@@ -86,6 +86,68 @@ def test_entering_a_city(content: GameContent, hero: Character, in_city: PlaySta
 # --- stubs ------------------------------------------------------------
 
 
+def test_shop_and_inventory_are_real_screens(
+    content: GameContent, hero: Character, in_city: PlayState, menu: PlayState
+) -> None:
+    from mmorpg.domain.rules.economy import buy_price, roll_assortment
+    from mmorpg.presentation.telegram.flows.play import Goods
+    from mmorpg.presentation.telegram.screens.shop import OwnedItem
+
+    stock = roll_assortment(
+        content, world_seed=WORLD_SEED, city_id="farhold", cycle=CYCLE, character_level=hero.level
+    )
+    goods = Goods(
+        gold=500,
+        owned=(OwnedItem("small_healing_potion", 2),),
+        stock=stock,
+        prices={item.id: buy_price(content, item) for item in stock},
+    )
+
+    shop = advance(content, hero, in_city, "Лавка", cycle=CYCLE, world_seed=WORLD_SEED, goods=goods)
+    assert shop.screen is ScreenId.SHOP
+    assert (
+        "Лавка города Дальний Оплот"
+        in render(content, hero, shop, world_seed=WORLD_SEED, goods=goods).text()
+    )
+
+    inventory = advance(
+        content, hero, menu, "Инвентарь", cycle=CYCLE, world_seed=WORLD_SEED, goods=goods
+    )
+    assert inventory.screen is ScreenId.INVENTORY
+    assert (
+        "Малое зелье лечения"
+        in render(content, hero, inventory, world_seed=WORLD_SEED, goods=goods).text()
+    )
+
+
+def test_buying_defers_the_write_to_the_handler(
+    content: GameContent, hero: Character, in_city: PlayState
+) -> None:
+    """The flow stays pure: it records the intent, the handler performs it."""
+    from mmorpg.domain.rules.economy import buy_price, roll_assortment
+    from mmorpg.presentation.telegram.flows.play import Goods
+    from mmorpg.presentation.telegram.screens.shop import buy_label
+
+    stock = roll_assortment(
+        content, world_seed=WORLD_SEED, city_id="farhold", cycle=CYCLE, character_level=hero.level
+    )
+    prices = {item.id: buy_price(content, item) for item in stock}
+    rich = Goods(gold=100_000, stock=stock, prices=prices)
+    poor = Goods(gold=0, stock=stock, prices=prices)
+
+    shop = advance(content, hero, in_city, "Лавка", cycle=CYCLE, world_seed=WORLD_SEED, goods=rich)
+    first = stock[0]
+    pressed = buy_label(first, prices[first.id]).text
+
+    bought = advance(content, hero, shop, pressed, cycle=CYCLE, world_seed=WORLD_SEED, goods=rich)
+    assert bought.pending_purchase == first.id
+    assert "куплен" in bought.notice
+
+    broke = advance(content, hero, shop, pressed, cycle=CYCLE, world_seed=WORLD_SEED, goods=poor)
+    assert broke.pending_purchase == ""
+    assert "Не хватает" in broke.notice
+
+
 @pytest.mark.parametrize("section", ["Данжи", "Таверна", "Наставник", "Банк"])
 def test_unfinished_sections_answer_with_a_working_back(
     content: GameContent, hero: Character, in_city: PlayState, section: str

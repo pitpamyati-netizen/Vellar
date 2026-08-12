@@ -10,12 +10,24 @@ from __future__ import annotations
 import pytest
 
 from mmorpg.application.dto.creation import CharacterDraft
-from mmorpg.domain.entities import Character, GameContent, GeneratedLocation, StatBlock
+from mmorpg.domain.entities import (
+    Character,
+    GameContent,
+    GeneratedLocation,
+    SkillLoadout,
+    StatBlock,
+)
+from mmorpg.domain.entities.combat import CombatState
+from mmorpg.domain.entities.content import Item
+from mmorpg.domain.entities.location import Enemy, EnemyKind
 from mmorpg.domain.procgen import generate_location
+from mmorpg.domain.rules.combat import start_combat
+from mmorpg.domain.rules.economy import buy_price, roll_assortment
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.infrastructure.content import load_content
 from mmorpg.presentation.telegram.handlers import creation as handlers_creation
-from mmorpg.presentation.telegram.screens import creation, play
+from mmorpg.presentation.telegram.screens import combat as combat_screens
+from mmorpg.presentation.telegram.screens import creation, play, shop
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
@@ -50,6 +62,48 @@ def sample_location() -> GeneratedLocation:
     )
 
 
+@pytest.fixture(scope="session")
+def fighter(content: GameContent) -> Character:
+    return Character(
+        id=2,
+        user_id=42,
+        name="Аргус",
+        race_id="human",
+        class_id="warrior",
+        level=10,
+        loadout=SkillLoadout(
+            actives=("warrior_cleave", "warrior_taunt", None, None, None, None),
+            passives=("warrior_toughness", None, None),
+            racial="race_human_second_wind",
+        ),
+    )
+
+
+@pytest.fixture(scope="session")
+def sample_fight(content: GameContent, fighter: Character) -> CombatState:
+    enemy = Enemy(
+        archetype_id="grey_wolf",
+        name="Серый волк",
+        kind=EnemyKind.BEAST,
+        level=4,
+        max_health=120,
+        damage=9,
+        armor=3,
+        initiative=9.0,
+        is_elite=False,
+        loot=("wolf_pelt",),
+        gold=14,
+    )
+    return start_combat(content, fighter, (enemy,))
+
+
+@pytest.fixture(scope="session")
+def sample_stock(content: GameContent) -> tuple[Item, ...]:
+    return roll_assortment(
+        content, world_seed="vellar-test", city_id="farhold", cycle=100, character_level=8
+    )
+
+
 @pytest.fixture
 def complete_draft() -> CharacterDraft:
     return CharacterDraft(
@@ -67,6 +121,9 @@ def all_screens(
     hero: Character,
     complete_draft: CharacterDraft,
     sample_location: GeneratedLocation,
+    fighter: Character,
+    sample_fight: CombatState,
+    sample_stock: tuple[Item, ...],
 ) -> list[Screen]:
     """Every screen in the game, rendered with sample data.
 
@@ -98,6 +155,24 @@ def all_screens(
         ),
         play.character_screen(content, hero, derived_stats(content, hero)),
         play.stub_screen("Таверна"),
+        combat_screens.combat_screen(content, fighter, sample_fight),
+        combat_screens.bag_screen(content, (("small_healing_potion", "Малое зелье лечения", 3),)),
+        combat_screens.bag_screen(content, ()),
+        combat_screens.victory_screen(sample_fight),
+        combat_screens.defeat_screen(),
+        combat_screens.escaped_screen(fled=True),
+        shop.inventory_screen(
+            content, (shop.OwnedItem("small_healing_potion", 3),), PageState(), gold=120
+        ),
+        shop.inventory_screen(content, (), PageState(), gold=0),
+        shop.shop_screen(
+            content,
+            sample_stock,
+            {item.id: buy_price(content, item) for item in sample_stock},
+            PageState(),
+            gold=250,
+            city_name="Дальний Оплот",
+        ),
         paginated_screen(
             screen_id=ScreenId.INVENTORY,
             title="Инвентарь",

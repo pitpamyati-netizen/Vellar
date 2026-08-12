@@ -8,18 +8,21 @@ location generation reproducible in tests (``docs/procgen.md``).
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import GameContent
+from mmorpg.domain.entities.content import GameContent, Item
 from mmorpg.domain.entities.location import GeneratedLocation, NodeKind
 from mmorpg.domain.procgen.location import cleared_mask, generate_location, is_cleared
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.routing import Command, Intent, resolve
 from mmorpg.presentation.telegram.screens import play as screens
+from mmorpg.presentation.telegram.screens import shop as shop_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.paginated import PageState, total_pages
+from mmorpg.presentation.telegram.screens.shop import OwnedItem
 from mmorpg.presentation.telegram.states.screens import NavigationStack, back_target
 
 # Sections that exist as screens but have no content yet. Each one is a real
@@ -30,10 +33,20 @@ STUBS: dict[str, str] = {
     labels.MENTOR.text: "Наставник",
     labels.BANK.text: "Банк",
     labels.SKILLS.text: "Умения",
-    labels.SETTINGS.text: "Настройки",
-    labels.INVENTORY.text: "Инвентарь",
-    labels.SHOP.text: "Лавка",
 }
+
+
+@dataclass(frozen=True, slots=True)
+class Goods:
+    """What the player owns and what the current city sells.
+
+    Passed in from the handler: the flow itself never touches a repository.
+    """
+
+    gold: int = 0
+    owned: tuple[OwnedItem, ...] = ()
+    stock: tuple[Item, ...] = ()
+    prices: Mapping[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +78,10 @@ class PlayState:
     session: LocationSession = field(default_factory=LocationSession)
     stub_title: str = ""
     notice: str = ""
+    list_page: PageState = field(default_factory=PageState)
+    # Set when the player pressed "buy": the handler performs the purchase, since
+    # writing to the database is not the flow's job.
+    pending_purchase: str = ""
 
     def at(self, screen: ScreenId) -> PlayState:
         return replace(self, screen=screen, stack=self.stack.push(screen), notice="")
@@ -136,9 +153,30 @@ def build_location(
 
 
 def render(
-    content: GameContent, character: Character, state: PlayState, *, world_seed: str
+    content: GameContent,
+    character: Character,
+    state: PlayState,
+    *,
+    world_seed: str,
+    goods: Goods | None = None,
 ) -> Screen:
+    shelf = goods or Goods(gold=character.gold)
     match state.screen:
+        case ScreenId.INVENTORY:
+            return shop_screens.inventory_screen(
+                content, shelf.owned, state.list_page, gold=shelf.gold, notice=state.notice
+            )
+        case ScreenId.SHOP:
+            city = content.city(state.city_id or character.city_id)
+            return shop_screens.shop_screen(
+                content,
+                shelf.stock,
+                dict(shelf.prices),
+                state.list_page,
+                gold=shelf.gold,
+                city_name=city.name,
+                notice=state.notice,
+            )
         case ScreenId.WORLD:
             return screens.world_screen(content, character, state.world_page, state.notice)
         case ScreenId.CITY:
@@ -177,9 +215,10 @@ def advance(
     *,
     cycle: int,
     world_seed: str,
+    goods: Goods | None = None,
 ) -> PlayState:
     """Apply one message. Always answers; never raises on unexpected input."""
-    screen = render(content, character, state, world_seed=world_seed)
+    screen = render(content, character, state, world_seed=world_seed, goods=goods)
     command = resolve(text, screen)
 
     if command.intent is Intent.LOOK:
@@ -194,7 +233,12 @@ def advance(
     if command.intent is Intent.BACK:
         return _go_back(state)
 
+    working = replace(state, pending_purchase="")
+    state = working
+
     match state.screen:
+        case ScreenId.INVENTORY | ScreenId.SHOP:
+            return _handle_goods(content, state, command, goods or Goods(gold=character.gold))
         case ScreenId.MAIN_MENU:
             return _handle_main_menu(state, command)
         case ScreenId.WORLD:
@@ -231,6 +275,45 @@ def _stub_for(state: PlayState, command: Command) -> PlayState | None:
     return replace(state, stub_title=title).at(ScreenId.STUB)
 
 
+def _handle_goods(
+    content: GameContent, state: PlayState, command: Command, goods: Goods
+) -> PlayState:
+    """Inventory and shop share their paging, filtering and selection behaviour."""
+    entries = len(goods.stock if state.screen is ScreenId.SHOP else goods.owned)
+    pages = total_pages(entries)
+
+    if command.intent in {Intent.NEXT_PAGE, Intent.PREVIOUS_PAGE}:
+        delta = 1 if command.intent is Intent.NEXT_PAGE else -1
+        return replace(state, list_page=state.list_page.moved(delta, pages), notice="")
+    if command.intent is Intent.PAGE and command.number is not None:
+        return replace(state, list_page=state.list_page.jumped(command.number, pages), notice="")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите позицию из списка.")
+
+    if labels.RESET_FILTERS.matches(command.argument):
+        return replace(
+            state, list_page=PageState(filters=state.list_page.filters.cleared()), notice=""
+        )
+
+    if state.screen is ScreenId.SHOP:
+        item = shop_screens.item_from_button(content, command.argument, goods.stock)
+        if item is None:
+            return state.with_notice("Нажмите товар из списка.")
+        price = goods.prices.get(item.id, item.price)
+        if price > goods.gold:
+            return state.with_notice(
+                f"{item.name} стоит {price} золота, у вас {goods.gold}. Не хватает."
+            )
+        return replace(state, pending_purchase=item.id).with_notice(
+            f"{item.name} куплен за {price} золота."
+        )
+
+    owned = shop_screens.owned_from_button(content, command.argument, goods.owned)
+    if owned is None:
+        return state.with_notice("Нажмите предмет из списка.")
+    return state.with_notice(f"{owned.name}. {owned.text}")
+
+
 def _handle_main_menu(state: PlayState, command: Command) -> PlayState:
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите кнопку из меню.")
@@ -238,6 +321,8 @@ def _handle_main_menu(state: PlayState, command: Command) -> PlayState:
         return state.at(ScreenId.WORLD)
     if labels.CHARACTER.matches(command.argument):
         return state.at(ScreenId.CHARACTER)
+    if labels.INVENTORY.matches(command.argument):
+        return replace(state, list_page=PageState()).at(ScreenId.INVENTORY)
     stub = _stub_for(state, command)
     return stub if stub is not None else state.with_notice("Нажмите кнопку из меню.")
 
@@ -274,6 +359,8 @@ def _handle_city(state: PlayState, command: Command) -> PlayState:
         return state.with_notice("Нажмите кнопку города.")
     if labels.LOCATIONS.matches(command.argument):
         return state.at(ScreenId.LOCATION_LIST)
+    if labels.SHOP.matches(command.argument):
+        return replace(state, list_page=PageState()).at(ScreenId.SHOP)
     stub = _stub_for(state, command)
     return stub if stub is not None else state.with_notice("Нажмите кнопку города.")
 
