@@ -1,0 +1,112 @@
+"""Experience, levels and the points a level grants.
+
+Pure arithmetic over a precomputed table: the curve is evaluated once at import
+time for levels 1..300, so ``level_for_experience`` is a binary search rather than
+a loop over levels.
+"""
+
+from __future__ import annotations
+
+import bisect
+from dataclasses import dataclass
+
+MAX_LEVEL = 300
+_CURVE_FACTOR = 50.0
+_CURVE_EXPONENT = 1.6
+
+
+def experience_to_next_level(level: int) -> int:
+    """Experience needed to go from ``level`` to ``level + 1``."""
+    if level < 1 or level >= MAX_LEVEL:
+        return 0
+    cost: float = _CURVE_FACTOR * float(level) ** _CURVE_EXPONENT
+    return round(cost)
+
+
+def _build_thresholds() -> tuple[int, ...]:
+    """Cumulative experience required to *reach* each level, index = level - 1."""
+    thresholds = [0]
+    total = 0
+    for level in range(1, MAX_LEVEL):
+        total += experience_to_next_level(level)
+        thresholds.append(total)
+    return tuple(thresholds)
+
+
+EXPERIENCE_THRESHOLDS: tuple[int, ...] = _build_thresholds()
+
+
+def experience_to_reach(level: int) -> int:
+    """Total experience required to reach ``level`` from scratch."""
+    clamped = max(1, min(level, MAX_LEVEL))
+    return EXPERIENCE_THRESHOLDS[clamped - 1]
+
+
+def level_for_experience(experience: int) -> int:
+    """The level a character with this much total experience has."""
+    if experience <= 0:
+        return 1
+    index = bisect.bisect_right(EXPERIENCE_THRESHOLDS, experience)
+    return min(index, MAX_LEVEL)
+
+
+def experience_into_level(experience: int) -> tuple[int, int]:
+    """Progress inside the current level as ``(earned, needed)``.
+
+    At the maximum level this is ``(0, 0)`` - there is nothing left to fill.
+    """
+    level = level_for_experience(experience)
+    if level >= MAX_LEVEL:
+        return 0, 0
+    earned = experience - experience_to_reach(level)
+    needed = experience_to_next_level(level)
+    return earned, needed
+
+
+@dataclass(frozen=True, slots=True)
+class LevelUp:
+    """What a character gained by levelling up."""
+
+    previous_level: int
+    new_level: int
+    stat_points: int
+    skill_points: int
+    unlocked_skills: tuple[str, ...] = ()
+
+    @property
+    def levels_gained(self) -> int:
+        return self.new_level - self.previous_level
+
+
+def apply_experience(
+    *,
+    current_level: int,
+    current_experience: int,
+    gained: int,
+    stat_points_per_level: int,
+    skill_points_per_level: int,
+) -> LevelUp:
+    """Compute the level change caused by gaining ``gained`` experience."""
+    if gained < 0:
+        msg = "experience gain cannot be negative"
+        raise ValueError(msg)
+    new_level = level_for_experience(current_experience + gained)
+    levels = max(0, new_level - current_level)
+    return LevelUp(
+        previous_level=current_level,
+        new_level=max(current_level, new_level),
+        stat_points=levels * stat_points_per_level,
+        skill_points=levels * skill_points_per_level,
+    )
+
+
+def experience_reward(*, enemy_level: int, character_level: int, base: int = 12) -> int:
+    """Experience for defeating an enemy, reduced when it is far below the player.
+
+    Fighting far under your level is not a farming strategy: at 10 levels of
+    difference the reward drops to a tenth.
+    """
+    difference = character_level - enemy_level
+    penalty = max(0.1, 1.0 - max(0, difference) * 0.09)
+    scaled: float = base * float(enemy_level) ** 0.9 * penalty
+    return max(1, round(scaled))

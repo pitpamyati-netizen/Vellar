@@ -107,3 +107,26 @@ Target: p95 update handling under 100 ms, p99 under 250 ms.
 
 The event loop is the stdlib `asyncio.Runner`; uvloop is not used
 (`docs/adr/0004-no-uvloop.md`).
+
+## Character maths
+
+Nothing derived is ever stored. The character record holds raw values only -
+allocated stat points, level, experience, chosen traits, the skill loadout and
+equipment - and `mmorpg.domain.rules.stats` rebuilds the rest on demand:
+
+```
+total = base + race + class + allocated + traits + equipped passives + equipment + active effects
+```
+
+Percentages from every source are summed first and applied once, so ordering
+cannot change the result. Active effects are keyed by id in an `EffectStack`:
+re-applying an effect refreshes its duration and never adds its modifiers twice
+(`tests/domain/test_effects.py`).
+
+Derived values: max health, max resource, armour, accuracy, dodge, crit chance,
+crit damage, initiative, resource regeneration and health regeneration. Dodge and
+crit chance are capped at 75 percent so no build turns combat into a coin that
+never lands.
+
+The experience curve is precomputed once at import for levels 1-300, so finding a
+level from an experience total is a binary search, not a loop.

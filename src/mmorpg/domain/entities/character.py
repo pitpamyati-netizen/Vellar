@@ -1,0 +1,134 @@
+"""The character entity and the parts that are actually stored.
+
+Only *raw* values live here: allocated stat points, level, experience, chosen
+traits, the skill loadout and equipment. Totals - health, armor, damage - are never
+stored; they are recomputed from these raw values by ``mmorpg.domain.rules.stats``.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from dataclasses import dataclass, field, replace
+from types import MappingProxyType
+
+from mmorpg.domain.entities.stats import StatBlock
+
+ACTIVE_SLOTS = 6
+PASSIVE_SLOTS = 3
+
+
+@dataclass(frozen=True, slots=True)
+class SkillLoadout:
+    """What the player put in the fixed panel.
+
+    ``actives`` always has 6 entries and ``passives`` always has 3; an empty slot is
+    ``None`` and is still rendered, so button positions never shift.
+    """
+
+    actives: tuple[str | None, ...] = (None,) * ACTIVE_SLOTS
+    passives: tuple[str | None, ...] = (None,) * PASSIVE_SLOTS
+    racial: str | None = None
+    ranks: Mapping[str, int] = field(default_factory=dict)
+    edges: Mapping[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if len(self.actives) != ACTIVE_SLOTS:
+            msg = f"the panel has exactly {ACTIVE_SLOTS} active slots"
+            raise ValueError(msg)
+        if len(self.passives) != PASSIVE_SLOTS:
+            msg = f"the panel has exactly {PASSIVE_SLOTS} passive slots"
+            raise ValueError(msg)
+
+    def rank_of(self, skill_code: str) -> int:
+        """Rank of a skill; 1 once it is known at all."""
+        return self.ranks.get(skill_code, 1)
+
+    def edge_of(self, skill_code: str) -> str | None:
+        return self.edges.get(skill_code)
+
+    def equipped_actives(self) -> tuple[str, ...]:
+        return tuple(code for code in self.actives if code is not None)
+
+    def equipped_passives(self) -> tuple[str, ...]:
+        return tuple(code for code in self.passives if code is not None)
+
+    def with_active(self, slot: int, skill_code: str | None) -> SkillLoadout:
+        actives = list(self.actives)
+        actives[slot] = skill_code
+        return replace(self, actives=tuple(actives))
+
+    def with_passive(self, slot: int, skill_code: str | None) -> SkillLoadout:
+        passives = list(self.passives)
+        passives[slot] = skill_code
+        return replace(self, passives=tuple(passives))
+
+    def with_rank(self, skill_code: str, rank: int) -> SkillLoadout:
+        ranks = dict(self.ranks)
+        ranks[skill_code] = rank
+        return replace(self, ranks=MappingProxyType(ranks))
+
+    def with_edge(self, skill_code: str, edge_code: str) -> SkillLoadout:
+        edges = dict(self.edges)
+        edges[skill_code] = edge_code
+        return replace(self, edges=MappingProxyType(edges))
+
+
+@dataclass(frozen=True, slots=True)
+class Equipment:
+    """Item ids by slot. An empty slot is simply absent."""
+
+    items: Mapping[str, str] = field(default_factory=dict)
+
+    def item_in(self, slot: str) -> str | None:
+        return self.items.get(slot)
+
+    def equip(self, slot: str, item_id: str) -> Equipment:
+        return Equipment(MappingProxyType({**self.items, slot: item_id}))
+
+    def unequip(self, slot: str) -> Equipment:
+        remaining = {key: value for key, value in self.items.items() if key != slot}
+        return Equipment(MappingProxyType(remaining))
+
+    def item_ids(self) -> tuple[str, ...]:
+        return tuple(self.items.values())
+
+
+@dataclass(frozen=True, slots=True)
+class InventoryEntry:
+    item_id: str
+    quantity: int
+
+
+@dataclass(frozen=True, slots=True)
+class Character:
+    """A player character. Everything here is persisted verbatim."""
+
+    id: int
+    user_id: int
+    name: str
+    race_id: str
+    class_id: str
+    level: int = 1
+    experience: int = 0
+    gold: int = 0
+    allocated: StatBlock = field(default_factory=StatBlock)
+    trait_ids: tuple[str, ...] = ()
+    loadout: SkillLoadout = field(default_factory=SkillLoadout)
+    equipment: Equipment = field(default_factory=Equipment)
+    city_id: str = "farhold"
+    unspent_stat_points: int = 0
+    unspent_skill_points: int = 0
+
+    def with_experience(self, gained: int) -> Character:
+        return replace(self, experience=self.experience + gained)
+
+    def with_level(self, level: int, *, stat_points: int, skill_points: int) -> Character:
+        return replace(
+            self,
+            level=level,
+            unspent_stat_points=self.unspent_stat_points + stat_points,
+            unspent_skill_points=self.unspent_skill_points + skill_points,
+        )
+
+    def with_gold(self, delta: int) -> Character:
+        return replace(self, gold=max(0, self.gold + delta))

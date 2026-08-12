@@ -143,6 +143,7 @@ def _build_rules(raw: Mapping[str, Mapping[str, Any]], problems: list[str]) -> P
         max_character_level=int(world_meta.get("max_character_level", 300)),
         base_stat_value=int(class_meta.get("base_stat_value", 5)),
         free_points_at_creation=int(class_meta.get("free_points_at_creation", 5)),
+        stat_points_per_level=int(class_meta.get("stat_points_per_level", 2)),
         active_unlock_levels=tuple(class_meta.get("active_unlock_levels", ())),
         passive_unlock_levels=tuple(class_meta.get("passive_unlock_levels", ())),
         active_slots=int(class_meta.get("active_slots", 6)),

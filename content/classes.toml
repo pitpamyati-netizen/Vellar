@@ -8,6 +8,7 @@
 [meta]
 base_stat_value = 5
 free_points_at_creation = 5
+stat_points_per_level = 2
 active_unlock_levels = [1, 4, 8, 14, 22, 35, 60, 100]
 passive_unlock_levels = [2, 6, 12, 20, 30, 50]
 active_slots = 6

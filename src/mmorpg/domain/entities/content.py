@@ -224,6 +224,7 @@ class ProgressionRules:
     max_character_level: int
     base_stat_value: int
     free_points_at_creation: int
+    stat_points_per_level: int
     active_unlock_levels: tuple[int, ...]
     passive_unlock_levels: tuple[int, ...]
     active_slots: int
