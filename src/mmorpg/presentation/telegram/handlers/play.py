@@ -23,12 +23,16 @@ from mmorpg.presentation.telegram.handlers.creation import welcome_screen
 from mmorpg.presentation.telegram.messaging import send_screen
 from mmorpg.presentation.telegram.states.screens import STATE_FOR_SCREEN, Play
 
-router = Router(name="play")
-
 STATE_KEY = "play"
 
 
-@router.message(StateFilter(Play))
+def build_router() -> Router:
+    """A fresh router per application - see handlers.creation.build_router."""
+    router = Router(name="play")
+    router.message.register(play, StateFilter(Play))
+    return router
+
+
 async def play(
     message: Message,
     state: FSMContext,

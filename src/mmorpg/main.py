@@ -1,0 +1,250 @@
+"""Composition root.
+
+Everything is wired here and nowhere else: settings are read, content is loaded
+and validated, adapters are chosen for the environment, pools are opened,
+middlewares and routers are attached, and the bot starts.
+
+Three run modes (``docs/architecture.md``):
+
+- ``APP_ENV=local`` - long polling with in-memory adapters, no PostgreSQL and no
+  Redis required, so the game is playable with just a bot token;
+- ``APP_ENV=dev``   - long polling against real PostgreSQL and Redis;
+- ``APP_ENV=prod``  - aiohttp webhook against real PostgreSQL and Redis.
+
+The event loop is the stdlib ``asyncio.Runner``; uvloop is deliberately absent
+(``docs/adr/0004-no-uvloop.md``).
+"""
+
+from __future__ import annotations
+
+import asyncio
+from contextlib import AsyncExitStack
+from dataclasses import dataclass
+
+from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.fsm.storage.base import BaseStorage
+from aiogram.fsm.storage.memory import MemoryStorage
+
+from mmorpg.config import AppEnv, Settings, load_settings
+from mmorpg.domain.entities.content import GameContent
+from mmorpg.domain.ports.repositories import IdempotencyStore
+from mmorpg.infrastructure.cache import (
+    InMemoryIdempotencyStore,
+    InMemoryLocationDeltaCache,
+    InMemoryStateCache,
+)
+from mmorpg.infrastructure.content import load_content
+from mmorpg.infrastructure.persistence import (
+    InMemoryCharacterRepository,
+    InMemoryInventoryRepository,
+    InMemoryUserRepository,
+)
+from mmorpg.logging import configure_logging, get_logger
+from mmorpg.monitoring import install_slow_callback_detector
+from mmorpg.presentation.telegram.handlers import creation, play
+from mmorpg.presentation.telegram.middlewares.dependencies import (
+    Dependencies,
+    DependencyMiddleware,
+)
+from mmorpg.presentation.telegram.middlewares.errors import ErrorMiddleware
+from mmorpg.presentation.telegram.middlewares.idempotency import IdempotencyMiddleware
+
+logger = get_logger(__name__)
+
+
+@dataclass(slots=True)
+class Application:
+    """The assembled bot, ready to run."""
+
+    settings: Settings
+    content: GameContent
+    bot: Bot
+    dispatcher: Dispatcher
+    stack: AsyncExitStack
+
+
+async def build_application(settings: Settings) -> Application:
+    """Load content, choose adapters, wire routers. Nothing runs yet."""
+    content = load_content(settings.content_dir)
+    logger.info(
+        "content_loaded",
+        races=len(content.races),
+        classes=len(content.classes),
+        traits=len(content.traits),
+        skills=len(content.skills),
+        cities=len(content.cities),
+    )
+
+    stack = AsyncExitStack()
+    storage, dependencies, idempotency = await _build_adapters(settings, content, stack)
+
+    bot = Bot(
+        token=settings.bot_token.get_secret_value(),
+        # parse_mode stays None: Markdown is read aloud by screen readers.
+        default=DefaultBotProperties(parse_mode=None),
+    )
+    dispatcher = Dispatcher(storage=storage)
+
+    # Order matters: drop duplicates first, then inject, then catch failures
+    # around the handler itself.
+    dispatcher.update.outer_middleware(IdempotencyMiddleware(idempotency))
+    dispatcher.update.outer_middleware(DependencyMiddleware(dependencies))
+    dispatcher.message.middleware(ErrorMiddleware())
+
+    dispatcher.include_router(creation.build_router())
+    dispatcher.include_router(play.build_router())
+
+    return Application(
+        settings=settings, content=content, bot=bot, dispatcher=dispatcher, stack=stack
+    )
+
+
+async def _build_adapters(
+    settings: Settings, content: GameContent, stack: AsyncExitStack
+) -> tuple[BaseStorage, Dependencies, IdempotencyStore]:
+    """In-memory for local, PostgreSQL and Redis otherwise (ADR 0005)."""
+    if not settings.uses_external_storage:
+        logger.warning(
+            "using_in_memory_adapters",
+            detail="APP_ENV=local: state is lost on restart, never deploy this way",
+        )
+        dependencies = Dependencies(
+            settings=settings,
+            content=content,
+            users=InMemoryUserRepository(),
+            characters=InMemoryCharacterRepository(),
+            inventory=InMemoryInventoryRepository(),
+            state_cache=InMemoryStateCache(),
+            location_deltas=InMemoryLocationDeltaCache(),
+        )
+        return MemoryStorage(), dependencies, InMemoryIdempotencyStore()
+
+    from aiogram.fsm.storage.redis import RedisStorage
+
+    from mmorpg.infrastructure.cache.redis_cache import (
+        RedisIdempotencyStore,
+        RedisLocationDeltaCache,
+        RedisStateCache,
+    )
+    from mmorpg.infrastructure.persistence.pool import create_postgres_pool, create_redis_client
+    from mmorpg.infrastructure.persistence.postgres import (
+        PostgresCharacterRepository,
+        PostgresInventoryRepository,
+        PostgresUserRepository,
+    )
+
+    pool = await create_postgres_pool(settings)
+    stack.push_async_callback(pool.close)
+    redis = create_redis_client(settings)
+    stack.push_async_callback(redis.aclose)
+
+    logger.info("pools_ready", postgres_max=settings.postgres_pool_max)
+
+    dependencies = Dependencies(
+        settings=settings,
+        content=content,
+        users=PostgresUserRepository(pool),
+        characters=PostgresCharacterRepository(pool),
+        inventory=PostgresInventoryRepository(pool),
+        state_cache=RedisStateCache(redis),
+        location_deltas=RedisLocationDeltaCache(redis),
+    )
+    return RedisStorage(redis), dependencies, RedisIdempotencyStore(redis)
+
+
+async def run_polling(app: Application) -> None:
+    """Development transport: long polling."""
+    logger.info("starting_polling", env=app.settings.app_env.value)
+    async with app.stack:
+        try:
+            await _greet_telegram(app)
+            await app.bot.delete_webhook(drop_pending_updates=True)
+            await app.dispatcher.start_polling(app.bot)
+        finally:
+            await app.bot.session.close()
+
+
+async def _greet_telegram(app: Application) -> None:
+    """Fail fast and in plain language on a bad token.
+
+    Without this the first API call raises deep inside aiogram and the operator
+    gets a stack trace instead of "your token is wrong".
+    """
+    from aiogram.exceptions import TelegramUnauthorizedError
+
+    try:
+        me = await app.bot.get_me()
+    except TelegramUnauthorizedError as error:
+        msg = (
+            "Telegram rejected BOT_TOKEN. Check the value in .env - "
+            "get a fresh token from @BotFather if you are unsure."
+        )
+        raise SystemExit(msg) from error
+    logger.info("connected", bot=me.username or str(me.id))
+
+
+async def run_webhook(app: Application) -> None:
+    """Production transport: aiohttp serving the webhook."""
+    from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+    from aiohttp import web
+
+    settings = app.settings
+    secret = settings.webhook_secret.get_secret_value()
+
+    await app.bot.set_webhook(
+        url=settings.webhook_url,
+        secret_token=secret,
+        drop_pending_updates=True,
+    )
+    logger.info("webhook_registered", url=settings.webhook_url)
+
+    server = web.Application()
+    SimpleRequestHandler(dispatcher=app.dispatcher, bot=app.bot, secret_token=secret).register(
+        server, path=settings.webhook_path
+    )
+    setup_application(server, app.dispatcher, bot=app.bot)
+
+    runner = web.AppRunner(server)
+    await runner.setup()
+    site = web.TCPSite(runner, host=settings.webhook_host, port=settings.webhook_port)
+
+    async with app.stack:
+        try:
+            await site.start()
+            logger.info("webhook_serving", host=settings.webhook_host, port=settings.webhook_port)
+            # Serve until cancelled: the runner is stopped by the finally block.
+            await asyncio.Event().wait()
+        finally:
+            await runner.cleanup()
+            await app.bot.session.close()
+
+
+async def _amain() -> None:
+    settings = load_settings()
+    configure_logging(settings)
+
+    if not settings.bot_token.get_secret_value():
+        msg = "BOT_TOKEN is not set. Copy .env.example to .env and put your token in it."
+        raise SystemExit(msg)
+
+    install_slow_callback_detector(asyncio.get_running_loop(), settings)
+
+    app = await build_application(settings)
+    if settings.app_env is AppEnv.PROD:
+        await run_webhook(app)
+    else:
+        await run_polling(app)
+
+
+def main() -> None:
+    """Entry point. Stdlib runner, no uvloop (ADR 0004)."""
+    try:
+        with asyncio.Runner() as runner:
+            runner.run(_amain())
+    except (KeyboardInterrupt, SystemExit) as stop:
+        logger.info("shutdown", reason=type(stop).__name__)
+
+
+if __name__ == "__main__":
+    main()

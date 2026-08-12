@@ -24,9 +24,20 @@ from mmorpg.presentation.telegram.messaging import send_screen
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.states.screens import STATE_FOR_SCREEN, Creation, Play
 
-router = Router(name="creation")
-
 STATE_KEY = "creation"
+
+
+def build_router() -> Router:
+    """A fresh router per application.
+
+    Routers are single-use in aiogram: one can only ever be attached to one
+    dispatcher, so handing out a module-level singleton would make building the
+    application twice in one process - as the tests do - fail.
+    """
+    router = Router(name="creation")
+    router.message.register(start, CommandStart())
+    router.message.register(step, StateFilter(Creation))
+    return router
 
 
 def welcome_screen() -> Screen:
@@ -51,7 +62,6 @@ def created_screen(name: str, city_name: str) -> Screen:
     )
 
 
-@router.message(CommandStart())
 async def start(
     message: Message,
     state: FSMContext,
@@ -80,7 +90,6 @@ async def start(
     await send_screen(message, render(content, flow))
 
 
-@router.message(StateFilter(Creation))
 async def step(
     message: Message,
     state: FSMContext,
