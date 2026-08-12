@@ -1,0 +1,277 @@
+"""PostgreSQL repositories.
+
+Explicit SQL over asyncpg, no ORM (``docs/adr/0001-no-orm.md``). Every query here
+touches one or two rows by primary key or by a unique index, which is what keeps
+an update inside the 100 ms budget.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import replace
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any
+
+from mmorpg.domain.entities.character import Character, Equipment, InventoryEntry, SkillLoadout
+from mmorpg.domain.entities.stats import StatBlock
+from mmorpg.domain.ports.repositories import AccessibilitySettings, User
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    import asyncpg
+
+CHARACTER_COLUMNS = """
+    id, user_id, name, race_id, class_id, level, experience, gold,
+    stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
+    trait_ids, loadout, equipment, city_id, unspent_stat_points, unspent_skill_points
+"""
+
+
+def _character_from_row(row: Any) -> Character:
+    loadout_raw = json.loads(row["loadout"]) if row["loadout"] else {}
+    equipment_raw = json.loads(row["equipment"]) if row["equipment"] else {}
+    return Character(
+        id=row["id"],
+        user_id=row["user_id"],
+        name=row["name"],
+        race_id=row["race_id"],
+        class_id=row["class_id"],
+        level=row["level"],
+        experience=row["experience"],
+        gold=row["gold"],
+        allocated=StatBlock(
+            STR=row["stat_str"],
+            AGI=row["stat_agi"],
+            END=row["stat_end"],
+            INT=row["stat_int"],
+            WIS=row["stat_wis"],
+            CHA=row["stat_cha"],
+            LCK=row["stat_lck"],
+        ),
+        trait_ids=tuple(row["trait_ids"] or ()),
+        loadout=SkillLoadout(
+            actives=tuple(loadout_raw.get("actives", [None] * 6)),
+            passives=tuple(loadout_raw.get("passives", [None] * 3)),
+            racial=loadout_raw.get("racial"),
+            ranks=MappingProxyType(dict(loadout_raw.get("ranks", {}))),
+            edges=MappingProxyType(dict(loadout_raw.get("edges", {}))),
+        ),
+        equipment=Equipment(MappingProxyType(dict(equipment_raw))),
+        city_id=row["city_id"],
+        unspent_stat_points=row["unspent_stat_points"],
+        unspent_skill_points=row["unspent_skill_points"],
+    )
+
+
+def _loadout_to_json(loadout: SkillLoadout) -> str:
+    return json.dumps(
+        {
+            "actives": list(loadout.actives),
+            "passives": list(loadout.passives),
+            "racial": loadout.racial,
+            "ranks": dict(loadout.ranks),
+            "edges": dict(loadout.edges),
+        },
+        ensure_ascii=False,
+    )
+
+
+class PostgresUserRepository:
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        self._pool = pool
+
+    async def get(self, telegram_id: int) -> User | None:
+        row = await self._pool.fetchrow(
+            "SELECT telegram_id, username, emoji, verbose, page_size"
+            " FROM users WHERE telegram_id = $1",
+            telegram_id,
+        )
+        if row is None:
+            return None
+        return User(
+            telegram_id=row["telegram_id"],
+            username=row["username"] or "",
+            settings=AccessibilitySettings(
+                emoji=row["emoji"], verbose=row["verbose"], page_size=row["page_size"]
+            ),
+        )
+
+    async def upsert(self, user: User) -> User:
+        await self._pool.execute(
+            """
+            INSERT INTO users (telegram_id, username, emoji, verbose, page_size)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (telegram_id) DO UPDATE SET username = EXCLUDED.username
+            """,
+            user.telegram_id,
+            user.username,
+            user.settings.emoji,
+            user.settings.verbose,
+            user.settings.page_size,
+        )
+        stored = await self.get(user.telegram_id)
+        return stored if stored is not None else user
+
+    async def save_settings(self, telegram_id: int, settings: AccessibilitySettings) -> None:
+        await self._pool.execute(
+            """
+            INSERT INTO users (telegram_id, emoji, verbose, page_size)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (telegram_id) DO UPDATE
+                SET emoji = EXCLUDED.emoji,
+                    verbose = EXCLUDED.verbose,
+                    page_size = EXCLUDED.page_size
+            """,
+            telegram_id,
+            settings.emoji,
+            settings.verbose,
+            settings.page_size,
+        )
+
+
+class PostgresCharacterRepository:
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        self._pool = pool
+
+    async def get(self, character_id: int) -> Character | None:
+        row = await self._pool.fetchrow(
+            f"SELECT {CHARACTER_COLUMNS} FROM characters WHERE id = $1",
+            character_id,
+        )
+        return _character_from_row(row) if row else None
+
+    async def get_active(self, telegram_id: int) -> Character | None:
+        row = await self._pool.fetchrow(
+            f"SELECT {CHARACTER_COLUMNS} FROM characters WHERE user_id = $1 ORDER BY id LIMIT 1",
+            telegram_id,
+        )
+        return _character_from_row(row) if row else None
+
+    async def list_for_user(self, telegram_id: int) -> tuple[Character, ...]:
+        rows = await self._pool.fetch(
+            f"SELECT {CHARACTER_COLUMNS} FROM characters WHERE user_id = $1 ORDER BY id",
+            telegram_id,
+        )
+        return tuple(_character_from_row(row) for row in rows)
+
+    async def create(self, character: Character) -> Character:
+        row = await self._pool.fetchrow(
+            """
+            INSERT INTO characters (
+                user_id, name, race_id, class_id, level, experience, gold,
+                stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
+                trait_ids, loadout, equipment, city_id,
+                unspent_stat_points, unspent_skill_points
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+                    $15, $16::jsonb, $17::jsonb, $18, $19, $20)
+            RETURNING id
+            """,
+            character.user_id,
+            character.name,
+            character.race_id,
+            character.class_id,
+            character.level,
+            character.experience,
+            character.gold,
+            character.allocated.STR,
+            character.allocated.AGI,
+            character.allocated.END,
+            character.allocated.INT,
+            character.allocated.WIS,
+            character.allocated.CHA,
+            character.allocated.LCK,
+            list(character.trait_ids),
+            _loadout_to_json(character.loadout),
+            json.dumps(dict(character.equipment.items), ensure_ascii=False),
+            character.city_id,
+            character.unspent_stat_points,
+            character.unspent_skill_points,
+        )
+        return replace(character, id=row["id"])
+
+    async def save(self, character: Character) -> None:
+        await self._pool.execute(
+            """
+            UPDATE characters SET
+                level = $2, experience = $3, gold = $4,
+                stat_str = $5, stat_agi = $6, stat_end = $7, stat_int = $8,
+                stat_wis = $9, stat_cha = $10, stat_lck = $11,
+                trait_ids = $12, loadout = $13::jsonb, equipment = $14::jsonb,
+                city_id = $15, unspent_stat_points = $16, unspent_skill_points = $17,
+                updated_at = now()
+            WHERE id = $1
+            """,
+            character.id,
+            character.level,
+            character.experience,
+            character.gold,
+            character.allocated.STR,
+            character.allocated.AGI,
+            character.allocated.END,
+            character.allocated.INT,
+            character.allocated.WIS,
+            character.allocated.CHA,
+            character.allocated.LCK,
+            list(character.trait_ids),
+            _loadout_to_json(character.loadout),
+            json.dumps(dict(character.equipment.items), ensure_ascii=False),
+            character.city_id,
+            character.unspent_stat_points,
+            character.unspent_skill_points,
+        )
+
+    async def name_taken(self, name: str) -> bool:
+        row = await self._pool.fetchval(
+            "SELECT 1 FROM characters WHERE lower(name) = lower($1) LIMIT 1", name
+        )
+        return row is not None
+
+
+class PostgresInventoryRepository:
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        self._pool = pool
+
+    async def list_items(self, character_id: int) -> tuple[InventoryEntry, ...]:
+        rows = await self._pool.fetch(
+            "SELECT item_id, quantity FROM inventory"
+            " WHERE character_id = $1 AND quantity > 0 ORDER BY item_id",
+            character_id,
+        )
+        return tuple(
+            InventoryEntry(item_id=row["item_id"], quantity=row["quantity"]) for row in rows
+        )
+
+    async def add(self, character_id: int, item_id: str, quantity: int = 1) -> None:
+        await self._pool.execute(
+            """
+            INSERT INTO inventory (character_id, item_id, quantity)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (character_id, item_id)
+            DO UPDATE SET quantity = inventory.quantity + EXCLUDED.quantity
+            """,
+            character_id,
+            item_id,
+            quantity,
+        )
+
+    async def remove(self, character_id: int, item_id: str, quantity: int = 1) -> bool:
+        """Atomic: the row is only touched when it holds enough."""
+        updated = await self._pool.fetchval(
+            """
+            UPDATE inventory SET quantity = quantity - $3
+            WHERE character_id = $1 AND item_id = $2 AND quantity >= $3
+            RETURNING quantity
+            """,
+            character_id,
+            item_id,
+            quantity,
+        )
+        return updated is not None
+
+    async def count(self, character_id: int, item_id: str) -> int:
+        value = await self._pool.fetchval(
+            "SELECT quantity FROM inventory WHERE character_id = $1 AND item_id = $2",
+            character_id,
+            item_id,
+        )
+        return int(value or 0)

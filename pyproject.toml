@@ -78,6 +78,11 @@ show_error_codes = true
 module = ["tests.*"]
 disallow_untyped_defs = false
 
+# asyncpg ships no py.typed marker; the repositories annotate their own signatures.
+[[tool.mypy.overrides]]
+module = ["asyncpg.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"

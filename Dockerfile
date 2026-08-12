@@ -17,6 +17,8 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY src/ ./src/
 COPY content/ ./content/
+COPY migrations/ ./migrations/
+COPY alembic.ini ./
 RUN uv sync --frozen --no-dev
 
 ENV PATH="/opt/venv/bin:${PATH}"

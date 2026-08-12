@@ -70,7 +70,16 @@ def test_application_does_not_import_outer_layers(path: Path) -> None:
         )
 
 
-@pytest.mark.parametrize("path", _python_files(DOMAIN_ROOT), ids=lambda p: p.name)
+def _rules_and_entities() -> list[Path]:
+    """Domain modules that must be synchronous - everything except the ports.
+
+    Ports describe the boundary to the outside world, which is asynchronous by
+    nature; the logic behind them is not.
+    """
+    return [path for path in _python_files(DOMAIN_ROOT) if path.parent.name != "ports"]
+
+
+@pytest.mark.parametrize("path", _rules_and_entities(), ids=lambda p: p.name)
 def test_domain_has_no_coroutines(path: Path) -> None:
     """The domain is synchronous: no awaits, no async def, nothing to schedule."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
