@@ -1,0 +1,1 @@
+"""mmorpg.infrastructure layer package."""

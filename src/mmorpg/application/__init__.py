@@ -1,0 +1,1 @@
+"""mmorpg.application layer package."""

@@ -1,0 +1,1 @@
+"""mmorpg.domain layer package."""

@@ -1,0 +1,109 @@
+# Architecture
+
+## Layers
+
+Hexagonal, three layers, one direction of dependency:
+
+```
+presentation  ->  application  ->  domain
+        \             |              ^
+         \            v              |
+          `------> infrastructure ---'   (implements domain ports)
+```
+
+| Layer | Package | May import |
+| --- | --- | --- |
+| Domain | `mmorpg.domain` | stdlib only |
+| Application | `mmorpg.application` | domain, stdlib |
+| Infrastructure | `mmorpg.infrastructure` | domain, application, asyncpg, redis, stdlib |
+| Presentation | `mmorpg.presentation` | application, domain, aiogram, stdlib |
+
+**The domain is synchronous and side-effect free.** No `async def`, no I/O, no
+imports of `aiogram`, `asyncpg`, `redis`, `pydantic` or `datetime.now`. Everything
+it needs - the current cycle index, random seeds, the clock - is passed in as an
+argument. That makes it testable without a database, a bot token or a network.
+
+*Enforced by:* `tests/domain/test_layering.py`, which walks the AST of every module
+under `src/mmorpg/domain/` and fails on a forbidden import.
+
+Anything reaching the outside world goes through a port: a `typing.Protocol` in
+`mmorpg/domain/ports/`, implemented in `mmorpg/infrastructure/`.
+
+**No business logic in handlers.** A handler does exactly three things: parse the
+incoming button text, call an application service, render the resulting screen.
+
+## Packages
+
+```
+src/mmorpg/
+  domain/
+    entities/   Character, Stats, Item, Location, Enemy, Skill
+    rules/      damage, progression, economy formulas
+    procgen/    deterministic generators
+    ports/      repository protocols
+  application/
+    services/   CreateCharacter, EnterLocation, ResolveCombatTurn
+    dto/        boundary data objects
+  infrastructure/
+    persistence/  asyncpg repositories + explicit SQL, in-memory adapters
+    cache/        Redis, in-memory adapter
+    content/      TOML -> frozen dataclasses loader
+  presentation/
+    telegram/
+      handlers/     aiogram routers, one per screen family
+      keyboards/    ReplyKeyboardMarkup builders only
+      screens/      screen text renderers
+      states/       FSM states
+      middlewares/  idempotency, dependency injection, error handling
+  main.py       composition root
+```
+
+## Storage split
+
+| Where | What |
+| --- | --- |
+| PostgreSQL | users, characters (raw stats, level, experience, gold), inventory, equipment, skill loadout with ranks and edges, chosen traits, city and quest progress, accessibility settings, world seed |
+| Redis (with TTL) | FSM state, current screen, active combat, location deltas for the current cycle, update deduplication, shop assortment cache |
+| Nowhere - recomputed | location layout, nodes, enemies, loot, total character stats, shop assortment (all pure functions of seed and cycle) |
+
+Redis keys:
+
+| Key | Value | TTL |
+| --- | --- | --- |
+| `loc:{city}:{slot}:{cycle}:{user}` | cleared-node bitmask | until end of cycle |
+| `upd:{update_id}` | idempotency marker | 300 s |
+| `shop:{city}:{cycle}` | rolled assortment | until end of cycle |
+| `fsm:*` | aiogram `RedisStorage` | 7 days |
+
+`APP_ENV=local` substitutes in-memory implementations of every port, so the bot
+runs with no external services at all. See `docs/adr/0005-in-memory-adapters.md`.
+
+## Latency budget
+
+Target: p95 update handling under 100 ms, p99 under 250 ms.
+
+- Nothing blocks the event loop. `time.sleep`, synchronous HTTP clients and runtime
+  file I/O are forbidden; `asyncio` debug mode plus `loop.slow_callback_duration`
+  logs any violation.
+- All static content is loaded once at startup into `@dataclass(frozen=True,
+  slots=True)` objects held in memory and indexed by dict for O(1) access.
+- Keyboards are cached with `functools.lru_cache` keyed by screen plus state, so
+  markup is not rebuilt per update.
+- Connection pools (asyncpg min 5 / max 20, Redis pool) are created at startup, not
+  per request.
+- Heavy work runs in background tasks via `asyncio.TaskGroup`; the player gets an
+  answer immediately.
+- One player action produces exactly one new message.
+- An idempotency middleware drops duplicate `update_id` values, so a redelivered
+  update never applies an effect twice.
+
+## Runtime
+
+| Mode | Transport | Storage |
+| --- | --- | --- |
+| `APP_ENV=local` | long polling | in-memory |
+| `APP_ENV=dev` | long polling | PostgreSQL + Redis |
+| `APP_ENV=prod` | aiohttp webhook | PostgreSQL + Redis |
+
+The event loop is the stdlib `asyncio.Runner`; uvloop is not used
+(`docs/adr/0004-no-uvloop.md`).
