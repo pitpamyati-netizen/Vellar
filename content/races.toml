@@ -1,0 +1,140 @@
+# Sixteen playable races.
+#
+# Stat budget rule: the sum of positive bonuses may not exceed 3 plus the sum of
+# penalties taken, and the net total may not exceed +3. Verified by
+# tests/content/test_races.py.
+#
+# Stat codes: STR strength, AGI agility, END endurance, INT intellect,
+# WIS wisdom, CHA charisma, LCK luck.
+#
+# Every race has exactly one passive and exactly one active ability. The active
+# one lives in skills.toml with owner = "race:<id>" and occupies the separate
+# racial slot, so it never competes with class skills.
+
+[[race]]
+id = "human"
+name = "Человек"
+description = "Приспосабливаются ко всему и учатся быстрее прочих."
+bonuses = { STR = 1, INT = 1, CHA = 1 }
+passive = { id = "adaptability", name = "Адаптивность", text = "Вы получаете на 5 процентов больше опыта." }
+active = "race_human_second_wind"
+
+[[race]]
+id = "high_elf"
+name = "Высший эльф"
+description = "Живут веками и помнят магию, забытую всеми остальными."
+bonuses = { INT = 2, WIS = 1, END = -1 }
+passive = { id = "arcane_legacy", name = "Наследие арканы", text = "Ваш запас маны больше на 10 процентов." }
+active = "race_high_elf_mana_surge"
+
+[[race]]
+id = "wood_elf"
+name = "Лесной эльф"
+description = "Ходят по лесу так, что лес их не замечает."
+bonuses = { AGI = 2, WIS = 1 }
+passive = { id = "forest_paths", name = "Тропы леса", text = "Шанс засады под открытым небом ниже на 20 процентов." }
+active = "race_wood_elf_true_shot"
+
+[[race]]
+id = "dark_elf"
+name = "Тёмный эльф"
+description = "Выросли под землёй и не доверяют дневному свету."
+bonuses = { AGI = 2, INT = 1, CHA = -1 }
+passive = { id = "darkvision", name = "Взор во тьме", text = "В тёмных местах вы не теряете точность." }
+active = "race_dark_elf_gloom_cloud"
+
+[[race]]
+id = "half_elf"
+name = "Полуэльф"
+description = "Свои и там, и там, а значит нигде до конца."
+bonuses = { AGI = 1, WIS = 1, CHA = 1 }
+passive = { id = "diplomat", name = "Дипломат", text = "Цены в лавках для вас ниже на 10 процентов." }
+active = "race_half_elf_charm"
+
+[[race]]
+id = "dwarf"
+name = "Дварф"
+description = "Камень им роднее неба, а упрямство крепче камня."
+bonuses = { END = 2, STR = 1 }
+passive = { id = "stone_skin", name = "Каменная кожа", text = "Ваша броня выше на 10 процентов." }
+active = "race_dwarf_ancestral_stance"
+
+[[race]]
+id = "gnome"
+name = "Гном"
+description = "Разбирают на части всё, до чего дотянутся, и обычно собирают обратно."
+bonuses = { INT = 2, AGI = 1, STR = -1 }
+passive = { id = "tinkerer", name = "Механик", text = "Результат ремесла и разбора выше на 15 процентов." }
+active = "race_gnome_cunning_trap"
+
+[[race]]
+id = "halfling"
+name = "Полурослик"
+description = "Малы ростом и необъяснимо везучи."
+bonuses = { LCK = 2, AGI = 1 }
+passive = { id = "lucky", name = "Везунчик", text = "Раз за бой вы переброшиваете неудачную проверку." }
+active = "race_halfling_nimbleness"
+
+[[race]]
+id = "orc"
+name = "Орк"
+description = "Считают боль поводом бить сильнее."
+bonuses = { STR = 3, END = 1, INT = -1 }
+passive = { id = "fury", name = "Ярость", text = "Чем меньше у вас здоровья, тем выше ваш урон, до 30 процентов." }
+active = "race_orc_war_cry"
+
+[[race]]
+id = "half_orc"
+name = "Полуорк"
+description = "Слишком человек для орков и слишком орк для людей."
+bonuses = { STR = 2, END = 1 }
+passive = { id = "unbreakable", name = "Несгибаемость", text = "Раз за бой смертельный удар оставляет вам 1 здоровья." }
+active = "race_half_orc_savage_blow"
+
+[[race]]
+id = "goblin"
+name = "Гоблин"
+description = "Берут не силой, а тем, что плохо лежит."
+bonuses = { AGI = 2, LCK = 1, STR = -1 }
+passive = { id = "scavenger", name = "Падальщик", text = "С противников вы получаете на 20 процентов больше золота." }
+active = "race_goblin_dirty_trick"
+
+[[race]]
+id = "troll"
+name = "Тролль"
+description = "Медленно думают, быстро заживают."
+bonuses = { STR = 2, END = 2, INT = -2 }
+passive = { id = "regeneration", name = "Регенерация", text = "В конце вашего хода вы восстанавливаете 2 процента здоровья." }
+active = "race_troll_crushing_swing"
+
+[[race]]
+id = "dragonborn"
+name = "Драконорождённый"
+description = "Носят кровь дракона и его же дурной характер."
+bonuses = { STR = 2, CHA = 1 }
+passive = { id = "scales", name = "Чешуя", text = "Вы сопротивляетесь стихии своего происхождения на 25 процентов." }
+active = "race_dragonborn_breath"
+
+[[race]]
+id = "tiefling"
+name = "Тифлинг"
+description = "Наследие, которого никто не просил, но которое всегда при них."
+bonuses = { CHA = 2, INT = 1 }
+passive = { id = "infernal_legacy", name = "Адское наследие", text = "Вы сопротивляетесь огню на 25 процентов." }
+active = "race_tiefling_curse_seal"
+
+[[race]]
+id = "aasimar"
+name = "Аасимар"
+description = "В их крови свет, и он светит независимо от их желания."
+bonuses = { WIS = 2, CHA = 1 }
+passive = { id = "heavens_light", name = "Свет небес", text = "Получаемое вами лечение выше на 15 процентов." }
+active = "race_aasimar_healing_hand"
+
+[[race]]
+id = "lizardfolk"
+name = "Ящеролюд"
+description = "Холодная кровь, ровное дыхание, никакой паники."
+bonuses = { END = 2, LCK = 1, CHA = -1 }
+passive = { id = "cold_blood", name = "Хладнокровие", text = "Вы невосприимчивы к страху." }
+active = "race_lizardfolk_tail_drop"

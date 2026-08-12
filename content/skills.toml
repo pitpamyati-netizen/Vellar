@@ -1,0 +1,2222 @@
+# Skills: 8 active + 6 passive per class, plus one active per race.
+#
+# Race passives are inherent and live in races.toml - they are always on and never
+# occupy a slot. The racial active listed here occupies the separate racial slot.
+#
+# The panel is fixed forever: 6 active slots, 3 passive slots, 1 racial slot.
+# Depth comes from ranks 1-5 and from the edge chosen at rank 3, never from extra
+# buttons. Both edges of every skill are declared here; their codes are derived as
+# "<code>_a" and "<code>_b" in the order they appear. See docs/skills.md.
+#
+# scaling: which primary stat multiplies the power.
+# power: base value at rank 1; each rank adds rank_step (default 0.15) of it.
+
+[meta]
+max_rank = 5
+edge_rank = 3
+default_rank_step = 0.15
+skill_point_per_level = 1
+
+# Every active skill declares one of these effects. The combat engine implements
+# each of them, and tests/domain/test_combat.py fails if content introduces an
+# effect the engine does not handle. Passive skills instead declare a modifier key
+# from traits.toml [meta].modifier_keys - one vocabulary for traits, equipment and
+# passives.
+targets = ["self", "enemy", "all_enemies"]
+active_effects = [
+    "avoid_combat",
+    "buff_all_stats",
+    "buff_armor",
+    "buff_avatar",
+    "buff_cooldown_reset",
+    "buff_counter",
+    "buff_damage",
+    "buff_damage_taken",
+    "buff_dodge",
+    "buff_evade_full",
+    "buff_form_bear",
+    "buff_form_wolf",
+    "buff_free_cast",
+    "buff_lifesteal",
+    "cleanse",
+    "cleanse_dodge",
+    "cleanse_shield",
+    "damage",
+    "damage_and_heal",
+    "damage_aoe",
+    "damage_aoe_arcane",
+    "damage_aoe_elemental",
+    "damage_aoe_fire",
+    "damage_aoe_holy",
+    "damage_aoe_nature",
+    "damage_aoe_slow",
+    "damage_aoe_stun",
+    "damage_chain",
+    "damage_companion",
+    "damage_crit",
+    "damage_dot",
+    "damage_execute",
+    "damage_fire",
+    "damage_guaranteed_crit",
+    "damage_holy",
+    "damage_initiative",
+    "damage_multi",
+    "damage_nature",
+    "damage_pierce",
+    "damage_reckless",
+    "damage_savage",
+    "damage_slow",
+    "damage_steal",
+    "damage_stun",
+    "debuff_accuracy",
+    "debuff_damage",
+    "debuff_death_mark",
+    "debuff_root",
+    "debuff_vulnerable",
+    "heal",
+    "heal_big",
+    "heal_over_time",
+    "heal_percent",
+    "shield",
+    "taunt",
+]
+
+# =====================================================================
+# Warrior
+# =====================================================================
+
+[[skill]]
+code = "warrior_cleave"
+name = "Рассечение"
+owner = "class:warrior"
+kind = "active"
+level = 1
+cost = 10
+cooldown = 0
+target = "enemy"
+effect = "damage"
+power = 14
+scaling = "STR"
+text = "Тяжёлый рубящий удар по одной цели."
+edges = [
+    { name = "Кровопускание", text = "Цель теряет здоровье ещё 3 хода." },
+    { name = "Размах", text = "Удар задевает вторую цель на 60 процентов урона." },
+]
+
+[[skill]]
+code = "warrior_taunt"
+name = "Провокация"
+owner = "class:warrior"
+kind = "active"
+level = 4
+cost = 15
+cooldown = 2
+target = "enemy"
+effect = "taunt"
+power = 20
+scaling = "END"
+text = "Противник переключается на вас и бьёт слабее на 20 процентов."
+edges = [
+    { name = "Оскорбление", text = "Цель теряет ещё 15 процентов точности." },
+    { name = "Вызов", text = "Провокация задевает всех противников." },
+]
+
+[[skill]]
+code = "warrior_shield_bash"
+name = "Удар щитом"
+owner = "class:warrior"
+kind = "active"
+level = 8
+cost = 18
+cooldown = 3
+target = "enemy"
+effect = "damage_stun"
+power = 20
+scaling = "STR"
+text = "Урон и пропуск хода цели."
+edges = [
+    { name = "Оглушение", text = "Цель пропускает ещё один ход." },
+    { name = "Отбрасывание", text = "Цель теряет 30 процентов инициативы до конца боя." },
+]
+
+[[skill]]
+code = "warrior_blade_whirl"
+name = "Вихрь клинков"
+owner = "class:warrior"
+kind = "active"
+level = 14
+cost = 25
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe"
+power = 22
+scaling = "STR"
+text = "Удар по всем противникам."
+edges = [
+    { name = "Расширенный вихрь", text = "Урон выше на 25 процентов, откат дольше на 1 ход." },
+    { name = "Короткий вихрь", text = "Откат короче на 1 ход." },
+]
+
+[[skill]]
+code = "warrior_rally"
+name = "Клич сплочения"
+owner = "class:warrior"
+kind = "active"
+level = 22
+cost = 20
+cooldown = 4
+target = "self"
+effect = "buff_damage"
+power = 25
+scaling = "END"
+text = "Ваш урон выше на 25 процентов на 3 хода."
+edges = [
+    { name = "Боевой дух", text = "Дополнительно восстанавливает 10 процентов здоровья." },
+    { name = "Долгий клич", text = "Действует 5 ходов вместо 3." },
+]
+
+[[skill]]
+code = "warrior_riposte"
+name = "Ответный выпад"
+owner = "class:warrior"
+kind = "active"
+level = 35
+cost = 22
+cooldown = 3
+target = "self"
+effect = "buff_counter"
+power = 40
+scaling = "STR"
+text = "3 хода вы отвечаете на каждый удар по вам."
+edges = [
+    { name = "Жёсткий ответ", text = "Ответный урон выше на 40 процентов." },
+    { name = "Парирование", text = "Дополнительно даёт 15 процентов уклонения." },
+]
+
+[[skill]]
+code = "warrior_breach"
+name = "Пробой строя"
+owner = "class:warrior"
+kind = "active"
+level = 60
+cost = 30
+cooldown = 3
+target = "enemy"
+effect = "damage_pierce"
+power = 70
+scaling = "STR"
+text = "Удар игнорирует половину брони цели."
+edges = [
+    { name = "Полный пробой", text = "Игнорирует всю броню цели." },
+    { name = "Раскол", text = "Цель получает на 15 процентов больше урона 3 хода." },
+]
+
+[[skill]]
+code = "warrior_last_stand"
+name = "Последний рубеж"
+owner = "class:warrior"
+kind = "active"
+level = 100
+cost = 40
+cooldown = 6
+target = "self"
+effect = "shield"
+power = 120
+scaling = "END"
+text = "Поглощает урон и не даёт вам пасть 3 хода."
+edges = [
+    { name = "Несокрушимость", text = "Щит больше на 50 процентов." },
+    { name = "Второе дыхание рубежа", text = "По окончании восстанавливает 20 процентов здоровья." },
+]
+
+[[skill]]
+code = "warrior_toughness"
+name = "Стойкость"
+owner = "class:warrior"
+kind = "passive"
+level = 2
+effect = "armor_percent"
+power = 6
+text = "Ваша броня выше."
+edges = [
+    { name = "Каменная стойка", text = "Броня выше ещё на 4 процента." },
+    { name = "Гибкая стойка", text = "Половина прибавки идёт в уклонение." },
+]
+
+[[skill]]
+code = "warrior_weapon_mastery"
+name = "Оружейная выучка"
+owner = "class:warrior"
+kind = "passive"
+level = 6
+effect = "physical_damage_percent"
+power = 7
+text = "Физический урон выше."
+edges = [
+    { name = "Тяжёлая рука", text = "Прибавка выше, но точность ниже на 4 процента." },
+    { name = "Верный удар", text = "Точность выше на 6 процентов." },
+]
+
+[[skill]]
+code = "warrior_veteran"
+name = "Ветеран"
+owner = "class:warrior"
+kind = "passive"
+level = 12
+effect = "health_percent"
+power = 8
+text = "Максимальное здоровье выше."
+edges = [
+    { name = "Шрамы", text = "Прибавка выше на 4 процента." },
+    { name = "Опыт боёв", text = "Дополнительно 5 процентов сопротивления магии." },
+]
+
+[[skill]]
+code = "warrior_battle_focus"
+name = "Боевая собранность"
+owner = "class:warrior"
+kind = "passive"
+level = 20
+effect = "resource_regen_percent"
+power = 12
+text = "Отвага копится быстрее."
+edges = [
+    { name = "Хладнокровие боя", text = "Прибавка выше на 8 процентов." },
+    { name = "Резерв", text = "Запас отваги больше на 15 процентов." },
+]
+
+[[skill]]
+code = "warrior_iron_guard"
+name = "Железная защита"
+owner = "class:warrior"
+kind = "passive"
+level = 30
+effect = "damage_taken_percent"
+power = -7
+text = "Вы получаете меньше урона."
+edges = [
+    { name = "Глухая защита", text = "Ещё на 4 процента меньше урона, но урон ниже на 3." },
+    { name = "Активная защита", text = "Дополнительно 5 процентов уклонения." },
+]
+
+[[skill]]
+code = "warrior_undying"
+name = "Несдающийся"
+owner = "class:warrior"
+kind = "passive"
+level = 50
+effect = "low_health_damage_percent"
+power = 20
+text = "На низком здоровье вы бьёте сильнее."
+edges = [
+    { name = "Отчаяние", text = "Прибавка выше на 15 процентов." },
+    { name = "Упорство", text = "На низком здоровье вы получаете на 10 процентов меньше урона." },
+]
+
+# =====================================================================
+# Barbarian
+# =====================================================================
+
+[[skill]]
+code = "barbarian_reckless_swing"
+name = "Безрассудный замах"
+owner = "class:barbarian"
+kind = "active"
+level = 1
+cost = 0
+cooldown = 0
+target = "enemy"
+effect = "damage_reckless"
+power = 18
+scaling = "STR"
+text = "Сильный удар, который открывает вас на один ход."
+edges = [
+    { name = "Двойной замах", text = "Бьёт дважды по 60 процентов урона." },
+    { name = "Собранный замах", text = "Вы больше не открываетесь после удара." },
+]
+
+[[skill]]
+code = "barbarian_roar"
+name = "Рёв"
+owner = "class:barbarian"
+kind = "active"
+level = 4
+cost = 10
+cooldown = 3
+target = "all_enemies"
+effect = "debuff_damage"
+power = 20
+scaling = "STR"
+text = "Все противники бьют слабее на 20 процентов 2 хода."
+edges = [
+    { name = "Устрашение", text = "Дополнительно снижает их точность на 15 процентов." },
+    { name = "Раскат", text = "Действует 4 хода." },
+]
+
+[[skill]]
+code = "barbarian_bloodlust"
+name = "Жажда крови"
+owner = "class:barbarian"
+kind = "active"
+level = 8
+cost = 15
+cooldown = 4
+target = "self"
+effect = "buff_lifesteal"
+power = 30
+scaling = "STR"
+text = "3 хода вы забираете себе 30 процентов нанесённого урона."
+edges = [
+    { name = "Ненасытность", text = "Забирает 45 процентов урона." },
+    { name = "Долгая жажда", text = "Действует 5 ходов." },
+]
+
+[[skill]]
+code = "barbarian_sweep"
+name = "Широкий размах"
+owner = "class:barbarian"
+kind = "active"
+level = 14
+cost = 20
+cooldown = 2
+target = "all_enemies"
+effect = "damage_aoe"
+power = 24
+scaling = "STR"
+text = "Удар по всем противникам."
+edges = [
+    { name = "Сокрушающий размах", text = "Урон выше на 30 процентов по раненым целям." },
+    { name = "Быстрый размах", text = "Откат короче на 1 ход." },
+]
+
+[[skill]]
+code = "barbarian_hide_fury"
+name = "Ярость шкуры"
+owner = "class:barbarian"
+kind = "active"
+level = 22
+cost = 18
+cooldown = 4
+target = "self"
+effect = "buff_armor"
+power = 35
+scaling = "END"
+text = "Броня выше на 35 процентов 3 хода."
+edges = [
+    { name = "Толстая шкура", text = "Дополнительно 10 процентов сопротивления стихиям." },
+    { name = "Кипящая кровь", text = "Дополнительно 10 процентов урона." },
+]
+
+[[skill]]
+code = "barbarian_earthshaker"
+name = "Сотрясение земли"
+owner = "class:barbarian"
+kind = "active"
+level = 35
+cost = 28
+cooldown = 4
+target = "all_enemies"
+effect = "damage_aoe_stun"
+power = 45
+scaling = "STR"
+text = "Урон по всем и шанс сбить их с хода."
+edges = [
+    { name = "Разлом", text = "Оглушение срабатывает всегда." },
+    { name = "Толчок", text = "Урон выше на 25 процентов." },
+]
+
+[[skill]]
+code = "barbarian_frenzy"
+name = "Исступление"
+owner = "class:barbarian"
+kind = "active"
+level = 60
+cost = 30
+cooldown = 5
+target = "self"
+effect = "buff_damage"
+power = 50
+scaling = "STR"
+text = "Урон выше на 50 процентов, броня ниже на 30, на 3 хода."
+edges = [
+    { name = "Слепая ярость", text = "Урон выше на 75 процентов, броня ниже на 50." },
+    { name = "Управляемое исступление", text = "Броня не снижается." },
+]
+
+[[skill]]
+code = "barbarian_avatar_of_rage"
+name = "Воплощение ярости"
+owner = "class:barbarian"
+kind = "active"
+level = 100
+cost = 45
+cooldown = 7
+target = "self"
+effect = "buff_avatar"
+power = 80
+scaling = "STR"
+text = "4 хода вы бьёте вдвое сильнее и не можете быть оглушены."
+edges = [
+    { name = "Бессмертная ярость", text = "Первый смертельный удар за это время не убивает вас." },
+    { name = "Заразительная ярость", text = "Каждое убийство продлевает эффект на ход." },
+]
+
+[[skill]]
+code = "barbarian_rage_engine"
+name = "Двигатель ярости"
+owner = "class:barbarian"
+kind = "passive"
+level = 2
+effect = "resource_regen_percent"
+power = 15
+text = "Ярость копится быстрее."
+edges = [
+    { name = "Кипение", text = "Прибавка выше на 10 процентов." },
+    { name = "Ровный огонь", text = "Ярость не сгорает между боями." },
+]
+
+[[skill]]
+code = "barbarian_hard_bones"
+name = "Крепкие кости"
+owner = "class:barbarian"
+kind = "passive"
+level = 6
+effect = "health_percent"
+power = 10
+text = "Максимальное здоровье выше."
+edges = [
+    { name = "Толстокожесть", text = "Прибавка выше на 5 процентов." },
+    { name = "Сопротивление", text = "Дополнительно 10 процентов сопротивления яду." },
+]
+
+[[skill]]
+code = "barbarian_naked_strength"
+name = "Голая сила"
+owner = "class:barbarian"
+kind = "passive"
+level = 12
+effect = "damage_percent"
+power = 10
+text = "Урон выше, броня ниже."
+edges = [
+    { name = "Дикарь", text = "Урон выше ещё на 8 процентов, броня ниже на 8." },
+    { name = "Осторожный дикарь", text = "Броня не снижается." },
+]
+
+[[skill]]
+code = "barbarian_blood_scent"
+name = "Запах крови"
+owner = "class:barbarian"
+kind = "passive"
+level = 20
+effect = "low_health_damage_percent"
+power = 20
+text = "По раненым целям вы бьёте сильнее."
+edges = [
+    { name = "Охота", text = "Прибавка выше на 15 процентов." },
+    { name = "Добивание", text = "Убийство восстанавливает 10 процентов здоровья." },
+]
+
+[[skill]]
+code = "barbarian_stamina"
+name = "Звериная выносливость"
+owner = "class:barbarian"
+kind = "passive"
+level = 30
+effect = "regen_per_turn_percent"
+power = 2
+text = "В конце хода вы восстанавливаете часть здоровья."
+edges = [
+    { name = "Живучесть", text = "Восстановление вдвое выше вне боя." },
+    { name = "Второе сердце", text = "Восстановление выше на 1 процент." },
+]
+
+[[skill]]
+code = "barbarian_terror"
+name = "Ужас в бою"
+owner = "class:barbarian"
+kind = "passive"
+level = 50
+effect = "crit_damage_percent"
+power = 20
+text = "Критический урон выше."
+edges = [
+    { name = "Кровавое зрелище", text = "Прибавка выше на 15 процентов." },
+    { name = "Паника", text = "Криты снижают урон цели на 10 процентов на 2 хода." },
+]
+
+# =====================================================================
+# Paladin
+# =====================================================================
+
+[[skill]]
+code = "paladin_smite"
+name = "Кара"
+owner = "class:paladin"
+kind = "active"
+level = 1
+cost = 12
+cooldown = 0
+target = "enemy"
+effect = "damage_holy"
+power = 13
+scaling = "CHA"
+text = "Светлый урон по одной цели."
+edges = [
+    { name = "Свет возмездия", text = "По нежити урон выше на 50 процентов." },
+    { name = "Милосердная кара", text = "Вы восстанавливаете 20 процентов нанесённого урона." },
+]
+
+[[skill]]
+code = "paladin_shield_of_faith"
+name = "Щит веры"
+owner = "class:paladin"
+kind = "active"
+level = 4
+cost = 16
+cooldown = 3
+target = "self"
+effect = "shield"
+power = 40
+scaling = "CHA"
+text = "Поглощает урон 3 хода."
+edges = [
+    { name = "Крепкий щит", text = "Щит больше на 40 процентов." },
+    { name = "Отражающий щит", text = "Возвращает 25 процентов поглощённого урона." },
+]
+
+[[skill]]
+code = "paladin_lay_on_hands"
+name = "Возложение рук"
+owner = "class:paladin"
+kind = "active"
+level = 8
+cost = 20
+cooldown = 4
+target = "self"
+effect = "heal"
+power = 45
+scaling = "CHA"
+text = "Восстанавливает здоровье."
+edges = [
+    { name = "Полное исцеление", text = "Лечение выше на 50 процентов, откат дольше на 2 хода." },
+    { name = "Очищающее касание", text = "Дополнительно снимает один отрицательный эффект." },
+]
+
+[[skill]]
+code = "paladin_consecrate"
+name = "Освящение"
+owner = "class:paladin"
+kind = "active"
+level = 14
+cost = 24
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe"
+power = 20
+scaling = "CHA"
+text = "Светлый урон по всем противникам."
+edges = [
+    { name = "Выжженная земля", text = "Урон повторяется в конце следующего хода." },
+    { name = "Освящённая земля", text = "Вы получаете 10 процентов брони на 3 хода." },
+]
+
+[[skill]]
+code = "paladin_aegis"
+name = "Эгида"
+owner = "class:paladin"
+kind = "active"
+level = 22
+cost = 22
+cooldown = 4
+target = "self"
+effect = "buff_damage_taken"
+power = 30
+scaling = "END"
+text = "Вы получаете на 30 процентов меньше урона 3 хода."
+edges = [
+    { name = "Непоколебимость", text = "Снижение доходит до 45 процентов." },
+    { name = "Длань защиты", text = "Действует 5 ходов." },
+]
+
+[[skill]]
+code = "paladin_judgment"
+name = "Суд"
+owner = "class:paladin"
+kind = "active"
+level = 35
+cost = 30
+cooldown = 3
+target = "enemy"
+effect = "damage_holy"
+power = 55
+scaling = "CHA"
+text = "Тяжёлый светлый урон по одной цели."
+edges = [
+    { name = "Приговор", text = "По целям ниже половины здоровья урон выше вдвое." },
+    { name = "Оправдание", text = "Вы восстанавливаете 30 процентов нанесённого урона." },
+]
+
+[[skill]]
+code = "paladin_sanctuary"
+name = "Убежище"
+owner = "class:paladin"
+kind = "active"
+level = 60
+cost = 32
+cooldown = 5
+target = "self"
+effect = "cleanse_shield"
+power = 90
+scaling = "CHA"
+text = "Снимает все отрицательные эффекты и даёт щит."
+edges = [
+    { name = "Святая земля", text = "Дополнительно лечит 15 процентов здоровья." },
+    { name = "Отпор", text = "Оглушает всех противников на 1 ход." },
+]
+
+[[skill]]
+code = "paladin_divine_intervention"
+name = "Вмешательство свыше"
+owner = "class:paladin"
+kind = "active"
+level = 100
+cost = 45
+cooldown = 8
+target = "self"
+effect = "heal_big"
+power = 200
+scaling = "CHA"
+text = "Полностью возвращает вас в бой."
+edges = [
+    { name = "Второй шанс", text = "Дополнительно даёт неуязвимость на 1 ход." },
+    { name = "Кара небес", text = "Дополнительно наносит светлый урон всем противникам." },
+]
+
+[[skill]]
+code = "paladin_aura"
+name = "Аура защиты"
+owner = "class:paladin"
+kind = "passive"
+level = 2
+effect = "armor_percent"
+power = 7
+text = "Ваша броня выше."
+edges = [
+    { name = "Аура стали", text = "Прибавка выше на 5 процентов." },
+    { name = "Аура света", text = "Дополнительно 8 процентов сопротивления магии." },
+]
+
+[[skill]]
+code = "paladin_devotion"
+name = "Преданность"
+owner = "class:paladin"
+kind = "passive"
+level = 6
+effect = "healing_done_percent"
+power = 12
+text = "Ваше лечение сильнее."
+edges = [
+    { name = "Служение", text = "Прибавка выше на 8 процентов." },
+    { name = "Обет", text = "Лечение дополнительно даёт небольшой щит." },
+]
+
+[[skill]]
+code = "paladin_heavy_training"
+name = "Тяжёлая выучка"
+owner = "class:paladin"
+kind = "passive"
+level = 12
+effect = "health_percent"
+power = 8
+text = "Максимальное здоровье выше."
+edges = [
+    { name = "Латная выучка", text = "Дополнительно 5 процентов брони." },
+    { name = "Походная выучка", text = "Дополнительно 8 процентов инициативы." },
+]
+
+[[skill]]
+code = "paladin_faith_reserve"
+name = "Запас благодати"
+owner = "class:paladin"
+kind = "passive"
+level = 20
+effect = "resource_percent"
+power = 15
+text = "Запас благодати больше."
+edges = [
+    { name = "Глубокий запас", text = "Прибавка выше на 10 процентов." },
+    { name = "Быстрый приток", text = "Благодать восстанавливается на 12 процентов быстрее." },
+]
+
+[[skill]]
+code = "paladin_retribution"
+name = "Возмездие"
+owner = "class:paladin"
+kind = "passive"
+level = 30
+effect = "reflect_percent"
+power = 10
+text = "Часть полученного урона возвращается обидчику."
+edges = [
+    { name = "Зеркало", text = "Возврат выше на 8 процентов." },
+    { name = "Искупление", text = "Возврат дополнительно лечит вас на треть." },
+]
+
+[[skill]]
+code = "paladin_beacon"
+name = "Маяк надежды"
+owner = "class:paladin"
+kind = "passive"
+level = 50
+effect = "healing_taken_percent"
+power = 15
+text = "Получаемое вами лечение сильнее."
+edges = [
+    { name = "Свет вокруг", text = "Прибавка выше на 10 процентов." },
+    { name = "Тихий свет", text = "Дополнительно 1 процент восстановления в конце хода." },
+]
+
+# =====================================================================
+# Ranger
+# =====================================================================
+
+[[skill]]
+code = "ranger_aimed_shot"
+name = "Прицельный выстрел"
+owner = "class:ranger"
+kind = "active"
+level = 1
+cost = 10
+cooldown = 0
+target = "enemy"
+effect = "damage"
+power = 13
+scaling = "AGI"
+text = "Точный выстрел по одной цели."
+edges = [
+    { name = "Выстрел в глаз", text = "Шанс критического удара выше на 25 процентов." },
+    { name = "Двойной выстрел", text = "Стреляет дважды по 60 процентов урона." },
+]
+
+[[skill]]
+code = "ranger_hunters_mark"
+name = "Метка охотника"
+owner = "class:ranger"
+kind = "active"
+level = 4
+cost = 14
+cooldown = 3
+target = "enemy"
+effect = "debuff_vulnerable"
+power = 20
+scaling = "WIS"
+text = "Цель получает на 20 процентов больше урона 3 хода."
+edges = [
+    { name = "Глубокая метка", text = "Уязвимость выше на 10 процентов." },
+    { name = "Широкая метка", text = "Метка переходит на новую цель после смерти прежней." },
+]
+
+[[skill]]
+code = "ranger_volley"
+name = "Залп"
+owner = "class:ranger"
+kind = "active"
+level = 8
+cost = 20
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe"
+power = 18
+scaling = "AGI"
+text = "Обстрел всех противников."
+edges = [
+    { name = "Плотный залп", text = "Урон выше на 25 процентов." },
+    { name = "Зажигательный залп", text = "Цели горят ещё 2 хода." },
+]
+
+[[skill]]
+code = "ranger_snare"
+name = "Ловчая петля"
+owner = "class:ranger"
+kind = "active"
+level = 14
+cost = 18
+cooldown = 3
+target = "enemy"
+effect = "damage_slow"
+power = 22
+scaling = "AGI"
+text = "Урон и потеря инициативы у цели."
+edges = [
+    { name = "Стальная петля", text = "Цель пропускает следующий ход." },
+    { name = "Двойная петля", text = "Задевает вторую цель." },
+]
+
+[[skill]]
+code = "ranger_camouflage"
+name = "Маскировка"
+owner = "class:ranger"
+kind = "active"
+level = 22
+cost = 20
+cooldown = 4
+target = "self"
+effect = "buff_dodge"
+power = 40
+scaling = "AGI"
+text = "Уклонение выше на 40 процентов 2 хода."
+edges = [
+    { name = "Полное слияние", text = "Первый удар из маскировки бьёт вдвое сильнее." },
+    { name = "Долгая тень", text = "Действует 4 хода." },
+]
+
+[[skill]]
+code = "ranger_piercing_arrow"
+name = "Бронебойная стрела"
+owner = "class:ranger"
+kind = "active"
+level = 35
+cost = 26
+cooldown = 3
+target = "enemy"
+effect = "damage_pierce"
+power = 50
+scaling = "AGI"
+text = "Игнорирует половину брони цели."
+edges = [
+    { name = "Насквозь", text = "Задевает всех противников за целью на 50 процентов урона." },
+    { name = "Пробойная", text = "Игнорирует всю броню." },
+]
+
+[[skill]]
+code = "ranger_beast_call"
+name = "Зов зверя"
+owner = "class:ranger"
+kind = "active"
+level = 60
+cost = 30
+cooldown = 5
+target = "enemy"
+effect = "damage_companion"
+power = 65
+scaling = "WIS"
+text = "Ваш зверь бьёт выбранную цель 3 хода подряд."
+edges = [
+    { name = "Свирепый зверь", text = "Урон зверя выше на 40 процентов." },
+    { name = "Верный зверь", text = "Зверь дополнительно принимает удар за вас один раз." },
+]
+
+[[skill]]
+code = "ranger_rain_of_arrows"
+name = "Дождь стрел"
+owner = "class:ranger"
+kind = "active"
+level = 100
+cost = 42
+cooldown = 6
+target = "all_enemies"
+effect = "damage_aoe"
+power = 110
+scaling = "AGI"
+text = "Накрывает всех противников градом стрел."
+edges = [
+    { name = "Ливень", text = "Урон выше на 40 процентов." },
+    { name = "Затяжной дождь", text = "Повторяется в конце следующего хода на 50 процентов." },
+]
+
+[[skill]]
+code = "ranger_keen_eye"
+name = "Острый глаз"
+owner = "class:ranger"
+kind = "passive"
+level = 2
+effect = "accuracy_percent"
+power = 10
+text = "Ваша точность выше."
+edges = [
+    { name = "Зоркость", text = "Прибавка выше на 6 процентов." },
+    { name = "Слабое место", text = "Дополнительно 3 процента шанса крита." },
+]
+
+[[skill]]
+code = "ranger_tracker"
+name = "Следопытство"
+owner = "class:ranger"
+kind = "passive"
+level = 6
+effect = "drop_rate_percent"
+power = 12
+text = "Добыча выпадает чаще."
+edges = [
+    { name = "Опытный следопыт", text = "Прибавка выше на 8 процентов." },
+    { name = "Знаток троп", text = "Шанс засады ниже на 20 процентов." },
+]
+
+[[skill]]
+code = "ranger_steady_aim"
+name = "Твёрдая рука"
+owner = "class:ranger"
+kind = "passive"
+level = 12
+effect = "crit_chance_percent"
+power = 5
+text = "Шанс критического удара выше."
+edges = [
+    { name = "Расчётливость", text = "Критический урон выше на 20 процентов." },
+    { name = "Скорость", text = "Дополнительно 8 процентов инициативы." },
+]
+
+[[skill]]
+code = "ranger_light_step"
+name = "Лёгкий шаг"
+owner = "class:ranger"
+kind = "passive"
+level = 20
+effect = "dodge_percent"
+power = 8
+text = "Ваше уклонение выше."
+edges = [
+    { name = "Ветер в спину", text = "Прибавка выше на 5 процентов." },
+    { name = "Тихий шаг", text = "Дополнительно 10 процентов инициативы." },
+]
+
+[[skill]]
+code = "ranger_focus_flow"
+name = "Поток концентрации"
+owner = "class:ranger"
+kind = "passive"
+level = 30
+effect = "resource_regen_percent"
+power = 15
+text = "Концентрация восстанавливается быстрее."
+edges = [
+    { name = "Дыхание охотника", text = "Прибавка выше на 10 процентов." },
+    { name = "Экономия", text = "Умения стоят на 10 процентов меньше." },
+]
+
+[[skill]]
+code = "ranger_beast_lore"
+name = "Знание зверей"
+owner = "class:ranger"
+kind = "passive"
+level = 50
+effect = "beast_damage_percent"
+power = 20
+text = "Урон по зверям выше."
+edges = [
+    { name = "Охотник на крупных", text = "Урон по элитным противникам выше на 15 процентов." },
+    { name = "Знание повадок", text = "Звери попадают по вам на 15 процентов реже." },
+]
+
+# =====================================================================
+# Rogue
+# =====================================================================
+
+[[skill]]
+code = "rogue_backstab"
+name = "Удар в спину"
+owner = "class:rogue"
+kind = "active"
+level = 1
+cost = 15
+cooldown = 0
+target = "enemy"
+effect = "damage_crit"
+power = 15
+scaling = "AGI"
+text = "Удар с повышенным шансом крита."
+edges = [
+    { name = "Под лопатку", text = "Критический урон выше на 40 процентов." },
+    { name = "Быстрый нож", text = "Стоит на 40 процентов меньше энергии." },
+]
+
+[[skill]]
+code = "rogue_poison_blade"
+name = "Отравленный клинок"
+owner = "class:rogue"
+kind = "active"
+level = 4
+cost = 18
+cooldown = 2
+target = "enemy"
+effect = "damage_dot"
+power = 12
+scaling = "AGI"
+text = "Урон сейчас и яд на 3 хода."
+edges = [
+    { name = "Сильный яд", text = "Урон яда выше на 50 процентов." },
+    { name = "Разъедающий яд", text = "Цель дополнительно теряет 15 процентов брони." },
+]
+
+[[skill]]
+code = "rogue_smoke_bomb"
+name = "Дымовая шашка"
+owner = "class:rogue"
+kind = "active"
+level = 8
+cost = 20
+cooldown = 4
+target = "all_enemies"
+effect = "debuff_accuracy"
+power = 40
+scaling = "AGI"
+text = "Все противники теряют 40 процентов точности на 2 хода."
+edges = [
+    { name = "Едкий дым", text = "Дополнительно наносит урон каждый ход." },
+    { name = "Густой дым", text = "Действует 4 хода." },
+]
+
+[[skill]]
+code = "rogue_flurry"
+name = "Шквал ударов"
+owner = "class:rogue"
+kind = "active"
+level = 14
+cost = 25
+cooldown = 3
+target = "enemy"
+effect = "damage_multi"
+power = 12
+scaling = "AGI"
+text = "Три быстрых удара по одной цели."
+edges = [
+    { name = "Пять клинков", text = "Наносит пять ударов вместо трёх." },
+    { name = "Точный шквал", text = "Каждый удар может стать критическим." },
+]
+
+[[skill]]
+code = "rogue_vanish"
+name = "Исчезновение"
+owner = "class:rogue"
+kind = "active"
+level = 22
+cost = 22
+cooldown = 5
+target = "self"
+effect = "buff_evade_full"
+power = 100
+scaling = "AGI"
+text = "Вы полностью избегаете следующего удара."
+edges = [
+    { name = "Тень за спиной", text = "Следующий ваш удар критический." },
+    { name = "Двойное исчезновение", text = "Избегает двух ударов." },
+]
+
+[[skill]]
+code = "rogue_exploit"
+name = "Уязвимое место"
+owner = "class:rogue"
+kind = "active"
+level = 35
+cost = 28
+cooldown = 3
+target = "enemy"
+effect = "damage_execute"
+power = 55
+scaling = "AGI"
+text = "Урон тем выше, чем меньше здоровья у цели."
+edges = [
+    { name = "Добивание", text = "Против целей ниже четверти здоровья урон удваивается." },
+    { name = "Расчёт", text = "Восстанавливает половину энергии при убийстве." },
+]
+
+[[skill]]
+code = "rogue_shadow_step"
+name = "Шаг сквозь тень"
+owner = "class:rogue"
+kind = "active"
+level = 60
+cost = 30
+cooldown = 4
+target = "enemy"
+effect = "damage_initiative"
+power = 70
+scaling = "AGI"
+text = "Урон и ваш следующий ход наступает раньше."
+edges = [
+    { name = "Из ниоткуда", text = "Урон выше на 40 процентов, если вы ходите первым." },
+    { name = "Тень позади", text = "Дополнительно даёт 20 процентов уклонения на 2 хода." },
+]
+
+[[skill]]
+code = "rogue_death_mark"
+name = "Метка смерти"
+owner = "class:rogue"
+kind = "active"
+level = 100
+cost = 40
+cooldown = 6
+target = "enemy"
+effect = "debuff_death_mark"
+power = 40
+scaling = "LCK"
+text = "Цель получает на 40 процентов больше урона 4 хода."
+edges = [
+    { name = "Приговор", text = "Если цель умирает под меткой, метка переходит дальше." },
+    { name = "Клеймо", text = "Уязвимость выше на 20 процентов." },
+]
+
+[[skill]]
+code = "rogue_lethality"
+name = "Смертоносность"
+owner = "class:rogue"
+kind = "passive"
+level = 2
+effect = "crit_damage_percent"
+power = 20
+text = "Критический урон выше."
+edges = [
+    { name = "Точка боли", text = "Прибавка выше на 15 процентов." },
+    { name = "Частота", text = "Дополнительно 3 процента шанса крита." },
+]
+
+[[skill]]
+code = "rogue_light_fingers"
+name = "Ловкие пальцы"
+owner = "class:rogue"
+kind = "passive"
+level = 6
+effect = "gold_percent"
+power = 15
+text = "Вы находите больше золота."
+edges = [
+    { name = "Карманник", text = "Прибавка выше на 10 процентов." },
+    { name = "Скупщик", text = "Продажа выгоднее на 12 процентов." },
+]
+
+[[skill]]
+code = "rogue_evasion"
+name = "Уклонение"
+owner = "class:rogue"
+kind = "passive"
+level = 12
+effect = "dodge_percent"
+power = 10
+text = "Ваше уклонение выше."
+edges = [
+    { name = "Пляска клинков", text = "Прибавка выше на 6 процентов." },
+    { name = "Контратака", text = "Уклонение возвращает 20 процентов урона обидчику." },
+]
+
+[[skill]]
+code = "rogue_opportunist"
+name = "Оппортунист"
+owner = "class:rogue"
+kind = "passive"
+level = 20
+effect = "first_turn_damage_percent"
+power = 25
+text = "Первый удар в бою сильнее."
+edges = [
+    { name = "Засада", text = "Прибавка выше на 20 процентов." },
+    { name = "Инициатива", text = "Дополнительно 12 процентов инициативы." },
+]
+
+[[skill]]
+code = "rogue_energy_flow"
+name = "Второе дыхание вора"
+owner = "class:rogue"
+kind = "passive"
+level = 30
+effect = "resource_regen_percent"
+power = 18
+text = "Энергия восстанавливается быстрее."
+edges = [
+    { name = "Неутомимость", text = "Прибавка выше на 12 процентов." },
+    { name = "Запас сил", text = "Запас энергии больше на 20 процентов." },
+]
+
+[[skill]]
+code = "rogue_treasure_hunter"
+name = "Кладоискатель"
+owner = "class:rogue"
+kind = "passive"
+level = 50
+effect = "rarity_percent"
+power = 15
+text = "Редкая добыча выпадает чаще."
+edges = [
+    { name = "Чутьё на редкое", text = "Прибавка выше на 10 процентов." },
+    { name = "Полные карманы", text = "Дополнительно 12 процентов золота." },
+]
+
+# =====================================================================
+# Mage
+# =====================================================================
+
+[[skill]]
+code = "mage_firebolt"
+name = "Огненная стрела"
+owner = "class:mage"
+kind = "active"
+level = 1
+cost = 12
+cooldown = 0
+target = "enemy"
+effect = "damage_fire"
+power = 15
+scaling = "INT"
+text = "Огненный снаряд по одной цели."
+edges = [
+    { name = "Пламя", text = "Цель горит ещё 2 хода." },
+    { name = "Раскол снаряда", text = "Задевает вторую цель на 50 процентов урона." },
+]
+
+[[skill]]
+code = "mage_frost_nova"
+name = "Ледяная волна"
+owner = "class:mage"
+kind = "active"
+level = 4
+cost = 20
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_slow"
+power = 14
+scaling = "INT"
+text = "Урон холодом по всем и потеря инициативы."
+edges = [
+    { name = "Оковы льда", text = "Один противник пропускает ход." },
+    { name = "Стужа", text = "Урон выше на 30 процентов." },
+]
+
+[[skill]]
+code = "mage_arcane_shield"
+name = "Чародейский щит"
+owner = "class:mage"
+kind = "active"
+level = 8
+cost = 18
+cooldown = 4
+target = "self"
+effect = "shield"
+power = 45
+scaling = "INT"
+text = "Поглощает урон 3 хода."
+edges = [
+    { name = "Плотный щит", text = "Щит больше на 50 процентов." },
+    { name = "Питающий щит", text = "Поглощённый урон возвращается вам маной." },
+]
+
+[[skill]]
+code = "mage_fireball"
+name = "Огненный шар"
+owner = "class:mage"
+kind = "active"
+level = 14
+cost = 28
+cooldown = 2
+target = "all_enemies"
+effect = "damage_aoe_fire"
+power = 26
+scaling = "INT"
+text = "Взрыв, накрывающий всех противников."
+edges = [
+    { name = "Большой шар", text = "Урон выше на 35 процентов, стоит на 30 процентов дороже." },
+    { name = "Экономный шар", text = "Стоит на 40 процентов меньше маны." },
+]
+
+[[skill]]
+code = "mage_chain_lightning"
+name = "Цепная молния"
+owner = "class:mage"
+kind = "active"
+level = 22
+cost = 30
+cooldown = 3
+target = "all_enemies"
+effect = "damage_chain"
+power = 30
+scaling = "INT"
+text = "Молния перескакивает между противниками, слабея."
+edges = [
+    { name = "Долгая цепь", text = "Молния не слабеет при переходах." },
+    { name = "Перегрузка", text = "Первая цель получает вдвое больше урона." },
+]
+
+[[skill]]
+code = "mage_time_slip"
+name = "Смещение времени"
+owner = "class:mage"
+kind = "active"
+level = 35
+cost = 32
+cooldown = 6
+target = "self"
+effect = "buff_cooldown_reset"
+power = 100
+scaling = "INT"
+text = "Сбрасывает откаты ваших умений."
+edges = [
+    { name = "Ускорение", text = "Дополнительно даёт лишний ход." },
+    { name = "Замедление врага", text = "Все противники теряют ход инициативы." },
+]
+
+[[skill]]
+code = "mage_meteor"
+name = "Метеор"
+owner = "class:mage"
+kind = "active"
+level = 60
+cost = 40
+cooldown = 4
+target = "all_enemies"
+effect = "damage_aoe_fire"
+power = 90
+scaling = "INT"
+text = "Тяжёлый удар по всем противникам."
+edges = [
+    { name = "Осколки", text = "Оставляет горящую землю на 2 хода." },
+    { name = "Прямое падение", text = "Урон по одной цели выше вдвое." },
+]
+
+[[skill]]
+code = "mage_arcane_singularity"
+name = "Сингулярность"
+owner = "class:mage"
+kind = "active"
+level = 100
+cost = 50
+cooldown = 7
+target = "all_enemies"
+effect = "damage_aoe_arcane"
+power = 140
+scaling = "INT"
+text = "Стягивает противников в точку и разрывает её."
+edges = [
+    { name = "Схлопывание", text = "Урон выше на 50 процентов по одиночной цели." },
+    { name = "Разрыв", text = "Противники получают на 20 процентов больше урона 3 хода." },
+]
+
+[[skill]]
+code = "mage_arcane_reserve"
+name = "Запас арканы"
+owner = "class:mage"
+kind = "passive"
+level = 2
+effect = "resource_percent"
+power = 15
+text = "Запас маны больше."
+edges = [
+    { name = "Глубокий колодец", text = "Прибавка выше на 10 процентов." },
+    { name = "Быстрый источник", text = "Мана восстанавливается на 12 процентов быстрее." },
+]
+
+[[skill]]
+code = "mage_elemental_focus"
+name = "Стихийная сосредоточенность"
+owner = "class:mage"
+kind = "passive"
+level = 6
+effect = "magic_damage_percent"
+power = 12
+text = "Магический урон выше."
+edges = [
+    { name = "Чистая стихия", text = "Прибавка выше на 8 процентов." },
+    { name = "Широкий охват", text = "Урон по площади выше на 15 процентов." },
+]
+
+[[skill]]
+code = "mage_mana_flow"
+name = "Течение маны"
+owner = "class:mage"
+kind = "passive"
+level = 12
+effect = "resource_regen_percent"
+power = 15
+text = "Мана восстанавливается быстрее."
+edges = [
+    { name = "Полноводность", text = "Прибавка выше на 10 процентов." },
+    { name = "Бережливость", text = "Умения стоят на 10 процентов меньше." },
+]
+
+[[skill]]
+code = "mage_burn"
+name = "Прожигание"
+owner = "class:mage"
+kind = "passive"
+level = 20
+effect = "dot_damage_percent"
+power = 20
+text = "Периодический урон от ваших умений выше."
+edges = [
+    { name = "Долгий огонь", text = "Периодические эффекты длятся на ход дольше." },
+    { name = "Жаркий огонь", text = "Прибавка выше на 15 процентов." },
+]
+
+[[skill]]
+code = "mage_ward"
+name = "Барьер"
+owner = "class:mage"
+kind = "passive"
+level = 30
+effect = "resist_magic_percent"
+power = 15
+text = "Сопротивление магии выше."
+edges = [
+    { name = "Двойной барьер", text = "Прибавка выше на 10 процентов." },
+    { name = "Отражающий барьер", text = "5 процентов магического урона возвращается." },
+]
+
+[[skill]]
+code = "mage_overload"
+name = "Перегрузка"
+owner = "class:mage"
+kind = "passive"
+level = 50
+effect = "crit_chance_percent"
+power = 6
+text = "Шанс критического заклинания выше."
+edges = [
+    { name = "Скачок", text = "Критический урон выше на 25 процентов." },
+    { name = "Разряд", text = "Крит восстанавливает 10 процентов маны." },
+]
+
+# =====================================================================
+# Cleric
+# =====================================================================
+
+[[skill]]
+code = "cleric_mend"
+name = "Исцеление"
+owner = "class:cleric"
+kind = "active"
+level = 1
+cost = 14
+cooldown = 0
+target = "self"
+effect = "heal"
+power = 22
+scaling = "WIS"
+text = "Восстанавливает здоровье."
+edges = [
+    { name = "Быстрое исцеление", text = "Стоит на 40 процентов меньше веры." },
+    { name = "Продлённое исцеление", text = "Дополнительно лечит ещё 3 хода." },
+]
+
+[[skill]]
+code = "cleric_smite_light"
+name = "Свет карающий"
+owner = "class:cleric"
+kind = "active"
+level = 4
+cost = 16
+cooldown = 1
+target = "enemy"
+effect = "damage_holy"
+power = 16
+scaling = "WIS"
+text = "Светлый урон по одной цели."
+edges = [
+    { name = "Ослепление", text = "Цель теряет 20 процентов точности на 2 хода." },
+    { name = "Луч", text = "Задевает вторую цель на 50 процентов урона." },
+]
+
+[[skill]]
+code = "cleric_purify"
+name = "Очищение"
+owner = "class:cleric"
+kind = "active"
+level = 8
+cost = 18
+cooldown = 3
+target = "self"
+effect = "cleanse"
+power = 2
+text = "Снимает два отрицательных эффекта."
+edges = [
+    { name = "Полное очищение", text = "Снимает все отрицательные эффекты." },
+    { name = "Обратный ход", text = "За каждый снятый эффект лечит 8 процентов здоровья." },
+]
+
+[[skill]]
+code = "cleric_blessing"
+name = "Благословение"
+owner = "class:cleric"
+kind = "active"
+level = 14
+cost = 22
+cooldown = 4
+target = "self"
+effect = "buff_all_stats"
+power = 15
+scaling = "WIS"
+text = "Все характеристики выше на 15 процентов 3 хода."
+edges = [
+    { name = "Высшее благословение", text = "Прибавка выше на 10 процентов." },
+    { name = "Долгое благословение", text = "Действует 5 ходов." },
+]
+
+[[skill]]
+code = "cleric_ward"
+name = "Оберег"
+owner = "class:cleric"
+kind = "active"
+level = 22
+cost = 24
+cooldown = 4
+target = "self"
+effect = "shield"
+power = 70
+scaling = "WIS"
+text = "Поглощает урон 3 хода."
+edges = [
+    { name = "Крепкий оберег", text = "Щит больше на 40 процентов." },
+    { name = "Ответный оберег", text = "Возвращает 20 процентов поглощённого урона." },
+]
+
+[[skill]]
+code = "cleric_circle_of_healing"
+name = "Круг исцеления"
+owner = "class:cleric"
+kind = "active"
+level = 35
+cost = 30
+cooldown = 4
+target = "self"
+effect = "heal_over_time"
+power = 60
+scaling = "WIS"
+text = "Лечит вас каждый ход в течение 4 ходов."
+edges = [
+    { name = "Широкий круг", text = "Лечение выше на 40 процентов." },
+    { name = "Крепкий круг", text = "Дополнительно даёт 10 процентов брони." },
+]
+
+[[skill]]
+code = "cleric_pillar_of_light"
+name = "Столп света"
+owner = "class:cleric"
+kind = "active"
+level = 60
+cost = 34
+cooldown = 4
+target = "all_enemies"
+effect = "damage_aoe_holy"
+power = 80
+scaling = "WIS"
+text = "Светлый урон по всем противникам."
+edges = [
+    { name = "Ослепляющий столп", text = "Противники теряют 25 процентов точности на 2 хода." },
+    { name = "Испепеляющий столп", text = "Урон по нежити выше вдвое." },
+]
+
+[[skill]]
+code = "cleric_return"
+name = "Возвращение"
+owner = "class:cleric"
+kind = "active"
+level = 100
+cost = 48
+cooldown = 8
+target = "self"
+effect = "heal_big"
+power = 220
+scaling = "WIS"
+text = "Возвращает вас с края и полностью лечит."
+edges = [
+    { name = "Свет жизни", text = "Дополнительно снимает все отрицательные эффекты." },
+    { name = "Пламя веры", text = "Дополнительно наносит светлый урон всем противникам." },
+]
+
+[[skill]]
+code = "cleric_devout"
+name = "Набожность"
+owner = "class:cleric"
+kind = "passive"
+level = 2
+effect = "healing_done_percent"
+power = 15
+text = "Ваше лечение сильнее."
+edges = [
+    { name = "Истовость", text = "Прибавка выше на 10 процентов." },
+    { name = "Служение", text = "Лечение дополнительно даёт небольшой щит." },
+]
+
+[[skill]]
+code = "cleric_faith_depth"
+name = "Глубина веры"
+owner = "class:cleric"
+kind = "passive"
+level = 6
+effect = "resource_percent"
+power = 15
+text = "Запас веры больше."
+edges = [
+    { name = "Незыблемость", text = "Прибавка выше на 10 процентов." },
+    { name = "Приток", text = "Вера восстанавливается на 12 процентов быстрее." },
+]
+
+[[skill]]
+code = "cleric_holy_armor"
+name = "Святая броня"
+owner = "class:cleric"
+kind = "passive"
+level = 12
+effect = "armor_percent"
+power = 8
+text = "Ваша броня выше."
+edges = [
+    { name = "Латы веры", text = "Прибавка выше на 5 процентов." },
+    { name = "Ореол", text = "Дополнительно 8 процентов сопротивления магии." },
+]
+
+[[skill]]
+code = "cleric_mercy"
+name = "Милосердие"
+owner = "class:cleric"
+kind = "passive"
+level = 20
+effect = "healing_taken_percent"
+power = 15
+text = "Получаемое вами лечение сильнее."
+edges = [
+    { name = "Благодать", text = "Прибавка выше на 10 процентов." },
+    { name = "Тихая молитва", text = "Дополнительно 1 процент восстановления в конце хода." },
+]
+
+[[skill]]
+code = "cleric_undead_bane"
+name = "Гроза нежити"
+owner = "class:cleric"
+kind = "passive"
+level = 30
+effect = "undead_damage_percent"
+power = 25
+text = "Урон по нежити выше."
+edges = [
+    { name = "Изгнание", text = "Прибавка выше на 20 процентов." },
+    { name = "Защита от мёртвых", text = "Нежить наносит вам на 15 процентов меньше урона." },
+]
+
+[[skill]]
+code = "cleric_prayer"
+name = "Молитва"
+owner = "class:cleric"
+kind = "passive"
+level = 50
+effect = "resource_regen_percent"
+power = 18
+text = "Вера восстанавливается быстрее."
+edges = [
+    { name = "Непрестанная молитва", text = "Прибавка выше на 12 процентов." },
+    { name = "Услышанная молитва", text = "Умения стоят на 10 процентов меньше." },
+]
+
+# =====================================================================
+# Druid
+# =====================================================================
+
+[[skill]]
+code = "druid_thorns"
+name = "Шипы"
+owner = "class:druid"
+kind = "active"
+level = 1
+cost = 12
+cooldown = 0
+target = "enemy"
+effect = "damage_nature"
+power = 14
+scaling = "WIS"
+text = "Природный урон по одной цели."
+edges = [
+    { name = "Ядовитые шипы", text = "Цель отравлена ещё 3 хода." },
+    { name = "Заросли", text = "Задевает вторую цель на 60 процентов урона." },
+]
+
+[[skill]]
+code = "druid_entangle"
+name = "Оплетение"
+owner = "class:druid"
+kind = "active"
+level = 4
+cost = 16
+cooldown = 3
+target = "enemy"
+effect = "debuff_root"
+power = 30
+scaling = "WIS"
+text = "Цель теряет 30 процентов инициативы и точности на 2 хода."
+edges = [
+    { name = "Крепкие корни", text = "Цель пропускает следующий ход." },
+    { name = "Широкие корни", text = "Оплетает всех противников." },
+]
+
+[[skill]]
+code = "druid_regrowth"
+name = "Прорастание"
+owner = "class:druid"
+kind = "active"
+level = 8
+cost = 20
+cooldown = 3
+target = "self"
+effect = "heal_over_time"
+power = 30
+scaling = "WIS"
+text = "Лечит вас каждый ход 3 хода."
+edges = [
+    { name = "Бурный рост", text = "Лечение выше на 40 процентов." },
+    { name = "Цепкий рост", text = "Действует 5 ходов." },
+]
+
+[[skill]]
+code = "druid_storm"
+name = "Буря"
+owner = "class:druid"
+kind = "active"
+level = 14
+cost = 26
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_nature"
+power = 24
+scaling = "WIS"
+text = "Природный урон по всем противникам."
+edges = [
+    { name = "Град", text = "Урон выше на 30 процентов." },
+    { name = "Ветер", text = "Противники теряют 20 процентов точности на 2 хода." },
+]
+
+[[skill]]
+code = "druid_bear_form"
+name = "Облик медведя"
+owner = "class:druid"
+kind = "active"
+level = 22
+cost = 24
+cooldown = 5
+target = "self"
+effect = "buff_form_bear"
+power = 40
+scaling = "END"
+text = "3 хода: здоровье и броня выше на 40 процентов."
+edges = [
+    { name = "Ярость медведя", text = "Дополнительно 20 процентов физического урона." },
+    { name = "Шкура медведя", text = "Действует 5 ходов." },
+]
+
+[[skill]]
+code = "druid_wolf_form"
+name = "Облик волка"
+owner = "class:druid"
+kind = "active"
+level = 35
+cost = 26
+cooldown = 5
+target = "self"
+effect = "buff_form_wolf"
+power = 40
+scaling = "AGI"
+text = "3 хода: урон и инициатива выше на 40 процентов."
+edges = [
+    { name = "Стая", text = "Каждый ваш удар бьёт вторую цель на 40 процентов." },
+    { name = "Погоня", text = "Дополнительно 20 процентов уклонения." },
+]
+
+[[skill]]
+code = "druid_natures_wrath"
+name = "Гнев природы"
+owner = "class:druid"
+kind = "active"
+level = 60
+cost = 36
+cooldown = 4
+target = "all_enemies"
+effect = "damage_aoe_nature"
+power = 85
+scaling = "WIS"
+text = "Тяжёлый природный удар по всем противникам."
+edges = [
+    { name = "Земля разверзлась", text = "Противники теряют ход с шансом в половину случаев." },
+    { name = "Живая земля", text = "Вы лечитесь на 20 процентов нанесённого урона." },
+]
+
+[[skill]]
+code = "druid_worldroot"
+name = "Мировой корень"
+owner = "class:druid"
+kind = "active"
+level = 100
+cost = 48
+cooldown = 7
+target = "all_enemies"
+effect = "damage_and_heal"
+power = 120
+scaling = "WIS"
+text = "Урон всем противникам и полное восстановление вам."
+edges = [
+    { name = "Корень жизни", text = "Лечение продолжается ещё 3 хода." },
+    { name = "Корень гнева", text = "Урон выше на 50 процентов." },
+]
+
+[[skill]]
+code = "druid_natural_armor"
+name = "Природная броня"
+owner = "class:druid"
+kind = "passive"
+level = 2
+effect = "armor_percent"
+power = 8
+text = "Ваша броня выше."
+edges = [
+    { name = "Кора", text = "Прибавка выше на 5 процентов." },
+    { name = "Мох", text = "Дополнительно 1 процент восстановления в конце хода." },
+]
+
+[[skill]]
+code = "druid_photosynthesis"
+name = "Фотосинтез"
+owner = "class:druid"
+kind = "passive"
+level = 6
+effect = "regen_per_turn_percent"
+power = 2
+text = "В конце хода вы восстанавливаете часть здоровья."
+edges = [
+    { name = "Солнечный свет", text = "Восстановление выше на 1 процент." },
+    { name = "Корневое питание", text = "Дополнительно восстанавливает ресурс." },
+]
+
+[[skill]]
+code = "druid_wild_growth"
+name = "Дикий рост"
+owner = "class:druid"
+kind = "passive"
+level = 12
+effect = "healing_done_percent"
+power = 15
+text = "Ваше лечение сильнее."
+edges = [
+    { name = "Буйство", text = "Прибавка выше на 10 процентов." },
+    { name = "Стойкие побеги", text = "Лечение со временем длится на ход дольше." },
+]
+
+[[skill]]
+code = "druid_communion_flow"
+name = "Единение с потоком"
+owner = "class:druid"
+kind = "passive"
+level = 20
+effect = "resource_regen_percent"
+power = 15
+text = "Единение восстанавливается быстрее."
+edges = [
+    { name = "Полный поток", text = "Прибавка выше на 10 процентов." },
+    { name = "Тихий поток", text = "Запас единения больше на 15 процентов." },
+]
+
+[[skill]]
+code = "druid_beast_kin"
+name = "Родство со зверьём"
+owner = "class:druid"
+kind = "passive"
+level = 30
+effect = "beast_damage_percent"
+power = 20
+text = "Урон по зверям выше."
+edges = [
+    { name = "Язык зверей", text = "Звери наносят вам на 15 процентов меньше урона." },
+    { name = "Хищник", text = "Прибавка выше на 15 процентов." },
+]
+
+[[skill]]
+code = "druid_bark_skin"
+name = "Кора"
+owner = "class:druid"
+kind = "passive"
+level = 50
+effect = "damage_taken_percent"
+power = -8
+text = "Вы получаете меньше урона."
+edges = [
+    { name = "Древесная кожа", text = "Ещё на 5 процентов меньше урона." },
+    { name = "Живая кора", text = "Дополнительно 10 процентов сопротивления стихиям." },
+]
+
+# =====================================================================
+# Racial actives (one per race, occupies the separate racial slot)
+# =====================================================================
+
+[[skill]]
+code = "race_human_second_wind"
+name = "Второе дыхание"
+owner = "race:human"
+kind = "active"
+level = 1
+cost = 0
+cooldown = 5
+target = "self"
+effect = "heal_percent"
+power = 15
+text = "Восстанавливает 15 процентов здоровья."
+edges = [
+    { name = "Глубокий вдох", text = "Восстанавливает 25 процентов здоровья." },
+    { name = "Ровное дыхание", text = "Дополнительно восстанавливает 20 процентов ресурса." },
+]
+
+[[skill]]
+code = "race_high_elf_mana_surge"
+name = "Прилив магии"
+owner = "race:high_elf"
+kind = "active"
+level = 1
+cost = 0
+cooldown = 6
+target = "self"
+effect = "buff_free_cast"
+power = 100
+text = "Следующее умение не тратит ресурс."
+edges = [
+    { name = "Двойной прилив", text = "Бесплатны два следующих умения." },
+    { name = "Усиленный прилив", text = "Следующее умение бьёт на 30 процентов сильнее." },
+]
+
+[[skill]]
+code = "race_wood_elf_true_shot"
+name = "Меткий выстрел"
+owner = "race:wood_elf"
+kind = "active"
+level = 1
+cost = 0
+cooldown = 5
+target = "enemy"
+effect = "damage_guaranteed_crit"
+power = 20
+scaling = "AGI"
+text = "Гарантированный критический удар."
+edges = [
+    { name = "Смертельная точность", text = "Критический урон выше на 40 процентов." },
+    { name = "Быстрая тетива", text = "Откат короче на 2 хода." },
+]
+
+[[skill]]
+code = "race_dark_elf_gloom_cloud"
+name = "Облако мрака"
+owner = "race:dark_elf"
+kind = "active"
+level = 1
+cost = 0
+cooldown = 6
+target = "all_enemies"
+effect = "debuff_accuracy"
+power = 50
+text = "Точность противников ниже на 50 процентов 2 хода."
+edges = [
+    { name = "Густой мрак", text = "Действует 4 хода." },
+    { name = "Жалящий мрак", text = "Дополнительно наносит урон каждый ход." },
+]
+
+[[skill]]
+code = "race_half_elf_charm"
+name = "Обаяние"
+owner = "race:half_elf"
+kind = "active"
+level = 1
+cost = 0
+cooldown = 6
+target = "enemy"
+effect = "avoid_combat"
+power = 50
+scaling = "CHA"
+text = "Шанс закончить бой с разумным противником миром."
+edges = [
+    { name = "Убеждение", text = "Шанс выше на 25 процентов." },
+    { name = "Выгодная беседа", text = "При успехе вы получаете золото." },
+]
+
+[[skill]]
+code = "race_dwarf_ancestral_stance"
+name = "Стойка предков"
+owner = "race:dwarf"
+kind = "active"
+level = 1
+cost = 0
+cooldown = 6
+target = "self"
+effect = "buff_damage_taken"
+power = 30
+text = "Вы получаете на 30 процентов меньше урона 3 хода."
+edges = [
+    { name = "Несдвигаемость", text = "Снижение доходит до 45 процентов." },
+    { name = "Стойка мастера", text = "Действует 5 ходов." },
+]
+
+[[skill]]
+code = "race_gnome_cunning_trap"
+name = "Хитрая ловушка"
+owner = "race:gnome"
+kind = "active"
+level = 1
+cost = 0
+cooldown = 5
+target = "enemy"
+effect = "damage_slow"
+power = 18
+scaling = "INT"
+text = "Урон и потеря инициативы у цели."
+edges = [
+    { name = "Зубчатая ловушка", text = "Цель пропускает следующий ход." },
+    { name = "Двойная ловушка", text = "Срабатывает по двум целям." },
+]
+
+[[skill]]
+code = "race_halfling_nimbleness"
+name = "Юркость"
+owner = "race:halfling"
+kind = "active"
+level = 1
+cost = 0
+cooldown = 5
+target = "self"
+effect = "buff_evade_full"
+power = 100
+text = "Вы полностью уклоняетесь от следующего удара."
+edges = [
+    { name = "Кувырок", text = "Уклоняетесь от двух ударов." },
+    { name = "Подножка", text = "После уклонения вы отвечаете ударом." },
+]
+
+[[skill]]
+code = "race_orc_war_cry"
+name = "Боевой рёв"
+owner = "race:orc"
+kind = "active"
+level = 1
+cost = 0
+cooldown = 5
+target = "self"
+effect = "buff_damage"
+power = 25
+text = "Ваш урон выше на 25 процентов 2 хода."
+edges = [
+    { name = "Рёв вождя", text = "Прибавка выше на 20 процентов." },
+    { name = "Долгий рёв", text = "Действует 4 хода." },
+]
+
+[[skill]]
+code = "race_half_orc_savage_blow"
+name = "Свирепый удар"
+owner = "race:half_orc"
+kind = "active"
+level = 1
+cost = 0
+cooldown = 4
+target = "enemy"
+effect = "damage_savage"
+power = 25
+scaling = "STR"
+text = "Урон выше на 50 процентов, точность ниже на 20."
+edges = [
+    { name = "Слепая сила", text = "Урон выше ещё на 30 процентов." },
+    { name = "Выверенный удар", text = "Точность не снижается." },
+]
+
+[[skill]]
+code = "race_goblin_dirty_trick"
+name = "Подлый приём"
+owner = "race:goblin"
+kind = "active"
+level = 1
+cost = 0
+cooldown = 5
+target = "enemy"
+effect = "damage_steal"
+power = 15
+scaling = "AGI"
+text = "Урон и кража золота или предмета."
+edges = [
+    { name = "Ловкие руки", text = "Кража срабатывает всегда." },
+    { name = "Песок в глаза", text = "Цель теряет 30 процентов точности на 2 хода." },
+]
+
+[[skill]]
+code = "race_troll_crushing_swing"
+name = "Дробящий замах"
+owner = "race:troll"
+kind = "active"
+level = 1
+cost = 0
+cooldown = 5
+target = "all_enemies"
+effect = "damage_aoe"
+power = 20
+scaling = "STR"
+text = "Удар по всем противникам."
+edges = [
+    { name = "Тяжёлый замах", text = "Урон выше на 40 процентов." },
+    { name = "Сотрясающий замах", text = "Противники теряют 20 процентов инициативы." },
+]
+
+[[skill]]
+code = "race_dragonborn_breath"
+name = "Дыхание дракона"
+owner = "race:dragonborn"
+kind = "active"
+level = 1
+cost = 0
+cooldown = 5
+target = "all_enemies"
+effect = "damage_aoe_elemental"
+power = 22
+scaling = "CHA"
+text = "Стихийный урон по всем противникам."
+edges = [
+    { name = "Долгое дыхание", text = "Цели горят ещё 2 хода." },
+    { name = "Сжатое дыхание", text = "Урон по одной цели выше вдвое." },
+]
+
+[[skill]]
+code = "race_tiefling_curse_seal"
+name = "Печать проклятия"
+owner = "race:tiefling"
+kind = "active"
+level = 1
+cost = 0
+cooldown = 5
+target = "enemy"
+effect = "debuff_vulnerable"
+power = 20
+scaling = "CHA"
+text = "Цель получает на 20 процентов больше урона 3 хода."
+edges = [
+    { name = "Тяжёлая печать", text = "Уязвимость выше на 15 процентов." },
+    { name = "Широкая печать", text = "Печать ложится на всех противников." },
+]
+
+[[skill]]
+code = "race_aasimar_healing_hand"
+name = "Длань исцеления"
+owner = "race:aasimar"
+kind = "active"
+level = 1
+cost = 0
+cooldown = 5
+target = "self"
+effect = "heal"
+power = 30
+scaling = "WIS"
+text = "Восстанавливает здоровье вам или союзнику."
+edges = [
+    { name = "Свет полной луны", text = "Лечение выше на 50 процентов." },
+    { name = "Очищающий свет", text = "Дополнительно снимает один отрицательный эффект." },
+]
+
+[[skill]]
+code = "race_lizardfolk_tail_drop"
+name = "Сброс хвоста"
+owner = "race:lizardfolk"
+kind = "active"
+level = 1
+cost = 0
+cooldown = 5
+target = "self"
+effect = "cleanse_dodge"
+power = 10
+text = "Снимает отрицательный эффект и даёт 10 процентов уклонения."
+edges = [
+    { name = "Полный сброс", text = "Снимает все отрицательные эффекты." },
+    { name = "Отрастание", text = "Дополнительно лечит 10 процентов здоровья." },
+]

@@ -1,0 +1,95 @@
+# Eight classes, chosen right after the race during character creation.
+#
+# Each class contributes 8 active and 6 passive skills across the whole
+# progression (skills.toml, owner = "class:<id>"), unlocked at the levels in
+# [meta].active_unlock_levels / passive_unlock_levels. The player equips 6 of the
+# 8 actives and 3 of the 6 passives - that choice is the build. See docs/skills.md.
+
+[meta]
+base_stat_value = 5
+free_points_at_creation = 5
+active_unlock_levels = [1, 4, 8, 14, 22, 35, 60, 100]
+passive_unlock_levels = [2, 6, 12, 20, 30, 50]
+active_slots = 6
+passive_slots = 3
+racial_slots = 1
+
+[[class]]
+id = "warrior"
+name = "Воин"
+role = "Стойкий боец ближнего боя"
+description = "Держит строй, забирает удар на себя и не отступает."
+key_stats = ["STR", "END"]
+bonuses = { STR = 2, END = 1 }
+resource = { id = "valor", name = "Отвага", base = 40, per_level = 1.0, stat = "END", per_stat = 1.0, regen_per_turn = 6 }
+health = { base = 110, per_level = 9.0, per_endurance = 6.0 }
+
+[[class]]
+id = "barbarian"
+name = "Варвар"
+role = "Урон в обмен на защиту"
+description = "Меняет броню на скорость, а осторожность на исход боя."
+key_stats = ["STR"]
+bonuses = { STR = 2, END = 1 }
+resource = { id = "rage", name = "Ярость", base = 0, per_level = 0.5, stat = "STR", per_stat = 0.5, regen_per_turn = 0 }
+health = { base = 120, per_level = 10.0, per_endurance = 6.0 }
+
+[[class]]
+id = "paladin"
+name = "Паладин"
+role = "Защита и поддержка"
+description = "Стоит между союзником и бедой, и обычно выстаивает."
+key_stats = ["STR", "CHA"]
+bonuses = { STR = 1, CHA = 1, END = 1 }
+resource = { id = "grace", name = "Благодать", base = 45, per_level = 1.2, stat = "CHA", per_stat = 1.5, regen_per_turn = 5 }
+health = { base = 105, per_level = 8.5, per_endurance = 6.0 }
+
+[[class]]
+id = "ranger"
+name = "Следопыт"
+role = "Дальний бой и выслеживание"
+description = "Видит след там, где остальные видят траву."
+key_stats = ["AGI", "WIS"]
+bonuses = { AGI = 2, WIS = 1 }
+resource = { id = "focus", name = "Концентрация", base = 50, per_level = 1.2, stat = "WIS", per_stat = 1.5, regen_per_turn = 8 }
+health = { base = 95, per_level = 7.5, per_endurance = 6.0 }
+
+[[class]]
+id = "rogue"
+name = "Разбойник"
+role = "Максимальный урон и скрытность"
+description = "Бьёт один раз и очень точно выбирает этот раз."
+key_stats = ["AGI", "LCK"]
+bonuses = { AGI = 2, LCK = 1 }
+resource = { id = "energy", name = "Энергия", base = 60, per_level = 1.0, stat = "AGI", per_stat = 1.0, regen_per_turn = 10 }
+health = { base = 90, per_level = 7.0, per_endurance = 6.0 }
+
+[[class]]
+id = "mage"
+name = "Маг"
+role = "Стихийный урон по площади"
+description = "Решает задачи количеством энергии, а не тонкостью подхода."
+key_stats = ["INT"]
+bonuses = { INT = 3 }
+resource = { id = "mana", name = "Мана", base = 70, per_level = 2.0, stat = "INT", per_stat = 2.5, regen_per_turn = 7 }
+health = { base = 80, per_level = 6.0, per_endurance = 6.0 }
+
+[[class]]
+id = "cleric"
+name = "Жрец"
+role = "Лечение и снятие эффектов"
+description = "Поднимает тех, кого уже списали."
+key_stats = ["WIS"]
+bonuses = { WIS = 2, CHA = 1 }
+resource = { id = "faith", name = "Вера", base = 65, per_level = 1.8, stat = "WIS", per_stat = 2.2, regen_per_turn = 7 }
+health = { base = 90, per_level = 7.0, per_endurance = 6.0 }
+
+[[class]]
+id = "druid"
+name = "Друид"
+role = "Контроль, превращения, регенерация"
+description = "Договаривается с природой, и природа обычно соглашается."
+key_stats = ["WIS", "END"]
+bonuses = { WIS = 2, END = 1 }
+resource = { id = "communion", name = "Единение", base = 60, per_level = 1.6, stat = "WIS", per_stat = 2.0, regen_per_turn = 7 }
+health = { base = 95, per_level = 7.5, per_endurance = 6.0 }

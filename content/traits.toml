@@ -1,0 +1,578 @@
+# Individual traits. The player picks exactly two at character creation.
+#
+# HARD RULE: a trait never grants a button, an active skill or a new screen.
+# Traits are modifiers only. This is what keeps the interface small enough to be
+# playable by ear - see docs/skills.md, "Anti-bloat rules".
+#
+# Every modifier key must be listed in [meta].modifier_keys; the loader rejects
+# unknown keys at startup. Categories are used by the filter on the selection
+# screen. "dark" traits pay for a strong bonus with a real penalty.
+
+[meta]
+picks_at_creation = 2
+categories = [
+    { id = "combat", name = "Боевые" },
+    { id = "magic", name = "Магические" },
+    { id = "defense", name = "Защитные" },
+    { id = "social", name = "Социальные" },
+    { id = "crafting", name = "Ремесленные" },
+    { id = "survival", name = "Выживание" },
+    { id = "fate", name = "Судьба и удача" },
+    { id = "dark", name = "Тёмные" },
+]
+modifier_keys = [
+    "stat_STR", "stat_AGI", "stat_END", "stat_INT", "stat_WIS", "stat_CHA", "stat_LCK",
+    "damage_percent", "physical_damage_percent", "magic_damage_percent",
+    "damage_taken_percent", "armor_percent", "health_percent",
+    "accuracy_percent", "dodge_percent", "initiative_percent",
+    "crit_chance_percent", "crit_damage_percent",
+    "resource_percent", "resource_regen_percent", "cost_reduction_percent",
+    "cooldown_reduction_percent", "regen_per_turn_percent",
+    "healing_done_percent", "healing_taken_percent",
+    "resist_fire_percent", "resist_cold_percent", "resist_poison_percent", "resist_magic_percent",
+    "exp_percent", "gold_percent", "shop_price_percent", "sell_price_percent",
+    "drop_rate_percent", "rarity_percent", "quest_reward_percent", "event_reward_percent",
+    "craft_quality_percent", "gather_yield_percent", "salvage_yield_percent",
+    "reflect_percent", "dot_damage_percent",
+    "ambush_chance_percent", "flee_chance_percent", "trap_damage_percent",
+    "first_turn_damage_percent", "single_target_damage_percent", "aoe_damage_percent",
+    "low_health_damage_percent", "elite_damage_percent", "beast_damage_percent",
+    "undead_damage_percent", "humanoid_damage_percent", "reputation_percent",
+]
+# Modifier keys where a lower value is the good outcome. The renderer needs this to
+# say "prices are 12 percent lower" instead of blindly printing a minus sign, and
+# the balance tests need it to tell a bonus from a penalty.
+lower_is_better = [
+    "damage_taken_percent",
+    "shop_price_percent",
+    "ambush_chance_percent",
+    "trap_damage_percent",
+]
+
+# --- Combat ---
+
+[[trait]]
+id = "berserker"
+name = "Берсерк"
+category = "combat"
+tags = ["урон", "риск"]
+modifiers = { damage_percent = 10, armor_percent = -10 }
+text = "Вы бьёте на 10 процентов сильнее и держите удар на 10 процентов хуже."
+
+[[trait]]
+id = "duelist"
+name = "Дуэлянт"
+category = "combat"
+tags = ["точность", "одиночная цель"]
+modifiers = { accuracy_percent = 15, single_target_damage_percent = 5 }
+text = "Против одиночной цели ваша точность выше на 15 процентов."
+
+[[trait]]
+id = "first_strike"
+name = "Первый удар"
+category = "combat"
+tags = ["инициатива"]
+modifiers = { initiative_percent = 20, first_turn_damage_percent = 15 }
+text = "Вы чаще ходите первым, и первый ваш удар сильнее на 15 процентов."
+
+[[trait]]
+id = "heavy_hand"
+name = "Тяжёлая рука"
+category = "combat"
+tags = ["урон", "точность"]
+modifiers = { physical_damage_percent = 12, accuracy_percent = -5 }
+text = "Физический урон выше на 12 процентов, точность ниже на 5."
+
+[[trait]]
+id = "executioner"
+name = "Палач"
+category = "combat"
+tags = ["добивание"]
+modifiers = { low_health_damage_percent = 25 }
+text = "По раненым целям вы наносите на 25 процентов больше урона."
+
+[[trait]]
+id = "giant_slayer"
+name = "Убийца великанов"
+category = "combat"
+tags = ["элита"]
+modifiers = { elite_damage_percent = 18, damage_taken_percent = 3 }
+text = "Урон по элитным противникам выше на 18 процентов."
+
+[[trait]]
+id = "whirlwind_training"
+name = "Круговая выучка"
+category = "combat"
+tags = ["площадь"]
+modifiers = { aoe_damage_percent = 20, single_target_damage_percent = -8 }
+text = "Умения по площади сильнее на 20 процентов, по одной цели слабее на 8."
+
+[[trait]]
+id = "keen_edge"
+name = "Острая кромка"
+category = "combat"
+tags = ["крит"]
+modifiers = { crit_chance_percent = 5, crit_damage_percent = 10 }
+text = "Шанс критического удара выше на 5 процентов, урон крита - на 10."
+
+[[trait]]
+id = "beast_hunter"
+name = "Зверобой"
+category = "combat"
+tags = ["звери"]
+modifiers = { beast_damage_percent = 20 }
+text = "Урон по зверям выше на 20 процентов."
+
+[[trait]]
+id = "bane_of_dead"
+name = "Погибель мёртвых"
+category = "combat"
+tags = ["нежить"]
+modifiers = { undead_damage_percent = 20 }
+text = "Урон по нежити выше на 20 процентов."
+
+[[trait]]
+id = "brawler"
+name = "Драчун"
+category = "combat"
+tags = ["ресурс"]
+modifiers = { resource_regen_percent = 15, armor_percent = -5 }
+text = "Ресурс класса восстанавливается на 15 процентов быстрее."
+
+[[trait]]
+id = "relentless"
+name = "Неотступный"
+category = "combat"
+tags = ["откаты"]
+modifiers = { cooldown_reduction_percent = 8 }
+text = "Откаты умений короче на 8 процентов."
+
+# --- Magic ---
+
+[[trait]]
+id = "arcane_mind"
+name = "Магический склад ума"
+category = "magic"
+tags = ["урон", "мана"]
+modifiers = { magic_damage_percent = 12, stat_INT = 1 }
+text = "Магический урон выше на 12 процентов, интеллект выше на 1."
+
+[[trait]]
+id = "deep_well"
+name = "Глубокий источник"
+category = "magic"
+tags = ["ресурс"]
+modifiers = { resource_percent = 20, resource_regen_percent = -5 }
+text = "Запас ресурса больше на 20 процентов."
+
+[[trait]]
+id = "frugal_caster"
+name = "Экономный чтец"
+category = "magic"
+tags = ["стоимость"]
+modifiers = { cost_reduction_percent = 12 }
+text = "Умения стоят на 12 процентов меньше ресурса."
+
+[[trait]]
+id = "flame_affinity"
+name = "Родство с огнём"
+category = "magic"
+tags = ["огонь"]
+modifiers = { magic_damage_percent = 8, resist_fire_percent = 15 }
+text = "Магический урон выше на 8 процентов, сопротивление огню - на 15."
+
+[[trait]]
+id = "frost_affinity"
+name = "Родство со льдом"
+category = "magic"
+tags = ["холод"]
+modifiers = { magic_damage_percent = 8, resist_cold_percent = 15 }
+text = "Магический урон выше на 8 процентов, сопротивление холоду - на 15."
+
+[[trait]]
+id = "ley_reader"
+name = "Чтец силовых линий"
+category = "magic"
+tags = ["восстановление"]
+modifiers = { resource_regen_percent = 20, health_percent = -5 }
+text = "Ресурс восстанавливается на 20 процентов быстрее, здоровья на 5 меньше."
+
+[[trait]]
+id = "healers_touch"
+name = "Рука целителя"
+category = "magic"
+tags = ["лечение"]
+modifiers = { healing_done_percent = 15 }
+text = "Ваше лечение сильнее на 15 процентов."
+
+[[trait]]
+id = "spell_ward"
+name = "Оберег"
+category = "magic"
+tags = ["сопротивление"]
+modifiers = { resist_magic_percent = 15 }
+text = "Сопротивление магии выше на 15 процентов."
+
+# --- Defense ---
+
+[[trait]]
+id = "iron_hide"
+name = "Железная шкура"
+category = "defense"
+tags = ["броня"]
+modifiers = { armor_percent = 12, initiative_percent = -8 }
+text = "Броня выше на 12 процентов, инициатива ниже на 8."
+
+[[trait]]
+id = "bulwark"
+name = "Оплот"
+category = "defense"
+tags = ["здоровье"]
+modifiers = { health_percent = 12 }
+text = "Максимальное здоровье выше на 12 процентов."
+
+[[trait]]
+id = "evasive"
+name = "Уклончивый"
+category = "defense"
+tags = ["уклонение"]
+modifiers = { dodge_percent = 10, health_percent = -5 }
+text = "Уклонение выше на 10 процентов, здоровья на 5 процентов меньше."
+
+[[trait]]
+id = "second_skin"
+name = "Вторая кожа"
+category = "defense"
+tags = ["урон по вам"]
+modifiers = { damage_taken_percent = -8 }
+text = "Вы получаете на 8 процентов меньше урона."
+
+[[trait]]
+id = "poison_blood"
+name = "Стойкая кровь"
+category = "defense"
+tags = ["яд"]
+modifiers = { resist_poison_percent = 25 }
+text = "Сопротивление яду выше на 25 процентов."
+
+[[trait]]
+id = "steady_breath"
+name = "Ровное дыхание"
+category = "defense"
+tags = ["регенерация"]
+modifiers = { regen_per_turn_percent = 2 }
+text = "В конце хода вы восстанавливаете 2 процента здоровья."
+
+[[trait]]
+id = "trap_sense"
+name = "Чутьё на ловушки"
+category = "defense"
+tags = ["ловушки"]
+modifiers = { trap_damage_percent = -30 }
+text = "Ловушки наносят вам на 30 процентов меньше урона."
+
+[[trait]]
+id = "shield_wall"
+name = "Щитоносец"
+category = "defense"
+tags = ["броня", "урон"]
+modifiers = { armor_percent = 8, damage_percent = -4 }
+text = "Броня выше на 8 процентов, урон ниже на 4."
+
+# --- Social ---
+
+[[trait]]
+id = "haggler"
+name = "Торгаш"
+category = "social"
+tags = ["цены"]
+modifiers = { shop_price_percent = -12, sell_price_percent = 10 }
+text = "Покупка дешевле на 12 процентов, продажа выгоднее на 10."
+
+[[trait]]
+id = "silver_tongue"
+name = "Серебряный язык"
+category = "social"
+tags = ["задания"]
+modifiers = { quest_reward_percent = 15 }
+text = "Награды за задания выше на 15 процентов."
+
+[[trait]]
+id = "known_face"
+name = "Знакомое лицо"
+category = "social"
+tags = ["репутация"]
+modifiers = { reputation_percent = 20 }
+text = "Репутация растёт на 20 процентов быстрее."
+
+[[trait]]
+id = "storyteller"
+name = "Рассказчик"
+category = "social"
+tags = ["события"]
+modifiers = { event_reward_percent = 15 }
+text = "Награды за события выше на 15 процентов."
+
+[[trait]]
+id = "intimidating"
+name = "Устрашающий"
+category = "social"
+tags = ["страх"]
+modifiers = { stat_CHA = 1, flee_chance_percent = 15 }
+text = "Харизма выше на 1, сбежать из боя проще на 15 процентов."
+
+[[trait]]
+id = "guild_contact"
+name = "Связи в гильдии"
+category = "social"
+tags = ["золото"]
+modifiers = { gold_percent = 12 }
+text = "Вы получаете на 12 процентов больше золота."
+
+[[trait]]
+id = "diplomatic_immunity"
+name = "Дипломатическая неприкосновенность"
+category = "social"
+tags = ["разумные"]
+modifiers = { humanoid_damage_percent = -10, quest_reward_percent = 10 }
+text = "Разумные противники ценят вас больше, чем боятся."
+
+[[trait]]
+id = "patron"
+name = "Покровитель"
+category = "social"
+tags = ["цены", "опыт"]
+modifiers = { shop_price_percent = -6, exp_percent = 4 }
+text = "Скидка в лавках 6 процентов и небольшая прибавка к опыту."
+
+# --- Crafting ---
+
+[[trait]]
+id = "apprentice_smith"
+name = "Подмастерье кузнеца"
+category = "crafting"
+tags = ["ремесло"]
+modifiers = { craft_quality_percent = 15 }
+text = "Качество изготовленных вещей выше на 15 процентов."
+
+[[trait]]
+id = "salvager"
+name = "Разборщик"
+category = "crafting"
+tags = ["разбор"]
+modifiers = { salvage_yield_percent = 25 }
+text = "С разбора вещей вы получаете на 25 процентов больше материалов."
+
+[[trait]]
+id = "herbalist"
+name = "Травник"
+category = "crafting"
+tags = ["сбор"]
+modifiers = { gather_yield_percent = 20 }
+text = "Со сбора ресурсов вы получаете на 20 процентов больше."
+
+[[trait]]
+id = "appraiser"
+name = "Оценщик"
+category = "crafting"
+tags = ["цены"]
+modifiers = { sell_price_percent = 15 }
+text = "Вы продаёте вещи на 15 процентов дороже."
+
+[[trait]]
+id = "field_repair"
+name = "Полевой ремонт"
+category = "crafting"
+tags = ["ремонт"]
+modifiers = { armor_percent = 5, craft_quality_percent = 5 }
+text = "Снаряжение служит лучше: броня выше на 5 процентов."
+
+[[trait]]
+id = "alchemists_eye"
+name = "Глаз алхимика"
+category = "crafting"
+tags = ["зелья"]
+modifiers = { healing_taken_percent = 12, gather_yield_percent = 8 }
+text = "Зелья лечат вас на 12 процентов сильнее."
+
+# --- Survival ---
+
+[[trait]]
+id = "pathfinder"
+name = "Следопыт троп"
+category = "survival"
+tags = ["засады"]
+modifiers = { ambush_chance_percent = -25 }
+text = "Шанс попасть в засаду ниже на 25 процентов."
+
+[[trait]]
+id = "light_sleeper"
+name = "Чуткий сон"
+category = "survival"
+tags = ["инициатива"]
+modifiers = { initiative_percent = 12 }
+text = "Инициатива выше на 12 процентов."
+
+[[trait]]
+id = "scout"
+name = "Разведчик"
+category = "survival"
+tags = ["исследование"]
+modifiers = { event_reward_percent = 10, drop_rate_percent = 5 }
+text = "Вы чаще находите то, что стоит найти."
+
+[[trait]]
+id = "iron_stomach"
+name = "Лужёный желудок"
+category = "survival"
+tags = ["яд"]
+modifiers = { resist_poison_percent = 15, health_percent = 4 }
+text = "Сопротивление яду выше на 15 процентов."
+
+[[trait]]
+id = "cold_born"
+name = "Рождённый в стуже"
+category = "survival"
+tags = ["холод"]
+modifiers = { resist_cold_percent = 25 }
+text = "Сопротивление холоду выше на 25 процентов."
+
+[[trait]]
+id = "fire_born"
+name = "Рождённый в пепле"
+category = "survival"
+tags = ["огонь"]
+modifiers = { resist_fire_percent = 25 }
+text = "Сопротивление огню выше на 25 процентов."
+
+[[trait]]
+id = "runner"
+name = "Ходок"
+category = "survival"
+tags = ["бегство"]
+modifiers = { flee_chance_percent = 25 }
+text = "Сбежать из боя удаётся на 25 процентов чаще."
+
+[[trait]]
+id = "hardened"
+name = "Закалённый"
+category = "survival"
+tags = ["опыт"]
+modifiers = { exp_percent = 8, health_percent = -4 }
+text = "Опыта на 8 процентов больше, здоровья на 4 процента меньше."
+
+# --- Fate and luck ---
+
+[[trait]]
+id = "born_lucky"
+name = "Родился в рубашке"
+category = "fate"
+tags = ["удача"]
+modifiers = { stat_LCK = 2, stat_END = -1 }
+text = "Удача выше на 2, выносливость ниже на 1."
+
+[[trait]]
+id = "treasure_sense"
+name = "Нюх на клады"
+category = "fate"
+tags = ["добыча"]
+modifiers = { drop_rate_percent = 15 }
+text = "Добыча выпадает на 15 процентов чаще."
+
+[[trait]]
+id = "collector"
+name = "Собиратель"
+category = "fate"
+tags = ["редкость"]
+modifiers = { rarity_percent = 12, gold_percent = -5 }
+text = "Шанс редкой добычи выше на 12 процентов."
+
+[[trait]]
+id = "golden_hour"
+name = "Золотой час"
+category = "fate"
+tags = ["золото"]
+modifiers = { gold_percent = 18, drop_rate_percent = -6 }
+text = "Золота на 18 процентов больше, вещей немного меньше."
+
+[[trait]]
+id = "fated_blow"
+name = "Предначертанный удар"
+category = "fate"
+tags = ["крит"]
+modifiers = { crit_chance_percent = 4, crit_damage_percent = 15 }
+text = "Криты случаются чаще и бьют сильнее."
+
+[[trait]]
+id = "quick_study"
+name = "Схватывает на лету"
+category = "fate"
+tags = ["опыт"]
+modifiers = { exp_percent = 10, gold_percent = -8 }
+text = "Опыта на 10 процентов больше, золота на 8 меньше."
+
+[[trait]]
+id = "second_chance"
+name = "Второй шанс"
+category = "fate"
+tags = ["удача"]
+modifiers = { stat_LCK = 1, dodge_percent = 4 }
+text = "Удача выше на 1, уклонение - на 4 процента."
+
+[[trait]]
+id = "wanderers_star"
+name = "Звезда странника"
+category = "fate"
+tags = ["события"]
+modifiers = { event_reward_percent = 20, damage_taken_percent = 3 }
+text = "События приносят на 20 процентов больше."
+
+# --- Dark ---
+
+[[trait]]
+id = "glass_cannon"
+name = "Стеклянная пушка"
+category = "dark"
+tags = ["урон", "риск"]
+modifiers = { damage_percent = 25, health_percent = -20 }
+text = "Урон выше на 25 процентов, здоровья на 20 процентов меньше."
+
+[[trait]]
+id = "blood_pact"
+name = "Кровавый договор"
+category = "dark"
+tags = ["ресурс", "риск"]
+modifiers = { resource_regen_percent = 30, regen_per_turn_percent = -2 }
+text = "Ресурс копится на 30 процентов быстрее ценой вашей крови."
+
+[[trait]]
+id = "cursed_luck"
+name = "Проклятая удача"
+category = "dark"
+tags = ["удача", "риск"]
+modifiers = { rarity_percent = 25, dodge_percent = -8 }
+text = "Редкая добыча на 25 процентов чаще, уклонение ниже на 8."
+
+[[trait]]
+id = "pain_eater"
+name = "Пожиратель боли"
+category = "dark"
+tags = ["низкое здоровье"]
+modifiers = { low_health_damage_percent = 30, healing_taken_percent = -20 }
+text = "На низком здоровье вы бьёте на 30 процентов сильнее, но лечитесь хуже."
+
+[[trait]]
+id = "soul_debt"
+name = "Долг души"
+category = "dark"
+tags = ["опыт", "риск"]
+modifiers = { exp_percent = 20, damage_taken_percent = 10 }
+text = "Опыта на 20 процентов больше, урона по вам - на 10."
+
+[[trait]]
+id = "shadow_bargain"
+name = "Сделка с тенью"
+category = "dark"
+tags = ["крит", "риск"]
+modifiers = { crit_damage_percent = 30, armor_percent = -15 }
+text = "Критический урон выше на 30 процентов, броня ниже на 15."

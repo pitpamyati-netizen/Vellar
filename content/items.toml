@@ -1,0 +1,423 @@
+# Items: equipment, consumables and materials.
+#
+# HARD RULE: equipment never grants an active skill. It grants modifiers and skill
+# variations (skill_modifiers), which change the numbers of a skill the player
+# already has. See docs/skills.md, "Anti-bloat rules".
+#
+# Consumables live in the combat Bag tab, never in a skill slot.
+# Modifier keys share the vocabulary declared in traits.toml [meta].modifier_keys.
+
+[meta]
+rarities = [
+    { id = "common", name = "Обычный", weight = 100, price_factor = 1.0 },
+    { id = "uncommon", name = "Необычный", weight = 45, price_factor = 2.2 },
+    { id = "rare", name = "Редкий", weight = 18, price_factor = 5.0 },
+    { id = "epic", name = "Эпический", weight = 5, price_factor = 12.0 },
+    { id = "legendary", name = "Легендарный", weight = 1, price_factor = 30.0 },
+]
+slots = [
+    { id = "weapon", name = "Оружие" },
+    { id = "head", name = "Голова" },
+    { id = "body", name = "Тело" },
+    { id = "hands", name = "Руки" },
+    { id = "feet", name = "Ноги" },
+    { id = "trinket", name = "Украшение" },
+]
+
+# --- Weapons ---
+
+[[item]]
+id = "rusty_sword"
+name = "Ржавый меч"
+kind = "equipment"
+slot = "weapon"
+rarity = "common"
+level = 1
+price = 30
+modifiers = { physical_damage_percent = 5 }
+text = "Тупой, но честный кусок железа."
+
+[[item]]
+id = "militia_spear"
+name = "Ополченское копьё"
+kind = "equipment"
+slot = "weapon"
+rarity = "common"
+level = 3
+price = 55
+modifiers = { physical_damage_percent = 7, accuracy_percent = 3 }
+text = "Длиннее врага - уже преимущество."
+
+[[item]]
+id = "hunting_bow"
+name = "Охотничий лук"
+kind = "equipment"
+slot = "weapon"
+rarity = "common"
+level = 4
+price = 70
+modifiers = { physical_damage_percent = 6, initiative_percent = 5 }
+text = "Бил белку, побьёт и волка."
+
+[[item]]
+id = "apprentice_staff"
+name = "Посох ученика"
+kind = "equipment"
+slot = "weapon"
+rarity = "common"
+level = 4
+price = 75
+modifiers = { magic_damage_percent = 8, resource_percent = 5 }
+text = "На конце ещё видны следы чужих опытов."
+
+[[item]]
+id = "guard_saber"
+name = "Сабля стражника"
+kind = "equipment"
+slot = "weapon"
+rarity = "uncommon"
+level = 8
+price = 210
+modifiers = { physical_damage_percent = 12, crit_chance_percent = 2 }
+skill_modifiers = { warrior_cleave = 15 }
+text = "Служебное оружие, списанное по бумагам."
+
+[[item]]
+id = "poacher_daggers"
+name = "Ножи браконьера"
+kind = "equipment"
+slot = "weapon"
+rarity = "uncommon"
+level = 9
+price = 230
+modifiers = { crit_chance_percent = 5, crit_damage_percent = 8 }
+skill_modifiers = { rogue_backstab = 20 }
+text = "Два коротких, оба слишком острые для честной охоты."
+
+[[item]]
+id = "grove_branch"
+name = "Ветвь рощи"
+kind = "equipment"
+slot = "weapon"
+rarity = "uncommon"
+level = 10
+price = 240
+modifiers = { magic_damage_percent = 12, healing_done_percent = 6 }
+text = "Она всё ещё живая, если прислушаться."
+
+[[item]]
+id = "dwarven_maul"
+name = "Дварфийский молот"
+kind = "equipment"
+slot = "weapon"
+rarity = "rare"
+level = 16
+price = 720
+modifiers = { physical_damage_percent = 20, initiative_percent = -6 }
+skill_modifiers = { barbarian_reckless_swing = 20 }
+text = "Весит как совесть, бьёт как приговор."
+
+[[item]]
+id = "silver_censer"
+name = "Серебряное кадило"
+kind = "equipment"
+slot = "weapon"
+rarity = "rare"
+level = 18
+price = 780
+modifiers = { healing_done_percent = 18, resource_regen_percent = 8 }
+skill_modifiers = { cleric_mend = 20 }
+text = "Пахнет ладаном и старыми похоронами."
+
+[[item]]
+id = "stormcaller_rod"
+name = "Жезл грозы"
+kind = "equipment"
+slot = "weapon"
+rarity = "epic"
+level = 26
+price = 2400
+modifiers = { magic_damage_percent = 26, aoe_damage_percent = 12 }
+skill_modifiers = { mage_firebolt = 25 }
+text = "В грозу он гудит и нагревается сам по себе."
+
+# --- Body ---
+
+[[item]]
+id = "padded_jacket"
+name = "Стёганая куртка"
+kind = "equipment"
+slot = "body"
+rarity = "common"
+level = 1
+price = 25
+modifiers = { armor_percent = 5 }
+text = "Лучше, чем ничего, и ненамного дороже."
+
+[[item]]
+id = "leather_armor"
+name = "Кожаный доспех"
+kind = "equipment"
+slot = "body"
+rarity = "common"
+level = 5
+price = 90
+modifiers = { armor_percent = 8, dodge_percent = 2 }
+text = "Пахнет дублением и чужим потом."
+
+[[item]]
+id = "chain_shirt"
+name = "Кольчужная рубаха"
+kind = "equipment"
+slot = "body"
+rarity = "uncommon"
+level = 11
+price = 260
+modifiers = { armor_percent = 14, initiative_percent = -3 }
+text = "Звенит на каждом шаге, зато держит удар."
+
+[[item]]
+id = "grove_wardens_mail"
+name = "Доспех хранителя рощи"
+kind = "equipment"
+slot = "body"
+rarity = "rare"
+level = 19
+price = 850
+modifiers = { armor_percent = 18, regen_per_turn_percent = 1 }
+text = "Кожа, кора и что-то ещё, чему нет названия."
+
+[[item]]
+id = "runed_plate"
+name = "Рунная броня"
+kind = "equipment"
+slot = "body"
+rarity = "epic"
+level = 28
+price = 2900
+modifiers = { armor_percent = 26, resist_magic_percent = 12, initiative_percent = -5 }
+text = "Руны греются, когда рядом колдуют."
+
+# --- Head ---
+
+[[item]]
+id = "worn_hood"
+name = "Потёртый капюшон"
+kind = "equipment"
+slot = "head"
+rarity = "common"
+level = 2
+price = 20
+modifiers = { dodge_percent = 3 }
+text = "Скрывает лицо и половину дождя."
+
+[[item]]
+id = "iron_helm"
+name = "Железный шлем"
+kind = "equipment"
+slot = "head"
+rarity = "common"
+level = 6
+price = 85
+modifiers = { armor_percent = 6, health_percent = 3 }
+text = "Вмятина спереди - чужая заслуга."
+
+[[item]]
+id = "seers_circlet"
+name = "Венец провидца"
+kind = "equipment"
+slot = "head"
+rarity = "rare"
+level = 20
+price = 900
+modifiers = { resource_percent = 15, magic_damage_percent = 8 }
+text = "Холодит лоб даже в жару."
+
+# --- Hands and feet ---
+
+[[item]]
+id = "work_gloves"
+name = "Рабочие перчатки"
+kind = "equipment"
+slot = "hands"
+rarity = "common"
+level = 1
+price = 15
+modifiers = { accuracy_percent = 3 }
+text = "Мозоли уже чужие, но подходят."
+
+[[item]]
+id = "bracers_of_grip"
+name = "Наручи хватки"
+kind = "equipment"
+slot = "hands"
+rarity = "uncommon"
+level = 12
+price = 280
+modifiers = { physical_damage_percent = 8, accuracy_percent = 4 }
+text = "Затягиваются одним движением зубов."
+
+[[item]]
+id = "travel_boots"
+name = "Дорожные сапоги"
+kind = "equipment"
+slot = "feet"
+rarity = "common"
+level = 2
+price = 30
+modifiers = { initiative_percent = 5 }
+text = "Прошли больше, чем их хозяин помнит."
+
+[[item]]
+id = "silent_steps"
+name = "Тихие шаги"
+kind = "equipment"
+slot = "feet"
+rarity = "rare"
+level = 17
+price = 700
+modifiers = { dodge_percent = 9, initiative_percent = 8 }
+text = "Подошва глушит даже гравий."
+
+# --- Trinkets ---
+
+[[item]]
+id = "copper_charm"
+name = "Медный оберег"
+kind = "equipment"
+slot = "trinket"
+rarity = "common"
+level = 3
+price = 40
+modifiers = { stat_LCK = 1 }
+text = "Бабушкин. Помогает, если верить."
+
+[[item]]
+id = "wolf_fang"
+name = "Волчий клык"
+kind = "equipment"
+slot = "trinket"
+rarity = "uncommon"
+level = 7
+price = 180
+modifiers = { beast_damage_percent = 12, crit_chance_percent = 2 }
+text = "Снят с того, кто почти успел первым."
+
+[[item]]
+id = "tide_pearl"
+name = "Жемчужина прилива"
+kind = "equipment"
+slot = "trinket"
+rarity = "rare"
+level = 21
+price = 950
+modifiers = { resource_regen_percent = 15, resist_cold_percent = 10 }
+text = "Каждые шесть часов она теплеет."
+
+[[item]]
+id = "ashen_signet"
+name = "Пепельная печатка"
+kind = "equipment"
+slot = "trinket"
+rarity = "epic"
+level = 30
+price = 3200
+modifiers = { damage_percent = 12, resist_fire_percent = 20 }
+text = "Внутри кольца что-то до сих пор тлеет."
+
+# --- Consumables ---
+
+[[item]]
+id = "small_healing_potion"
+name = "Малое зелье лечения"
+kind = "consumable"
+slot = "none"
+rarity = "common"
+level = 1
+price = 35
+stack = 20
+effect = { kind = "heal_flat", power = 40 }
+text = "Восстанавливает 40 здоровья."
+
+[[item]]
+id = "healing_potion"
+name = "Зелье лечения"
+kind = "consumable"
+slot = "none"
+rarity = "uncommon"
+level = 10
+price = 90
+stack = 20
+effect = { kind = "heal_percent", power = 35 }
+text = "Восстанавливает 35 процентов здоровья."
+
+[[item]]
+id = "resource_draught"
+name = "Настой сосредоточения"
+kind = "consumable"
+slot = "none"
+rarity = "uncommon"
+level = 8
+price = 80
+stack = 20
+effect = { kind = "restore_resource_percent", power = 40 }
+text = "Восстанавливает 40 процентов ресурса класса."
+
+[[item]]
+id = "antidote"
+name = "Противоядие"
+kind = "consumable"
+slot = "none"
+rarity = "common"
+level = 5
+price = 45
+stack = 10
+effect = { kind = "cleanse", power = 1 }
+text = "Снимает один отрицательный эффект."
+
+[[item]]
+id = "whetstone"
+name = "Точильный камень"
+kind = "consumable"
+slot = "none"
+rarity = "common"
+level = 4
+price = 50
+stack = 10
+effect = { kind = "buff_damage_percent", power = 15, turns = 3 }
+text = "Урон выше на 15 процентов на 3 хода."
+
+# --- Materials ---
+
+[[item]]
+id = "wolf_pelt"
+name = "Волчья шкура"
+kind = "material"
+slot = "none"
+rarity = "common"
+level = 1
+price = 12
+stack = 99
+text = "Годится на продажу и на заплатки."
+
+[[item]]
+id = "iron_scrap"
+name = "Железный лом"
+kind = "material"
+slot = "none"
+rarity = "common"
+level = 1
+price = 8
+stack = 99
+text = "Кузнец возьмёт, не глядя."
+
+[[item]]
+id = "grove_resin"
+name = "Смола рощи"
+kind = "material"
+slot = "none"
+rarity = "uncommon"
+level = 6
+price = 30
+stack = 99
+text = "Липнет ко всему, включая совесть."

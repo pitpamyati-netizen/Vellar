@@ -1,0 +1,197 @@
+# Content guide
+
+All game content lives in `content/*.toml`. **Adding a race, a class, a trait, an
+item or a city requires no code changes.** The loader
+(`src/mmorpg/infrastructure/content/loader.py`) parses these files once at startup,
+validates them, and fails loudly with the full list of problems if anything is
+wrong - the bot refuses to start on broken content.
+
+| File | Contains |
+| --- | --- |
+| `world.toml` | 15 cities, 5 locations each, level bands, unlock conditions |
+| `races.toml` | 16 races: stat bonuses, passive ability, racial active reference |
+| `classes.toml` | 8 classes: key stats, resource curve, health curve, progression meta |
+| `traits.toml` | 60+ traits, the modifier vocabulary, categories |
+| `skills.toml` | 8 active + 6 passive per class, 1 active per race, both edges of each |
+| `items.toml` | equipment, consumables, materials, rarities, slots |
+
+## Ground rules
+
+1. **Traits and equipment never grant active skills.** They grant modifiers, and
+   equipment may additionally boost a specific skill through `skill_modifiers`.
+   This is what keeps the interface small enough to be played by ear
+   (`docs/skills.md`).
+2. **One modifier vocabulary.** Traits, passives and equipment all draw from
+   `traits.toml [meta].modifier_keys`. A key that is not listed there is rejected.
+   Add the key to that list first, then implement it in the rules layer.
+3. **Panel size is fixed.** 6 active, 3 passive, 1 racial. New content changes what
+   fills the slots, never how many there are.
+4. **Player-visible text is Russian, everything else English.** Names, descriptions
+   and `text` fields are what the player hears; ids, codes and comments are English.
+5. **No pseudo-graphics in any text field** - screen readers read them character by
+   character. Numbers as words: `"выше на 15 процентов"`.
+
+## Add a race
+
+```toml
+[[race]]
+id = "seaborn"                       # snake_case, unique, never changes
+name = "Морерождённый"
+description = "Одна фраза о том, кто это."
+bonuses = { AGI = 2, WIS = 1, STR = -1 }
+passive = { id = "tide_born", name = "Дитя прилива", text = "Одна фраза об эффекте." }
+active = "race_seaborn_undertow"     # must exist in skills.toml
+```
+
+Budget rule, enforced by `tests/content/test_races_classes_skills.py`: positive
+points may not exceed `3 + (sum of penalties)`, and the net total may not exceed
+`+3`. `{ STR = 2, END = 2, INT = -2 }` is legal; `{ STR = 4 }` is not.
+
+Then add the racial active to `skills.toml` with `owner = "race:seaborn"`, `kind =
+"active"`, `level = 1` and exactly two edges. The passive stays in `races.toml`: it
+is always on and occupies no slot.
+
+Finally bump `EXPECTED_RACES` in the loader and the race count test - the count is
+asserted deliberately, so growing the roster is a conscious decision.
+
+## Add a class
+
+```toml
+[[class]]
+id = "monk"
+name = "Монах"
+role = "Ближний бой без оружия"
+description = "Одна фраза."
+key_stats = ["AGI", "WIS"]
+bonuses = { AGI = 2, WIS = 1 }
+resource = { id = "chi", name = "Ци", base = 55, per_level = 1.2, stat = "WIS", per_stat = 1.5, regen_per_turn = 8 }
+health = { base = 95, per_level = 7.5, per_endurance = 6.0 }
+```
+
+A class needs exactly **8 active** skills at levels `[1, 4, 8, 14, 22, 35, 60,
+100]` and exactly **6 passive** skills at levels `[2, 6, 12, 20, 30, 50]` (the lists
+in `classes.toml [meta]`). The loader checks both the counts and the exact level
+sequence.
+
+## Add a skill
+
+```toml
+[[skill]]
+code = "monk_palm_strike"      # unique across all skills
+name = "Удар ладонью"          # unique within its owner - buttons route by text
+owner = "class:monk"           # "class:<id>" or "race:<id>"
+kind = "active"                # or "passive"
+level = 1                      # must match the unlock schedule for its kind
+cost = 10                      # active only
+cooldown = 0                   # active only, in turns
+target = "enemy"               # self | enemy | all_enemies
+effect = "damage"              # must be listed in skills.toml [meta].active_effects
+power = 14                     # value at rank 1
+scaling = "AGI"                # which stat multiplies power
+text = "Одна фраза, что делает умение."
+edges = [
+    { name = "Первая грань", text = "Что меняется." },
+    { name = "Вторая грань", text = "Что меняется иначе." },
+]
+```
+
+A passive declares `effect` as a **modifier key** instead, and omits
+`cost`/`cooldown`/`target`/`scaling`:
+
+```toml
+effect = "armor_percent"
+power = 6
+```
+
+Every skill declares exactly two edges; their codes are derived as `<code>_a` and
+`<code>_b`. Introducing a new `effect` value means adding it to
+`[meta].active_effects` **and** implementing it in the combat engine - the engine
+test fails on an effect it does not handle.
+
+## Add a trait
+
+```toml
+[[trait]]
+id = "stone_patience"
+name = "Каменное терпение"
+category = "defense"                 # one of traits.toml [meta].categories
+tags = ["броня", "выносливость"]     # free-form, shown in filters
+modifiers = { armor_percent = 8, initiative_percent = -4 }
+text = "Броня выше на 8 процентов, инициатива ниже на 4."
+```
+
+Traits in the `dark` category must contain both an upside and a real penalty; the
+test uses `[meta].lower_is_better` to decide which direction is which (for
+`shop_price_percent` a negative value is the bonus).
+
+## Add an item
+
+```toml
+[[item]]
+id = "sea_glass_blade"
+name = "Клинок морского стекла"
+kind = "equipment"                   # equipment | consumable | material
+slot = "weapon"                      # weapon/head/body/hands/feet/trinket, or "none"
+rarity = "rare"                      # from items.toml [meta].rarities
+level = 18
+price = 760
+modifiers = { physical_damage_percent = 16 }
+skill_modifiers = { monk_palm_strike = 20 }   # +20% to that skill, never a new button
+text = "Одна фраза."
+```
+
+Consumables must declare `stack` and an `effect` table, and always use `slot =
+"none"` - they live in the combat Bag tab.
+
+## Add or rebalance a city
+
+```toml
+[[city]]
+id = "seaward"
+order = 16
+name = "Приморье"
+description = "Одна фраза."
+level_min = 290
+level_max = 320
+unlock_level = 290
+unlock_requires = ["city:last_beacon"]
+services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
+
+[[city.location]]
+id = "shell_shore"
+slot = 1
+name = "Ракушечный берег"
+biome = "берег"
+level_min = 290
+level_max = 294
+```
+
+Invariants checked by `tests/content/test_world.py`:
+
+- exactly 15 cities (change `EXPECTED_CITIES` deliberately if you extend the world);
+- exactly 5 locations per city, slots `1..5` in order;
+- inside a city, both bounds increase from location to location and there is no gap
+  (`next.level_min <= previous.level_max`);
+- the first location starts at the city's `level_min`, the last ends at its
+  `level_max`;
+- city bands overlap: the next city starts inside the previous one's band, so a
+  player always has both a place to push and a place to farm;
+- every level from 1 to `max_character_level` is covered by at least one location.
+
+Location level ranges drive enemy level, loot quality and rarity, experience and
+event difficulty. Location layout itself is generated, never stored - see
+`docs/procgen.md`.
+
+## Checking your changes
+
+```bash
+uv run pytest tests/content
+```
+
+The loader reports every problem at once:
+
+```
+content validation failed (2 problems):
+  - races.toml: seaborn spends 5 positive points but its budget is 4
+  - skills.toml: class monk has 7 actives, expected 8
+```

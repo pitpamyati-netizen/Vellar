@@ -1,0 +1,779 @@
+# World map: 15 cities, 5 locations each, levels 1-300.
+#
+# Invariants enforced by tests/content/test_world.py:
+#   - exactly 15 cities, exactly 5 locations per city
+#   - every level from 1 to 300 is covered by at least one location
+#   - bounds increase monotonically inside a city, no gaps between locations
+#   - city bands overlap so there is always somewhere to farm and somewhere to push
+#
+# See docs/content-guide.md before editing.
+
+[meta]
+max_character_level = 300
+cities_expected = 15
+locations_per_city = 5
+
+[[city]]
+id = "farhold"
+order = 1
+name = "Дальний Оплот"
+description = "Пограничная крепость на краю обжитых земель."
+level_min = 1
+level_max = 30
+unlock_level = 1
+unlock_requires = []
+services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
+
+[[city.location]]
+id = "quiet_meadows"
+slot = 1
+name = "Тихие Луга"
+biome = "луга"
+level_min = 1
+level_max = 4
+
+[[city.location]]
+id = "dusk_grove"
+slot = 2
+name = "Сумеречная Роща"
+biome = "лес"
+level_min = 4
+level_max = 10
+
+[[city.location]]
+id = "wolf_ravines"
+slot = 3
+name = "Волчьи Овраги"
+biome = "овраги"
+level_min = 9
+level_max = 16
+
+[[city.location]]
+id = "old_road"
+slot = 4
+name = "Старый Тракт"
+biome = "дорога"
+level_min = 15
+level_max = 23
+
+[[city.location]]
+id = "abandoned_mine"
+slot = 5
+name = "Заброшенная Шахта"
+biome = "подземелье"
+level_min = 22
+level_max = 30
+
+[[city]]
+id = "dusk_harbor"
+order = 2
+name = "Сумеречная Пристань"
+description = "Портовый город, живущий рыбой и контрабандой."
+level_min = 24
+level_max = 54
+unlock_level = 24
+unlock_requires = ["city:farhold"]
+services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
+
+[[city.location]]
+id = "fisher_piers"
+slot = 1
+name = "Рыбацкие Мостки"
+biome = "берег"
+level_min = 24
+level_max = 27
+
+[[city.location]]
+id = "salt_marshes"
+slot = 2
+name = "Солёные Болота"
+biome = "болото"
+level_min = 27
+level_max = 33
+
+[[city.location]]
+id = "broken_pier"
+slot = 3
+name = "Разбитый Причал"
+biome = "берег"
+level_min = 32
+level_max = 40
+
+[[city.location]]
+id = "rotten_docks"
+slot = 4
+name = "Гнилые Верфи"
+biome = "руины"
+level_min = 39
+level_max = 47
+
+[[city.location]]
+id = "tide_caves"
+slot = 5
+name = "Пещеры Прилива"
+biome = "пещеры"
+level_min = 46
+level_max = 54
+
+[[city]]
+id = "stonedale"
+order = 3
+name = "Каменный Дол"
+description = "Город камнетёсов у подножия серых утёсов."
+level_min = 48
+level_max = 76
+unlock_level = 48
+unlock_requires = ["city:dusk_harbor"]
+services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
+
+[[city.location]]
+id = "dale_screes"
+slot = 1
+name = "Осыпи Дола"
+biome = "холмы"
+level_min = 48
+level_max = 51
+
+[[city.location]]
+id = "granite_steps"
+slot = 2
+name = "Гранитные Ступени"
+biome = "горы"
+level_min = 51
+level_max = 56
+
+[[city.location]]
+id = "quarry"
+slot = 3
+name = "Каменоломня"
+biome = "карьер"
+level_min = 55
+level_max = 63
+
+[[city.location]]
+id = "wind_gorge"
+slot = 4
+name = "Ущелье Ветров"
+biome = "ущелье"
+level_min = 62
+level_max = 69
+
+[[city.location]]
+id = "troll_den"
+slot = 5
+name = "Логово Троллей"
+biome = "пещеры"
+level_min = 68
+level_max = 76
+
+[[city]]
+id = "copper_cross"
+order = 4
+name = "Медный Перекрёсток"
+description = "Узел четырёх торговых трактов."
+level_min = 70
+level_max = 98
+unlock_level = 70
+unlock_requires = ["city:stonedale"]
+services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
+
+[[city.location]]
+id = "trade_road"
+slot = 1
+name = "Торговый Тракт"
+biome = "дорога"
+level_min = 70
+level_max = 73
+
+[[city.location]]
+id = "copper_mines"
+slot = 2
+name = "Медные Копи"
+biome = "шахта"
+level_min = 73
+level_max = 78
+
+[[city.location]]
+id = "ruined_farm"
+slot = 3
+name = "Разорённый Хутор"
+biome = "руины"
+level_min = 77
+level_max = 85
+
+[[city.location]]
+id = "bandit_hollow"
+slot = 4
+name = "Разбойничий Лог"
+biome = "лес"
+level_min = 84
+level_max = 91
+
+[[city.location]]
+id = "smelting_pits"
+slot = 5
+name = "Плавильные Ямы"
+biome = "шахта"
+level_min = 90
+level_max = 98
+
+[[city]]
+id = "quiet_fords"
+order = 5
+name = "Тихие Броды"
+description = "Речные переправы и старые курганы."
+level_min = 92
+level_max = 118
+unlock_level = 92
+unlock_requires = ["city:copper_cross"]
+services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
+
+[[city.location]]
+id = "willow_shoals"
+slot = 1
+name = "Ивовые Отмели"
+biome = "река"
+level_min = 92
+level_max = 95
+
+[[city.location]]
+id = "flooded_forest"
+slot = 2
+name = "Затопленный Лес"
+biome = "болото"
+level_min = 95
+level_max = 100
+
+[[city.location]]
+id = "river_barrows"
+slot = 3
+name = "Речные Курганы"
+biome = "курганы"
+level_min = 99
+level_max = 106
+
+[[city.location]]
+id = "mill_reaches"
+slot = 4
+name = "Мельничные Плёсы"
+biome = "река"
+level_min = 105
+level_max = 112
+
+[[city.location]]
+id = "drowned_temple"
+slot = 5
+name = "Утопленный Храм"
+biome = "руины"
+level_min = 111
+level_max = 118
+
+[[city]]
+id = "salt_ridge"
+order = 6
+name = "Соляной Кряж"
+description = "Караванная застава на солёном хребте."
+level_min = 113
+level_max = 138
+unlock_level = 113
+unlock_requires = ["city:quiet_fords"]
+services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
+
+[[city.location]]
+id = "salt_terraces"
+slot = 1
+name = "Соляные Террасы"
+biome = "пустошь"
+level_min = 113
+level_max = 115
+
+[[city.location]]
+id = "scorched_waste"
+slot = 2
+name = "Выжженная Пустошь"
+biome = "пустошь"
+level_min = 115
+level_max = 121
+
+[[city.location]]
+id = "caravan_route"
+slot = 3
+name = "Караванный Путь"
+biome = "дорога"
+level_min = 120
+level_max = 126
+
+[[city.location]]
+id = "scorpion_ridge"
+slot = 4
+name = "Хребет Скорпионов"
+biome = "горы"
+level_min = 125
+level_max = 132
+
+[[city.location]]
+id = "salt_grottos"
+slot = 5
+name = "Соляные Гроты"
+biome = "пещеры"
+level_min = 131
+level_max = 138
+
+[[city]]
+id = "crimson_wharf"
+order = 7
+name = "Багровый Причал"
+description = "Вольная гавань под властью капитанов."
+level_min = 133
+level_max = 157
+unlock_level = 133
+unlock_requires = ["city:salt_ridge"]
+services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
+
+[[city.location]]
+id = "bloody_docks"
+slot = 1
+name = "Кровавые Верфи"
+biome = "порт"
+level_min = 133
+level_max = 135
+
+[[city.location]]
+id = "pirate_bay"
+slot = 2
+name = "Пиратская Бухта"
+biome = "берег"
+level_min = 135
+level_max = 140
+
+[[city.location]]
+id = "sunken_holds"
+slot = 3
+name = "Трюмы Затонувших"
+biome = "корабли"
+level_min = 139
+level_max = 145
+
+[[city.location]]
+id = "beacon_cliff"
+slot = 4
+name = "Маячный Утёс"
+biome = "утёсы"
+level_min = 144
+level_max = 151
+
+[[city.location]]
+id = "siren_reefs"
+slot = 5
+name = "Рифы Сирен"
+biome = "море"
+level_min = 150
+level_max = 157
+
+[[city]]
+id = "glass_hollow"
+order = 8
+name = "Стеклянная Впадина"
+description = "Город у кратера, где песок спёкся в стекло."
+level_min = 152
+level_max = 176
+unlock_level = 152
+unlock_requires = ["city:crimson_wharf"]
+services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
+
+[[city.location]]
+id = "glass_fields"
+slot = 1
+name = "Стеклянные Поля"
+biome = "пустошь"
+level_min = 152
+level_max = 154
+
+[[city.location]]
+id = "impact_crater"
+slot = 2
+name = "Кратер Падения"
+biome = "кратер"
+level_min = 154
+level_max = 159
+
+[[city.location]]
+id = "molten_ruins"
+slot = 3
+name = "Оплавленные Руины"
+biome = "руины"
+level_min = 158
+level_max = 164
+
+[[city.location]]
+id = "mirror_tunnels"
+slot = 4
+name = "Зеркальные Тоннели"
+biome = "тоннели"
+level_min = 163
+level_max = 170
+
+[[city.location]]
+id = "hollow_heart"
+slot = 5
+name = "Сердце Впадины"
+biome = "аномалия"
+level_min = 169
+level_max = 176
+
+[[city]]
+id = "winter_march"
+order = 9
+name = "Зимний Рубеж"
+description = "Последний гарнизон перед вечными снегами."
+level_min = 171
+level_max = 194
+unlock_level = 171
+unlock_requires = ["city:glass_hollow"]
+services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
+
+[[city.location]]
+id = "snow_dells"
+slot = 1
+name = "Снежные Пади"
+biome = "снега"
+level_min = 171
+level_max = 173
+
+[[city.location]]
+id = "ice_pass"
+slot = 2
+name = "Ледяной Перевал"
+biome = "горы"
+level_min = 173
+level_max = 178
+
+[[city.location]]
+id = "frozen_garrison"
+slot = 3
+name = "Замёрзший Гарнизон"
+biome = "руины"
+level_min = 177
+level_max = 183
+
+[[city.location]]
+id = "wolf_tundra"
+slot = 4
+name = "Волчья Тундра"
+biome = "тундра"
+level_min = 182
+level_max = 188
+
+[[city.location]]
+id = "ice_halls"
+slot = 5
+name = "Ледяные Чертоги"
+biome = "подземелье"
+level_min = 187
+level_max = 194
+
+[[city]]
+id = "ashen_gates"
+order = 10
+name = "Пепельные Врата"
+description = "Кузнечный город на вулканическом плато."
+level_min = 189
+level_max = 213
+unlock_level = 189
+unlock_requires = ["city:winter_march"]
+services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
+
+[[city.location]]
+id = "ash_fields"
+slot = 1
+name = "Пепельные Поля"
+biome = "пепел"
+level_min = 189
+level_max = 191
+
+[[city.location]]
+id = "lava_fissures"
+slot = 2
+name = "Лавовые Трещины"
+biome = "вулкан"
+level_min = 191
+level_max = 196
+
+[[city.location]]
+id = "gate_forges"
+slot = 3
+name = "Кузни Врат"
+biome = "кузни"
+level_min = 195
+level_max = 201
+
+[[city.location]]
+id = "smoke_citadel"
+slot = 4
+name = "Дымная Цитадель"
+biome = "крепость"
+level_min = 200
+level_max = 207
+
+[[city.location]]
+id = "burnt_forest"
+slot = 5
+name = "Обгоревший Лес"
+biome = "лес"
+level_min = 206
+level_max = 213
+
+[[city]]
+id = "thunder_range"
+order = 11
+name = "Громовая Гряда"
+description = "Поселение на скалах, где не стихает буря."
+level_min = 208
+level_max = 230
+unlock_level = 208
+unlock_requires = ["city:ashen_gates"]
+services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
+
+[[city.location]]
+id = "storm_ledges"
+slot = 1
+name = "Грозовые Уступы"
+biome = "горы"
+level_min = 208
+level_max = 210
+
+[[city.location]]
+id = "griffin_nests"
+slot = 2
+name = "Гнёзда Грифонов"
+biome = "скалы"
+level_min = 210
+level_max = 215
+
+[[city.location]]
+id = "split_peak"
+slot = 3
+name = "Расколотый Пик"
+biome = "горы"
+level_min = 214
+level_max = 219
+
+[[city.location]]
+id = "lightning_path"
+slot = 4
+name = "Тропа Молний"
+biome = "плато"
+level_min = 218
+level_max = 225
+
+[[city.location]]
+id = "storm_eye"
+slot = 5
+name = "Око Бури"
+biome = "аномалия"
+level_min = 224
+level_max = 230
+
+[[city]]
+id = "azure_halls"
+order = 12
+name = "Лазурный Чертог"
+description = "Парящие сады высших магов."
+level_min = 226
+level_max = 248
+unlock_level = 226
+unlock_requires = ["city:thunder_range"]
+services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
+
+[[city.location]]
+id = "azure_gardens"
+slot = 1
+name = "Лазурные Сады"
+biome = "сады"
+level_min = 226
+level_max = 228
+
+[[city.location]]
+id = "floating_isles"
+slot = 2
+name = "Плавучие Острова"
+biome = "небо"
+level_min = 228
+level_max = 233
+
+[[city.location]]
+id = "crystal_galleries"
+slot = 3
+name = "Хрустальные Галереи"
+biome = "чертоги"
+level_min = 232
+level_max = 237
+
+[[city.location]]
+id = "wind_bridges"
+slot = 4
+name = "Ветряные Мосты"
+biome = "небо"
+level_min = 236
+level_max = 243
+
+[[city.location]]
+id = "sky_spire"
+slot = 5
+name = "Небесный Шпиль"
+biome = "башня"
+level_min = 242
+level_max = 248
+
+[[city]]
+id = "bone_marches"
+order = 13
+name = "Костяной Предел"
+description = "Город живых на границе мёртвых земель."
+level_min = 244
+level_max = 266
+unlock_level = 244
+unlock_requires = ["city:azure_halls"]
+services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
+
+[[city.location]]
+id = "bone_fields"
+slot = 1
+name = "Костяные Поля"
+biome = "пустошь"
+level_min = 244
+level_max = 246
+
+[[city.location]]
+id = "march_barrows"
+slot = 2
+name = "Курганы Предела"
+biome = "курганы"
+level_min = 246
+level_max = 251
+
+[[city.location]]
+id = "forgotten_crypts"
+slot = 3
+name = "Склепы Забытых"
+biome = "склепы"
+level_min = 250
+level_max = 255
+
+[[city.location]]
+id = "necropolis"
+slot = 4
+name = "Некрополь"
+biome = "город мёртвых"
+level_min = 254
+level_max = 261
+
+[[city.location]]
+id = "bone_throne"
+slot = 5
+name = "Трон Костей"
+biome = "подземелье"
+level_min = 260
+level_max = 266
+
+[[city]]
+id = "obsidian_throne"
+order = 14
+name = "Обсидиановый Трон"
+description = "Чёрная цитадель над провалом."
+level_min = 262
+level_max = 283
+unlock_level = 262
+unlock_requires = ["city:bone_marches"]
+services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
+
+[[city.location]]
+id = "obsidian_steps"
+slot = 1
+name = "Обсидиановые Ступени"
+biome = "крепость"
+level_min = 262
+level_max = 264
+
+[[city.location]]
+id = "void_halls"
+slot = 2
+name = "Залы Пустоты"
+biome = "чертоги"
+level_min = 264
+level_max = 268
+
+[[city.location]]
+id = "shadow_forge"
+slot = 3
+name = "Кузня Теней"
+biome = "кузни"
+level_min = 268
+level_max = 273
+
+[[city.location]]
+id = "abyss_chasm"
+slot = 4
+name = "Провал Бездны"
+biome = "бездна"
+level_min = 272
+level_max = 278
+
+[[city.location]]
+id = "throne_hall"
+slot = 5
+name = "Чертог Трона"
+biome = "тронный зал"
+level_min = 277
+level_max = 283
+
+[[city]]
+id = "last_beacon"
+order = 15
+name = "Последний Маяк"
+description = "Край мира и последний огонь на нём."
+level_min = 279
+level_max = 300
+unlock_level = 279
+unlock_requires = ["city:obsidian_throne"]
+services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
+
+[[city.location]]
+id = "worlds_edge"
+slot = 1
+name = "Край Мира"
+biome = "край"
+level_min = 279
+level_max = 281
+
+[[city.location]]
+id = "reality_rift"
+slot = 2
+name = "Разлом Реальности"
+biome = "аномалия"
+level_min = 281
+level_max = 285
+
+[[city.location]]
+id = "beacon_tower"
+slot = 3
+name = "Башня Маяка"
+biome = "башня"
+level_min = 285
+level_max = 290
+
+[[city.location]]
+id = "garden_of_ash"
+slot = 4
+name = "Сад Пепла и Света"
+biome = "сады"
+level_min = 289
+level_max = 295
+
+[[city.location]]
+id = "beacon_summit"
+slot = 5
+name = "Вершина Маяка"
+biome = "вершина"
+level_min = 294
+level_max = 300
