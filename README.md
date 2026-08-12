@@ -88,6 +88,9 @@ tests/
 
 | Document | Contents |
 | --- | --- |
+| [Claude.md](Claude.md) | File map and the development rules (Russian) |
+| [Roadmap.md](Roadmap.md) | The three days to open beta, with status flags (Russian) |
+| [Narrative.md](Narrative.md) | World, naming, dialogue and broadcast tone (Russian) |
 | [docs/architecture.md](docs/architecture.md) | Layers, dependency rule, flows, data schema, latency budget |
 | [docs/accessibility.md](docs/accessibility.md) | Screen-reader rules and the review checklist |
 | [docs/procgen.md](docs/procgen.md) | Seeds, cycles, generation invariants |

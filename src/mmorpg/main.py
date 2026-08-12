@@ -44,6 +44,7 @@ from mmorpg.infrastructure.persistence import (
 )
 from mmorpg.logging import configure_logging, get_logger
 from mmorpg.monitoring import install_slow_callback_detector
+from mmorpg.presentation.telegram.broadcast import ChannelBroadcaster
 from mmorpg.presentation.telegram.handlers import creation, play
 from mmorpg.presentation.telegram.middlewares.dependencies import (
     Dependencies,
@@ -97,6 +98,13 @@ async def build_application(settings: Settings) -> Application:
     dispatcher.include_router(creation.build_router())
     dispatcher.include_router(play.build_router())
 
+    dependencies.broadcasts.sink = bot
+    logger.info(
+        "broadcasts",
+        channel=settings.channel_id or "not configured",
+        group=settings.group_id or "not configured",
+    )
+
     return Application(
         settings=settings, content=content, bot=bot, dispatcher=dispatcher, stack=stack
     )
@@ -119,6 +127,9 @@ async def _build_adapters(
             inventory=InMemoryInventoryRepository(),
             state_cache=InMemoryStateCache(),
             location_deltas=InMemoryLocationDeltaCache(),
+            # The sink is attached once the Bot exists; until then, and whenever
+            # CHANNEL_ID is empty, announcing is a no-op.
+            broadcasts=ChannelBroadcaster(sink=None, chat_id=settings.channel_id),
         )
         return MemoryStorage(), dependencies, InMemoryIdempotencyStore()
 
@@ -151,6 +162,7 @@ async def _build_adapters(
         inventory=PostgresInventoryRepository(pool),
         state_cache=RedisStateCache(redis),
         location_deltas=RedisLocationDeltaCache(redis),
+        broadcasts=ChannelBroadcaster(sink=None, chat_id=settings.channel_id),
     )
     return RedisStorage(redis), dependencies, RedisIdempotencyStore(redis)
 

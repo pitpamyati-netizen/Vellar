@@ -119,10 +119,15 @@ current FSM state and, on a mismatch, answers:
 
 together with the current keyboard. Never stay silent, never raise.
 
-## 13. No real-time timers in combat
+## 13. No real-time timers in PvE
 
-Combat is turn-based and waits for the player indefinitely. Nothing in the game
-expires while the player is reading.
+Combat against the world is turn-based and waits for the player indefinitely.
+Nothing in a location, a dungeon or a quest expires while the player is reading.
+
+The **only** exception is the arena, where a second player is waiting: a turn
+there lasts 60 seconds, and silence plays the auto-action the player configured in
+Settings (attack, defend, skill slot N, potion) rather than passing the turn.
+The rule is stated in `Narrative.md`, section 7, and never leaks into PvE.
 
 ## 14. `parse_mode=None`
 

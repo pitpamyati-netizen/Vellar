@@ -56,10 +56,19 @@ def is_alive(settings: Settings, *, now: float | None = None) -> bool:
     return age is not None and age <= settings.heartbeat_stale_after
 
 
-async def _beat(path: Path, interval: float) -> None:
-    """Touch the file forever, until cancelled."""
-    while True:
-        await asyncio.sleep(interval)
+async def _beat(path: Path, interval: float, stop: asyncio.Event) -> None:
+    """Touch the file every ``interval`` until asked to stop.
+
+    Stopping is an event rather than a cancellation on purpose: cancelling does
+    not reach into the worker thread, so a cancelled beat can still land its write
+    *after* the shutdown deleted the file - leaving a fresh heartbeat behind for a
+    process that is gone.
+    """
+    while not stop.is_set():
+        with suppress(TimeoutError):
+            await asyncio.wait_for(stop.wait(), timeout=interval)
+        if stop.is_set():
+            return
         await asyncio.to_thread(touch, path)
 
 
@@ -72,12 +81,15 @@ async def heartbeat(settings: Settings) -> AsyncIterator[None]:
     """
     path = settings.heartbeat_path
     await asyncio.to_thread(touch, path)
-    task = asyncio.create_task(_beat(path, settings.heartbeat_seconds), name="heartbeat")
+    stop = asyncio.Event()
+    task = asyncio.create_task(_beat(path, settings.heartbeat_seconds, stop), name="heartbeat")
     logger.info("heartbeat_started", path=str(path), seconds=settings.heartbeat_seconds)
     try:
         yield
     finally:
-        task.cancel()
+        # Ask, then wait: the beat returns at once, and any write already in
+        # flight has finished by the time the file is removed below.
+        stop.set()
         with suppress(asyncio.CancelledError):
             await task
         # A file left behind by a clean shutdown would make the next start look

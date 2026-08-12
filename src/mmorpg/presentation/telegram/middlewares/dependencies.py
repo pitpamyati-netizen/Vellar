@@ -23,6 +23,7 @@ from mmorpg.domain.ports.repositories import (
     StateCache,
     UserRepository,
 )
+from mmorpg.presentation.telegram.broadcast import ChannelBroadcaster
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +37,7 @@ class Dependencies:
     inventory: InventoryRepository
     state_cache: StateCache
     location_deltas: LocationDeltaCache
+    broadcasts: ChannelBroadcaster
 
     def as_data(self) -> dict[str, Any]:
         return {
@@ -46,6 +48,7 @@ class Dependencies:
             "inventory": self.inventory,
             "state_cache": self.state_cache,
             "location_deltas": self.location_deltas,
+            "broadcasts": self.broadcasts,
         }
 
 

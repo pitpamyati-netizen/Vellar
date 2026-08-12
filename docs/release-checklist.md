@@ -51,18 +51,40 @@ uv run pytest tests/content
 
 ## 5. Data and migrations
 
+```bash
+docker compose up -d postgres redis
+uv run pytest -m integration
+```
+
 - [ ] New columns have a migration in `migrations/versions/`
+- [ ] The integration tests pass. They are the *only* place the SQL is executed;
+      the rest of the suite runs against the in-memory adapters and cannot see a
+      column PostgreSQL refuses, or a name it reserves - `verbose` was one
+- [ ] Every new query is covered there, or it ships unverified
 - [ ] Nothing derived was added to a table: totals are recomputed, not stored
 - [ ] Redis keys carry a TTL
 
 ## 6. Runtime
 
-- [ ] `APP_ENV=local uv run python -m mmorpg.main` starts and plays
-- [ ] `docker compose up -d` brings up postgres, redis and the bot
-- [ ] Startup logs show `content_loaded` with the expected counts
+- [ ] `Start.bat local` starts and plays
+- [ ] `Start.bat` (or `docker compose up -d --wait`) reaches healthy on its own
+- [ ] Startup logs show `content_loaded` with the expected counts, then `connected`
+- [ ] `docker compose stop bot` logs `Polling stopped` and exits 0 - a shutdown
+      that has to be killed is dropping players' updates
 - [ ] No `slow_operation` or asyncio slow-callback warnings under normal play
+- [ ] `SLOW_CALLBACK_DETECTOR` is off wherever players are connected
 
-## 7. Release
+## 7. Channel and group
+
+- [ ] `uv run python scripts/broadcast.py --kind service --headline "..." --dry-run`
+      renders the post and stays under the limit
+- [ ] The bot is an administrator of the channel in `CHANNEL_ID`, and a real post
+      arrives - a broadcast nobody saw is a broadcast that does not work
+- [ ] New broadcast texts follow `Narrative.md`, section 8, and are covered by
+      `tests/presentation/test_broadcast.py`
+- [ ] Group commands answer in one message and stay silent for other bots' traffic
+
+## 8. Release
 
 - [ ] Documentation updated **in the same commit** as the code
 - [ ] An ADR added for any decision a future reader would question

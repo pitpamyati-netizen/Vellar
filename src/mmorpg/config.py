@@ -57,6 +57,16 @@ class Settings(BaseSettings):
     webhook_host: str = "0.0.0.0"
     webhook_port: int = 8080
 
+    # --- Community ---
+    # The public channel the game posts to, and the group players talk in. Both
+    # accept either a numeric chat id (-100...) or an @username. Empty means the
+    # feature is simply off: a local run has no channel and must still play.
+    channel_id: str = ""
+    group_id: str = ""
+    # Shown to players as "where to find the others"; empty hides the line.
+    channel_url: str = ""
+    group_url: str = ""
+
     world_seed: str = "vellar-prime"
     cycle_seconds: int = Field(default=21_600, gt=0)
 
@@ -100,6 +110,16 @@ class Settings(BaseSettings):
             msg = "webhook_secret is required when app_env is 'prod'"
             raise ValueError(msg)
         return self
+
+    @property
+    def broadcasts_enabled(self) -> bool:
+        """Whether the game channel is configured. Broadcasts are a no-op if not."""
+        return bool(self.channel_id.strip())
+
+    @property
+    def group_chat_enabled(self) -> bool:
+        """Whether public group commands are answered."""
+        return bool(self.group_id.strip())
 
     @property
     def uses_external_storage(self) -> bool:

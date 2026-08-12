@@ -37,17 +37,23 @@ call :ensure_docker || exit /b 1
 
 echo [Vellar] Building the image and starting PostgreSQL, Redis and the bot...
 echo [Vellar] The first build downloads the base images and takes a few minutes.
-docker compose up -d --build
+echo.
+rem --wait blocks until every service is healthy and the migration has finished.
+rem The bot only reports healthy once its event loop is beating, so reaching this
+rem point means it is genuinely serving - see src/mmorpg/health.py.
+docker compose up -d --build --wait --wait-timeout 300
 if errorlevel 1 (
     echo.
-    echo [Vellar] The stack did not start. Recent output:
+    echo [Vellar] The stack did not come up. Recent output:
+    echo.
     docker compose logs --tail=60
+    echo.
+    echo [Vellar] A rejected BOT_TOKEN is the usual cause - check the value in .env.
     exit /b 1
 )
 
-call :wait_healthy || exit /b 1
-
 echo.
+echo [Vellar] Healthy.
 docker compose ps
 echo.
 echo [Vellar] The bot is running and will keep running after this window closes.
@@ -145,33 +151,3 @@ if errorlevel 1 (
     exit /b 1
 )
 exit /b 0
-
-:wait_healthy
-rem The container reports healthy once the bot's event loop is beating; see
-rem src/mmorpg/health.py. Up to two minutes, because the first start also
-rem validates the content and runs the migrations.
-echo.
-echo [Vellar] Waiting for the bot to report healthy...
-set "STATE=none"
-for /l %%i in (1,1,60) do (
-    set "STATE=none"
-    set "RUNSTATE=none"
-    for /f "usebackq delims=" %%s in (`docker inspect -f "{{.State.Health.Status}}" vellar-bot 2^>nul`) do set "STATE=%%s"
-    if "!STATE!"=="healthy" (
-        echo [Vellar] Healthy.
-        exit /b 0
-    )
-    if "!STATE!"=="unhealthy" goto :wait_failed
-    for /f "usebackq delims=" %%r in (`docker inspect -f "{{.State.Status}}" vellar-bot 2^>nul`) do set "RUNSTATE=%%r"
-    if "!RUNSTATE!"=="exited" goto :wait_failed
-    timeout /t 2 /nobreak >nul 2>&1
-)
-
-:wait_failed
-echo.
-echo [Vellar] The bot did not become healthy. Its last output:
-echo.
-docker compose logs --tail=60 bot
-echo.
-echo [Vellar] A rejected BOT_TOKEN is the usual cause - check the value in .env.
-exit /b 1
