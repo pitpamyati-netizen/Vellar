@@ -10,10 +10,12 @@ from __future__ import annotations
 import pytest
 
 from mmorpg.application.dto.creation import CharacterDraft
-from mmorpg.domain.entities import Character, GameContent, StatBlock
+from mmorpg.domain.entities import Character, GameContent, GeneratedLocation, StatBlock
+from mmorpg.domain.procgen import generate_location
+from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.infrastructure.content import load_content
 from mmorpg.presentation.telegram.handlers import creation as handlers_creation
-from mmorpg.presentation.telegram.screens import creation
+from mmorpg.presentation.telegram.screens import creation, play
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
@@ -34,6 +36,20 @@ def hero() -> Character:
     return Character(id=1, user_id=42, name="Аргус", race_id="human", class_id="warrior")
 
 
+@pytest.fixture(scope="session")
+def sample_location() -> GeneratedLocation:
+    return generate_location(
+        world_seed="vellar-test",
+        city_id="farhold",
+        slot=1,
+        cycle=100,
+        name="Тихие Луга",
+        biome="луга",
+        level_min=1,
+        level_max=4,
+    )
+
+
 @pytest.fixture
 def complete_draft() -> CharacterDraft:
     return CharacterDraft(
@@ -47,7 +63,10 @@ def complete_draft() -> CharacterDraft:
 
 @pytest.fixture
 def all_screens(
-    content: GameContent, hero: Character, complete_draft: CharacterDraft
+    content: GameContent,
+    hero: Character,
+    complete_draft: CharacterDraft,
+    sample_location: GeneratedLocation,
 ) -> list[Screen]:
     """Every screen in the game, rendered with sample data.
 
@@ -69,6 +88,16 @@ def all_screens(
         creation.confirm_screen(content, complete_draft),
         handlers_creation.welcome_screen(),
         handlers_creation.created_screen("Аргус", "Дальний Оплот"),
+        play.main_menu_screen(content, hero, derived_stats(content, hero)),
+        play.world_screen(content, hero, PageState()),
+        play.city_screen(content, content.city("farhold"), hero),
+        play.location_list_screen(content, content.city("farhold"), hero, PageState()),
+        play.location_screen(sample_location, sample_location.entrance, cleared=0),
+        play.location_screen(
+            sample_location, sample_location.exit_node, cleared=0b101, notice="Узел пройден."
+        ),
+        play.character_screen(content, hero, derived_stats(content, hero)),
+        play.stub_screen("Таверна"),
         paginated_screen(
             screen_id=ScreenId.INVENTORY,
             title="Инвентарь",
