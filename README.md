@@ -70,13 +70,31 @@ docs/              architecture, accessibility, procgen, content guide, ADRs
 tests/
 ```
 
+## What is playable
+
+| Working | Stubbed (a real screen with a working "Назад", never silence) |
+| --- | --- |
+| Character creation: name, race, class, two traits, free points, confirmation | Dungeons, tavern, mentor, bank |
+| Main menu, world list, city hub, five locations, node-by-node movement | Cities 2-15 (they unlock by level; content is generated for all of them) |
+| Turn-based combat with the fixed 6+3+1 panel, one to three enemies | Skill loadout editing, PvP, guilds |
+| Inventory and city shop on the shared paginated list | |
+| Accessibility settings: emoji, verbose descriptions, repeat | |
+
 ## Documentation
 
 | Document | Contents |
 | --- | --- |
-| [docs/architecture.md](docs/architecture.md) | Layers, dependency rule, data schema, latency budget |
+| [docs/architecture.md](docs/architecture.md) | Layers, dependency rule, flows, data schema, latency budget |
 | [docs/accessibility.md](docs/accessibility.md) | Screen-reader rules and the review checklist |
 | [docs/procgen.md](docs/procgen.md) | Seeds, cycles, generation invariants |
 | [docs/content-guide.md](docs/content-guide.md) | Adding a race, class, trait or city without touching code |
 | [docs/skills.md](docs/skills.md) | Skill panel, ranks, edges, anti-bloat rules |
+| [docs/release-checklist.md](docs/release-checklist.md) | What to verify before shipping |
 | [docs/adr/](docs/adr/) | One architecture decision per file |
+
+## Content at a glance
+
+16 races · 8 classes · 64 traits · 128 skills (112 class + 16 racial, each with two
+rank-3 edges) · 24 enemy archetypes · 15 cities × 5 locations covering levels 1-300.
+All of it lives in [`content/`](content/) as TOML and is validated at startup - the
+bot refuses to boot on broken content and reports every problem at once.

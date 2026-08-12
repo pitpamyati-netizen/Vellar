@@ -51,12 +51,30 @@ src/mmorpg/
   presentation/
     telegram/
       handlers/     aiogram routers, one per screen family
+      flows/        pure state machines: advance(state, message) -> state
       keyboards/    ReplyKeyboardMarkup builders only
       screens/      screen text renderers
-      states/       FSM states
+      states/       FSM states and the navigation stack
       middlewares/  idempotency, dependency injection, error handling
+      routing.py    button text and typed commands -> intents
   main.py       composition root
 ```
+
+## Flows: why the interface is testable
+
+Each screen family has a **flow**: a pure function
+`advance(content, state, message) -> state`, with `render(content, state) -> Screen`
+beside it. No I/O, no aiogram, no clock - the world cycle and the player's goods
+arrive as arguments.
+
+That is what makes the whole interface testable without a bot token: the tests
+press buttons by sending their exact text and assert on the resulting state and
+screen. A handler is then only four lines: load state, call `advance`, render,
+send one message.
+
+Anything that writes to a database is *recorded as an intent* on the state
+(`pending_purchase`, `pending_settings`) and executed by the handler, so the flow
+stays pure and the write stays in one place.
 
 ## Storage split
 

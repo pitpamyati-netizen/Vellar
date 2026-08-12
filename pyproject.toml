@@ -103,4 +103,8 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
     "@overload",
+    # Protocol declarations are signatures, not code: their bodies are literally
+    # "..." and are implemented by the adapters, which are tested directly.
+    "class .*\\(Protocol\\):",
+    "^\\s*\\.\\.\\.$",
 ]
