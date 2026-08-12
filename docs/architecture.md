@@ -102,7 +102,9 @@ Target: p95 update handling under 100 ms, p99 under 250 ms.
 
 - Nothing blocks the event loop. `time.sleep`, synchronous HTTP clients and runtime
   file I/O are forbidden; `asyncio` debug mode plus `loop.slow_callback_duration`
-  logs any violation.
+  logs any violation. That detector costs a timestamp per callback, so it is a
+  switch (`SLOW_CALLBACK_DETECTOR`) that the Docker stack turns off - see
+  `docs/deployment.md`.
 - All static content is loaded once at startup into `@dataclass(frozen=True,
   slots=True)` objects held in memory and indexed by dict for O(1) access.
 - Keyboards are cached with `functools.lru_cache` keyed by screen plus state, so
@@ -115,6 +117,21 @@ Target: p95 update handling under 100 ms, p99 under 250 ms.
 - An idempotency middleware drops duplicate `update_id` values, so a redelivered
   update never applies an effect twice.
 
+## Capacity
+
+Sized for a hundred players online: about ten updates a second, with bursts several
+times that. Two limits keep a burst from becoming a queue everyone waits in.
+
+- `UPDATE_CONCURRENCY_LIMIT` caps updates handled at the same time. Excess updates
+  wait at the door rather than all contending for the connection pool at once, so
+  the players already being served keep their latency.
+- `POSTGRES_POOL_MAX` caps concurrent queries. Raising the first without the second
+  only moves the queue.
+
+Telegram's own rate limit - roughly 30 messages a second per bot - binds before
+this stack does. `docs/deployment.md` has the full sizing argument and what to
+change first when the player count grows.
+
 ## Runtime
 
 | Mode | Transport | Storage |
@@ -125,6 +142,15 @@ Target: p95 update handling under 100 ms, p99 under 250 ms.
 
 The event loop is the stdlib `asyncio.Runner`; uvloop is not used
 (`docs/adr/0004-no-uvloop.md`).
+
+Polling runs in exactly one process: Telegram gives `getUpdates` to a single
+consumer, so a second replica would only lose races with the first. Webhook mode is
+what allows more than one instance.
+
+The loop touches a heartbeat file every ten seconds (`mmorpg.health`). A process
+that dies is caught by the restart policy; a process whose loop is wedged is caught
+only by that file going stale, which is what the container healthcheck reads.
+Shutdown is graceful on `SIGTERM` in both transports.
 
 ## Character maths
 

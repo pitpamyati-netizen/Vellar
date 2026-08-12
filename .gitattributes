@@ -1,4 +1,8 @@
 * text=auto eol=lf
 *.ps1 text eol=crlf
+# cmd.exe mis-parses multi-line blocks in a batch file saved with LF endings.
+*.bat text eol=crlf
+# Git runs hooks through bash, which needs LF whatever the platform.
+.githooks/** text eol=lf
 *.png binary
 *.jpg binary

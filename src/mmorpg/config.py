@@ -7,6 +7,7 @@ read ``os.environ`` directly; everything goes through :class:`Settings`.
 
 from __future__ import annotations
 
+import tempfile
 from enum import StrEnum
 from pathlib import Path
 from typing import Literal
@@ -16,6 +17,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONTENT_DIR = PROJECT_ROOT / "content"
+# The temporary directory, not the project tree: the container runs the bot as a
+# non-root user that owns nothing under /app.
+DEFAULT_HEARTBEAT_PATH = Path(tempfile.gettempdir()) / "vellar-heartbeat"
 
 
 class AppEnv(StrEnum):
@@ -67,6 +71,21 @@ class Settings(BaseSettings):
     # Updates slower than this many seconds are reported by the slow callback
     # detector; see docs/architecture.md, "Latency budget".
     slow_callback_seconds: float = Field(default=0.1, gt=0.0)
+    # That detector needs asyncio debug mode, which timestamps every callback and
+    # keeps coroutine origins alive. It is a development tool: turn it off
+    # wherever real players are connected.
+    slow_callback_detector: bool = True
+
+    # Ceiling on updates handled at the same time. A burst of players cannot
+    # queue more concurrent work than the PostgreSQL pool can serve; 0 lifts the
+    # ceiling. See docs/architecture.md, "Capacity".
+    update_concurrency_limit: int = Field(default=100, ge=0)
+
+    # Liveness heartbeat: the running event loop touches this file every
+    # ``heartbeat_seconds``, and the container healthcheck fails once the file
+    # goes stale. See ``mmorpg.health``.
+    heartbeat_path: Path = DEFAULT_HEARTBEAT_PATH
+    heartbeat_seconds: float = Field(default=10.0, gt=0.0)
 
     @model_validator(mode="after")
     def _check_pool_bounds(self) -> Settings:
@@ -91,6 +110,20 @@ class Settings(BaseSettings):
     def webhook_url(self) -> str:
         """Public URL Telegram will deliver updates to."""
         return f"{self.webhook_base_url.rstrip('/')}{self.webhook_path}"
+
+    @property
+    def heartbeat_stale_after(self) -> float:
+        """Heartbeat age that means the event loop is wedged.
+
+        Three beats: one missed beat is a slow disk or a busy host, three in a
+        row is not.
+        """
+        return self.heartbeat_seconds * 3
+
+    @property
+    def concurrency_limit(self) -> int | None:
+        """The update ceiling in the form aiogram wants: ``None`` for no limit."""
+        return self.update_concurrency_limit or None
 
 
 def load_settings() -> Settings:

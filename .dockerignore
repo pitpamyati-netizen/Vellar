@@ -1,0 +1,32 @@
+# The build context is uploaded to the daemon before the first layer runs, so
+# .venv and .git alone are worth hundreds of megabytes of nothing.
+.git/
+.github/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+coverage.xml
+htmlcov/
+
+# Secrets are injected as environment variables, never baked into a layer.
+.env
+*.log
+
+.idea/
+.vscode/
+.githooks/
+docs/
+tests/
+*.bat
+*.md
+# ...except the one pyproject.toml points at: the build reads it for metadata.
+!README.md

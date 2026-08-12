@@ -10,42 +10,39 @@ specification, not a preference.
 - 16 races, 8 classes, 60+ traits, all defined in TOML under [`content/`](content/)
 - Fixed skill panel: 6 active + 3 passive + 1 racial slot, at every level
 
-## Run it in five minutes
+## Run it
 
-Requirements: [uv](https://docs.astral.sh/uv/) and Python 3.14.
+Put your bot token in `.env` first - copy `.env.example` if the file is not there
+yet, and get a token from [@BotFather](https://t.me/BotFather).
 
-```bash
-git clone <this repo> && cd Vellar
-uv sync
+On Windows, that is the only step:
+
+```
+Start.bat
 ```
 
-Copy the environment template and put your bot token in it (get one from
-[@BotFather](https://t.me/BotFather)):
+This builds the image and starts PostgreSQL, Redis, the migrations and the bot,
+then waits until the bot reports healthy and follows its log. The bot keeps running
+after you close the window; `stop.bat` stops it. `Start.bat local` runs a single
+in-memory process instead, with no Docker and nothing saved - good for trying a
+change, never for players.
+
+Elsewhere, or by hand:
 
 ```bash
-cp .env.example .env
+docker compose up -d && docker compose logs -f bot
 ```
 
-`APP_ENV=local` is the default. In this mode the bot uses in-memory adapters, so
-**no PostgreSQL and no Redis are required** - you can play immediately:
+Without Docker you need [uv](https://docs.astral.sh/uv/) and Python 3.14. With
+`APP_ENV=local` the bot uses in-memory adapters, so no PostgreSQL and no Redis are
+required and a token is the only prerequisite:
 
 ```bash
-uv run python -m mmorpg.main
+uv sync && uv run python -m mmorpg.main
 ```
 
-With `APP_ENV=dev` the bot long-polls against real PostgreSQL and Redis. Start them
-with Docker:
-
-```bash
-docker compose up -d postgres redis
-```
-
-`APP_ENV=prod` switches to webhook mode served by aiohttp. The full stack, bot
-included, runs with:
-
-```bash
-docker compose up -d
-```
+`docs/deployment.md` covers the whole picture: what the stack is sized for, webhook
+mode, and how it stays up.
 
 ## Quality gate
 
@@ -56,6 +53,13 @@ pwsh -File scripts/ci.ps1
 (or `./scripts/ci.sh` on Linux and macOS). This runs `ruff check`, `ruff format
 --check`, `mypy --strict` and `pytest` with coverage. The `domain/` package is held
 at 90% coverage or better.
+
+The same gate runs on every commit, and fixes itself where it can:
+`.githooks/pre-commit` applies `ruff format` and `ruff check --fix` to the staged
+files, stages the result, and only then runs `mypy` and the tests. `Start.bat`
+installs it; `pwsh -File scripts/install-hooks.ps1` (or `./scripts/install-hooks.sh`)
+does it on its own. `VELLAR_SKIP_TESTS=1` skips the slow part, and
+`git commit --no-verify` skips the hook entirely.
 
 ## Layout
 

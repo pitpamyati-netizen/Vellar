@@ -146,6 +146,17 @@ def test_slow_callback_detector_uses_the_configured_threshold() -> None:
         loop.close()
 
 
+def test_the_detector_can_be_switched_off_for_a_loaded_deployment() -> None:
+    """Debug mode timestamps every callback; that is not a price to pay in production."""
+    loop = asyncio.new_event_loop()
+    try:
+        settings = Settings(_env_file=None, slow_callback_detector=False)  # type: ignore[call-arg]
+        install_slow_callback_detector(loop, settings)
+        assert loop.get_debug() is False
+    finally:
+        loop.close()
+
+
 def test_measure_does_not_raise_on_fast_work() -> None:
     with measure("render", budget_seconds=1.0):
         sum(range(10))

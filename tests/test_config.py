@@ -49,6 +49,18 @@ def test_webhook_url_joins_base_and_path() -> None:
     assert settings.webhook_url == "https://vellar.example/telegram/webhook"
 
 
+def test_the_concurrency_ceiling_is_translated_for_aiogram() -> None:
+    """aiogram spells "no limit" as None; the setting spells it 0."""
+    assert _settings().concurrency_limit == 100
+    assert _settings(update_concurrency_limit=250).concurrency_limit == 250
+    assert _settings(update_concurrency_limit=0).concurrency_limit is None
+
+
+def test_the_heartbeat_tolerates_two_missed_beats() -> None:
+    """One missed beat is a busy host; three in a row is a wedged loop."""
+    assert _settings(heartbeat_seconds=10.0).heartbeat_stale_after == 30.0
+
+
 def test_settings_are_immutable() -> None:
     settings = _settings()
     with pytest.raises(ValidationError):

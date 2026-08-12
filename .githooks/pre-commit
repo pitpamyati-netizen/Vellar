@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# Apply what a tool can fix, then verify what it cannot.
+#
+# Formatting and the mechanical lint fixes are applied to the staged files and
+# staged again, so no commit ever fails over something ruff was willing to fix
+# by itself. Everything after that only reports: ruff, mypy and the test suite
+# decide whether the commit happens.
+#
+# Installed by scripts/install-hooks.ps1 (or .sh), which points core.hooksPath
+# at this directory. Nothing here is machine-specific, so the hook is versioned
+# alongside the code it checks.
+#
+# Escape hatches:
+#   VELLAR_SKIP_HOOK=1    skip the hook entirely (git commit --no-verify also works)
+#   VELLAR_SKIP_TESTS=1   apply fixes and type check, but do not run pytest
+set -euo pipefail
+
+if [ "${VELLAR_SKIP_HOOK:-0}" = "1" ]; then
+    echo "pre-commit: skipped (VELLAR_SKIP_HOOK=1)"
+    exit 0
+fi
+
+cd "$(git rev-parse --show-toplevel)"
+
+if ! command -v uv >/dev/null 2>&1; then
+    echo "pre-commit: uv is not on PATH. Install it from https://docs.astral.sh/uv/" >&2
+    exit 1
+fi
+
+say() { printf '\033[36m==> %s\033[0m\n' "$1"; }
+fail() { printf '\033[31m%s\033[0m\n' "$1" >&2; }
+
+# --- What is being committed -------------------------------------------------
+
+staged=()
+while IFS= read -r line; do
+    [ -n "$line" ] && staged+=("$line")
+done < <(git diff --cached --name-only --diff-filter=ACMR -- '*.py')
+
+if [ ${#staged[@]} -eq 0 ]; then
+    say "no Python files staged, nothing to fix"
+else
+    # A file staged in one state and edited in another cannot be re-staged
+    # wholesale - that would sweep the unstaged edits into the commit. Those are
+    # fixed on disk and left for the author to stage deliberately.
+    partial=""
+    while IFS= read -r line; do
+        [ -n "$line" ] && partial="${partial}${line}"$'\n'
+    done < <(git diff --name-only -- "${staged[@]}")
+
+    # --- Auto-apply ----------------------------------------------------------
+    # Failures are not fatal here: whatever ruff did fix still gets staged, and
+    # the verification pass below reports what is left.
+
+    say "ruff format (applying)"
+    uv run ruff format "${staged[@]}" || true
+
+    say "ruff check --fix (applying)"
+    uv run ruff check --fix "${staged[@]}" || true
+
+    # --- Re-stage ------------------------------------------------------------
+
+    restaged=0
+    blocked=""
+    for file in "${staged[@]}"; do
+        # Deleted or renamed away since staging: nothing to add back.
+        if [ ! -f "$file" ]; then
+            continue
+        fi
+        # Untouched by the fixers: nothing to do.
+        if git diff --quiet -- "$file"; then
+            continue
+        fi
+        if printf '%s' "$partial" | grep -Fxq -- "$file"; then
+            blocked="${blocked}  ${file}"$'\n'
+        else
+            git add -- "$file"
+            restaged=$((restaged + 1))
+        fi
+    done
+
+    if [ "$restaged" -gt 0 ]; then
+        say "re-staged $restaged file(s) after the fixers"
+    fi
+
+    if [ -n "$blocked" ]; then
+        fail "pre-commit: these files were only partly staged, so the fixes went to your working tree and not into the commit:"
+        printf '%s' "$blocked" >&2
+        fail "Stage them (git add -u) or commit them whole, then commit again."
+        exit 1
+    fi
+fi
+
+# --- Verify ------------------------------------------------------------------
+
+say "ruff check"
+uv run ruff check .
+
+say "ruff format --check"
+uv run ruff format --check .
+
+say "mypy --strict"
+uv run mypy
+
+if [ "${VELLAR_SKIP_TESTS:-0}" = "1" ]; then
+    say "pytest skipped (VELLAR_SKIP_TESTS=1)"
+else
+    say "pytest"
+    uv run pytest -q
+fi
+
+say "pre-commit: clean"

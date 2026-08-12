@@ -28,7 +28,9 @@ def upgrade() -> None:
             username    TEXT NOT NULL DEFAULT '',
             -- Accessibility settings. Emoji are off by default (rule 6).
             emoji       BOOLEAN NOT NULL DEFAULT FALSE,
-            verbose     BOOLEAN NOT NULL DEFAULT TRUE,
+            -- Not "verbose": PostgreSQL treats that as a keyword and rejects it
+            -- as a column name unless it is quoted at every single use.
+            verbose_descriptions BOOLEAN NOT NULL DEFAULT TRUE,
             page_size   SMALLINT NOT NULL DEFAULT 8,
             created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
         )

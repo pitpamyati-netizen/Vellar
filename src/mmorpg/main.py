@@ -18,7 +18,8 @@ The event loop is the stdlib ``asyncio.Runner``; uvloop is deliberately absent
 from __future__ import annotations
 
 import asyncio
-from contextlib import AsyncExitStack
+import signal
+from contextlib import AsyncExitStack, suppress
 from dataclasses import dataclass
 
 from aiogram import Bot, Dispatcher
@@ -29,6 +30,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from mmorpg.config import AppEnv, Settings, load_settings
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.ports.repositories import IdempotencyStore
+from mmorpg.health import heartbeat
 from mmorpg.infrastructure.cache import (
     InMemoryIdempotencyStore,
     InMemoryLocationDeltaCache,
@@ -154,13 +156,27 @@ async def _build_adapters(
 
 
 async def run_polling(app: Application) -> None:
-    """Development transport: long polling."""
-    logger.info("starting_polling", env=app.settings.app_env.value)
-    async with app.stack:
+    """Long polling: the transport for local play and for the Docker stack.
+
+    One process only. Telegram hands ``getUpdates`` to a single consumer, so a
+    second replica would fight the first for every update.
+    """
+    settings = app.settings
+    logger.info(
+        "starting_polling",
+        env=settings.app_env.value,
+        concurrency_limit=settings.concurrency_limit,
+    )
+    async with app.stack, heartbeat(settings):
         try:
             await _greet_telegram(app)
             await app.bot.delete_webhook(drop_pending_updates=True)
-            await app.dispatcher.start_polling(app.bot)
+            # aiogram installs its own SIGINT/SIGTERM handlers here, so
+            # "docker stop" drains in-flight updates instead of severing them.
+            await app.dispatcher.start_polling(
+                app.bot,
+                tasks_concurrency_limit=settings.concurrency_limit,
+            )
         finally:
             await app.bot.session.close()
 
@@ -184,6 +200,22 @@ async def _greet_telegram(app: Application) -> None:
     logger.info("connected", bot=me.username or str(me.id))
 
 
+def _stop_event() -> asyncio.Event:
+    """An event set by SIGINT or SIGTERM.
+
+    Polling gets this from aiogram; the webhook runner has to ask for it, and
+    without it ``docker stop`` would sever open connections instead of letting
+    the exit stack close the pools.
+    """
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        # Windows has no loop-level signal handlers; Ctrl+C still raises there.
+        with suppress(NotImplementedError):
+            loop.add_signal_handler(sig, stop.set)
+    return stop
+
+
 async def run_webhook(app: Application) -> None:
     """Production transport: aiohttp serving the webhook."""
     from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
@@ -192,6 +224,7 @@ async def run_webhook(app: Application) -> None:
     settings = app.settings
     secret = settings.webhook_secret.get_secret_value()
 
+    await _greet_telegram(app)
     await app.bot.set_webhook(
         url=settings.webhook_url,
         secret_token=secret,
@@ -209,13 +242,15 @@ async def run_webhook(app: Application) -> None:
     await runner.setup()
     site = web.TCPSite(runner, host=settings.webhook_host, port=settings.webhook_port)
 
-    async with app.stack:
+    async with app.stack, heartbeat(settings):
+        stop = _stop_event()
         try:
             await site.start()
             logger.info("webhook_serving", host=settings.webhook_host, port=settings.webhook_port)
-            # Serve until cancelled: the runner is stopped by the finally block.
-            await asyncio.Event().wait()
+            await stop.wait()
+            logger.info("shutdown_requested")
         finally:
+            # aiohttp drains the in-flight requests before this returns.
             await runner.cleanup()
             await app.bot.session.close()
 

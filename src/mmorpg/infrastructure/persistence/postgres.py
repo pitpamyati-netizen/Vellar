@@ -81,7 +81,7 @@ class PostgresUserRepository:
 
     async def get(self, telegram_id: int) -> User | None:
         row = await self._pool.fetchrow(
-            "SELECT telegram_id, username, emoji, verbose, page_size"
+            "SELECT telegram_id, username, emoji, verbose_descriptions, page_size"
             " FROM users WHERE telegram_id = $1",
             telegram_id,
         )
@@ -91,14 +91,17 @@ class PostgresUserRepository:
             telegram_id=row["telegram_id"],
             username=row["username"] or "",
             settings=AccessibilitySettings(
-                emoji=row["emoji"], verbose=row["verbose"], page_size=row["page_size"]
+                emoji=row["emoji"],
+                # The column cannot be called "verbose"; PostgreSQL reserves it.
+                verbose=row["verbose_descriptions"],
+                page_size=row["page_size"],
             ),
         )
 
     async def upsert(self, user: User) -> User:
         await self._pool.execute(
             """
-            INSERT INTO users (telegram_id, username, emoji, verbose, page_size)
+            INSERT INTO users (telegram_id, username, emoji, verbose_descriptions, page_size)
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (telegram_id) DO UPDATE SET username = EXCLUDED.username
             """,
@@ -114,11 +117,11 @@ class PostgresUserRepository:
     async def save_settings(self, telegram_id: int, settings: AccessibilitySettings) -> None:
         await self._pool.execute(
             """
-            INSERT INTO users (telegram_id, emoji, verbose, page_size)
+            INSERT INTO users (telegram_id, emoji, verbose_descriptions, page_size)
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (telegram_id) DO UPDATE
                 SET emoji = EXCLUDED.emoji,
-                    verbose = EXCLUDED.verbose,
+                    verbose_descriptions = EXCLUDED.verbose_descriptions,
                     page_size = EXCLUDED.page_size
             """,
             telegram_id,

@@ -18,9 +18,27 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY src/ ./src/
 COPY content/ ./content/
 COPY migrations/ ./migrations/
-COPY alembic.ini ./
+COPY scripts/healthcheck.py ./scripts/
+# alembic.ini for the migration run; README.md because pyproject.toml names it as
+# the package readme and hatchling refuses to build the project without it.
+COPY alembic.ini README.md ./
 RUN uv sync --frozen --no-dev
 
 ENV PATH="/opt/venv/bin:${PATH}"
+
+# Nothing the bot does needs root, and it never writes to its own source tree.
+# The heartbeat goes to /tmp, which this user does own.
+RUN useradd --create-home --uid 10001 vellar
+USER vellar
+
+# A process that dies is handled by the restart policy. A process whose event
+# loop is wedged is only visible here - see src/mmorpg/health.py. The start
+# period covers content validation and the first Telegram call.
+HEALTHCHECK --interval=15s --timeout=10s --start-period=45s --retries=3 \
+    CMD ["python", "scripts/healthcheck.py"]
+
+# Explicit because the shutdown path depends on it: polling drains through
+# aiogram's handler, the webhook through the stop event in mmorpg.main.
+STOPSIGNAL SIGTERM
 
 CMD ["python", "-m", "mmorpg.main"]

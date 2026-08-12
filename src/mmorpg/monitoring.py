@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
-from mmorpg.config import Settings
+from mmorpg.config import AppEnv, Settings
 from mmorpg.logging import get_logger
 
 logger = get_logger(__name__)
@@ -22,9 +22,21 @@ def install_slow_callback_detector(loop: asyncio.AbstractEventLoop, settings: Se
     """Ask asyncio to complain about callbacks that hog the loop.
 
     ``slow_callback_duration`` only takes effect in debug mode, so both are set
-    together. The cost is a timestamp per callback - acceptable for the safety it
-    buys, and the threshold comes from configuration.
+    together. Debug mode also timestamps every callback and keeps coroutine
+    origins alive, which is a fine price while one developer is playing and the
+    wrong price with a hundred players connected - hence the switch.
     """
+    if not settings.slow_callback_detector:
+        logger.info("slow_callback_detector_disabled")
+        return
+
+    if settings.app_env is not AppEnv.LOCAL:
+        logger.warning(
+            "slow_callback_detector_enabled_outside_local",
+            env=settings.app_env.value,
+            detail="asyncio debug mode costs throughput; set SLOW_CALLBACK_DETECTOR=false",
+        )
+
     loop.set_debug(True)
     loop.slow_callback_duration = settings.slow_callback_seconds
     logger.info(

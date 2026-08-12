@@ -1,14 +1,57 @@
+# The full stack: PostgreSQL, Redis, a one-shot migration run, and the bot in
+# long-polling mode. Sized for roughly a hundred players online at once - see
+# docs/deployment.md for where those numbers come from and what to change first
+# when the player count grows.
+#
+#   docker compose up -d           start everything
+#   docker compose logs -f bot     watch the bot
+#   docker compose down            stop, keeping the world
+#
+# Webhook mode adds docker-compose.prod.yml on top; see docs/deployment.md.
 name: vellar
+
+# Without a cap the JSON log file grows until the disk is full, which takes the
+# database down with it.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
 
 services:
   postgres:
     image: postgres:17-alpine
+    container_name: vellar-postgres
     environment:
       POSTGRES_USER: vellar
-      POSTGRES_PASSWORD: vellar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vellar}
       POSTGRES_DB: vellar
+      # Checksums turn silent corruption into a loud error while it is still
+      # confined to one page.
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    command:
+      - postgres
+      # The bot holds at most POSTGRES_POOL_MAX (20) connections. The rest is
+      # headroom for the migration run, psql and pg_dump.
+      - -c
+      - max_connections=100
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=768MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - wal_compression=on
+      # Queries are single-row lookups by primary key; anything over 200 ms is a
+      # bug worth reading about, and the p95 budget per update is 100 ms.
+      - -c
+      - log_min_duration_statement=200
     ports:
-      - "5432:5432"
+      # Loopback only: the database is for this host, not for the network.
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -16,33 +59,107 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    stop_grace_period: 30s
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          memory: 1g
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    container_name: vellar-redis
+    command:
+      - redis-server
+      # Redis holds FSM state and active fights, not just a cache: losing the
+      # file drops players out of a fight mid-turn, so it is persisted.
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory
+      - 512mb
+      # Only keys the game gave a TTL may be evicted. FSM keys have none, so
+      # this policy can never silently forget where a player is standing.
+      - --maxmemory-policy
+      - volatile-lru
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    stop_grace_period: 30s
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          memory: 640m
+
+  # Runs to completion before the bot starts, so the bot never meets a schema it
+  # does not know. Idempotent: on an up-to-date database it is a no-op.
+  migrate:
+    build: .
+    image: vellar-bot
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DSN: postgresql://vellar:${POSTGRES_PASSWORD:-vellar}@postgres:5432/vellar
+    command: ["alembic", "upgrade", "head"]
+    # The image probe watches for a heartbeat this container never writes.
+    healthcheck:
+      disable: true
+    restart: "no"
+    logging: *logging
 
   bot:
     build: .
+    image: vellar-bot
+    container_name: vellar-bot
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     env_file:
       - .env
+    # These win over .env: the stack has real PostgreSQL and Redis, so the
+    # in-memory adapters must never be reachable from here whatever .env says.
     environment:
-      POSTGRES_DSN: postgresql://vellar:vellar@postgres:5432/vellar
+      APP_ENV: dev
+      POSTGRES_DSN: postgresql://vellar:${POSTGRES_PASSWORD:-vellar}@postgres:5432/vellar
       REDIS_DSN: redis://redis:6379/0
-    ports:
-      - "8080:8080"
+      # asyncio debug mode timestamps every callback: a development tool, not
+      # something to run players on (src/mmorpg/monitoring.py).
+      SLOW_CALLBACK_DETECTOR: "false"
+      HEARTBEAT_PATH: /tmp/vellar-heartbeat
     restart: unless-stopped
+    # Long enough for aiogram to finish the updates already in flight.
+    stop_grace_period: 25s
+    logging: *logging
+    deploy:
+      resources:
+        limits:
+          # Measured idle is well under 200 MB; the rest is headroom for a burst
+          # of concurrent updates.
+          memory: 512m
+          cpus: "2.0"
+      # Telegram gives getUpdates to one consumer. A second replica would spend
+      # its life losing races with the first, so polling never scales out.
+      replicas: 1
 
 volumes:
   pgdata:
+  redisdata:
