@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
 
+from mmorpg.domain.entities.location import EnemyArchetype
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 
 
@@ -247,6 +248,8 @@ class GameContent:
     skills: tuple[Skill, ...]
     cities: tuple[City, ...]
     rarities: tuple[Rarity, ...]
+    enemy_archetypes: tuple[EnemyArchetype, ...]
+    elite_titles: tuple[str, ...]
     trait_categories: Mapping[str, str]
     inverted_modifiers: frozenset[str]
     rules: ProgressionRules
@@ -271,6 +274,8 @@ class GameContent:
         skills: Sequence[Skill],
         cities: Sequence[City],
         rarities: Sequence[Rarity],
+        enemy_archetypes: Sequence[EnemyArchetype],
+        elite_titles: Sequence[str],
         trait_categories: Mapping[str, str],
         inverted_modifiers: frozenset[str],
         rules: ProgressionRules,
@@ -288,6 +293,8 @@ class GameContent:
             skills=tuple(skills),
             cities=tuple(cities),
             rarities=tuple(rarities),
+            enemy_archetypes=tuple(enemy_archetypes),
+            elite_titles=tuple(elite_titles),
             trait_categories=MappingProxyType(dict(trait_categories)),
             inverted_modifiers=inverted_modifiers,
             rules=rules,

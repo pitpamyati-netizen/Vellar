@@ -27,6 +27,14 @@ from mmorpg.domain.entities.content import (
     Trait,
 )
 from mmorpg.domain.entities.effects import ActiveEffect, EffectStack
+from mmorpg.domain.entities.location import (
+    Enemy,
+    EnemyArchetype,
+    EnemyKind,
+    GeneratedLocation,
+    LocationNode,
+    NodeKind,
+)
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 
 __all__ = [
@@ -36,14 +44,20 @@ __all__ = [
     "City",
     "ClassResource",
     "EffectStack",
+    "Enemy",
+    "EnemyArchetype",
+    "EnemyKind",
     "Equipment",
     "GameContent",
+    "GeneratedLocation",
     "HealthCurve",
     "InventoryEntry",
     "Item",
     "ItemEffect",
     "ItemKind",
     "Location",
+    "LocationNode",
+    "NodeKind",
     "OwnerKind",
     "ProgressionRules",
     "Race",

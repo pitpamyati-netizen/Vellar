@@ -34,6 +34,7 @@ from mmorpg.domain.entities.content import (
     SkillKind,
     Trait,
 )
+from mmorpg.domain.entities.location import EnemyArchetype, EnemyKind
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 
 CONTENT_FILES = (
@@ -43,6 +44,7 @@ CONTENT_FILES = (
     "traits.toml",
     "skills.toml",
     "items.toml",
+    "enemies.toml",
 )
 
 EXPECTED_RACES = 16
@@ -100,6 +102,9 @@ def load_content(content_dir: Path) -> GameContent:
     traits = _parse_traits(raw["traits.toml"], modifier_keys, set(categories), problems)
     items, rarities = _parse_items(raw["items.toml"], modifier_keys, skills_by_code, problems)
     cities = _parse_world(raw["world.toml"], problems)
+    item_ids = {item.id for item in items}
+    enemies, elite_titles = _parse_enemies(raw["enemies.toml"], item_ids, problems)
+    _validate_enemies(enemies, cities, problems)
 
     rules = _build_rules(raw, problems)
 
@@ -119,6 +124,8 @@ def load_content(content_dir: Path) -> GameContent:
         skills=skills,
         cities=cities,
         rarities=rarities,
+        enemy_archetypes=enemies,
+        elite_titles=elite_titles,
         trait_categories=categories,
         inverted_modifiers=inverted_modifiers,
         rules=rules,
@@ -535,6 +542,61 @@ def _parse_items(
         )
     _check_unique((item.id for item in parsed), "items.toml", problems)
     return tuple(parsed), rarities
+
+
+# --- enemies ---------------------------------------------------------
+
+
+def _parse_enemies(
+    raw: Mapping[str, Any],
+    item_ids: set[str],
+    problems: list[str],
+) -> tuple[tuple[EnemyArchetype, ...], tuple[str, ...]]:
+    meta = raw.get("meta", {})
+    elite_titles = tuple(str(title) for title in meta.get("elite_titles", ()))
+    known_kinds = {kind.value for kind in EnemyKind}
+
+    parsed: list[EnemyArchetype] = []
+    for entry in raw.get("enemy", ()):
+        enemy_id = str(entry.get("id", ""))
+        kind_raw = str(entry.get("kind", ""))
+        if kind_raw not in known_kinds:
+            problems.append(f"enemies.toml: {enemy_id} has unknown kind {kind_raw!r}")
+            continue
+        loot = tuple(str(item) for item in entry.get("loot", ()))
+        for item_id in loot:
+            if item_id not in item_ids:
+                problems.append(f"enemies.toml: {enemy_id} drops unknown item {item_id!r}")
+
+        parsed.append(
+            EnemyArchetype(
+                id=enemy_id,
+                name=str(entry["name"]),
+                kind=EnemyKind(kind_raw),
+                biomes=tuple(str(biome) for biome in entry.get("biomes", ())),
+                health=float(entry.get("health", 1.0)),
+                damage=float(entry.get("damage", 1.0)),
+                armor=float(entry.get("armor", 1.0)),
+                initiative=float(entry.get("initiative", 1.0)),
+                loot=loot,
+            )
+        )
+    _check_unique((enemy.id for enemy in parsed), "enemies.toml", problems)
+    return tuple(parsed), elite_titles
+
+
+def _validate_enemies(
+    enemies: Sequence[EnemyArchetype],
+    cities: Sequence[City],
+    problems: list[str],
+) -> None:
+    if not enemies:
+        problems.append("enemies.toml: no enemy archetypes defined")
+        return
+    biomes = {location.biome for city in cities for location in city.locations}
+    for biome in sorted(biomes):
+        if not any(enemy.fits(biome) for enemy in enemies):
+            problems.append(f"enemies.toml: biome {biome!r} has no enemy archetype")
 
 
 # --- world -----------------------------------------------------------

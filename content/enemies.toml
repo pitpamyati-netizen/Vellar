@@ -1,0 +1,301 @@
+# Enemy archetypes. Concrete enemies are generated, never stored: the generator
+# picks an archetype that fits the biome and scales it to the location level.
+#
+# Multipliers are relative to the level baseline in
+# mmorpg/domain/procgen/enemies.py. 1.0 is an average opponent.
+#
+# biomes: which location biomes this archetype can appear in. "*" means anywhere.
+# Every biome used in world.toml must have at least three candidates - checked by
+# tests/content/test_enemies.py.
+
+[meta]
+kinds = ["beast", "humanoid", "undead", "elemental", "aberration"]
+elite_titles = ["Матёрый", "Древний", "Свирепый", "Проклятый", "Владыка"]
+
+[[enemy]]
+id = "grey_wolf"
+name = "Серый волк"
+kind = "beast"
+biomes = ["луга", "лес", "овраги", "тундра", "снега", "холмы"]
+health = 0.9
+damage = 1.1
+armor = 0.7
+initiative = 1.3
+loot = ["wolf_pelt"]
+
+[[enemy]]
+id = "wild_boar"
+name = "Кабан"
+kind = "beast"
+biomes = ["луга", "лес", "болото", "река", "сады"]
+health = 1.2
+damage = 1.0
+armor = 0.9
+initiative = 0.9
+loot = ["wolf_pelt"]
+
+[[enemy]]
+id = "giant_spider"
+name = "Гигантский паук"
+kind = "beast"
+biomes = ["лес", "пещеры", "подземелье", "тоннели", "склепы", "шахта"]
+health = 0.8
+damage = 1.2
+armor = 0.6
+initiative = 1.4
+loot = ["grove_resin"]
+
+[[enemy]]
+id = "cave_bat"
+name = "Пещерная тварь"
+kind = "beast"
+biomes = ["пещеры", "подземелье", "тоннели", "шахта", "карьер", "бездна"]
+health = 0.7
+damage = 0.9
+armor = 0.5
+initiative = 1.6
+loot = []
+
+[[enemy]]
+id = "bandit"
+name = "Разбойник"
+kind = "humanoid"
+biomes = ["дорога", "руины", "лес", "холмы", "порт", "крепость"]
+health = 1.0
+damage = 1.0
+armor = 1.0
+initiative = 1.1
+loot = ["iron_scrap"]
+
+[[enemy]]
+id = "deserter"
+name = "Дезертир"
+kind = "humanoid"
+biomes = ["дорога", "руины", "крепость", "пустошь", "снега"]
+health = 1.1
+damage = 1.1
+armor = 1.2
+initiative = 0.9
+loot = ["iron_scrap"]
+
+[[enemy]]
+id = "smuggler"
+name = "Контрабандист"
+kind = "humanoid"
+biomes = ["берег", "порт", "корабли", "море", "пещеры", "утёсы"]
+health = 0.9
+damage = 1.1
+armor = 0.9
+initiative = 1.2
+loot = ["iron_scrap"]
+
+[[enemy]]
+id = "cultist"
+name = "Сектант"
+kind = "humanoid"
+biomes = ["руины", "склепы", "курганы", "чертоги", "аномалия", "город мёртвых"]
+health = 0.9
+damage = 1.3
+armor = 0.7
+initiative = 1.0
+loot = []
+
+[[enemy]]
+id = "marauder"
+name = "Мародёр"
+kind = "humanoid"
+biomes = ["*"]
+health = 1.0
+damage = 1.0
+armor = 1.0
+initiative = 1.0
+loot = ["iron_scrap"]
+
+[[enemy]]
+id = "wandering_beast"
+name = "Дикий зверь"
+kind = "beast"
+# Wildcard archetypes keep every biome above the three-candidate floor, so no
+# location ever fields the same enemy twice in a row. See tests/content/test_enemies.py.
+biomes = ["*"]
+health = 1.0
+damage = 1.1
+armor = 0.8
+initiative = 1.2
+loot = ["wolf_pelt"]
+
+[[enemy]]
+id = "lost_soul"
+name = "Заблудшая душа"
+kind = "undead"
+biomes = ["*"]
+health = 0.8
+damage = 1.2
+armor = 0.6
+initiative = 1.1
+loot = []
+
+[[enemy]]
+id = "skeleton"
+name = "Скелет"
+kind = "undead"
+biomes = ["склепы", "курганы", "город мёртвых", "подземелье", "руины", "тронный зал"]
+health = 0.8
+damage = 1.0
+armor = 1.1
+initiative = 0.8
+loot = ["iron_scrap"]
+
+[[enemy]]
+id = "ghoul"
+name = "Упырь"
+kind = "undead"
+biomes = ["склепы", "болото", "город мёртвых", "курганы", "подземелье"]
+health = 1.1
+damage = 1.2
+armor = 0.8
+initiative = 1.0
+loot = []
+
+[[enemy]]
+id = "drowned"
+name = "Утопленник"
+kind = "undead"
+biomes = ["река", "болото", "море", "корабли", "берег", "порт"]
+health = 1.2
+damage = 0.9
+armor = 0.9
+initiative = 0.7
+loot = []
+
+[[enemy]]
+id = "wraith"
+name = "Призрак"
+kind = "undead"
+biomes = ["руины", "чертоги", "склепы", "аномалия", "башня", "бездна"]
+health = 0.7
+damage = 1.4
+armor = 0.5
+initiative = 1.3
+loot = []
+
+[[enemy]]
+id = "bog_lurker"
+name = "Болотный лишень"
+kind = "aberration"
+biomes = ["болото", "река", "отмели", "лес", "сады"]
+health = 1.3
+damage = 1.0
+armor = 1.0
+initiative = 0.8
+loot = ["grove_resin"]
+
+[[enemy]]
+id = "glass_horror"
+name = "Стеклянный ужас"
+kind = "aberration"
+biomes = ["кратер", "аномалия", "тоннели", "пустошь", "разлом"]
+health = 1.1
+damage = 1.3
+armor = 1.2
+initiative = 1.0
+loot = []
+
+[[enemy]]
+id = "void_spawn"
+name = "Порождение пустоты"
+kind = "aberration"
+biomes = ["бездна", "аномалия", "чертоги", "тронный зал", "край", "вершина"]
+health = 1.4
+damage = 1.4
+armor = 1.1
+initiative = 1.1
+loot = []
+
+[[enemy]]
+id = "stone_golem"
+name = "Каменный голем"
+kind = "elemental"
+biomes = ["горы", "карьер", "ущелье", "скалы", "кузни", "крепость", "шахта"]
+health = 1.6
+damage = 1.1
+armor = 1.6
+initiative = 0.6
+loot = ["iron_scrap"]
+
+[[enemy]]
+id = "fire_elemental"
+name = "Огненный элементаль"
+kind = "elemental"
+biomes = ["вулкан", "пепел", "кузни", "лава", "аномалия"]
+health = 1.0
+damage = 1.5
+armor = 0.8
+initiative = 1.2
+loot = []
+
+[[enemy]]
+id = "frost_elemental"
+name = "Ледяной элементаль"
+kind = "elemental"
+biomes = ["снега", "тундра", "горы", "перевал", "подземелье"]
+health = 1.2
+damage = 1.2
+armor = 1.1
+initiative = 0.9
+loot = []
+
+[[enemy]]
+id = "storm_spirit"
+name = "Дух бури"
+kind = "elemental"
+biomes = ["плато", "скалы", "небо", "горы", "аномалия", "вершина"]
+health = 0.9
+damage = 1.4
+armor = 0.7
+initiative = 1.5
+loot = []
+
+[[enemy]]
+id = "sand_stalker"
+name = "Песчаный охотник"
+kind = "beast"
+biomes = ["пустошь", "пепел", "дорога", "кратер"]
+health = 1.0
+damage = 1.2
+armor = 0.9
+initiative = 1.3
+loot = ["wolf_pelt"]
+
+[[enemy]]
+id = "griffin"
+name = "Грифон"
+kind = "beast"
+biomes = ["скалы", "горы", "небо", "плато", "вершина", "утёсы"]
+health = 1.3
+damage = 1.3
+armor = 1.0
+initiative = 1.4
+loot = ["wolf_pelt"]
+
+[[enemy]]
+id = "treant"
+name = "Древень"
+kind = "aberration"
+biomes = ["лес", "сады", "роща", "болото"]
+health = 1.7
+damage = 1.0
+armor = 1.4
+initiative = 0.5
+loot = ["grove_resin"]
+
+[[enemy]]
+id = "guardian_construct"
+name = "Страж-конструкт"
+kind = "elemental"
+biomes = ["чертоги", "башня", "тронный зал", "крепость", "кузни", "галереи"]
+health = 1.5
+damage = 1.3
+armor = 1.5
+initiative = 0.8
+loot = ["iron_scrap"]
