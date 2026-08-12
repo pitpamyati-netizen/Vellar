@@ -1,8 +1,8 @@
-"""Channel broadcasts.
+"""Channel posts.
 
-The channel is player-facing text, so it is held to the same rules as a screen:
-plain text, the key fact first, emoji that carry nothing on their own, and a hard
-length limit. See ``Narrative.md`` for the wording rules these tests guard.
+The channel carries news about the game, never a feed of what players did, so
+these tests guard two things: the wording rules from ``Narrative.md`` ("Канал"),
+and the fact that a dead channel cannot break the caller.
 """
 
 from __future__ import annotations
@@ -27,41 +27,64 @@ class RecordingSink:
         return object()
 
 
+def test_the_channel_posts_only_game_news() -> None:
+    """No per-player events. Adding one back should fail this test first."""
+    assert {kind.value for kind in bc.BroadcastKind} == {"news", "changelog", "service"}
+
+
 def test_headline_comes_first_and_stands_alone() -> None:
-    event = bc.trade_completed("Аргус", "Мерла", "Соляной клинок", 240)
+    event = bc.news("Открыт Медный Перекрёсток.", "Четыре тракта, пять локаций.")
     text = bc.render_broadcast(event, emoji=False)
 
-    assert text.splitlines()[0] == "Сделка закрыта: Соляной клинок, 240 золотых."
+    assert text.splitlines()[0] == "Открыт Медный Перекрёсток."
 
 
 def test_emoji_is_optional_and_never_the_only_meaning() -> None:
-    event = bc.level_reached("Аргус", 100)
+    event = bc.service("Технические работы, полчаса.")
 
     with_emoji = bc.render_broadcast(event, emoji=True)
     without = bc.render_broadcast(event, emoji=False)
 
     assert with_emoji.endswith(without)
-    assert without == "Аргус достигает 100 уровня."
-    assert without.strip()
+    assert without == "Технические работы, полчаса."
+
+
+def test_a_changelog_reads_as_news_for_players() -> None:
+    event = bc.changelog(
+        "0.2",
+        added=("Арена: бой между игроками на три круга.",),
+        fixed=("Лавка больше не забывает выкупленный товар.",),
+    )
+    text = bc.render_broadcast(event, emoji=False)
+
+    assert text.splitlines()[0] == "Обновление 0.2."
+    # Sections with no entries are dropped, not left as empty headings.
+    assert "Изменилось:" not in text
+    assert "Добавлено:" in text and "Исправлено:" in text
+
+
+def test_an_empty_changelog_is_refused() -> None:
+    with pytest.raises(ValueError, match="not an update"):
+        bc.changelog("0.3")
+
+
+def test_a_changelog_may_be_longer_than_a_notice() -> None:
+    assert bc.limit_for(bc.BroadcastKind.CHANGELOG) > bc.limit_for(bc.BroadcastKind.NEWS)
 
 
 @pytest.mark.parametrize(
     "event",
     [
-        bc.level_reached("Аргус", 50),
-        bc.city_unlocked("Аргус", "Медный Перекрёсток", 70),
-        bc.arena_result("Аргус", "Мерла", 3),
-        bc.arena_result("Аргус", "Мерла", 3, timeout=True),
-        bc.trade_completed("Аргус", "Мерла", "Соляной клинок", 240),
-        bc.boss_defeated("Аргус", "Смотритель Отлива", "Утопленный Храм"),
-        bc.cycle_turned(1200),
+        bc.news("Открыт Медный Перекрёсток."),
+        bc.service("Бот перезапущен."),
+        bc.changelog("0.2", added=("Арена.",)),
     ],
     ids=lambda event: event.kind.value,
 )
-def test_every_event_is_plain_short_text(event: bc.BroadcastEvent) -> None:
+def test_every_post_is_plain_short_text(event: bc.BroadcastEvent) -> None:
     text = bc.render_broadcast(event)
 
-    assert len(text) <= bc.BROADCAST_LIMIT
+    assert len(text) <= bc.limit_for(event.kind)
     # Markdown is spoken aloud by screen readers (accessibility rule 14).
     assert not set(text) & set("*_`[]")
     # No pseudo-graphics (rule 5).
@@ -70,14 +93,12 @@ def test_every_event_is_plain_short_text(event: bc.BroadcastEvent) -> None:
 
 def test_an_empty_headline_is_refused() -> None:
     with pytest.raises(ValueError, match="headline"):
-        bc.BroadcastEvent(kind=bc.BroadcastKind.SERVICE, headline="   ")
+        bc.news("   ")
 
 
 def test_an_over_long_post_is_refused_at_render() -> None:
-    event = bc.BroadcastEvent(kind=bc.BroadcastKind.SERVICE, headline="а" * 800)
-
     with pytest.raises(ValueError, match="limit"):
-        bc.render_broadcast(event)
+        bc.render_broadcast(bc.news("а" * 800))
 
 
 async def test_an_unconfigured_channel_is_a_no_op() -> None:
@@ -85,7 +106,7 @@ async def test_an_unconfigured_channel_is_a_no_op() -> None:
     broadcaster = bc.ChannelBroadcaster(sink=sink, chat_id="")
 
     assert broadcaster.enabled is False
-    assert await broadcaster.announce(bc.cycle_turned(1)) is False
+    assert await broadcaster.announce(bc.news("Что-то открылось.")) is False
     assert sink.sent == []
 
 
@@ -93,18 +114,18 @@ async def test_a_configured_channel_receives_exactly_one_message() -> None:
     sink = RecordingSink()
     broadcaster = bc.ChannelBroadcaster(sink=sink, chat_id="-1001234567890")
 
-    assert await broadcaster.announce(bc.level_reached("Аргус", 300)) is True
+    assert await broadcaster.announce(bc.news("Открыта арена.")) is True
     assert len(sink.sent) == 1
     chat_id, text = sink.sent[0]
     assert chat_id == -1001234567890
-    assert text.endswith("Аргус достигает 300 уровня.")
+    assert text.endswith("Открыта арена.")
 
 
 async def test_a_username_channel_is_passed_through_unchanged() -> None:
     sink = RecordingSink()
     broadcaster = bc.ChannelBroadcaster(sink=sink, chat_id="@vellar_game")
 
-    await broadcaster.announce(bc.cycle_turned(7))
+    await broadcaster.announce(bc.service("Проверка."))
 
     assert sink.sent[0][0] == "@vellar_game"
 
@@ -112,14 +133,4 @@ async def test_a_username_channel_is_passed_through_unchanged() -> None:
 async def test_a_dead_channel_never_breaks_the_caller() -> None:
     broadcaster = bc.ChannelBroadcaster(sink=RecordingSink(fail=True), chat_id="@vellar_game")
 
-    assert await broadcaster.announce(bc.cycle_turned(7)) is False
-
-
-@pytest.mark.parametrize("level", [1, 10, 50, 100, 300])
-def test_milestone_levels_are_posted(level: int) -> None:
-    assert bc.is_notable_level(level)
-
-
-@pytest.mark.parametrize("level", [2, 11, 99, 101, 299])
-def test_ordinary_levels_are_not_posted(level: int) -> None:
-    assert not bc.is_notable_level(level)
+    assert await broadcaster.announce(bc.service("Проверка.")) is False

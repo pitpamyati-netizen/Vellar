@@ -1,9 +1,13 @@
-"""Broadcasts to the game channel.
+"""Posts to the game channel.
 
-The channel is a log, not a feed: every post states a fact that already happened,
-in the order it happened, in one or two dry lines. The rules that govern the
-wording live in ``Narrative.md`` ("Бродкасты"); the ones that can be enforced by
-code live here.
+The channel carries **news about the game**: what changed, what opened, what is
+planned, and service notices. It is not a feed of what players did - no level-ups,
+no kills, no trades. Those belong in the group, where the people they concern are.
+The rules that govern the wording live in ``Narrative.md`` ("Канал"); the ones that
+can be enforced by code live here.
+
+A changelog is a news item, not a commit log: it says what a player can now do,
+never which module changed.
 
 Enforced here:
 
@@ -29,33 +33,28 @@ from mmorpg.logging import get_logger
 logger = get_logger(__name__)
 
 BROADCAST_LIMIT = 700
-
-# Levels worth a post. Anything more often turns the channel into noise nobody
-# reads, which is the same as having no channel.
-NOTABLE_LEVELS: frozenset[int] = frozenset({1, 10, 25, 50, 75, 100, 150, 200, 250, 300})
+# A changelog earns more room than a notice, because cutting it would mean
+# splitting one update across two posts.
+CHANGELOG_LIMIT = 2000
 
 
 class BroadcastKind(StrEnum):
-    """What happened. The kind picks the emoji and nothing else."""
+    """What kind of news this is. The kind picks the emoji and the length limit."""
 
-    ARENA = "arena"
-    LEVEL = "level"
-    CITY = "city"
-    TRADE = "trade"
-    BOSS = "boss"
-    CYCLE = "cycle"
+    NEWS = "news"
+    CHANGELOG = "changelog"
     SERVICE = "service"
 
 
 EMOJI: dict[BroadcastKind, str] = {
-    BroadcastKind.ARENA: "⚔️",
-    BroadcastKind.LEVEL: "📈",
-    BroadcastKind.CITY: "🏰",
-    BroadcastKind.TRADE: "🛒",
-    BroadcastKind.BOSS: "🐉",
-    BroadcastKind.CYCLE: "🌘",
+    BroadcastKind.NEWS: "📣",
+    BroadcastKind.CHANGELOG: "🧾",
     BroadcastKind.SERVICE: "🔔",
 }
+
+
+def limit_for(kind: BroadcastKind) -> int:
+    return CHANGELOG_LIMIT if kind is BroadcastKind.CHANGELOG else BROADCAST_LIMIT
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,15 +78,11 @@ def render_broadcast(event: BroadcastEvent, *, emoji: bool = True) -> str:
         head = f"{EMOJI[event.kind]} {head}"
     lines = [head, *(detail.strip() for detail in event.details if detail.strip())]
     text = "\n".join(lines)
-    if len(text) > BROADCAST_LIMIT:
-        msg = f"broadcast is {len(text)} characters, limit is {BROADCAST_LIMIT}"
+    limit = limit_for(event.kind)
+    if len(text) > limit:
+        msg = f"broadcast is {len(text)} characters, limit is {limit}"
         raise ValueError(msg)
     return text
-
-
-def is_notable_level(level: int) -> bool:
-    """Whether reaching this level is worth a post."""
-    return level in NOTABLE_LEVELS
 
 
 class ChannelSink(Protocol):
@@ -138,50 +133,43 @@ class ChannelBroadcaster:
         return True
 
 
-# --- the events the game actually posts ------------------------------
+# --- what the channel actually posts ---------------------------------
 
 
-def level_reached(name: str, level: int) -> BroadcastEvent:
+def news(headline: str, *details: str) -> BroadcastEvent:
+    """A game news item: something opened, changed or is coming."""
+    return BroadcastEvent(kind=BroadcastKind.NEWS, headline=headline, details=details)
+
+
+def service(headline: str, *details: str) -> BroadcastEvent:
+    """A service notice: maintenance, downtime, a restart."""
+    return BroadcastEvent(kind=BroadcastKind.SERVICE, headline=headline, details=details)
+
+
+def changelog(
+    version: str,
+    *,
+    added: tuple[str, ...] = (),
+    changed: tuple[str, ...] = (),
+    fixed: tuple[str, ...] = (),
+) -> BroadcastEvent:
+    """An update, written for players.
+
+    Each entry is what a player can now do or will now see - never a module, a
+    function or a commit. Empty sections are omitted rather than left as headings
+    with nothing under them, because a screen reader reads the heading anyway.
+    """
+    details: list[str] = []
+    for title, entries in (("Добавлено", added), ("Изменилось", changed), ("Исправлено", fixed)):
+        if not entries:
+            continue
+        details.append(f"{title}:")
+        details.extend(f"— {entry}" for entry in entries)
+    if not details:
+        msg = "a changelog with no entries is not an update"
+        raise ValueError(msg)
     return BroadcastEvent(
-        kind=BroadcastKind.LEVEL,
-        headline=f"{name} достигает {level} уровня.",
-    )
-
-
-def city_unlocked(name: str, city: str, level: int) -> BroadcastEvent:
-    return BroadcastEvent(
-        kind=BroadcastKind.CITY,
-        headline=f"{city}: первым дошёл {name}, уровень {level}.",
-    )
-
-
-def arena_result(winner: str, loser: str, rounds: int, *, timeout: bool = False) -> BroadcastEvent:
-    tail = " Бой закончен по истечении времени хода." if timeout else ""
-    return BroadcastEvent(
-        kind=BroadcastKind.ARENA,
-        headline=f"Соляной Круг: {winner} побеждает {loser} за {rounds} круга.{tail}".strip(),
-    )
-
-
-def trade_completed(seller: str, buyer: str, item: str, price: int) -> BroadcastEvent:
-    return BroadcastEvent(
-        kind=BroadcastKind.TRADE,
-        headline=f"Сделка закрыта: {item}, {price} золотых.",
-        details=(f"Продавец {seller}, покупатель {buyer}.",),
-    )
-
-
-def boss_defeated(name: str, boss: str, place: str) -> BroadcastEvent:
-    return BroadcastEvent(
-        kind=BroadcastKind.BOSS,
-        headline=f"{boss} побеждён. {place}.",
-        details=(f"Отряд: {name}.",),
-    )
-
-
-def cycle_turned(cycle: int) -> BroadcastEvent:
-    return BroadcastEvent(
-        kind=BroadcastKind.CYCLE,
-        headline=f"Отлив {cycle}. Земли переписаны, зачистка узлов сброшена.",
-        details=("Ассортимент лавок обновлён.",),
+        kind=BroadcastKind.CHANGELOG,
+        headline=f"Обновление {version}.",
+        details=tuple(details),
     )
