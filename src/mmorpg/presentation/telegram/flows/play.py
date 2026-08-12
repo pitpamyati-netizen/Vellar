@@ -14,11 +14,13 @@ from dataclasses import dataclass, field, replace
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, Item
 from mmorpg.domain.entities.location import GeneratedLocation, NodeKind
+from mmorpg.domain.ports.repositories import AccessibilitySettings
 from mmorpg.domain.procgen.location import cleared_mask, generate_location, is_cleared
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.routing import Command, Intent, resolve
 from mmorpg.presentation.telegram.screens import play as screens
+from mmorpg.presentation.telegram.screens import settings as settings_screens
 from mmorpg.presentation.telegram.screens import shop as shop_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.paginated import PageState, total_pages
@@ -34,6 +36,8 @@ STUBS: dict[str, str] = {
     labels.BANK.text: "Банк",
     labels.SKILLS.text: "Умения",
 }
+
+DEFAULT_SETTINGS = AccessibilitySettings()
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,8 +84,9 @@ class PlayState:
     notice: str = ""
     list_page: PageState = field(default_factory=PageState)
     # Set when the player pressed "buy": the handler performs the purchase, since
-    # writing to the database is not the flow's job.
+    # writing to the database is not the flow's job. Same for a settings switch.
     pending_purchase: str = ""
+    pending_settings: AccessibilitySettings | None = None
 
     def at(self, screen: ScreenId) -> PlayState:
         return replace(self, screen=screen, stack=self.stack.push(screen), notice="")
@@ -159,9 +164,12 @@ def render(
     *,
     world_seed: str,
     goods: Goods | None = None,
+    settings: AccessibilitySettings | None = None,
 ) -> Screen:
     shelf = goods or Goods(gold=character.gold)
     match state.screen:
+        case ScreenId.SETTINGS:
+            return settings_screens.settings_screen(settings or DEFAULT_SETTINGS, state.notice)
         case ScreenId.INVENTORY:
             return shop_screens.inventory_screen(
                 content, shelf.owned, state.list_page, gold=shelf.gold, notice=state.notice
@@ -216,9 +224,12 @@ def advance(
     cycle: int,
     world_seed: str,
     goods: Goods | None = None,
+    settings: AccessibilitySettings | None = None,
 ) -> PlayState:
     """Apply one message. Always answers; never raises on unexpected input."""
-    screen = render(content, character, state, world_seed=world_seed, goods=goods)
+    screen = render(
+        content, character, state, world_seed=world_seed, goods=goods, settings=settings
+    )
     command = resolve(text, screen)
 
     if command.intent is Intent.LOOK:
@@ -233,10 +244,11 @@ def advance(
     if command.intent is Intent.BACK:
         return _go_back(state)
 
-    working = replace(state, pending_purchase="")
-    state = working
+    state = replace(state, pending_purchase="", pending_settings=None)
 
     match state.screen:
+        case ScreenId.SETTINGS:
+            return _handle_settings(state, command, settings or DEFAULT_SETTINGS)
         case ScreenId.INVENTORY | ScreenId.SHOP:
             return _handle_goods(content, state, command, goods or Goods(gold=character.gold))
         case ScreenId.MAIN_MENU:
@@ -314,6 +326,21 @@ def _handle_goods(
     return state.with_notice(f"{owned.name}. {owned.text}")
 
 
+def _handle_settings(
+    state: PlayState, command: Command, settings: AccessibilitySettings
+) -> PlayState:
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите переключатель из списка.")
+    if settings_screens.REPEAT_SCREEN.matches(command.argument):
+        return state.with_notice("Настройки доступности.")
+
+    updated, said = settings_screens.toggled(settings, command.argument)
+    if not said:
+        return state.with_notice("Нажмите переключатель из списка.")
+    # The handler persists it; the flow only decides what should change.
+    return replace(state, pending_settings=updated).with_notice(said)
+
+
 def _handle_main_menu(state: PlayState, command: Command) -> PlayState:
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите кнопку из меню.")
@@ -323,6 +350,8 @@ def _handle_main_menu(state: PlayState, command: Command) -> PlayState:
         return state.at(ScreenId.CHARACTER)
     if labels.INVENTORY.matches(command.argument):
         return replace(state, list_page=PageState()).at(ScreenId.INVENTORY)
+    if labels.SETTINGS.matches(command.argument):
+        return state.at(ScreenId.SETTINGS)
     stub = _stub_for(state, command)
     return stub if stub is not None else state.with_notice("Нажмите кнопку из меню.")
 
