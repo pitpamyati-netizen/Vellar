@@ -1,0 +1,144 @@
+"""FSM states and the back-navigation stack.
+
+Character creation is a linear walk with a real "back" at every step, including
+the first one (spec section 12). The stack of visited steps lives in FSM data, not
+in heuristics: going back pops one entry and every choice already made is kept.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from aiogram.fsm.state import State, StatesGroup
+
+from mmorpg.presentation.telegram.screens.base import ScreenId
+
+
+class Creation(StatesGroup):
+    """The character creation flow."""
+
+    name = State()
+    race = State()
+    race_details = State()
+    character_class = State()
+    class_details = State()
+    traits = State()
+    points = State()
+    confirm = State()
+
+
+class Play(StatesGroup):
+    """Everything after a character exists."""
+
+    main_menu = State()
+    world = State()
+    city = State()
+    location_list = State()
+    location = State()
+    combat = State()
+    combat_bag = State()
+    inventory = State()
+    shop = State()
+    character = State()
+    skills = State()
+    settings = State()
+    stub = State()
+
+
+# Which screen belongs to which state. The resolver uses this to tell the player
+# where they actually are when they press a button from an old keyboard.
+STATE_FOR_SCREEN: dict[ScreenId, State] = {
+    ScreenId.CREATE_NAME: Creation.name,
+    ScreenId.CREATE_RACE: Creation.race,
+    ScreenId.CREATE_RACE_DETAILS: Creation.race_details,
+    ScreenId.CREATE_CLASS: Creation.character_class,
+    ScreenId.CREATE_CLASS_DETAILS: Creation.class_details,
+    ScreenId.CREATE_TRAITS: Creation.traits,
+    ScreenId.CREATE_POINTS: Creation.points,
+    ScreenId.CREATE_CONFIRM: Creation.confirm,
+    ScreenId.MAIN_MENU: Play.main_menu,
+    ScreenId.WORLD: Play.world,
+    ScreenId.CITY: Play.city,
+    ScreenId.LOCATION_LIST: Play.location_list,
+    ScreenId.LOCATION: Play.location,
+    ScreenId.COMBAT: Play.combat,
+    ScreenId.COMBAT_BAG: Play.combat_bag,
+    ScreenId.INVENTORY: Play.inventory,
+    ScreenId.SHOP: Play.shop,
+    ScreenId.CHARACTER: Play.character,
+    ScreenId.SKILLS: Play.skills,
+    ScreenId.SETTINGS: Play.settings,
+    ScreenId.STUB: Play.stub,
+}
+
+# The single step "back" leads to, per screen. Creation walks backwards through
+# its own steps; play screens fall back towards the main menu.
+BACK_TARGET: dict[ScreenId, ScreenId | None] = {
+    ScreenId.CREATE_NAME: None,  # the first step confirms before leaving creation
+    ScreenId.CREATE_RACE: ScreenId.CREATE_NAME,
+    ScreenId.CREATE_RACE_DETAILS: ScreenId.CREATE_RACE,
+    ScreenId.CREATE_CLASS: ScreenId.CREATE_RACE,
+    ScreenId.CREATE_CLASS_DETAILS: ScreenId.CREATE_CLASS,
+    ScreenId.CREATE_TRAITS: ScreenId.CREATE_CLASS,
+    ScreenId.CREATE_POINTS: ScreenId.CREATE_TRAITS,
+    ScreenId.CREATE_CONFIRM: ScreenId.CREATE_POINTS,
+    ScreenId.MAIN_MENU: None,
+    ScreenId.WORLD: ScreenId.MAIN_MENU,
+    ScreenId.CITY: ScreenId.WORLD,
+    ScreenId.LOCATION_LIST: ScreenId.CITY,
+    ScreenId.LOCATION: ScreenId.LOCATION_LIST,
+    ScreenId.COMBAT: ScreenId.LOCATION,
+    ScreenId.COMBAT_BAG: ScreenId.COMBAT,
+    ScreenId.INVENTORY: ScreenId.MAIN_MENU,
+    ScreenId.SHOP: ScreenId.CITY,
+    ScreenId.CHARACTER: ScreenId.MAIN_MENU,
+    ScreenId.SKILLS: ScreenId.CHARACTER,
+    ScreenId.SETTINGS: ScreenId.MAIN_MENU,
+    ScreenId.STUB: ScreenId.CITY,
+}
+
+CREATION_ORDER: tuple[ScreenId, ...] = (
+    ScreenId.CREATE_NAME,
+    ScreenId.CREATE_RACE,
+    ScreenId.CREATE_CLASS,
+    ScreenId.CREATE_TRAITS,
+    ScreenId.CREATE_POINTS,
+    ScreenId.CREATE_CONFIRM,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class NavigationStack:
+    """The screens the player walked through, oldest first."""
+
+    screens: tuple[ScreenId, ...] = ()
+
+    @property
+    def current(self) -> ScreenId | None:
+        return self.screens[-1] if self.screens else None
+
+    def push(self, screen: ScreenId) -> NavigationStack:
+        if self.current is screen:
+            return self
+        return NavigationStack((*self.screens, screen))
+
+    def pop(self) -> tuple[NavigationStack, ScreenId | None]:
+        """Step back one screen, keeping every choice already made."""
+        if len(self.screens) <= 1:
+            return NavigationStack(()), None
+        remaining = self.screens[:-1]
+        return NavigationStack(remaining), remaining[-1]
+
+    def serialise(self) -> str:
+        return ",".join(screen.value for screen in self.screens)
+
+    @classmethod
+    def deserialise(cls, raw: str) -> NavigationStack:
+        if not raw:
+            return cls(())
+        return cls(tuple(ScreenId(part) for part in raw.split(",") if part))
+
+
+def back_target(screen: ScreenId) -> ScreenId | None:
+    """The declared previous screen, used when the stack is empty."""
+    return BACK_TARGET.get(screen)
