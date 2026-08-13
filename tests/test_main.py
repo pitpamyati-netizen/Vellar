@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from mmorpg.config import AppEnv, Settings
@@ -43,7 +45,36 @@ async def test_content_is_validated_before_the_bot_starts(app) -> None:
 
 async def test_routers_are_registered(app) -> None:
     names = {router.name for router in app.dispatcher.sub_routers}
-    assert {"creation", "play"} <= names
+    assert {"creation", "play", "group"} <= names
+
+
+async def test_the_screens_and_the_group_never_share_a_chat(app) -> None:
+    """A private router firing in the group would answer a room with a keyboard.
+
+    Character creation is the dangerous one: ``/start`` has no state filter, so
+    without this the first ``/start`` in the group would drag someone into
+    creation in public.
+    """
+    from aiogram.enums import ChatType
+    from aiogram.types import Chat
+
+    routers = {router.name: router for router in app.dispatcher.sub_routers}
+    group = Chat(id=-1001234567890, type=ChatType.SUPERGROUP)
+    private = Chat(id=42, type=ChatType.PRIVATE)
+
+    for name, allowed in (("creation", private), ("play", private), ("group", group)):
+        refused = group if allowed is private else private
+        assert await _accepts(routers[name], allowed), f"{name} refuses its own chat"
+        assert not await _accepts(routers[name], refused), f"{name} would fire in the wrong chat"
+
+
+async def _accepts(router, chat) -> bool:
+    """Whether the router's own filters let a message from this chat through."""
+    from aiogram.types import Message
+
+    probe = Message(message_id=1, date=datetime.now(UTC), chat=chat, text="/start")
+    accepted, _ = await router.message.check_root_filters(probe)
+    return bool(accepted)
 
 
 async def test_middlewares_are_installed_in_order(app) -> None:

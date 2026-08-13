@@ -136,6 +136,23 @@ sends plain text. If markup is ever needed, HTML only - never Markdown.
 
 *Enforced by:* a test asserting the bot's default `parse_mode` is `None`.
 
+## 15. The group is not a screen
+
+Rules 3, 8 and 10 describe a private chat, where a message is a place the player
+stands in. The game group is a conversation, and three things differ there:
+
+- **no service row.** There is nowhere to go "Назад" to, so offering it would lie.
+- **the bot's messages are deleted after five minutes.** Nothing in a private chat
+  is ever deleted: there the message *is* the screen, and the player re-reads it
+  for as long as they need.
+- **the keyboard is `selective`.** An offer's two buttons are shown to its target
+  alone, and each button's text is exactly the command it duplicates, so pressing
+  and typing are the same act (rule 10). Visibility is a convenience, not a
+  permission check - a stranger's press is refused by the handler either way.
+
+Silence is the default: anything the bot is not clearly addressed in goes
+unanswered. See `Narrative.md`, section 9.
+
 ## Review checklist
 
 Run through this before merging any change that touches `presentation/`:
@@ -151,3 +168,4 @@ Run through this before merging any change that touches `presentation/`:
 - [ ] A text command exists for every new action
 - [ ] Pressing the new screen's buttons from a different state produces the "action unavailable" answer
 - [ ] `parse_mode` left at `None`
+- [ ] Anything new in the group: no service row, deleted after five minutes, and silent unless addressed

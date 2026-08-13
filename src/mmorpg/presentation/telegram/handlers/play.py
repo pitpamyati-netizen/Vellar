@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import time
 
-from aiogram import Router
+from aiogram import F, Router
+from aiogram.enums import ChatType
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
@@ -29,6 +30,9 @@ STATE_KEY = "play"
 def build_router() -> Router:
     """A fresh router per application - see handlers.creation.build_router."""
     router = Router(name="play")
+    # The screens are a private conversation: one player, one keyboard, one
+    # message at a time. The group has its own router and its own rules.
+    router.message.filter(F.chat.type == ChatType.PRIVATE)
     router.message.register(play, StateFilter(Play))
     return router
 

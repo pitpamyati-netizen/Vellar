@@ -45,7 +45,8 @@ from mmorpg.infrastructure.persistence import (
 from mmorpg.logging import configure_logging, get_logger
 from mmorpg.monitoring import install_slow_callback_detector
 from mmorpg.presentation.telegram.broadcast import ChannelBroadcaster
-from mmorpg.presentation.telegram.handlers import creation, play
+from mmorpg.presentation.telegram.cleanup import MessageReaper
+from mmorpg.presentation.telegram.handlers import creation, group, play
 from mmorpg.presentation.telegram.middlewares.dependencies import (
     Dependencies,
     DependencyMiddleware,
@@ -97,6 +98,13 @@ async def build_application(settings: Settings) -> Application:
 
     dispatcher.include_router(creation.build_router())
     dispatcher.include_router(play.build_router())
+
+    # The group router owns the deletion clock for what it posts there. Its tasks
+    # are cancelled with the rest of the stack, so a shutdown does not hang on
+    # five minutes of pending deletions.
+    reaper = MessageReaper()
+    stack.push_async_callback(reaper.aclose)
+    dispatcher.include_router(group.build_router(reaper))
 
     dependencies.broadcasts.sink = bot
     logger.info(

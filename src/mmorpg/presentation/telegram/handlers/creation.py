@@ -7,7 +7,8 @@ All the rules live in ``flows.creation``; none of them live here
 
 from __future__ import annotations
 
-from aiogram import Router
+from aiogram import F, Router
+from aiogram.enums import ChatType
 from aiogram.filters import CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
@@ -35,6 +36,9 @@ def build_router() -> Router:
     application twice in one process - as the tests do - fail.
     """
     router = Router(name="creation")
+    # Private chats only. The same ``/start`` in the group would otherwise drag a
+    # player into character creation in front of everybody.
+    router.message.filter(F.chat.type == ChatType.PRIVATE)
     router.message.register(start, CommandStart())
     router.message.register(step, StateFilter(Creation))
     return router
