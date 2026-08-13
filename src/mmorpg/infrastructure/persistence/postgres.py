@@ -14,7 +14,9 @@ from typing import TYPE_CHECKING, Any
 
 from mmorpg.domain.entities.character import Character, Equipment, InventoryEntry, SkillLoadout
 from mmorpg.domain.entities.stats import StatBlock
+from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeRecord, TradeStatus
 from mmorpg.domain.ports.repositories import AccessibilitySettings, User
+from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     import asyncpg
@@ -23,6 +25,13 @@ CHARACTER_COLUMNS = """
     id, user_id, name, race_id, class_id, level, experience, gold,
     stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
     trait_ids, loadout, equipment, city_id, unspent_stat_points, unspent_skill_points
+"""
+
+TRADE_COLUMNS = """
+    scope, number, kind, status, tax, created_at, settled_at,
+    author_user_id, author_character_id, author_name,
+    target_user_id, target_character_id, target_name,
+    item_id, item_name, quantity, price
 """
 
 
@@ -228,6 +237,151 @@ class PostgresCharacterRepository:
             "SELECT 1 FROM characters WHERE lower(name) = lower($1) LIMIT 1", name
         )
         return row is not None
+
+
+def _trade_from_row(row: Any) -> TradeRecord:
+    return TradeRecord(
+        offer=Offer(
+            number=row["number"],
+            kind=OfferKind(row["kind"]),
+            author=Party(
+                user_id=row["author_user_id"],
+                character_id=row["author_character_id"],
+                name=row["author_name"],
+            ),
+            target=Party(
+                user_id=row["target_user_id"],
+                character_id=row["target_character_id"],
+                name=row["target_name"],
+            ),
+            item_id=row["item_id"],
+            item_name=row["item_name"],
+            price=row["price"],
+            quantity=row["quantity"],
+            created_at=row["created_at"],
+        ),
+        scope=row["scope"],
+        status=TradeStatus(row["status"]),
+        tax=row["tax"],
+        settled_at=row["settled_at"],
+    )
+
+
+class PostgresTradeRepository:
+    """The trade journal, and the escrow that hangs on its pending rows.
+
+    Two statements carry the weight. ``open`` picks the lowest free number and
+    inserts it in one go, so no gap exists between choosing a number and taking
+    it; the partial unique index turns a lost race into a rejected insert, which
+    is retried rather than reported. ``close`` updates only a row that is still
+    pending and returns what it changed, which is what makes "accept" happen at
+    most once no matter how many taps arrive together.
+    """
+
+    # A race needs two proposals in the same millisecond; three attempts is far
+    # more than the traffic of one group will ever need.
+    ATTEMPTS = 3
+
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        self._pool = pool
+
+    async def open(self, offer: Offer, *, scope: str) -> TradeRecord | None:
+        for _ in range(self.ATTEMPTS):
+            number = await self._pool.fetchval(
+                """
+                INSERT INTO trades (
+                    scope, number, kind, created_at,
+                    author_user_id, author_character_id, author_name,
+                    target_user_id, target_character_id, target_name,
+                    item_id, item_name, quantity, price
+                )
+                SELECT $1, free.n, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+                FROM (
+                    SELECT n FROM generate_series(1, $14) AS n
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM trades taken
+                        WHERE taken.scope = $1
+                          AND taken.number = n
+                          AND taken.status = 'pending'
+                    )
+                    ORDER BY n LIMIT 1
+                ) AS free
+                ON CONFLICT DO NOTHING
+                RETURNING number
+                """,
+                scope,
+                offer.kind.value,
+                offer.created_at,
+                offer.author.user_id,
+                offer.author.character_id,
+                offer.author.name,
+                offer.target.user_id,
+                offer.target.character_id,
+                offer.target.name,
+                offer.item_id,
+                offer.item_name,
+                offer.quantity,
+                offer.price,
+                MAX_OFFER_NUMBER,
+            )
+            if number is not None:
+                return TradeRecord(offer=replace(offer, number=number), scope=scope)
+        return None
+
+    async def pending(self, number: int, *, scope: str) -> TradeRecord | None:
+        row = await self._pool.fetchrow(
+            f"SELECT {TRADE_COLUMNS} FROM trades"
+            " WHERE scope = $1 AND number = $2 AND status = 'pending'",
+            scope,
+            number,
+        )
+        return _trade_from_row(row) if row else None
+
+    async def close(
+        self,
+        number: int,
+        *,
+        scope: str,
+        status: TradeStatus,
+        settled_at: int,
+        tax: int = 0,
+    ) -> TradeRecord | None:
+        """Close a pending trade. ``None`` means it was already closed."""
+        row = await self._pool.fetchrow(
+            f"""
+            UPDATE trades SET status = $3, tax = $4, settled_at = $5
+            WHERE scope = $1 AND number = $2 AND status = 'pending'
+            RETURNING {TRADE_COLUMNS}
+            """,
+            scope,
+            number,
+            status.value,
+            tax,
+            settled_at,
+        )
+        return _trade_from_row(row) if row else None
+
+    async def expire(self, *, scope: str, before: int) -> tuple[TradeRecord, ...]:
+        rows = await self._pool.fetch(
+            f"""
+            UPDATE trades SET status = 'expired', settled_at = $2
+            WHERE scope = $1 AND status = 'pending' AND created_at <= $2
+            RETURNING {TRADE_COLUMNS}
+            """,
+            scope,
+            before,
+        )
+        return tuple(_trade_from_row(row) for row in rows)
+
+    async def journal(self, character_id: int, *, limit: int = 20) -> tuple[TradeRecord, ...]:
+        rows = await self._pool.fetch(
+            f"SELECT {TRADE_COLUMNS} FROM trades"
+            " WHERE author_character_id = $1 OR target_character_id = $1"
+            " ORDER BY id DESC LIMIT $2",
+            character_id,
+            limit,
+        )
+        return tuple(_trade_from_row(row) for row in rows)
 
 
 class PostgresInventoryRepository:

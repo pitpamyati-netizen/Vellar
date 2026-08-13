@@ -40,6 +40,7 @@ from mmorpg.infrastructure.content import load_content
 from mmorpg.infrastructure.persistence import (
     InMemoryCharacterRepository,
     InMemoryInventoryRepository,
+    InMemoryTradeRepository,
     InMemoryUserRepository,
 )
 from mmorpg.logging import configure_logging, get_logger
@@ -133,6 +134,7 @@ async def _build_adapters(
             users=InMemoryUserRepository(),
             characters=InMemoryCharacterRepository(),
             inventory=InMemoryInventoryRepository(),
+            trades=InMemoryTradeRepository(),
             state_cache=InMemoryStateCache(),
             location_deltas=InMemoryLocationDeltaCache(),
             # The sink is attached once the Bot exists; until then, and whenever
@@ -152,6 +154,7 @@ async def _build_adapters(
     from mmorpg.infrastructure.persistence.postgres import (
         PostgresCharacterRepository,
         PostgresInventoryRepository,
+        PostgresTradeRepository,
         PostgresUserRepository,
     )
 
@@ -168,6 +171,7 @@ async def _build_adapters(
         users=PostgresUserRepository(pool),
         characters=PostgresCharacterRepository(pool),
         inventory=PostgresInventoryRepository(pool),
+        trades=PostgresTradeRepository(pool),
         state_cache=RedisStateCache(redis),
         location_deltas=RedisLocationDeltaCache(redis),
         broadcasts=ChannelBroadcaster(sink=None, chat_id=settings.channel_id),

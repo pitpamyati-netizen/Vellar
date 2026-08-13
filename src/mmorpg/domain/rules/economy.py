@@ -1,4 +1,4 @@
-"""Shop assortment and prices.
+"""Shop assortment, prices, and the duty on a trade between players.
 
 The assortment is a pure function of ``(city, cycle, reputation)`` - it is rolled
 from a seed, never stored, and it rotates once per world cycle, which gives a
@@ -20,6 +20,12 @@ LEVEL_WINDOW_ABOVE = 4
 CHARISMA_DISCOUNT_PER_POINT = 0.4
 MAX_CHARISMA_DISCOUNT = 15.0
 SELL_FRACTION = 0.35
+
+# The Treaty of Cities holds on duties, not on loyalty (``Narrative.md``, section
+# 1), and the Salt Watch takes its share of every deal struck between players.
+# The number is the whole reason gold does not pile up forever: it is the one
+# outflow that scales with how much the players actually trade.
+TRADE_TAX_PERCENT = 5
 
 
 def roll_assortment(
@@ -74,6 +80,28 @@ def sell_price(
     price = item.price * rarity.price_factor * SELL_FRACTION
     bonus = 1.0 + (modifiers.get("sell_price_percent", 0.0) if modifiers else 0.0) / 100.0
     return max(1, round(price * bonus))
+
+
+def trade_tax(price: int, *, percent: int = TRADE_TAX_PERCENT) -> int:
+    """The duty on a settled trade between two players.
+
+    Charged once, on the price, and it leaves the game entirely - nobody receives
+    it. A free hand-over (``передать``) is not a trade and is not taxed: taxing a
+    gift would only punish players for helping each other, and two hand-overs can
+    always replace a sale anyway. That is not a loophole to close but a trade
+    without the protection of a confirmation.
+
+    A priced trade always costs at least one gold, so a shower of one-coin sales
+    cannot launder value past the duty.
+    """
+    if price <= 0:
+        return 0
+    return max(1, round(price * percent / 100))
+
+
+def payout(price: int, *, percent: int = TRADE_TAX_PERCENT) -> int:
+    """What the seller actually receives: the price, less the duty."""
+    return max(0, price - trade_tax(price, percent=percent))
 
 
 def affordable(items: Sequence[Item], gold: int, prices: dict[str, int]) -> tuple[Item, ...]:

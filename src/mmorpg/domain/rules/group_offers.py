@@ -1,20 +1,22 @@
 """Offers made in the group: what one player may propose to another, and when it
 may actually settle.
 
-The grammar lives in ``group_commands``; this module is about consequences. Two
-rules shape everything here:
+The grammar lives in ``group_commands`` and the nouns in ``entities/trade``; this
+module is about consequences. Three rules shape everything here:
 
 - **only the target may answer** - an offer names one person, and a stranger
   pressing the button gets a refusal, not the goods (``Narrative.md``, section 9);
-- **an offer is a promise, not a hold** - nothing is moved when it is made, so both
-  sides are re-checked at the moment it settles. A player who spent their gold
-  while the offer stood simply cannot accept it.
+- **the author stakes their side up front** - publishing an offer takes the item
+  out of the seller's pack, or the gold out of the buyer's purse, and holds it
+  until the offer is answered (Roadmap 2.3). An offer is therefore a promise the
+  author can no longer break by accident: they cannot spend what they have already
+  put on the table;
+- **the target stakes nothing until they say yes** - taking gold from someone who
+  has not agreed would be theft, so their side is read at the moment they answer,
+  and that is the only thing a settlement still has to check.
 
 There is no clock here. ``now`` is a unix timestamp handed in by the caller, which
 is what keeps expiry testable without waiting five minutes (``Claude.md``, rule 1).
-
-Escrow, the trade tax and the persisted journal are Roadmap 2.3; this module
-knows about neither, and deliberately settles from live balances instead.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 
+from mmorpg.domain.entities.trade import Offer, OfferKind, Party
 from mmorpg.domain.rules.group_commands import GroupIntent, normalise
 
 # Five minutes, from Narrative.md: long enough to read the message aloud and
@@ -30,17 +33,11 @@ from mmorpg.domain.rules.group_commands import GroupIntent, normalise
 OFFER_TTL_SECONDS = 300
 MAX_OFFER_NUMBER = 999
 
-
-class OfferKind(StrEnum):
-    """Which side parts with the item.
-
-    ``SELL`` - the author offers their own item and the target pays.
-    ``BUY``  - the author offers gold for the target's item.
-    """
-
-    SELL = "sell"
-    BUY = "buy"
-
+# The sweep that returns stakes runs a minute behind expiry on purpose. A player
+# who presses "Принять" a moment too late should be told that the offer ran out,
+# not that it never existed - and that answer only exists while the row does.
+# The cost is one extra minute of escrow on an offer nobody answered at all.
+SWEEP_GRACE_SECONDS = 60
 
 OFFER_KIND_FOR_INTENT: dict[GroupIntent, OfferKind] = {
     GroupIntent.SELL: OfferKind.SELL,
@@ -64,40 +61,7 @@ class Refusal(StrEnum):
     UNKNOWN_OFFER = "unknown_offer"
     EXPIRED = "expired"
     TOO_MANY_COMMANDS = "too_many_commands"
-
-
-@dataclass(frozen=True, slots=True)
-class Party:
-    """One side of an offer: the Telegram account and the character behind it."""
-
-    user_id: int
-    character_id: int
-    name: str
-
-
-@dataclass(frozen=True, slots=True)
-class Offer:
-    """A published proposal, waiting for exactly one person to answer it."""
-
-    number: int
-    kind: OfferKind
-    author: Party
-    target: Party
-    item_id: str
-    item_name: str
-    price: int
-    quantity: int = 1
-    created_at: int = 0
-
-    @property
-    def giver(self) -> Party:
-        """The side that parts with the item."""
-        return self.author if self.kind is OfferKind.SELL else self.target
-
-    @property
-    def payer(self) -> Party:
-        """The side that parts with the gold."""
-        return self.target if self.kind is OfferKind.SELL else self.author
+    TOO_MANY_OFFERS = "too_many_offers"
 
 
 def is_expired(offer: Offer, now: int, *, ttl: int = OFFER_TTL_SECONDS) -> bool:
@@ -114,6 +78,19 @@ def next_number(previous: int) -> int:
     return previous % MAX_OFFER_NUMBER + 1
 
 
+# --- escrow ----------------------------------------------------------
+
+
+def stakes_item(offer: Offer) -> bool:
+    """Whether publishing this offer took an item out of the author's pack."""
+    return offer.kind is OfferKind.SELL
+
+
+def stakes_gold(offer: Offer) -> bool:
+    """Whether publishing this offer took gold out of the author's purse."""
+    return offer.kind is OfferKind.BUY
+
+
 # --- checks ----------------------------------------------------------
 
 
@@ -124,38 +101,41 @@ def check_proposal(
     target: Party,
     giver_holds: int,
     quantity: int,
+    price: int,
+    author_gold: int,
 ) -> Refusal | None:
     """Whether an offer may be published at all.
 
-    Gold is deliberately **not** checked here: for a sale that would mean reading
-    the target's purse to answer someone else's message, and an offer they cannot
-    afford yet is still a fair offer - they have five minutes to find the money.
+    The item is checked on whichever side is meant to hand it over, because that
+    is also how the item was named. The **author's** gold is checked too, and only
+    the author's: a buyer stakes their money the moment they offer it, while
+    reading the target's purse would answer a question nobody asked and leak a
+    balance to the whole group.
     """
     if author.user_id == target.user_id:
         return Refusal.SELF
     if giver_holds < quantity:
         return Refusal.AUTHOR_LACKS_ITEM if kind is OfferKind.SELL else Refusal.TARGET_LACKS_ITEM
+    if kind is OfferKind.BUY and author_gold < price:
+        return Refusal.AUTHOR_LACKS_GOLD
     return None
 
 
 def check_settlement(
-    offer: Offer, *, giver_holds: int, payer_gold: int, now: int
+    offer: Offer, *, target_holds: int, target_gold: int, now: int
 ) -> Refusal | None:
     """Whether the offer can still be honoured right now.
 
-    Both sides are read fresh: between the offer and the answer either of them
-    could have spent the gold or sold the item elsewhere.
+    Only the target is read: the author's side has been in escrow since the offer
+    was published, so the one thing that can still have changed is the purse - or
+    the pack - of the person now answering.
     """
     if is_expired(offer, now):
         return Refusal.EXPIRED
-    if giver_holds < offer.quantity:
-        return (
-            Refusal.AUTHOR_LACKS_ITEM if offer.giver == offer.author else Refusal.TARGET_LACKS_ITEM
-        )
-    if payer_gold < offer.price:
-        return (
-            Refusal.AUTHOR_LACKS_GOLD if offer.payer == offer.author else Refusal.TARGET_LACKS_GOLD
-        )
+    if offer.kind is OfferKind.SELL and target_gold < offer.price:
+        return Refusal.TARGET_LACKS_GOLD
+    if offer.kind is OfferKind.BUY and target_holds < offer.quantity:
+        return Refusal.TARGET_LACKS_ITEM
     return None
 
 

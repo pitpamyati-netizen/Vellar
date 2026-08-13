@@ -80,7 +80,7 @@ stays pure and the write stays in one place.
 
 | Where | What |
 | --- | --- |
-| PostgreSQL | users, characters (raw stats, level, experience, gold), inventory, equipment, skill loadout with ranks and edges, chosen traits, city and quest progress, accessibility settings, world seed |
+| PostgreSQL | users, characters (raw stats, level, experience, gold), inventory, equipment, skill loadout with ranks and edges, chosen traits, city and quest progress, accessibility settings, world seed, trades (pending escrow and the settled journal) |
 | Redis (with TTL) | FSM state, current screen, active combat, location deltas for the current cycle, update deduplication, shop assortment cache |
 | Nowhere - recomputed | location layout, nodes, enemies, loot, total character stats, shop assortment (all pure functions of seed and cycle) |
 
@@ -95,6 +95,15 @@ Redis keys:
 
 `APP_ENV=local` substitutes in-memory implementations of every port, so the bot
 runs with no external services at all. See `docs/adr/0005-in-memory-adapters.md`.
+
+A pending offer is the one short-lived thing that is *not* in Redis. Publishing
+one takes the author's item or gold into escrow, so the row now holds real value:
+a store that expires by itself would swallow it. `trades` is closed by a single
+`UPDATE ... WHERE status = 'pending' RETURNING`, which is what makes two taps on
+"Принять" settle exactly once, and a partial unique index on `(scope, number)`
+keeps two live offers from sharing a number. Stakes of offers nobody answered are
+returned by a sweep that runs at the start of the next group command - there is
+no background timer.
 
 ## Latency budget
 

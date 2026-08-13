@@ -19,12 +19,14 @@ from mmorpg.application.services.group_trade import GroupOutcome, GroupResult
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
+from mmorpg.domain.entities.trade import Offer, OfferKind, Party
+from mmorpg.domain.rules.economy import trade_tax
 from mmorpg.domain.rules.group_commands import GroupIntent, parse_group_command
-from mmorpg.domain.rules.group_offers import Offer, OfferKind, Party, Refusal
-from mmorpg.infrastructure.cache import InMemoryStateCache
+from mmorpg.domain.rules.group_offers import Refusal
 from mmorpg.infrastructure.persistence import (
     InMemoryCharacterRepository,
     InMemoryInventoryRepository,
+    InMemoryTradeRepository,
 )
 from mmorpg.presentation.telegram.cleanup import MessageReaper
 from mmorpg.presentation.telegram.handlers.group import handle_group_message, is_game_group
@@ -132,16 +134,21 @@ def reaper() -> MessageReaper:
 
 
 @pytest.fixture
+def trades() -> InMemoryTradeRepository:
+    return InMemoryTradeRepository()
+
+
+@pytest.fixture
 def bus(
     content: GameContent,
     settings: Settings,
     characters: InMemoryCharacterRepository,
     inventory: InMemoryInventoryRepository,
+    trades: InMemoryTradeRepository,
     reaper: MessageReaper,
 ):
     """Everything ``handle_group_message`` needs, in one callable."""
     bot = FakeBot()
-    state = InMemoryStateCache()
     limiter = RateLimiter()
 
     async def deliver(msg: Message, *, now: int = NOW):
@@ -152,7 +159,7 @@ def bus(
             content=content,
             characters=characters,
             inventory=inventory,
-            state_cache=state,
+            trades=trades,
             limiter=limiter,
             reaper=reaper,
             now=now,
@@ -308,7 +315,7 @@ async def test_a_stranger_pressing_the_button_gets_a_refusal_not_the_goods(
     bus, argus_account: User, merla_account: User, world, characters, inventory
 ) -> None:
     stranger = account(33, "Довен")
-    await characters.create(
+    doven = await characters.create(
         Character(id=0, user_id=33, name="Довен", race_id="human", class_id="warrior", gold=999)
     )
     target = message("что продаёшь", sender=merla_account, message_id=7)
@@ -317,7 +324,9 @@ async def test_a_stranger_pressing_the_button_gets_a_refusal_not_the_goods(
     await bus.deliver(message("Принять 1", sender=stranger))
 
     assert "не вам" in bus.bot.sent[1]["text"]
-    assert await inventory.count(world["Аргус"].id, SWORD) == 1
+    # The sword is held by the offer, and a stranger cannot pull it out of there.
+    assert await inventory.count(world["Аргус"].id, SWORD) == 0
+    assert await inventory.count(doven.id, SWORD) == 0
 
 
 # --- the five minutes -------------------------------------------------
@@ -481,7 +490,47 @@ def test_an_offer_says_who_gives_what_before_who_may_answer(content: GameContent
 
     assert lines[0].startswith("Предложение 12, продажа")
     assert "Отдаёт вещь: Аргус" in lines[1]
-    assert "Отвечает только Мерла" in lines[2]
+    assert "Отвечает только Мерла" in lines[-2]
+
+
+def test_an_offer_says_what_it_holds_and_what_the_duty_costs(content: GameContent) -> None:
+    """Both are news to the author: their sword is gone and 95 is what comes back."""
+    reply = group_screens.render(
+        content,
+        GroupOutcome(result=GroupResult.OFFER_MADE, offer=offer(), tax=trade_tax(100)),
+    )
+
+    assert "Пошлина Надзора: 5 золотых" in reply.text
+    assert "Продавцу на руки: 95 золотых" in reply.text
+    assert "Вещь отложена до ответа." in reply.text
+
+
+def test_a_purchase_says_the_gold_is_the_thing_being_held(content: GameContent) -> None:
+    reply = group_screens.render(
+        content,
+        GroupOutcome(result=GroupResult.OFFER_MADE, offer=offer(OfferKind.BUY), tax=trade_tax(100)),
+    )
+
+    assert "Золото отложено до ответа." in reply.text
+
+
+def test_a_settled_trade_repeats_the_duty_it_charged(content: GameContent) -> None:
+    reply = group_screens.render(
+        content,
+        GroupOutcome(result=GroupResult.OFFER_ACCEPTED, offer=offer(), tax=trade_tax(100)),
+    )
+
+    assert "принято" in reply.text
+    assert "Пошлина Надзора: 5 золотых" in reply.text
+
+
+def test_a_declined_offer_says_the_stake_came_back(content: GameContent) -> None:
+    reply = group_screens.render(
+        content, GroupOutcome(result=GroupResult.OFFER_DECLINED, offer=offer())
+    )
+
+    assert "отклонено" in reply.text
+    assert "вернулось владельцу" in reply.text
 
 
 def test_a_purchase_is_worded_from_the_same_two_roles(content: GameContent) -> None:

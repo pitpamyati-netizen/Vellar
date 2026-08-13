@@ -15,10 +15,12 @@ import pytest
 
 from mmorpg.domain.entities.character import Character, Equipment, SkillLoadout
 from mmorpg.domain.entities.stats import StatBlock
+from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeStatus
 from mmorpg.domain.ports.repositories import AccessibilitySettings, User
 from mmorpg.infrastructure.persistence.postgres import (
     PostgresCharacterRepository,
     PostgresInventoryRepository,
+    PostgresTradeRepository,
     PostgresUserRepository,
 )
 
@@ -242,3 +244,178 @@ async def test_counting_an_item_the_character_never_had_is_zero(pool, clean_user
 
     assert await inventory.count(character.id, "nothing_like_this") == 0
     assert await inventory.remove(character.id, "nothing_like_this", 1) is False
+
+
+# --- trades ------------------------------------------------------------------
+
+# One group of its own, so a test never sees an offer left by a real player.
+TEST_SCOPE = "test-group"
+NOW = 1_700_000_000
+
+
+@pytest.fixture
+async def two_parties(pool, clean_user) -> tuple[Party, Party]:
+    """Two characters to trade with each other, cascading away with the user."""
+    await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user, username="tester"))
+    characters = PostgresCharacterRepository(pool)
+    first = await characters.create(a_character(clean_user, name="Продавец"))
+    second = await characters.create(a_character(clean_user, name="Покупатель"))
+    return (
+        Party(user_id=clean_user, character_id=first.id, name=first.name),
+        Party(user_id=clean_user, character_id=second.id, name=second.name),
+    )
+
+
+def an_offer(author: Party, target: Party, *, price: int = 100, created_at: int = NOW) -> Offer:
+    return Offer(
+        number=0,
+        kind=OfferKind.SELL,
+        author=author,
+        target=target,
+        item_id="leather_armor",
+        item_name="Кожаная броня",
+        price=price,
+        quantity=2,
+        created_at=created_at,
+    )
+
+
+async def test_an_offer_survives_a_round_trip_and_gets_a_number(pool, two_parties) -> None:
+    author, target = two_parties
+    trades = PostgresTradeRepository(pool)
+
+    opened = await trades.open(an_offer(author, target), scope=TEST_SCOPE)
+
+    assert opened is not None
+    assert 1 <= opened.number <= 999
+    read = await trades.pending(opened.number, scope=TEST_SCOPE)
+    assert read is not None
+    assert read.status is TradeStatus.PENDING
+    assert read.offer.kind is OfferKind.SELL
+    assert read.offer.item_name == "Кожаная броня"
+    assert read.offer.price == 100
+    assert read.offer.quantity == 2
+    assert read.offer.created_at == NOW
+    assert read.offer.author.name == "Продавец"
+    assert read.offer.target.character_id == target.character_id
+    assert read.tax == 0 and read.settled_at is None
+
+
+async def test_two_live_offers_never_share_a_number(pool, two_parties) -> None:
+    author, target = two_parties
+    trades = PostgresTradeRepository(pool)
+
+    first = await trades.open(an_offer(author, target), scope=TEST_SCOPE)
+    second = await trades.open(an_offer(author, target), scope=TEST_SCOPE)
+
+    assert first is not None and second is not None
+    assert first.number != second.number
+
+
+async def test_a_number_comes_back_round_once_its_offer_closes(pool, two_parties) -> None:
+    author, target = two_parties
+    trades = PostgresTradeRepository(pool)
+    first = await trades.open(an_offer(author, target), scope=TEST_SCOPE)
+    assert first is not None
+    await trades.close(
+        first.number, scope=TEST_SCOPE, status=TradeStatus.DECLINED, settled_at=NOW + 1
+    )
+
+    again = await trades.open(an_offer(author, target), scope=TEST_SCOPE)
+
+    assert again is not None
+    assert again.number == first.number
+
+
+async def test_a_trade_can_only_be_closed_once(pool, two_parties) -> None:
+    """This is what makes two taps on "Принять" settle exactly one trade."""
+    author, target = two_parties
+    trades = PostgresTradeRepository(pool)
+    opened = await trades.open(an_offer(author, target), scope=TEST_SCOPE)
+    assert opened is not None
+
+    first = await trades.close(
+        opened.number, scope=TEST_SCOPE, status=TradeStatus.ACCEPTED, settled_at=NOW + 5, tax=5
+    )
+    second = await trades.close(
+        opened.number, scope=TEST_SCOPE, status=TradeStatus.ACCEPTED, settled_at=NOW + 6, tax=5
+    )
+
+    assert first is not None
+    assert first.status is TradeStatus.ACCEPTED
+    assert first.tax == 5 and first.settled_at == NOW + 5
+    assert second is None
+    assert await trades.pending(opened.number, scope=TEST_SCOPE) is None
+
+
+async def test_the_index_refuses_a_second_pending_offer_on_one_number(pool, two_parties) -> None:
+    """The partial unique index is the last line of defence against a race."""
+    import asyncpg
+
+    author, target = two_parties
+    trades = PostgresTradeRepository(pool)
+    opened = await trades.open(an_offer(author, target), scope=TEST_SCOPE)
+    assert opened is not None
+
+    with pytest.raises(asyncpg.UniqueViolationError):
+        await pool.execute(
+            """
+            INSERT INTO trades (
+                scope, number, kind, price, item_id, item_name, created_at,
+                author_user_id, author_character_id, author_name,
+                target_user_id, target_character_id, target_name
+            )
+            VALUES ($1, $2, 'sell', 1, 'x', 'x', $3, $4, $5, 'x', $6, $7, 'x')
+            """,
+            TEST_SCOPE,
+            opened.number,
+            NOW,
+            author.user_id,
+            author.character_id,
+            target.user_id,
+            target.character_id,
+        )
+
+
+async def test_expiry_hands_back_each_stale_offer_exactly_once(pool, two_parties) -> None:
+    author, target = two_parties
+    trades = PostgresTradeRepository(pool)
+    stale = await trades.open(an_offer(author, target, created_at=NOW), scope=TEST_SCOPE)
+    fresh = await trades.open(an_offer(author, target, created_at=NOW + 1_000), scope=TEST_SCOPE)
+    assert stale is not None and fresh is not None
+
+    first_sweep = await trades.expire(scope=TEST_SCOPE, before=NOW + 500)
+    second_sweep = await trades.expire(scope=TEST_SCOPE, before=NOW + 500)
+
+    assert [record.number for record in first_sweep] == [stale.number]
+    assert first_sweep[0].status is TradeStatus.EXPIRED
+    assert second_sweep == ()
+    # The offer that is still young was not touched.
+    assert await trades.pending(fresh.number, scope=TEST_SCOPE) is not None
+
+
+async def test_another_group_never_sees_these_offers(pool, two_parties) -> None:
+    author, target = two_parties
+    trades = PostgresTradeRepository(pool)
+    opened = await trades.open(an_offer(author, target), scope=TEST_SCOPE)
+    assert opened is not None
+
+    assert await trades.pending(opened.number, scope="some-other-group") is None
+    assert await trades.expire(scope="some-other-group", before=NOW + 10_000) == ()
+
+
+async def test_the_journal_lists_both_sides_newest_first(pool, two_parties) -> None:
+    author, target = two_parties
+    trades = PostgresTradeRepository(pool)
+    older = await trades.open(an_offer(author, target, price=10), scope=TEST_SCOPE)
+    assert older is not None
+    await trades.close(
+        older.number, scope=TEST_SCOPE, status=TradeStatus.ACCEPTED, settled_at=NOW + 1, tax=1
+    )
+    newer = await trades.open(an_offer(author, target, price=20), scope=TEST_SCOPE)
+    assert newer is not None
+
+    for character_id in (author.character_id, target.character_id):
+        journal = await trades.journal(character_id)
+        assert [record.offer.price for record in journal] == [20, 10]
+        assert journal[1].tax == 1

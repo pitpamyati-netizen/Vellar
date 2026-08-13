@@ -1,7 +1,8 @@
 """Trades between players, end to end through the repositories.
 
-Two properties are worth more than the rest: nothing is ever created or destroyed
-by a trade, and an offer nobody may accept moves nothing at all.
+Three properties are worth more than the rest: nothing is ever created by a
+trade, everything an offer holds comes back to its author when the offer dies,
+and the duty is the only way gold leaves the game.
 """
 
 from __future__ import annotations
@@ -9,22 +10,21 @@ from __future__ import annotations
 import pytest
 
 from mmorpg.application.services.group_trade import GroupResult, GroupTrade
-from mmorpg.application.services.offers import OfferStore
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
+from mmorpg.domain.entities.trade import OfferKind, TradeStatus
+from mmorpg.domain.rules.economy import trade_tax
 from mmorpg.domain.rules.group_commands import parse_group_command
 from mmorpg.domain.rules.group_offers import (
     OFFER_TTL_SECONDS,
-    Offer,
-    OfferKind,
-    Party,
+    SWEEP_GRACE_SECONDS,
     Refusal,
 )
-from mmorpg.infrastructure.cache import InMemoryStateCache
 from mmorpg.infrastructure.content import load_content
 from mmorpg.infrastructure.persistence import (
     InMemoryCharacterRepository,
     InMemoryInventoryRepository,
+    InMemoryTradeRepository,
 )
 from tests.conftest import CONTENT_ROOT
 
@@ -52,16 +52,22 @@ def inventory() -> InMemoryInventoryRepository:
 
 
 @pytest.fixture
+def trades() -> InMemoryTradeRepository:
+    return InMemoryTradeRepository()
+
+
+@pytest.fixture
 def trade(
     content: GameContent,
     characters: InMemoryCharacterRepository,
     inventory: InMemoryInventoryRepository,
+    trades: InMemoryTradeRepository,
 ) -> GroupTrade:
     return GroupTrade(
         content=content,
         characters=characters,
         inventory=inventory,
-        offers=OfferStore(cache=InMemoryStateCache()),
+        trades=trades,
     )
 
 
@@ -98,6 +104,12 @@ async def run(trade: GroupTrade, text: str, *, author: int, target: int | None, 
     command = parse_group_command(text)
     assert command is not None, text
     return await trade.run(command, author_id=author, target_id=target, now=now)
+
+
+async def purse(characters: InMemoryCharacterRepository, character: Character) -> int:
+    read = await characters.get(character.id)
+    assert read is not None
+    return read.gold
 
 
 # --- profile ----------------------------------------------------------
@@ -141,11 +153,21 @@ async def test_gold_moves_immediately_and_nothing_is_created(
     outcome = await run(trade, "передать 100 золота", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
 
     assert outcome.result is GroupResult.GOLD_GIVEN
-    after_argus = await characters.get(argus.id)
-    after_merla = await characters.get(merla.id)
-    assert after_argus is not None and after_merla is not None
-    assert (after_argus.gold, after_merla.gold) == (400, 400)
-    assert after_argus.gold + after_merla.gold == before
+    after = (await purse(characters, argus), await purse(characters, merla))
+    assert after == (400, 400)
+    assert sum(after) == before
+
+
+async def test_a_hand_over_pays_no_duty(
+    trade: GroupTrade,
+    characters: InMemoryCharacterRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    """A gift is not a trade: taxing it would only punish players for helping."""
+    await run(trade, "передать 100 золота", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+
+    assert await purse(characters, merla) == 400
 
 
 async def test_gold_you_do_not_have_stays_where_it_is(
@@ -157,8 +179,7 @@ async def test_gold_you_do_not_have_stays_where_it_is(
     outcome = await run(trade, "передать 5000 золота", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
 
     assert outcome.refusal is Refusal.AUTHOR_LACKS_GOLD
-    unchanged = await characters.get(argus.id)
-    assert unchanged is not None and unchanged.gold == 500
+    assert await purse(characters, argus) == 500
 
 
 async def test_an_item_is_handed_over_without_asking_the_receiver(
@@ -215,10 +236,10 @@ async def test_giving_to_yourself_is_refused(
     assert await inventory.count(argus.id, SWORD) == 1
 
 
-# --- offers -----------------------------------------------------------
+# --- publishing an offer takes the author's side --------------------
 
 
-async def test_a_sale_is_published_and_nothing_moves_yet(
+async def test_a_sale_holds_the_item_and_asks_the_target_for_nothing(
     trade: GroupTrade,
     characters: InMemoryCharacterRepository,
     inventory: InMemoryInventoryRepository,
@@ -235,35 +256,13 @@ async def test_a_sale_is_published_and_nothing_moves_yet(
     assert outcome.offer is not None
     assert outcome.offer.kind is OfferKind.SELL
     assert outcome.offer.price == 100
-    # Published, not executed.
-    assert await inventory.count(argus.id, SWORD) == 1
-    still = await characters.get(merla.id)
-    assert still is not None and still.gold == 300
-
-
-async def test_accepting_a_sale_swaps_goods_for_gold(
-    trade: GroupTrade,
-    characters: InMemoryCharacterRepository,
-    inventory: InMemoryInventoryRepository,
-    argus: Character,
-    merla: Character,
-) -> None:
-    await inventory.add(argus.id, SWORD, 1)
-    made = await run(trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
-    assert made.offer is not None
-
-    accepted = await run(trade, f"принять {made.offer.number}", author=MERLA_ACCOUNT, target=None)
-
-    assert accepted.result is GroupResult.OFFER_ACCEPTED
+    # The seller's side is in escrow; the buyer has not been touched.
     assert await inventory.count(argus.id, SWORD) == 0
-    assert await inventory.count(merla.id, SWORD) == 1
-    seller = await characters.get(argus.id)
-    buyer = await characters.get(merla.id)
-    assert seller is not None and buyer is not None
-    assert (seller.gold, buyer.gold) == (600, 200)
+    assert await inventory.count(merla.id, SWORD) == 0
+    assert await purse(characters, merla) == 300
 
 
-async def test_a_purchase_runs_the_same_trade_from_the_other_side(
+async def test_a_purchase_holds_the_buyers_gold(
     trade: GroupTrade,
     characters: InMemoryCharacterRepository,
     inventory: InMemoryInventoryRepository,
@@ -271,108 +270,53 @@ async def test_a_purchase_runs_the_same_trade_from_the_other_side(
     merla: Character,
 ) -> None:
     await inventory.add(merla.id, SWORD, 1)
-    made = await run(trade, f"купить 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
-    assert made.offer is not None
-
-    await run(trade, f"принять {made.offer.number}", author=MERLA_ACCOUNT, target=None)
-
-    assert await inventory.count(argus.id, SWORD) == 1
-    payer = await characters.get(argus.id)
-    seller = await characters.get(merla.id)
-    assert payer is not None and seller is not None
-    assert (payer.gold, seller.gold) == (400, 400)
-
-
-async def test_a_stranger_cannot_accept_someone_elses_offer(
-    trade: GroupTrade,
-    characters: InMemoryCharacterRepository,
-    inventory: InMemoryInventoryRepository,
-    argus: Character,
-    merla: Character,
-) -> None:
-    await make(characters, STRANGER_ACCOUNT, "Довен", gold=1000)
-    await inventory.add(argus.id, SWORD, 1)
-    made = await run(trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
-    assert made.offer is not None
-
-    outcome = await run(trade, f"принять {made.offer.number}", author=STRANGER_ACCOUNT, target=None)
-
-    assert outcome.refusal is Refusal.NOT_YOURS
-    assert await inventory.count(argus.id, SWORD) == 1
-
-
-async def test_the_author_may_cancel_but_not_accept(
-    trade: GroupTrade,
-    inventory: InMemoryInventoryRepository,
-    argus: Character,
-    merla: Character,
-) -> None:
-    await inventory.add(argus.id, SWORD, 1)
-    made = await run(trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
-    assert made.offer is not None
-
-    refused = await run(trade, f"принять {made.offer.number}", author=ARGUS_ACCOUNT, target=None)
-    cancelled = await run(trade, f"отказ {made.offer.number}", author=ARGUS_ACCOUNT, target=None)
-
-    assert refused.refusal is Refusal.NOT_YOURS
-    assert cancelled.result is GroupResult.OFFER_DECLINED
-
-
-async def test_a_declined_offer_is_gone_for_good(
-    trade: GroupTrade,
-    inventory: InMemoryInventoryRepository,
-    argus: Character,
-    merla: Character,
-) -> None:
-    await inventory.add(argus.id, SWORD, 1)
-    made = await run(trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
-    assert made.offer is not None
-
-    await run(trade, f"отказ {made.offer.number}", author=MERLA_ACCOUNT, target=None)
-    again = await run(trade, f"принять {made.offer.number}", author=MERLA_ACCOUNT, target=None)
-
-    assert again.refusal is Refusal.UNKNOWN_OFFER
-
-
-async def test_an_offer_older_than_five_minutes_refuses(
-    trade: GroupTrade,
-    inventory: InMemoryInventoryRepository,
-    argus: Character,
-    merla: Character,
-) -> None:
-    await inventory.add(argus.id, SWORD, 1)
-    made = await run(trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
-    assert made.offer is not None
 
     outcome = await run(
-        trade,
-        f"принять {made.offer.number}",
-        author=MERLA_ACCOUNT,
-        target=None,
-        now=NOW + OFFER_TTL_SECONDS,
+        trade, f"купить 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT
     )
 
-    assert outcome.refusal is Refusal.EXPIRED
-    assert await inventory.count(argus.id, SWORD) == 1
+    assert outcome.result is GroupResult.OFFER_MADE
+    assert await purse(characters, argus) == 400
+    # The target's item stays with them until they agree to part with it.
+    assert await inventory.count(merla.id, SWORD) == 1
 
 
-async def test_a_buyer_who_spent_the_money_meanwhile_is_refused(
+async def test_offering_gold_you_do_not_have_is_refused_up_front(
     trade: GroupTrade,
     characters: InMemoryCharacterRepository,
     inventory: InMemoryInventoryRepository,
     argus: Character,
     merla: Character,
 ) -> None:
-    """Nothing is held in escrow, so the balance is read when the answer arrives."""
+    """A buyer stakes their money when they offer it, so it has to be there."""
+    await inventory.add(merla.id, SWORD, 1)
+
+    outcome = await run(
+        trade, f"купить 5000 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT
+    )
+
+    assert outcome.refusal is Refusal.AUTHOR_LACKS_GOLD
+    assert await purse(characters, argus) == 500
+
+
+async def test_the_author_cannot_sell_the_same_item_twice(
+    trade: GroupTrade,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    """The first offer holds the sword, so the second has nothing to hold."""
     await inventory.add(argus.id, SWORD, 1)
-    made = await run(trade, f"продать 400 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
-    assert made.offer is not None
-    await characters.save(merla.with_gold(-250))
 
-    outcome = await run(trade, f"принять {made.offer.number}", author=MERLA_ACCOUNT, target=None)
+    first = await run(
+        trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT
+    )
+    second = await run(
+        trade, f"продать 200 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT
+    )
 
-    assert outcome.refusal is Refusal.TARGET_LACKS_GOLD
-    assert await inventory.count(argus.id, SWORD) == 1
+    assert first.result is GroupResult.OFFER_MADE
+    assert second.refusal is Refusal.UNKNOWN_ITEM
 
 
 async def test_selling_something_you_do_not_own_is_refused_up_front(
@@ -418,55 +362,271 @@ async def test_offers_get_distinct_numbers(
     assert first.offer.number != second.offer.number
 
 
-# --- where the offers are kept ----------------------------------------
+# --- settling ---------------------------------------------------------
 
 
-async def test_a_taken_number_is_stepped_over_not_overwritten() -> None:
-    """A wrap must not hand two live offers the same number."""
-    store = OfferStore(cache=InMemoryStateCache())
-    first = await store.reserve_number()
-    await store.put(
-        Offer(
-            number=first,
-            kind=OfferKind.SELL,
-            author=Party(user_id=1, character_id=1, name="Аргус"),
-            target=Party(user_id=2, character_id=2, name="Мерла"),
-            item_id=SWORD,
-            item_name=SWORD_NAME,
-            price=10,
-            created_at=NOW,
-        )
+async def test_accepting_a_sale_swaps_goods_for_gold_less_the_duty(
+    trade: GroupTrade,
+    characters: InMemoryCharacterRepository,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    await inventory.add(argus.id, SWORD, 1)
+    made = await run(trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    assert made.offer is not None
+
+    accepted = await run(trade, f"принять {made.offer.number}", author=MERLA_ACCOUNT, target=None)
+
+    assert accepted.result is GroupResult.OFFER_ACCEPTED
+    assert accepted.tax == trade_tax(100) == 5
+    assert await inventory.count(argus.id, SWORD) == 0
+    assert await inventory.count(merla.id, SWORD) == 1
+    # The buyer pays 100, the seller receives 95, and five gold leave the game.
+    assert (await purse(characters, argus), await purse(characters, merla)) == (595, 200)
+
+
+async def test_a_purchase_runs_the_same_trade_from_the_other_side(
+    trade: GroupTrade,
+    characters: InMemoryCharacterRepository,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    await inventory.add(merla.id, SWORD, 1)
+    made = await run(trade, f"купить 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    assert made.offer is not None
+
+    await run(trade, f"принять {made.offer.number}", author=MERLA_ACCOUNT, target=None)
+
+    assert await inventory.count(argus.id, SWORD) == 1
+    assert await inventory.count(merla.id, SWORD) == 0
+    assert (await purse(characters, argus), await purse(characters, merla)) == (400, 395)
+
+
+async def test_a_settled_trade_is_the_only_way_gold_leaves_the_game(
+    trade: GroupTrade,
+    characters: InMemoryCharacterRepository,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    before = argus.gold + merla.gold
+    await inventory.add(argus.id, SWORD, 1)
+    made = await run(trade, f"продать 200 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    assert made.offer is not None
+
+    await run(trade, f"принять {made.offer.number}", author=MERLA_ACCOUNT, target=None)
+
+    after = await purse(characters, argus) + await purse(characters, merla)
+    assert before - after == trade_tax(200)
+
+
+async def test_a_stranger_cannot_accept_someone_elses_offer(
+    trade: GroupTrade,
+    characters: InMemoryCharacterRepository,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    await make(characters, STRANGER_ACCOUNT, "Довен", gold=1000)
+    await inventory.add(argus.id, SWORD, 1)
+    made = await run(trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    assert made.offer is not None
+
+    outcome = await run(trade, f"принять {made.offer.number}", author=STRANGER_ACCOUNT, target=None)
+
+    assert outcome.refusal is Refusal.NOT_YOURS
+    # Refused, and the sword is still held by the offer, not by anyone.
+    assert await inventory.count(argus.id, SWORD) == 0
+    assert await inventory.count(merla.id, SWORD) == 0
+
+
+async def test_the_author_may_cancel_but_not_accept(
+    trade: GroupTrade,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    await inventory.add(argus.id, SWORD, 1)
+    made = await run(trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    assert made.offer is not None
+
+    refused = await run(trade, f"принять {made.offer.number}", author=ARGUS_ACCOUNT, target=None)
+    cancelled = await run(trade, f"отказ {made.offer.number}", author=ARGUS_ACCOUNT, target=None)
+
+    assert refused.refusal is Refusal.NOT_YOURS
+    assert cancelled.result is GroupResult.OFFER_DECLINED
+
+
+async def test_a_declined_offer_is_gone_for_good(
+    trade: GroupTrade,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    await inventory.add(argus.id, SWORD, 1)
+    made = await run(trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    assert made.offer is not None
+
+    await run(trade, f"отказ {made.offer.number}", author=MERLA_ACCOUNT, target=None)
+    again = await run(trade, f"принять {made.offer.number}", author=MERLA_ACCOUNT, target=None)
+
+    assert again.refusal is Refusal.UNKNOWN_OFFER
+
+
+# --- what the escrow gives back ---------------------------------------
+
+
+async def test_a_declined_sale_returns_the_item(
+    trade: GroupTrade,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    await inventory.add(argus.id, SWORD, 1)
+    made = await run(trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    assert made.offer is not None
+
+    await run(trade, f"отказ {made.offer.number}", author=MERLA_ACCOUNT, target=None)
+
+    assert await inventory.count(argus.id, SWORD) == 1
+
+
+async def test_a_declined_purchase_returns_the_gold(
+    trade: GroupTrade,
+    characters: InMemoryCharacterRepository,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    await inventory.add(merla.id, SWORD, 1)
+    made = await run(trade, f"купить 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    assert made.offer is not None
+
+    await run(trade, f"отказ {made.offer.number}", author=MERLA_ACCOUNT, target=None)
+
+    assert await purse(characters, argus) == 500
+
+
+async def test_an_offer_answered_too_late_says_so_and_gives_everything_back(
+    trade: GroupTrade,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    await inventory.add(argus.id, SWORD, 1)
+    made = await run(trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    assert made.offer is not None
+
+    outcome = await run(
+        trade,
+        f"принять {made.offer.number}",
+        author=MERLA_ACCOUNT,
+        target=None,
+        now=NOW + OFFER_TTL_SECONDS,
     )
 
-    second = await store.reserve_number()
-
-    assert second != first
-    kept = await store.get(first)
-    assert kept is not None and kept.price == 10
+    assert outcome.refusal is Refusal.EXPIRED
+    assert await inventory.count(argus.id, SWORD) == 1
 
 
-async def test_an_offer_survives_the_round_trip_through_the_cache() -> None:
-    store = OfferStore(cache=InMemoryStateCache())
-    original = Offer(
-        number=5,
-        kind=OfferKind.BUY,
-        author=Party(user_id=1, character_id=1, name="Аргус"),
-        target=Party(user_id=2, character_id=2, name="Мерла"),
-        item_id=SWORD,
-        item_name=SWORD_NAME,
-        price=250,
-        quantity=1,
-        created_at=NOW,
+async def test_a_stale_offer_is_swept_by_the_next_command_from_anyone(
+    trade: GroupTrade,
+    characters: InMemoryCharacterRepository,
+    trades: InMemoryTradeRepository,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    """Nobody answers, and the group moves on: the gold still comes back."""
+    await inventory.add(merla.id, SWORD, 1)
+    made = await run(trade, f"купить 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    assert made.offer is not None
+    assert await purse(characters, argus) == 400
+
+    await run(
+        trade,
+        "профиль",
+        author=MERLA_ACCOUNT,
+        target=ARGUS_ACCOUNT,
+        now=NOW + OFFER_TTL_SECONDS + SWEEP_GRACE_SECONDS,
     )
-    await store.put(original)
 
-    assert await store.get(5) == original
+    assert await purse(characters, argus) == 500
+    journal = await trades.journal(argus.id)
+    assert [record.status for record in journal] == [TradeStatus.EXPIRED]
 
 
-async def test_a_payload_from_an_older_version_reads_as_no_offer() -> None:
-    """A cache outlives deployments; an unreadable value is absent, not a crash."""
-    cache = InMemoryStateCache()
-    store = OfferStore(cache=cache)
-    await cache.set(store._key(5), '{"number": 5}', 60)
+async def test_a_stake_comes_back_exactly_once(
+    trade: GroupTrade,
+    characters: InMemoryCharacterRepository,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    """Two sweeps and a late refusal must not mint a second refund."""
+    await inventory.add(merla.id, SWORD, 1)
+    made = await run(trade, f"купить 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    assert made.offer is not None
+    late = NOW + OFFER_TTL_SECONDS + SWEEP_GRACE_SECONDS
 
-    assert await store.get(5) is None
+    for _ in range(3):
+        await run(trade, "профиль", author=MERLA_ACCOUNT, target=ARGUS_ACCOUNT, now=late)
+    await run(trade, f"отказ {made.offer.number}", author=ARGUS_ACCOUNT, target=None, now=late)
+
+    assert await purse(characters, argus) == 500
+
+
+# --- the journal ------------------------------------------------------
+
+
+async def test_every_trade_leaves_a_row_behind(
+    trade: GroupTrade,
+    trades: InMemoryTradeRepository,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    await inventory.add(argus.id, SWORD, 2)
+    first = await run(
+        trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT
+    )
+    assert first.offer is not None
+    await run(trade, f"принять {first.offer.number}", author=MERLA_ACCOUNT, target=None)
+    second = await run(
+        trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT
+    )
+    assert second.offer is not None
+    await run(trade, f"отказ {second.offer.number}", author=MERLA_ACCOUNT, target=None)
+
+    journal = await trades.journal(argus.id)
+
+    assert [record.status for record in journal] == [TradeStatus.DECLINED, TradeStatus.ACCEPTED]
+    settled = journal[-1]
+    assert settled.tax == trade_tax(100)
+    assert settled.settled_at == NOW
+    # A trade that never happened cost nobody anything.
+    assert journal[0].tax == 0
+
+
+async def test_a_number_is_free_again_once_its_offer_closes(
+    trade: GroupTrade,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    """Numbers are short on purpose, so closed ones have to come back round."""
+    await inventory.add(argus.id, SWORD, 1)
+    first = await run(
+        trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT
+    )
+    assert first.offer is not None
+    await run(trade, f"отказ {first.offer.number}", author=MERLA_ACCOUNT, target=None)
+
+    second = await run(
+        trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT
+    )
+
+    assert second.offer is not None
+    assert second.offer.number == first.offer.number

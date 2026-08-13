@@ -27,7 +27,8 @@ from dataclasses import dataclass
 from mmorpg.application.services.group_trade import GroupOutcome, GroupResult
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
-from mmorpg.domain.rules.group_offers import Offer, OfferKind, Refusal
+from mmorpg.domain.entities.trade import Offer, OfferKind
+from mmorpg.domain.rules.group_offers import Refusal
 from mmorpg.domain.rules.stats import DerivedStats
 from mmorpg.presentation.telegram.screens.format import gold, items
 
@@ -67,6 +68,15 @@ REFUSALS: dict[Refusal, str] = {
     Refusal.UNKNOWN_OFFER: "Предложение с таким номером не найдено или уже закрыто.",
     Refusal.EXPIRED: "Предложение просрочено: прошло больше пяти минут.",
     Refusal.TOO_MANY_COMMANDS: "Слишком много команд подряд. Подождите немного.",
+    Refusal.TOO_MANY_OFFERS: (
+        "Сейчас в группе слишком много открытых предложений. Попробуйте позже."
+    ),
+}
+
+# What publishing an offer takes from its author and holds until it is answered.
+ESCROW_WORDS: dict[OfferKind, str] = {
+    OfferKind.SELL: "Вещь отложена до ответа.",
+    OfferKind.BUY: "Золото отложено до ответа.",
 }
 
 KIND_WORDS: dict[OfferKind, str] = {
@@ -99,17 +109,18 @@ def render(content: GameContent, outcome: GroupOutcome) -> GroupReply:
         case GroupResult.OFFER_MADE | GroupResult.OFFER_ACCEPTED | GroupResult.OFFER_DECLINED:
             if outcome.offer is None:  # pragma: no cover
                 return GroupReply(text=REFUSALS[Refusal.UNKNOWN_OFFER])
-            return _offer_result(outcome.result, outcome.offer)
+            return _offer_result(outcome.result, outcome.offer, outcome.tax)
         case GroupResult.REFUSED:
             return GroupReply(text=refusal_text(outcome))
 
 
-def _offer_result(result: GroupResult, offer: Offer) -> GroupReply:
+def _offer_result(result: GroupResult, offer: Offer, tax: int) -> GroupReply:
     if result is GroupResult.OFFER_MADE:
-        return offer_reply(offer)
+        return offer_reply(offer, tax)
     if result is GroupResult.OFFER_ACCEPTED:
-        return GroupReply(text=accepted_text(offer))
-    return GroupReply(text=f"Предложение {offer.number} отклонено. Ничего не передано.")
+        return GroupReply(text=accepted_text(offer, tax))
+    # A declined offer gives the author back what the offer was holding.
+    return GroupReply(text=f"Предложение {offer.number} отклонено. Отложенное вернулось владельцу.")
 
 
 def profile_text(content: GameContent, character: Character, stats: DerivedStats) -> str:
@@ -131,17 +142,23 @@ def profile_text(content: GameContent, character: Character, stats: DerivedStats
     return "\n".join(lines)
 
 
-def offer_reply(offer: Offer) -> GroupReply:
-    """A published offer, plus the two buttons only its target can see."""
+def offer_reply(offer: Offer, tax: int = 0) -> GroupReply:
+    """A published offer, plus the two buttons only its target can see.
+
+    The duty is quoted before anyone agrees to anything: a seller who reads
+    "получит 95" and then finds 95 in their purse has been told the truth, and
+    the same line explains where the missing five went.
+    """
     seller, buyer = offer.giver.name, offer.payer.name
     return GroupReply(
         text=_lines(
             f"Предложение {offer.number}, {KIND_WORDS[offer.kind]}: "
             f"{offer.item_name} за {gold(offer.price)}.",
             _sides("Отдаёт вещь", seller, "Платит", buyer),
+            _duty(offer.price, tax),
             f"Отвечает только {offer.target.name}: "
             f"«{ACCEPT_WORD} {offer.number}» или «{DECLINE_WORD} {offer.number}».",
-            "Предложение действует пять минут.",
+            f"Предложение действует пять минут. {ESCROW_WORDS[offer.kind]}",
         ),
         buttons=answer_buttons(offer.number),
     )
@@ -152,11 +169,19 @@ def answer_buttons(number: int) -> tuple[str, ...]:
     return (f"{ACCEPT_WORD} {number}", f"{DECLINE_WORD} {number}")
 
 
-def accepted_text(offer: Offer) -> str:
+def accepted_text(offer: Offer, tax: int = 0) -> str:
     return _lines(
         f"Предложение {offer.number} принято: {offer.item_name} за {gold(offer.price)}.",
         _sides("Вещь получает", offer.payer.name, "Золото получает", offer.giver.name),
+        _duty(offer.price, tax),
     )
+
+
+def _duty(price: int, tax: int) -> str:
+    """The Salt Watch takes its share of every deal (``Narrative.md``, section 1)."""
+    if tax <= 0:
+        return ""
+    return f"Пошлина Надзора: {gold(tax)}. Продавцу на руки: {gold(price - tax)}."
 
 
 def refusal_text(outcome: GroupOutcome) -> str:

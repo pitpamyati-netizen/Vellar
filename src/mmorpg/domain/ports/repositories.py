@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
 from mmorpg.domain.entities.character import Character, InventoryEntry
+from mmorpg.domain.entities.trade import Offer, TradeRecord, TradeStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +73,50 @@ class InventoryRepository(Protocol):
     async def remove(self, character_id: int, item_id: str, quantity: int = 1) -> bool: ...
 
     async def count(self, character_id: int, item_id: str) -> int: ...
+
+
+@runtime_checkable
+class TradeRepository(Protocol):
+    """Pending offers and the journal of everything that became of them.
+
+    This is the one part of the group economy that cannot live in a cache: while
+    an offer stands, the author's item or gold is held in it, and a store that
+    expires by itself would quietly swallow both (Roadmap 2.3).
+
+    ``close`` is the gate that makes a trade atomic. It changes the row only while
+    it is still pending and returns what it changed, so two people answering the
+    same offer in the same second produce exactly one settlement: the loser gets
+    ``None`` back and moves nothing.
+    """
+
+    async def open(self, offer: Offer, *, scope: str) -> TradeRecord | None:
+        """Publish an offer, assigning the short number players will type.
+
+        ``None`` means no number was free - the group has 999 offers standing.
+        """
+
+    async def pending(self, number: int, *, scope: str) -> TradeRecord | None: ...
+
+    async def close(
+        self,
+        number: int,
+        *,
+        scope: str,
+        status: TradeStatus,
+        settled_at: int,
+        tax: int = 0,
+    ) -> TradeRecord | None: ...
+
+    async def expire(self, *, scope: str, before: int) -> tuple[TradeRecord, ...]:
+        """Close every offer made before ``before`` and return them, once each.
+
+        The caller returns each stake to its author; returning a record twice
+        would hand out the same item twice, which is why this both reads and
+        writes in one step.
+        """
+
+    async def journal(self, character_id: int, *, limit: int = 20) -> tuple[TradeRecord, ...]:
+        """The latest trades this character was a side of, newest first."""
 
 
 @runtime_checkable

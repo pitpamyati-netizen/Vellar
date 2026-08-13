@@ -28,13 +28,12 @@ from aiogram.enums import ChatType
 from aiogram.types import Chat, Message
 
 from mmorpg.application.services.group_trade import GroupResult, GroupTrade
-from mmorpg.application.services.offers import OfferStore
 from mmorpg.config import Settings
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.ports.repositories import (
     CharacterRepository,
     InventoryRepository,
-    StateCache,
+    TradeRepository,
 )
 from mmorpg.domain.rules.group_commands import GroupIntent, parse_group_command
 from mmorpg.domain.rules.group_offers import Refusal
@@ -68,7 +67,7 @@ def build_router(reaper: MessageReaper, limiter: RateLimiter | None = None) -> R
         content: GameContent,
         characters: CharacterRepository,
         inventory: InventoryRepository,
-        state_cache: StateCache,
+        trades: TradeRepository,
     ) -> None:
         await handle_group_message(
             message,
@@ -77,7 +76,7 @@ def build_router(reaper: MessageReaper, limiter: RateLimiter | None = None) -> R
             content=content,
             characters=characters,
             inventory=inventory,
-            state_cache=state_cache,
+            trades=trades,
             limiter=limits,
             reaper=reaper,
         )
@@ -102,7 +101,7 @@ async def handle_group_message(
     content: GameContent,
     characters: CharacterRepository,
     inventory: InventoryRepository,
-    state_cache: StateCache,
+    trades: TradeRepository,
     limiter: RateLimiter,
     reaper: MessageReaper,
     now: int | None = None,
@@ -140,7 +139,8 @@ async def handle_group_message(
         content=content,
         characters=characters,
         inventory=inventory,
-        offers=OfferStore(cache=state_cache, scope=str(message.chat.id)),
+        trades=trades,
+        scope=str(message.chat.id),
     )
     outcome = await trade.run(
         command,

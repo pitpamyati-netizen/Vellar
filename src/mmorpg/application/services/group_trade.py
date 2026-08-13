@@ -12,9 +12,19 @@ Two shapes of operation live side by side:
 - an **offer** costs both sides something, so it is published, numbered, and waits
   for the target to answer within five minutes.
 
-Nothing is held in escrow while an offer stands. Both purses and both packs are
-re-read at the moment of settlement, so the worst case of a stale offer is a
-refusal, never a debt.
+An offer holds the author's side in escrow. Publishing a sale takes the item out
+of the seller's pack; publishing a purchase takes the gold out of the buyer's
+purse. Both come back the moment the offer is declined or runs out of time. The
+target stakes nothing until they answer, because nobody has asked them yet.
+
+Three things follow from that, and they are the whole point of Roadmap 2.3:
+
+- an offer cannot fail because the *author* spent their side meanwhile - they no
+  longer have it to spend;
+- the escrow outlives a restart, because it lives in the trade journal in
+  PostgreSQL rather than in a cache that expires on its own;
+- every settled trade pays a duty, which is the one place gold leaves the game
+  (``domain/rules/economy.trade_tax``).
 """
 
 from __future__ import annotations
@@ -24,14 +34,25 @@ from enum import StrEnum
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
-from mmorpg.domain.ports.repositories import CharacterRepository, InventoryRepository
-from mmorpg.domain.rules.group_commands import GroupCommand, GroupIntent
-from mmorpg.domain.rules.group_offers import (
-    OFFER_KIND_FOR_INTENT,
-    ItemOption,
+from mmorpg.domain.entities.trade import (
     Offer,
     OfferKind,
     Party,
+    TradeRecord,
+    TradeStatus,
+)
+from mmorpg.domain.ports.repositories import (
+    CharacterRepository,
+    InventoryRepository,
+    TradeRepository,
+)
+from mmorpg.domain.rules.economy import payout, trade_tax
+from mmorpg.domain.rules.group_commands import GroupCommand, GroupIntent
+from mmorpg.domain.rules.group_offers import (
+    OFFER_KIND_FOR_INTENT,
+    OFFER_TTL_SECONDS,
+    SWEEP_GRACE_SECONDS,
+    ItemOption,
     Refusal,
     answerable_by,
     check_gift,
@@ -39,10 +60,10 @@ from mmorpg.domain.rules.group_offers import (
     check_proposal,
     check_settlement,
     match_items,
+    stakes_gold,
+    stakes_item,
 )
 from mmorpg.domain.rules.stats import DerivedStats, derived_stats
-
-from .offers import OfferStore
 
 
 class GroupResult(StrEnum):
@@ -69,6 +90,8 @@ class GroupOutcome:
     item_name: str = ""
     quantity: int = 1
     gold: int = 0
+    # The duty on this trade: charged on settlement, quoted when the offer is made.
+    tax: int = 0
     author_name: str = ""
     target_name: str = ""
     # The candidates behind AMBIGUOUS_ITEM, so the answer can list them.
@@ -104,7 +127,9 @@ class GroupTrade:
     content: GameContent
     characters: CharacterRepository
     inventory: InventoryRepository
-    offers: OfferStore
+    trades: TradeRepository
+    # Offers are numbered per group, so two groups never fight over "принять 7".
+    scope: str = "group"
 
     # --- entry points -------------------------------------------------
 
@@ -117,6 +142,8 @@ class GroupTrade:
         now: int,
     ) -> GroupOutcome:
         """Perform one parsed command. ``target_id`` is who the author replied to."""
+        await self._sweep(now)
+
         author_character = await self.characters.get_active(author_id)
         if author_character is None:
             return _refused(Refusal.NO_CHARACTER)
@@ -211,9 +238,15 @@ class GroupTrade:
         if isinstance(found, GroupOutcome):
             return replace(found, author_name=author.name, target_name=target.name)
 
-        held = await self.inventory.count(owner.character_id, found.item_id)
+        purse = await self._character(author)
         refusal = check_proposal(
-            kind=kind, author=author, target=target, giver_holds=held, quantity=1
+            kind=kind,
+            author=author,
+            target=target,
+            giver_holds=await self.inventory.count(owner.character_id, found.item_id),
+            quantity=1,
+            price=command.amount,
+            author_gold=purse.gold,
         )
         if refusal is not None:
             return _refused(
@@ -223,51 +256,165 @@ class GroupTrade:
                 target_name=target.name,
             )
 
-        offer = Offer(
-            number=await self.offers.reserve_number(),
-            kind=kind,
-            author=author,
-            target=target,
-            item_id=found.item_id,
-            item_name=found.name,
-            price=command.amount,
-            created_at=now,
+        record = await self.trades.open(
+            Offer(
+                # The repository assigns the number a player will type; until it
+                # does, this offer has none.
+                number=0,
+                kind=kind,
+                author=author,
+                target=target,
+                item_id=found.item_id,
+                item_name=found.name,
+                price=command.amount,
+                created_at=now,
+            ),
+            scope=self.scope,
         )
-        await self.offers.put(offer)
-        return GroupOutcome(result=GroupResult.OFFER_MADE, offer=offer)
+        if record is None:
+            return _refused(
+                Refusal.TOO_MANY_OFFERS, author_name=author.name, target_name=target.name
+            )
+
+        # The row exists before the stake moves, so a stake that moved is always
+        # recorded somewhere. If it cannot move, the row closes again immediately.
+        if not await self._take_stake(record.offer):
+            await self.trades.close(
+                record.number, scope=self.scope, status=TradeStatus.DECLINED, settled_at=now
+            )
+            lacking = (
+                Refusal.AUTHOR_LACKS_ITEM
+                if stakes_item(record.offer)
+                else Refusal.AUTHOR_LACKS_GOLD
+            )
+            return _refused(
+                lacking, item_name=found.name, author_name=author.name, target_name=target.name
+            )
+
+        return GroupOutcome(
+            result=GroupResult.OFFER_MADE,
+            offer=record.offer,
+            tax=trade_tax(record.offer.price),
+        )
 
     async def _answer(
         self, number: int, *, accept: bool, answering: Party, now: int
     ) -> GroupOutcome:
-        offer = await self.offers.get(number)
-        if offer is None:
+        record = await self.trades.pending(number, scope=self.scope)
+        if record is None:
             return _refused(Refusal.UNKNOWN_OFFER)
+        offer = record.offer
 
         # Either side may walk away from an offer; only the target may agree to it.
         if not accept and answering.user_id in (offer.target.user_id, offer.author.user_id):
-            await self.offers.drop(number)
+            closed = await self._close(number, TradeStatus.DECLINED, now=now)
+            if closed is None:
+                return _refused(Refusal.UNKNOWN_OFFER)
             return GroupOutcome(result=GroupResult.OFFER_DECLINED, offer=offer)
         if not answerable_by(offer, answering.user_id):
             return _refused(Refusal.NOT_YOURS, offer=offer)
 
-        giver = await self._character(offer.giver)
-        payer = await self._character(offer.payer)
+        target = await self._character(offer.target)
         refusal = check_settlement(
             offer,
-            giver_holds=await self.inventory.count(offer.giver.character_id, offer.item_id),
-            payer_gold=payer.gold,
+            target_holds=await self.inventory.count(offer.target.character_id, offer.item_id),
+            target_gold=target.gold,
             now=now,
         )
         if refusal is not None:
-            await self.offers.drop(number)
+            status = TradeStatus.EXPIRED if refusal is Refusal.EXPIRED else TradeStatus.DECLINED
+            await self._close(number, status, now=now)
             return _refused(refusal, offer=offer)
 
-        # The item goes to whoever paid for it, whichever way the offer was worded.
-        await self._move_item(offer.item_id, offer.quantity, offer.giver, offer.payer)
-        await self.characters.save(payer.with_gold(-offer.price))
-        await self.characters.save(giver.with_gold(offer.price))
-        await self.offers.drop(number)
-        return GroupOutcome(result=GroupResult.OFFER_ACCEPTED, offer=offer)
+        return await self._settle(record, now=now)
+
+    async def _settle(self, record: TradeRecord, *, now: int) -> GroupOutcome:
+        """Move everything, once. The trade row decides who gets to do it."""
+        offer = record.offer
+        tax = trade_tax(offer.price)
+
+        # A purchase takes the target's item first, because that is the only side
+        # whose removal is atomic: if it is gone in this very instant, nothing has
+        # happened yet and the offer simply refuses.
+        took_item = stakes_gold(offer) and await self.inventory.remove(
+            offer.target.character_id, offer.item_id, offer.quantity
+        )
+        if stakes_gold(offer) and not took_item:
+            await self._close(offer.number, TradeStatus.DECLINED, now=now)
+            return _refused(Refusal.TARGET_LACKS_ITEM, offer=offer)
+
+        closed = await self._close(offer.number, TradeStatus.ACCEPTED, now=now, tax=tax)
+        if closed is None:
+            # Somebody answered first. Undo the one thing already done.
+            if took_item:
+                await self.inventory.add(offer.target.character_id, offer.item_id, offer.quantity)
+            return _refused(Refusal.UNKNOWN_OFFER)
+
+        # The item goes to whoever paid for it, whichever way the offer was worded:
+        # out of escrow for a sale, straight from the target for a purchase.
+        await self.inventory.add(offer.payer.character_id, offer.item_id, offer.quantity)
+        if stakes_item(offer):
+            # A buyer answering a sale pays now; a buyer who proposed one paid
+            # when they proposed it, and their gold is already in escrow.
+            payer = await self._character(offer.payer)
+            await self.characters.save(payer.with_gold(-offer.price))
+
+        # The seller is paid out of escrow or out of the buyer's purse; either way
+        # the duty is simply never credited to anyone.
+        giver = await self._character(offer.giver)
+        await self.characters.save(giver.with_gold(payout(offer.price)))
+        return GroupOutcome(result=GroupResult.OFFER_ACCEPTED, offer=offer, tax=tax)
+
+    # --- escrow -------------------------------------------------------
+
+    async def _take_stake(self, offer: Offer) -> bool:
+        """Hold the author's side of a published offer. False if it is not there."""
+        if stakes_item(offer):
+            return await self.inventory.remove(
+                offer.author.character_id, offer.item_id, offer.quantity
+            )
+        author = await self._character(offer.author)
+        if author.gold < offer.price:
+            return False
+        await self.characters.save(author.with_gold(-offer.price))
+        return True
+
+    async def _return_stake(self, offer: Offer) -> None:
+        """Give the author back what publishing the offer took from them."""
+        if stakes_item(offer):
+            await self.inventory.add(offer.author.character_id, offer.item_id, offer.quantity)
+            return
+        author = await self._character(offer.author)
+        await self.characters.save(author.with_gold(offer.price))
+
+    async def _close(
+        self, number: int, status: TradeStatus, *, now: int, tax: int = 0
+    ) -> TradeRecord | None:
+        """Close a pending trade and, unless it settled, hand the stake back.
+
+        Only the caller that actually closed the row returns the stake, so two
+        answers arriving together cannot refund the same item twice.
+        """
+        closed = await self.trades.close(
+            number, scope=self.scope, status=status, settled_at=now, tax=tax
+        )
+        if closed is not None and status is not TradeStatus.ACCEPTED:
+            await self._return_stake(closed.offer)
+        return closed
+
+    async def _sweep(self, now: int) -> None:
+        """Return the stakes of every offer nobody answered in time.
+
+        Run before each command rather than on a timer: the group is the only
+        place offers are made, so anything that expired is discovered the next
+        time somebody speaks, and an idle group needs no background work at all.
+
+        The grace period is what keeps "просрочено" a real answer instead of
+        "не найдено" - see ``SWEEP_GRACE_SECONDS``.
+        """
+        stale = now - OFFER_TTL_SECONDS - SWEEP_GRACE_SECONDS
+        for record in await self.trades.expire(scope=self.scope, before=stale):
+            await self._return_stake(record.offer)
 
     # --- shared steps -------------------------------------------------
 

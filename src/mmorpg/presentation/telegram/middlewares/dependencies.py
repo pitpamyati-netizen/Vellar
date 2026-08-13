@@ -21,6 +21,7 @@ from mmorpg.domain.ports.repositories import (
     InventoryRepository,
     LocationDeltaCache,
     StateCache,
+    TradeRepository,
     UserRepository,
 )
 from mmorpg.presentation.telegram.broadcast import ChannelBroadcaster
@@ -35,6 +36,7 @@ class Dependencies:
     users: UserRepository
     characters: CharacterRepository
     inventory: InventoryRepository
+    trades: TradeRepository
     state_cache: StateCache
     location_deltas: LocationDeltaCache
     broadcasts: ChannelBroadcaster
@@ -46,6 +48,7 @@ class Dependencies:
             "users": self.users,
             "characters": self.characters,
             "inventory": self.inventory,
+            "trades": self.trades,
             "state_cache": self.state_cache,
             "location_deltas": self.location_deltas,
             "broadcasts": self.broadcasts,

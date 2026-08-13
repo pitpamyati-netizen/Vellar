@@ -36,6 +36,13 @@ from mmorpg.domain.entities.location import (
     NodeKind,
 )
 from mmorpg.domain.entities.stats import StatBlock, StatCode
+from mmorpg.domain.entities.trade import (
+    Offer,
+    OfferKind,
+    Party,
+    TradeRecord,
+    TradeStatus,
+)
 
 __all__ = [
     "ActiveEffect",
@@ -58,7 +65,10 @@ __all__ = [
     "Location",
     "LocationNode",
     "NodeKind",
+    "Offer",
+    "OfferKind",
     "OwnerKind",
+    "Party",
     "ProgressionRules",
     "Race",
     "RacePassive",
@@ -69,5 +79,7 @@ __all__ = [
     "SkillLoadout",
     "StatBlock",
     "StatCode",
+    "TradeRecord",
+    "TradeStatus",
     "Trait",
 ]

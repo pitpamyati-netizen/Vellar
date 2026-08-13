@@ -2,20 +2,20 @@
 
 The rules that matter are the ones that protect a player from someone else's
 mistake or malice: only the target may agree, nothing is guessed when a name is
-ambiguous, and a stale offer refuses rather than settles.
+ambiguous, and a stale offer refuses rather than settles. Since Roadmap 2.3 the
+author also stakes their side up front, so most of these checks are about who is
+still allowed to change their mind.
 """
 
 from __future__ import annotations
 
 import pytest
 
+from mmorpg.domain.entities.trade import Offer, OfferKind, Party
 from mmorpg.domain.rules.group_offers import (
     MAX_OFFER_NUMBER,
     OFFER_TTL_SECONDS,
     ItemOption,
-    Offer,
-    OfferKind,
-    Party,
     Refusal,
     answerable_by,
     check_gift,
@@ -25,6 +25,8 @@ from mmorpg.domain.rules.group_offers import (
     is_expired,
     match_items,
     next_number,
+    stakes_gold,
+    stakes_item,
 )
 
 ARGUS = Party(user_id=1, character_id=10, name="Аргус")
@@ -83,75 +85,102 @@ def test_an_offer_expires_exactly_when_it_says_it_does() -> None:
 def test_an_expired_offer_refuses_before_anything_else_is_checked() -> None:
     """Even a perfectly funded settlement is refused once the time is up."""
     refusal = check_settlement(
-        offer(created_at=0), giver_holds=5, payer_gold=10_000, now=OFFER_TTL_SECONDS
+        offer(created_at=0), target_holds=5, target_gold=10_000, now=OFFER_TTL_SECONDS
     )
 
     assert refusal is Refusal.EXPIRED
 
 
+# --- what an offer holds ----------------------------------------------
+
+
+def test_a_sale_stakes_the_item_and_a_purchase_stakes_the_gold() -> None:
+    """Whichever the author put up is what comes back if the offer dies."""
+    assert stakes_item(offer(OfferKind.SELL)) is True
+    assert stakes_gold(offer(OfferKind.SELL)) is False
+    assert stakes_item(offer(OfferKind.BUY)) is False
+    assert stakes_gold(offer(OfferKind.BUY)) is True
+
+
 # --- publishing an offer ----------------------------------------------
 
 
-def test_an_offer_to_yourself_is_refused() -> None:
-    refusal = check_proposal(
-        kind=OfferKind.SELL, author=ARGUS, target=ARGUS, giver_holds=1, quantity=1
+def proposal(
+    kind: OfferKind = OfferKind.SELL,
+    *,
+    author: Party = ARGUS,
+    target: Party = MERLA,
+    giver_holds: int = 1,
+    price: int = 100,
+    author_gold: int = 500,
+) -> Refusal | None:
+    return check_proposal(
+        kind=kind,
+        author=author,
+        target=target,
+        giver_holds=giver_holds,
+        quantity=1,
+        price=price,
+        author_gold=author_gold,
     )
 
-    assert refusal is Refusal.SELF
+
+def test_an_offer_to_yourself_is_refused() -> None:
+    assert proposal(target=ARGUS) is Refusal.SELF
 
 
 def test_selling_what_you_do_not_have_is_your_problem() -> None:
-    refusal = check_proposal(
-        kind=OfferKind.SELL, author=ARGUS, target=MERLA, giver_holds=0, quantity=1
-    )
-
-    assert refusal is Refusal.AUTHOR_LACKS_ITEM
+    assert proposal(OfferKind.SELL, giver_holds=0) is Refusal.AUTHOR_LACKS_ITEM
 
 
 def test_buying_what_they_do_not_have_names_the_right_side() -> None:
-    refusal = check_proposal(
-        kind=OfferKind.BUY, author=ARGUS, target=MERLA, giver_holds=0, quantity=1
-    )
-
-    assert refusal is Refusal.TARGET_LACKS_ITEM
+    assert proposal(OfferKind.BUY, giver_holds=0) is Refusal.TARGET_LACKS_ITEM
 
 
-def test_a_purse_is_never_read_to_publish_an_offer() -> None:
+def test_a_buyer_has_to_have_the_money_before_they_offer_it() -> None:
+    """The gold is staked the moment the offer is published, so it must exist."""
+    assert proposal(OfferKind.BUY, price=100, author_gold=99) is Refusal.AUTHOR_LACKS_GOLD
+    assert proposal(OfferKind.BUY, price=100, author_gold=100) is None
+
+
+def test_the_targets_purse_is_never_read_to_publish_an_offer() -> None:
     """Checking the target's gold here would answer a question nobody asked.
 
     They have five minutes to find the money; refusing up front would both leak
-    their balance and deny a trade they could have made.
+    their balance and deny a trade they could have made. Only the author's own
+    purse is read, and only when the author is the one paying.
     """
-    assert (
-        check_proposal(kind=OfferKind.SELL, author=ARGUS, target=MERLA, giver_holds=1, quantity=1)
-        is None
-    )
+    assert proposal(OfferKind.SELL, author_gold=0) is None
 
 
 # --- settling ---------------------------------------------------------
 
 
-def test_a_settlement_needs_the_goods_and_the_money() -> None:
-    assert check_settlement(offer(), giver_holds=1, payer_gold=100, now=1000) is None
+def test_a_settlement_reads_only_the_side_that_is_answering() -> None:
+    assert check_settlement(offer(), target_holds=0, target_gold=100, now=1000) is None
 
 
-def test_the_item_may_be_gone_by_the_time_the_answer_arrives() -> None:
-    """Nothing is held in escrow, so the seller can sell it elsewhere first."""
-    refusal = check_settlement(offer(), giver_holds=0, payer_gold=100, now=1000)
+def test_a_buyer_who_spent_the_money_meanwhile_cannot_agree() -> None:
+    """The seller's item is in escrow; the buyer's purse is the open question."""
+    refusal = check_settlement(offer(OfferKind.SELL), target_holds=0, target_gold=99, now=1000)
 
-    assert refusal is Refusal.AUTHOR_LACKS_ITEM
+    assert refusal is Refusal.TARGET_LACKS_GOLD
 
 
-def test_the_payer_is_named_by_the_kind_of_offer() -> None:
-    sale = check_settlement(offer(OfferKind.SELL), giver_holds=1, payer_gold=1, now=1000)
-    purchase = check_settlement(offer(OfferKind.BUY), giver_holds=1, payer_gold=1, now=1000)
+def test_a_seller_who_sold_it_elsewhere_cannot_agree_to_a_purchase() -> None:
+    """A purchase holds the buyer's gold, so the item is the open question."""
+    refusal = check_settlement(offer(OfferKind.BUY), target_holds=0, target_gold=0, now=1000)
 
-    assert sale is Refusal.TARGET_LACKS_GOLD
-    assert purchase is Refusal.AUTHOR_LACKS_GOLD
+    assert refusal is Refusal.TARGET_LACKS_ITEM
+
+
+def test_the_author_can_no_longer_break_their_own_offer() -> None:
+    """Whatever the author staked is already gone from their side of the table."""
+    assert check_settlement(offer(OfferKind.BUY), target_holds=1, target_gold=0, now=1000) is None
 
 
 def test_paying_the_exact_price_is_enough() -> None:
-    assert check_settlement(offer(price=100), giver_holds=1, payer_gold=100, now=1000) is None
+    assert check_settlement(offer(price=100), target_holds=0, target_gold=100, now=1000) is None
 
 
 # --- hand-overs -------------------------------------------------------

@@ -6,6 +6,5 @@ presentation layer can word. Services know no aiogram types and no SQL.
 """
 
 from mmorpg.application.services.group_trade import GroupOutcome, GroupResult, GroupTrade
-from mmorpg.application.services.offers import OfferStore
 
-__all__ = ["GroupOutcome", "GroupResult", "GroupTrade", "OfferStore"]
+__all__ = ["GroupOutcome", "GroupResult", "GroupTrade"]
