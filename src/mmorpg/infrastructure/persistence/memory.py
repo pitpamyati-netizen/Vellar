@@ -33,6 +33,44 @@ class InMemoryUserRepository:
         self._users[telegram_id] = replace(user, settings=settings)
 
 
+class InMemoryPrivacyRepository:
+    """Profile visibility and black lists, by account id.
+
+    Absence is the open state: an account nobody stored anything about shows its
+    profile and blocks no one.
+    """
+
+    def __init__(self) -> None:
+        self._hidden: set[int] = set()
+        self._blocks: dict[int, set[int]] = {}
+
+    async def profile_visible(self, telegram_id: int) -> bool:
+        return telegram_id not in self._hidden
+
+    async def set_profile_visible(self, telegram_id: int, visible: bool) -> None:
+        if visible:
+            self._hidden.discard(telegram_id)
+        else:
+            self._hidden.add(telegram_id)
+
+    async def blocks(self, telegram_id: int, other_id: int) -> bool:
+        return other_id in self._blocks.get(telegram_id, set())
+
+    async def block(self, telegram_id: int, other_id: int, *, at: int) -> bool:
+        listed = self._blocks.setdefault(telegram_id, set())
+        if other_id in listed:
+            return False
+        listed.add(other_id)
+        return True
+
+    async def unblock(self, telegram_id: int, other_id: int) -> bool:
+        listed = self._blocks.get(telegram_id, set())
+        if other_id not in listed:
+            return False
+        listed.discard(other_id)
+        return True
+
+
 class InMemoryCharacterRepository:
     def __init__(self) -> None:
         self._characters: dict[int, Character] = {}

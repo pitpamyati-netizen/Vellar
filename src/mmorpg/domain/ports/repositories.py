@@ -50,6 +50,30 @@ class UserRepository(Protocol):
 
 
 @runtime_checkable
+class PrivacyRepository(Protocol):
+    """What a player shows in the group, and whom they refuse to deal with.
+
+    Both live on the account rather than on the character: a black list a player
+    could walk around by rolling a second character would not be one (Roadmap 2.5).
+    A player who never touched any of this is open to everyone, so an account with
+    no row at all answers "visible, blocks nobody".
+    """
+
+    async def profile_visible(self, telegram_id: int) -> bool: ...
+
+    async def set_profile_visible(self, telegram_id: int, visible: bool) -> None: ...
+
+    async def blocks(self, telegram_id: int, other_id: int) -> bool:
+        """Whether ``telegram_id`` put ``other_id`` on their black list."""
+
+    async def block(self, telegram_id: int, other_id: int, *, at: int) -> bool:
+        """Add to the black list. False if they were already on it."""
+
+    async def unblock(self, telegram_id: int, other_id: int) -> bool:
+        """Take off the black list. False if they were not on it."""
+
+
+@runtime_checkable
 class CharacterRepository(Protocol):
     async def get(self, character_id: int) -> Character | None: ...
 

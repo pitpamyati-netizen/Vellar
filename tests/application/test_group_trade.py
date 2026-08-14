@@ -24,6 +24,7 @@ from mmorpg.infrastructure.content import load_content
 from mmorpg.infrastructure.persistence import (
     InMemoryCharacterRepository,
     InMemoryInventoryRepository,
+    InMemoryPrivacyRepository,
     InMemoryTradeRepository,
 )
 from tests.conftest import CONTENT_ROOT
@@ -57,17 +58,24 @@ def trades() -> InMemoryTradeRepository:
 
 
 @pytest.fixture
+def privacy() -> InMemoryPrivacyRepository:
+    return InMemoryPrivacyRepository()
+
+
+@pytest.fixture
 def trade(
     content: GameContent,
     characters: InMemoryCharacterRepository,
     inventory: InMemoryInventoryRepository,
     trades: InMemoryTradeRepository,
+    privacy: InMemoryPrivacyRepository,
 ) -> GroupTrade:
     return GroupTrade(
         content=content,
         characters=characters,
         inventory=inventory,
         trades=trades,
+        privacy=privacy,
     )
 
 
@@ -139,6 +147,86 @@ async def test_replying_to_someone_who_never_played(trade: GroupTrade, argus: Ch
     assert outcome.refusal is Refusal.TARGET_HAS_NO_CHARACTER
 
 
+# --- privacy ----------------------------------------------------------
+
+
+async def test_a_closed_profile_is_refused_rather_than_shown(
+    trade: GroupTrade, argus: Character, merla: Character
+) -> None:
+    await run(trade, "скрыть профиль", author=MERLA_ACCOUNT, target=None)
+
+    outcome = await run(trade, "профиль", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+
+    assert outcome.refusal is Refusal.PROFILE_HIDDEN
+
+
+async def test_closing_a_profile_hides_nothing_else(
+    trade: GroupTrade, inventory: InMemoryInventoryRepository, argus: Character, merla: Character
+) -> None:
+    """Privacy is about the card, not about trading: business goes on."""
+    await run(trade, "скрыть профиль", author=MERLA_ACCOUNT, target=None)
+    await inventory.add(argus.id, SWORD, 1)
+
+    outcome = await run(trade, "передать ржавый меч", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+
+    assert outcome.result is GroupResult.ITEM_GIVEN
+
+
+async def test_a_block_stops_business_from_both_sides(
+    trade: GroupTrade, inventory: InMemoryInventoryRepository, argus: Character, merla: Character
+) -> None:
+    await inventory.add(argus.id, SWORD, 1)
+    blocked = await run(trade, "блок", author=MERLA_ACCOUNT, target=ARGUS_ACCOUNT)
+
+    from_them = await run(
+        trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT
+    )
+    from_us = await run(trade, "профиль", author=MERLA_ACCOUNT, target=ARGUS_ACCOUNT)
+
+    assert blocked.result is GroupResult.BLOCK_ADDED
+    assert from_them.refusal is Refusal.BLOCKED_BY_TARGET
+    assert from_us.refusal is Refusal.BLOCKED_TARGET
+    # The refused sale never took the sword: an offer that cannot exist holds nothing.
+    assert await inventory.count(argus.id, SWORD) == 1
+
+
+async def test_blocking_twice_says_the_same_thing(
+    trade: GroupTrade, argus: Character, merla: Character
+) -> None:
+    """A player who lost the answer retypes the command; it must not surprise them."""
+    first = await run(trade, "блок", author=MERLA_ACCOUNT, target=ARGUS_ACCOUNT)
+    again = await run(trade, "блок", author=MERLA_ACCOUNT, target=ARGUS_ACCOUNT)
+
+    assert first.result is again.result is GroupResult.BLOCK_ADDED
+
+
+async def test_a_block_can_be_lifted(trade: GroupTrade, argus: Character, merla: Character) -> None:
+    await run(trade, "блок", author=MERLA_ACCOUNT, target=ARGUS_ACCOUNT)
+
+    lifted = await run(trade, "снять блок", author=MERLA_ACCOUNT, target=ARGUS_ACCOUNT)
+    outcome = await run(trade, "профиль", author=MERLA_ACCOUNT, target=ARGUS_ACCOUNT)
+
+    assert lifted.result is GroupResult.BLOCK_REMOVED
+    assert outcome.result is GroupResult.PROFILE
+
+
+async def test_a_block_mid_offer_returns_the_stake(
+    trade: GroupTrade,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    await inventory.add(argus.id, SWORD, 1)
+    await run(trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    await run(trade, "блок", author=MERLA_ACCOUNT, target=ARGUS_ACCOUNT)
+
+    outcome = await run(trade, "принять 1", author=MERLA_ACCOUNT, target=None)
+
+    assert outcome.refusal is Refusal.BLOCKED_TARGET
+    assert await inventory.count(argus.id, SWORD) == 1
+    assert await inventory.count(merla.id, SWORD) == 0
+
+
 # --- hand-overs -------------------------------------------------------
 
 
@@ -202,9 +290,7 @@ async def test_an_item_is_handed_over_without_asking_the_receiver(
 async def test_an_item_nobody_holds_cannot_be_named(
     trade: GroupTrade, argus: Character, merla: Character
 ) -> None:
-    outcome = await run(
-        trade, "передать соляная печать", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT
-    )
+    outcome = await run(trade, "передать медный шлем", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
 
     assert outcome.refusal is Refusal.UNKNOWN_ITEM
 

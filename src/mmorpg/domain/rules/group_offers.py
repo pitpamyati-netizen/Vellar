@@ -62,6 +62,9 @@ class Refusal(StrEnum):
     EXPIRED = "expired"
     TOO_MANY_COMMANDS = "too_many_commands"
     TOO_MANY_OFFERS = "too_many_offers"
+    PROFILE_HIDDEN = "profile_hidden"
+    BLOCKED_BY_TARGET = "blocked_by_target"
+    BLOCKED_TARGET = "blocked_target"
 
 
 def is_expired(offer: Offer, now: int, *, ttl: int = OFFER_TTL_SECONDS) -> bool:
@@ -146,6 +149,25 @@ def check_gift(*, author: Party, target: Party, holds: int, quantity: int) -> Re
     if holds < quantity:
         return Refusal.AUTHOR_LACKS_ITEM
     return None
+
+
+def check_contact(*, blocked_by_target: bool, blocks_target: bool) -> Refusal | None:
+    """Whether these two players deal with each other at all (Roadmap 2.5).
+
+    A block works both ways on purpose. Whoever drew the line, the pair is closed:
+    a one-way block would let the blocker keep pushing offers at somebody who has
+    already said no, which is the behaviour a black list exists to stop.
+    """
+    if blocked_by_target:
+        return Refusal.BLOCKED_BY_TARGET
+    if blocks_target:
+        return Refusal.BLOCKED_TARGET
+    return None
+
+
+def check_profile(*, visible: bool) -> Refusal | None:
+    """A closed profile is a refusal, not silence: the asker is owed an answer."""
+    return None if visible else Refusal.PROFILE_HIDDEN
 
 
 def check_gold_gift(*, author: Party, target: Party, purse: int, amount: int) -> Refusal | None:

@@ -20,6 +20,7 @@ from mmorpg.domain.ports.repositories import (
     CharacterRepository,
     InventoryRepository,
     LocationDeltaCache,
+    PrivacyRepository,
     StateCache,
     TradeRepository,
     UserRepository,
@@ -37,6 +38,7 @@ class Dependencies:
     characters: CharacterRepository
     inventory: InventoryRepository
     trades: TradeRepository
+    privacy: PrivacyRepository
     state_cache: StateCache
     location_deltas: LocationDeltaCache
     broadcasts: ChannelBroadcaster
@@ -49,6 +51,7 @@ class Dependencies:
             "characters": self.characters,
             "inventory": self.inventory,
             "trades": self.trades,
+            "privacy": self.privacy,
             "state_cache": self.state_cache,
             "location_deltas": self.location_deltas,
             "broadcasts": self.broadcasts,

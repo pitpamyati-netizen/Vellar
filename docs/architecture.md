@@ -80,7 +80,7 @@ stays pure and the write stays in one place.
 
 | Where | What |
 | --- | --- |
-| PostgreSQL | users, characters (raw stats, level, experience, gold), inventory, equipment, skill loadout with ranks and edges, chosen traits, city and quest progress, accessibility settings, world seed, trades (pending escrow and the settled journal) |
+| PostgreSQL | users, characters (raw stats, level, experience, gold), inventory, equipment, skill loadout with ranks and edges, chosen traits, city and quest progress, accessibility settings, world seed, trades (pending escrow and the settled journal), privacy (profile visibility on the user row, black lists in `blocks`) |
 | Redis (with TTL) | FSM state, current screen, active combat, location deltas for the current cycle, update deduplication, shop assortment cache |
 | Nowhere - recomputed | location layout, nodes, enemies, loot, total character stats, shop assortment (all pure functions of seed and cycle) |
 

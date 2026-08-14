@@ -44,6 +44,7 @@ from mmorpg.domain.entities.trade import (
 from mmorpg.domain.ports.repositories import (
     CharacterRepository,
     InventoryRepository,
+    PrivacyRepository,
     TradeRepository,
 )
 from mmorpg.domain.rules.economy import payout, trade_tax
@@ -55,8 +56,10 @@ from mmorpg.domain.rules.group_offers import (
     ItemOption,
     Refusal,
     answerable_by,
+    check_contact,
     check_gift,
     check_gold_gift,
+    check_profile,
     check_proposal,
     check_settlement,
     match_items,
@@ -70,6 +73,10 @@ class GroupResult(StrEnum):
     """What happened, in the terms the group message will describe."""
 
     PROFILE = "profile"
+    PROFILE_CLOSED = "profile_closed"
+    PROFILE_OPENED = "profile_opened"
+    BLOCK_ADDED = "block_added"
+    BLOCK_REMOVED = "block_removed"
     GOLD_GIVEN = "gold_given"
     ITEM_GIVEN = "item_given"
     OFFER_MADE = "offer_made"
@@ -128,6 +135,7 @@ class GroupTrade:
     characters: CharacterRepository
     inventory: InventoryRepository
     trades: TradeRepository
+    privacy: PrivacyRepository
     # Offers are numbered per group, so two groups never fight over "принять 7".
     scope: str = "group"
 
@@ -156,6 +164,10 @@ class GroupTrade:
                 answering=author,
                 now=now,
             )
+        if command.intent in (GroupIntent.HIDE_PROFILE, GroupIntent.SHOW_PROFILE):
+            return await self._set_visible(
+                author, visible=command.intent is GroupIntent.SHOW_PROFILE
+            )
 
         if target_id is None:
             return _refused(Refusal.TARGET_HAS_NO_CHARACTER)
@@ -164,8 +176,29 @@ class GroupTrade:
             return _refused(Refusal.TARGET_HAS_NO_CHARACTER)
         target = _party(target_id, target_character)
 
+        # Drawing the line is always allowed, in either direction: a black list
+        # somebody else's block could freeze would be a trap, not a list.
+        if command.intent in (GroupIntent.BLOCK, GroupIntent.UNBLOCK):
+            return await self._list_entry(
+                author, target, adding=command.intent is GroupIntent.BLOCK, now=now
+            )
+
+        wall = check_contact(
+            blocked_by_target=await self.privacy.blocks(target.user_id, author.user_id),
+            blocks_target=await self.privacy.blocks(author.user_id, target.user_id),
+        )
+        if wall is not None:
+            return _refused(wall, author_name=author.name, target_name=target.name)
+
         match command.intent:
             case GroupIntent.PROFILE:
+                # A player always sees their own card, closed or not.
+                if author.user_id != target.user_id:
+                    hidden = check_profile(
+                        visible=await self.privacy.profile_visible(target.user_id)
+                    )
+                    if hidden is not None:
+                        return _refused(hidden, target_name=target.name)
                 return GroupOutcome(
                     result=GroupResult.PROFILE,
                     character=target_character,
@@ -176,10 +209,38 @@ class GroupTrade:
                 return await self._give_gold(command, author, target)
             case GroupIntent.GIVE_ITEM:
                 return await self._give_item(command, author, target)
-            # Nothing else reaches here: the answers were handled above and the
-            # parser produces no other intent.
-            case GroupIntent.SELL | GroupIntent.BUY:
+            # Nothing else reaches here: answers, privacy and the black list were
+            # handled above, and the parser produces no other intent.
+            case _:
                 return await self._propose(command, author, target, now=now)
+
+    # --- privacy ------------------------------------------------------
+
+    async def _set_visible(self, author: Party, *, visible: bool) -> GroupOutcome:
+        """Open or close the profile card. Saying it twice is not an error."""
+        await self.privacy.set_profile_visible(author.user_id, visible)
+        return GroupOutcome(
+            result=GroupResult.PROFILE_OPENED if visible else GroupResult.PROFILE_CLOSED,
+            author_name=author.name,
+        )
+
+    async def _list_entry(
+        self, author: Party, target: Party, *, adding: bool, now: int
+    ) -> GroupOutcome:
+        """Add somebody to the black list, or take them off it."""
+        if author.user_id == target.user_id:
+            return _refused(Refusal.SELF, author_name=author.name, target_name=target.name)
+        if adding:
+            await self.privacy.block(author.user_id, target.user_id, at=now)
+        else:
+            await self.privacy.unblock(author.user_id, target.user_id)
+        # The answer states the state, not the change, so a repeated command reads
+        # the same as the first one - which is what a player who lost the reply needs.
+        return GroupOutcome(
+            result=GroupResult.BLOCK_ADDED if adding else GroupResult.BLOCK_REMOVED,
+            author_name=author.name,
+            target_name=target.name,
+        )
 
     # --- hand-overs ---------------------------------------------------
 
@@ -313,6 +374,16 @@ class GroupTrade:
             return GroupOutcome(result=GroupResult.OFFER_DECLINED, offer=offer)
         if not answerable_by(offer, answering.user_id):
             return _refused(Refusal.NOT_YOURS, offer=offer)
+
+        # A block drawn while the offer stood cancels it: the stake goes back to
+        # its author, and neither side is left waiting on business they refused.
+        wall = check_contact(
+            blocked_by_target=await self.privacy.blocks(offer.author.user_id, answering.user_id),
+            blocks_target=await self.privacy.blocks(answering.user_id, offer.author.user_id),
+        )
+        if wall is not None:
+            await self._close(number, TradeStatus.DECLINED, now=now)
+            return _refused(wall, offer=offer)
 
         target = await self._character(offer.target)
         refusal = check_settlement(

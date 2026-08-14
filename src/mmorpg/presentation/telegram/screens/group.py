@@ -71,6 +71,11 @@ REFUSALS: dict[Refusal, str] = {
     Refusal.TOO_MANY_OFFERS: (
         "Сейчас в группе слишком много открытых предложений. Попробуйте позже."
     ),
+    Refusal.PROFILE_HIDDEN: "Этот игрок закрыл свой профиль.",
+    Refusal.BLOCKED_BY_TARGET: "Этот игрок не ведёт с вами дел.",
+    Refusal.BLOCKED_TARGET: (
+        "Этот игрок у вас в чёрном списке. Снять: ответьте ему словом «разблок»."
+    ),
 }
 
 # What publishing an offer takes from its author and holds until it is answered.
@@ -92,6 +97,35 @@ def render(content: GameContent, outcome: GroupOutcome) -> GroupReply:
             if outcome.character is None or outcome.stats is None:  # pragma: no cover
                 return GroupReply(text=REFUSALS[Refusal.TARGET_HAS_NO_CHARACTER])
             return GroupReply(text=profile_text(content, outcome.character, outcome.stats))
+        case GroupResult.PROFILE_CLOSED:
+            return GroupReply(
+                text=_lines(
+                    "Профиль закрыт: в группе его больше не показывают.",
+                    "Открыть обратно: «открыть профиль».",
+                )
+            )
+        case GroupResult.PROFILE_OPENED:
+            return GroupReply(
+                text=_lines(
+                    "Профиль открыт: в группе его снова показывают.",
+                    "Закрыть: «скрыть профиль».",
+                )
+            )
+        case GroupResult.BLOCK_ADDED:
+            return GroupReply(
+                text=_lines(
+                    f"Чёрный список: {outcome.target_name}.",
+                    "Профиль, обмен и передача между вами закрыты.",
+                    "Снять: ответьте ему словом «разблок».",
+                )
+            )
+        case GroupResult.BLOCK_REMOVED:
+            return GroupReply(
+                text=_lines(
+                    f"Из чёрного списка: {outcome.target_name}.",
+                    "Обмен между вами снова открыт.",
+                )
+            )
         case GroupResult.GOLD_GIVEN:
             return GroupReply(
                 text=_lines(
@@ -178,10 +212,10 @@ def accepted_text(offer: Offer, tax: int = 0) -> str:
 
 
 def _duty(price: int, tax: int) -> str:
-    """The Salt Watch takes its share of every deal (``Narrative.md``, section 1)."""
+    """The Road Chamber takes its share of every deal (``Narrative.md``, section 1)."""
     if tax <= 0:
         return ""
-    return f"Пошлина Надзора: {gold(tax)}. Продавцу на руки: {gold(price - tax)}."
+    return f"Пошлина Палаты: {gold(tax)}. Продавцу на руки: {gold(price - tax)}."
 
 
 def refusal_text(outcome: GroupOutcome) -> str:

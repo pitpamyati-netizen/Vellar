@@ -10,9 +10,10 @@ message is answered only when all of these hold (``Narrative.md``, section 9):
   named, so a command shouted into the room addresses nobody and is ignored;
 - the sender has not just flooded the chat.
 
-Answering an offer is the one exception to the reply rule: "принять 12" carries
-its target in the number, and asking a player to find the original message before
-they may say yes would be cruel with a screen reader.
+Two kinds of message are exempt from the reply rule, and both name nobody else.
+"принять 12" carries its target in the number, and asking a player to find the
+original message before they may say yes would be cruel with a screen reader;
+"скрыть профиль" is about the speaker alone (``UNADDRESSED``).
 
 Nothing is decided here beyond that. The command is parsed by the domain, carried
 out by ``application.services.group_trade`` and worded by ``screens.group``; this
@@ -33,9 +34,10 @@ from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.ports.repositories import (
     CharacterRepository,
     InventoryRepository,
+    PrivacyRepository,
     TradeRepository,
 )
-from mmorpg.domain.rules.group_commands import GroupIntent, parse_group_command
+from mmorpg.domain.rules.group_commands import UNADDRESSED, GroupIntent, parse_group_command
 from mmorpg.domain.rules.group_offers import Refusal
 from mmorpg.presentation.telegram.broadcast import chat_id_of
 from mmorpg.presentation.telegram.cleanup import Deleter, MessageReaper
@@ -68,6 +70,7 @@ def build_router(reaper: MessageReaper, limiter: RateLimiter | None = None) -> R
         characters: CharacterRepository,
         inventory: InventoryRepository,
         trades: TradeRepository,
+        privacy: PrivacyRepository,
     ) -> None:
         await handle_group_message(
             message,
@@ -77,6 +80,7 @@ def build_router(reaper: MessageReaper, limiter: RateLimiter | None = None) -> R
             characters=characters,
             inventory=inventory,
             trades=trades,
+            privacy=privacy,
             limiter=limits,
             reaper=reaper,
         )
@@ -102,6 +106,7 @@ async def handle_group_message(
     characters: CharacterRepository,
     inventory: InventoryRepository,
     trades: TradeRepository,
+    privacy: PrivacyRepository,
     limiter: RateLimiter,
     reaper: MessageReaper,
     now: int | None = None,
@@ -120,7 +125,9 @@ async def handle_group_message(
     answering = command.intent in ANSWERS
     target = message.reply_to_message
     target_user = target.from_user if target is not None else None
-    if not answering and (target is None or target_user is None or target_user.is_bot):
+    if command.intent not in UNADDRESSED and (
+        target is None or target_user is None or target_user.is_bot
+    ):
         # Not addressed to a player. The bot has no business in this sentence.
         return None
 
@@ -140,6 +147,7 @@ async def handle_group_message(
         characters=characters,
         inventory=inventory,
         trades=trades,
+        privacy=privacy,
         scope=str(message.chat.id),
     )
     outcome = await trade.run(

@@ -140,6 +140,66 @@ class PostgresUserRepository:
         )
 
 
+class PostgresPrivacyRepository:
+    """Profile visibility and black lists (Roadmap 2.5).
+
+    Both are keyed by Telegram account, not by character. The visibility flag
+    lives on the ``users`` row that already exists for every player; the black
+    list is its own table, because it is a set that grows.
+    """
+
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        self._pool = pool
+
+    async def profile_visible(self, telegram_id: int) -> bool:
+        row = await self._pool.fetchrow(
+            "SELECT show_profile FROM users WHERE telegram_id = $1", telegram_id
+        )
+        # No row means the player never opened the bot: nothing to hide anyway.
+        return True if row is None else bool(row["show_profile"])
+
+    async def set_profile_visible(self, telegram_id: int, visible: bool) -> None:
+        await self._pool.execute(
+            """
+            INSERT INTO users (telegram_id, show_profile) VALUES ($1, $2)
+            ON CONFLICT (telegram_id) DO UPDATE SET show_profile = EXCLUDED.show_profile
+            """,
+            telegram_id,
+            visible,
+        )
+
+    async def blocks(self, telegram_id: int, other_id: int) -> bool:
+        row = await self._pool.fetchrow(
+            "SELECT 1 FROM blocks WHERE owner_id = $1 AND blocked_id = $2",
+            telegram_id,
+            other_id,
+        )
+        return row is not None
+
+    async def block(self, telegram_id: int, other_id: int, *, at: int) -> bool:
+        # DO NOTHING returns no row when the pair is already listed, which is
+        # exactly the "they were already blocked" answer the caller needs.
+        row = await self._pool.fetchrow(
+            """
+            INSERT INTO blocks (owner_id, blocked_id, created_at) VALUES ($1, $2, $3)
+            ON CONFLICT (owner_id, blocked_id) DO NOTHING
+            RETURNING owner_id
+            """,
+            telegram_id,
+            other_id,
+            at,
+        )
+        return row is not None
+
+    async def unblock(self, telegram_id: int, other_id: int) -> bool:
+        row = await self._pool.fetchrow(
+            "DELETE FROM blocks WHERE owner_id = $1 AND blocked_id = $2 RETURNING owner_id",
+            telegram_id,
+            other_id,
+        )
+        return row is not None
+
+
 class PostgresCharacterRepository:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool

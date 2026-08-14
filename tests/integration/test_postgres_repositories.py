@@ -20,6 +20,7 @@ from mmorpg.domain.ports.repositories import AccessibilitySettings, User
 from mmorpg.infrastructure.persistence.postgres import (
     PostgresCharacterRepository,
     PostgresInventoryRepository,
+    PostgresPrivacyRepository,
     PostgresTradeRepository,
     PostgresUserRepository,
 )
@@ -29,6 +30,7 @@ pytestmark = pytest.mark.integration
 # Far outside the range Telegram issues, so a test can never collide with a real
 # player's row in a database someone is also playing on.
 TEST_TELEGRAM_ID = -999_001
+OTHER_TELEGRAM_ID = -999_002
 
 
 @pytest.fixture
@@ -42,6 +44,25 @@ async def clean_user(pool) -> AsyncIterator[int]:
     await purge()
     try:
         yield TEST_TELEGRAM_ID
+    finally:
+        await purge()
+
+
+@pytest.fixture
+async def clean_blocks(pool) -> AsyncIterator[tuple[int, int]]:
+    """Two account ids with no black list rows between them, before and after."""
+    pair = (TEST_TELEGRAM_ID, OTHER_TELEGRAM_ID)
+
+    async def purge() -> None:
+        await pool.execute(
+            "DELETE FROM blocks WHERE owner_id = ANY($1::bigint[])"
+            " OR blocked_id = ANY($1::bigint[])",
+            list(pair),
+        )
+
+    await purge()
+    try:
+        yield pair
     finally:
         await purge()
 
@@ -130,6 +151,65 @@ async def test_upsert_does_not_reset_settings(pool, clean_user) -> None:
     assert read is not None
     assert read.username == "renamed"
     assert read.settings.page_size == 20
+
+
+# --- privacy -----------------------------------------------------------------
+
+
+async def test_an_account_nobody_stored_anything_about_is_open(pool, clean_user) -> None:
+    privacy = PostgresPrivacyRepository(pool)
+
+    assert await privacy.profile_visible(clean_user) is True
+    assert await privacy.blocks(clean_user, OTHER_TELEGRAM_ID) is False
+
+
+async def test_profile_visibility_is_saved_and_read_back(pool, clean_user) -> None:
+    privacy = PostgresPrivacyRepository(pool)
+    users = PostgresUserRepository(pool)
+    await users.upsert(User(telegram_id=clean_user, username="tester"))
+
+    await privacy.set_profile_visible(clean_user, False)
+    hidden = await privacy.profile_visible(clean_user)
+    await privacy.set_profile_visible(clean_user, True)
+
+    assert hidden is False
+    assert await privacy.profile_visible(clean_user) is True
+
+
+async def test_closing_the_profile_creates_the_user_row_when_there_is_none(
+    pool, clean_user
+) -> None:
+    privacy = PostgresPrivacyRepository(pool)
+
+    await privacy.set_profile_visible(clean_user, False)
+
+    assert await privacy.profile_visible(clean_user) is False
+
+
+async def test_a_block_is_written_once_and_lifted_once(pool, clean_blocks) -> None:
+    privacy = PostgresPrivacyRepository(pool)
+    owner, other = clean_blocks
+
+    first = await privacy.block(owner, other, at=1000)
+    again = await privacy.block(owner, other, at=1001)
+
+    assert (first, again) == (True, False)
+    assert await privacy.blocks(owner, other) is True
+    # A block is one direction: the other side is not listed by it.
+    assert await privacy.blocks(other, owner) is False
+    assert await privacy.unblock(owner, other) is True
+    assert await privacy.unblock(owner, other) is False
+    assert await privacy.blocks(owner, other) is False
+
+
+async def test_the_database_refuses_a_block_on_oneself(pool, clean_blocks) -> None:
+    import asyncpg
+
+    privacy = PostgresPrivacyRepository(pool)
+    owner, _ = clean_blocks
+
+    with pytest.raises(asyncpg.CheckViolationError):
+        await privacy.block(owner, owner, at=1000)
 
 
 # --- characters --------------------------------------------------------------

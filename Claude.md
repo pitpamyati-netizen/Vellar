@@ -51,8 +51,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 
 **`scripts/`** — `ci.ps1`/`ci.sh` (гейт), `healthcheck.py`, `broadcast.py` (пост
 в канал: `--headline` или `--changelog latest`), `install-hooks.ps1`/`.sh`.
-**`migrations/`** — `env.py`, `versions/0001_initial_schema.py`.
-**`.githooks/pre-commit`** — гейт на коммите.
+**`migrations/`** — `env.py`, `versions/0001_initial_schema`, `0002_trades`,
+`0003_privacy`. **`.githooks/pre-commit`** — гейт на коммите.
 
 ## 2. Правила разработки
 

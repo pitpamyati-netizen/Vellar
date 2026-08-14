@@ -26,6 +26,7 @@ from mmorpg.domain.rules.group_offers import Refusal
 from mmorpg.infrastructure.persistence import (
     InMemoryCharacterRepository,
     InMemoryInventoryRepository,
+    InMemoryPrivacyRepository,
     InMemoryTradeRepository,
 )
 from mmorpg.presentation.telegram.cleanup import MessageReaper
@@ -139,12 +140,18 @@ def trades() -> InMemoryTradeRepository:
 
 
 @pytest.fixture
+def privacy() -> InMemoryPrivacyRepository:
+    return InMemoryPrivacyRepository()
+
+
+@pytest.fixture
 def bus(
     content: GameContent,
     settings: Settings,
     characters: InMemoryCharacterRepository,
     inventory: InMemoryInventoryRepository,
     trades: InMemoryTradeRepository,
+    privacy: InMemoryPrivacyRepository,
     reaper: MessageReaper,
 ):
     """Everything ``handle_group_message`` needs, in one callable."""
@@ -160,12 +167,13 @@ def bus(
             characters=characters,
             inventory=inventory,
             trades=trades,
+            privacy=privacy,
             limiter=limiter,
             reaper=reaper,
             now=now,
         )
 
-    return SimpleNamespace(deliver=deliver, bot=bot, limiter=limiter)
+    return SimpleNamespace(deliver=deliver, bot=bot, limiter=limiter, privacy=privacy)
 
 
 async def drain(reaper: MessageReaper) -> None:
@@ -195,7 +203,7 @@ async def test_a_chat_that_is_not_the_game_group_is_ignored(
 async def test_ordinary_conversation_is_never_answered(
     bus, argus_account: User, merla_account: User, world
 ) -> None:
-    target = message("вчера был отлив", sender=merla_account, message_id=1)
+    target = message("вчера сменилась стража", sender=merla_account, message_id=1)
 
     await bus.deliver(message("да, зарубки не сошлись", sender=argus_account, reply_to=target))
 
@@ -327,6 +335,103 @@ async def test_a_stranger_pressing_the_button_gets_a_refusal_not_the_goods(
     # The sword is held by the offer, and a stranger cannot pull it out of there.
     assert await inventory.count(world["Аргус"].id, SWORD) == 0
     assert await inventory.count(doven.id, SWORD) == 0
+
+
+# --- privacy ----------------------------------------------------------
+
+
+async def test_hiding_the_profile_needs_no_reply_and_closes_the_card(
+    bus, argus_account: User, merla_account: User, world
+) -> None:
+    """It is a sentence about the speaker, so there is nobody to address it to."""
+    await bus.deliver(message("скрыть профиль", sender=merla_account, message_id=1))
+    here = message("я тут", sender=merla_account, message_id=2)
+
+    await bus.deliver(message("профиль", sender=argus_account, reply_to=here, message_id=3))
+
+    assert bus.bot.sent[0]["text"].startswith("Профиль закрыт")
+    assert bus.bot.sent[1]["text"] == "Этот игрок закрыл свой профиль."
+
+
+async def test_a_closed_profile_is_still_shown_to_its_owner(
+    bus, merla_account: User, world
+) -> None:
+    await bus.deliver(message("скрыть профиль", sender=merla_account, message_id=1))
+    own = message("я тут", sender=merla_account, message_id=2)
+
+    await bus.deliver(message("профиль", sender=merla_account, reply_to=own, message_id=3))
+
+    assert bus.bot.sent[1]["text"].startswith("Мерла, уровень")
+
+
+async def test_opening_the_profile_again_puts_it_back(
+    bus, argus_account: User, merla_account: User, world
+) -> None:
+    await bus.deliver(message("скрыть профиль", sender=merla_account, message_id=1))
+    await bus.deliver(message("открыть профиль", sender=merla_account, message_id=2))
+    here = message("я тут", sender=merla_account, message_id=3)
+
+    await bus.deliver(message("профиль", sender=argus_account, reply_to=here, message_id=4))
+
+    assert bus.bot.sent[1]["text"].startswith("Профиль открыт")
+    assert bus.bot.sent[2]["text"].startswith("Мерла, уровень")
+
+
+async def test_a_black_list_closes_the_pair_in_both_directions(
+    bus, argus_account: User, merla_account: User, world
+) -> None:
+    argus_here = message("я тут", sender=argus_account, message_id=1)
+    await bus.deliver(message("блок", sender=merla_account, reply_to=argus_here, message_id=2))
+    merla_here = message("и я", sender=merla_account, message_id=3)
+
+    # The blocked player is refused...
+    await bus.deliver(
+        message(f"продать 100 {SWORD_NAME}", sender=argus_account, reply_to=merla_here)
+    )
+    # ...and so is the one who drew the line.
+    await bus.deliver(message("профиль", sender=merla_account, reply_to=argus_here))
+
+    assert bus.bot.sent[0]["text"].startswith("Чёрный список: Аргус.")
+    assert bus.bot.sent[1]["text"] == "Этот игрок не ведёт с вами дел."
+    assert bus.bot.sent[2]["text"].startswith("Этот игрок у вас в чёрном списке")
+
+
+async def test_a_block_can_be_lifted_by_the_one_who_made_it(
+    bus, argus_account: User, merla_account: User, world
+) -> None:
+    argus_here = message("я тут", sender=argus_account, message_id=1)
+    await bus.deliver(message("блок", sender=merla_account, reply_to=argus_here, message_id=2))
+
+    await bus.deliver(message("разблок", sender=merla_account, reply_to=argus_here, message_id=3))
+    await bus.deliver(message("профиль", sender=merla_account, reply_to=argus_here, message_id=4))
+
+    assert bus.bot.sent[1]["text"].startswith("Из чёрного списка: Аргус.")
+    assert bus.bot.sent[2]["text"].startswith("Аргус, уровень")
+
+
+async def test_a_block_drawn_mid_offer_cancels_it_and_returns_the_stake(
+    bus, argus_account: User, merla_account: User, world, inventory
+) -> None:
+    merla_here = message("что продаёшь", sender=merla_account, message_id=1)
+    await bus.deliver(
+        message(f"продать 100 {SWORD_NAME}", sender=argus_account, reply_to=merla_here)
+    )
+    argus_here = message("вот", sender=argus_account, message_id=2)
+    await bus.deliver(message("блок", sender=merla_account, reply_to=argus_here))
+
+    await bus.deliver(message("Принять 1", sender=merla_account))
+
+    assert bus.bot.sent[-1]["text"].startswith("Этот игрок у вас в чёрном списке")
+    assert await inventory.count(world["Аргус"].id, SWORD) == 1
+    assert await inventory.count(world["Мерла"].id, SWORD) == 0
+
+
+async def test_nobody_blocks_themselves(bus, merla_account: User, world) -> None:
+    own = message("я тут", sender=merla_account, message_id=1)
+
+    await bus.deliver(message("блок", sender=merla_account, reply_to=own, message_id=2))
+
+    assert "самому себе" in bus.bot.sent[0]["text"]
 
 
 # --- the five minutes -------------------------------------------------
@@ -500,7 +605,7 @@ def test_an_offer_says_what_it_holds_and_what_the_duty_costs(content: GameConten
         GroupOutcome(result=GroupResult.OFFER_MADE, offer=offer(), tax=trade_tax(100)),
     )
 
-    assert "Пошлина Надзора: 5 золотых" in reply.text
+    assert "Пошлина Палаты: 5 золотых" in reply.text
     assert "Продавцу на руки: 95 золотых" in reply.text
     assert "Вещь отложена до ответа." in reply.text
 
@@ -521,7 +626,7 @@ def test_a_settled_trade_repeats_the_duty_it_charged(content: GameContent) -> No
     )
 
     assert "принято" in reply.text
-    assert "Пошлина Надзора: 5 золотых" in reply.text
+    assert "Пошлина Палаты: 5 золотых" in reply.text
 
 
 def test_a_declined_offer_says_the_stake_came_back(content: GameContent) -> None:
@@ -559,6 +664,10 @@ def test_a_purchase_is_worded_from_the_same_two_roles(content: GameContent) -> N
         GroupOutcome(result=GroupResult.OFFER_ACCEPTED, offer=offer()),
         GroupOutcome(result=GroupResult.OFFER_DECLINED, offer=offer()),
         GroupOutcome(result=GroupResult.REFUSED, refusal=Refusal.EXPIRED),
+        GroupOutcome(result=GroupResult.PROFILE_CLOSED, author_name="Мерла"),
+        GroupOutcome(result=GroupResult.PROFILE_OPENED, author_name="Мерла"),
+        GroupOutcome(result=GroupResult.BLOCK_ADDED, author_name="Мерла", target_name="Аргус"),
+        GroupOutcome(result=GroupResult.BLOCK_REMOVED, author_name="Мерла", target_name="Аргус"),
     ],
     ids=lambda outcome: outcome.result.value,
 )

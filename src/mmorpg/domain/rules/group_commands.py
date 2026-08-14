@@ -13,8 +13,16 @@ Grammar (``Narrative.md``, section 9), always as a reply to the target's message
     передать <предмет>
     передать <количество> <предмет>
     передать <количество> золота
+    блок
+    разблок
     принять <номер>
     отказ    <номер>
+
+Two commands speak about the sender rather than about the person they answer, so
+they need no reply at all - they are the privacy switch (Roadmap 2.5):
+
+    скрыть профиль
+    открыть профиль
 
 The item is written the way a player says it, so matching is case-insensitive,
 ignores ``ё`` and collapses spaces. It is resolved against the speaker's inventory
@@ -41,6 +49,17 @@ class GroupIntent(StrEnum):
     GIVE_GOLD = "give_gold"
     ACCEPT = "accept"
     DECLINE = "decline"
+    BLOCK = "block"
+    UNBLOCK = "unblock"
+    HIDE_PROFILE = "hide_profile"
+    SHOW_PROFILE = "show_profile"
+
+
+# Commands about the sender, not about whoever they replied to. They are the only
+# ones that mean something shouted into the room (``Narrative.md``, section 9).
+UNADDRESSED = frozenset(
+    {GroupIntent.ACCEPT, GroupIntent.DECLINE, GroupIntent.HIDE_PROFILE, GroupIntent.SHOW_PROFILE}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,7 +79,18 @@ _VERBS: dict[str, GroupIntent] = {
     "передать": GroupIntent.GIVE_ITEM,
     "принять": GroupIntent.ACCEPT,
     "отказ": GroupIntent.DECLINE,
+    "блок": GroupIntent.BLOCK,
+    "разблок": GroupIntent.UNBLOCK,
 }
+# Said in two words, and only in these two words: a phrase is matched whole, so
+# "скрыть" alone stays somebody's sentence rather than becoming a command.
+_PHRASES: dict[str, GroupIntent] = {
+    "скрыть профиль": GroupIntent.HIDE_PROFILE,
+    "открыть профиль": GroupIntent.SHOW_PROFILE,
+    "снять блок": GroupIntent.UNBLOCK,
+}
+# Commands that take nothing after the verb.
+_BARE = frozenset({GroupIntent.PROFILE, GroupIntent.BLOCK, GroupIntent.UNBLOCK})
 _GOLD_WORDS = frozenset({"золота", "золото", "золотых"})
 _SPACES = re.compile(r"\s+")
 
@@ -76,24 +106,29 @@ def parse_group_command(text: str) -> GroupCommand | None:
     if not cleaned:
         return None
 
+    phrase = _PHRASES.get(cleaned)
+    if phrase is not None:
+        return GroupCommand(intent=phrase)
+
     verb, _, tail = cleaned.partition(" ")
     intent = _VERBS.get(verb)
     if intent is None:
         return None
+    if intent in _BARE:
+        # "профиль" and nothing else: an argument means the player meant
+        # something the bot does not do, and guessing would be worse.
+        return GroupCommand(intent=intent) if not tail else None
 
     match intent:
-        case GroupIntent.PROFILE:
-            # "профиль" and nothing else: an argument means the player meant
-            # something the bot does not do, and guessing would be worse.
-            return GroupCommand(intent=intent) if not tail else None
         case GroupIntent.SELL | GroupIntent.BUY:
             return _parse_offer(intent, tail)
         case GroupIntent.GIVE_ITEM:
             return _parse_give(tail)
         case GroupIntent.ACCEPT | GroupIntent.DECLINE:
             return _parse_number_only(intent, tail)
-        case GroupIntent.GIVE_GOLD:
-            # No verb maps here: gold is a shape of "передать", not a word.
+        case _:
+            # Nothing else comes from a verb: gold is a shape of "передать", and
+            # the privacy switch is a phrase.
             return None
 
 

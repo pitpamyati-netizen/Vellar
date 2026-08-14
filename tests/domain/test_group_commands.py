@@ -11,6 +11,7 @@ import pytest
 
 from mmorpg.domain.rules.group_commands import (
     MAX_QUANTITY,
+    UNADDRESSED,
     GroupIntent,
     parse_group_command,
 )
@@ -43,12 +44,12 @@ def test_a_sale_is_read_however_it_is_typed(text: str) -> None:
 
 
 def test_buying_mirrors_selling() -> None:
-    parsed = parse_group_command("купить 250 соляной клинок")
+    parsed = parse_group_command("купить 250 бронзовый клинок")
 
     assert parsed is not None
     assert parsed.intent is GroupIntent.BUY
     assert parsed.amount == 250
-    assert parsed.item_query == "соляной клинок"
+    assert parsed.item_query == "бронзовый клинок"
 
 
 def test_yo_is_optional_because_players_do_not_type_it() -> None:
@@ -110,11 +111,48 @@ def test_answers_carry_the_offer_number(text: str, intent: GroupIntent) -> None:
 
 
 @pytest.mark.parametrize(
+    ("text", "intent"),
+    [
+        ("блок", GroupIntent.BLOCK),
+        ("Блок", GroupIntent.BLOCK),
+        ("разблок", GroupIntent.UNBLOCK),
+        ("снять блок", GroupIntent.UNBLOCK),
+        ("скрыть профиль", GroupIntent.HIDE_PROFILE),
+        ("Открыть профиль", GroupIntent.SHOW_PROFILE),
+    ],
+)
+def test_privacy_is_said_in_one_command(text: str, intent: GroupIntent) -> None:
+    parsed = parse_group_command(text)
+
+    assert parsed is not None
+    assert parsed.intent is intent
+    assert parsed.amount == 0
+
+
+def test_only_answers_and_the_privacy_switch_need_no_target() -> None:
+    """Everything else names its target by being a reply to them.
+
+    Widening this set means the bot starts answering messages shouted into the
+    room, so it is spelled out here rather than left to the handler.
+    """
+    assert set(UNADDRESSED) == {
+        GroupIntent.ACCEPT,
+        GroupIntent.DECLINE,
+        GroupIntent.HIDE_PROFILE,
+        GroupIntent.SHOW_PROFILE,
+    }
+
+
+@pytest.mark.parametrize(
     "text",
     [
         "",
         "   ",
         "привет всем",
+        "скрыть",  # half of a phrase is somebody's sentence
+        "открыть",
+        "блок Аргуса",
+        "снять",
         "продать кожаная броня",  # no price
         "продать 100",  # no item
         "продать 0 кожаная броня",  # nothing is free
