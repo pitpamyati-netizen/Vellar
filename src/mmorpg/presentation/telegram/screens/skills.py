@@ -100,8 +100,8 @@ def slots_screen(content: GameContent, character: Character, notice: str = "") -
     lines = [
         notice or "Слоты умений. Нажмите слот, чтобы положить в него умение.",
         f"Боевых слотов {rules.active_slots}, постоянных {rules.passive_slots}, "
-        "народный один и меняться не может.",
-        f"Умение народа: {racial}.",
+        "родовой один и меняться не может.",
+        f"Умение рода: {racial}.",
     ]
     rows: list[tuple[Label, ...]] = [
         (slot_label(content, character, SkillKind.ACTIVE, slot),)

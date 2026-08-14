@@ -9,7 +9,7 @@ wrong - the bot refuses to start on broken content.
 | File | Contains |
 | --- | --- |
 | `world.toml` | 15 cities, 5 locations each, level bands, unlock conditions |
-| `races.toml` | 16 peoples: stat bonuses, passive ability, racial active reference |
+| `races.toml` | 16 trade families: stat bonuses, passive ability, racial active reference |
 | `classes.toml` | 8 crafts: key stats, resource curve, health curve, progression meta |
 | `traits.toml` | 60+ traits, the modifier vocabulary, categories |
 | `skills.toml` | 8 active + 6 passive per class, 1 active per race, both edges of each |
@@ -30,19 +30,20 @@ wrong - the bot refuses to start on broken content.
    and `text` fields are what the player hears; ids, codes and comments are English.
 5. **No pseudo-graphics in any text field** - screen readers read them character by
    character. Numbers as words: `"выше на 15 процентов"`.
-6. **Names belong to Vellar.** A people carries a name of its own and says where
-   it is from in the description; a class is named after the work it lives by.
-   Nothing borrows from the fantasy shelf or the black list in `Narrative.md`,
-   section 2. `tests/content/test_naming.py` reads every name and description in
-   this directory and fails on either.
+6. **Names belong to Vellar.** There are no peoples here, only work: a "race" is
+   the trade family a character was born into (plural), a class is the craft they
+   live by now (singular). Both name a trade this world actually has - nothing
+   borrows from the fantasy shelf or the black list in `Narrative.md`, section 2.
+   `tests/content/test_naming.py` reads every name and description in this
+   directory and fails on either.
 
-## Add a race
+## Add a trade family
 
 ```toml
 [[race]]
 id = "seaborn"                       # snake_case, unique, never changes
-name = "Сельдар"                     # the people's own name: one Cyrillic word, <= 12 letters
-description = "Одна фраза: откуда народ и чем известен."
+name = "Бакенщики"                   # a trade of this world, plural, <= 12 letters
+description = "Одна фраза: чем промысел занят и что он делает с человеком."
 bonuses = { AGI = 2, WIS = 1, STR = -1 }
 passive = { id = "tide_born", name = "Приливная выучка", text = "Одна фраза об эффекте." }
 active = "race_seaborn_undertow"     # must exist in skills.toml
@@ -68,7 +69,7 @@ asserted deliberately, so growing the roster is a conscious decision.
 ```toml
 [[class]]
 id = "monk"
-name = "Кулачник"                    # a craft: what the character lives by
+name = "Кулачник"                    # a craft, singular: what the character lives by
 role = "Ближний бой без оружия"
 description = "Одна фраза."
 key_stats = ["AGI", "WIS"]

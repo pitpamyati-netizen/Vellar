@@ -34,7 +34,7 @@ def named(content: GameContent) -> CreationState:
 
 @pytest.fixture
 def raced(content: GameContent, named: CreationState) -> CreationState:
-    return walk(content, "Кадур", "Продолжить", state=named)
+    return walk(content, "Каменотёсы", "Продолжить", state=named)
 
 
 @pytest.fixture
@@ -149,7 +149,7 @@ def test_going_back_to_race_shows_the_current_race(
     content: GameContent, classed: CreationState
 ) -> None:
     back = _walk_back_to(content, classed, ScreenId.CREATE_RACE)
-    assert "Кадур" in render(content, back).text()
+    assert "Каменотёсы" in render(content, back).text()
 
 
 def test_changing_the_race_restates_its_bonuses(
@@ -157,7 +157,7 @@ def test_changing_the_race_restates_its_bonuses(
 ) -> None:
     """Switching race after going back must not silently change the numbers."""
     at_race = _walk_back_to(content, classed, ScreenId.CREATE_RACE)
-    switched = advance(content, at_race, "Аурен")
+    switched = advance(content, at_race, "Писари")
     assert switched.draft.race_id == "high_elf"
     assert "плюс 2 к интеллекту" in switched.notice
     assert "минус 1 к выносливости" in switched.notice
@@ -167,10 +167,10 @@ def test_races_beyond_the_first_page_are_reachable(
     content: GameContent, named: CreationState
 ) -> None:
     """16 races over 8-entry pages: the later ones need the navigation row."""
-    assert advance(content, named, "Ургаш").draft.race_id == "", "Ургаш is not on page 1"
+    assert advance(content, named, "Гуртовщики").draft.race_id == "", "Гуртовщики is not on page 1"
     second_page = advance(content, named, "Следующая страница")
     assert second_page.race_page.page == 2
-    chosen = advance(content, second_page, "Ургаш")
+    chosen = advance(content, second_page, "Гуртовщики")
     assert chosen.draft.race_id == "orc"
     assert "плюс 3 к силе" in chosen.notice
 
@@ -195,7 +195,7 @@ def test_every_creation_screen_is_reachable_and_has_a_way_back(
 
 
 def test_details_screens_return_to_their_list(content: GameContent, named: CreationState) -> None:
-    at_race = walk(content, "Кадур", "Подробно о народе", state=named)
+    at_race = walk(content, "Каменотёсы", "Подробно о роде", state=named)
     assert at_race.screen is ScreenId.CREATE_RACE_DETAILS
     assert "Дублёная кожа" in render(content, at_race).text()
     assert advance(content, at_race, "Назад").screen is ScreenId.CREATE_RACE

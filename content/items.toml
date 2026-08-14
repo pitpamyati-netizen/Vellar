@@ -107,7 +107,7 @@ text = "Свежесрезанная ветвь, на изломе выступ�
 
 [[item]]
 id = "dwarven_maul"
-name = "Кадурский молот"
+name = "Молот каменотёса"
 kind = "equipment"
 slot = "weapon"
 rarity = "rare"
@@ -115,7 +115,7 @@ level = 16
 price = 720
 modifiers = { physical_damage_percent = 20, initiative_percent = -6 }
 skill_modifiers = { barbarian_reckless_swing = 20 }
-text = "Работа кадуров: короткая рукоять, тяжёлая головка."
+text = "Короткая рукоять, тяжёлая головка: им ровняют камень, а не дерутся."
 
 [[item]]
 id = "silver_censer"

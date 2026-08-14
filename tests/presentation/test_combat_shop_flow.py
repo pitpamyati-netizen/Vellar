@@ -79,7 +79,7 @@ def test_panel_has_exactly_six_numbered_slots_plus_racial(
     texts = [row[0].text for row in screen.rows]
     assert texts[0] == "Атака — натиск"
     assert [text.split(".")[0] for text in texts[1:7]] == ["1", "2", "3", "4", "5", "6"]
-    assert "от народа" in texts[7]
+    assert "родовое" in texts[7]
     assert screen.rows[-1][0].text == "Сумка"
 
 

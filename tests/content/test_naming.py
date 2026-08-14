@@ -2,9 +2,10 @@
 
 Two rules from ``Narrative.md``, section 2, live here. The black list is the
 cheap half: one word from it turns a name into the generic fantasy set the world
-is written against. The peoples-and-crafts rule is the expensive half - a people
-carries a name of its own, a craft is named after the work - and it is guarded by
-the species names that must never come back (Roadmap 1.4).
+is written against. The work rule is the expensive half - Vellar has no peoples,
+only trades: a character is born into a family that does one and takes up another
+for pay - and it is guarded by the species names that must never come back
+(Roadmap 1.4).
 """
 
 from __future__ import annotations
@@ -15,8 +16,8 @@ from collections.abc import Iterator
 from mmorpg.domain.entities import GameContent
 from tests.content.conftest import FORBIDDEN_WORDS
 
-# Species and archetypes borrowed from the shelf. A race here would mean the
-# rename was undone; a class here would mean the craft became a class again.
+# Species and archetypes borrowed from the shelf. A trade family here would mean
+# the rename was undone; a class here would mean the craft became a class again.
 OFF_WORLD_ROSTER = (
     "эльф",
     "дварф",
@@ -73,8 +74,8 @@ def test_no_content_speaks_the_forbidden_vocabulary(content: GameContent) -> Non
             assert word not in lowered, f"{source} says {word!r}"
 
 
-def test_peoples_and_crafts_are_vellars_own(content: GameContent) -> None:
-    """No race or class is named after something off the fantasy shelf."""
+def test_families_and_crafts_are_vellars_own(content: GameContent) -> None:
+    """Neither axis is named after something off the fantasy shelf."""
     named = [(race.id, race.name) for race in content.races]
     named += [(klass.id, klass.name) for klass in content.classes]
     for source, name in named:
@@ -83,7 +84,7 @@ def test_peoples_and_crafts_are_vellars_own(content: GameContent) -> None:
             assert species not in lowered, f"{source} is still called {name!r}"
 
 
-def test_peoples_and_crafts_are_distinct_by_ear(content: GameContent) -> None:
+def test_families_and_crafts_are_distinct_by_ear(content: GameContent) -> None:
     """Both are picked from a list of buttons, and a button routes by its text."""
     race_names = [race.name for race in content.races]
     class_names = [klass.name for klass in content.classes]
@@ -96,17 +97,26 @@ def test_peoples_and_crafts_are_distinct_by_ear(content: GameContent) -> None:
 # a screen reader would have to spell out letter by letter.
 PLAIN_NAME = re.compile(r"^[А-ЯЁ][а-яё]+$")
 
+# Trade families are named in the plural - it is a household, not one person.
+FAMILY_ENDINGS = ("и", "ы")
 
-def test_a_people_carries_a_name_and_the_description_says_where_from(
-    content: GameContent,
-) -> None:
+
+def test_a_family_is_named_after_the_work_it_does(content: GameContent) -> None:
     for race in content.races:
         assert PLAIN_NAME.fullmatch(race.name), f"{race.id}: {race.name!r} is not one plain word"
         assert len(race.name) <= 12, race.id
-        # The name is the people's own; where they live belongs in the line below it.
+        assert race.name.endswith(FAMILY_ENDINGS), f"{race.id}: {race.name!r} is not a household"
+        # What the trade does to a person is the line under the name, and it is
+        # read out in full on the details screen.
         assert race.description.endswith("."), race.id
         assert len(race.description) <= 120, race.id
-        assert race.name not in race.description, race.id
+
+
+def test_a_craft_is_named_in_the_singular(content: GameContent) -> None:
+    """The player is one worker; the family they came from is many."""
+    for klass in content.classes:
+        assert PLAIN_NAME.fullmatch(klass.name), klass.id
+        assert not klass.name.endswith(FAMILY_ENDINGS), f"{klass.id}: {klass.name!r} reads plural"
 
 
 def test_every_race_keeps_its_frozen_id(content: GameContent) -> None:

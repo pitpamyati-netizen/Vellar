@@ -175,7 +175,7 @@ def _handle_name(
 
     named = replace(state, draft=state.draft.with_name(text))
     return named.at(ScreenId.CREATE_RACE).with_notice(
-        f"Имя {named.draft.name} принято. Теперь выберите народ."
+        f"Имя {named.draft.name} принято. Теперь выберите род."
     )
 
 
@@ -189,27 +189,27 @@ def _handle_race(content: GameContent, state: CreationState, command: Command) -
         return replace(state, race_page=state.race_page.jumped(command.number, pages), notice="")
 
     if command.intent is not Intent.SELECT:
-        return state.with_notice("Нажмите народ из списка или «Подробно о народе».")
+        return state.with_notice("Нажмите род из списка или «Подробно о роде».")
 
     if labels.RACE_DETAILS.matches(command.argument):
         if not state.draft.race_id:
-            return state.with_notice("Сначала выберите народ, потом смотрите подробности.")
+            return state.with_notice("Сначала выберите род, потом смотрите подробности.")
         return state.at(ScreenId.CREATE_RACE_DETAILS)
     if labels.CONTINUE.matches(command.argument):
         if not state.draft.race_id:
-            return state.with_notice("Сначала выберите народ.")
+            return state.with_notice("Сначала выберите род.")
         return state.at(ScreenId.CREATE_CLASS)
 
     for race in content.races:
         if race.name == command.argument:
             chosen = replace(state, draft=state.draft.with_race(race.id))
-            # Changing the people re-states its bonuses, so the effect of going
+            # Changing the family re-states its bonuses, so the effect of going
             # back and switching is never a surprise (spec section 12).
             return chosen.with_notice(
-                f"Народ {race.name}: {screens.describe_bonuses(race.bonuses)}. "
-                "Нажмите «Продолжить» или выберите другой народ."
+                f"Род: {race.name}, {screens.describe_bonuses(race.bonuses)}. "
+                "Нажмите «Продолжить» или выберите другой род."
             )
-    return state.with_notice("Не узнал народ. Нажмите народ из списка.")
+    return state.with_notice("Не узнал род. Нажмите род из списка.")
 
 
 def _handle_class(content: GameContent, state: CreationState, command: Command) -> CreationState:

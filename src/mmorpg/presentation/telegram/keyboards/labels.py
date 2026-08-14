@@ -87,7 +87,7 @@ DUNGEON_LEAVE = label("Выйти на воздух", "🚪")
 CREATE_CHARACTER = label("Создать персонажа", "✳️")
 CONTINUE = label("Продолжить", "▶️")
 CONFIRM = label("Подтвердить", "✅")
-RACE_DETAILS = label("Подробно о народе", "❔")
+RACE_DETAILS = label("Подробно о роде", "❔")
 CLASS_DETAILS = label("Подробно о ремесле", "❔")
 
 # --- paginated lists (accessibility rule 8 and section 13 of the spec) ---
