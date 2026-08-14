@@ -20,7 +20,7 @@ argument, which keeps generation pure and testable.
 
 A player already inside a location keeps the cycle index captured in their session
 until they leave, so the map never changes under their feet. On leaving they are
-told: `Сменилась стража. Тропы Сумеречной Рощи легли иначе.`
+told: `Сменилась стража. Тропы Ольшаника легли иначе.`
 
 ## Consequences
 

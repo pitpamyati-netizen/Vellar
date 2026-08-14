@@ -114,7 +114,7 @@ belonged to an old screen. The resolver compares the pressed text against the
 current FSM state and, on a mismatch, answers:
 
 ```
-Это действие сейчас недоступно, вы находитесь в: Город Дальний Оплот.
+Это действие сейчас недоступно, вы находитесь в: Город Порубежье.
 ```
 
 together with the current keyboard. Never stay silent, never raise.

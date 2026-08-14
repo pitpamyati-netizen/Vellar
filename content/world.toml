@@ -20,8 +20,8 @@ locations_per_city = 5
 [[city]]
 id = "farhold"
 order = 1
-name = "Дальний Оплот"
-description = "Последняя застава Договора: дальше кончается дорога, но не пошлина."
+name = "Порубежье"
+description = "Пограничная застава Договора: за ней дорога переходит в тропу."
 level_min = 1
 level_max = 30
 unlock_level = 1
@@ -31,7 +31,7 @@ services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
 [[city.location]]
 id = "quiet_meadows"
 slot = 1
-name = "Тихие Луга"
+name = "Луга у Заставы"
 biome = "луга"
 level_min = 1
 level_max = 4
@@ -39,7 +39,7 @@ level_max = 4
 [[city.location]]
 id = "dusk_grove"
 slot = 2
-name = "Сумеречная Роща"
+name = "Ольшаник"
 biome = "лес"
 level_min = 4
 level_max = 10
@@ -55,7 +55,7 @@ level_max = 16
 [[city.location]]
 id = "old_road"
 slot = 4
-name = "Старый Тракт"
+name = "Тракт на Затон"
 biome = "дорога"
 level_min = 15
 level_max = 23
@@ -63,7 +63,7 @@ level_max = 23
 [[city.location]]
 id = "abandoned_mine"
 slot = 5
-name = "Заброшенная Шахта"
+name = "Выработки"
 biome = "подземелье"
 level_min = 22
 level_max = 30
@@ -71,7 +71,7 @@ level_max = 30
 [[city]]
 id = "dusk_harbor"
 order = 2
-name = "Сумеречная Пристань"
+name = "Затон"
 description = "Портовый город, живущий рыбой и контрабандой."
 level_min = 24
 level_max = 54
@@ -82,7 +82,7 @@ services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
 [[city.location]]
 id = "fisher_piers"
 slot = 1
-name = "Рыбацкие Мостки"
+name = "Мостки"
 biome = "берег"
 level_min = 24
 level_max = 27
@@ -98,7 +98,7 @@ level_max = 33
 [[city.location]]
 id = "broken_pier"
 slot = 3
-name = "Разбитый Причал"
+name = "Волнолом"
 biome = "берег"
 level_min = 32
 level_max = 40
@@ -114,7 +114,7 @@ level_max = 47
 [[city.location]]
 id = "washed_grottos"
 slot = 5
-name = "Подмытые Гроты"
+name = "Гроты под Обрывом"
 biome = "пещеры"
 level_min = 46
 level_max = 54
@@ -165,7 +165,7 @@ level_max = 69
 [[city.location]]
 id = "collapsed_adits"
 slot = 5
-name = "Обвальные Штольни"
+name = "Штольни"
 biome = "пещеры"
 level_min = 68
 level_max = 76
@@ -173,8 +173,8 @@ level_max = 76
 [[city]]
 id = "copper_cross"
 order = 4
-name = "Медный Перекрёсток"
-description = "Узел четырёх торговых трактов."
+name = "Крестовье"
+description = "Здесь сходятся четыре торговых тракта; город живёт с проезжих."
 level_min = 70
 level_max = 98
 unlock_level = 70
@@ -184,7 +184,7 @@ services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
 [[city.location]]
 id = "trade_road"
 slot = 1
-name = "Торговый Тракт"
+name = "Тракт у Мытни"
 biome = "дорога"
 level_min = 70
 level_max = 73
@@ -200,7 +200,7 @@ level_max = 78
 [[city.location]]
 id = "ruined_farm"
 slot = 3
-name = "Разорённый Хутор"
+name = "Хутор"
 biome = "руины"
 level_min = 77
 level_max = 85
@@ -216,7 +216,7 @@ level_max = 91
 [[city.location]]
 id = "smelting_pits"
 slot = 5
-name = "Плавильные Ямы"
+name = "Плавильни"
 biome = "шахта"
 level_min = 90
 level_max = 98
@@ -224,7 +224,7 @@ level_max = 98
 [[city]]
 id = "quiet_fords"
 order = 5
-name = "Тихие Броды"
+name = "Броды"
 description = "Речные переправы и старые курганы."
 level_min = 92
 level_max = 118
@@ -235,7 +235,7 @@ services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
 [[city.location]]
 id = "willow_shoals"
 slot = 1
-name = "Ивовые Отмели"
+name = "Отмели"
 biome = "река"
 level_min = 92
 level_max = 95
@@ -251,7 +251,7 @@ level_max = 100
 [[city.location]]
 id = "river_barrows"
 slot = 3
-name = "Речные Курганы"
+name = "Курганы у Реки"
 biome = "курганы"
 level_min = 99
 level_max = 106
@@ -259,7 +259,7 @@ level_max = 106
 [[city.location]]
 id = "mill_reaches"
 slot = 4
-name = "Мельничные Плёсы"
+name = "Плёсы"
 biome = "река"
 level_min = 105
 level_max = 112
@@ -275,8 +275,8 @@ level_max = 118
 [[city]]
 id = "salt_ridge"
 order = 6
-name = "Сухой Кряж"
-description = "Караванная застава на безводном хребте: воду возят и продают."
+name = "Безводье"
+description = "Караванная застава на сухом хребте: воду сюда привозят обозами."
 level_min = 113
 level_max = 138
 unlock_level = 113
@@ -294,7 +294,7 @@ level_max = 115
 [[city.location]]
 id = "scorched_waste"
 slot = 2
-name = "Выжженная Пустошь"
+name = "Пустошь"
 biome = "пустошь"
 level_min = 115
 level_max = 121
@@ -302,7 +302,7 @@ level_max = 121
 [[city.location]]
 id = "caravan_route"
 slot = 3
-name = "Караванный Путь"
+name = "Путь Водовозов"
 biome = "дорога"
 level_min = 120
 level_max = 126
@@ -327,7 +327,7 @@ level_max = 138
 id = "crimson_wharf"
 order = 7
 name = "Багровый Причал"
-description = "Вольная гавань: пошлину здесь берут капитаны, и берут больше."
+description = "Вольная гавань вне Договора: порядок и пошлину здесь держат капитаны."
 level_min = 133
 level_max = 157
 unlock_level = 133
@@ -337,7 +337,7 @@ services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
 [[city.location]]
 id = "tar_docks"
 slot = 1
-name = "Смоляные Верфи"
+name = "Смолокурни"
 biome = "порт"
 level_min = 133
 level_max = 135
@@ -353,7 +353,7 @@ level_max = 140
 [[city.location]]
 id = "sunken_fleet"
 slot = 3
-name = "Затонувший Флот"
+name = "Остовы Флота"
 biome = "корабли"
 level_min = 139
 level_max = 145
@@ -369,7 +369,7 @@ level_max = 151
 [[city.location]]
 id = "grim_reefs"
 slot = 5
-name = "Гиблые Рифы"
+name = "Рифы"
 biome = "море"
 level_min = 150
 level_max = 157
@@ -377,7 +377,7 @@ level_max = 157
 [[city]]
 id = "glass_hollow"
 order = 8
-name = "Стеклянная Впадина"
+name = "Стеклянка"
 description = "Город у кратера, где песок спёкся в стекло."
 level_min = 152
 level_max = 176
@@ -396,7 +396,7 @@ level_max = 154
 [[city.location]]
 id = "impact_crater"
 slot = 2
-name = "Кратер Падения"
+name = "Воронка"
 biome = "кратер"
 level_min = 154
 level_max = 159
@@ -412,7 +412,7 @@ level_max = 164
 [[city.location]]
 id = "mirror_tunnels"
 slot = 4
-name = "Зеркальные Тоннели"
+name = "Тоннели под Воронкой"
 biome = "тоннели"
 level_min = 163
 level_max = 170
@@ -428,7 +428,7 @@ level_max = 176
 [[city]]
 id = "winter_march"
 order = 9
-name = "Зимний Рубеж"
+name = "Зимовье"
 description = "Гарнизон у снеговой черты: дальше дорогу не чистят."
 level_min = 171
 level_max = 194
@@ -439,7 +439,7 @@ services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
 [[city.location]]
 id = "snow_dells"
 slot = 1
-name = "Снежные Пади"
+name = "Пади"
 biome = "снега"
 level_min = 171
 level_max = 173
@@ -455,7 +455,7 @@ level_max = 178
 [[city.location]]
 id = "frozen_garrison"
 slot = 3
-name = "Замёрзший Гарнизон"
+name = "Караулка"
 biome = "руины"
 level_min = 177
 level_max = 183
@@ -463,7 +463,7 @@ level_max = 183
 [[city.location]]
 id = "wolf_tundra"
 slot = 4
-name = "Волчья Тундра"
+name = "Тундра за Перевалом"
 biome = "тундра"
 level_min = 182
 level_max = 188
@@ -490,7 +490,7 @@ services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
 [[city.location]]
 id = "ash_fields"
 slot = 1
-name = "Пепельные Поля"
+name = "Пепелища"
 biome = "пепел"
 level_min = 189
 level_max = 191
@@ -522,7 +522,7 @@ level_max = 207
 [[city.location]]
 id = "burnt_forest"
 slot = 5
-name = "Обгоревший Лес"
+name = "Гарь"
 biome = "лес"
 level_min = 206
 level_max = 213
@@ -530,7 +530,7 @@ level_max = 213
 [[city]]
 id = "thunder_range"
 order = 11
-name = "Громовая Гряда"
+name = "Грозовье"
 description = "Поселение на скалах, где не стихает буря."
 level_min = 208
 level_max = 230
@@ -541,7 +541,7 @@ services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
 [[city.location]]
 id = "storm_ledges"
 slot = 1
-name = "Грозовые Уступы"
+name = "Уступы"
 biome = "горы"
 level_min = 208
 level_max = 210
@@ -581,8 +581,8 @@ level_max = 230
 [[city]]
 id = "azure_halls"
 order = 12
-name = "Лазурная Палата"
-description = "Город весов, списков и лицензий: здесь решают, кому позволено колдовать."
+name = "Лазурь"
+description = "Город Дорожной палаты: весы, списки и разрешения на магию."
 level_min = 226
 level_max = 248
 unlock_level = 226
@@ -592,7 +592,7 @@ services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
 [[city.location]]
 id = "azure_terraces"
 slot = 1
-name = "Лазурные Террасы"
+name = "Сады Палаты"
 biome = "сады"
 level_min = 226
 level_max = 228
@@ -600,7 +600,7 @@ level_max = 228
 [[city.location]]
 id = "hanging_tiers"
 slot = 2
-name = "Навесные Ярусы"
+name = "Ярусы"
 biome = "небо"
 level_min = 228
 level_max = 233
@@ -632,8 +632,8 @@ level_max = 248
 [[city]]
 id = "bone_marches"
 order = 13
-name = "Костяной Предел"
-description = "Живут тем, что выкапывают, и платят с этого пошлину."
+name = "Костница"
+description = "Город на старых погребениях: живут тем, что выкапывают из курганов."
 level_min = 244
 level_max = 266
 unlock_level = 244
@@ -643,7 +643,7 @@ services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
 [[city.location]]
 id = "bone_fields"
 slot = 1
-name = "Костяные Поля"
+name = "Отвалы"
 biome = "пустошь"
 level_min = 244
 level_max = 246
@@ -651,7 +651,7 @@ level_max = 246
 [[city.location]]
 id = "march_barrows"
 slot = 2
-name = "Курганы Предела"
+name = "Большие Курганы"
 biome = "курганы"
 level_min = 246
 level_max = 251
@@ -684,7 +684,7 @@ level_max = 266
 id = "obsidian_throne"
 order = 14
 name = "Старый Престол"
-description = "Столица империи, которой нет: трон стоит, охрана при нём."
+description = "Бывшая столица империи. Дворец уцелел, при нём осталась охрана."
 level_min = 262
 level_max = 283
 unlock_level = 262
@@ -702,7 +702,7 @@ level_max = 264
 [[city.location]]
 id = "empty_halls"
 slot = 2
-name = "Пустые Залы"
+name = "Анфилады"
 biome = "чертоги"
 level_min = 264
 level_max = 268
@@ -718,7 +718,7 @@ level_max = 273
 [[city.location]]
 id = "old_chasm"
 slot = 4
-name = "Старый Провал"
+name = "Провал"
 biome = "ущелье"
 level_min = 272
 level_max = 278
@@ -735,7 +735,7 @@ level_max = 283
 id = "last_beacon"
 order = 15
 name = "Последний Маяк"
-description = "Мыс, где кончается дорога; маяк жгут по смете."
+description = "Мыс на дальнем конце дороги; маяк на нём жгут за счёт Договора."
 level_min = 279
 level_max = 300
 unlock_level = 279
@@ -745,7 +745,7 @@ services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
 [[city.location]]
 id = "last_cape"
 slot = 1
-name = "Последний Мыс"
+name = "Мыс"
 biome = "край"
 level_min = 279
 level_max = 281
@@ -777,7 +777,7 @@ level_max = 295
 [[city.location]]
 id = "beacon_summit"
 slot = 5
-name = "Вершина Маяка"
+name = "Вершина"
 biome = "вершина"
 level_min = 294
 level_max = 300

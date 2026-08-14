@@ -39,12 +39,12 @@ def menu(hero: Character) -> PlayState:
 
 @pytest.fixture
 def in_city(content: GameContent, hero: Character, menu: PlayState) -> PlayState:
-    return step(content, hero, menu, "Мир", "Дальний Оплот")
+    return step(content, hero, menu, "Мир", "Порубежье")
 
 
 @pytest.fixture
 def in_location(content: GameContent, hero: Character, in_city: PlayState) -> PlayState:
-    return step(content, hero, in_city, "Локации", "1. Тихие Луга")
+    return step(content, hero, in_city, "Локации", "1. Луга у Заставы")
 
 
 # --- menu and world ---------------------------------------------------
@@ -54,7 +54,7 @@ def test_main_menu_states_where_you_are(
     content: GameContent, hero: Character, menu: PlayState
 ) -> None:
     text = render(content, hero, menu, world_seed=WORLD_SEED).text()
-    assert text.startswith("Главное меню. Вы в городе Дальний Оплот.")
+    assert text.startswith("Главное меню. Вы в городе Порубежье.")
     assert "уровень 3" in text
     assert "Здоровье:" in text
 
@@ -64,7 +64,7 @@ def test_world_lists_only_unlocked_cities(
 ) -> None:
     world = step(content, hero, menu, "Мир")
     text = render(content, hero, world, world_seed=WORLD_SEED).text()
-    assert "Дальний Оплот" in text
+    assert "Порубежье" in text
     assert "Закрыто городов: 14" in text
 
 
@@ -72,7 +72,7 @@ def test_a_locked_city_explains_itself(
     content: GameContent, hero: Character, menu: PlayState
 ) -> None:
     world = step(content, hero, menu, "Мир")
-    blocked = step(content, hero, world, "Костяной Предел")
+    blocked = step(content, hero, world, "Костница")
     assert blocked.screen is ScreenId.WORLD
     assert "откроется на уровне" in blocked.notice
 
@@ -80,7 +80,7 @@ def test_a_locked_city_explains_itself(
 def test_entering_a_city(content: GameContent, hero: Character, in_city: PlayState) -> None:
     assert in_city.screen is ScreenId.CITY
     assert in_city.city_id == "farhold"
-    assert "Дальний Оплот" in render(content, hero, in_city, world_seed=WORLD_SEED).text()
+    assert "Порубежье" in render(content, hero, in_city, world_seed=WORLD_SEED).text()
 
 
 # --- stubs ------------------------------------------------------------
@@ -106,7 +106,7 @@ def test_shop_and_inventory_are_real_screens(
     shop = advance(content, hero, in_city, "Лавка", cycle=CYCLE, world_seed=WORLD_SEED, goods=goods)
     assert shop.screen is ScreenId.SHOP
     assert (
-        "Лавка города Дальний Оплот"
+        "Лавка города Порубежье"
         in render(content, hero, shop, world_seed=WORLD_SEED, goods=goods).text()
     )
 
@@ -170,7 +170,7 @@ def test_location_list_shows_level_bands(
 ) -> None:
     listed = step(content, hero, in_city, "Локации")
     text = render(content, hero, listed, world_seed=WORLD_SEED).text()
-    assert "Тихие Луга" in text
+    assert "Луга у Заставы" in text
     assert "уровни с 1 по 4" in text
 
 
@@ -182,14 +182,14 @@ def test_entering_a_location_starts_at_the_entrance(
     assert in_location.session.node == 0
     assert in_location.session.cycle == CYCLE
     text = render(content, hero, in_location, world_seed=WORLD_SEED).text()
-    assert text.startswith("Локация Тихие Луга, узел 0: Вход.")
+    assert text.startswith("Локация Луга у Заставы, узел 0: Вход.")
 
 
 def test_a_location_above_your_level_is_refused(
     content: GameContent, hero: Character, in_city: PlayState
 ) -> None:
     listed = step(content, hero, in_city, "Локации")
-    blocked = step(content, hero, listed, "5. Заброшенная Шахта")
+    blocked = step(content, hero, listed, "5. Выработки")
     assert blocked.screen is ScreenId.LOCATION_LIST
     assert "рассчитана на уровни" in blocked.notice
 

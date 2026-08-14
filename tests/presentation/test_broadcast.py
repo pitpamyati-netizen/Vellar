@@ -38,10 +38,10 @@ def test_the_channel_posts_only_game_news() -> None:
 
 
 def test_headline_comes_first_and_stands_alone() -> None:
-    event = bc.news("Открыт Медный Перекрёсток.", "Четыре тракта, пять локаций.")
+    event = bc.news("Открыто Крестовье.", "Четыре тракта, пять локаций.")
     text = bc.render_broadcast(event, emoji=False)
 
-    assert text.splitlines()[0] == "Открыт Медный Перекрёсток."
+    assert text.splitlines()[0] == "Открыто Крестовье."
 
 
 def test_emoji_is_optional_and_never_the_only_meaning() -> None:
@@ -80,7 +80,7 @@ def test_a_changelog_may_be_longer_than_a_notice() -> None:
 @pytest.mark.parametrize(
     "event",
     [
-        bc.news("Открыт Медный Перекрёсток."),
+        bc.news("Открыто Крестовье."),
         bc.service("Бот перезапущен."),
         bc.changelog("0.2", added=("Арена.",)),
     ],
