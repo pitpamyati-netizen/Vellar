@@ -14,6 +14,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from mmorpg.domain.entities.combat import ActionTag
+from mmorpg.domain.entities.content import Skill
+
 
 class EffectCategory(StrEnum):
     DAMAGE = "damage"
@@ -62,9 +65,6 @@ class EffectSpec:
     self_damage_taken: float = 0.0
     dot_turns: int = 0
     stun_turns: int = 0
-    # Healing: power is a flat amount unless heal_percent is set, in which case it
-    # is a percentage of maximum health.
-    heal_percent: bool = False
     execute_scaling: float = 0.0
     chain_falloff: float = 0.0
     self_modifiers: tuple[ModifierSpec, ...] = ()
@@ -73,6 +73,9 @@ class EffectSpec:
     cleanse_count: int = 0
     special: str = ""
     tags: tuple[str, ...] = field(default_factory=tuple)
+    # The trace this effect leaves. Left out, it is read off the category by
+    # `tag_of`; set it only where the category would say the wrong thing.
+    tag: ActionTag | None = None
 
 
 def _damage(**kwargs: object) -> EffectSpec:
@@ -102,7 +105,7 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
     "damage_dot": _damage(dot_turns=3),
     "damage_stun": _damage(stun_turns=1),
     "damage_slow": _damage(target_modifiers=(M("initiative_percent", -30.0),), duration=2),
-    "damage_execute": _damage(execute_scaling=1.0),
+    "damage_execute": _damage(execute_scaling=0.6),
     "damage_initiative": _damage(special="haste_self"),
     "damage_steal": _damage(special="steal_gold"),
     "damage_companion": _damage(dot_turns=3, damage_scale=0.6, special="companion"),
@@ -122,7 +125,6 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
     # --- healing and shields ---
     "heal": EffectSpec(category=EffectCategory.HEAL),
     "heal_big": EffectSpec(category=EffectCategory.HEAL),
-    "heal_percent": EffectSpec(category=EffectCategory.HEAL, heal_percent=True),
     "heal_over_time": EffectSpec(
         category=EffectCategory.HEAL, dot_turns=3, special="heal_over_time"
     ),
@@ -176,10 +178,43 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
             M("accuracy_percent", scale=-1.0),
         ),
     ),
-    "taunt": _debuff(target_modifiers=(M("damage_percent", scale=-1.0),), special="taunt"),
+    # Drawing the blow onto yourself is a guard, whatever the category says.
+    "taunt": _debuff(
+        target_modifiers=(M("damage_percent", scale=-1.0),),
+        special="taunt",
+        tag=ActionTag.GUARD,
+    ),
     # --- special ---
     "avoid_combat": EffectSpec(category=EffectCategory.SPECIAL, special="avoid_combat"),
 }
+
+
+def tag_of(spec: EffectSpec) -> ActionTag:
+    """Which trace an effect leaves.
+
+    A blow presses; a blow that is aimed - at armour, at a weak spot, at a mark -
+    or that leaves the target hindered is precision; everything that mends,
+    shields or prepares is a guard. A skill may name its tag outright, in content
+    or here, and then nothing is inferred.
+    """
+    if spec.tag is not None:
+        return spec.tag
+    if spec.category is EffectCategory.DAMAGE:
+        aimed = spec.pierce or spec.guaranteed_crit or spec.crit_bonus or spec.execute_scaling
+        hinders = spec.target_modifiers or spec.dot_turns
+        return ActionTag.PRECISION if aimed or hinders else ActionTag.PRESS
+    if spec.category is EffectCategory.DEBUFF:
+        return ActionTag.PRECISION
+    return ActionTag.GUARD
+
+
+def tag_of_skill(skill: Skill) -> ActionTag:
+    """The trace a whole skill leaves - content's word first, the effect's second.
+
+    Every class needs all three tags within reach, or a перелом is arithmetically
+    impossible for it; that is what the content overrides buy.
+    """
+    return skill.tag if skill.tag is not None else tag_of(spec_for(skill.effect))
 
 
 def spec_for(effect: str) -> EffectSpec:

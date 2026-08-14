@@ -27,7 +27,8 @@ from mmorpg.presentation.telegram.screens.paginated import (
 NODE_ACTIONS: dict[NodeKind, str] = {
     NodeKind.ENTRANCE: "Осмотреть вход",
     NodeKind.BATTLE: "Вступить в бой",
-    NodeKind.ELITE_BATTLE: "Вызвать сильного противника",
+    NodeKind.ELITE_BATTLE: "Вызвать эпического противника",
+    NodeKind.BOSS_BATTLE: "Вызвать хозяина логова",
     NodeKind.GATHER: "Собрать ресурсы",
     NodeKind.EVENT: "Разобраться с событием",
     NodeKind.CACHE: "Обыскать тайник",
@@ -40,7 +41,8 @@ NODE_ACTIONS: dict[NodeKind, str] = {
 NODE_DESCRIPTIONS: dict[NodeKind, str] = {
     NodeKind.ENTRANCE: "Отсюда вы вошли",
     NodeKind.BATTLE: "здесь ждёт противник",
-    NodeKind.ELITE_BATTLE: "здесь ждёт сильный противник",
+    NodeKind.ELITE_BATTLE: "здесь ждёт эпический противник, бой будет долгим",
+    NodeKind.BOSS_BATTLE: "здесь ждёт хозяин логова, бой будет самым долгим",
     NodeKind.GATHER: "здесь есть что собрать",
     NodeKind.EVENT: "здесь что-то происходит",
     NodeKind.CACHE: "здесь спрятан тайник",

@@ -31,7 +31,6 @@ def make_enemy(level: int = 3, health: int = 60, damage: int = 8, name: str = "Ð
         damage=damage,
         armor=2,
         initiative=9.0,
-        is_elite=False,
         loot=("wolf_pelt",),
         gold=12,
     )
@@ -129,9 +128,15 @@ def test_a_turn_is_reproducible(content: GameContent, fighter: Character) -> Non
 
 
 def test_a_different_seed_can_change_the_roll(content: GameContent, fighter: Character) -> None:
-    state = start_combat(content, fighter, (make_enemy(health=400),))
+    """Against an opponent well above your level the roll matters again.
+
+    At or below your own level accuracy is capped and criticals are rare, so forty
+    seeds legitimately produce one number - that is the point of measuring
+    accuracy by the level gap. The randomness has to be found where it lives.
+    """
+    state = start_combat(content, fighter, (make_enemy(level=fighter.level + 15, health=400),))
     results = {
-        attack(content, fighter, state, seed=bytes([index] * 16)).enemies[0].health
+        attack(content, fighter, state, seed=seed_for(index)).enemies[0].health
         for index in range(40)
     }
     assert len(results) > 1

@@ -23,7 +23,7 @@ from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import ActionKind, CombatAction, CombatOutcome
 from mmorpg.domain.entities.content import GameContent, ItemKind
-from mmorpg.domain.entities.location import NodeKind
+from mmorpg.domain.entities.location import EnemyRank
 from mmorpg.domain.ports.repositories import CharacterRepository, InventoryRepository
 from mmorpg.domain.procgen.location import cleared_mask
 from mmorpg.domain.rules import adventure
@@ -97,7 +97,9 @@ def _spawn(
             seed=seed,
             biome=biome,
             level=descent.level,
-            elite=descent.depth >= DUNGEON_DEPTH,
+            # The last floor of a descent is what the whole run is for: an epic
+            # opponent, and therefore a fight about twice as long as the two above.
+            rank=EnemyRank.ELITE if descent.depth >= DUNGEON_DEPTH else EnemyRank.NORMAL,
         )
         return fight_flow.begin(content, character, enemies, seed=seed, node=0, depth=descent.depth)
 
@@ -109,7 +111,7 @@ def _spawn(
         seed=seed,
         biome=location.biome,
         level=max(1, node.level),
-        elite=node.kind is NodeKind.ELITE_BATTLE,
+        rank=node.kind.rank,
     )
     return fight_flow.begin(content, character, enemies, seed=seed, node=node.index)
 

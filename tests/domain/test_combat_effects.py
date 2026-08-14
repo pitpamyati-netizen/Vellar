@@ -35,7 +35,6 @@ def enemy(name: str = "Волк", health: int = 4_000, damage: int = 5) -> Enemy
         damage=damage,
         armor=2,
         initiative=9.0,
-        is_elite=False,
         loot=(),
         gold=10,
     )

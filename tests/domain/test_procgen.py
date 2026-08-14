@@ -10,6 +10,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from mmorpg.domain.entities import GameContent, NodeKind
+from mmorpg.domain.entities.location import EnemyRank
 from mmorpg.domain.procgen import (
     DEFAULT_CYCLE_SECONDS,
     MAX_NODES,
@@ -198,7 +199,7 @@ def test_elites_are_stronger_and_alone(content: GameContent) -> None:
         archetypes=content.enemy_archetypes,
         biome="лес",
         level=30,
-        elite=True,
+        rank=EnemyRank.ELITE,
         elite_titles=content.elite_titles,
     )
     assert elite.is_elite
@@ -209,7 +210,7 @@ def test_elites_are_stronger_and_alone(content: GameContent) -> None:
         archetypes=content.enemy_archetypes,
         biome="лес",
         level=30,
-        elite=True,
+        rank=EnemyRank.ELITE,
         elite_titles=content.elite_titles,
     )
     assert len(group) == 1

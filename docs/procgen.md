@@ -52,8 +52,11 @@ expire exactly when they stop being meaningful and the database never grows.
 - 8 to 14 nodes.
 - Node 0 is the entrance, the last node is the exit.
 - Interior node kinds are weighted: battle 42, gather 16, event 14, cache 12, elite
-  battle 9, shrine 7. If the roll produces no fight at all, one node is forced to
-  be a battle - a location is never a corridor.
+  battle 9, shrine 7.
+- The **deepest interior node is always the boss**, so every location has exactly
+  one and always the same distance in. It is not a toll on the way out: the graph
+  has shortcuts, so fighting it is a decision. Because that node is forced, a
+  location always contains at least one fight.
 - Node level rises with depth from the location's `level_min` to its `level_max`.
 
 **Connectivity is structural, not checked-and-retried.** Node `i` is always linked
@@ -78,17 +81,40 @@ biome (with a wildcard pool as fallback so an unknown biome degrades instead of
 crashing), then scaled to the node level:
 
 ```
-health = (28 + 11.5 * level) * archetype.health * spread
-damage = (5 + 2.1 * level)  * archetype.damage * spread
-armor  = 1.15 * level       * archetype.armor
+health = (24 + 9.0 * level) * archetype.health * spread * rank.health * share
+damage = (3.5 + 0.7 * level) * archetype.damage * spread * rank.damage * share
+armor  = 1.15 * level        * archetype.armor          * rank.armor
 ```
 
 `spread` is a deterministic +-12% wobble derived from the same seed, so two fights
 against "серый волк" at level 12 are not carbon copies while staying reproducible.
 
-Elites are single opponents with 2.3x health, 1.45x damage and 3x gold, and get a
-title from `[meta].elite_titles` ("Матёрый серый волк"). Ordinary encounters roll
-one to three enemies, weighted 6:3:1.
+Health is set against the player's *standard blow* and damage against their health
+pool, both of which grow with level on their own - so the shape of a fight is the
+same at level 3 and at level 300. What that shape is, `tests/domain/test_combat_balance.py`
+pins down: an ordinary fight is about three turns.
+
+**Three tiers** (`EnemyRank`), and they differ in one thing only - how long the
+fight lasts:
+
+| tier | health | damage | armour | gold | turns |
+| --- | --- | --- | --- | --- | --- |
+| обычный | 1.0 | 1.0 | 1.0 | 1.0 | ~3 |
+| эпический | 2.6 | 1.25 | 1.2 | 3.0 | ~5 |
+| босс | 5.2 | 1.25 | 1.35 | 7.0 | ~10 |
+
+Damage deliberately lags health: a boss that lasted four times as long *and* hit
+four times as hard would simply end the fight on turn three of ten.
+
+Both long tiers are single opponents and wear a title from `[meta].elite_titles` -
+adjectives only, since they are glued in front of the archetype name ("Матёрый
+серый волк"). The title does not say which tier: the combat screen does that in
+words, so the name stays a name.
+
+`share` is the **pack tax**: an ordinary encounter rolls one to three enemies
+(weighted 6:3:1) and they divide one fight's budget, `1 / (1 + 0.45 * (size - 1))`.
+Three full-strength opponents made an "ordinary" fight nine turns long - three
+fights in a row wearing one name.
 
 ## The delta log
 

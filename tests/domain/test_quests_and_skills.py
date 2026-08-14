@@ -12,7 +12,7 @@ import pytest
 
 from mmorpg.domain.entities import Character, GameContent, QuestLog, SkillLoadout
 from mmorpg.domain.entities.content import SkillKind
-from mmorpg.domain.entities.location import Enemy, EnemyKind, NodeKind
+from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank, NodeKind
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import skills as skill_rules
 
@@ -46,7 +46,7 @@ def a_beast(*, elite: bool = False) -> Enemy:
         damage=5,
         armor=1,
         initiative=8.0,
-        is_elite=elite,
+        rank=EnemyRank.ELITE if elite else EnemyRank.NORMAL,
         loot=(),
         gold=5,
     )

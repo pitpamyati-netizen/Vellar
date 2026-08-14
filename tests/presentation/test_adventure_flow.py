@@ -239,7 +239,8 @@ async def test_a_battle_node_actually_starts_a_fight(player: Player, content: Ga
     screen = await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
     assert screen.id is ScreenId.COMBAT
     assert screen.text().startswith("Бой. Ход 1.")
-    assert next(row[0].text for row in screen.rows) == "Атака"
+    # The first button is the plain attack; its label now names the tag it leaves.
+    assert next(row[0].text for row in screen.rows).startswith("Атака")
 
 
 async def test_a_fight_ends_and_the_result_is_stored(

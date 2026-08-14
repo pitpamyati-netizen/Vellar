@@ -49,13 +49,13 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 
 **`docs/`** — `architecture.md`, `accessibility.md` (спецификация, не пожелания),
 `procgen.md`, `content-guide.md`, `skills.md`, `deployment.md`,
-`release-checklist.md`, `adr/0001..0005`.
+`release-checklist.md`, `adr/0001..0007`.
 
-**`tests/`** — `domain/` (12, слои держит `test_layering.py`), `content/` (6),
-`presentation/` (11: доступность, канал, группа, сквозной проход по циклу в
-`test_adventure_flow.py`), `application/` (2), `integration/` (маркер
-`integration`), `test_config.py`, `test_health.py`, `test_main.py`,
-`conftest.py`.
+**`tests/`** — `domain/` (слои держит `test_layering.py`, длину боя —
+`test_combat_balance.py`), `content/`, `presentation/` (доступность, канал,
+группа, сквозной проход по циклу в `test_adventure_flow.py`), `application/`,
+`integration/` (маркер `integration`), `test_config.py`, `test_health.py`,
+`test_main.py`, `conftest.py`.
 
 **`scripts/`** — `ci.ps1`/`ci.sh` (гейт), `healthcheck.py`, `broadcast.py` (пост
 в канал: `--headline` или `--changelog latest`), `install-hooks.ps1`/`.sh`.
@@ -74,11 +74,15 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
    ряд всегда `Назад · Осмотреться · Главное меню`. Каждое действие дублируется
    текстовой командой. `parse_mode=None`. Полный список — `docs/accessibility.md`.
 3. **Никаких таймеров в PvE.** Только арена: 60 с и автодействие из настроек.
+   Длина боя — три хода на обычном противнике, вдвое на эпическом, вчетверо на
+   боссе; держит `tests/domain/test_combat_balance.py`.
 4. **Текст игрока — по `Narrative.md`.** Сверяться до написания, не после.
 5. **Логика — не в хендлерах.** Хендлер: разобрать кнопку, вызвать сервис,
    отрисовать экран. Запись в БД — намерением на состоянии флоу.
 6. **Контент — в TOML, не в коде.** Новое умение — строка в `skills.toml`, новое
-   поведение — запись в `skill_effects.py`.
+   поведение — запись в `skill_effects.py`. Сила умения — всегда процент: урон от
+   стандартного удара, лечение и щит от максимума здоровья, усиление от самого
+   модификатора. Абсолютных чисел в контенте нет (ADR 0007).
 7. **Ничего производного не хранится**: тотал статов, лут, ассортимент и карта
    считаются заново из сида и цикла. Ключи Redis всегда с TTL.
 8. **Новый экран** добавляется в `tests/presentation/conftest.py::all_screens` —

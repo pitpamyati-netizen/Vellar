@@ -39,6 +39,70 @@ class ActionKind(StrEnum):
     FLEE = "flee"
 
 
+class ActionTag(StrEnum):
+    """The trace a move leaves behind: press, guard or precision.
+
+    Three tags in a closed circle, so no move is safe and none is useless. The
+    Russian words for them are written by the presentation layer.
+    """
+
+    PRESS = "press"
+    GUARD = "guard"
+    PRECISION = "precision"
+
+
+_COUNTERS: dict[ActionTag, ActionTag] = {
+    ActionTag.PRESS: ActionTag.GUARD,
+    ActionTag.GUARD: ActionTag.PRECISION,
+    ActionTag.PRECISION: ActionTag.PRESS,
+}
+
+
+def counter_to(tag: ActionTag) -> ActionTag:
+    """The tag that opens a breach in ``tag``.
+
+    A guard stops a press, precision finds the gap in a guard, and a press is
+    inside the reach before precision picks its spot.
+    """
+    return _COUNTERS[tag]
+
+
+TRACE_LENGTH = 3
+
+
+@dataclass(frozen=True, slots=True)
+class Trace:
+    """The last few tags the player left, newest last.
+
+    Only ``TRACE_LENGTH`` are kept, because that is all the rules ever ask about:
+    a repeat builds momentum, three different tags in a row break the exchange.
+    """
+
+    tags: tuple[ActionTag, ...] = ()
+
+    @property
+    def last(self) -> ActionTag | None:
+        return self.tags[-1] if self.tags else None
+
+    @property
+    def streak(self) -> int:
+        """How many identical tags close the trace."""
+        count = 0
+        for tag in reversed(self.tags):
+            if tag is not self.last:
+                break
+            count += 1
+        return count
+
+    def push(self, tag: ActionTag) -> Trace:
+        return Trace(tags=(*self.tags, tag)[-TRACE_LENGTH:])
+
+    def breaks_with(self, tag: ActionTag) -> bool:
+        """Whether adding ``tag`` makes the last three tags all different."""
+        recent = (*self.tags[-(TRACE_LENGTH - 1) :], tag)
+        return len(recent) == TRACE_LENGTH and len(set(recent)) == TRACE_LENGTH
+
+
 class EventKind(StrEnum):
     DAMAGE = "damage"
     MISS = "miss"
@@ -60,12 +124,9 @@ class EventKind(StrEnum):
     ON_COOLDOWN = "on_cooldown"
     EMPTY_SLOT = "empty_slot"
     TURN_SKIPPED = "turn_skipped"
-    # Tempo (Roadmap 1.1): the announcement, the two rewards of a trail, and the
-    # armour that a countered intent leaves open.
-    INTENT = "intent"
     MOMENTUM = "momentum"
-    BREAK = "break"
     BREACH = "breach"
+    BREAKTHROUGH = "breakthrough"
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,7 +140,6 @@ class CombatEvent:
     skill_name: str = ""
     effect_name: str = ""
     turns: int = 0
-    tag: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,15 +233,12 @@ class CombatState:
     player: PlayerState
     enemies: tuple[EnemyState, ...]
     turn: int = 1
+    trace: Trace = field(default_factory=Trace)
     outcome: CombatOutcome = CombatOutcome.ONGOING
     events: tuple[CombatEvent, ...] = ()
     experience: int = 0
     gold: int = 0
     loot: tuple[str, ...] = ()
-    # Tempo. ``trail`` holds the tags of the last three player actions, ``intent``
-    # is what the enemy side announced for this turn (Roadmap 1.1).
-    trail: tuple[str, ...] = ()
-    intent: str = ""
 
     @property
     def living_enemies(self) -> tuple[EnemyState, ...]:

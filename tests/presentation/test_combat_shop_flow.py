@@ -29,7 +29,6 @@ def make_enemy(name: str = "Серый волк", health: int = 400) -> Enemy:
         damage=9,
         armor=3,
         initiative=9.0,
-        is_elite=False,
         loot=("wolf_pelt",),
         gold=14,
     )
@@ -78,7 +77,7 @@ def test_panel_has_exactly_six_numbered_slots_plus_racial(
 ) -> None:
     screen = flow.render(content, fighter, session)
     texts = [row[0].text for row in screen.rows]
-    assert texts[0] == "Атака"
+    assert texts[0] == "Атака — натиск"
     assert [text.split(".")[0] for text in texts[1:7]] == ["1", "2", "3", "4", "5", "6"]
     assert "расовое" in texts[7]
     assert screen.rows[-1][0].text == "Сумка"
@@ -97,11 +96,48 @@ def test_empty_slots_are_rendered_in_place(
 def test_cooldown_is_written_into_the_button(
     content: GameContent, fighter: Character, session: flow.CombatSession
 ) -> None:
-    used, _ = flow.advance(content, fighter, session, "3. Удар щитом — готово, 18 ресурса")
-    screen = flow.render(content, fighter, used)
-    third = screen.rows[3][0].text
-    assert third.startswith("3. Удар щитом — откат")
-    assert "ход" in third
+    ready = flow.render(content, fighter, session).rows[3][0].text
+    # Ready, the button states the price of using it.
+    assert "откат 3 хода" in ready
+    assert ready.endswith("готово")
+
+    used, _ = flow.advance(content, fighter, session, ready)
+    third = flow.render(content, fighter, used).rows[3][0].text
+    # Spent, it states what is left of it - a different question.
+    assert third.startswith("3. Удар щитом — точность,")
+    assert third.endswith("ещё 3 хода")
+
+
+def test_every_button_says_what_it_does(
+    content: GameContent, fighter: Character, session: flow.CombatSession
+) -> None:
+    """A panel of six buttons that all read "готово" tells the player nothing.
+
+    Each filled slot has to name a consequence - a number of damage, of healing,
+    of a shield, or the rule it applies - before it is pressed. That is the whole
+    difference between a skill and a lottery ticket for a player who cannot see
+    a tooltip.
+    """
+    screen = flow.render(content, fighter, session)
+    cleave, taunt = screen.rows[1][0].text, screen.rows[2][0].text
+    assert "урон " in cleave, cleave
+    assert "стоит 10" in cleave, cleave
+    assert "урон минус 20 процентов" in taunt, taunt
+    assert "на 2 хода" in taunt, taunt
+
+
+def test_a_skill_states_a_number_that_grows_with_the_character(
+    content: GameContent, fighter: Character
+) -> None:
+    """The number on the button is the character's, not the skill's."""
+
+    def damage_on_the_button(level: int) -> int:
+        hero = replace(fighter, level=level)
+        session = flow.begin(content, hero, (make_enemy(),), seed=FIGHT_SEED, node=1)
+        label = flow.render(content, hero, session).rows[1][0].text
+        return int(label.split("урон ")[1].split(",")[0])
+
+    assert damage_on_the_button(300) > damage_on_the_button(10) > damage_on_the_button(1)
 
 
 def test_panel_size_never_changes_with_level(
@@ -162,6 +198,60 @@ def test_unknown_input_is_refused_without_burning_a_turn(
     assert notice
 
 
+# --- the tag rules, spoken -------------------------------------------
+
+
+def test_the_enemy_announces_its_intent_and_the_way_in(
+    content: GameContent, fighter: Character, session: flow.CombatSession
+) -> None:
+    """Rule 1.1.1 and 1.1.3: the choice is made against something, in words."""
+    line = flow.render(content, fighter, session).text().split("\n")[1]
+    assert "Намерение:" in line
+    assert "брешь — " in line
+    assert any(tag in line for tag in ("натиск", "оборона", "точность"))
+
+
+def test_the_trace_is_a_spoken_line(
+    content: GameContent, fighter: Character, session: flow.CombatSession
+) -> None:
+    """Rule 1.1.4: no bar, no icon - the state of the exchange is a sentence."""
+    opening = flow.render(content, fighter, session).text()
+    assert "След пуст." in opening
+
+    pressed, _ = flow.advance(content, fighter, session, "Атака — натиск")
+    once = flow.render(content, fighter, pressed).text()
+    assert "След: натиск." in once
+    assert "повтор даст разгон" in once
+
+    twice, _ = flow.advance(content, fighter, pressed, "Атака — натиск")
+    assert (
+        "След: натиск, 2 следа подряд, разгон 25 процентов."
+        in flow.render(content, fighter, twice).text()
+    )
+
+
+def test_every_action_button_names_its_tag(
+    content: GameContent, fighter: Character, session: flow.CombatSession
+) -> None:
+    texts = [row[0].text for row in flow.render(content, fighter, session).rows]
+    assert texts[0] == "Атака — натиск"
+    assert "натиск" in texts[1], "Рассечение is a plain blow"
+    assert "оборона" in texts[2], "Провокация pulls the blow onto you"
+    assert "оборона" in texts[7], "the racial slot names its tag too"
+
+
+def test_the_plain_attack_word_still_works(
+    content: GameContent, fighter: Character, session: flow.CombatSession
+) -> None:
+    """The label grew a tag; a player who typed the old word is not locked out."""
+    assert flow.action_for(content, fighter, session, "Атака") == flow.CombatAction(
+        kind=ActionKind.ATTACK
+    )
+    assert flow.action_for(content, fighter, session, "Атака — натиск") == flow.CombatAction(
+        kind=ActionKind.ATTACK
+    )
+
+
 def test_victory_screen_reports_the_rewards(content: GameContent, fighter: Character) -> None:
     weak = flow.begin(content, fighter, (make_enemy(health=1),), seed=FIGHT_SEED, node=2)
     state = weak
@@ -185,6 +275,7 @@ def test_a_fight_survives_a_round_trip_through_redis(
     fought, _ = flow.advance(content, fighter, session, "Атака")
     restored = flow.deserialise(flow.serialise(fought))
     assert restored.state.turn == fought.state.turn
+    assert restored.state.trace == fought.state.trace, "the trace outlives a reconnect"
     assert restored.state.player.health == fought.state.player.health
     assert restored.state.enemies[0].health == fought.state.enemies[0].health
     assert restored.seed == fought.seed

@@ -5,18 +5,38 @@ enemy's action, then the end-of-turn upkeep, and returns a brand new state with
 the list of events that happened. There are no timers anywhere: the state simply
 waits (accessibility rule 13).
 
+Three rules make a fight more than a damage race, and none of them adds a button:
+
+- **intent** - every enemy says in advance which of the three tags its next move
+  carries, so the player chooses against something, not into the dark;
+- **trace** - the player's own moves carry tags too. A repeat builds *momentum*
+  and hits harder with every repeat; three different tags in a row are a
+  *breakthrough* and the enemies do not get to answer that turn;
+- **breach** - a tag that counters the announced intent takes that enemy's armour
+  out of the count *and* halves the blow it answers with.
+
+Every magnitude - a blow, a skill, a heal - is stated as a percentage of
+something that grows on its own: damage of the character's standard blow, healing
+of maximum health. Content therefore never has to be rewritten as levels climb,
+and a level-1 skill and a level-100 skill are read on the same scale (ADR 0007).
+
 All randomness comes from an explicit seed passed in by the caller, so a fight can
-be replayed exactly - which is what makes it testable.
+be replayed exactly - which is what makes it testable. Intents carry no randomness
+at all: they are a pure function of the enemy and the turn, so the screen and the
+engine always name the same one.
 """
 
 from __future__ import annotations
 
 import random
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
+from types import MappingProxyType
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import (
     ActionKind,
+    ActionTag,
     CombatAction,
     CombatEvent,
     CombatOutcome,
@@ -24,50 +44,163 @@ from mmorpg.domain.entities.combat import (
     EnemyState,
     EventKind,
     PlayerState,
+    Trace,
+    counter_to,
 )
 from mmorpg.domain.entities.content import GameContent, Skill
-from mmorpg.domain.entities.effects import ActiveEffect
+from mmorpg.domain.entities.effects import ActiveEffect, EffectStack
 from mmorpg.domain.entities.location import Enemy
+from mmorpg.domain.entities.stats import StatCode
+from mmorpg.domain.procgen.enemies import RANK_FACTORS
 from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules import skills as skill_rules
-from mmorpg.domain.rules import tempo as tempo_rules
 from mmorpg.domain.rules.progression import experience_reward
-from mmorpg.domain.rules.skill_effects import EffectCategory, EffectSpec, spec_for
+from mmorpg.domain.rules.skill_effects import (
+    EffectCategory,
+    EffectSpec,
+    spec_for,
+    tag_of_skill,
+)
 from mmorpg.domain.rules.stats import DerivedStats, derived_stats, primary_stats
-from mmorpg.domain.rules.tempo import Tag
 
-BASIC_ATTACK_POWER = 8.0
-STAT_DAMAGE_DIVISOR = 18.0
-ARMOR_SOFTENER = 100.0
+# --- one scale for every number --------------------------------------
+#
+# Everything a skill does is measured in *standard blows*. A character's blow is
+# a function of the one stat their class scales on, so damage has exactly one
+# source of growth; content states a skill's power as a percentage of it, where
+# 100 is a plain attack. Before this, a skill's power was a flat content number
+# while the plain attack grew with level, and every skill past level 30 was
+# strictly worse than pressing "Атака" - see ADR 0007.
+#
+# Level carries most of the curve and the scaling stat carries the spread. If the
+# stat carried it alone, a class with one key stat would pour every point into it
+# and hit twice as hard as a class with two - the difference would not be a build,
+# it would be a bug.
+BLOW_BASE = 6.0
+BLOW_PER_LEVEL = 2.2
+BLOW_PER_STAT = 0.6
+BASIC_ATTACK_PERCENT = 100.0
+
 MIN_HIT_CHANCE = 40.0
 MAX_HIT_CHANCE = 97.0
 ENEMY_ACCURACY_BASE = 78.0
-ENEMY_ACCURACY_PER_LEVEL = 0.15
 BASE_FLEE_CHANCE = 45.0
 LOW_HEALTH_THRESHOLD = 0.35
+
+# Accuracy is answered by the *difference* in levels, never by the absolute one.
+# Measured absolutely, a hero of level 300 missed three blows in five while the
+# enemies never missed at all, and every high-level fight became a coin flip.
+# Measured by the gap, a fight at your own level is even and being out of your
+# depth is what costs you.
+ACCURACY_PER_LEVEL_GAP = 1.5
+ENEMY_ACCURACY_PER_LEVEL_GAP = 1.0
+
+# Armour is softened against the defender's own level. Both armour and damage
+# grow linearly with level, so an unnormalised softener would let armour win the
+# race outright: at level 300 an ordinary blow would land for a quarter of itself.
+ARMOR_SOFTENER_BASE = 55.0
+ARMOR_SOFTENER_PER_LEVEL = 3.2
+
+
+def standard_blow(level: int, stat_value: int) -> float:
+    """What one plain attack of this character is worth."""
+    return BLOW_BASE + BLOW_PER_LEVEL * level + BLOW_PER_STAT * stat_value
+
+
+def armor_factor(armor: float, level: int) -> float:
+    """The share of a blow that survives armour, between 0 and 1."""
+    softener = ARMOR_SOFTENER_BASE + ARMOR_SOFTENER_PER_LEVEL * level
+    return softener / (softener + max(0.0, armor))
+
+
+# --- tempo: intent, trace, breach ------------------------------------
+
+#: Enemies walk this circle, offset by their own initiative, so two enemies in
+#: the same fight rarely announce the same thing.
+INTENT_CYCLE = (ActionTag.PRESS, ActionTag.PRECISION, ActionTag.GUARD)
+#: A quarter of health left and the beast stops trading blows.
+WOUNDED_RATIO = 0.25
+#: What the announced intent does to the enemy's armour when the player strikes.
+INTENT_ARMOR: dict[ActionTag, float] = {
+    ActionTag.PRESS: 0.75,
+    ActionTag.PRECISION: 1.0,
+    ActionTag.GUARD: 2.0,
+}
+#: And to the damage of the enemy's own blow.
+INTENT_DAMAGE: dict[ActionTag, float] = {
+    ActionTag.PRESS: 1.4,
+    ActionTag.PRECISION: 1.0,
+    ActionTag.GUARD: 0.5,
+}
+#: Two identical tags in a row are momentum; three different ones break the guard.
+MOMENTUM_STREAK = 2
+#: Added per repeat beyond the first, so a third identical tag is worth +50%.
+MOMENTUM_DAMAGE_PERCENT = 25.0
+#: A breached enemy has been caught mid-move: its own blow lands for half.
+BREACH_ANSWER_SCALE = 0.5
+
+
+def enemy_intent(enemy: EnemyState, turn: int) -> ActionTag:
+    """What this enemy announces for the given turn.
+
+    Pure and deterministic: the screen calls it to print the announcement, the
+    engine calls it to keep the promise. A wounded enemy always closes up, which
+    is both readable and the reason a fight does not end the way it started.
+    """
+    if enemy.health * 4 <= enemy.enemy.max_health:
+        return ActionTag.GUARD
+    step = int(enemy.enemy.initiative) + enemy.index + turn
+    return INTENT_CYCLE[step % len(INTENT_CYCLE)]
 
 
 @dataclass(frozen=True, slots=True)
 class TurnTempo:
-    """What the trail and the announced intent are worth for one action.
+    """Everything the tag rules decide about one turn, worked out before it runs.
 
-    ``boost`` is momentum, ``breach`` means the armour of the target is open
-    because the action counters what the enemy announced (Roadmap 1.1).
+    It has to be settled up front: momentum changes the damage of the very action
+    that earns it, and a breakthrough decides whether the enemies answer at all.
     """
 
-    boost: float = 1.0
-    breach: bool = False
+    intents: Mapping[int, ActionTag]
+    tag: ActionTag | None = None
+    streak: int = 0
+    breakthrough: bool = False
+
+    @property
+    def momentum(self) -> bool:
+        return self.streak >= MOMENTUM_STREAK
+
+    def breached(self, index: int) -> bool:
+        """Whether the player's tag counters what this enemy announced."""
+        intent = self.intents.get(index)
+        return intent is not None and self.tag is counter_to(intent)
+
+    def armor_scale(self, index: int) -> float:
+        if self.breached(index):
+            return 0.0
+        intent = self.intents.get(index)
+        return INTENT_ARMOR[intent] if intent is not None else 1.0
+
+    def answer_scale(self, index: int) -> float:
+        """What is left of a breached enemy's own blow.
+
+        Without this a breach would be worth nothing against an announced press:
+        the tag that counters a press is a guard, and a guard deals no damage, so
+        the "armour out of the count" reward had nothing to apply to. A breach now
+        always pays - in damage dealt, in damage taken, or in both.
+        """
+        return BREACH_ANSWER_SCALE if self.breached(index) else 1.0
+
+    @property
+    def damage_scale(self) -> float:
+        return 1.0 + MOMENTUM_DAMAGE_PERCENT * max(0, self.streak - 1) / 100.0
 
 
 # --- starting a fight ------------------------------------------------
 
 
 def start_combat(
-    content: GameContent,
-    character: Character,
-    enemies: tuple[Enemy, ...],
-    *,
-    seed: bytes = b"\x00",
+    content: GameContent, character: Character, enemies: tuple[Enemy, ...]
 ) -> CombatState:
     """Build the opening state. The player always acts first on turn 1.
 
@@ -83,11 +216,9 @@ def start_combat(
         max_resource=stats.max_resource,
         resource_name=stats.resource_name,
     )
-    intent = tempo_rules.roll_intent(random.Random(int.from_bytes(seed, "big")))
     return CombatState(
         player=player,
         enemies=tuple(EnemyState.spawn(enemy, index) for index, enemy in enumerate(enemies)),
-        intent=intent.value,
     )
 
 
@@ -107,21 +238,7 @@ def resolve_turn(
 
     source = random.Random(int.from_bytes(seed, "big"))
     working = replace(state, events=())
-
-    tag = _tag_for(content, character, action)
-    trail = tempo_rules.extended(state.trail, tag)
-    breach = bool(state.intent) and tempo_rules.counters(tag, Tag(state.intent))
-    momentum = tempo_rules.has_momentum(trail)
-    broke = tempo_rules.is_break(trail)
-    pace = TurnTempo(boost=tempo_rules.damage_factor(trail), breach=breach)
-    working = replace(working, trail=trail)
-
-    if breach:
-        working = working.with_events(CombatEvent(kind=EventKind.BREACH, tag=tag.value))
-    if momentum:
-        working = working.with_events(
-            CombatEvent(kind=EventKind.MOMENTUM, tag=tag.value, amount=tempo_rules.streak(trail))
-        )
+    tempo = _tempo(content, character, working, action)
 
     if working.player.stunned > 0:
         working = working.with_events(
@@ -131,45 +248,89 @@ def resolve_turn(
             working, player=replace(working.player, stunned=working.player.stunned - 1)
         )
     else:
-        working = _player_action(content, character, working, action, source, pace)
+        working = _announce_tempo(working, tempo)
+        working = _player_action(content, character, working, action, tempo, source)
+        working = replace(working, trace=_advanced_trace(state.trace, tempo))
 
     working = _check_outcome(content, character, working)
     if working.is_over:
         return working
 
-    if broke:
-        # A break costs the enemy its answer: the trail read three different
-        # tags in a row and nobody on the other side kept up.
-        working = working.with_events(CombatEvent(kind=EventKind.BREAK))
+    if tempo.breakthrough:
+        # The exchange is broken: the enemies spend the turn finding their feet.
+        working = working.with_events(
+            CombatEvent(kind=EventKind.BREAKTHROUGH, actor=working.player.name)
+        )
     else:
-        working = _enemy_actions(content, character, working, source)
+        working = _enemy_actions(content, character, working, tempo, source)
         working = _check_outcome(content, character, working)
         if working.is_over:
             return working
 
-    return _announce_intent(_end_of_turn(content, character, working), source)
+    return _end_of_turn(content, character, working)
 
 
-def _tag_for(content: GameContent, character: Character, action: CombatAction) -> Tag:
-    """Which tag the chosen action leaves on the trail."""
-    match action.kind:
-        case ActionKind.SKILL | ActionKind.RACIAL:
-            skill = _resolve_skill(content, character, action)
-            return tempo_rules.tag_of_spec(spec_for(skill.effect) if skill else None)
-        case ActionKind.ITEM | ActionKind.FLEE:
-            return Tag.GUARD
-        case _:
-            return tempo_rules.tag_of_attack()
-
-
-def _announce_intent(state: CombatState, source: random.Random) -> CombatState:
-    """Say out loud what the enemy side prepares for the next turn."""
-    if not state.living_enemies:
-        return state
-    intent = tempo_rules.roll_intent(source)
-    return replace(state, intent=intent.value).with_events(
-        CombatEvent(kind=EventKind.INTENT, actor=state.living_enemies[0].name, tag=intent.value)
+def _tempo(
+    content: GameContent, character: Character, state: CombatState, action: CombatAction
+) -> TurnTempo:
+    """Work out the intents, the player's tag and what the trace makes of it."""
+    intents = MappingProxyType(
+        {enemy.index: enemy_intent(enemy, state.turn) for enemy in state.living_enemies}
     )
+    tag = _action_tag(content, character, state, action)
+    if tag is None or state.player.stunned > 0:
+        return TurnTempo(intents=intents)
+
+    trace = state.trace
+    return TurnTempo(
+        intents=intents,
+        tag=tag,
+        streak=trace.streak + 1 if trace.last is tag else 1,
+        breakthrough=trace.breaks_with(tag),
+    )
+
+
+def _action_tag(
+    content: GameContent, character: Character, state: CombatState, action: CombatAction
+) -> ActionTag | None:
+    """The tag this action will leave, or ``None`` when it leaves none.
+
+    An action that cannot happen - an empty slot, a skill on cooldown or one the
+    player cannot pay for - leaves no trace, and neither does running away.
+    """
+    match action.kind:
+        case ActionKind.ATTACK:
+            return ActionTag.PRESS
+        case ActionKind.ITEM:
+            return ActionTag.GUARD if action.item_id is not None else None
+        case ActionKind.FLEE:
+            return None
+        case ActionKind.SKILL | ActionKind.RACIAL:
+            attempt = _attempt_skill(content, character, state, action)
+            return None if isinstance(attempt, CombatEvent) else tag_of_skill(attempt[0])
+
+
+def _announce_tempo(state: CombatState, tempo: TurnTempo) -> CombatState:
+    working = state
+    if tempo.momentum:
+        working = working.with_events(
+            CombatEvent(
+                kind=EventKind.MOMENTUM,
+                actor=working.player.name,
+                amount=tempo.streak,
+            )
+        )
+    for enemy in working.living_enemies:
+        if tempo.breached(enemy.index):
+            working = working.with_events(CombatEvent(kind=EventKind.BREACH, target=enemy.name))
+    return working
+
+
+def _advanced_trace(trace: Trace, tempo: TurnTempo) -> Trace:
+    """A breakthrough spends the trace; anything else lengthens it."""
+    if tempo.tag is None:
+        return trace
+    return Trace() if tempo.breakthrough else trace.push(tempo.tag)
 
 
 def _player_action(
@@ -177,14 +338,14 @@ def _player_action(
     character: Character,
     state: CombatState,
     action: CombatAction,
+    tempo: TurnTempo,
     source: random.Random,
-    pace: TurnTempo,
 ) -> CombatState:
     match action.kind:
         case ActionKind.ATTACK:
-            return _basic_attack(content, character, state, action.target, source, pace)
+            return _basic_attack(content, character, state, action.target, tempo, source)
         case ActionKind.SKILL | ActionKind.RACIAL:
-            return _use_skill(content, character, state, action, source, pace)
+            return _use_skill(content, character, state, action, tempo, source)
         case ActionKind.ITEM:
             return _use_item(content, state, action)
         case ActionKind.FLEE:
@@ -199,31 +360,46 @@ def _basic_attack(
     character: Character,
     state: CombatState,
     target_index: int,
+    tempo: TurnTempo,
     source: random.Random,
-    pace: TurnTempo,
 ) -> CombatState:
     target = state.enemy_at(target_index) or state.first_living()
     if target is None:
         return state
     stats = derived_stats(content, character, state.player.effects)
-    primary = primary_stats(content, character, state.player.effects)
     modifiers = mods.collect_modifiers(content, character, state.player.effects)
-    klass = content.character_class(character.class_id)
-    scaling = klass.key_stats[0] if klass.key_stats else None
-    stat_value = primary[scaling] if scaling is not None else 0
 
     return _strike(
         state,
         target=target,
-        power=BASIC_ATTACK_POWER + character.level * 1.5,
-        stat_value=stat_value,
+        power=blow_of(content, character, state.player.effects) * BASIC_ATTACK_PERCENT / 100.0,
+        character_level=character.level,
         stats=stats,
         modifiers=modifiers,
         spec=None,
         skill_name="Атака",
+        tempo=tempo,
         source=source,
-        pace=pace,
     )
+
+
+def blow_of(
+    content: GameContent,
+    character: Character,
+    effects: EffectStack | None = None,
+    scaling: StatCode | None = None,
+) -> float:
+    """This character's standard blow - the unit every skill power is a percent of.
+
+    The stat is the skill's own when it names one and the class's first key stat
+    otherwise, so a warrior's blow follows strength and a mage's follows intellect
+    without either being written down twice.
+    """
+    if scaling is None:
+        klass = content.character_class(character.class_id)
+        scaling = klass.key_stats[0] if klass.key_stats else None
+    primary = primary_stats(content, character, effects)
+    return standard_blow(character.level, primary[scaling] if scaling is not None else 0)
 
 
 # --- skills ----------------------------------------------------------
@@ -244,47 +420,60 @@ def _resolve_skill(
     return content.skill(slotted) if slotted else None
 
 
+def _attempt_skill(
+    content: GameContent, character: Character, state: CombatState, action: CombatAction
+) -> tuple[Skill, int] | CombatEvent:
+    """The skill and what it costs, or the event that says why it cannot be used.
+
+    Asked twice per turn - once to work out the tag before anything happens, once
+    to actually run the skill - so it stays pure and cheap.
+    """
+    skill = _resolve_skill(content, character, action)
+    if skill is None:
+        return CombatEvent(kind=EventKind.EMPTY_SLOT)
+
+    player = state.player
+    cooldown = player.cooldown_of(skill.code)
+    if cooldown > 0:
+        return CombatEvent(kind=EventKind.ON_COOLDOWN, skill_name=skill.name, turns=cooldown)
+
+    modifiers = mods.collect_modifiers(content, character, player.effects)
+    # The rank-3 edge is a discount or a gain, never both: see ``rules.skills``.
+    cost = round(
+        _skill_cost(skill, modifiers, free=player.free_cast)
+        * skill_rules.cost_factor(character, skill)
+    )
+    if cost > player.resource:
+        return CombatEvent(kind=EventKind.NOT_ENOUGH_RESOURCE, skill_name=skill.name, amount=cost)
+    return skill, cost
+
+
 def _use_skill(
     content: GameContent,
     character: Character,
     state: CombatState,
     action: CombatAction,
+    tempo: TurnTempo,
     source: random.Random,
-    pace: TurnTempo,
 ) -> CombatState:
-    skill = _resolve_skill(content, character, action)
-    if skill is None:
-        return state.with_events(CombatEvent(kind=EventKind.EMPTY_SLOT))
+    attempt = _attempt_skill(content, character, state, action)
+    if isinstance(attempt, CombatEvent):
+        return state.with_events(attempt)
 
-    player = state.player
-    if player.cooldown_of(skill.code) > 0:
-        return state.with_events(
-            CombatEvent(
-                kind=EventKind.ON_COOLDOWN,
-                skill_name=skill.name,
-                turns=player.cooldown_of(skill.code),
-            )
-        )
-
-    modifiers = mods.collect_modifiers(content, character, player.effects)
-    cost = _skill_cost(skill, modifiers, free=player.free_cast)
-    cost = round(cost * skill_rules.cost_factor(character, skill))
-    if cost > player.resource:
-        return state.with_events(
-            CombatEvent(kind=EventKind.NOT_ENOUGH_RESOURCE, skill_name=skill.name, amount=cost)
-        )
-
+    skill, cost = attempt
     rank = character.loadout.rank_of(skill.code)
     power = skill.power_at_rank(rank) * skill_rules.power_factor(character, skill)
     spec = spec_for(skill.effect)
 
-    player = replace(player, resource=player.resource - cost, free_cast=False)
+    player = replace(state.player, resource=state.player.resource - cost, free_cast=False)
     if skill.cooldown:
         # +1 because cooldowns tick down at the end of this same turn, so the skill
         # stays unavailable for exactly `cooldown` further turns.
         player = player.with_cooldown(skill.code, skill.cooldown + 1)
     working = replace(state, player=player)
-    return _apply_spec(content, character, working, skill, spec, power, action.target, source, pace)
+    return _apply_spec(
+        content, character, working, skill, spec, power, action.target, tempo, source
+    )
 
 
 def _skill_cost(skill: Skill, modifiers: dict[str, float], *, free: bool) -> int:
@@ -302,13 +491,12 @@ def _apply_spec(
     spec: EffectSpec,
     power: float,
     target_index: int,
+    tempo: TurnTempo,
     source: random.Random,
-    pace: TurnTempo,
 ) -> CombatState:
     stats = derived_stats(content, character, state.player.effects)
-    primary = primary_stats(content, character, state.player.effects)
     modifiers = mods.collect_modifiers(content, character, state.player.effects)
-    stat_value = primary[skill.scaling] if skill.scaling is not None else 0
+    blow = blow_of(content, character, state.player.effects, skill.scaling)
     working = state
 
     if spec.special == "avoid_combat":
@@ -329,23 +517,22 @@ def _apply_spec(
                 working = _strike(
                     working,
                     target=current,
-                    power=power * spec.damage_scale * falloff,
-                    stat_value=stat_value,
+                    power=blow * power / 100.0 * spec.damage_scale * falloff,
+                    character_level=character.level,
                     stats=stats,
                     modifiers=modifiers,
                     spec=spec,
                     skill_name=skill.name,
+                    tempo=tempo,
                     source=source,
-                    pace=pace,
                 )
             falloff *= 1.0 - spec.chain_falloff
 
     if spec.category is EffectCategory.HEAL or spec.special == "full_heal":
-        amount = (
-            round(working.player.max_health * power / 100.0)
-            if spec.heal_percent
-            else round(power * (1.0 + stat_value / STAT_DAMAGE_DIVISOR))
-        )
+        # Healing and shields are percentages of maximum health, not of a blow:
+        # health grows five times faster than a blow does, so a heal priced in
+        # blows would be worth nothing by level 40.
+        amount = round(working.player.max_health * power / 100.0)
         amount = round(amount * mods.percent(modifiers, "healing_done_percent"))
         player, restored = working.player.healed(amount)
         working = replace(working, player=player).with_events(
@@ -358,7 +545,7 @@ def _apply_spec(
         )
 
     if spec.category is EffectCategory.SHIELD:
-        shield = round(power * (1.0 + stat_value / STAT_DAMAGE_DIVISOR))
+        shield = round(working.player.max_health * power / 100.0)
         player = replace(working.player, shield=working.player.shield + shield)
         working = replace(working, player=player).with_events(
             CombatEvent(
@@ -472,41 +659,45 @@ def _strike(
     *,
     target: EnemyState,
     power: float,
-    stat_value: int,
+    character_level: int,
     stats: DerivedStats,
     modifiers: dict[str, float],
     spec: EffectSpec | None,
     skill_name: str,
+    tempo: TurnTempo,
     source: random.Random,
-    pace: TurnTempo = TurnTempo(),
 ) -> CombatState:
     working = state
     enemy = target.enemy
 
     accuracy_penalty = 15.0 if spec is not None and "inaccurate" in spec.tags else 0.0
+    gap = enemy.level - character_level
     hit_chance = min(
         MAX_HIT_CHANCE,
-        max(MIN_HIT_CHANCE, stats.accuracy - enemy.level * 0.5 - accuracy_penalty),
+        max(
+            MIN_HIT_CHANCE,
+            stats.accuracy - gap * ACCURACY_PER_LEVEL_GAP - accuracy_penalty,
+        ),
     )
     if source.uniform(0, 100) > hit_chance:
         return working.with_events(
             CombatEvent(kind=EventKind.MISS, target=target.name, skill_name=skill_name)
         )
 
-    raw = power * (1.0 + stat_value / STAT_DAMAGE_DIVISOR)
+    raw = power
     raw *= mods.percent(modifiers, "damage_percent")
-    raw *= pace.boost
+    raw *= tempo.damage_scale
     if spec is not None and spec.execute_scaling:
         missing = 1.0 - target.health / max(1, enemy.max_health)
         raw *= 1.0 + missing * spec.execute_scaling
     if target.effects.modifiers().get("damage_taken_percent"):
         raw *= 1.0 + target.effects.modifiers()["damage_taken_percent"] / 100.0
 
-    # A breach is exactly that: the armour is not softened, it is simply not
-    # there for this action.
-    pierce = 1.0 if pace.breach else (spec.pierce if spec is not None else 0.0)
-    effective_armor = enemy.armor * (1.0 - pierce)
-    raw *= ARMOR_SOFTENER / (ARMOR_SOFTENER + effective_armor)
+    pierce = spec.pierce if spec is not None else 0.0
+    # A breach takes the armour out of the count entirely; an announced guard
+    # doubles it, and an enemy winding up for a press has already opened.
+    effective_armor = enemy.armor * (1.0 - pierce) * tempo.armor_scale(target.index)
+    raw *= armor_factor(effective_armor, enemy.level)
 
     guaranteed = spec is not None and spec.guaranteed_crit
     crit_chance = stats.crit_chance + (spec.crit_bonus if spec is not None else 0.0)
@@ -561,11 +752,8 @@ def _use_item(content: GameContent, state: CombatState, action: CombatAction) ->
         return state
     working = state
     match item.effect.kind:
-        case "heal_flat":
-            player, restored = working.player.healed(round(item.effect.power))
-            working = replace(working, player=player).with_events(
-                CombatEvent(kind=EventKind.HEAL, actor=player.name, amount=restored)
-            )
+        # No flat magnitudes here either: a potion worth 40 health is a potion
+        # worth nothing by level 20 (ADR 0007).
         case "heal_percent":
             amount = round(working.player.max_health * item.effect.power / 100.0)
             player, restored = working.player.healed(amount)
@@ -625,6 +813,7 @@ def _enemy_actions(
     content: GameContent,
     character: Character,
     state: CombatState,
+    tempo: TurnTempo,
     source: random.Random,
 ) -> CombatState:
     stats = derived_stats(content, character, state.player.effects)
@@ -652,32 +841,32 @@ def _enemy_actions(
             )
             continue
 
-        # The announcement is not decoration: an aim cannot be dodged, a press
-        # hits harder, a guard trades damage for holding the line.
-        announced = Tag(state.intent) if state.intent else None
+        # The intent was announced before the player moved, so it is honoured here
+        # even if the enemy has been wounded since.
+        intent = tempo.intents.get(current.index, ActionTag.PRESS)
+
         hit_chance = min(
             MAX_HIT_CHANCE,
             max(
                 MIN_HIT_CHANCE,
-                ENEMY_ACCURACY_BASE + current.enemy.level * ENEMY_ACCURACY_PER_LEVEL - stats.dodge,
+                ENEMY_ACCURACY_BASE
+                + (current.enemy.level - character.level) * ENEMY_ACCURACY_PER_LEVEL_GAP
+                - stats.dodge,
             ),
         )
-        if announced is Tag.AIM:
-            hit_chance = MAX_HIT_CHANCE
-        if source.uniform(0, 100) > hit_chance:
+        # A blow announced as precision is not dodged - it is answered or taken.
+        if intent is not ActionTag.PRECISION and source.uniform(0, 100) > hit_chance:
             working = working.with_events(
                 CombatEvent(kind=EventKind.DODGE, actor=current.name, target=working.player.name)
             )
             continue
 
-        raw = float(current.enemy.damage)
-        if announced is Tag.PRESS:
-            raw *= tempo_rules.INTENT_PRESS_DAMAGE
-        elif announced is Tag.GUARD:
-            raw *= 1.0 - tempo_rules.INTENT_GUARD_REDUCTION
+        raw = float(current.enemy.damage) * INTENT_DAMAGE[intent]
+        # Caught mid-move: countering the announced tag also blunts the answer.
+        raw *= tempo.answer_scale(current.index)
         enemy_modifiers = current.effects.modifiers()
         raw *= 1.0 + enemy_modifiers.get("damage_percent", 0.0) / 100.0
-        raw *= ARMOR_SOFTENER / (ARMOR_SOFTENER + stats.armor)
+        raw *= armor_factor(stats.armor, character.level)
         raw *= mods.percent(modifiers, "damage_taken_percent")
         raw *= 1.0 + working.player.effects.modifiers().get("damage_taken_percent", 0.0) / 100.0
 
@@ -726,9 +915,12 @@ def _check_outcome(content: GameContent, character: Character, state: CombatStat
     if not state.player.alive:
         return replace(state, outcome=CombatOutcome.DEFEAT)
     if not state.living_enemies:
-        experience = sum(
-            experience_reward(enemy_level=enemy.enemy.level, character_level=character.level)
-            for enemy in state.enemies
+        experience = round(
+            sum(
+                experience_reward(enemy_level=enemy.enemy.level, character_level=character.level)
+                * RANK_FACTORS[enemy.enemy.rank].experience
+                for enemy in state.enemies
+            )
         )
         gold_modifier = mods.collect_modifiers(content, character, state.player.effects).get(
             "gold_percent", 0.0

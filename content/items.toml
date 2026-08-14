@@ -336,7 +336,7 @@ rarity = "common"
 level = 1
 price = 35
 stack = 20
-effect = { kind = "heal_flat", power = 40 }
+effect = { kind = "heal_percent", power = 15 }
 text = "Восстанавливает 40 здоровья."
 
 [[item]]

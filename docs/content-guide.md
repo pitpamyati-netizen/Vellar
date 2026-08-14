@@ -86,8 +86,9 @@ cost = 10                      # active only
 cooldown = 0                   # active only, in turns
 target = "enemy"               # self | enemy | all_enemies
 effect = "damage"              # must be listed in skills.toml [meta].active_effects
-power = 14                     # value at rank 1
-scaling = "AGI"                # which stat multiplies power
+power = 135                    # a PERCENTAGE at rank 1 - see below
+scaling = "AGI"                # which stat the standard blow is measured on
+tag = "точность"               # optional: натиск | оборона | точность
 text = "Одна фраза, что делает умение."
 edges = [
     { name = "Первая грань", text = "Что меняется." },
@@ -102,6 +103,25 @@ A passive declares `effect` as a **modifier key** instead, and omits
 effect = "armor_percent"
 power = 6
 ```
+
+**`power` is never an absolute number.** It is a percentage of something that
+already grows with the character, so a skill written once is correct at level 1
+and at level 300:
+
+| effect kind | percentage of | 100 means |
+| --- | --- | --- |
+| damage | the standard blow | one plain "Атака" |
+| healing, shields | maximum health | a full bar |
+| buffs, debuffs | the modifier itself | +100% to that stat |
+
+Rough scale for damage: an opener with no cooldown 130, a blow on a cooldown
+170-200, an area skill 110-150 *per target*, a capstone 210-275. Writing an
+absolute number here is the one mistake that cannot be caught by a test - it will
+simply be a skill that stops mattering. See ADR 0007.
+
+`tag` is optional and only needed when the effect would leave the wrong trace, or
+when a class would otherwise never reach all three tags - and every class must,
+or a перелом is impossible for it.
 
 Every skill declares exactly two edges; their codes are derived as `<code>_a` and
 `<code>_b`. Introducing a new `effect` value means adding it to

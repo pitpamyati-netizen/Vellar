@@ -29,7 +29,13 @@ DODGE_PER_AGILITY = 0.55
 CRIT_CHANCE_BASE = 3.0
 CRIT_CHANCE_PER_LUCK = 0.45
 CRIT_DAMAGE_BASE = 150.0
-CRIT_DAMAGE_PER_LUCK = 0.8
+CRIT_DAMAGE_PER_LUCK = 0.45
+# Both halves of a critical hit are capped. Uncapped, luck multiplied chance by
+# damage and a luck build ended up hitting three times as hard as anyone else -
+# not a build, an exploit. Capped, it is worth about half again as much.
+MAX_CRIT_CHANCE = 50.0
+MAX_CRIT_DAMAGE = 250.0
+MAX_DODGE = 75.0
 INITIATIVE_PER_AGILITY = 1.5
 RESOURCE_REGEN_PER_WISDOM = 0.4
 
@@ -124,9 +130,9 @@ def derived_stats(
         resource_name=resource.name,
         armor=max(0, round(armor)),
         accuracy=round(accuracy, 2),
-        dodge=round(min(dodge, 75.0), 2),
-        crit_chance=round(min(crit_chance, 75.0), 2),
-        crit_damage=round(crit_damage, 2),
+        dodge=round(min(dodge, MAX_DODGE), 2),
+        crit_chance=round(min(crit_chance, MAX_CRIT_CHANCE), 2),
+        crit_damage=round(min(crit_damage, MAX_CRIT_DAMAGE), 2),
         initiative=round(initiative, 2),
         resource_regen=round(resource_regen, 2),
         health_regen_percent=round(mods.flat(modifiers, "regen_per_turn_percent"), 2),

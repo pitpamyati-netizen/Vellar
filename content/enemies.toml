@@ -10,7 +10,10 @@
 
 [meta]
 kinds = ["beast", "humanoid", "undead", "elemental", "aberration"]
-elite_titles = ["Матёрый", "Древний", "Свирепый", "Проклятый", "Владыка"]
+# Titles are adjectives, never nouns: they are glued in front of the archetype
+# name ("Матёрый серый волк"). "Владыка кабан" is not Russian - which tier it is
+# the combat screen says in its own words.
+elite_titles = ["Матёрый", "Древний", "Свирепый", "Проклятый", "Исполинский"]
 
 [[enemy]]
 id = "grey_wolf"

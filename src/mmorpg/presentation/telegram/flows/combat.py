@@ -19,15 +19,17 @@ from typing import Any
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import (
     ActionKind,
+    ActionTag,
     CombatAction,
     CombatOutcome,
     CombatState,
     EnemyState,
     PlayerState,
+    Trace,
 )
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.effects import ActiveEffect, EffectStack
-from mmorpg.domain.entities.location import Enemy, EnemyKind
+from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
 from mmorpg.domain.procgen.enemies import generate_group
 from mmorpg.domain.procgen.seeds import derive
 from mmorpg.domain.rules.combat import resolve_turn, start_combat
@@ -70,7 +72,7 @@ def begin(
     depth: int = 0,
 ) -> CombatSession:
     return CombatSession(
-        state=start_combat(content, character, enemies, seed=derive(seed, "intent")),
+        state=start_combat(content, character, enemies),
         seed=seed,
         node=node,
         depth=depth,
@@ -83,7 +85,7 @@ def spawn_for_node(
     seed: bytes,
     biome: str,
     level: int,
-    elite: bool,
+    rank: EnemyRank = EnemyRank.NORMAL,
 ) -> tuple[Enemy, ...]:
     """Who is standing at this node. Same seed, same opponents, every time."""
     return generate_group(
@@ -91,7 +93,7 @@ def spawn_for_node(
         archetypes=content.enemy_archetypes,
         biome=biome,
         level=level,
-        elite=elite,
+        rank=rank,
         elite_titles=content.elite_titles,
     )
 
@@ -153,7 +155,8 @@ def _action_from_label(
     racial = screens.racial_label(content, character, session.state)
     if racial.matches(argument):
         return CombatAction(kind=ActionKind.RACIAL)
-    if labels.ATTACK.matches(argument):
+    # The label now carries its tag; the bare word a player typed before still works.
+    if screens.attack_label().matches(argument) or labels.ATTACK.matches(argument):
         return CombatAction(kind=ActionKind.ATTACK)
     if labels.FLEE.matches(argument):
         return CombatAction(kind=ActionKind.FLEE)
@@ -221,8 +224,7 @@ def serialise(session: CombatSession) -> str:
             "experience": state.experience,
             "gold": state.gold,
             "loot": list(state.loot),
-            "trail": list(state.trail),
-            "intent": state.intent,
+            "trace": [tag.value for tag in state.trace.tags],
             "player": {
                 "name": state.player.name,
                 "health": state.player.health,
@@ -252,7 +254,7 @@ def serialise(session: CombatSession) -> str:
                         "damage": enemy.enemy.damage,
                         "armor": enemy.enemy.armor,
                         "initiative": enemy.enemy.initiative,
-                        "elite": enemy.enemy.is_elite,
+                        "rank": enemy.enemy.rank.value,
                         "loot": list(enemy.enemy.loot),
                         "gold": enemy.enemy.gold,
                     },
@@ -292,7 +294,7 @@ def deserialise(raw: str) -> CombatSession:
                 damage=entry["enemy"]["damage"],
                 armor=entry["enemy"]["armor"],
                 initiative=entry["enemy"]["initiative"],
-                is_elite=entry["enemy"]["elite"],
+                rank=EnemyRank(entry["enemy"]["rank"]),
                 loot=tuple(entry["enemy"]["loot"]),
                 gold=entry["enemy"]["gold"],
             ),
@@ -311,8 +313,7 @@ def deserialise(raw: str) -> CombatSession:
         experience=data["experience"],
         gold=data["gold"],
         loot=tuple(data["loot"]),
-        trail=tuple(data.get("trail", ())),
-        intent=str(data.get("intent", "")),
+        trace=Trace(tuple(ActionTag(tag) for tag in data.get("trace", ()))),
     )
     return CombatSession(
         state=state,

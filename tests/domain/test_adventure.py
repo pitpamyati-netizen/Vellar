@@ -13,7 +13,13 @@ import pytest
 
 from mmorpg.domain.entities import Character, GameContent, QuestLog
 from mmorpg.domain.entities.combat import CombatOutcome, CombatState, EnemyState, PlayerState
-from mmorpg.domain.entities.location import Enemy, EnemyKind, LocationNode, NodeKind
+from mmorpg.domain.entities.location import (
+    Enemy,
+    EnemyKind,
+    EnemyRank,
+    LocationNode,
+    NodeKind,
+)
 from mmorpg.domain.rules import adventure
 from mmorpg.domain.rules.economy import inn_price, mentor_price
 from mmorpg.domain.rules.stats import derived_stats
@@ -42,7 +48,7 @@ def a_wolf(*, elite: bool = False) -> Enemy:
         damage=6,
         armor=2,
         initiative=8.0,
-        is_elite=elite,
+        rank=EnemyRank.ELITE if elite else EnemyRank.NORMAL,
         loot=("wolf_pelt",),
         gold=20,
     )
