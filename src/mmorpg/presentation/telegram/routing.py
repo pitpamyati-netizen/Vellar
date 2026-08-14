@@ -58,6 +58,8 @@ SIMPLE_COMMANDS: dict[str, Intent] = {
     "/bag": Intent.BAG,
     "/бежать": Intent.FLEE,
     "/flee": Intent.FLEE,
+    # "/раса" stays: it was the command before the peoples got their own name.
+    "/народ": Intent.RACIAL,
     "/раса": Intent.RACIAL,
     "/racial": Intent.RACIAL,
 }

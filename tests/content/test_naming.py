@@ -2,13 +2,14 @@
 
 Two rules from ``Narrative.md``, section 2, live here. The black list is the
 cheap half: one word from it turns a name into the generic fantasy set the world
-is written against. The peoples-and-crafts rule is the expensive half - a race
-says where a person is from, a class says what work they live by - and it is
-guarded by the species names that must never come back (Roadmap 1.4).
+is written against. The peoples-and-crafts rule is the expensive half - a people
+carries a name of its own, a craft is named after the work - and it is guarded by
+the species names that must never come back (Roadmap 1.4).
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 
 from mmorpg.domain.entities import GameContent
@@ -82,16 +83,30 @@ def test_peoples_and_crafts_are_vellars_own(content: GameContent) -> None:
             assert species not in lowered, f"{source} is still called {name!r}"
 
 
-def test_a_race_says_where_and_a_class_says_what_work(content: GameContent) -> None:
-    """Both are picked from a list of buttons, so both have to be distinct by ear."""
+def test_peoples_and_crafts_are_distinct_by_ear(content: GameContent) -> None:
+    """Both are picked from a list of buttons, and a button routes by its text."""
     race_names = [race.name for race in content.races]
     class_names = [klass.name for klass in content.classes]
     assert len(set(race_names)) == len(race_names)
     assert len(set(class_names)) == len(class_names)
     assert not set(race_names) & set(class_names)
+
+
+# One Cyrillic word, nothing else: no apostrophes, no Latin, no invented spelling
+# a screen reader would have to spell out letter by letter.
+PLAIN_NAME = re.compile(r"^[А-ЯЁ][а-яё]+$")
+
+
+def test_a_people_carries_a_name_and_the_description_says_where_from(
+    content: GameContent,
+) -> None:
     for race in content.races:
+        assert PLAIN_NAME.fullmatch(race.name), f"{race.id}: {race.name!r} is not one plain word"
+        assert len(race.name) <= 12, race.id
+        # The name is the people's own; where they live belongs in the line below it.
         assert race.description.endswith("."), race.id
         assert len(race.description) <= 120, race.id
+        assert race.name not in race.description, race.id
 
 
 def test_every_race_keeps_its_frozen_id(content: GameContent) -> None:

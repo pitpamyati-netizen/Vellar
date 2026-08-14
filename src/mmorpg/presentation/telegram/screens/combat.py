@@ -209,10 +209,10 @@ def skill_label(content: GameContent, character: Character, state: CombatState, 
 def racial_label(content: GameContent, character: Character, state: CombatState) -> Label:
     code = character.loadout.racial
     if code is None:
-        return label(f"Расовое умение — {EMPTY_SLOT.lower()}")
+        return label(f"Умение народа — {EMPTY_SLOT.lower()}")
     skill = content.skill(code)
     return label(
-        f"{skill.name} — расовое, {TAG_NAMES[tag_of_skill(skill)]}, "
+        f"{skill.name} — от народа, {TAG_NAMES[tag_of_skill(skill)]}, "
         f"{skill_effect(content, character, state, skill)}, {_slot_status(skill, state)}"
     )
 

@@ -30,18 +30,19 @@ wrong - the bot refuses to start on broken content.
    and `text` fields are what the player hears; ids, codes and comments are English.
 5. **No pseudo-graphics in any text field** - screen readers read them character by
    character. Numbers as words: `"выше на 15 процентов"`.
-6. **Names belong to Vellar.** A race says where a person is from, a class says
-   what work they live by, and nothing borrows from the fantasy shelf or the
-   black list in `Narrative.md`, section 2. `tests/content/test_naming.py` reads
-   every name and description in this directory and fails on either.
+6. **Names belong to Vellar.** A people carries a name of its own and says where
+   it is from in the description; a class is named after the work it lives by.
+   Nothing borrows from the fantasy shelf or the black list in `Narrative.md`,
+   section 2. `tests/content/test_naming.py` reads every name and description in
+   this directory and fails on either.
 
 ## Add a race
 
 ```toml
 [[race]]
 id = "seaborn"                       # snake_case, unique, never changes
-name = "Приморский"                  # a people, named after the place it comes from
-description = "Одна фраза о том, откуда человек родом."
+name = "Сельдар"                     # the people's own name: one Cyrillic word, <= 12 letters
+description = "Одна фраза: откуда народ и чем известен."
 bonuses = { AGI = 2, WIS = 1, STR = -1 }
 passive = { id = "tide_born", name = "Приливная выучка", text = "Одна фраза об эффекте." }
 active = "race_seaborn_undertow"     # must exist in skills.toml

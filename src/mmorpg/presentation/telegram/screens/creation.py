@@ -78,9 +78,9 @@ def chosen_so_far(content: GameContent, draft: CharacterDraft) -> str:
     if draft.name:
         parts.append(f"имя {draft.name}")
     if draft.race_id:
-        parts.append(f"раса {content.race(draft.race_id).name}")
+        parts.append(f"народ {content.race(draft.race_id).name}")
     if draft.class_id:
-        parts.append(f"класс {content.character_class(draft.class_id).name}")
+        parts.append(f"ремесло {content.character_class(draft.class_id).name}")
     if draft.trait_ids:
         names = ", ".join(content.trait(trait_id).name for trait_id in draft.trait_ids)
         parts.append(f"особенности {names}")
@@ -99,7 +99,7 @@ def name_screen(draft: CharacterDraft, notice: str = "") -> Screen:
             f"Текущее имя: {draft.name}." if draft.name else "Имя ещё не выбрано.",
             "Кнопка «Продолжить» станет доступна, когда имя будет принято."
             if not draft.name
-            else "Нажмите «Продолжить», чтобы перейти к выбору расы.",
+            else "Нажмите «Продолжить», чтобы перейти к выбору народа.",
             "Кнопка «Назад» выйдет из создания персонажа.",
         ),
         rows=((CONTINUE,),),
@@ -120,14 +120,14 @@ def race_screen(
     current = content.race(draft.race_id).name if draft.race_id else "не выбрана"
     return paginated_screen(
         screen_id=ScreenId.CREATE_RACE,
-        title="Создание персонажа, шаг 2 из 5: раса",
+        title="Создание персонажа, шаг 2 из 5: народ",
         entries=entries,
         state=state,
         lead_lines=(
-            notice or f"Текущая раса: {current}.",
-            "Нажмите расу, чтобы выбрать её."
+            notice or f"Текущий народ: {current}.",
+            "Нажмите народ, чтобы выбрать его."
             if not draft.race_id
-            else "Нажмите «Продолжить» или выберите другую расу.",
+            else "Нажмите «Продолжить» или выберите другой народ.",
         ),
         extra_rows=((RACE_DETAILS, CONTINUE),),
         show_filters=False,
@@ -140,19 +140,19 @@ def race_details_screen(content: GameContent, race_id: str) -> Screen:
     return Screen(
         id=ScreenId.CREATE_RACE_DETAILS,
         lines=(
-            f"Раса: {race.name}.",
+            f"Народ: {race.name}.",
             race.description,
             f"Характеристики: {describe_bonuses(race.bonuses)}.",
             f"Пассивная способность: {race.passive.name}. {race.passive.text}",
-            f"Расовое умение: {active.name}. {active.text}",
-            "Расовое умение занимает отдельный слот и не мешает классовым.",
+            f"Умение народа: {active.name}. {active.text}",
+            "Умение народа занимает отдельный слот и не мешает ремесленным.",
         ),
     )
 
 
 def class_screen(content: GameContent, draft: CharacterDraft, notice: str = "") -> Screen:
     race = content.race(draft.race_id) if draft.race_id else None
-    race_line = f"Раса: {race.name}, {describe_bonuses(race.bonuses)}." if race else ""
+    race_line = f"Народ: {race.name}, {describe_bonuses(race.bonuses)}." if race else ""
     current = content.character_class(draft.class_id).name if draft.class_id else "не выбран"
     rows: list[tuple[Label, ...]] = [
         (label(f"{klass.name} — {klass.role.lower()}"),) for klass in content.classes
@@ -161,12 +161,12 @@ def class_screen(content: GameContent, draft: CharacterDraft, notice: str = "") 
     return Screen(
         id=ScreenId.CREATE_CLASS,
         lines=(
-            "Создание персонажа, шаг 3 из 5: класс.",
-            notice or f"Текущий класс: {current}.",
+            "Создание персонажа, шаг 3 из 5: ремесло.",
+            notice or f"Текущее ремесло: {current}.",
             race_line,
-            "Нажмите класс, чтобы выбрать его."
+            "Нажмите ремесло, чтобы выбрать его."
             if not draft.class_id
-            else "Нажмите «Продолжить» или выберите другой класс.",
+            else "Нажмите «Продолжить» или выберите другое ремесло.",
         ),
         rows=tuple(rows),
     )
@@ -178,12 +178,12 @@ def class_details_screen(content: GameContent, class_id: str) -> Screen:
     return Screen(
         id=ScreenId.CREATE_CLASS_DETAILS,
         lines=(
-            f"Класс: {klass.name}.",
+            f"Ремесло: {klass.name}.",
             klass.description,
             f"Роль: {klass.role}.",
             f"Ключевые характеристики: {key_stats}.",
             f"Ресурс: {klass.resource.name}.",
-            "У класса 8 активных и 6 пассивных умений; в панель встанут 6 и 3.",
+            "У ремесла 8 активных и 6 пассивных умений; в панель встанут 6 и 3.",
         ),
     )
 
@@ -267,11 +267,11 @@ def confirm_screen(content: GameContent, draft: CharacterDraft) -> Screen:
         lines=(
             "Подтверждение персонажа.",
             f"Имя: {draft.name}.",
-            f"Раса: {race.name}, {describe_bonuses(race.bonuses)}.",
-            f"Класс: {klass.name}, ресурс {klass.resource.name}.",
+            f"Народ: {race.name}, {describe_bonuses(race.bonuses)}.",
+            f"Ремесло: {klass.name}, ресурс {klass.resource.name}.",
             f"Особенности: {traits}.",
             f"Распределено: {allocated or 'ничего'}.",
-            f"Расовое умение: {content.skill(race.active_code).name}.",
+            f"Умение народа: {content.skill(race.active_code).name}.",
             "Нажмите «Подтвердить», чтобы начать игру.",
         ),
         rows=((CONFIRM,),),
