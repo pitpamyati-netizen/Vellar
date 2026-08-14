@@ -13,7 +13,7 @@ kinds = ["beast", "humanoid", "undead", "elemental", "aberration"]
 # Titles are adjectives, never nouns: they are glued in front of the archetype
 # name ("Матёрый серый волк"). "Владыка кабан" is not Russian - which tier it is
 # the combat screen says in its own words.
-elite_titles = ["Матёрый", "Древний", "Свирепый", "Проклятый", "Исполинский"]
+elite_titles = ["Матёрый", "Свирепый", "Лютый", "Исполинский", "Порченый"]
 
 [[enemy]]
 id = "grey_wolf"
@@ -52,7 +52,7 @@ loot = ["grove_resin"]
 id = "cave_bat"
 name = "Пещерная тварь"
 kind = "beast"
-biomes = ["пещеры", "подземелье", "тоннели", "шахта", "карьер", "бездна"]
+biomes = ["пещеры", "подземелье", "тоннели", "шахта", "карьер", "разлом"]
 health = 0.7
 damage = 0.9
 armor = 0.5
@@ -175,7 +175,7 @@ loot = []
 id = "wraith"
 name = "Призрак"
 kind = "undead"
-biomes = ["руины", "чертоги", "склепы", "аномалия", "башня", "бездна"]
+biomes = ["руины", "чертоги", "склепы", "аномалия", "башня", "курганы"]
 health = 0.7
 damage = 1.4
 armor = 0.5
@@ -217,7 +217,7 @@ loot = []
 
 [[enemy]]
 id = "stone_golem"
-name = "Каменный голем"
+name = "Каменный истукан"
 kind = "elemental"
 biomes = ["горы", "карьер", "ущелье", "скалы", "кузни", "крепость", "шахта"]
 health = 1.6
@@ -228,7 +228,7 @@ loot = ["iron_scrap"]
 
 [[enemy]]
 id = "fire_elemental"
-name = "Огненный элементаль"
+name = "Живой огонь"
 kind = "elemental"
 biomes = ["вулкан", "пепел", "кузни", "лава", "аномалия"]
 health = 1.0
@@ -239,7 +239,7 @@ loot = []
 
 [[enemy]]
 id = "frost_elemental"
-name = "Ледяной элементаль"
+name = "Живой лёд"
 kind = "elemental"
 biomes = ["снега", "тундра", "горы", "перевал", "подземелье"]
 health = 1.2
@@ -294,7 +294,7 @@ loot = ["grove_resin"]
 
 [[enemy]]
 id = "guardian_construct"
-name = "Страж-конструкт"
+name = "Заводной страж"
 kind = "elemental"
 biomes = ["чертоги", "башня", "тронный зал", "крепость", "кузни", "галереи"]
 health = 1.5

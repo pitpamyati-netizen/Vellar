@@ -13,7 +13,7 @@ rarities = [
     { id = "uncommon", name = "Необычный", weight = 45, price_factor = 2.2 },
     { id = "rare", name = "Редкий", weight = 18, price_factor = 5.0 },
     { id = "epic", name = "Эпический", weight = 5, price_factor = 12.0 },
-    { id = "legendary", name = "Легендарный", weight = 1, price_factor = 30.0 },
+    { id = "legendary", name = "Именной", weight = 1, price_factor = 30.0 },
 ]
 slots = [
     { id = "weapon", name = "Оружие" },
@@ -107,7 +107,7 @@ text = "Свежесрезанная ветвь, на изломе выступ�
 
 [[item]]
 id = "dwarven_maul"
-name = "Дварфийский молот"
+name = "Загорный молот"
 kind = "equipment"
 slot = "weapon"
 rarity = "rare"
@@ -115,7 +115,7 @@ level = 16
 price = 720
 modifiers = { physical_damage_percent = 20, initiative_percent = -6 }
 skill_modifiers = { barbarian_reckless_swing = 20 }
-text = "Дварфийская работа: короткая рукоять, тяжёлая головка."
+text = "Работа из-за хребта: короткая рукоять, тяжёлая головка."
 
 [[item]]
 id = "silver_censer"

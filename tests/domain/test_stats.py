@@ -129,7 +129,7 @@ def test_level_raises_health_and_resource(content: GameContent, warrior: Charact
 def test_resource_name_comes_from_the_class(content: GameContent, warrior: Character) -> None:
     assert derived_stats(content, warrior).resource_name == "Отвага"
     mage = Character(id=2, user_id=1, name="М", race_id="high_elf", class_id="mage")
-    assert derived_stats(content, mage).resource_name == "Мана"
+    assert derived_stats(content, mage).resource_name == "Чары"
 
 
 def test_dodge_and_crit_are_capped(content: GameContent) -> None:

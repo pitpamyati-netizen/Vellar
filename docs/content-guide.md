@@ -9,8 +9,8 @@ wrong - the bot refuses to start on broken content.
 | File | Contains |
 | --- | --- |
 | `world.toml` | 15 cities, 5 locations each, level bands, unlock conditions |
-| `races.toml` | 16 races: stat bonuses, passive ability, racial active reference |
-| `classes.toml` | 8 classes: key stats, resource curve, health curve, progression meta |
+| `races.toml` | 16 peoples: stat bonuses, passive ability, racial active reference |
+| `classes.toml` | 8 crafts: key stats, resource curve, health curve, progression meta |
 | `traits.toml` | 60+ traits, the modifier vocabulary, categories |
 | `skills.toml` | 8 active + 6 passive per class, 1 active per race, both edges of each |
 | `items.toml` | equipment, consumables, materials, rarities, slots |
@@ -30,18 +30,26 @@ wrong - the bot refuses to start on broken content.
    and `text` fields are what the player hears; ids, codes and comments are English.
 5. **No pseudo-graphics in any text field** - screen readers read them character by
    character. Numbers as words: `"выше на 15 процентов"`.
+6. **Names belong to Vellar.** A race says where a person is from, a class says
+   what work they live by, and nothing borrows from the fantasy shelf or the
+   black list in `Narrative.md`, section 2. `tests/content/test_naming.py` reads
+   every name and description in this directory and fails on either.
 
 ## Add a race
 
 ```toml
 [[race]]
 id = "seaborn"                       # snake_case, unique, never changes
-name = "Морерождённый"
-description = "Одна фраза о том, кто перед вами."
+name = "Приморский"                  # a people, named after the place it comes from
+description = "Одна фраза о том, откуда человек родом."
 bonuses = { AGI = 2, WIS = 1, STR = -1 }
-passive = { id = "tide_born", name = "Дитя прилива", text = "Одна фраза об эффекте." }
+passive = { id = "tide_born", name = "Приливная выучка", text = "Одна фраза об эффекте." }
 active = "race_seaborn_undertow"     # must exist in skills.toml
 ```
+
+The id is frozen from the moment the first character picks it: characters point
+at it in the database, so a rename is a `name`/`description` change and never a
+change of key.
 
 Budget rule, enforced by `tests/content/test_races_classes_skills.py`: positive
 points may not exceed `3 + (sum of penalties)`, and the net total may not exceed
@@ -59,7 +67,7 @@ asserted deliberately, so growing the roster is a conscious decision.
 ```toml
 [[class]]
 id = "monk"
-name = "Монах"
+name = "Кулачник"                    # a craft: what the character lives by
 role = "Ближний бой без оружия"
 description = "Одна фраза."
 key_stats = ["AGI", "WIS"]

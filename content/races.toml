@@ -1,4 +1,8 @@
-# Sixteen playable races.
+# Sixteen playable peoples of Vellar.
+#
+# A race says where a person is from, never what they are: every one of these is
+# a человек, born somewhere along the road (Narrative.md, section 2). Ids are
+# frozen - characters in the database point at them.
 #
 # Stat budget rule: the sum of positive bonuses may not exceed 3 plus the sum of
 # penalties taken, and the net total may not exceed +3. Verified by
@@ -13,128 +17,128 @@
 
 [[race]]
 id = "human"
-name = "Человек"
-description = "Приспосабливаются ко всему и учатся быстрее прочих."
+name = "Обозный"
+description = "Родом с большой дороги, при обозах: прилаживаются к любому месту и учатся на ходу."
 bonuses = { STR = 1, INT = 1, CHA = 1 }
-passive = { id = "adaptability", name = "Адаптивность", text = "Вы получаете на 5 процентов больше опыта." }
+passive = { id = "adaptability", name = "Дорожная выучка", text = "Вы получаете на 5 процентов больше опыта." }
 active = "race_human_second_wind"
 
 [[race]]
 id = "high_elf"
-name = "Высший эльф"
-description = "Живут веками и помнят магию, забытую всеми остальными."
+name = "Престольный"
+description = "Из Старого Престола, где остались имперские школы и учат по книгам."
 bonuses = { INT = 2, WIS = 1, END = -1 }
-passive = { id = "arcane_legacy", name = "Наследие арканы", text = "Ваш запас маны больше на 10 процентов." }
+passive = { id = "arcane_legacy", name = "Школьная выучка", text = "Запас вашего ресурса больше на 10 процентов." }
 active = "race_high_elf_mana_surge"
 
 [[race]]
 id = "wood_elf"
-name = "Лесной эльф"
-description = "Выросли в лесу и ходят по нему бесшумно."
+name = "Лесовик"
+description = "Выросли в лесах за трактом и ходят по ним бесшумно."
 bonuses = { AGI = 2, WIS = 1 }
 passive = { id = "forest_paths", name = "Тропы леса", text = "Шанс засады под открытым небом ниже на 20 процентов." }
 active = "race_wood_elf_true_shot"
 
 [[race]]
 id = "dark_elf"
-name = "Тёмный эльф"
-description = "Выросли под землёй и не доверяют дневному свету."
+name = "Штольник"
+description = "Родились в выработках Каменного Дола и дневной свет считают помехой."
 bonuses = { AGI = 2, INT = 1, CHA = -1 }
-passive = { id = "darkvision", name = "Взор во тьме", text = "В тёмных местах вы не теряете точность." }
+passive = { id = "darkvision", name = "Привычка к темноте", text = "В тёмных местах вы не теряете точность." }
 active = "race_dark_elf_gloom_cloud"
 
 [[race]]
 id = "half_elf"
-name = "Полуэльф"
-description = "Растут между двумя народами и легко сходятся с обоими."
+name = "Крестовский"
+description = "С перекрёстка в Крестовье: торгуются с малолетства и сходятся с кем угодно."
 bonuses = { AGI = 1, WIS = 1, CHA = 1 }
-passive = { id = "diplomat", name = "Дипломат", text = "Цены в лавках для вас ниже на 10 процентов." }
+passive = { id = "diplomat", name = "Торговый язык", text = "Цены в лавках для вас ниже на 10 процентов." }
 active = "race_half_elf_charm"
 
 [[race]]
 id = "dwarf"
-name = "Дварф"
-description = "Живут в камне, работают с камнем и редко меняют решения."
+name = "Загорный"
+description = "Из-за хребта, где всё сложено из камня; решений своих не меняют."
 bonuses = { END = 2, STR = 1 }
-passive = { id = "stone_skin", name = "Каменная кожа", text = "Ваша броня выше на 10 процентов." }
+passive = { id = "stone_skin", name = "Дублёная кожа", text = "Ваша броня выше на 10 процентов." }
 active = "race_dwarf_ancestral_stance"
 
 [[race]]
 id = "gnome"
-name = "Гном"
-description = "Разбирают и чинят всё, что попадает им в руки."
+name = "Стеклянский"
+description = "Из Стеклянки: разбирают и чинят всё, что попадает им в руки."
 bonuses = { INT = 2, AGI = 1, STR = -1 }
-passive = { id = "tinkerer", name = "Механик", text = "Результат ремесла и разбора выше на 15 процентов." }
+passive = { id = "tinkerer", name = "Мастеровые руки", text = "Результат ремесла и разбора выше на 15 процентов." }
 active = "race_gnome_cunning_trap"
 
 [[race]]
 id = "halfling"
-name = "Полурослик"
-description = "Невысокий народ, известный своим везением."
+name = "Хуторской"
+description = "С хуторов у дороги: домашний народ, известный своим везением."
 bonuses = { LCK = 2, AGI = 1 }
 passive = { id = "lucky", name = "Везунчик", text = "Раз за бой вы переброшиваете неудачную проверку." }
 active = "race_halfling_nimbleness"
 
 [[race]]
 id = "orc"
-name = "Орк"
-description = "Сильны, выносливы и в драке идут вперёд до конца."
+name = "Безводец"
+description = "Из Безводья: живут на сухой стороне и в драке идут вперёд до конца."
 bonuses = { STR = 3, END = 1, INT = -1 }
-passive = { id = "fury", name = "Ярость", text = "Чем меньше у вас здоровья, тем выше ваш урон, до 30 процентов." }
+passive = { id = "fury", name = "Отчаянность", text = "Чем меньше у вас здоровья, тем выше ваш урон, до 30 процентов." }
 active = "race_orc_war_cry"
 
 [[race]]
 id = "half_orc"
-name = "Полуорк"
-description = "Растут среди людей, а силу берут от орочьей родни."
+name = "Каторжанин"
+description = "Родились на копях, куда ссылают за долги; ломаются позже прочих."
 bonuses = { STR = 2, END = 1 }
 passive = { id = "unbreakable", name = "Несгибаемость", text = "Раз за бой смертельный удар оставляет вам 1 здоровья." }
 active = "race_half_orc_savage_blow"
 
 [[race]]
 id = "goblin"
-name = "Гоблин"
-description = "Мелкие, ловкие и цепкие до чужого добра."
+name = "Затонский"
+description = "С причалов Затона: щуплые, ловкие и цепкие до чужого добра."
 bonuses = { AGI = 2, LCK = 1, STR = -1 }
-passive = { id = "scavenger", name = "Падальщик", text = "С противников вы получаете на 20 процентов больше золота." }
+passive = { id = "scavenger", name = "Цепкие руки", text = "С противников вы получаете на 20 процентов больше золота." }
 active = "race_goblin_dirty_trick"
 
 [[race]]
 id = "troll"
-name = "Тролль"
-description = "Огромные и медлительные, раны на них затягиваются за считаные часы."
+name = "Болотник"
+description = "С Камышовых Топей: тяжёлые и неспорые, раны на них затягиваются за считаные часы."
 bonuses = { STR = 2, END = 2, INT = -2 }
-passive = { id = "regeneration", name = "Регенерация", text = "В конце вашего хода вы восстанавливаете 2 процента здоровья." }
+passive = { id = "regeneration", name = "Живучесть", text = "В конце вашего хода вы восстанавливаете 2 процента здоровья." }
 active = "race_troll_crushing_swing"
 
 [[race]]
 id = "dragonborn"
-name = "Драконорождённый"
-description = "Потомки драконов: чешуя, тяжёлый нрав и дыхание своей стихии."
+name = "Пепельный"
+description = "От Пепельных Врат, где земля горит: жёсткая кожа, тяжёлый нрав, гарь в голосе."
 bonuses = { STR = 2, CHA = 1 }
-passive = { id = "scales", name = "Чешуя", text = "Вы сопротивляетесь стихии своего происхождения на 25 процентов." }
+passive = { id = "scales", name = "Пепельная корка", text = "Вы сопротивляетесь стихии своих мест на 25 процентов." }
 active = "race_dragonborn_breath"
 
 [[race]]
 id = "tiefling"
-name = "Тифлинг"
-description = "В их роду был демон, и это заметно с первого взгляда."
+name = "Горновой"
+description = "Выросли при плавильнях: жар их не берёт, а языком работают не хуже, чем клещами."
 bonuses = { CHA = 2, INT = 1 }
-passive = { id = "infernal_legacy", name = "Адское наследие", text = "Вы сопротивляетесь огню на 25 процентов." }
+passive = { id = "infernal_legacy", name = "Привычка к жару", text = "Вы сопротивляетесь огню на 25 процентов." }
 active = "race_tiefling_curse_seal"
 
 [[race]]
 id = "aasimar"
-name = "Аасимар"
-description = "Потомки небесных сил: светлая кожа, ровный характер, заметны в любой толпе."
+name = "Лазурский"
+description = "Из Лазури, где лечат при водах: говорят ровно и заметны в любой толпе."
 bonuses = { WIS = 2, CHA = 1 }
-passive = { id = "heavens_light", name = "Свет небес", text = "Получаемое вами лечение выше на 15 процентов." }
+passive = { id = "heavens_light", name = "Целебные воды", text = "Получаемое вами лечение выше на 15 процентов." }
 active = "race_aasimar_healing_hand"
 
 [[race]]
 id = "lizardfolk"
-name = "Ящеролюд"
-description = "Хладнокровны, терпеливы и почти не поддаются страху."
+name = "Бродник"
+description = "С Бродов: терпеливы, холодны на голову и почти не поддаются страху."
 bonuses = { END = 2, LCK = 1, CHA = -1 }
 passive = { id = "cold_blood", name = "Хладнокровие", text = "Вы невосприимчивы к страху." }
 active = "race_lizardfolk_tail_drop"

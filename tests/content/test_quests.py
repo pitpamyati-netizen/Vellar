@@ -9,16 +9,7 @@ from __future__ import annotations
 
 from mmorpg.domain.entities import GameContent
 from mmorpg.domain.entities.quest import ObjectiveKind
-
-FORBIDDEN_WORDS = (
-    "вечн",
-    "древн",
-    "проклят",
-    "тёмн властелин",
-    "бездн",
-    "избранн",
-    "легендарн",
-)
+from tests.content.conftest import FORBIDDEN_WORDS
 
 
 def test_the_first_act_is_actually_written(content: GameContent) -> None:

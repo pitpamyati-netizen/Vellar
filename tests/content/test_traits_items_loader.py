@@ -81,7 +81,7 @@ def test_rarities_are_ordered_by_scarcity(content: GameContent) -> None:
 
 def test_lookups_are_indexed(content: GameContent) -> None:
     assert content.race("human").name
-    assert content.character_class("mage").resource.name == "Мана"
+    assert content.character_class("mage").resource.name == "Чары"
     assert content.item("healing_potion").kind is ItemKind.CONSUMABLE
     assert content.city("farhold").location(1).slot == 1
     with pytest.raises(KeyError):

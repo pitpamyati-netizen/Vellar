@@ -17,7 +17,7 @@ categories = [
     { id = "social", name = "Социальные" },
     { id = "crafting", name = "Ремесленные" },
     { id = "survival", name = "Выживание" },
-    { id = "fate", name = "Судьба и удача" },
+    { id = "fate", name = "Удача и случай" },
     { id = "dark", name = "Тёмные" },
 ]
 modifier_keys = [
@@ -153,7 +153,7 @@ text = "Откаты умений короче на 8 процентов."
 id = "arcane_mind"
 name = "Магический склад ума"
 category = "magic"
-tags = ["урон", "мана"]
+tags = ["урон", "чары"]
 modifiers = { magic_damage_percent = 12, stat_INT = 1 }
 text = "Магический урон выше на 12 процентов, интеллект выше на 1."
 
@@ -539,7 +539,7 @@ text = "Урон выше на 25 процентов, здоровья на 20 �
 
 [[trait]]
 id = "blood_pact"
-name = "Кровавый договор"
+name = "Уговор на крови"
 category = "dark"
 tags = ["ресурс", "риск"]
 modifiers = { resource_regen_percent = 30, regen_per_turn_percent = -2 }
@@ -547,7 +547,7 @@ text = "Ресурс копится на 30 процентов быстрее ц
 
 [[trait]]
 id = "cursed_luck"
-name = "Проклятая удача"
+name = "Дурная удача"
 category = "dark"
 tags = ["удача", "риск"]
 modifiers = { rarity_percent = 25, dodge_percent = -8 }

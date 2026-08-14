@@ -34,12 +34,12 @@ def named(content: GameContent) -> CreationState:
 
 @pytest.fixture
 def raced(content: GameContent, named: CreationState) -> CreationState:
-    return walk(content, "Дварф", "Продолжить", state=named)
+    return walk(content, "Загорный", "Продолжить", state=named)
 
 
 @pytest.fixture
 def classed(content: GameContent, raced: CreationState) -> CreationState:
-    return walk(content, "Воин — стойкий боец ближнего боя", "Продолжить", state=raced)
+    return walk(content, "Ратник — стойкий боец ближнего боя", "Продолжить", state=raced)
 
 
 @pytest.fixture
@@ -149,7 +149,7 @@ def test_going_back_to_race_shows_the_current_race(
     content: GameContent, classed: CreationState
 ) -> None:
     back = _walk_back_to(content, classed, ScreenId.CREATE_RACE)
-    assert "Дварф" in render(content, back).text()
+    assert "Загорный" in render(content, back).text()
 
 
 def test_changing_the_race_restates_its_bonuses(
@@ -157,7 +157,7 @@ def test_changing_the_race_restates_its_bonuses(
 ) -> None:
     """Switching race after going back must not silently change the numbers."""
     at_race = _walk_back_to(content, classed, ScreenId.CREATE_RACE)
-    switched = advance(content, at_race, "Высший эльф")
+    switched = advance(content, at_race, "Престольный")
     assert switched.draft.race_id == "high_elf"
     assert "плюс 2 к интеллекту" in switched.notice
     assert "минус 1 к выносливости" in switched.notice
@@ -167,10 +167,10 @@ def test_races_beyond_the_first_page_are_reachable(
     content: GameContent, named: CreationState
 ) -> None:
     """16 races over 8-entry pages: the later ones need the navigation row."""
-    assert advance(content, named, "Орк").draft.race_id == "", "Орк is not on page 1"
+    assert advance(content, named, "Безводец").draft.race_id == "", "Безводец is not on page 1"
     second_page = advance(content, named, "Следующая страница")
     assert second_page.race_page.page == 2
-    chosen = advance(content, second_page, "Орк")
+    chosen = advance(content, second_page, "Безводец")
     assert chosen.draft.race_id == "orc"
     assert "плюс 3 к силе" in chosen.notice
 
@@ -195,9 +195,9 @@ def test_every_creation_screen_is_reachable_and_has_a_way_back(
 
 
 def test_details_screens_return_to_their_list(content: GameContent, named: CreationState) -> None:
-    at_race = walk(content, "Дварф", "Подробно о расе", state=named)
+    at_race = walk(content, "Загорный", "Подробно о расе", state=named)
     assert at_race.screen is ScreenId.CREATE_RACE_DETAILS
-    assert "Каменная кожа" in render(content, at_race).text()
+    assert "Дублёная кожа" in render(content, at_race).text()
     assert advance(content, at_race, "Назад").screen is ScreenId.CREATE_RACE
 
 
