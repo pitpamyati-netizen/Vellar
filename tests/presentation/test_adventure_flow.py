@@ -1,0 +1,425 @@
+"""The core loop, driven through the real handlers.
+
+Everything else in this suite tests a pure function. This file tests the wiring:
+a character walks into a location, presses "Вступить в бой", fights to the end,
+and the result reaches the repositories. A fight the player cannot actually enter
+is the one failure the flow tests cannot see, so it is checked here.
+
+No network: the two handlers are called directly and their one message per step
+is captured.
+"""
+
+from __future__ import annotations
+
+from collections import deque
+from dataclasses import replace
+from datetime import UTC, datetime
+from typing import Any
+
+import pytest
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.base import StorageKey
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import Chat, Message, User
+
+from mmorpg.config import Settings
+from mmorpg.domain.entities import Character, GameContent, QuestLog, SkillLoadout
+from mmorpg.domain.entities.location import NodeKind
+from mmorpg.domain.rules.stats import derived_stats
+from mmorpg.infrastructure.persistence.memory import (
+    InMemoryCharacterRepository,
+    InMemoryInventoryRepository,
+    InMemoryUserRepository,
+)
+from mmorpg.presentation.telegram.flows.play import (
+    LocationSession,
+    PlayState,
+    build_location,
+)
+from mmorpg.presentation.telegram.handlers import combat as combat_handler
+from mmorpg.presentation.telegram.handlers import play as play_handler
+from mmorpg.presentation.telegram.screens import play as play_screens
+from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
+from mmorpg.presentation.telegram.states.screens import Play
+
+ACCOUNT = 500_001
+# A cycle that will not turn over while the test runs: the location a player
+# walks into must be the one the test computed.
+SETTINGS = Settings(_env_file=None, cycle_seconds=10**9)  # type: ignore[call-arg]
+
+
+class Recorder:
+    """Stands in for send_screen: keeps every screen the handlers produced."""
+
+    def __init__(self) -> None:
+        self.screens: list[Screen] = []
+
+    async def __call__(self, message: Message, screen: Screen, *, emoji: bool = False) -> None:
+        self.screens.append(screen)
+
+    @property
+    def last(self) -> Screen:
+        assert self.screens, "the game answered with silence"
+        return self.screens[-1]
+
+
+@pytest.fixture
+def sent(monkeypatch: pytest.MonkeyPatch) -> Recorder:
+    recorder = Recorder()
+    monkeypatch.setattr(play_handler, "send_screen", recorder)
+    monkeypatch.setattr(combat_handler, "send_screen", recorder)
+    return recorder
+
+
+@pytest.fixture
+def characters() -> InMemoryCharacterRepository:
+    return InMemoryCharacterRepository()
+
+
+@pytest.fixture
+def inventory() -> InMemoryInventoryRepository:
+    return InMemoryInventoryRepository()
+
+
+@pytest.fixture
+def users() -> InMemoryUserRepository:
+    return InMemoryUserRepository()
+
+
+@pytest.fixture
+def deltas() -> Any:
+    from mmorpg.infrastructure.cache.memory import InMemoryLocationDeltaCache
+
+    return InMemoryLocationDeltaCache()
+
+
+@pytest.fixture
+async def argus(characters: InMemoryCharacterRepository) -> Character:
+    return await characters.create(
+        Character(
+            id=0,
+            user_id=ACCOUNT,
+            name="Аргус",
+            race_id="human",
+            class_id="warrior",
+            level=4,
+            gold=200,
+            unspent_skill_points=2,
+            loadout=SkillLoadout(
+                actives=("warrior_cleave", None, None, None, None, None),
+                racial="race_human_second_wind",
+                ranks={"warrior_cleave": 1},
+            ),
+        )
+    )
+
+
+@pytest.fixture
+def state() -> FSMContext:
+    return FSMContext(
+        storage=MemoryStorage(),
+        key=StorageKey(bot_id=1, chat_id=ACCOUNT, user_id=ACCOUNT),
+    )
+
+
+def a_message(text: str) -> Message:
+    return Message(
+        message_id=1,
+        date=datetime.now(UTC),
+        chat=Chat(id=ACCOUNT, type="private"),
+        from_user=User(id=ACCOUNT, is_bot=False, first_name="Аргус"),
+        text=text,
+    )
+
+
+class Player:
+    """One test player: presses buttons, and the right handler answers."""
+
+    def __init__(self, state: FSMContext, sent: Recorder, **deps: Any) -> None:
+        self.state = state
+        self.sent = sent
+        self.deps = deps
+
+    async def press(self, text: str) -> Screen:
+        current = await self.state.get_state()
+        message = a_message(text)
+        if current in {Play.combat.state, Play.combat_bag.state}:
+            await combat_handler.fight(
+                message,
+                self.state,
+                self.deps["content"],
+                SETTINGS,
+                self.deps["characters"],
+                self.deps["inventory"],
+            )
+        else:
+            await play_handler.play(
+                message,
+                self.state,
+                self.deps["content"],
+                SETTINGS,
+                self.deps["characters"],
+                self.deps["inventory"],
+                self.deps["users"],
+                self.deps["deltas"],
+            )
+        return self.sent.last
+
+    async def flow(self) -> PlayState:
+        data = await self.state.get_data()
+        return PlayState.deserialise(data["play"])
+
+
+@pytest.fixture
+async def player(
+    state: FSMContext,
+    sent: Recorder,
+    content: GameContent,
+    characters: InMemoryCharacterRepository,
+    inventory: InMemoryInventoryRepository,
+    users: InMemoryUserRepository,
+    deltas: Any,
+    argus: Character,
+) -> Player:
+    await state.set_state(Play.main_menu)
+    return Player(
+        state,
+        sent,
+        content=content,
+        characters=characters,
+        inventory=inventory,
+        users=users,
+        deltas=deltas,
+    )
+
+
+def path_to(location: Any, kind: NodeKind) -> tuple[list[int], int] | None:
+    """A walk from the entrance to the nearest node of this kind."""
+    parents: dict[int, int] = {0: 0}
+    queue = deque([0])
+    while queue:
+        current = queue.popleft()
+        if location.node(current).kind is kind and current != 0:
+            walk = [current]
+            while walk[-1] != 0:
+                walk.append(parents[walk[-1]])
+            return list(reversed(walk))[1:], current
+        for link in location.node(current).links:
+            if link not in parents:
+                parents[link] = current
+                queue.append(link)
+    return None
+
+
+async def walk_to(player: Player, content: GameContent, kind: NodeKind) -> int:
+    """Enter the first location of the first city and stand on a node of ``kind``."""
+    await player.press("Мир")
+    await player.press("Дальний Оплот")
+    await player.press("Локации")
+    await player.press("1. Тихие Луга")
+
+    flow = await player.flow()
+    location = build_location(content, SETTINGS.world_seed, flow.session)
+    found = path_to(location, kind)
+    assert found is not None, f"this seed produced no {kind} node"
+    walk, target = found
+    for index in walk:
+        node = location.node(index)
+        await player.press(f"Узел {node.index}: {node.name}")
+    assert (await player.flow()).session.node == target
+    return target
+
+
+# --- the loop ---------------------------------------------------------
+
+
+async def test_a_battle_node_actually_starts_a_fight(player: Player, content: GameContent) -> None:
+    """The one thing every other feature stands on: the fight opens."""
+    await walk_to(player, content, NodeKind.BATTLE)
+    screen = await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
+    assert screen.id is ScreenId.COMBAT
+    assert screen.text().startswith("Бой. Ход 1.")
+    assert next(row[0].text for row in screen.rows) == "Атака"
+
+
+async def test_a_fight_ends_and_the_result_is_stored(
+    player: Player,
+    content: GameContent,
+    characters: InMemoryCharacterRepository,
+    argus: Character,
+) -> None:
+    await walk_to(player, content, NodeKind.BATTLE)
+    await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
+
+    for _ in range(40):
+        screen = await player.press("Атака")
+        text = screen.text()
+        if text.startswith(("Победа.", "Поражение.")):
+            break
+    else:  # pragma: no cover - a fight that never ends is the bug this catches
+        pytest.fail("the fight never finished in 40 turns")
+
+    stored = await characters.get_active(ACCOUNT)
+    assert stored is not None
+    if text.startswith("Победа."):
+        assert stored.experience > argus.experience
+        assert stored.gold >= argus.gold
+        assert "Опыт:" in text
+    else:
+        assert stored.gold < argus.gold
+    # Wounds outlive the fight, whatever its outcome.
+    assert 0 < stored.health <= derived_stats(content, stored).max_health
+
+
+async def test_victory_marks_the_node_and_refuses_a_second_helping(
+    player: Player, content: GameContent
+) -> None:
+    await walk_to(player, content, NodeKind.BATTLE)
+    await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
+    for _ in range(40):
+        if (await player.press("Атака")).text().startswith(("Победа.", "Поражение.")):
+            break
+
+    back = await player.press("Назад")
+    flow = await player.flow()
+    if flow.session.active:
+        assert back.id is ScreenId.LOCATION
+        assert flow.session.cleared, "a won fight leaves the node empty"
+        again = await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
+        assert "уже пусто" in again.text()
+    else:
+        # A lost fight sends the player back to the city instead.
+        assert flow.session == LocationSession()
+
+
+async def test_the_service_row_still_works_on_an_outcome_screen(
+    player: Player, content: GameContent
+) -> None:
+    """A fight that swallowed "Главное меню" would be a trap, not a screen."""
+    await walk_to(player, content, NodeKind.BATTLE)
+    await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
+    for _ in range(40):
+        if (await player.press("Атака")).text().startswith(("Победа.", "Поражение.")):
+            break
+
+    home = await player.press("Главное меню")
+    assert home.id is ScreenId.MAIN_MENU
+    assert (await player.flow()).screen is ScreenId.MAIN_MENU
+    assert await player.state.get_state() == Play.main_menu.state
+
+
+async def test_a_quiet_node_pays_and_is_remembered(
+    player: Player,
+    content: GameContent,
+    characters: InMemoryCharacterRepository,
+    argus: Character,
+) -> None:
+    kinds = (NodeKind.CACHE, NodeKind.GATHER, NodeKind.EVENT, NodeKind.SHRINE)
+    for kind in kinds:
+        flow_before = await player.flow() if (await player.state.get_data()) else None
+        if flow_before is not None and flow_before.session.active:
+            await player.press("Покинуть локацию")
+        try:
+            await walk_to(player, content, kind)
+        except AssertionError:
+            continue
+        screen = await player.press(play_screens.NODE_ACTIONS[kind])
+        assert "сделано" in screen.text()
+        assert "Опыт:" in screen.text()
+        stored = await characters.get_active(ACCOUNT)
+        assert stored is not None
+        assert stored.experience > argus.experience
+        return
+    pytest.fail("this seed produced no quiet node at all")  # pragma: no cover
+
+
+# --- the city ---------------------------------------------------------
+
+
+async def test_the_inn_sells_health_and_the_bank_keeps_gold(
+    player: Player, content: GameContent, characters: InMemoryCharacterRepository
+) -> None:
+    hurt = await characters.get_active(ACCOUNT)
+    assert hurt is not None
+    await characters.save(hurt.with_health(5, derived_stats(content, hurt).max_health))
+
+    await player.press("Мир")
+    await player.press("Дальний Оплот")
+    await player.press("Таверна")
+    screen = await player.press("Снять комнату")
+    assert "здоровье полное" in screen.text()
+    rested = await characters.get_active(ACCOUNT)
+    assert rested is not None
+    assert rested.health == derived_stats(content, rested).max_health
+    assert rested.gold < 200
+
+    await player.press("Назад")
+    await player.press("Банк")
+    kept = await player.press("Положить 50")
+    assert "В ячейке теперь 50" in kept.text()
+    banked = await characters.get_active(ACCOUNT)
+    assert banked is not None
+    assert banked.bank_gold == 50
+
+
+async def test_a_contract_is_taken_counted_and_paid(
+    player: Player, content: GameContent, characters: InMemoryCharacterRepository
+) -> None:
+    await player.press("Мир")
+    await player.press("Дальний Оплот")
+    await player.press("Таверна")
+    board = await player.press("Доска подрядов")
+    assert "Столбы на Тракте" in board.text()
+
+    quest = content.quest("farhold_tallies")
+    offer = await player.press(f"{quest.name} — уровень {quest.level}, плата {quest.reward_gold}")
+    assert quest.giver in offer.text()
+    assert "Уйти" in [item.text for row in offer.rows for item in row]
+
+    await player.press("Согласиться")
+    holder = await characters.get_active(ACCOUNT)
+    assert holder is not None
+    assert holder.quests.is_taken(quest.id)
+
+    # Hand it in already counted out: how the counter moves is tested in the
+    # domain, what matters here is that the payment arrives.
+    counted = await characters.get_active(ACCOUNT)
+    assert counted is not None
+    await characters.save(replace(counted, quests=QuestLog(taken={quest.id: quest.target_count})))
+    await player.press("Назад")
+    paid = await player.press("Сдать подряд")
+    assert "закрыт" in paid.text()
+    settled = await characters.get_active(ACCOUNT)
+    assert settled is not None
+    assert settled.quests.is_done(quest.id)
+    assert settled.gold >= 200 + quest.reward_gold - 1
+
+
+async def test_a_skill_point_buys_a_skill_and_a_slot_holds_it(
+    player: Player, content: GameContent, characters: InMemoryCharacterRepository
+) -> None:
+    skills = await player.press("Умения")
+    assert "Очков умений: 2" in skills.text()
+
+    from mmorpg.domain.rules import skills as skill_rules
+    from mmorpg.presentation.telegram.screens import skills as skill_screens
+
+    holder = await characters.get_active(ACCOUNT)
+    assert holder is not None
+    fresh = next(
+        skill
+        for skill in skill_rules.teachable(content, holder)
+        if not skill_rules.is_known(holder, skill.code) and skill.is_active
+    )
+    await player.press(skill_screens.skill_entry_text(content, holder, fresh))
+    learned = await characters.get_active(ACCOUNT)
+    assert learned is not None
+    assert skill_rules.is_known(learned, fresh.code)
+    assert learned.unspent_skill_points == 1
+
+    await player.press("Слоты умений")
+    await player.press(skill_screens.slot_label(content, learned, fresh.kind, 1).text)
+    await player.press(f"{fresh.name} — ранг 1")
+    equipped = await characters.get_active(ACCOUNT)
+    assert equipped is not None
+    assert equipped.loadout.actives[1] == fresh.code

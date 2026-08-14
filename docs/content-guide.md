@@ -182,6 +182,39 @@ Location level ranges drive enemy level, loot quality and rarity, experience and
 event difficulty. Location layout itself is generated, never stored - see
 `docs/procgen.md`.
 
+## Add a contract
+
+`content/quests.toml`. A contract is a paid job: the giver names the price in the
+first two sentences, and refusing is always a button (`Narrative.md`, section 4).
+
+```toml
+[[quest]]
+id = "farhold_tallies"     # frozen key: it lives in the character's ledger
+city = "farhold"           # who hands it out, and where it is handed in
+level = 1                  # not offered below this level
+follows = ""               # stays off the board until that contract is paid out
+name = "Столбы на Тракте"
+giver = "Довен, писарь заставы"
+intro = "Стоит у столба со сводкой."          # up to 140 characters
+terms = "Обойдите три места на Лугах, плачу 40."  # up to 200
+objective = "search"       # kill | elite | search
+target_count = 3
+target_kind = ""           # kill: an enemy kind; search: gather/cache/shrine/event
+reward_gold = 40
+reward_experience = 60
+reward_item = "small_healing_potion"   # optional
+```
+
+What each objective counts (`domain/rules/quests.py`): `kill` counts defeated
+opponents, narrowed by enemy kind; `elite` counts only the strong ones; `search`
+counts nodes worked through without a fight. A counter never runs past its target,
+and only moves for a contract the character has actually taken.
+
+Checked by `tests/content/test_quests.py`: the city exists, the reward item
+exists, the chain never loops, the level sits inside the city's band, a contract
+never pays less than the one it follows, and none of it speaks the black-listed
+vocabulary from `Narrative.md`.
+
 ## Checking your changes
 
 ```bash

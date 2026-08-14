@@ -60,6 +60,12 @@ class EventKind(StrEnum):
     ON_COOLDOWN = "on_cooldown"
     EMPTY_SLOT = "empty_slot"
     TURN_SKIPPED = "turn_skipped"
+    # Tempo (Roadmap 1.1): the announcement, the two rewards of a trail, and the
+    # armour that a countered intent leaves open.
+    INTENT = "intent"
+    MOMENTUM = "momentum"
+    BREAK = "break"
+    BREACH = "breach"
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +79,7 @@ class CombatEvent:
     skill_name: str = ""
     effect_name: str = ""
     turns: int = 0
+    tag: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,6 +178,10 @@ class CombatState:
     experience: int = 0
     gold: int = 0
     loot: tuple[str, ...] = ()
+    # Tempo. ``trail`` holds the tags of the last three player actions, ``intent``
+    # is what the enemy side announced for this turn (Roadmap 1.1).
+    trail: tuple[str, ...] = ()
+    intent: str = ""
 
     @property
     def living_enemies(self) -> tuple[EnemyState, ...]:

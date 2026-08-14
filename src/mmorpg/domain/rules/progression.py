@@ -9,6 +9,11 @@ from __future__ import annotations
 
 import bisect
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from mmorpg.domain.entities.character import Character
+    from mmorpg.domain.entities.content import GameContent
 
 MAX_LEVEL = 300
 _CURVE_FACTOR = 50.0
@@ -98,6 +103,32 @@ def apply_experience(
         stat_points=levels * stat_points_per_level,
         skill_points=levels * skill_points_per_level,
     )
+
+
+def grant_experience(
+    content: GameContent, character: Character, gained: int
+) -> tuple[Character, LevelUp]:
+    """The one place experience turns into a level.
+
+    Every source - a fight, a contract, a cache - goes through here, so a level
+    always brings the same points no matter what earned it.
+    """
+    rules = content.rules
+    level_up = apply_experience(
+        current_level=character.level,
+        current_experience=character.experience,
+        gained=gained,
+        stat_points_per_level=rules.stat_points_per_level,
+        skill_points_per_level=rules.skill_point_per_level,
+    )
+    grown = character.with_experience(gained)
+    if level_up.levels_gained:
+        grown = grown.with_level(
+            level_up.new_level,
+            stat_points=level_up.stat_points,
+            skill_points=level_up.skill_points,
+        )
+    return grown, level_up
 
 
 def experience_reward(*, enemy_level: int, character_level: int, base: int = 12) -> int:

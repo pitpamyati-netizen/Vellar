@@ -39,8 +39,19 @@ class Play(StatesGroup):
     combat_bag = State()
     inventory = State()
     shop = State()
+    sell = State()
     character = State()
     skills = State()
+    skill_slots = State()
+    skill_pick = State()
+    skill_edge = State()
+    quests = State()
+    quest_board = State()
+    quest_offer = State()
+    tavern = State()
+    mentor = State()
+    bank = State()
+    dungeon = State()
     settings = State()
     stub = State()
 
@@ -65,8 +76,19 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.COMBAT_BAG: Play.combat_bag,
     ScreenId.INVENTORY: Play.inventory,
     ScreenId.SHOP: Play.shop,
+    ScreenId.SELL: Play.sell,
     ScreenId.CHARACTER: Play.character,
     ScreenId.SKILLS: Play.skills,
+    ScreenId.SKILL_SLOTS: Play.skill_slots,
+    ScreenId.SKILL_PICK: Play.skill_pick,
+    ScreenId.SKILL_EDGE: Play.skill_edge,
+    ScreenId.QUESTS: Play.quests,
+    ScreenId.QUEST_BOARD: Play.quest_board,
+    ScreenId.QUEST_OFFER: Play.quest_offer,
+    ScreenId.TAVERN: Play.tavern,
+    ScreenId.MENTOR: Play.mentor,
+    ScreenId.BANK: Play.bank,
+    ScreenId.DUNGEON: Play.dungeon,
     ScreenId.SETTINGS: Play.settings,
     ScreenId.STUB: Play.stub,
 }
@@ -91,8 +113,19 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.COMBAT_BAG: ScreenId.COMBAT,
     ScreenId.INVENTORY: ScreenId.MAIN_MENU,
     ScreenId.SHOP: ScreenId.CITY,
+    ScreenId.SELL: ScreenId.SHOP,
     ScreenId.CHARACTER: ScreenId.MAIN_MENU,
-    ScreenId.SKILLS: ScreenId.CHARACTER,
+    ScreenId.SKILLS: ScreenId.MAIN_MENU,
+    ScreenId.SKILL_SLOTS: ScreenId.SKILLS,
+    ScreenId.SKILL_PICK: ScreenId.SKILL_SLOTS,
+    ScreenId.SKILL_EDGE: ScreenId.SKILLS,
+    ScreenId.QUESTS: ScreenId.MAIN_MENU,
+    ScreenId.QUEST_BOARD: ScreenId.TAVERN,
+    ScreenId.QUEST_OFFER: ScreenId.QUEST_BOARD,
+    ScreenId.TAVERN: ScreenId.CITY,
+    ScreenId.MENTOR: ScreenId.CITY,
+    ScreenId.BANK: ScreenId.CITY,
+    ScreenId.DUNGEON: ScreenId.CITY,
     ScreenId.SETTINGS: ScreenId.MAIN_MENU,
     ScreenId.STUB: ScreenId.CITY,
 }

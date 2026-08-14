@@ -35,6 +35,7 @@ from mmorpg.domain.entities.location import (
     LocationNode,
     NodeKind,
 )
+from mmorpg.domain.entities.quest import ObjectiveKind, Quest, QuestLog
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.entities.trade import (
     Offer,
@@ -65,11 +66,14 @@ __all__ = [
     "Location",
     "LocationNode",
     "NodeKind",
+    "ObjectiveKind",
     "Offer",
     "OfferKind",
     "OwnerKind",
     "Party",
     "ProgressionRules",
+    "Quest",
+    "QuestLog",
     "Race",
     "RacePassive",
     "Rarity",

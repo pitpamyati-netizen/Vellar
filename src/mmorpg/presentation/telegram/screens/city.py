@@ -1,0 +1,136 @@
+"""City services: the inn, the mentor, the strongbox and the descent.
+
+Each one exists because something in the game costs money. The inn sells health,
+the mentor sells a second opinion about a skill point, the strongbox keeps gold
+out of reach of a bad fight, and the descent is where the money comes from.
+"""
+
+from __future__ import annotations
+
+from mmorpg.domain.entities.character import Character
+from mmorpg.domain.entities.content import City, GameContent
+from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules.economy import inn_price, mentor_price
+from mmorpg.domain.rules.quests import ready_to_hand_in
+from mmorpg.domain.rules.stats import derived_stats
+from mmorpg.presentation.telegram.keyboards import labels
+from mmorpg.presentation.telegram.keyboards.labels import Label, label
+from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
+from mmorpg.presentation.telegram.screens.format import amount, gold
+from mmorpg.presentation.telegram.screens.paginated import (
+    ListEntry,
+    PageState,
+    paginated_screen,
+)
+
+DEPOSIT_STEPS: tuple[int, ...] = (50, 250, 1000)
+
+
+def tavern_screen(
+    content: GameContent, character: Character, city: City, notice: str = ""
+) -> Screen:
+    """A bed, a board with contracts, and a clerk who pays for closed ones."""
+    stats = derived_stats(content, character)
+    health = character.health_or(stats.max_health)
+    due = ready_to_hand_in(content, character)
+    price = inn_price(character.level)
+
+    lines = [
+        notice or f"Таверна города {city.name}. Пахнет варевом и мокрой шерстью.",
+        f"Здоровье: {amount(health, stats.max_health)}.",
+        f"Комната на ночь: {gold(price)}. У вас {gold(character.gold)}.",
+        "Солома во дворе бесплатна и лечит не всё.",
+    ]
+    if due:
+        lines.append(f"Готовы к сдаче подряды: {len(due)}.")
+
+    rows: list[tuple[Label, ...]] = [(labels.REST_PAID, labels.REST_FREE), (labels.QUEST_BOARD,)]
+    if due:
+        rows.append((labels.HAND_IN,))
+    return Screen(id=ScreenId.TAVERN, lines=tuple(lines), rows=tuple(rows))
+
+
+def forget_label(skill_name: str, refund: int) -> Label:
+    return label(f"Забыть: {skill_name} — вернут {refund}")
+
+
+def mentor_screen(
+    content: GameContent,
+    character: Character,
+    city: City,
+    state: PageState,
+    notice: str = "",
+) -> Screen:
+    """Unlearning: the only way a spent skill point comes back."""
+    price = mentor_price(character.level)
+    entries = [
+        ListEntry(
+            key=code,
+            text=forget_label(content.skill(code).name, character.loadout.rank_of(code)).text,
+            detail=f"ранг {character.loadout.rank_of(code)}",
+        )
+        for code in sorted(skill_rules.known_codes(character))
+        if content.has_skill(code)
+    ]
+    return paginated_screen(
+        screen_id=ScreenId.MENTOR,
+        title=f"Наставник, {city.name}",
+        entries=entries,
+        state=state,
+        lead_lines=(
+            notice or "Наставник берёт деньгами и возвращает очками.",
+            f"Разбор одного умения: {gold(price)}. У вас {gold(character.gold)}.",
+            "Вместе с умением уходит и его грань, и место в панели.",
+        ),
+        empty_text="Вы пока ничего не изучили, разбирать нечего.",
+        show_filters=False,
+    )
+
+
+def deposit_label(sum_: int) -> Label:
+    return label(f"Положить {sum_}")
+
+
+def withdraw_label(sum_: int) -> Label:
+    return label(f"Забрать {sum_}")
+
+
+def bank_screen(content: GameContent, character: Character, city: City, notice: str = "") -> Screen:
+    """Gold in the strongbox is not on you, and a lost fight takes only what is."""
+    lines = [
+        notice or f"Банк Палаты, {city.name}. Стойка, весы, книга.",
+        f"На руках: {gold(character.gold)}. В ячейке: {gold(character.bank_gold)}.",
+        "За ячейку не берут: Палате важнее знать, у кого сколько.",
+        "Проигранный бой забирает десятую часть того, что на руках. Ячейку не трогает.",
+    ]
+    rows: list[tuple[Label, ...]] = [
+        tuple(deposit_label(step) for step in DEPOSIT_STEPS),
+        tuple(withdraw_label(step) for step in DEPOSIT_STEPS),
+    ]
+    return Screen(id=ScreenId.BANK, lines=tuple(lines), rows=tuple(rows))
+
+
+def dungeon_screen(
+    content: GameContent,
+    character: Character,
+    city: City,
+    *,
+    level: int,
+    depth: int,
+    total: int,
+    notice: str = "",
+) -> Screen:
+    """The descent: three fights in a row, no exit in the middle without loss."""
+    stats = derived_stats(content, character)
+    health = character.health_or(stats.max_health)
+    lines = [
+        notice or f"Подземелья города {city.name}. Ход вниз, сквозняк, вода по щиколотку.",
+        f"Спуск рассчитан на уровень {level}. Ваш уровень: {character.level}.",
+        "Три схватки подряд, без передышки. Здоровье не восстанавливается между ними.",
+        f"Здоровье: {amount(health, stats.max_health)}.",
+        "Награда выдаётся внизу и целиком: уйти на середине — уйти ни с чем.",
+    ]
+    if depth:
+        lines.insert(1, f"Пройдено схваток: {depth} из {total}.")
+    rows: list[tuple[Label, ...]] = [(labels.DUNGEON_ENTER,)]
+    return Screen(id=ScreenId.DUNGEON, lines=tuple(lines), rows=tuple(rows))

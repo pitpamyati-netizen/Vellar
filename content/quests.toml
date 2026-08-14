@@ -1,0 +1,137 @@
+# Contracts: paid jobs the cities hand out. Act I, "Подорожная" (levels 1-30).
+#
+# A contract is a deal, not a calling: the giver names the price in the first two
+# sentences, refusing is always allowed and never closes the job forever
+# (Narrative.md, section 4).
+#
+# objective:
+#   kill   - defeat N opponents; target_kind narrows it to one enemy kind
+#   elite  - defeat N strong opponents (an elite node)
+#   search - work through N nodes without a fight; target_kind narrows it to one
+#            node kind: gather, cache, shrine, event
+#
+# follows chains the act: a contract with a predecessor stays off the board until
+# that one is paid out. Ids are frozen keys - they live in the character's ledger.
+# Validated by tests/content/test_quests.py.
+
+# --- Дальний Оплот: сводки застав не сходятся ---
+
+[[quest]]
+id = "farhold_tallies"
+city = "farhold"
+level = 1
+name = "Столбы на Тракте"
+giver = "Довен, писарь заставы"
+intro = "Стоит у столба со сводкой, водит пальцем по строкам."
+terms = "Третью стражу числа не сходятся. Обойдите три места на Лугах и скажите, что там на самом деле, плачу 40."
+objective = "search"
+target_count = 3
+reward_gold = 40
+reward_experience = 60
+reward_item = "small_healing_potion"
+
+[[quest]]
+id = "farhold_meadow_teeth"
+city = "farhold"
+level = 3
+follows = "farhold_tallies"
+name = "Зубы на Лугах"
+giver = "Мерла с Отмелей, гуртовщица"
+intro = "Считает овец дважды и оба раза сбивается."
+terms = "Скот убывает, а волки сытые. Шесть шкур зверья с Лугов, и я плачу 70 без торга."
+objective = "kill"
+target_kind = "beast"
+target_count = 6
+reward_gold = 70
+reward_experience = 140
+reward_item = "travel_boots"
+
+[[quest]]
+id = "farhold_grove_toll"
+city = "farhold"
+level = 6
+follows = "farhold_meadow_teeth"
+name = "Пошлина в Роще"
+giver = "Довен, писарь заставы"
+intro = "Кладёт на стол подорожную с чужой печатью."
+terms = "В Роще кто-то берёт проезд вместо Палаты. Разберитесь с восемью, плата 120 и молчание."
+objective = "kill"
+target_count = 8
+reward_gold = 120
+reward_experience = 260
+reward_item = "leather_armor"
+
+[[quest]]
+id = "farhold_ravine_leader"
+city = "farhold"
+level = 10
+follows = "farhold_grove_toll"
+name = "Вожак Оврагов"
+giver = "Тарен, ловчий заставы"
+intro = "Показывает капкан, разогнутый изнутри."
+terms = "Стая слушается одного. Уберите вожака в Оврагах, за него дают 200."
+objective = "elite"
+target_count = 1
+reward_gold = 200
+reward_experience = 420
+reward_item = "wolf_fang"
+
+[[quest]]
+id = "farhold_road_count"
+city = "farhold"
+level = 16
+follows = "farhold_ravine_leader"
+name = "Пересчёт на Старом Тракте"
+giver = "Довен, писарь заставы"
+intro = "Сводка за третью стражу опять короче, чем за первую."
+terms = "Пять мест на Тракте: тайники, привалы, что найдёте. Опишете все пять — 260."
+objective = "search"
+target_count = 5
+reward_gold = 260
+reward_experience = 700
+reward_item = "chain_shirt"
+
+[[quest]]
+id = "farhold_mine_ledger"
+city = "farhold"
+level = 22
+follows = "farhold_road_count"
+name = "Недостача в Шахте"
+giver = "Ольда, весовщица Палаты"
+intro = "Весы сходятся, а рудой в них не пахнет."
+terms = "Шахту закрыли не из-за обвала. Пройдите десять встреч внизу и вернитесь, плата 400."
+objective = "kill"
+target_count = 10
+reward_gold = 400
+reward_experience = 1200
+reward_item = "silent_steps"
+
+# --- Сумеречная Пристань: обозы мимо пошлины ---
+
+[[quest]]
+id = "harbor_manifest"
+city = "dusk_harbor"
+level = 24
+name = "Опись без печати"
+giver = "Кевен, приёмщик мостков"
+intro = "Держит опись, в которой не хватает половины строк."
+terms = "Четыре схрона на Мостках стоят не там, где записаны. Найдите их, плачу 450."
+objective = "search"
+target_count = 4
+reward_gold = 450
+reward_experience = 1400
+
+[[quest]]
+id = "harbor_undertow"
+city = "dusk_harbor"
+level = 27
+follows = "harbor_manifest"
+name = "Двое с Топей"
+giver = "Кевен, приёмщик мостков"
+intro = "Говорит тише, чем нужно для разговора у воды."
+terms = "На Топях сидят двое, за которых никто не платит пошлину. Уберите обоих, с меня 600."
+objective = "elite"
+target_count = 2
+reward_gold = 600
+reward_experience = 1900
+reward_item = "tide_pearl"

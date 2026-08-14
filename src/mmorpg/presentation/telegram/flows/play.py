@@ -1,8 +1,13 @@
-"""Navigation between menu, world, city and locations, as a pure state machine.
+"""Navigation and every action outside a fight, as a pure state machine.
 
 Same shape as the creation flow: ``advance(state, message) -> state``, no I/O and
 no clock. The current world cycle arrives as an argument, which is what keeps
-location generation reproducible in tests (``docs/procgen.md``).
+location generation reproducible (``docs/procgen.md``).
+
+The flow never writes anything. When a step should change stored data - gold, a
+loadout, a contract, the bag - it puts the result into :class:`PendingWrite` and
+the handler persists it. That is what keeps the whole game testable without a
+database (``docs/architecture.md``).
 """
 
 from __future__ import annotations
@@ -12,32 +17,66 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import GameContent, Item
+from mmorpg.domain.entities.content import GameContent, Item, SkillKind
 from mmorpg.domain.entities.location import GeneratedLocation, NodeKind
+from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.ports.repositories import AccessibilitySettings
 from mmorpg.domain.procgen.location import cleared_mask, generate_location, is_cleared
+from mmorpg.domain.procgen.seeds import derive, location_seed
+from mmorpg.domain.rules import adventure, economy
+from mmorpg.domain.rules import quests as quest_rules
+from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules.progression import LevelUp
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.routing import Command, Intent, resolve
+from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import play as screens
+from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import settings as settings_screens
 from mmorpg.presentation.telegram.screens import shop as shop_screens
+from mmorpg.presentation.telegram.screens import skills as skill_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
+from mmorpg.presentation.telegram.screens.creation import STAT_NAMES
 from mmorpg.presentation.telegram.screens.paginated import PageState, total_pages
 from mmorpg.presentation.telegram.screens.shop import OwnedItem
 from mmorpg.presentation.telegram.states.screens import NavigationStack, back_target
 
-# Sections that exist as screens but have no content yet. Each one is a real
-# screen with a working "Назад" - never silence.
-STUBS: dict[str, str] = {
-    labels.DUNGEONS.text: "Данжи",
-    labels.TAVERN.text: "Таверна",
-    labels.MENTOR.text: "Наставник",
-    labels.BANK.text: "Банк",
-    labels.SKILLS.text: "Умения",
+DEFAULT_SETTINGS = AccessibilitySettings()
+
+# Which city service each button opens, and the id the city declares it under.
+SERVICES: dict[str, tuple[str, ScreenId]] = {
+    labels.LOCATIONS.text: ("locations", ScreenId.LOCATION_LIST),
+    labels.SHOP.text: ("shop", ScreenId.SHOP),
+    labels.DUNGEONS.text: ("dungeons", ScreenId.DUNGEON),
+    labels.TAVERN.text: ("tavern", ScreenId.TAVERN),
+    labels.MENTOR.text: ("mentor", ScreenId.MENTOR),
+    labels.BANK.text: ("bank", ScreenId.BANK),
 }
 
-DEFAULT_SETTINGS = AccessibilitySettings()
+# A descent is three fights deep. Short enough to hold in the head, long enough
+# that walking in wounded is a decision (Roadmap 1.5).
+DUNGEON_DEPTH = 3
+
+
+@dataclass(frozen=True, slots=True)
+class PendingWrite:
+    """What the handler must store after this step.
+
+    ``items`` is a list of bag changes: a positive number adds, a negative one
+    takes away. Nothing here is applied by the flow itself.
+    """
+
+    character: Character | None = None
+    settings: AccessibilitySettings | None = None
+    items: tuple[tuple[str, int], ...] = ()
+
+    @property
+    def empty(self) -> bool:
+        return self.character is None and self.settings is None and not self.items
+
+    def with_items(self, *changes: tuple[str, int]) -> PendingWrite:
+        return replace(self, items=(*self.items, *changes))
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +112,20 @@ class LocationSession:
 
 
 @dataclass(frozen=True, slots=True)
+class Descent:
+    """An unfinished run into the dungeons of a city."""
+
+    city_id: str = ""
+    level: int = 0
+    depth: int = 0
+    cycle: int = 0
+
+    @property
+    def active(self) -> bool:
+        return bool(self.city_id)
+
+
+@dataclass(frozen=True, slots=True)
 class PlayState:
     screen: ScreenId = ScreenId.MAIN_MENU
     stack: NavigationStack = field(default_factory=lambda: NavigationStack((ScreenId.MAIN_MENU,)))
@@ -80,19 +133,30 @@ class PlayState:
     location_page: PageState = field(default_factory=PageState)
     city_id: str = ""
     session: LocationSession = field(default_factory=LocationSession)
+    descent: Descent = field(default_factory=Descent)
     stub_title: str = ""
     notice: str = ""
     list_page: PageState = field(default_factory=PageState)
-    # Set when the player pressed "buy": the handler performs the purchase, since
-    # writing to the database is not the flow's job. Same for a settings switch.
-    pending_purchase: str = ""
-    pending_settings: AccessibilitySettings | None = None
+    skill_page: PageState = field(default_factory=PageState)
+    mentor_page: PageState = field(default_factory=PageState)
+    board_page: PageState = field(default_factory=PageState)
+    # What the player is in the middle of choosing: a slot, an edge, a contract.
+    pick_kind: str = ""
+    pick_slot: int = 0
+    edge_skill: str = ""
+    quest_id: str = ""
+    # Transient: cleared at the start of every step, read by the handler.
+    pending: PendingWrite = field(default_factory=PendingWrite)
+    fight: str = ""
 
     def at(self, screen: ScreenId) -> PlayState:
         return replace(self, screen=screen, stack=self.stack.push(screen), notice="")
 
     def with_notice(self, notice: str) -> PlayState:
         return replace(self, notice=notice)
+
+    def storing(self, write: PendingWrite) -> PlayState:
+        return replace(self, pending=write)
 
     def serialise(self) -> str:
         return json.dumps(
@@ -109,7 +173,17 @@ class PlayState:
                     self.session.node,
                     self.session.cleared,
                 ],
+                "descent": [
+                    self.descent.city_id,
+                    self.descent.level,
+                    self.descent.depth,
+                    self.descent.cycle,
+                ],
                 "stub": self.stub_title,
+                "pick": [self.pick_kind, self.pick_slot],
+                "edge": self.edge_skill,
+                "quest": self.quest_id,
+                "pages": [self.list_page.page, self.skill_page.page, self.board_page.page],
             },
             ensure_ascii=False,
         )
@@ -118,6 +192,9 @@ class PlayState:
     def deserialise(cls, raw: str) -> PlayState:
         data = json.loads(raw)
         city_id, slot, cycle, node, cleared = data.get("session", ["", 0, 0, 0, 0])
+        descent_city, descent_level, depth, descent_cycle = data.get("descent", ["", 0, 0, 0])
+        pick_kind, pick_slot = data.get("pick", ["", 0])
+        list_page, skill_page, board_page = data.get("pages", [1, 1, 1])
         return cls(
             screen=ScreenId(data["screen"]),
             stack=NavigationStack.deserialise(data.get("stack", "")),
@@ -131,7 +208,20 @@ class PlayState:
                 node=int(node),
                 cleared=int(cleared),
             ),
+            descent=Descent(
+                city_id=descent_city,
+                level=int(descent_level),
+                depth=int(depth),
+                cycle=int(descent_cycle),
+            ),
             stub_title=data.get("stub", ""),
+            list_page=PageState(page=int(list_page)),
+            skill_page=PageState(page=int(skill_page)),
+            board_page=PageState(page=int(board_page)),
+            pick_kind=str(pick_kind),
+            pick_slot=int(pick_slot),
+            edge_skill=data.get("edge", ""),
+            quest_id=data.get("quest", ""),
         )
 
 
@@ -157,6 +247,25 @@ def build_location(
     )
 
 
+def node_fight_seed(world_seed: str, session: LocationSession) -> bytes:
+    """The seed of the fight standing at the current node."""
+    parent = location_seed(world_seed, session.city_id, session.slot, session.cycle)
+    return derive(parent, "fight", session.node)
+
+
+def descent_fight_seed(world_seed: str, descent: Descent) -> bytes:
+    return derive(world_seed, "descent", descent.city_id, descent.cycle, descent.depth)
+
+
+def dungeon_level(content: GameContent, character: Character, city_id: str) -> int:
+    """A descent is tuned to the player, inside the band the city allows."""
+    city = content.city(city_id)
+    return max(city.level_min, min(city.level_max, character.level + 1))
+
+
+# --- rendering --------------------------------------------------------
+
+
 def render(
     content: GameContent,
     character: Character,
@@ -167,6 +276,7 @@ def render(
     settings: AccessibilitySettings | None = None,
 ) -> Screen:
     shelf = goods or Goods(gold=character.gold)
+    city = content.city(state.city_id or character.city_id)
     match state.screen:
         case ScreenId.SETTINGS:
             return settings_screens.settings_screen(settings or DEFAULT_SETTINGS, state.notice)
@@ -175,7 +285,6 @@ def render(
                 content, shelf.owned, state.list_page, gold=shelf.gold, notice=state.notice
             )
         case ScreenId.SHOP:
-            city = content.city(state.city_id or character.city_id)
             return shop_screens.shop_screen(
                 content,
                 shelf.stock,
@@ -185,13 +294,21 @@ def render(
                 city_name=city.name,
                 notice=state.notice,
             )
+        case ScreenId.SELL:
+            return shop_screens.sell_screen(
+                content,
+                shelf.owned,
+                _sale_prices(content, shelf.owned),
+                state.list_page,
+                gold=shelf.gold,
+                city_name=city.name,
+                notice=state.notice,
+            )
         case ScreenId.WORLD:
             return screens.world_screen(content, character, state.world_page, state.notice)
         case ScreenId.CITY:
-            city = content.city(state.city_id or character.city_id)
             return screens.city_screen(content, city, character, state.notice)
         case ScreenId.LOCATION_LIST:
-            city = content.city(state.city_id or character.city_id)
             return screens.location_list_screen(
                 content, city, character, state.location_page, state.notice
             )
@@ -207,12 +324,62 @@ def render(
             return screens.character_screen(
                 content, character, derived_stats(content, character), state.notice
             )
+        case ScreenId.SKILLS:
+            return skill_screens.skills_screen(content, character, state.skill_page, state.notice)
+        case ScreenId.SKILL_SLOTS:
+            return skill_screens.slots_screen(content, character, state.notice)
+        case ScreenId.SKILL_PICK:
+            return skill_screens.pick_screen(
+                content,
+                character,
+                _pick_kind(state),
+                state.pick_slot,
+                state.list_page,
+                state.notice,
+            )
+        case ScreenId.SKILL_EDGE:
+            return skill_screens.edge_screen(content, character, content.skill(state.edge_skill))
+        case ScreenId.QUESTS:
+            return quest_screens.journal_screen(content, character, state.notice)
+        case ScreenId.QUEST_BOARD:
+            return quest_screens.board_screen(content, character, state.board_page, state.notice)
+        case ScreenId.QUEST_OFFER:
+            return quest_screens.offer_screen(content, content.quest(state.quest_id))
+        case ScreenId.TAVERN:
+            return city_screens.tavern_screen(content, character, city, state.notice)
+        case ScreenId.MENTOR:
+            return city_screens.mentor_screen(
+                content, character, city, state.mentor_page, state.notice
+            )
+        case ScreenId.BANK:
+            return city_screens.bank_screen(content, character, city, state.notice)
+        case ScreenId.DUNGEON:
+            return city_screens.dungeon_screen(
+                content,
+                character,
+                city,
+                level=dungeon_level(content, character, city.id),
+                depth=state.descent.depth,
+                total=DUNGEON_DEPTH,
+                notice=state.notice,
+            )
         case ScreenId.STUB:
             return screens.stub_screen(state.stub_title, state.notice)
         case _:
             return screens.main_menu_screen(
                 content, character, derived_stats(content, character), state.notice
             )
+
+
+def _pick_kind(state: PlayState) -> SkillKind:
+    return SkillKind.PASSIVE if state.pick_kind == "passive" else SkillKind.ACTIVE
+
+
+def _sale_prices(content: GameContent, owned: tuple[OwnedItem, ...]) -> dict[str, int]:
+    return {held.item_id: economy.sell_price(content, content.item(held.item_id)) for held in owned}
+
+
+# --- stepping ---------------------------------------------------------
 
 
 def advance(
@@ -233,46 +400,76 @@ def advance(
     command = resolve(text, screen)
 
     if command.intent is Intent.LOOK:
-        return replace(state, notice="")
+        return replace(state, notice="", pending=PendingWrite(), fight="")
     if command.intent is Intent.MAIN_MENU:
         return replace(
             state,
             screen=ScreenId.MAIN_MENU,
             stack=NavigationStack((ScreenId.MAIN_MENU,)),
             notice="",
+            pending=PendingWrite(),
+            fight="",
         )
     if command.intent is Intent.BACK:
         return _go_back(state)
 
-    state = replace(state, pending_purchase="", pending_settings=None)
+    state = replace(state, pending=PendingWrite(), fight="")
+    shelf = goods or Goods(gold=character.gold)
 
     match state.screen:
         case ScreenId.SETTINGS:
             return _handle_settings(state, command, settings or DEFAULT_SETTINGS)
-        case ScreenId.INVENTORY | ScreenId.SHOP:
-            return _handle_goods(content, state, command, goods or Goods(gold=character.gold))
+        case ScreenId.INVENTORY:
+            return _handle_inventory(content, character, state, command, shelf)
+        case ScreenId.SHOP:
+            return _handle_shop(content, character, state, command, shelf)
+        case ScreenId.SELL:
+            return _handle_sell(content, character, state, command, shelf)
         case ScreenId.MAIN_MENU:
             return _handle_main_menu(state, command)
         case ScreenId.WORLD:
             return _handle_world(content, character, state, command)
         case ScreenId.CITY:
-            return _handle_city(state, command)
+            return _handle_city(content, character, state, command)
+        case ScreenId.CHARACTER:
+            return _handle_character(content, character, state, command)
+        case ScreenId.SKILLS:
+            return _handle_skills(content, character, state, command)
+        case ScreenId.SKILL_SLOTS:
+            return _handle_slots(content, character, state, command)
+        case ScreenId.SKILL_PICK:
+            return _handle_pick(content, character, state, command)
+        case ScreenId.SKILL_EDGE:
+            return _handle_edge(content, character, state, command)
+        case ScreenId.TAVERN:
+            return _handle_tavern(content, character, state, command)
+        case ScreenId.QUEST_BOARD:
+            return _handle_board(content, character, state, command)
+        case ScreenId.QUEST_OFFER:
+            return _handle_offer(content, character, state, command)
+        case ScreenId.MENTOR:
+            return _handle_mentor(content, character, state, command)
+        case ScreenId.BANK:
+            return _handle_bank(content, character, state, command)
+        case ScreenId.DUNGEON:
+            return _handle_dungeon(content, character, state, command, cycle=cycle)
         case ScreenId.LOCATION_LIST:
             return _handle_location_list(content, character, state, command, cycle=cycle)
         case ScreenId.LOCATION:
-            return _handle_location(content, state, command, world_seed=world_seed)
+            return _handle_location(content, character, state, command, world_seed=world_seed)
         case _:
             return state.with_notice("Нажмите «Назад» или «Главное меню».")
 
 
 def _go_back(state: PlayState) -> PlayState:
     stack, previous = state.stack.pop()
+    cleaned = replace(state, pending=PendingWrite(), fight="")
     if previous is None:
         target = back_target(state.screen) or ScreenId.MAIN_MENU
-        return replace(state, screen=target, stack=NavigationStack((target,)), notice="")
+        return replace(cleaned, screen=target, stack=NavigationStack((target,)), notice="")
     leaving_location = state.screen is ScreenId.LOCATION
     return replace(
-        state,
+        cleaned,
         screen=previous,
         stack=stack,
         notice="",
@@ -280,65 +477,17 @@ def _go_back(state: PlayState) -> PlayState:
     )
 
 
-def _stub_for(state: PlayState, command: Command) -> PlayState | None:
-    title = STUBS.get(command.argument)
-    if title is None:
-        return None
-    return replace(state, stub_title=title).at(ScreenId.STUB)
-
-
-def _handle_goods(
-    content: GameContent, state: PlayState, command: Command, goods: Goods
-) -> PlayState:
-    """Inventory and shop share their paging, filtering and selection behaviour."""
-    entries = len(goods.stock if state.screen is ScreenId.SHOP else goods.owned)
-    pages = total_pages(entries)
-
+def _page_move(command: Command, current: PageState, pages: int) -> PageState | None:
+    """Shared paging arithmetic. ``None`` when this command was not a page move."""
     if command.intent in {Intent.NEXT_PAGE, Intent.PREVIOUS_PAGE}:
         delta = 1 if command.intent is Intent.NEXT_PAGE else -1
-        return replace(state, list_page=state.list_page.moved(delta, pages), notice="")
+        return current.moved(delta, pages)
     if command.intent is Intent.PAGE and command.number is not None:
-        return replace(state, list_page=state.list_page.jumped(command.number, pages), notice="")
-    if command.intent is not Intent.SELECT:
-        return state.with_notice("Нажмите позицию из списка.")
-
-    if labels.RESET_FILTERS.matches(command.argument):
-        return replace(
-            state, list_page=PageState(filters=state.list_page.filters.cleared()), notice=""
-        )
-
-    if state.screen is ScreenId.SHOP:
-        item = shop_screens.item_from_button(content, command.argument, goods.stock)
-        if item is None:
-            return state.with_notice("Нажмите товар из списка.")
-        price = goods.prices.get(item.id, item.price)
-        if price > goods.gold:
-            return state.with_notice(
-                f"{item.name} стоит {price} золота, у вас {goods.gold}. Не хватает."
-            )
-        return replace(state, pending_purchase=item.id).with_notice(
-            f"{item.name} куплен за {price} золота."
-        )
-
-    owned = shop_screens.owned_from_button(content, command.argument, goods.owned)
-    if owned is None:
-        return state.with_notice("Нажмите предмет из списка.")
-    return state.with_notice(f"{owned.name}. {owned.text}")
+        return current.jumped(command.number, pages)
+    return None
 
 
-def _handle_settings(
-    state: PlayState, command: Command, settings: AccessibilitySettings
-) -> PlayState:
-    if command.intent is not Intent.SELECT:
-        return state.with_notice("Нажмите переключатель из списка.")
-    if settings_screens.REPEAT_SCREEN.matches(command.argument):
-        return state.with_notice("Настройки доступности.")
-
-    updated, said = settings_screens.toggled(settings, command.argument)
-    if not said:
-        return state.with_notice("Нажмите переключатель из списка.")
-    # The handler persists it; the flow only decides what should change.
-    return replace(state, pending_settings=updated).with_notice(said)
+# --- menu, world, city ------------------------------------------------
 
 
 def _handle_main_menu(state: PlayState, command: Command) -> PlayState:
@@ -350,22 +499,22 @@ def _handle_main_menu(state: PlayState, command: Command) -> PlayState:
         return state.at(ScreenId.CHARACTER)
     if labels.INVENTORY.matches(command.argument):
         return replace(state, list_page=PageState()).at(ScreenId.INVENTORY)
+    if labels.SKILLS.matches(command.argument):
+        return replace(state, skill_page=PageState()).at(ScreenId.SKILLS)
+    if labels.QUESTS.matches(command.argument):
+        return state.at(ScreenId.QUESTS)
     if labels.SETTINGS.matches(command.argument):
         return state.at(ScreenId.SETTINGS)
-    stub = _stub_for(state, command)
-    return stub if stub is not None else state.with_notice("Нажмите кнопку из меню.")
+    return state.with_notice("Нажмите кнопку из меню.")
 
 
 def _handle_world(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
     available = content.cities_available_at(character.level)
-    pages = total_pages(len(available))
-    if command.intent in {Intent.NEXT_PAGE, Intent.PREVIOUS_PAGE}:
-        delta = 1 if command.intent is Intent.NEXT_PAGE else -1
-        return replace(state, world_page=state.world_page.moved(delta, pages), notice="")
-    if command.intent is Intent.PAGE and command.number is not None:
-        return replace(state, world_page=state.world_page.jumped(command.number, pages), notice="")
+    moved = _page_move(command, state.world_page, total_pages(len(available)))
+    if moved is not None:
+        return replace(state, world_page=moved, notice="")
 
     if command.intent is Intent.SELECT:
         for city in available:
@@ -383,15 +532,467 @@ def _handle_world(
     return state.with_notice("Нажмите город из списка.")
 
 
-def _handle_city(state: PlayState, command: Command) -> PlayState:
+def _handle_city(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите кнопку города.")
-    if labels.LOCATIONS.matches(command.argument):
-        return state.at(ScreenId.LOCATION_LIST)
-    if labels.SHOP.matches(command.argument):
-        return replace(state, list_page=PageState()).at(ScreenId.SHOP)
-    stub = _stub_for(state, command)
-    return stub if stub is not None else state.with_notice("Нажмите кнопку города.")
+    city = content.city(state.city_id or character.city_id)
+    service = SERVICES.get(command.argument)
+    if service is None:
+        return state.with_notice("Нажмите кнопку города.")
+
+    declared, target = service
+    if declared not in city.services:
+        return replace(state, stub_title=command.argument).at(ScreenId.STUB)
+    fresh = replace(state, list_page=PageState(), board_page=PageState(), mentor_page=PageState())
+    return fresh.at(target)
+
+
+def _handle_character(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите кнопку из списка.")
+    if labels.SKILLS.matches(command.argument):
+        return replace(state, skill_page=PageState()).at(ScreenId.SKILLS)
+
+    for code, stat_name in STAT_NAMES.items():
+        if not screens.spend_label(stat_name).matches(command.argument):
+            continue
+        if character.unspent_stat_points < 1:
+            return state.with_notice("Свободных очков характеристик нет.")
+        stronger = replace(
+            character,
+            allocated=character.allocated.with_change(StatCode(code), 1),
+            unspent_stat_points=character.unspent_stat_points - 1,
+        )
+        return state.storing(PendingWrite(character=stronger)).with_notice(
+            f"{stat_name} повышена. Осталось очков: {stronger.unspent_stat_points}."
+        )
+
+    for slot, slot_name in screens.SLOT_NAMES.items():
+        if not screens.unequip_label(slot_name).matches(command.argument):
+            continue
+        item_id = character.equipment.item_in(slot)
+        if item_id is None:
+            return state.with_notice(f"В слоте «{slot_name}» ничего нет.")
+        stripped = replace(character, equipment=character.equipment.unequip(slot))
+        write = PendingWrite(character=stripped, items=((item_id, 1),))
+        return state.storing(write).with_notice(
+            f"{content.item(item_id).name} снят и убран в сумку."
+        )
+    return state.with_notice("Нажмите кнопку из списка.")
+
+
+# --- goods ------------------------------------------------------------
+
+
+def _handle_shop(
+    content: GameContent,
+    character: Character,
+    state: PlayState,
+    command: Command,
+    goods: Goods,
+) -> PlayState:
+    moved = _page_move(command, state.list_page, total_pages(len(goods.stock)))
+    if moved is not None:
+        return replace(state, list_page=moved, notice="")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите товар из списка.")
+    if labels.RESET_FILTERS.matches(command.argument):
+        return replace(
+            state, list_page=PageState(filters=state.list_page.filters.cleared()), notice=""
+        )
+    if labels.SELL.matches(command.argument):
+        return replace(state, list_page=PageState()).at(ScreenId.SELL)
+
+    item = shop_screens.item_from_button(content, command.argument, goods.stock)
+    if item is None:
+        return state.with_notice("Нажмите товар из списка.")
+    price = goods.prices.get(item.id, item.price)
+    if price > goods.gold:
+        return state.with_notice(
+            f"{item.name} стоит {price} золота, у вас {goods.gold}. Не хватает."
+        )
+    write = PendingWrite(character=character.with_gold(-price), items=((item.id, 1),))
+    return state.storing(write).with_notice(f"{item.name} куплен за {price} золота.")
+
+
+def _handle_sell(
+    content: GameContent,
+    character: Character,
+    state: PlayState,
+    command: Command,
+    goods: Goods,
+) -> PlayState:
+    moved = _page_move(command, state.list_page, total_pages(len(goods.owned)))
+    if moved is not None:
+        return replace(state, list_page=moved, notice="")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите вещь из списка.")
+    if labels.RESET_FILTERS.matches(command.argument):
+        return replace(
+            state, list_page=PageState(filters=state.list_page.filters.cleared()), notice=""
+        )
+
+    item = shop_screens.sold_from_button(content, command.argument, goods.owned)
+    if item is None:
+        return state.with_notice("Нажмите вещь из списка.")
+    price = economy.sell_price(content, item)
+    write = PendingWrite(character=character.with_gold(price), items=((item.id, -1),))
+    return state.storing(write).with_notice(f"{item.name} продан за {price} золота.")
+
+
+def _handle_inventory(
+    content: GameContent,
+    character: Character,
+    state: PlayState,
+    command: Command,
+    goods: Goods,
+) -> PlayState:
+    moved = _page_move(command, state.list_page, total_pages(len(goods.owned)))
+    if moved is not None:
+        return replace(state, list_page=moved, notice="")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите предмет из списка.")
+    if labels.RESET_FILTERS.matches(command.argument):
+        return replace(
+            state, list_page=PageState(filters=state.list_page.filters.cleared()), notice=""
+        )
+
+    item = shop_screens.owned_from_button(content, command.argument, goods.owned)
+    if item is None:
+        return state.with_notice("Нажмите предмет из списка.")
+
+    if item.is_equipment:
+        return _equip(content, character, state, item)
+    if item.kind.value == "consumable":
+        healed_character, healed = adventure.use_consumable(content, character, item.id)
+        if healed <= 0:
+            return state.with_notice(f"{item.name} сейчас ничего не даст. {item.text}")
+        write = PendingWrite(character=healed_character, items=((item.id, -1),))
+        return state.storing(write).with_notice(
+            f"{item.name} выпито, восстановлено {healed} здоровья."
+        )
+    return state.with_notice(f"{item.name}. {item.text}")
+
+
+def _equip(content: GameContent, character: Character, state: PlayState, item: Item) -> PlayState:
+    """Put a thing on. What it replaces goes back into the bag, never nowhere."""
+    previous = character.equipment.item_in(item.slot)
+    dressed = replace(character, equipment=character.equipment.equip(item.slot, item.id))
+    write = PendingWrite(character=dressed, items=((item.id, -1),))
+    if previous is not None:
+        write = write.with_items((previous, 1))
+        said = f"{item.name} надет, {content.item(previous).name} убран в сумку."
+    else:
+        said = f"{item.name} надет."
+    return state.storing(write).with_notice(said)
+
+
+def _handle_settings(
+    state: PlayState, command: Command, settings: AccessibilitySettings
+) -> PlayState:
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите переключатель из списка.")
+    if settings_screens.REPEAT_SCREEN.matches(command.argument):
+        return state.with_notice("Настройки доступности.")
+
+    updated, said = settings_screens.toggled(settings, command.argument)
+    if not said:
+        return state.with_notice("Нажмите переключатель из списка.")
+    # The handler persists it; the flow only decides what should change.
+    return state.storing(PendingWrite(settings=updated)).with_notice(said)
+
+
+# --- skills -----------------------------------------------------------
+
+
+def _handle_skills(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    pool = skill_rules.teachable(content, character)
+    moved = _page_move(command, state.skill_page, total_pages(len(pool)))
+    if moved is not None:
+        return replace(state, skill_page=moved, notice="")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите умение из списка.")
+    if labels.SKILL_SLOTS.matches(command.argument):
+        return state.at(ScreenId.SKILL_SLOTS)
+
+    for skill in pool:
+        if not command.argument.startswith(f"{skill.name} —"):
+            continue
+        if skill_rules.needs_edge(content, character, skill):
+            return replace(state, edge_skill=skill.code).at(ScreenId.SKILL_EDGE)
+        learned = skill_rules.learn(content, character, skill)
+        if learned is None:
+            if character.unspent_skill_points < 1:
+                return state.with_notice(
+                    "Очков умений нет. Их дают за уровень и возвращает наставник."
+                )
+            return state.with_notice(f"{skill.name} уже на высшем ранге.")
+        rank = learned.loadout.rank_of(skill.code)
+        said = f"{skill.name}: ранг {rank}. Осталось очков: {learned.unspent_skill_points}."
+        if skill_rules.needs_edge(content, learned, skill):
+            return (
+                replace(state, edge_skill=skill.code)
+                .storing(PendingWrite(character=learned))
+                .at(ScreenId.SKILL_EDGE)
+                .with_notice(said)
+            )
+        if skill.is_active and skill.code not in learned.loadout.equipped_actives():
+            said += " Положите его в слот, иначе в бою его не будет."
+        return state.storing(PendingWrite(character=learned)).with_notice(said)
+    return state.with_notice("Нажмите умение из списка.")
+
+
+def _handle_slots(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите слот из списка.")
+    rules = content.rules
+    for kind, count in (
+        (SkillKind.ACTIVE, rules.active_slots),
+        (SkillKind.PASSIVE, rules.passive_slots),
+    ):
+        for slot in range(count):
+            if skill_screens.slot_label(content, character, kind, slot).matches(command.argument):
+                return replace(
+                    state,
+                    pick_kind=kind.value,
+                    pick_slot=slot,
+                    list_page=PageState(),
+                ).at(ScreenId.SKILL_PICK)
+    return state.with_notice("Нажмите слот из списка.")
+
+
+def _handle_pick(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    kind = _pick_kind(state)
+    available = skill_rules.equippable(content, character, kind)
+    moved = _page_move(command, state.list_page, total_pages(len(available)))
+    if moved is not None:
+        return replace(state, list_page=moved, notice="")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите умение из списка.")
+
+    if skill_screens.CLEAR_SLOT.matches(command.argument):
+        emptied = skill_rules.put_in_slot(content, character, kind, state.pick_slot, None)
+        if emptied is None:
+            return state.with_notice("Этот слот освободить нельзя.")
+        return (
+            state.storing(PendingWrite(character=emptied))
+            .at(ScreenId.SKILL_SLOTS)
+            .with_notice(f"Слот {state.pick_slot + 1} пуст.")
+        )
+
+    for skill in available:
+        if not command.argument.startswith(f"{skill.name} —"):
+            continue
+        filled = skill_rules.put_in_slot(content, character, kind, state.pick_slot, skill.code)
+        if filled is None:
+            return state.with_notice("Это умение сюда не встаёт.")
+        return (
+            state.storing(PendingWrite(character=filled))
+            .at(ScreenId.SKILL_SLOTS)
+            .with_notice(f"{skill.name} занял слот {state.pick_slot + 1}.")
+        )
+    return state.with_notice("Нажмите умение из списка.")
+
+
+def _handle_edge(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Выберите одну из двух граней.")
+    skill = content.skill(state.edge_skill)
+    for edge in skill.edges:
+        if not skill_screens.edge_label(edge.name).matches(command.argument):
+            continue
+        chosen = skill_rules.choose_edge(character, skill, edge.code)
+        if chosen is None:
+            return state.with_notice("Грань этого умения уже выбрана.")
+        return (
+            state.storing(PendingWrite(character=chosen))
+            .at(ScreenId.SKILLS)
+            .with_notice(f"{skill.name}: грань «{edge.name}» выбрана.")
+        )
+    return state.with_notice("Выберите одну из двух граней.")
+
+
+# --- city services ----------------------------------------------------
+
+
+def _handle_tavern(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите кнопку таверны.")
+    if labels.QUEST_BOARD.matches(command.argument):
+        return replace(state, board_page=PageState()).at(ScreenId.QUEST_BOARD)
+    if labels.HAND_IN.matches(command.argument):
+        return _hand_in(content, character, state)
+
+    paid = labels.REST_PAID.matches(command.argument)
+    if not paid and not labels.REST_FREE.matches(command.argument):
+        return state.with_notice("Нажмите кнопку таверны.")
+
+    result = adventure.rest(content, character, paid=paid)
+    if result.refused == "whole":
+        return state.with_notice("Вы и так целы. Незачем платить за койку.")
+    if result.refused == "poor":
+        return state.with_notice(
+            f"Комната стоит {result.cost} золота, у вас {character.gold}. Во дворе есть солома."
+        )
+    if paid:
+        said = f"Ночь в комнате: {result.cost} золота, здоровье полное."
+    else:
+        said = f"Ночь на соломе: восстановлено {result.healed} здоровья, спина не в счёт."
+    return state.storing(PendingWrite(character=result.character)).with_notice(said)
+
+
+def _hand_in(content: GameContent, character: Character, state: PlayState) -> PlayState:
+    due = quest_rules.ready_to_hand_in(content, character)
+    if not due:
+        return state.with_notice("Сдавать нечего: ни один подряд не досчитан.")
+    payout = quest_rules.hand_in(content, character, due[0].quest)
+    if payout is None:  # pragma: no cover - ready_to_hand_in already checked it
+        return state.with_notice("Сдавать нечего.")
+
+    write = PendingWrite(character=payout.character)
+    said = (
+        f"Подряд «{payout.quest.name}» закрыт. "
+        f"Плата: {payout.gold} золота и {payout.experience} опыта."
+    )
+    if payout.item_id and content.has_item(payout.item_id):
+        write = write.with_items((payout.item_id, 1))
+        said += f" Сверху дали: {content.item(payout.item_id).name}."
+    if payout.level_up.levels_gained:
+        said += f" {level_up_line(payout.level_up)}"
+    return state.storing(write).with_notice(said)
+
+
+def _handle_board(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    offered = quest_rules.available(content, character)
+    moved = _page_move(command, state.board_page, total_pages(len(offered)))
+    if moved is not None:
+        return replace(state, board_page=moved, notice="")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите подряд из списка.")
+    for quest in offered:
+        if quest_screens.quest_button(quest).matches(command.argument):
+            return replace(state, quest_id=quest.id).at(ScreenId.QUEST_OFFER)
+    return state.with_notice("Нажмите подряд из списка.")
+
+
+def _handle_offer(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Согласитесь, спросите или уйдите.")
+    quest = content.quest(state.quest_id)
+    if labels.QUEST_ASK.matches(command.argument):
+        return state.with_notice(
+            f"Платит {quest.giver}, из своего кармана, после счёта. "
+            f"Палата берёт своё с торговли, а не с подряда."
+        )
+    if labels.QUEST_LEAVE.matches(command.argument):
+        # Refusing never closes a contract for good (Narrative.md, section 4).
+        return _go_back(state).with_notice("Вы ушли. Подряд останется на доске.")
+    if not labels.QUEST_ACCEPT.matches(command.argument):
+        return state.with_notice("Согласитесь, спросите или уйдите.")
+
+    accepted = quest_rules.take(content, character, quest)
+    if accepted == character:
+        return state.with_notice("Этот подряд уже у вас или уже закрыт.")
+    return (
+        _go_back(replace(state, quest_id=""))
+        .storing(PendingWrite(character=accepted))
+        .with_notice(f"Подряд «{quest.name}» взят. Счёт идёт с этой минуты.")
+    )
+
+
+def _handle_mentor(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    known = sorted(code for code in skill_rules.known_codes(character) if content.has_skill(code))
+    moved = _page_move(command, state.mentor_page, total_pages(len(known)))
+    if moved is not None:
+        return replace(state, mentor_page=moved, notice="")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите умение из списка.")
+
+    price = economy.mentor_price(character.level)
+    for code in known:
+        skill = content.skill(code)
+        rank = character.loadout.rank_of(code)
+        if not city_screens.forget_label(skill.name, rank).matches(command.argument):
+            continue
+        if character.gold < price:
+            return state.with_notice(f"Наставник берёт {price} золота, у вас {character.gold}.")
+        forgotten = skill_rules.forget(content, character, skill)
+        if forgotten is None:  # pragma: no cover - the list only holds known skills
+            return state.with_notice("Это умение вы не изучали.")
+        paid = forgotten.with_gold(-price)
+        return state.storing(PendingWrite(character=paid)).with_notice(
+            f"{skill.name} забыто. Вернулось очков: {rank}. Заплачено {price} золота."
+        )
+    return state.with_notice("Нажмите умение из списка.")
+
+
+def _handle_bank(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите сумму.")
+    for step in city_screens.DEPOSIT_STEPS:
+        if city_screens.deposit_label(step).matches(command.argument):
+            if character.gold < step:
+                return state.with_notice(f"На руках только {character.gold}.")
+            stored = replace(character.with_gold(-step), bank_gold=character.bank_gold + step)
+            return state.storing(PendingWrite(character=stored)).with_notice(
+                f"В ячейке теперь {stored.bank_gold}. На руках {stored.gold}."
+            )
+        if city_screens.withdraw_label(step).matches(command.argument):
+            if character.bank_gold < step:
+                return state.with_notice(f"В ячейке только {character.bank_gold}.")
+            taken = replace(character.with_gold(step), bank_gold=character.bank_gold - step)
+            return state.storing(PendingWrite(character=taken)).with_notice(
+                f"На руках теперь {taken.gold}. В ячейке {taken.bank_gold}."
+            )
+    return state.with_notice("Нажмите сумму.")
+
+
+def _handle_dungeon(
+    content: GameContent,
+    character: Character,
+    state: PlayState,
+    command: Command,
+    *,
+    cycle: int,
+) -> PlayState:
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите «Спуститься» или «Назад».")
+    if not labels.DUNGEON_ENTER.matches(command.argument):
+        return state.with_notice("Нажмите «Спуститься» или «Назад».")
+
+    city = content.city(state.city_id or character.city_id)
+    descent = Descent(
+        city_id=city.id,
+        level=dungeon_level(content, character, city.id),
+        depth=1,
+        cycle=cycle,
+    )
+    return replace(state, descent=descent, fight="dungeon").at(ScreenId.COMBAT)
+
+
+# --- locations --------------------------------------------------------
 
 
 def _handle_location_list(
@@ -403,10 +1004,9 @@ def _handle_location_list(
     cycle: int,
 ) -> PlayState:
     city = content.city(state.city_id or character.city_id)
-    pages = total_pages(len(city.locations))
-    if command.intent in {Intent.NEXT_PAGE, Intent.PREVIOUS_PAGE}:
-        delta = 1 if command.intent is Intent.NEXT_PAGE else -1
-        return replace(state, location_page=state.location_page.moved(delta, pages), notice="")
+    moved = _page_move(command, state.location_page, total_pages(len(city.locations)))
+    if moved is not None:
+        return replace(state, location_page=moved, notice="")
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите локацию из списка.")
 
@@ -425,7 +1025,12 @@ def _handle_location_list(
 
 
 def _handle_location(
-    content: GameContent, state: PlayState, command: Command, *, world_seed: str
+    content: GameContent,
+    character: Character,
+    state: PlayState,
+    command: Command,
+    *,
+    world_seed: str,
 ) -> PlayState:
     location = build_location(content, world_seed, state.session)
     node = location.node(state.session.node)
@@ -447,23 +1052,76 @@ def _handle_location(
             return replace(state, session=replace(state.session, node=neighbour.index))
 
     if command.argument == screens.NODE_ACTIONS[node.kind]:
-        return _resolve_node_action(state, location, node.index)
+        return _resolve_node_action(content, character, state, location, world_seed)
 
     return state.with_notice("Не узнал это действие. Нажмите кнопку узла.")
 
 
-def _resolve_node_action(state: PlayState, location: GeneratedLocation, index: int) -> PlayState:
+def _resolve_node_action(
+    content: GameContent,
+    character: Character,
+    state: PlayState,
+    location: GeneratedLocation,
+    world_seed: str,
+) -> PlayState:
     """Non-combat nodes resolve immediately; combat is handed to the fight screen."""
+    index = state.session.node
     node = location.node(index)
     if node.kind.is_combat:
-        # Wired to the combat engine by the combat handler.
-        return replace(state, screen=ScreenId.COMBAT, stack=state.stack.push(ScreenId.COMBAT))
+        if is_cleared(state.session.cleared, index):
+            return state.with_notice("Здесь уже пусто: этот бой прошёл в эту стражу.")
+        # The handler builds the fight itself: it owns the enemy generation and
+        # the cache the fight lives in.
+        return replace(state, fight="node").at(ScreenId.COMBAT)
+
+    if node.kind in {NodeKind.ENTRANCE, NodeKind.EXIT}:
+        # A door pays nobody: looking at it is an answer, not a reward.
+        return state.with_notice(
+            f"{node.name}: смотреть здесь не на что, кроме дороги в обе стороны."
+        )
 
     if is_cleared(state.session.cleared, index):
         return state.with_notice(f"Узел {index} уже пройден, здесь больше ничего нет.")
 
+    seed = derive(
+        location_seed(world_seed, state.session.city_id, state.session.slot, state.session.cycle),
+        "search",
+        index,
+    )
+    result = adventure.resolve_search(content, character, node, seed)
+    write = PendingWrite(character=result.character)
+    if result.item_id:
+        write = write.with_items((result.item_id, 1))
+
     cleared = state.session.cleared | cleared_mask([index])
     session = replace(state.session, cleared=cleared)
-    return replace(state, session=session).with_notice(
-        f"Узел {index}: {node.name} — сделано. Отметка сохранится до конца стражи."
+    return (
+        replace(state, session=session)
+        .storing(write)
+        .with_notice(search_line(content, node.name, result))
+    )
+
+
+def search_line(content: GameContent, node_name: str, result: adventure.SearchResult) -> str:
+    """One sentence about a node worked through, then what it gave."""
+    parts = [f"{node_name}: сделано."]
+    if result.gold:
+        parts.append(f"Найдено золота: {result.gold}.")
+    if result.item_id and content.has_item(result.item_id):
+        parts.append(f"Взято: {content.item(result.item_id).name}.")
+    if result.healed:
+        parts.append(f"Восстановлено здоровья: {result.healed}.")
+    parts.append(f"Опыт: {result.experience}.")
+    for step in result.quest_steps:
+        parts.append(f"Подряд «{step.quest.name}»: {step.progress} из {step.quest.target_count}.")
+    if result.level_up is not None and result.level_up.levels_gained:
+        parts.append(level_up_line(result.level_up))
+    return " ".join(parts)
+
+
+def level_up_line(level_up: LevelUp) -> str:
+    """The one sentence a level is announced with, wherever it happened."""
+    return (
+        f"Уровень {level_up.new_level}. Очков характеристик: {level_up.stat_points}, "
+        f"очков умений: {level_up.skill_points}."
     )

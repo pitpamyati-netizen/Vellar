@@ -48,6 +48,28 @@ modifications that change how it behaves, without adding a button.
 144 skills x 2 edges = 288 behaviours behind 7 buttons. Edges are re-picked at a
 city Mentor for gold, so a build is a decision, not a life sentence.
 
+**What an edge does mechanically** is uniform, and deliberately so: the first
+edge listed **hits 20% harder** (`power_factor`), the second one **costs 35%
+less** (`cost_factor`). Content writes what the edge *is* in the world; the rule
+is the same everywhere, so a player learns it once instead of 288 times.
+`domain/rules/skills.py` owns both numbers.
+
+## Spending a point, in the interface
+
+Three screens, and no more (`presentation/telegram/screens/skills.py`):
+
+- **Умения** - every skill of the craft unlocked by level, with its rank and what
+  one point would buy. Pressing one learns it, or raises it a rank; at rank 3 the
+  press opens the edge screen instead, and nothing else happens until it is
+  chosen.
+- **Слоты умений** - the six active, three passive and one racial position, each
+  button carrying its number and its contents. A skill sits in exactly one slot:
+  putting it in a second one empties the first.
+- **Грань** - the two-way fork, once per skill.
+
+A skill point is only ever handed back by the Mentor, who charges gold for it and
+takes the skill out of the panel along with its edge (`skills.forget`).
+
 ## Anti-bloat rules (enforced, not just intended)
 
 1. **Equipment never grants an active skill.** It grants modifiers, and may boost a
