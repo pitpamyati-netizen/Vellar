@@ -169,7 +169,7 @@ def advance(
 
     action = action_for(content, character, session, text)
     if action is None:
-        return session, "Не узнал это действие. Нажмите кнопку из панели боя."
+        return session, "Не узнал действие. Нажмите кнопку из панели боя."
 
     state = resolve_turn(content, character, session.state, action, session.turn_seed())
     return replace(session, state=state), ""

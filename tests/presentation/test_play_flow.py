@@ -83,7 +83,7 @@ def test_entering_a_city(content: GameContent, hero: Character, in_city: PlaySta
     assert "Дальний Оплот" in render(content, hero, in_city, world_seed=WORLD_SEED).text()
 
 
-# --- stubs ------------------------------------------------------------
+# --- shop and inventory -----------------------------------------------
 
 
 def test_shop_and_inventory_are_real_screens(

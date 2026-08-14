@@ -242,6 +242,8 @@ async def test_a_character_survives_a_round_trip(pool, clean_user) -> None:
     assert dict(read.quests.taken) == {"farhold_tallies": 2}
     assert read.quests.done == ("prologue",)
     assert read.unspent_stat_points == 5
+    # The vault is a column of its own: the purse must never absorb it.
+    assert (read.gold, read.bank_gold) == (250, 900)
 
 
 async def test_saving_a_character_updates_every_column(pool, clean_user) -> None:

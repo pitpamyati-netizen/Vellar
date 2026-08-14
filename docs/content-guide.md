@@ -37,7 +37,7 @@ wrong - the bot refuses to start on broken content.
 [[race]]
 id = "seaborn"                       # snake_case, unique, never changes
 name = "Морерождённый"
-description = "Одна фраза о том, кто это."
+description = "Одна фраза о том, кто перед вами."
 bonuses = { AGI = 2, WIS = 1, STR = -1 }
 passive = { id = "tide_born", name = "Дитя прилива", text = "Одна фраза об эффекте." }
 active = "race_seaborn_undertow"     # must exist in skills.toml

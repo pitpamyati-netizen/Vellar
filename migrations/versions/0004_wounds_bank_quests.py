@@ -29,7 +29,12 @@ depends_on = None
 
 def upgrade() -> None:
     op.execute("ALTER TABLE characters ADD COLUMN health INTEGER NOT NULL DEFAULT 0")
-    op.execute("ALTER TABLE characters ADD COLUMN bank_gold BIGINT NOT NULL DEFAULT 0")
+    # The vault can never go negative: the promise that a lost fight cannot reach
+    # it is only worth keeping if the column itself refuses to be overdrawn.
+    op.execute(
+        "ALTER TABLE characters ADD COLUMN bank_gold BIGINT NOT NULL DEFAULT 0"
+        " CONSTRAINT characters_bank_gold_non_negative CHECK (bank_gold >= 0)"
+    )
     op.execute("ALTER TABLE characters ADD COLUMN quests JSONB NOT NULL DEFAULT '{}'::jsonb")
 
 

@@ -111,7 +111,7 @@ def test_a_stale_button_is_reported_not_swallowed(screen: Screen) -> None:
     command = resolve("Вихрь клинков", screen)
     assert command.intent is Intent.UNKNOWN
     answer = stale_button_answer("Город Дальний Оплот")
-    assert answer.startswith("Это действие сейчас недоступно")
+    assert answer.startswith("Действие сейчас недоступно")
     assert "Город Дальний Оплот" in answer
 
 
@@ -173,7 +173,7 @@ def test_back_targets_never_dangle_and_always_terminate() -> None:
 
 
 def test_amount_is_spoken_not_drawn() -> None:
-    assert amount(42, 120) == "42 из 120, это 35 процентов"
+    assert amount(42, 120) == "42 из 120, 35 процентов"
     assert amount(42, 120, with_percent=False) == "42 из 120"
     assert "[" not in amount(42, 120)
 

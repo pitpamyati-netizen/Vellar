@@ -167,9 +167,15 @@ class NavigationStack:
 
     @classmethod
     def deserialise(cls, raw: str) -> NavigationStack:
+        """Rebuild the stack, dropping screens the game no longer has.
+
+        A player can be standing on a screen that was renamed or removed between
+        two releases; their walk back is then shorter, but nothing raises.
+        """
         if not raw:
             return cls(())
-        return cls(tuple(ScreenId(part) for part in raw.split(",") if part))
+        known = {screen.value for screen in ScreenId}
+        return cls(tuple(ScreenId(part) for part in raw.split(",") if part in known))
 
 
 def back_target(screen: ScreenId) -> ScreenId | None:

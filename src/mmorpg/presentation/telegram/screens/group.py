@@ -53,29 +53,27 @@ class GroupReply:
 
 
 REFUSALS: dict[Refusal, str] = {
-    Refusal.SELF: "Так нельзя: это предложение самому себе.",
+    Refusal.SELF: "Так нельзя: предложение самому себе.",
     Refusal.NO_CHARACTER: (
         "У вас пока нет персонажа. Напишите боту в личные сообщения и создайте его."
     ),
-    Refusal.TARGET_HAS_NO_CHARACTER: "У этого игрока нет персонажа в Велларе.",
+    Refusal.TARGET_HAS_NO_CHARACTER: "У игрока нет персонажа в Велларе.",
     Refusal.UNKNOWN_ITEM: "Такой вещи нет.",
     Refusal.AMBIGUOUS_ITEM: "Подходит несколько вещей, уточните название.",
     Refusal.AUTHOR_LACKS_ITEM: "У вас нет столько.",
-    Refusal.TARGET_LACKS_ITEM: "У этого игрока нет такой вещи.",
+    Refusal.TARGET_LACKS_ITEM: "У игрока нет такой вещи.",
     Refusal.AUTHOR_LACKS_GOLD: "У вас не хватает золота.",
     Refusal.TARGET_LACKS_GOLD: "У второй стороны не хватает золота.",
-    Refusal.NOT_YOURS: "Это предложение не вам: отвечает только тот, кому оно адресовано.",
+    Refusal.NOT_YOURS: "Предложение не вам: отвечает только тот, кому оно адресовано.",
     Refusal.UNKNOWN_OFFER: "Предложение с таким номером не найдено или уже закрыто.",
     Refusal.EXPIRED: "Предложение просрочено: прошло больше пяти минут.",
     Refusal.TOO_MANY_COMMANDS: "Слишком много команд подряд. Подождите немного.",
     Refusal.TOO_MANY_OFFERS: (
         "Сейчас в группе слишком много открытых предложений. Попробуйте позже."
     ),
-    Refusal.PROFILE_HIDDEN: "Этот игрок закрыл свой профиль.",
-    Refusal.BLOCKED_BY_TARGET: "Этот игрок не ведёт с вами дел.",
-    Refusal.BLOCKED_TARGET: (
-        "Этот игрок у вас в чёрном списке. Снять: ответьте ему словом «разблок»."
-    ),
+    Refusal.PROFILE_HIDDEN: "Игрок закрыл свой профиль.",
+    Refusal.BLOCKED_BY_TARGET: "Игрок не ведёт с вами дел.",
+    Refusal.BLOCKED_TARGET: ("Игрок у вас в чёрном списке. Снять: ответьте ему словом «разблок»."),
 }
 
 # What publishing an offer takes from its author and holds until it is answered.

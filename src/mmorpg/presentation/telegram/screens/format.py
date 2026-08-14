@@ -2,7 +2,7 @@
 
 Two rules drive everything here (``docs/accessibility.md``):
 
-- **no pseudo-graphics** - never ``[####----]``, always "42 из 120, это 35 процентов";
+- **no pseudo-graphics** - never ``[####----]``, always "42 из 120, 35 процентов";
 - **the key fact first** - the caller composes lines, these helpers keep each one
   short and speakable.
 """
@@ -13,13 +13,13 @@ MESSAGE_LIMIT = 900
 
 
 def amount(current: int, maximum: int, *, with_percent: bool = True) -> str:
-    """Render a bar-like value as speech: ``42 из 120, это 35 процентов``."""
+    """Render a bar-like value as speech: ``42 из 120, 35 процентов``."""
     if maximum <= 0:
         return f"{current}"
     if not with_percent:
         return f"{current} из {maximum}"
     percent = round(current * 100 / maximum)
-    return f"{current} из {maximum}, это {percent} процентов"
+    return f"{current} из {maximum}, {percent} процентов"
 
 
 def percent(value: float) -> str:

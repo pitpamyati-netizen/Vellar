@@ -350,7 +350,7 @@ async def test_hiding_the_profile_needs_no_reply_and_closes_the_card(
     await bus.deliver(message("профиль", sender=argus_account, reply_to=here, message_id=3))
 
     assert bus.bot.sent[0]["text"].startswith("Профиль закрыт")
-    assert bus.bot.sent[1]["text"] == "Этот игрок закрыл свой профиль."
+    assert bus.bot.sent[1]["text"] == "Игрок закрыл свой профиль."
 
 
 async def test_a_closed_profile_is_still_shown_to_its_owner(
@@ -392,8 +392,8 @@ async def test_a_black_list_closes_the_pair_in_both_directions(
     await bus.deliver(message("профиль", sender=merla_account, reply_to=argus_here))
 
     assert bus.bot.sent[0]["text"].startswith("Чёрный список: Аргус.")
-    assert bus.bot.sent[1]["text"] == "Этот игрок не ведёт с вами дел."
-    assert bus.bot.sent[2]["text"].startswith("Этот игрок у вас в чёрном списке")
+    assert bus.bot.sent[1]["text"] == "Игрок не ведёт с вами дел."
+    assert bus.bot.sent[2]["text"].startswith("Игрок у вас в чёрном списке")
 
 
 async def test_a_block_can_be_lifted_by_the_one_who_made_it(
@@ -421,7 +421,7 @@ async def test_a_block_drawn_mid_offer_cancels_it_and_returns_the_stake(
 
     await bus.deliver(message("Принять 1", sender=merla_account))
 
-    assert bus.bot.sent[-1]["text"].startswith("Этот игрок у вас в чёрном списке")
+    assert bus.bot.sent[-1]["text"].startswith("Игрок у вас в чёрном списке")
     assert await inventory.count(world["Аргус"].id, SWORD) == 1
     assert await inventory.count(world["Мерла"].id, SWORD) == 0
 

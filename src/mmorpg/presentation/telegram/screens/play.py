@@ -34,7 +34,7 @@ NODE_ACTIONS: dict[NodeKind, str] = {
     NodeKind.SHRINE: "Помолиться у святилища",
     # Distinct from the always-present "Покинуть локацию" button below it: two
     # buttons on one screen may never share a label, since routing is by text.
-    NodeKind.EXIT: "Выйти через этот узел",
+    NodeKind.EXIT: "Выйти через узел",
 }
 
 NODE_DESCRIPTIONS: dict[NodeKind, str] = {
@@ -211,7 +211,7 @@ def location_screen(
     lines = [
         notice or f"Локация {location.name}, узел {node.index}: {node.name}.",
         f"{NODE_DESCRIPTIONS[node.kind].capitalize()}. Уровень узла: {node.level}.",
-        "Этот узел уже пройден." if done else "Узел ещё не пройден.",
+        "Узел уже пройден." if done else "Узел ещё не пройден.",
         f"Отсюда можно перейти в {len(neighbours)} "
         + ("узел." if len(neighbours) == 1 else "узла." if len(neighbours) < 5 else "узлов."),
     ]
