@@ -36,6 +36,7 @@ NODE_NAMES: dict[NodeKind, tuple[str, ...]] = {
     NodeKind.ENTRANCE: ("Вход",),
     NodeKind.BATTLE: ("Стычка", "Засада", "Патруль", "Логово", "Развилка с врагом"),
     NodeKind.ELITE_BATTLE: ("Сильный противник", "Вожак стаи", "Страж прохода"),
+    NodeKind.BOSS_BATTLE: ("Хозяин этих мест", "Тронный камень", "Сердце логова"),
     NodeKind.GATHER: ("Заросли", "Жила руды", "Останки", "Полезные травы"),
     NodeKind.EVENT: ("Странная находка", "Развилка", "Следы", "Чужой лагерь"),
     NodeKind.CACHE: ("Тайник", "Сундук", "Схрон", "Забытый мешок"),
@@ -89,13 +90,15 @@ def generate_location(
 def _pick_kinds(source: random.Random, count: int) -> tuple[NodeKind, ...]:
     """Entrance first, exit last, weighted kinds in between.
 
-    Every location gets at least one fight, so a location is never a walk-through.
+    The deepest interior node - the one at the top of the level band - always holds
+    the boss, so every location has exactly one and it is always the same distance
+    in. It is not on the way out: the graph has shortcuts, so fighting it is a
+    decision, not a toll.
     """
     population = [kind for kind, _ in INTERIOR_KINDS]
     weights = [weight for _, weight in INTERIOR_KINDS]
     interior = source.choices(population, weights=weights, k=count - 2)
-    if not any(kind.is_combat for kind in interior):
-        interior[source.randrange(len(interior))] = NodeKind.BATTLE
+    interior[-1] = NodeKind.BOSS_BATTLE
     return (NodeKind.ENTRANCE, *interior, NodeKind.EXIT)
 
 

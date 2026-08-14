@@ -13,12 +13,30 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 
+class EnemyRank(StrEnum):
+    """How long an opponent is meant to hold out.
+
+    The whole point of the tier is fight length: an ordinary opponent falls in
+    about three turns, an epic one takes twice that, a boss twice again. Nothing
+    else about the tiers differs - same tags, same intents, same panel.
+    """
+
+    NORMAL = "normal"
+    ELITE = "elite"
+    BOSS = "boss"
+
+    @property
+    def is_long_fight(self) -> bool:
+        return self is not EnemyRank.NORMAL
+
+
 class NodeKind(StrEnum):
     """What a player finds at a node."""
 
     ENTRANCE = "entrance"
     BATTLE = "battle"
     ELITE_BATTLE = "elite_battle"
+    BOSS_BATTLE = "boss_battle"
     GATHER = "gather"
     EVENT = "event"
     CACHE = "cache"
@@ -27,7 +45,18 @@ class NodeKind(StrEnum):
 
     @property
     def is_combat(self) -> bool:
-        return self in {NodeKind.BATTLE, NodeKind.ELITE_BATTLE}
+        return self in {NodeKind.BATTLE, NodeKind.ELITE_BATTLE, NodeKind.BOSS_BATTLE}
+
+    @property
+    def rank(self) -> EnemyRank:
+        """Which tier of opponent waits here. Only meaningful for combat nodes."""
+        match self:
+            case NodeKind.ELITE_BATTLE:
+                return EnemyRank.ELITE
+            case NodeKind.BOSS_BATTLE:
+                return EnemyRank.BOSS
+            case _:
+                return EnemyRank.NORMAL
 
 
 class EnemyKind(StrEnum):
@@ -68,9 +97,14 @@ class Enemy:
     damage: int
     armor: int
     initiative: float
-    is_elite: bool
     loot: tuple[str, ...]
     gold: int
+    rank: EnemyRank = EnemyRank.NORMAL
+
+    @property
+    def is_elite(self) -> bool:
+        """Kept as a word because content and traits speak of elites, not ranks."""
+        return self.rank is not EnemyRank.NORMAL
 
 
 @dataclass(frozen=True, slots=True)

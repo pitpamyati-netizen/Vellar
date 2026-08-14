@@ -7,6 +7,8 @@ deliberate: a screen nobody listed is a screen nobody checked.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from mmorpg.application.dto.creation import CharacterDraft
@@ -17,9 +19,9 @@ from mmorpg.domain.entities import (
     SkillLoadout,
     StatBlock,
 )
-from mmorpg.domain.entities.combat import CombatState
+from mmorpg.domain.entities.combat import ActionTag, CombatState, Trace
 from mmorpg.domain.entities.content import Item
-from mmorpg.domain.entities.location import Enemy, EnemyKind
+from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
 from mmorpg.domain.procgen import generate_location
 from mmorpg.domain.rules.combat import start_combat
 from mmorpg.domain.rules.economy import buy_price, roll_assortment
@@ -90,11 +92,53 @@ def sample_fight(content: GameContent, fighter: Character) -> CombatState:
         damage=9,
         armor=3,
         initiative=9.0,
-        is_elite=False,
         loot=("wolf_pelt",),
         gold=14,
     )
     return start_combat(content, fighter, (enemy,))
+
+
+@pytest.fixture(scope="session")
+def crowded_fight(content: GameContent, fighter: Character) -> CombatState:
+    """The longest the combat screen can get: three enemies, each announcing, and
+    a trace with something to say about it."""
+    pack = tuple(
+        Enemy(
+            archetype_id="grey_wolf",
+            name=name,
+            kind=EnemyKind.BEAST,
+            level=4,
+            max_health=120,
+            damage=9,
+            armor=3,
+            initiative=9.0 + index,
+            loot=("wolf_pelt",),
+            gold=14,
+        )
+        for index, name in enumerate(("Серый волк", "Волчица", "Вожак стаи"))
+    )
+    state = start_combat(content, fighter, pack)
+    return replace(state, turn=7, trace=Trace((ActionTag.GUARD, ActionTag.PRESS)))
+
+
+@pytest.fixture(scope="session")
+def boss_fight(content: GameContent, fighter: Character) -> CombatState:
+    """A tier that announces itself: the enemy line has to say how long this will
+    take before the player commits a turn to it."""
+    boss = Enemy(
+        archetype_id="grey_wolf",
+        name="Владыка серого волка",
+        kind=EnemyKind.BEAST,
+        level=12,
+        max_health=900,
+        damage=22,
+        armor=18,
+        initiative=9.0,
+        loot=("wolf_pelt",),
+        gold=140,
+        rank=EnemyRank.BOSS,
+    )
+    return start_combat(content, fighter, (boss,))
 
 
 @pytest.fixture(scope="session")
@@ -123,6 +167,8 @@ def all_screens(
     sample_location: GeneratedLocation,
     fighter: Character,
     sample_fight: CombatState,
+    crowded_fight: CombatState,
+    boss_fight: CombatState,
     sample_stock: tuple[Item, ...],
 ) -> list[Screen]:
     """Every screen in the game, rendered with sample data.
@@ -156,6 +202,8 @@ def all_screens(
         play.character_screen(content, hero, derived_stats(content, hero)),
         play.stub_screen("Таверна"),
         combat_screens.combat_screen(content, fighter, sample_fight),
+        combat_screens.combat_screen(content, fighter, crowded_fight),
+        combat_screens.combat_screen(content, fighter, boss_fight),
         combat_screens.bag_screen(content, (("small_healing_potion", "Малое зелье лечения", 3),)),
         combat_screens.bag_screen(content, ()),
         combat_screens.victory_screen(sample_fight),

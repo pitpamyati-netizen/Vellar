@@ -14,6 +14,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from mmorpg.domain.entities.combat import ActionTag
 from mmorpg.domain.entities.content import (
     CharacterClass,
     City,
@@ -233,6 +234,14 @@ def _parse_skills(
             else:
                 problems.append(f"skills.toml: {code} scales with unknown stat {scaling_raw!r}")
 
+        tag_raw = entry.get("tag")
+        tag: ActionTag | None = None
+        if tag_raw is not None:
+            if tag_raw in {value.value for value in ActionTag}:
+                tag = ActionTag(tag_raw)
+            else:
+                problems.append(f"skills.toml: {code} declares unknown tag {tag_raw!r}")
+
         raw_edges = entry.get("edges", ())
         if len(raw_edges) != 2:
             problems.append(f"skills.toml: {code} must declare exactly 2 edges")
@@ -263,6 +272,7 @@ def _parse_skills(
                 target=target,
                 scaling=scaling,
                 rank_step=float(entry.get("rank_step", default_step)),
+                tag=tag,
             )
         )
     return tuple(parsed)

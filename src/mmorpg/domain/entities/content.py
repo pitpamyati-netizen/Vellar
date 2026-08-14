@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
 
+from mmorpg.domain.entities.combat import ActionTag
 from mmorpg.domain.entities.location import EnemyArchetype
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 
@@ -64,6 +65,10 @@ class Skill:
     target: str = "self"
     scaling: StatCode | None = None
     rank_step: float = 0.15
+    #: The trace this skill leaves. Left out, it is read off the effect by
+    #: ``skill_effects.tag_of``; content names it where the effect would say the
+    #: wrong thing, and where a class would otherwise never see all three tags.
+    tag: ActionTag | None = None
 
     @property
     def owner(self) -> str:

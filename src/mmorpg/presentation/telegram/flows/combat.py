@@ -18,15 +18,17 @@ from typing import Any
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import (
     ActionKind,
+    ActionTag,
     CombatAction,
     CombatOutcome,
     CombatState,
     EnemyState,
     PlayerState,
+    Trace,
 )
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.effects import ActiveEffect, EffectStack
-from mmorpg.domain.entities.location import Enemy, EnemyKind
+from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
 from mmorpg.domain.procgen.seeds import derive
 from mmorpg.domain.rules.combat import resolve_turn, start_combat
 from mmorpg.presentation.telegram.keyboards import labels
@@ -106,7 +108,7 @@ def _action_from_label(
     racial = screens.racial_label(content, character, session.state)
     if racial.matches(argument):
         return CombatAction(kind=ActionKind.RACIAL)
-    if labels.ATTACK.matches(argument):
+    if screens.attack_label().matches(argument) or labels.ATTACK.matches(argument):
         return CombatAction(kind=ActionKind.ATTACK)
     if labels.FLEE.matches(argument):
         return CombatAction(kind=ActionKind.FLEE)
@@ -169,6 +171,7 @@ def serialise(session: CombatSession) -> str:
             "seed": session.seed.hex(),
             "node": session.node,
             "turn": state.turn,
+            "trace": [tag.value for tag in state.trace.tags],
             "outcome": state.outcome.value,
             "experience": state.experience,
             "gold": state.gold,
@@ -202,7 +205,7 @@ def serialise(session: CombatSession) -> str:
                         "damage": enemy.enemy.damage,
                         "armor": enemy.enemy.armor,
                         "initiative": enemy.enemy.initiative,
-                        "elite": enemy.enemy.is_elite,
+                        "rank": enemy.enemy.rank.value,
                         "loot": list(enemy.enemy.loot),
                         "gold": enemy.enemy.gold,
                     },
@@ -242,9 +245,9 @@ def deserialise(raw: str) -> CombatSession:
                 damage=entry["enemy"]["damage"],
                 armor=entry["enemy"]["armor"],
                 initiative=entry["enemy"]["initiative"],
-                is_elite=entry["enemy"]["elite"],
                 loot=tuple(entry["enemy"]["loot"]),
                 gold=entry["enemy"]["gold"],
+                rank=EnemyRank(entry["enemy"]["rank"]),
             ),
             health=entry["health"],
             effects=_effects_from_json(entry["effects"]),
@@ -257,6 +260,7 @@ def deserialise(raw: str) -> CombatSession:
         player=player,
         enemies=enemies,
         turn=data["turn"],
+        trace=Trace(tuple(ActionTag(tag) for tag in data.get("trace", ()))),
         outcome=CombatOutcome(data["outcome"]),
         experience=data["experience"],
         gold=data["gold"],

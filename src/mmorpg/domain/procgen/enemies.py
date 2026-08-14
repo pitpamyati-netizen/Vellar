@@ -7,25 +7,66 @@ node in the same cycle always produces the same opponent.
 
 from __future__ import annotations
 
+import random
 from collections.abc import Sequence
+from dataclasses import dataclass
 
-from mmorpg.domain.entities.location import Enemy, EnemyArchetype
+from mmorpg.domain.entities.location import Enemy, EnemyArchetype, EnemyRank
 from mmorpg.domain.procgen.seeds import rng
 
 # Level baseline. An "average" archetype (all multipliers 1.0) uses these values.
-HEALTH_BASE = 28.0
-HEALTH_PER_LEVEL = 11.5
-DAMAGE_BASE = 5.0
-DAMAGE_PER_LEVEL = 2.1
+# Health is set against the standard blow of a character of the same level
+# (`domain.rules.combat.standard_blow`): an ordinary opponent is meant to fall in
+# about three turns, which is what tests/domain/test_combat_balance.py pins down.
+HEALTH_BASE = 24.0
+HEALTH_PER_LEVEL = 9.0
+# Damage is set against the player's health pool rather than against their blow:
+# an ordinary opponent should cost about a quarter of it over the three turns it
+# lives, which leaves a boss fight of ten turns genuinely dangerous.
+DAMAGE_BASE = 3.5
+DAMAGE_PER_LEVEL = 0.7
 ARMOR_PER_LEVEL = 1.15
 INITIATIVE_BASE = 8.0
 INITIATIVE_PER_LEVEL = 0.35
 GOLD_BASE = 4.0
 GOLD_PER_LEVEL = 2.4
 
-ELITE_HEALTH_FACTOR = 2.3
-ELITE_DAMAGE_FACTOR = 1.45
-ELITE_GOLD_FACTOR = 3.0
+#: A pack shares one fight's worth of health and damage rather than multiplying
+#: it. Three full-strength opponents made an "ordinary" fight nine turns long -
+#: three fights in a row wearing one name. Each extra body still adds to the
+#: total, just far less than a whole opponent.
+GROUP_MEMBER_TAX = 0.45
+
+
+def group_scale(size: int) -> float:
+    """What each member of a pack of ``size`` is worth on its own."""
+    return 1.0 / (1.0 + GROUP_MEMBER_TAX * (size - 1))
+
+
+@dataclass(frozen=True, slots=True)
+class RankFactors:
+    """What a tier multiplies. Health buys the turns, gold pays for them.
+
+    Damage grows far more slowly than health on purpose: a boss lasts four times
+    as long as an ordinary opponent, so a matching damage multiplier would simply
+    kill the player on turn three of ten.
+    """
+
+    health: float
+    damage: float
+    armor: float
+    gold: float
+    experience: float
+
+
+#: Gold and experience are paid per turn spent, near enough: a boss that takes
+#: four times as long has to be worth four times as much, or the shortest fight
+#: in the location is always the best one to grind.
+RANK_FACTORS: dict[EnemyRank, RankFactors] = {
+    EnemyRank.NORMAL: RankFactors(health=1.0, damage=1.0, armor=1.0, gold=1.0, experience=1.0),
+    EnemyRank.ELITE: RankFactors(health=2.6, damage=1.25, armor=1.2, gold=3.0, experience=2.5),
+    EnemyRank.BOSS: RankFactors(health=5.2, damage=1.25, armor=1.35, gold=7.0, experience=5.0),
+}
 
 # Same enemy at the same level still varies a little, so two fights do not feel
 # copy-pasted. The spread is deterministic - it comes from the seed.
@@ -46,10 +87,15 @@ def generate_enemy(
     archetypes: Sequence[EnemyArchetype],
     biome: str,
     level: int,
-    elite: bool = False,
+    rank: EnemyRank = EnemyRank.NORMAL,
     elite_titles: Sequence[str] = (),
+    members: int = 1,
 ) -> Enemy:
-    """Build one opponent. Same seed, same enemy - down to the last hit point."""
+    """Build one opponent. Same seed, same enemy - down to the last hit point.
+
+    ``members`` is how many stand beside it, itself included: a pack shares one
+    fight's budget, so each of three is weaker than one alone.
+    """
     pool = candidates(archetypes, biome)
     if not pool:
         msg = f"no enemy archetype fits biome {biome!r}"
@@ -58,35 +104,57 @@ def generate_enemy(
     random_source = rng(seed)
     archetype = pool[random_source.randrange(len(pool))]
     spread = 1.0 + random_source.uniform(-VARIANCE, VARIANCE)
+    factors = RANK_FACTORS[rank]
+    share = group_scale(members)
 
-    health = (HEALTH_BASE + HEALTH_PER_LEVEL * level) * archetype.health * spread
-    damage = (DAMAGE_BASE + DAMAGE_PER_LEVEL * level) * archetype.damage * spread
-    armor = ARMOR_PER_LEVEL * level * archetype.armor
+    health = (
+        (HEALTH_BASE + HEALTH_PER_LEVEL * level)
+        * archetype.health
+        * spread
+        * factors.health
+        * share
+    )
+    damage = (
+        (DAMAGE_BASE + DAMAGE_PER_LEVEL * level)
+        * archetype.damage
+        * spread
+        * factors.damage
+        * share
+    )
+    armor = ARMOR_PER_LEVEL * level * archetype.armor * factors.armor
     initiative = (INITIATIVE_BASE + INITIATIVE_PER_LEVEL * level) * archetype.initiative
-    gold = (GOLD_BASE + GOLD_PER_LEVEL * level) * spread
-
-    name = archetype.name
-    if elite:
-        health *= ELITE_HEALTH_FACTOR
-        damage *= ELITE_DAMAGE_FACTOR
-        gold *= ELITE_GOLD_FACTOR
-        if elite_titles:
-            title = elite_titles[random_source.randrange(len(elite_titles))]
-            name = f"{title} {archetype.name.lower()}"
+    gold = (GOLD_BASE + GOLD_PER_LEVEL * level) * spread * factors.gold
 
     return Enemy(
         archetype_id=archetype.id,
-        name=name,
+        name=_name_for(archetype, rank, elite_titles, random_source),
         kind=archetype.kind,
         level=level,
         max_health=max(1, round(health)),
         damage=max(1, round(damage)),
         armor=max(0, round(armor)),
         initiative=round(initiative, 2),
-        is_elite=elite,
         loot=archetype.loot,
         gold=max(1, round(gold)),
+        rank=rank,
     )
+
+
+def _name_for(
+    archetype: EnemyArchetype,
+    rank: EnemyRank,
+    elite_titles: Sequence[str],
+    random_source: random.Random,
+) -> str:
+    """A titled name for the long-fight tiers.
+
+    The title does not say which tier - the combat screen does that in words. It
+    only says that this one is not an ordinary animal.
+    """
+    if rank is EnemyRank.NORMAL or not elite_titles:
+        return archetype.name
+    title = elite_titles[random_source.randrange(len(elite_titles))]
+    return f"{title} {archetype.name.lower()}"
 
 
 def generate_group(
@@ -95,21 +163,26 @@ def generate_group(
     archetypes: Sequence[EnemyArchetype],
     biome: str,
     level: int,
-    elite: bool = False,
+    rank: EnemyRank = EnemyRank.NORMAL,
     elite_titles: Sequence[str] = (),
     max_size: int = 3,
 ) -> tuple[Enemy, ...]:
-    """One to ``max_size`` opponents. Elite fights are always a single opponent."""
+    """One to ``max_size`` opponents. A long fight is always a single opponent.
+
+    An epic or a boss stands alone because its whole cost is measured in turns:
+    two of them side by side would double a fight that is already meant to be the
+    longest in the game.
+    """
     from mmorpg.domain.procgen.seeds import derive  # local: keeps the seed API in one place
 
-    if elite:
+    if rank.is_long_fight:
         return (
             generate_enemy(
                 seed,
                 archetypes=archetypes,
                 biome=biome,
                 level=level,
-                elite=True,
+                rank=rank,
                 elite_titles=elite_titles,
             ),
         )
@@ -123,6 +196,7 @@ def generate_group(
             biome=biome,
             level=level,
             elite_titles=elite_titles,
+            members=size,
         )
         for index in range(size)
     )
