@@ -69,7 +69,7 @@ def step(
 
 @pytest.fixture
 def in_city(content: GameContent, hero: Character) -> PlayState:
-    return step(content, hero, begin(hero), "Мир", "Дальний Оплот")
+    return step(content, hero, begin(hero), "Мир", "Порубежье")
 
 
 # --- gear -------------------------------------------------------------

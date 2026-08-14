@@ -14,7 +14,7 @@
 # that one is paid out. Ids are frozen keys - they live in the character's ledger.
 # Validated by tests/content/test_quests.py.
 
-# --- Дальний Оплот: сводки застав не сходятся ---
+# --- Порубежье: сводки застав не сходятся ---
 
 [[quest]]
 id = "farhold_tallies"
@@ -106,7 +106,7 @@ reward_gold = 400
 reward_experience = 1200
 reward_item = "silent_steps"
 
-# --- Сумеречная Пристань: обозы мимо пошлины ---
+# --- Затон: обозы мимо пошлины ---
 
 [[quest]]
 id = "harbor_manifest"

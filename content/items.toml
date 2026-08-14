@@ -35,7 +35,7 @@ rarity = "common"
 level = 1
 price = 30
 modifiers = { physical_damage_percent = 5 }
-text = "Тупой, но честный кусок железа."
+text = "Обычный солдатский меч, лезвие в ржавых пятнах."
 
 [[item]]
 id = "militia_spear"
@@ -46,7 +46,7 @@ rarity = "common"
 level = 3
 price = 55
 modifiers = { physical_damage_percent = 7, accuracy_percent = 3 }
-text = "Длиннее врага - уже преимущество."
+text = "Древко в рост человека, наконечник перекован из косы."
 
 [[item]]
 id = "hunting_bow"
@@ -57,7 +57,7 @@ rarity = "common"
 level = 4
 price = 70
 modifiers = { physical_damage_percent = 6, initiative_percent = 5 }
-text = "Бил белку, побьёт и волка."
+text = "Простой охотничий лук, запасная тетива намотана на цевьё."
 
 [[item]]
 id = "apprentice_staff"
@@ -68,7 +68,7 @@ rarity = "common"
 level = 4
 price = 75
 modifiers = { magic_damage_percent = 8, resource_percent = 5 }
-text = "На конце ещё видны следы чужих опытов."
+text = "Учебный посох, навершие обожжено прежними опытами."
 
 [[item]]
 id = "guard_saber"
@@ -92,7 +92,7 @@ level = 9
 price = 230
 modifiers = { crit_chance_percent = 5, crit_damage_percent = 8 }
 skill_modifiers = { rogue_backstab = 20 }
-text = "Два коротких, оба слишком острые для честной охоты."
+text = "Два коротких ножа, заточены под снятие шкур."
 
 [[item]]
 id = "grove_branch"
@@ -103,7 +103,7 @@ rarity = "uncommon"
 level = 10
 price = 240
 modifiers = { magic_damage_percent = 12, healing_done_percent = 6 }
-text = "Она всё ещё живая, если прислушаться."
+text = "Свежесрезанная ветвь, на изломе выступает смола."
 
 [[item]]
 id = "dwarven_maul"
@@ -115,7 +115,7 @@ level = 16
 price = 720
 modifiers = { physical_damage_percent = 20, initiative_percent = -6 }
 skill_modifiers = { barbarian_reckless_swing = 20 }
-text = "Весит как совесть, бьёт как приговор."
+text = "Дварфийская работа: короткая рукоять, тяжёлая головка."
 
 [[item]]
 id = "silver_censer"
@@ -127,7 +127,7 @@ level = 18
 price = 780
 modifiers = { healing_done_percent = 18, resource_regen_percent = 8 }
 skill_modifiers = { cleric_mend = 20 }
-text = "Пахнет ладаном и старыми похоронами."
+text = "Кадило со службы, внутри спёкшийся ладан."
 
 [[item]]
 id = "stormcaller_rod"
@@ -152,7 +152,7 @@ rarity = "common"
 level = 1
 price = 25
 modifiers = { armor_percent = 5 }
-text = "Лучше, чем ничего, и ненамного дороже."
+text = "Стёганка в несколько слоёв холста, лёгкая и дешёвая."
 
 [[item]]
 id = "leather_armor"
@@ -163,7 +163,7 @@ rarity = "common"
 level = 5
 price = 90
 modifiers = { armor_percent = 8, dodge_percent = 2 }
-text = "Пахнет дублением и чужим потом."
+text = "Дублёная кожа с нашитыми пластинами на груди."
 
 [[item]]
 id = "chain_shirt"
@@ -174,7 +174,7 @@ rarity = "uncommon"
 level = 11
 price = 260
 modifiers = { armor_percent = 14, initiative_percent = -3 }
-text = "Звенит на каждом шаге, зато держит удар."
+text = "Короткая кольчуга до бедра, кольца местами склёпаны заново."
 
 [[item]]
 id = "grove_wardens_mail"
@@ -185,7 +185,7 @@ rarity = "rare"
 level = 19
 price = 850
 modifiers = { armor_percent = 18, regen_per_turn_percent = 1 }
-text = "Кожа, кора и что-то ещё, чему нет названия."
+text = "Кожа, проложенная корой и застывшей смолой."
 
 [[item]]
 id = "runed_plate"
@@ -209,7 +209,7 @@ rarity = "common"
 level = 2
 price = 20
 modifiers = { dodge_percent = 3 }
-text = "Скрывает лицо и половину дождя."
+text = "Плотный капюшон с широким краем, лицо остаётся в тени."
 
 [[item]]
 id = "iron_helm"
@@ -220,7 +220,7 @@ rarity = "common"
 level = 6
 price = 85
 modifiers = { armor_percent = 6, health_percent = 3 }
-text = "Вмятина спереди - чужая заслуга."
+text = "Простой шлем с наносником, спереди вмятина от удара."
 
 [[item]]
 id = "seers_circlet"
@@ -244,7 +244,7 @@ rarity = "common"
 level = 1
 price = 15
 modifiers = { accuracy_percent = 3 }
-text = "Мозоли уже чужие, но подходят."
+text = "Грубые кожаные перчатки, разношены прежним хозяином."
 
 [[item]]
 id = "bracers_of_grip"
@@ -266,7 +266,7 @@ rarity = "common"
 level = 2
 price = 30
 modifiers = { initiative_percent = 5 }
-text = "Прошли больше, чем их хозяин помнит."
+text = "Сапоги с толстой подошвой, набойки меняли не раз."
 
 [[item]]
 id = "silent_steps"
@@ -277,7 +277,7 @@ rarity = "rare"
 level = 17
 price = 700
 modifiers = { dodge_percent = 9, initiative_percent = 8 }
-text = "Подошва глушит даже гравий."
+text = "Мягкая подошва в несколько слоёв войлока."
 
 # --- Trinkets ---
 
@@ -290,7 +290,7 @@ rarity = "common"
 level = 3
 price = 40
 modifiers = { stat_LCK = 1 }
-text = "Бабушкин. Помогает, если верить."
+text = "Медный оберег на шнурке, из тех, что дают в дорогу."
 
 [[item]]
 id = "wolf_fang"
@@ -301,7 +301,7 @@ rarity = "uncommon"
 level = 7
 price = 180
 modifiers = { beast_damage_percent = 12, crit_chance_percent = 2 }
-text = "Снят с того, кто почти успел первым."
+text = "Клык матёрого волка, оправлен в проволоку."
 
 [[item]]
 id = "tide_pearl"
@@ -398,7 +398,7 @@ rarity = "common"
 level = 1
 price = 12
 stack = 99
-text = "Годится на продажу и на заплатки."
+text = "Шкура со следами выделки, годится на продажу."
 
 [[item]]
 id = "iron_scrap"
@@ -409,7 +409,7 @@ rarity = "common"
 level = 1
 price = 8
 stack = 99
-text = "Кузнец возьмёт, не глядя."
+text = "Обломки железа: гвозди, пряжки, куски оковки."
 
 [[item]]
 id = "grove_resin"
@@ -420,4 +420,4 @@ rarity = "uncommon"
 level = 6
 price = 30
 stack = 99
-text = "Липнет ко всему, включая совесть."
+text = "Тягучая смола, пахнет хвоей."

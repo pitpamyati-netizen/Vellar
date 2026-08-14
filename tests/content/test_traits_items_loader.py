@@ -125,8 +125,8 @@ def test_world_gap_is_reported(tmp_path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     # Break the very first location so levels 2-4 stop being covered.
     text = text.replace(
-        'name = "Тихие Луга"\nbiome = "луга"\nlevel_min = 1\nlevel_max = 4',
-        'name = "Тихие Луга"\nbiome = "луга"\nlevel_min = 1\nlevel_max = 1',
+        'name = "Луга у Заставы"\nbiome = "луга"\nlevel_min = 1\nlevel_max = 4',
+        'name = "Луга у Заставы"\nbiome = "луга"\nlevel_min = 1\nlevel_max = 1',
     )
     path.write_text(text, encoding="utf-8")
     with pytest.raises(ContentError) as error:
