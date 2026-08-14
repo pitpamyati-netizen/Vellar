@@ -13,6 +13,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from mmorpg.domain.entities.character import Character, Equipment, InventoryEntry, SkillLoadout
+from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatBlock
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeRecord, TradeStatus
 from mmorpg.domain.ports.repositories import AccessibilitySettings, User
@@ -24,7 +25,8 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 CHARACTER_COLUMNS = """
     id, user_id, name, race_id, class_id, level, experience, gold,
     stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
-    trait_ids, loadout, equipment, city_id, unspent_stat_points, unspent_skill_points
+    trait_ids, loadout, equipment, city_id, unspent_stat_points, unspent_skill_points,
+    health, bank_gold, quests
 """
 
 TRADE_COLUMNS = """
@@ -68,7 +70,21 @@ def _character_from_row(row: Any) -> Character:
         city_id=row["city_id"],
         unspent_stat_points=row["unspent_stat_points"],
         unspent_skill_points=row["unspent_skill_points"],
+        health=row["health"],
+        bank_gold=row["bank_gold"],
+        quests=_quests_from_json(row["quests"]),
     )
+
+
+def _quests_from_json(raw: str | None) -> QuestLog:
+    """The contract ledger, read whole. An absent column is an empty ledger."""
+    data = json.loads(raw) if raw else {}
+    taken = {str(key): int(value) for key, value in dict(data.get("taken", {})).items()}
+    return QuestLog(taken=MappingProxyType(taken), done=tuple(data.get("done", ())))
+
+
+def _quests_to_json(log: QuestLog) -> str:
+    return json.dumps({"taken": dict(log.taken), "done": list(log.done)}, ensure_ascii=False)
 
 
 def _loadout_to_json(loadout: SkillLoadout) -> str:
@@ -232,10 +248,11 @@ class PostgresCharacterRepository:
                 user_id, name, race_id, class_id, level, experience, gold,
                 stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
                 trait_ids, loadout, equipment, city_id,
-                unspent_stat_points, unspent_skill_points
+                unspent_stat_points, unspent_skill_points,
+                health, bank_gold, quests
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                    $15, $16::jsonb, $17::jsonb, $18, $19, $20)
+                    $15, $16::jsonb, $17::jsonb, $18, $19, $20, $21, $22, $23::jsonb)
             RETURNING id
             """,
             character.user_id,
@@ -258,6 +275,9 @@ class PostgresCharacterRepository:
             character.city_id,
             character.unspent_stat_points,
             character.unspent_skill_points,
+            character.health,
+            character.bank_gold,
+            _quests_to_json(character.quests),
         )
         return replace(character, id=row["id"])
 
@@ -270,6 +290,7 @@ class PostgresCharacterRepository:
                 stat_wis = $9, stat_cha = $10, stat_lck = $11,
                 trait_ids = $12, loadout = $13::jsonb, equipment = $14::jsonb,
                 city_id = $15, unspent_stat_points = $16, unspent_skill_points = $17,
+                health = $18, bank_gold = $19, quests = $20::jsonb,
                 updated_at = now()
             WHERE id = $1
             """,
@@ -290,6 +311,9 @@ class PostgresCharacterRepository:
             character.city_id,
             character.unspent_stat_points,
             character.unspent_skill_points,
+            character.health,
+            character.bank_gold,
+            _quests_to_json(character.quests),
         )
 
     async def name_taken(self, name: str) -> bool:

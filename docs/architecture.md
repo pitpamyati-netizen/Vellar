@@ -72,9 +72,16 @@ press buttons by sending their exact text and assert on the resulting state and
 screen. A handler is then only four lines: load state, call `advance`, render,
 send one message.
 
-Anything that writes to a database is *recorded as an intent* on the state
-(`pending_purchase`, `pending_settings`) and executed by the handler, so the flow
-stays pure and the write stays in one place.
+Anything that writes to a database is *recorded as an intent* on the state - one
+`PendingWrite` holding the new character, the new settings and the changes to the
+bag - and executed by the handler, so the flow stays pure and every write in the
+game goes through a single function (`handlers/play.py::_apply`).
+
+A fight is the one thing the play flow hands over rather than resolves: pressing
+"Вступить в бой" sets `PlayState.fight`, and the fight handler generates the
+opponents from the node seed, keeps the fight in FSM data, and pays out the
+result (`handlers/combat.py`). It is registered **before** the play router,
+because the play router filters on the whole `Play` state group.
 
 ## Storage split
 

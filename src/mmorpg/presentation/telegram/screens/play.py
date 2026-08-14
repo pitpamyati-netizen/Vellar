@@ -50,6 +50,21 @@ NODE_DESCRIPTIONS: dict[NodeKind, str] = {
 
 LEAVE_LOCATION = label("Покинуть локацию")
 
+# Equipment slots, in the order they are read out. The ids are content keys; the
+# names are what a player hears.
+SLOT_NAMES: dict[str, str] = {
+    "weapon": "Оружие",
+    "head": "Голова",
+    "body": "Тело",
+    "hands": "Руки",
+    "feet": "Ноги",
+    "trinket": "Украшение",
+}
+
+
+def unequip_label(slot_name: str) -> Label:
+    return label(f"Снять: {slot_name}")
+
 
 def node_button(node: LocationNode) -> Label:
     """Node buttons carry their index, so two "Стычка" nodes stay distinguishable."""
@@ -66,22 +81,29 @@ def main_menu_screen(
         if needed
         else "Достигнут максимальный уровень."
     )
+    lines = [
+        notice or f"Главное меню. Вы в городе {city.name}.",
+        f"{character.name}, уровень {character.level}, "
+        f"{content.race(character.race_id).name}, "
+        f"{content.character_class(character.class_id).name}.",
+        f"Здоровье: {amount(character.health_or(stats.max_health), stats.max_health)}.",
+        f"{stats.resource_name}: {amount(stats.max_resource, stats.max_resource)}.",
+        progress,
+        f"Золото: {gold(character.gold)}.",
+    ]
+    if character.unspent_stat_points or character.unspent_skill_points:
+        lines.append(
+            f"Нераспределено: очков характеристик {character.unspent_stat_points}, "
+            f"очков умений {character.unspent_skill_points}."
+        )
     return Screen(
         id=ScreenId.MAIN_MENU,
-        lines=(
-            notice or f"Главное меню. Вы в городе {city.name}.",
-            f"{character.name}, уровень {character.level}, "
-            f"{content.race(character.race_id).name}, "
-            f"{content.character_class(character.class_id).name}.",
-            f"Здоровье: {amount(stats.max_health, stats.max_health)}.",
-            f"{stats.resource_name}: {amount(stats.max_resource, stats.max_resource)}.",
-            progress,
-            f"Золото: {gold(character.gold)}.",
-        ),
+        lines=tuple(lines),
         rows=(
             (labels.WORLD,),
             (labels.CHARACTER, labels.INVENTORY),
-            (labels.SKILLS, labels.SETTINGS),
+            (labels.SKILLS, labels.QUESTS),
+            (labels.SETTINGS,),
         ),
     )
 
@@ -112,7 +134,24 @@ def world_screen(
     )
 
 
+# Which button opens which declared service. A city that does not declare one
+# does not show its button - and says so if the button arrives from an old
+# keyboard (accessibility rule 12).
+CITY_SERVICES: tuple[tuple[str, Label], ...] = (
+    ("locations", labels.LOCATIONS),
+    ("shop", labels.SHOP),
+    ("dungeons", labels.DUNGEONS),
+    ("tavern", labels.TAVERN),
+    ("mentor", labels.MENTOR),
+    ("bank", labels.BANK),
+)
+
+
 def city_screen(content: GameContent, city: City, character: Character, notice: str = "") -> Screen:
+    offered = [item for service, item in CITY_SERVICES if service in city.services]
+    rows: list[tuple[Label, ...]] = [
+        tuple(offered[index : index + 2]) for index in range(0, len(offered), 2)
+    ]
     return Screen(
         id=ScreenId.CITY,
         lines=(
@@ -120,14 +159,9 @@ def city_screen(content: GameContent, city: City, character: Character, notice: 
             city.description,
             f"Уровни города: с {city.level_min} по {city.level_max}. "
             f"Ваш уровень: {character.level}.",
-            "Доступно: лавка, локации, данжи, таверна, наставник, банк.",
+            "Доступно: " + ", ".join(item.text.lower() for item in offered) + ".",
         ),
-        rows=(
-            (labels.LOCATIONS,),
-            (labels.SHOP, labels.DUNGEONS),
-            (labels.TAVERN, labels.MENTOR),
-            (labels.BANK,),
-        ),
+        rows=tuple(rows),
     )
 
 
@@ -206,7 +240,8 @@ def character_screen(
         notice or f"Персонаж {character.name}, уровень {character.level}.",
         f"{content.race(character.race_id).name}, "
         f"{content.character_class(character.class_id).name}.",
-        f"Здоровье: {stats.max_health}. {stats.resource_name}: {stats.max_resource}.",
+        f"Здоровье: {character.health_or(stats.max_health)} из {stats.max_health}. "
+        f"{stats.resource_name}: {stats.max_resource}.",
         f"Броня: {stats.armor}. Точность: {stats.accuracy}. Уклонение: {stats.dodge} процентов.",
         f"Шанс крита: {stats.crit_chance} процентов. Инициатива: {stats.initiative}.",
     ]
@@ -214,12 +249,39 @@ def character_screen(
     if character.trait_ids:
         names = ", ".join(content.trait(trait_id).name for trait_id in character.trait_ids)
         lines.append(f"Особенности: {names}.")
+
+    worn: list[tuple[Label, ...]] = []
+    for slot, slot_name in SLOT_NAMES.items():
+        item_id = character.equipment.item_in(slot)
+        if item_id is None or not content.has_item(item_id):
+            continue
+        lines.append(f"{slot_name}: {content.item(item_id).name}.")
+        worn.append((unequip_label(slot_name),))
+    if not worn:
+        lines.append("Ничего не надето. Снаряжение надевается из инвентаря.")
+
+    spend: list[tuple[Label, ...]] = []
     if character.unspent_stat_points or character.unspent_skill_points:
         lines.append(
             f"Нераспределено: очков характеристик {character.unspent_stat_points}, "
             f"очков умений {character.unspent_skill_points}."
         )
-    return Screen(id=ScreenId.CHARACTER, lines=tuple(lines), rows=((labels.SKILLS,),))
+    if character.unspent_stat_points:
+        lines.append("Очко характеристики вкладывается сразу и навсегда.")
+        stat_names = list(STAT_NAMES.values())
+        spend = [
+            tuple(spend_label(name) for name in stat_names[index : index + 2])
+            for index in range(0, len(stat_names), 2)
+        ]
+    return Screen(
+        id=ScreenId.CHARACTER,
+        lines=tuple(lines),
+        rows=((labels.SKILLS,), *spend, *worn),
+    )
+
+
+def spend_label(stat_name: str) -> Label:
+    return label(f"Вложить: {stat_name}")
 
 
 def stub_screen(title: str, notice: str = "") -> Screen:

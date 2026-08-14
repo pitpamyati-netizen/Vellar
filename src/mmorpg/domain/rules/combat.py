@@ -12,7 +12,7 @@ be replayed exactly - which is what makes it testable.
 from __future__ import annotations
 
 import random
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import (
@@ -29,9 +29,12 @@ from mmorpg.domain.entities.content import GameContent, Skill
 from mmorpg.domain.entities.effects import ActiveEffect
 from mmorpg.domain.entities.location import Enemy
 from mmorpg.domain.rules import modifiers as mods
+from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules import tempo as tempo_rules
 from mmorpg.domain.rules.progression import experience_reward
 from mmorpg.domain.rules.skill_effects import EffectCategory, EffectSpec, spec_for
 from mmorpg.domain.rules.stats import DerivedStats, derived_stats, primary_stats
+from mmorpg.domain.rules.tempo import Tag
 
 BASIC_ATTACK_POWER = 8.0
 STAT_DAMAGE_DIVISOR = 18.0
@@ -44,25 +47,47 @@ BASE_FLEE_CHANCE = 45.0
 LOW_HEALTH_THRESHOLD = 0.35
 
 
+@dataclass(frozen=True, slots=True)
+class TurnTempo:
+    """What the trail and the announced intent are worth for one action.
+
+    ``boost`` is momentum, ``breach`` means the armour of the target is open
+    because the action counters what the enemy announced (Roadmap 1.1).
+    """
+
+    boost: float = 1.0
+    breach: bool = False
+
+
 # --- starting a fight ------------------------------------------------
 
 
 def start_combat(
-    content: GameContent, character: Character, enemies: tuple[Enemy, ...]
+    content: GameContent,
+    character: Character,
+    enemies: tuple[Enemy, ...],
+    *,
+    seed: bytes = b"\x00",
 ) -> CombatState:
-    """Build the opening state. The player always acts first on turn 1."""
+    """Build the opening state. The player always acts first on turn 1.
+
+    A fight starts from the health the character walked in with: wounds carry
+    over between nodes, and that is what makes a potion and an inn cost money.
+    """
     stats = derived_stats(content, character)
     player = PlayerState(
         name=character.name,
-        health=stats.max_health,
+        health=character.health_or(stats.max_health),
         max_health=stats.max_health,
         resource=stats.max_resource,
         max_resource=stats.max_resource,
         resource_name=stats.resource_name,
     )
+    intent = tempo_rules.roll_intent(random.Random(int.from_bytes(seed, "big")))
     return CombatState(
         player=player,
         enemies=tuple(EnemyState.spawn(enemy, index) for index, enemy in enumerate(enemies)),
+        intent=intent.value,
     )
 
 
@@ -83,6 +108,21 @@ def resolve_turn(
     source = random.Random(int.from_bytes(seed, "big"))
     working = replace(state, events=())
 
+    tag = _tag_for(content, character, action)
+    trail = tempo_rules.extended(state.trail, tag)
+    breach = bool(state.intent) and tempo_rules.counters(tag, Tag(state.intent))
+    momentum = tempo_rules.has_momentum(trail)
+    broke = tempo_rules.is_break(trail)
+    pace = TurnTempo(boost=tempo_rules.damage_factor(trail), breach=breach)
+    working = replace(working, trail=trail)
+
+    if breach:
+        working = working.with_events(CombatEvent(kind=EventKind.BREACH, tag=tag.value))
+    if momentum:
+        working = working.with_events(
+            CombatEvent(kind=EventKind.MOMENTUM, tag=tag.value, amount=tempo_rules.streak(trail))
+        )
+
     if working.player.stunned > 0:
         working = working.with_events(
             CombatEvent(kind=EventKind.TURN_SKIPPED, actor=working.player.name)
@@ -91,18 +131,45 @@ def resolve_turn(
             working, player=replace(working.player, stunned=working.player.stunned - 1)
         )
     else:
-        working = _player_action(content, character, working, action, source)
+        working = _player_action(content, character, working, action, source, pace)
 
     working = _check_outcome(content, character, working)
     if working.is_over:
         return working
 
-    working = _enemy_actions(content, character, working, source)
-    working = _check_outcome(content, character, working)
-    if working.is_over:
-        return working
+    if broke:
+        # A break costs the enemy its answer: the trail read three different
+        # tags in a row and nobody on the other side kept up.
+        working = working.with_events(CombatEvent(kind=EventKind.BREAK))
+    else:
+        working = _enemy_actions(content, character, working, source)
+        working = _check_outcome(content, character, working)
+        if working.is_over:
+            return working
 
-    return _end_of_turn(content, character, working)
+    return _announce_intent(_end_of_turn(content, character, working), source)
+
+
+def _tag_for(content: GameContent, character: Character, action: CombatAction) -> Tag:
+    """Which tag the chosen action leaves on the trail."""
+    match action.kind:
+        case ActionKind.SKILL | ActionKind.RACIAL:
+            skill = _resolve_skill(content, character, action)
+            return tempo_rules.tag_of_spec(spec_for(skill.effect) if skill else None)
+        case ActionKind.ITEM | ActionKind.FLEE:
+            return Tag.GUARD
+        case _:
+            return tempo_rules.tag_of_attack()
+
+
+def _announce_intent(state: CombatState, source: random.Random) -> CombatState:
+    """Say out loud what the enemy side prepares for the next turn."""
+    if not state.living_enemies:
+        return state
+    intent = tempo_rules.roll_intent(source)
+    return replace(state, intent=intent.value).with_events(
+        CombatEvent(kind=EventKind.INTENT, actor=state.living_enemies[0].name, tag=intent.value)
+    )
 
 
 def _player_action(
@@ -111,12 +178,13 @@ def _player_action(
     state: CombatState,
     action: CombatAction,
     source: random.Random,
+    pace: TurnTempo,
 ) -> CombatState:
     match action.kind:
         case ActionKind.ATTACK:
-            return _basic_attack(content, character, state, action.target, source)
+            return _basic_attack(content, character, state, action.target, source, pace)
         case ActionKind.SKILL | ActionKind.RACIAL:
-            return _use_skill(content, character, state, action, source)
+            return _use_skill(content, character, state, action, source, pace)
         case ActionKind.ITEM:
             return _use_item(content, state, action)
         case ActionKind.FLEE:
@@ -132,6 +200,7 @@ def _basic_attack(
     state: CombatState,
     target_index: int,
     source: random.Random,
+    pace: TurnTempo,
 ) -> CombatState:
     target = state.enemy_at(target_index) or state.first_living()
     if target is None:
@@ -153,6 +222,7 @@ def _basic_attack(
         spec=None,
         skill_name="Атака",
         source=source,
+        pace=pace,
     )
 
 
@@ -180,6 +250,7 @@ def _use_skill(
     state: CombatState,
     action: CombatAction,
     source: random.Random,
+    pace: TurnTempo,
 ) -> CombatState:
     skill = _resolve_skill(content, character, action)
     if skill is None:
@@ -197,13 +268,14 @@ def _use_skill(
 
     modifiers = mods.collect_modifiers(content, character, player.effects)
     cost = _skill_cost(skill, modifiers, free=player.free_cast)
+    cost = round(cost * skill_rules.cost_factor(character, skill))
     if cost > player.resource:
         return state.with_events(
             CombatEvent(kind=EventKind.NOT_ENOUGH_RESOURCE, skill_name=skill.name, amount=cost)
         )
 
     rank = character.loadout.rank_of(skill.code)
-    power = skill.power_at_rank(rank)
+    power = skill.power_at_rank(rank) * skill_rules.power_factor(character, skill)
     spec = spec_for(skill.effect)
 
     player = replace(player, resource=player.resource - cost, free_cast=False)
@@ -212,7 +284,7 @@ def _use_skill(
         # stays unavailable for exactly `cooldown` further turns.
         player = player.with_cooldown(skill.code, skill.cooldown + 1)
     working = replace(state, player=player)
-    return _apply_spec(content, character, working, skill, spec, power, action.target, source)
+    return _apply_spec(content, character, working, skill, spec, power, action.target, source, pace)
 
 
 def _skill_cost(skill: Skill, modifiers: dict[str, float], *, free: bool) -> int:
@@ -231,6 +303,7 @@ def _apply_spec(
     power: float,
     target_index: int,
     source: random.Random,
+    pace: TurnTempo,
 ) -> CombatState:
     stats = derived_stats(content, character, state.player.effects)
     primary = primary_stats(content, character, state.player.effects)
@@ -263,6 +336,7 @@ def _apply_spec(
                     spec=spec,
                     skill_name=skill.name,
                     source=source,
+                    pace=pace,
                 )
             falloff *= 1.0 - spec.chain_falloff
 
@@ -404,6 +478,7 @@ def _strike(
     spec: EffectSpec | None,
     skill_name: str,
     source: random.Random,
+    pace: TurnTempo = TurnTempo(),
 ) -> CombatState:
     working = state
     enemy = target.enemy
@@ -420,13 +495,16 @@ def _strike(
 
     raw = power * (1.0 + stat_value / STAT_DAMAGE_DIVISOR)
     raw *= mods.percent(modifiers, "damage_percent")
+    raw *= pace.boost
     if spec is not None and spec.execute_scaling:
         missing = 1.0 - target.health / max(1, enemy.max_health)
         raw *= 1.0 + missing * spec.execute_scaling
     if target.effects.modifiers().get("damage_taken_percent"):
         raw *= 1.0 + target.effects.modifiers()["damage_taken_percent"] / 100.0
 
-    pierce = spec.pierce if spec is not None else 0.0
+    # A breach is exactly that: the armour is not softened, it is simply not
+    # there for this action.
+    pierce = 1.0 if pace.breach else (spec.pierce if spec is not None else 0.0)
     effective_armor = enemy.armor * (1.0 - pierce)
     raw *= ARMOR_SOFTENER / (ARMOR_SOFTENER + effective_armor)
 
@@ -574,6 +652,9 @@ def _enemy_actions(
             )
             continue
 
+        # The announcement is not decoration: an aim cannot be dodged, a press
+        # hits harder, a guard trades damage for holding the line.
+        announced = Tag(state.intent) if state.intent else None
         hit_chance = min(
             MAX_HIT_CHANCE,
             max(
@@ -581,6 +662,8 @@ def _enemy_actions(
                 ENEMY_ACCURACY_BASE + current.enemy.level * ENEMY_ACCURACY_PER_LEVEL - stats.dodge,
             ),
         )
+        if announced is Tag.AIM:
+            hit_chance = MAX_HIT_CHANCE
         if source.uniform(0, 100) > hit_chance:
             working = working.with_events(
                 CombatEvent(kind=EventKind.DODGE, actor=current.name, target=working.player.name)
@@ -588,6 +671,10 @@ def _enemy_actions(
             continue
 
         raw = float(current.enemy.damage)
+        if announced is Tag.PRESS:
+            raw *= tempo_rules.INTENT_PRESS_DAMAGE
+        elif announced is Tag.GUARD:
+            raw *= 1.0 - tempo_rules.INTENT_GUARD_REDUCTION
         enemy_modifiers = current.effects.modifiers()
         raw *= 1.0 + enemy_modifiers.get("damage_percent", 0.0) / 100.0
         raw *= ARMOR_SOFTENER / (ARMOR_SOFTENER + stats.armor)

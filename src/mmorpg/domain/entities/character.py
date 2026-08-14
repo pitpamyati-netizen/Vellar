@@ -11,6 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 
+from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatBlock
 
 ACTIVE_SLOTS = 6
@@ -118,6 +119,26 @@ class Character:
     city_id: str = "farhold"
     unspent_stat_points: int = 0
     unspent_skill_points: int = 0
+    # Wounds outlive a fight: a player leaves a location as they left the last
+    # node, and pays somebody to be patched up. Zero means "as good as new",
+    # which is what a freshly created character is - see ``health_or``.
+    health: int = 0
+    bank_gold: int = 0
+    quests: QuestLog = field(default_factory=QuestLog)
+
+    def health_or(self, maximum: int) -> int:
+        """Current health, clamped into the range the totals allow right now.
+
+        Equipment and levels move the maximum around between fights, so the
+        stored number is only ever a claim: it is trusted up to the maximum and
+        never below one, because a character at zero would be unplayable.
+        """
+        if self.health <= 0:
+            return maximum
+        return max(1, min(self.health, maximum))
+
+    def with_health(self, health: int, maximum: int) -> Character:
+        return replace(self, health=max(1, min(health, maximum)))
 
     def with_experience(self, gained: int) -> Character:
         return replace(self, experience=self.experience + gained)

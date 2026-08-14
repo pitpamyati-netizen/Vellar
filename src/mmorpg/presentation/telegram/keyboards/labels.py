@@ -60,7 +60,27 @@ SHOP = label("Лавка", "🛒")
 CHARACTER = label("Персонаж", "🧝")
 INVENTORY = label("Инвентарь", "🎒")
 SKILLS = label("Умения", "✨")
+QUESTS = label("Подряды", "📜")
 SETTINGS = label("Настройки", "⚙️")
+
+# --- skills, contracts and city services ---
+
+SKILL_SLOTS = label("Слоты умений", "🧩")
+SKILL_LEARN = label("Изучить и улучшить", "📚")
+QUEST_BOARD = label("Доска подрядов", "📌")
+QUEST_ACCEPT = label("Согласиться", "🤝")
+QUEST_ASK = label("Спросить, кто платит", "❔")
+QUEST_LEAVE = label("Уйти", "🚪")
+REST_PAID = label("Снять комнату", "🛏")
+REST_FREE = label("Ночь на соломе", "🌾")
+HAND_IN = label("Сдать подряд", "🧾")
+SELL = label("Продать вещи", "💱")
+DEPOSIT = label("Положить в банк", "📥")
+WITHDRAW = label("Забрать из банка", "📤")
+FORGET_SKILL = label("Забыть умение", "🧠")
+DUNGEON_ENTER = label("Спуститься", "🕳")
+DUNGEON_DEEPER = label("Идти глубже", "⬇️")
+DUNGEON_LEAVE = label("Выйти на воздух", "🚪")
 
 # --- creation ---
 

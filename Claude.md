@@ -18,25 +18,32 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   единственный доступ к env), `logging.py`, `monitoring.py` (детектор медленных
   колбэков), `health.py` (heartbeat).
 - `domain/` — чистая логика, только stdlib, без async и I/O.
-  `entities/`: `character`, `stats`, `combat`, `effects`, `location`, `content`.
-  `rules/`: `combat` (движок боя), `stats`, `progression`, `economy`,
-  `modifiers`, `skill_effects` (эффект → спецификация), `group_commands`
-  (грамматика группы), `group_offers` (предложения). `procgen/`: `seeds`,
-  `location`, `enemies`. `ports/repositories.py` — протоколы хранилищ.
+  `entities/`: `character`, `stats`, `combat`, `effects`, `location`, `content`,
+  `quest` (подряд и журнал подрядов).
+  `rules/`: `combat` (движок боя), `tempo` (намерение, след, брешь), `stats`,
+  `progression`, `economy`, `modifiers`, `skill_effects` (эффект →
+  спецификация), `skills` (изучение, ранги, грани, слоты), `quests` (счёт и
+  плата по подрядам), `adventure` (последствия боя и узла, ночлег, зелья вне
+  боя), `group_commands` (грамматика группы), `group_offers` (предложения).
+  `procgen/`: `seeds`, `location`, `enemies`. `ports/repositories.py` —
+  протоколы хранилищ.
 - `application/` — `dto/creation.py` (черновик), `services/`: `group_trade.py`
   (операции группы), `offers.py` (предложения в кэше).
 - `infrastructure/` — `persistence/`: `postgres`, `memory`, `pool`; `cache/`:
   `redis_cache`, `memory`; `content/loader.py` (TOML → dataclass),
   `content/changelog.py` (обновления для канала).
-- `presentation/telegram/` — `handlers/` (`creation`, `play`, `group`), `flows/`
-  (`creation`, `play`, `combat` — чистые автоматы), `screens/` (`base`, `format`,
-  `paginated`, `creation`, `play`, `combat`, `shop`, `settings`, `group`),
+- `presentation/telegram/` — `handlers/` (`creation`, `play`, `combat`, `group`;
+  бой включается перед `play`, иначе его перехватит фильтр по группе состояний),
+  `flows/` (`creation`, `play`, `combat` — чистые автоматы), `screens/` (`base`,
+  `format`, `paginated`, `creation`, `play`, `combat`, `shop`, `skills`,
+  `quests`, `city`, `settings`, `group`),
   `keyboards/` (`labels`, `reply`), `middlewares/` (`dependencies`, `errors`,
   `idempotency`), `states/screens.py`, `routing.py`, `messaging.py`,
   `broadcast.py` (канал), `throttle.py` (лимит), `cleanup.py` (уборка в группе).
 
 **`content/`** — `world.toml` (15 городов × 5 локаций, 1–300), `races.toml`,
-`classes.toml`, `traits.toml`, `skills.toml`, `items.toml`, `enemies.toml`.
+`classes.toml`, `traits.toml`, `skills.toml`, `items.toml`, `enemies.toml`,
+`quests.toml` (подряды акта I).
 Правится без кода, валидируется на старте. Отдельно — `changelog.toml`: что
 изменилось, словами игрока; читается только при посте в канал.
 
@@ -44,15 +51,16 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 `procgen.md`, `content-guide.md`, `skills.md`, `deployment.md`,
 `release-checklist.md`, `adr/0001..0005`.
 
-**`tests/`** — `domain/` (9, слои держит `test_layering.py`), `content/` (5),
-`presentation/` (9: доступность, канал, группа), `application/` (2),
-`integration/` (маркер `integration`), `test_config.py`, `test_health.py`,
-`test_main.py`, `conftest.py`.
+**`tests/`** — `domain/` (12, слои держит `test_layering.py`), `content/` (6),
+`presentation/` (11: доступность, канал, группа, сквозной проход по циклу в
+`test_adventure_flow.py`), `application/` (2), `integration/` (маркер
+`integration`), `test_config.py`, `test_health.py`, `test_main.py`,
+`conftest.py`.
 
 **`scripts/`** — `ci.ps1`/`ci.sh` (гейт), `healthcheck.py`, `broadcast.py` (пост
 в канал: `--headline` или `--changelog latest`), `install-hooks.ps1`/`.sh`.
 **`migrations/`** — `env.py`, `versions/0001_initial_schema`, `0002_trades`,
-`0003_privacy`. **`.githooks/pre-commit`** — гейт на коммите.
+`0003_privacy`, `0004_wounds_bank_quests`. **`.githooks/pre-commit`** — гейт на коммите.
 
 ## 2. Правила разработки
 

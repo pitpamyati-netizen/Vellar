@@ -128,38 +128,56 @@ def test_buying_defers_the_write_to_the_handler(
     from mmorpg.presentation.telegram.flows.play import Goods
     from mmorpg.presentation.telegram.screens.shop import buy_label
 
+    wealthy = replace(hero, gold=100_000)
     stock = roll_assortment(
         content, world_seed=WORLD_SEED, city_id="farhold", cycle=CYCLE, character_level=hero.level
     )
     prices = {item.id: buy_price(content, item) for item in stock}
-    rich = Goods(gold=100_000, stock=stock, prices=prices)
+    rich = Goods(gold=wealthy.gold, stock=stock, prices=prices)
     poor = Goods(gold=0, stock=stock, prices=prices)
 
-    shop = advance(content, hero, in_city, "Лавка", cycle=CYCLE, world_seed=WORLD_SEED, goods=rich)
+    shop = advance(
+        content, wealthy, in_city, "Лавка", cycle=CYCLE, world_seed=WORLD_SEED, goods=rich
+    )
     first = stock[0]
     pressed = buy_label(first, prices[first.id]).text
 
-    bought = advance(content, hero, shop, pressed, cycle=CYCLE, world_seed=WORLD_SEED, goods=rich)
-    assert bought.pending_purchase == first.id
+    bought = advance(
+        content, wealthy, shop, pressed, cycle=CYCLE, world_seed=WORLD_SEED, goods=rich
+    )
+    assert bought.pending.items == ((first.id, 1),)
+    assert bought.pending.character is not None
+    assert bought.pending.character.gold == wealthy.gold - prices[first.id]
     assert "куплен" in bought.notice
 
     broke = advance(content, hero, shop, pressed, cycle=CYCLE, world_seed=WORLD_SEED, goods=poor)
-    assert broke.pending_purchase == ""
+    assert broke.pending.empty
     assert "Не хватает" in broke.notice
 
 
-@pytest.mark.parametrize("section", ["Данжи", "Таверна", "Наставник", "Банк"])
-def test_unfinished_sections_answer_with_a_working_back(
-    content: GameContent, hero: Character, in_city: PlayState, section: str
+@pytest.mark.parametrize(
+    ("section", "screen"),
+    [
+        ("Данжи", ScreenId.DUNGEON),
+        ("Таверна", ScreenId.TAVERN),
+        ("Наставник", ScreenId.MENTOR),
+        ("Банк", ScreenId.BANK),
+    ],
+)
+def test_every_city_service_is_a_real_screen(
+    content: GameContent,
+    hero: Character,
+    in_city: PlayState,
+    section: str,
+    screen: ScreenId,
 ) -> None:
-    """A stub is a real screen with a working Назад, never silence."""
-    stub = step(content, hero, in_city, section)
-    assert stub.screen is ScreenId.STUB
-    screen = render(content, hero, stub, world_seed=WORLD_SEED)
-    assert section in screen.text()
-    assert "ещё не готов" in screen.text()
-    assert screen.all_rows()[-1][0].text == "Назад"
-    assert step(content, hero, stub, "Назад").screen is ScreenId.CITY
+    """No stubs left in a city: each service answers and comes back (Roadmap 1.5)."""
+    opened = step(content, hero, in_city, section)
+    assert opened.screen is screen
+    rendered = render(content, hero, opened, world_seed=WORLD_SEED)
+    assert rendered.lines[0].strip()
+    assert rendered.all_rows()[-1][0].text == "Назад"
+    assert step(content, hero, opened, "Назад").screen is ScreenId.CITY
 
 
 # --- locations --------------------------------------------------------

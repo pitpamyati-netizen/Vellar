@@ -16,6 +16,7 @@ from enum import StrEnum
 from types import MappingProxyType
 
 from mmorpg.domain.entities.location import EnemyArchetype
+from mmorpg.domain.entities.quest import Quest
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 
 
@@ -250,6 +251,7 @@ class GameContent:
     rarities: tuple[Rarity, ...]
     enemy_archetypes: tuple[EnemyArchetype, ...]
     elite_titles: tuple[str, ...]
+    quests: tuple[Quest, ...]
     trait_categories: Mapping[str, str]
     inverted_modifiers: frozenset[str]
     rules: ProgressionRules
@@ -262,6 +264,7 @@ class GameContent:
     _skills_by_owner: Mapping[str, tuple[Skill, ...]]
     _cities_by_id: Mapping[str, City]
     _rarities_by_id: Mapping[str, Rarity]
+    _quests_by_id: Mapping[str, Quest]
 
     @classmethod
     def build(
@@ -279,6 +282,7 @@ class GameContent:
         trait_categories: Mapping[str, str],
         inverted_modifiers: frozenset[str],
         rules: ProgressionRules,
+        quests: Sequence[Quest] = (),
     ) -> GameContent:
         """Build the registry and its indexes."""
         by_owner: dict[str, list[Skill]] = {}
@@ -295,6 +299,7 @@ class GameContent:
             rarities=tuple(rarities),
             enemy_archetypes=tuple(enemy_archetypes),
             elite_titles=tuple(elite_titles),
+            quests=tuple(quests),
             trait_categories=MappingProxyType(dict(trait_categories)),
             inverted_modifiers=inverted_modifiers,
             rules=rules,
@@ -308,6 +313,7 @@ class GameContent:
             ),
             _cities_by_id=MappingProxyType({city.id: city for city in cities}),
             _rarities_by_id=MappingProxyType({rarity.id: rarity for rarity in rarities}),
+            _quests_by_id=MappingProxyType({quest.id: quest for quest in quests}),
         )
 
     # --- lookups -----------------------------------------------------
@@ -324,6 +330,9 @@ class GameContent:
     def item(self, item_id: str) -> Item:
         return self._items_by_id[item_id]
 
+    def has_item(self, item_id: str) -> bool:
+        return item_id in self._items_by_id
+
     def skill(self, code: str) -> Skill:
         return self._skills_by_code[code]
 
@@ -332,6 +341,21 @@ class GameContent:
 
     def rarity(self, rarity_id: str) -> Rarity:
         return self._rarities_by_id[rarity_id]
+
+    def quest(self, quest_id: str) -> Quest:
+        return self._quests_by_id[quest_id]
+
+    def has_quest(self, quest_id: str) -> bool:
+        return quest_id in self._quests_by_id
+
+    def quests_in(self, city_id: str) -> tuple[Quest, ...]:
+        """Contracts a city hands out, easiest first."""
+        return tuple(
+            sorted(
+                (quest for quest in self.quests if quest.city_id == city_id),
+                key=lambda quest: (quest.level, quest.id),
+            )
+        )
 
     def has_skill(self, code: str) -> bool:
         return code in self._skills_by_code

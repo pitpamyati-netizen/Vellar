@@ -11,6 +11,7 @@ reproducible from its seed and its sequence of actions.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Any
@@ -27,9 +28,11 @@ from mmorpg.domain.entities.combat import (
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.effects import ActiveEffect, EffectStack
 from mmorpg.domain.entities.location import Enemy, EnemyKind
+from mmorpg.domain.procgen.enemies import generate_group
 from mmorpg.domain.procgen.seeds import derive
 from mmorpg.domain.rules.combat import resolve_turn, start_combat
 from mmorpg.presentation.telegram.keyboards import labels
+from mmorpg.presentation.telegram.keyboards.labels import Label
 from mmorpg.presentation.telegram.routing import Intent, resolve
 from mmorpg.presentation.telegram.screens import combat as screens
 from mmorpg.presentation.telegram.screens.base import Screen
@@ -37,11 +40,21 @@ from mmorpg.presentation.telegram.screens.base import Screen
 
 @dataclass(frozen=True, slots=True)
 class CombatSession:
-    """An active fight, plus the seed it is being replayed from."""
+    """An active fight, plus the seed it is being replayed from.
+
+    ``depth`` is zero for a fight standing at a location node, and one to three
+    for a descent into the city dungeons, where fights follow one another with no
+    break in between.
+    """
 
     state: CombatState
     seed: bytes
     node: int = 0
+    depth: int = 0
+
+    @property
+    def in_descent(self) -> bool:
+        return self.depth > 0
 
     def turn_seed(self) -> bytes:
         return derive(self.seed, "turn", self.state.turn)
@@ -54,19 +67,53 @@ def begin(
     *,
     seed: bytes,
     node: int,
+    depth: int = 0,
 ) -> CombatSession:
-    return CombatSession(state=start_combat(content, character, enemies), seed=seed, node=node)
+    return CombatSession(
+        state=start_combat(content, character, enemies, seed=derive(seed, "intent")),
+        seed=seed,
+        node=node,
+        depth=depth,
+    )
+
+
+def spawn_for_node(
+    content: GameContent,
+    *,
+    seed: bytes,
+    biome: str,
+    level: int,
+    elite: bool,
+) -> tuple[Enemy, ...]:
+    """Who is standing at this node. Same seed, same opponents, every time."""
+    return generate_group(
+        seed,
+        archetypes=content.enemy_archetypes,
+        biome=biome,
+        level=level,
+        elite=elite,
+        elite_titles=content.elite_titles,
+    )
 
 
 def render(
-    content: GameContent, character: Character, session: CombatSession, notice: str = ""
+    content: GameContent,
+    character: Character,
+    session: CombatSession,
+    notice: str = "",
+    extra: Sequence[str] = (),
+    rows: Sequence[tuple[Label, ...]] = (),
+    gold_lost: int = 0,
 ) -> Screen:
     state = session.state
     match state.outcome:
         case CombatOutcome.VICTORY:
-            return screens.victory_screen(state)
+            loot = tuple(
+                content.item(item_id).name for item_id in state.loot if content.has_item(item_id)
+            )
+            return screens.victory_screen(state, extra=extra, rows=rows, loot=loot)
         case CombatOutcome.DEFEAT:
-            return screens.defeat_screen()
+            return screens.defeat_screen(gold_lost)
         case CombatOutcome.FLED:
             return screens.escaped_screen(fled=True)
         case CombatOutcome.AVOIDED:
@@ -168,11 +215,14 @@ def serialise(session: CombatSession) -> str:
         {
             "seed": session.seed.hex(),
             "node": session.node,
+            "depth": session.depth,
             "turn": state.turn,
             "outcome": state.outcome.value,
             "experience": state.experience,
             "gold": state.gold,
             "loot": list(state.loot),
+            "trail": list(state.trail),
+            "intent": state.intent,
             "player": {
                 "name": state.player.name,
                 "health": state.player.health,
@@ -261,5 +311,12 @@ def deserialise(raw: str) -> CombatSession:
         experience=data["experience"],
         gold=data["gold"],
         loot=tuple(data["loot"]),
+        trail=tuple(data.get("trail", ())),
+        intent=str(data.get("intent", "")),
     )
-    return CombatSession(state=state, seed=bytes.fromhex(data["seed"]), node=data["node"])
+    return CombatSession(
+        state=state,
+        seed=bytes.fromhex(data["seed"]),
+        node=data["node"],
+        depth=int(data.get("depth", 0)),
+    )

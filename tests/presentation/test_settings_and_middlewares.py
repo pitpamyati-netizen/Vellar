@@ -64,22 +64,22 @@ def test_toggling_emoji_defers_the_write_to_the_handler(
 ) -> None:
     opened = step(content, hero, begin(hero), "Настройки")
     toggled = step(content, hero, opened, "Переключить эмодзи", AccessibilitySettings())
-    assert toggled.pending_settings is not None
-    assert toggled.pending_settings.emoji is True
+    assert toggled.pending.settings is not None
+    assert toggled.pending.settings.emoji is True
     assert "Эмодзи теперь включены" in toggled.notice
 
 
 def test_toggling_verbose_descriptions(content: GameContent, hero: Character) -> None:
     opened = step(content, hero, begin(hero), "Настройки")
     toggled = step(content, hero, opened, "Переключить подробные описания", AccessibilitySettings())
-    assert toggled.pending_settings is not None
-    assert toggled.pending_settings.verbose is False
+    assert toggled.pending.settings is not None
+    assert toggled.pending.settings.verbose is False
 
 
 def test_repeat_button_changes_nothing(content: GameContent, hero: Character) -> None:
     opened = step(content, hero, begin(hero), "Настройки")
     repeated = step(content, hero, opened, "Повторить текущий экран")
-    assert repeated.pending_settings is None
+    assert repeated.pending.settings is None
     assert repeated.screen is ScreenId.SETTINGS
 
 
@@ -204,11 +204,11 @@ def test_no_blocking_calls_in_handlers_or_flows() -> None:
 
 
 def test_settings_survive_a_flow_round_trip(content: GameContent, hero: Character) -> None:
-    """pending_settings is transient: it must not leak into stored FSM data."""
+    """The pending write is transient: it must not leak into stored FSM data."""
     opened = step(content, hero, begin(hero), "Настройки")
     toggled = step(content, hero, opened, "Переключить эмодзи", AccessibilitySettings())
     restored = PlayState.deserialise(toggled.serialise())
-    assert restored.pending_settings is None
+    assert restored.pending.settings is None
     assert restored.screen is ScreenId.SETTINGS
 
 
@@ -225,6 +225,6 @@ def test_toggling_twice_returns_to_the_original(content: GameContent, hero: Char
     settings = AccessibilitySettings()
     opened = step(content, hero, begin(hero), "Настройки")
     once = step(content, hero, opened, "Переключить эмодзи", settings)
-    assert once.pending_settings is not None
-    twice = step(content, hero, once, "Переключить эмодзи", once.pending_settings)
-    assert twice.pending_settings == replace(settings, emoji=False)
+    assert once.pending.settings is not None
+    twice = step(content, hero, once, "Переключить эмодзи", once.pending.settings)
+    assert twice.pending.settings == replace(settings, emoji=False)

@@ -7,6 +7,9 @@ deliberate: a screen nobody listed is a screen nobody checked.
 
 from __future__ import annotations
 
+from dataclasses import replace
+from types import MappingProxyType
+
 import pytest
 
 from mmorpg.application.dto.creation import CharacterDraft
@@ -14,11 +17,12 @@ from mmorpg.domain.entities import (
     Character,
     GameContent,
     GeneratedLocation,
+    QuestLog,
     SkillLoadout,
     StatBlock,
 )
 from mmorpg.domain.entities.combat import CombatState
-from mmorpg.domain.entities.content import Item
+from mmorpg.domain.entities.content import Item, SkillKind
 from mmorpg.domain.entities.location import Enemy, EnemyKind
 from mmorpg.domain.procgen import generate_location
 from mmorpg.domain.rules.combat import start_combat
@@ -26,8 +30,12 @@ from mmorpg.domain.rules.economy import buy_price, roll_assortment
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.infrastructure.content import load_content
 from mmorpg.presentation.telegram.handlers import creation as handlers_creation
+from mmorpg.presentation.telegram.keyboards import labels
+from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import combat as combat_screens
 from mmorpg.presentation.telegram.screens import creation, play, shop
+from mmorpg.presentation.telegram.screens import quests as quest_screens
+from mmorpg.presentation.telegram.screens import skills as skill_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
@@ -71,11 +79,15 @@ def fighter(content: GameContent) -> Character:
         race_id="human",
         class_id="warrior",
         level=10,
+        gold=400,
+        health=90,
         loadout=SkillLoadout(
             actives=("warrior_cleave", "warrior_taunt", None, None, None, None),
             passives=("warrior_toughness", None, None),
             racial="race_human_second_wind",
+            ranks=MappingProxyType({"warrior_cleave": 3, "warrior_taunt": 1}),
         ),
+        quests=QuestLog(taken=MappingProxyType({"farhold_tallies": 2})),
     )
 
 
@@ -154,17 +166,55 @@ def all_screens(
             sample_location, sample_location.exit_node, cleared=0b101, notice="Узел пройден."
         ),
         play.character_screen(content, hero, derived_stats(content, hero)),
-        play.stub_screen("Таверна"),
+        play.character_screen(content, fighter, derived_stats(content, fighter)),
+        play.character_screen(
+            content,
+            replace(fighter, unspent_stat_points=3, unspent_skill_points=1),
+            derived_stats(content, fighter),
+        ),
+        play.stub_screen("Арена"),
+        skill_screens.skills_screen(content, fighter, PageState()),
+        skill_screens.skills_screen(content, hero, PageState(page=2)),
+        skill_screens.slots_screen(content, fighter),
+        skill_screens.pick_screen(content, fighter, SkillKind.ACTIVE, 2, PageState()),
+        skill_screens.pick_screen(content, hero, SkillKind.PASSIVE, 0, PageState()),
+        skill_screens.edge_screen(content, fighter, content.skill("warrior_cleave")),
+        quest_screens.journal_screen(content, fighter),
+        quest_screens.journal_screen(content, hero),
+        quest_screens.board_screen(content, hero, PageState()),
+        quest_screens.offer_screen(content, content.quest("farhold_tallies")),
+        city_screens.tavern_screen(content, fighter, content.city("farhold")),
+        city_screens.mentor_screen(content, fighter, content.city("farhold"), PageState()),
+        city_screens.bank_screen(content, fighter, content.city("farhold")),
+        city_screens.dungeon_screen(
+            content, fighter, content.city("farhold"), level=12, depth=1, total=3
+        ),
         combat_screens.combat_screen(content, fighter, sample_fight),
         combat_screens.bag_screen(content, (("small_healing_potion", "Малое зелье лечения", 3),)),
         combat_screens.bag_screen(content, ()),
         combat_screens.victory_screen(sample_fight),
-        combat_screens.defeat_screen(),
+        combat_screens.victory_screen(
+            sample_fight,
+            extra=("Уровень 11. Очков характеристик: 3, очков умений: 1.",),
+            rows=((labels.DUNGEON_DEEPER, labels.DUNGEON_LEAVE),),
+        ),
+        combat_screens.defeat_screen(42),
         combat_screens.escaped_screen(fled=True),
         shop.inventory_screen(
-            content, (shop.OwnedItem("small_healing_potion", 3),), PageState(), gold=120
+            content,
+            (shop.OwnedItem("small_healing_potion", 3), shop.OwnedItem("rusty_sword", 1)),
+            PageState(),
+            gold=120,
         ),
         shop.inventory_screen(content, (), PageState(), gold=0),
+        shop.sell_screen(
+            content,
+            (shop.OwnedItem("wolf_pelt", 4),),
+            {"wolf_pelt": 3},
+            PageState(),
+            gold=10,
+            city_name="Дальний Оплот",
+        ),
         shop.shop_screen(
             content,
             sample_stock,

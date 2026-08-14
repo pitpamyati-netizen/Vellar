@@ -48,7 +48,7 @@ from mmorpg.logging import configure_logging, get_logger
 from mmorpg.monitoring import install_slow_callback_detector
 from mmorpg.presentation.telegram.broadcast import ChannelBroadcaster
 from mmorpg.presentation.telegram.cleanup import MessageReaper
-from mmorpg.presentation.telegram.handlers import creation, group, play
+from mmorpg.presentation.telegram.handlers import combat, creation, group, play
 from mmorpg.presentation.telegram.middlewares.dependencies import (
     Dependencies,
     DependencyMiddleware,
@@ -99,6 +99,9 @@ async def build_application(settings: Settings) -> Application:
     dispatcher.message.middleware(ErrorMiddleware())
 
     dispatcher.include_router(creation.build_router())
+    # The fight router goes first: it claims the two combat states, and the play
+    # router below filters on the whole Play group, which includes them.
+    dispatcher.include_router(combat.build_router())
     dispatcher.include_router(play.build_router())
 
     # The group router owns the deletion clock for what it posts there. Its tasks

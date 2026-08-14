@@ -35,6 +35,7 @@ from mmorpg.domain.entities.content import (
     Trait,
 )
 from mmorpg.domain.entities.location import EnemyArchetype, EnemyKind
+from mmorpg.domain.entities.quest import ObjectiveKind, Quest
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 
 CONTENT_FILES = (
@@ -45,7 +46,12 @@ CONTENT_FILES = (
     "skills.toml",
     "items.toml",
     "enemies.toml",
+    "quests.toml",
 )
+
+# Node kinds a "search" contract may ask for. Kept as strings rather than as an
+# import of NodeKind, because content speaks the content vocabulary.
+SEARCHABLE_NODES = frozenset({"gather", "cache", "shrine", "event"})
 
 EXPECTED_RACES = 16
 EXPECTED_CLASSES = 8
@@ -105,6 +111,7 @@ def load_content(content_dir: Path) -> GameContent:
     item_ids = {item.id for item in items}
     enemies, elite_titles = _parse_enemies(raw["enemies.toml"], item_ids, problems)
     _validate_enemies(enemies, cities, problems)
+    quests = _parse_quests(raw["quests.toml"], item_ids, cities, problems)
 
     rules = _build_rules(raw, problems)
 
@@ -126,6 +133,7 @@ def load_content(content_dir: Path) -> GameContent:
         rarities=rarities,
         enemy_archetypes=enemies,
         elite_titles=elite_titles,
+        quests=quests,
         trait_categories=categories,
         inverted_modifiers=inverted_modifiers,
         rules=rules,
@@ -583,6 +591,76 @@ def _parse_enemies(
         )
     _check_unique((enemy.id for enemy in parsed), "enemies.toml", problems)
     return tuple(parsed), elite_titles
+
+
+def _parse_quests(
+    raw: Mapping[str, Any],
+    item_ids: set[str],
+    cities: Sequence[City],
+    problems: list[str],
+) -> tuple[Quest, ...]:
+    """Contracts. A broken contract is a dead end for a player, so it is refused.
+
+    Everything a contract points at has to exist before the game starts: the city
+    that hands it out, the item it pays with, and the contract it follows.
+    """
+    known_cities = {city.id for city in cities}
+    known_objectives = {kind.value for kind in ObjectiveKind}
+    enemy_kinds = {kind.value for kind in EnemyKind}
+
+    parsed: list[Quest] = []
+    for entry in raw.get("quest", ()):
+        quest_id = str(entry.get("id", ""))
+        city_id = str(entry.get("city", ""))
+        objective_raw = str(entry.get("objective", ""))
+        if city_id not in known_cities:
+            problems.append(f"quests.toml: {quest_id} belongs to unknown city {city_id!r}")
+            continue
+        if objective_raw not in known_objectives:
+            problems.append(f"quests.toml: {quest_id} has unknown objective {objective_raw!r}")
+            continue
+
+        objective = ObjectiveKind(objective_raw)
+        target_kind = str(entry.get("target_kind", ""))
+        if target_kind:
+            allowed = SEARCHABLE_NODES if objective is ObjectiveKind.SEARCH else enemy_kinds
+            if target_kind not in allowed:
+                problems.append(
+                    f"quests.toml: {quest_id} narrows to unknown target {target_kind!r}"
+                )
+        reward_item = str(entry.get("reward_item", ""))
+        if reward_item and reward_item not in item_ids:
+            problems.append(f"quests.toml: {quest_id} pays with unknown item {reward_item!r}")
+        if int(entry.get("target_count", 0)) < 1:
+            problems.append(f"quests.toml: {quest_id} counts to less than one")
+
+        parsed.append(
+            Quest(
+                id=quest_id,
+                city_id=city_id,
+                level=int(entry.get("level", 1)),
+                name=str(entry["name"]),
+                giver=str(entry["giver"]),
+                intro=str(entry.get("intro", "")),
+                terms=str(entry["terms"]),
+                objective=objective,
+                target_count=int(entry.get("target_count", 1)),
+                target_kind=target_kind,
+                reward_gold=int(entry.get("reward_gold", 0)),
+                reward_experience=int(entry.get("reward_experience", 0)),
+                reward_item=reward_item,
+                follows=str(entry.get("follows", "")),
+            )
+        )
+
+    _check_unique((quest.id for quest in parsed), "quests.toml", problems)
+    known = {quest.id for quest in parsed}
+    for quest in parsed:
+        if quest.follows and quest.follows not in known:
+            problems.append(f"quests.toml: {quest.id} follows unknown contract {quest.follows!r}")
+        if quest.follows == quest.id:
+            problems.append(f"quests.toml: {quest.id} follows itself")
+    return tuple(parsed)
 
 
 def _validate_enemies(

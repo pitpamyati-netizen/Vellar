@@ -14,6 +14,7 @@ from types import MappingProxyType
 import pytest
 
 from mmorpg.domain.entities.character import Character, Equipment, SkillLoadout
+from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatBlock
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeStatus
 from mmorpg.domain.ports.repositories import AccessibilitySettings, User
@@ -91,6 +92,9 @@ def a_character(user_id: int, name: str = "Тестовый") -> Character:
         city_id="farhold",
         unspent_stat_points=5,
         unspent_skill_points=2,
+        health=33,
+        bank_gold=900,
+        quests=QuestLog(taken=MappingProxyType({"farhold_tallies": 2}), done=("prologue",)),
     )
 
 
@@ -233,6 +237,10 @@ async def test_a_character_survives_a_round_trip(pool, clean_user) -> None:
     assert dict(read.loadout.ranks) == {"cleave": 3}
     assert dict(read.loadout.edges) == {"cleave": "wide"}
     assert dict(read.equipment.items) == {"weapon": "iron_axe"}
+    assert read.health == 33
+    assert read.bank_gold == 900
+    assert dict(read.quests.taken) == {"farhold_tallies": 2}
+    assert read.quests.done == ("prologue",)
     assert read.unspent_stat_points == 5
 
 
@@ -241,11 +249,25 @@ async def test_saving_a_character_updates_every_column(pool, clean_user) -> None
     characters = PostgresCharacterRepository(pool)
     created = await characters.create(a_character(clean_user))
 
-    await characters.save(replace(created, level=42, experience=99_999, gold=7, city_id="dunmoor"))
+    await characters.save(
+        replace(
+            created,
+            level=42,
+            experience=99_999,
+            gold=7,
+            city_id="dunmoor",
+            health=11,
+            bank_gold=1_500,
+            quests=QuestLog(taken=MappingProxyType({"farhold_tallies": 3}), done=()),
+        )
+    )
 
     read = await characters.get(created.id)
     assert read is not None
     assert (read.level, read.experience, read.gold, read.city_id) == (42, 99_999, 7, "dunmoor")
+    assert (read.health, read.bank_gold) == (11, 1_500)
+    assert read.quests.progress("farhold_tallies") == 3
+    assert read.quests.done == ()
 
 
 async def test_the_active_character_is_the_first_one(pool, clean_user) -> None:

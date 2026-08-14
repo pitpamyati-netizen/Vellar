@@ -104,6 +104,30 @@ def payout(price: int, *, percent: int = TRADE_TAX_PERCENT) -> int:
     return max(0, price - trade_tax(price, percent=percent))
 
 
+# --- what a city charges for its services ----------------------------
+#
+# A bed, a teacher and a strongbox are the three ways gold leaves a player
+# without another player receiving it. All three scale with level, because a
+# level 40 character earns in one watch what a level 4 character earns in ten.
+
+INN_PRICE_BASE = 5
+INN_PRICE_PER_LEVEL = 3
+STRAW_HEAL_PERCENT = 30
+MENTOR_PRICE_BASE = 40
+MENTOR_PRICE_PER_LEVEL = 10
+BANK_DEPOSIT_STEP = 50
+
+
+def inn_price(level: int) -> int:
+    """A night at the inn: full health, priced by what the guest can pay."""
+    return max(1, INN_PRICE_BASE + INN_PRICE_PER_LEVEL * max(0, level - 1))
+
+
+def mentor_price(level: int) -> int:
+    """What a teacher charges to unpick a rank or an edge and hand the point back."""
+    return max(1, MENTOR_PRICE_BASE + MENTOR_PRICE_PER_LEVEL * max(0, level - 1))
+
+
 def affordable(items: Sequence[Item], gold: int, prices: dict[str, int]) -> tuple[Item, ...]:
     return tuple(item for item in items if prices.get(item.id, 0) <= gold)
 
