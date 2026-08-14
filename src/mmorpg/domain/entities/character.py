@@ -111,6 +111,9 @@ class Character:
     level: int = 1
     experience: int = 0
     gold: int = 0
+    # Gold left in a city vault. Stored separately from the purse because nothing
+    # in the game can take it from there - see ``domain.rules.bank``.
+    bank_gold: int = 0
     allocated: StatBlock = field(default_factory=StatBlock)
     trait_ids: tuple[str, ...] = ()
     loadout: SkillLoadout = field(default_factory=SkillLoadout)

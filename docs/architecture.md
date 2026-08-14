@@ -73,14 +73,16 @@ screen. A handler is then only four lines: load state, call `advance`, render,
 send one message.
 
 Anything that writes to a database is *recorded as an intent* on the state
-(`pending_purchase`, `pending_settings`) and executed by the handler, so the flow
-stays pure and the write stays in one place.
+(`pending_purchase`, `pending_settings`, `pending_stat`, `pending_transfer`) and
+executed by the handler, so the flow stays pure and the write stays in one place.
+The handler applies an intent through the same domain function that produced the
+sentence the player was told, so the screen and the row can never disagree.
 
 ## Storage split
 
 | Where | What |
 | --- | --- |
-| PostgreSQL | users, characters (raw stats, level, experience, gold), inventory, equipment, skill loadout with ranks and edges, chosen traits, city and quest progress, accessibility settings, world seed, trades (pending escrow and the settled journal), privacy (profile visibility on the user row, black lists in `blocks`) |
+| PostgreSQL | users, characters (raw stats, level, experience, gold, vault gold), inventory, equipment, skill loadout with ranks and edges, chosen traits, city and quest progress, accessibility settings, world seed, trades (pending escrow and the settled journal), privacy (profile visibility on the user row, black lists in `blocks`) |
 | Redis (with TTL) | FSM state, current screen, active combat, location deltas for the current cycle, update deduplication, shop assortment cache |
 | Nowhere - recomputed | location layout, nodes, enemies, loot, total character stats, shop assortment (all pure functions of seed and cycle) |
 

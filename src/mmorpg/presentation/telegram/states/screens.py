@@ -42,7 +42,10 @@ class Play(StatesGroup):
     character = State()
     skills = State()
     settings = State()
-    stub = State()
+    tavern = State()
+    mentor = State()
+    bank = State()
+    dungeons = State()
 
 
 # Which screen belongs to which state. The resolver uses this to tell the player
@@ -68,7 +71,10 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.CHARACTER: Play.character,
     ScreenId.SKILLS: Play.skills,
     ScreenId.SETTINGS: Play.settings,
-    ScreenId.STUB: Play.stub,
+    ScreenId.TAVERN: Play.tavern,
+    ScreenId.MENTOR: Play.mentor,
+    ScreenId.BANK: Play.bank,
+    ScreenId.DUNGEONS: Play.dungeons,
 }
 
 # The single step "back" leads to, per screen. Creation walks backwards through
@@ -94,7 +100,10 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.CHARACTER: ScreenId.MAIN_MENU,
     ScreenId.SKILLS: ScreenId.CHARACTER,
     ScreenId.SETTINGS: ScreenId.MAIN_MENU,
-    ScreenId.STUB: ScreenId.CITY,
+    ScreenId.TAVERN: ScreenId.CITY,
+    ScreenId.MENTOR: ScreenId.CITY,
+    ScreenId.BANK: ScreenId.CITY,
+    ScreenId.DUNGEONS: ScreenId.CITY,
 }
 
 CREATION_ORDER: tuple[ScreenId, ...] = (
@@ -134,9 +143,15 @@ class NavigationStack:
 
     @classmethod
     def deserialise(cls, raw: str) -> NavigationStack:
+        """Rebuild the stack, dropping screens the game no longer has.
+
+        A player can be standing on a screen that was renamed or removed between
+        two releases; their walk back is then shorter, but nothing raises.
+        """
         if not raw:
             return cls(())
-        return cls(tuple(ScreenId(part) for part in raw.split(",") if part))
+        known = {screen.value for screen in ScreenId}
+        return cls(tuple(ScreenId(part) for part in raw.split(",") if part in known))
 
 
 def back_target(screen: ScreenId) -> ScreenId | None:

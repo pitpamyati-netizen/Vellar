@@ -22,7 +22,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     import asyncpg
 
 CHARACTER_COLUMNS = """
-    id, user_id, name, race_id, class_id, level, experience, gold,
+    id, user_id, name, race_id, class_id, level, experience, gold, bank_gold,
     stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
     trait_ids, loadout, equipment, city_id, unspent_stat_points, unspent_skill_points
 """
@@ -47,6 +47,7 @@ def _character_from_row(row: Any) -> Character:
         level=row["level"],
         experience=row["experience"],
         gold=row["gold"],
+        bank_gold=row["bank_gold"],
         allocated=StatBlock(
             STR=row["stat_str"],
             AGI=row["stat_agi"],
@@ -229,13 +230,13 @@ class PostgresCharacterRepository:
         row = await self._pool.fetchrow(
             """
             INSERT INTO characters (
-                user_id, name, race_id, class_id, level, experience, gold,
+                user_id, name, race_id, class_id, level, experience, gold, bank_gold,
                 stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
                 trait_ids, loadout, equipment, city_id,
                 unspent_stat_points, unspent_skill_points
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                    $15, $16::jsonb, $17::jsonb, $18, $19, $20)
+                    $15, $16, $17::jsonb, $18::jsonb, $19, $20, $21)
             RETURNING id
             """,
             character.user_id,
@@ -245,6 +246,7 @@ class PostgresCharacterRepository:
             character.level,
             character.experience,
             character.gold,
+            character.bank_gold,
             character.allocated.STR,
             character.allocated.AGI,
             character.allocated.END,
@@ -265,11 +267,11 @@ class PostgresCharacterRepository:
         await self._pool.execute(
             """
             UPDATE characters SET
-                level = $2, experience = $3, gold = $4,
-                stat_str = $5, stat_agi = $6, stat_end = $7, stat_int = $8,
-                stat_wis = $9, stat_cha = $10, stat_lck = $11,
-                trait_ids = $12, loadout = $13::jsonb, equipment = $14::jsonb,
-                city_id = $15, unspent_stat_points = $16, unspent_skill_points = $17,
+                level = $2, experience = $3, gold = $4, bank_gold = $5,
+                stat_str = $6, stat_agi = $7, stat_end = $8, stat_int = $9,
+                stat_wis = $10, stat_cha = $11, stat_lck = $12,
+                trait_ids = $13, loadout = $14::jsonb, equipment = $15::jsonb,
+                city_id = $16, unspent_stat_points = $17, unspent_skill_points = $18,
                 updated_at = now()
             WHERE id = $1
             """,
@@ -277,6 +279,7 @@ class PostgresCharacterRepository:
             character.level,
             character.experience,
             character.gold,
+            character.bank_gold,
             character.allocated.STR,
             character.allocated.AGI,
             character.allocated.END,

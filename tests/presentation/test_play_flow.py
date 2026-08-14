@@ -83,7 +83,7 @@ def test_entering_a_city(content: GameContent, hero: Character, in_city: PlaySta
     assert "Дальний Оплот" in render(content, hero, in_city, world_seed=WORLD_SEED).text()
 
 
-# --- stubs ------------------------------------------------------------
+# --- shop and inventory -----------------------------------------------
 
 
 def test_shop_and_inventory_are_real_screens(
@@ -148,18 +148,160 @@ def test_buying_defers_the_write_to_the_handler(
     assert "Не хватает" in broke.notice
 
 
-@pytest.mark.parametrize("section", ["Данжи", "Таверна", "Наставник", "Банк"])
-def test_unfinished_sections_answer_with_a_working_back(
-    content: GameContent, hero: Character, in_city: PlayState, section: str
+# --- city sections ----------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("section", "screen_id"),
+    [
+        ("Данжи", ScreenId.DUNGEONS),
+        ("Таверна", ScreenId.TAVERN),
+        ("Наставник", ScreenId.MENTOR),
+        ("Банк", ScreenId.BANK),
+    ],
+)
+def test_every_city_section_is_a_real_screen(
+    content: GameContent, hero: Character, in_city: PlayState, section: str, screen_id: ScreenId
 ) -> None:
-    """A stub is a real screen with a working Назад, never silence."""
-    stub = step(content, hero, in_city, section)
-    assert stub.screen is ScreenId.STUB
-    screen = render(content, hero, stub, world_seed=WORLD_SEED)
-    assert section in screen.text()
-    assert "ещё не готов" in screen.text()
+    """No section answers with "not ready yet": each one opens and walks back."""
+    opened = step(content, hero, in_city, section)
+    assert opened.screen is screen_id
+    screen = render(content, hero, opened, world_seed=WORLD_SEED, cycle=CYCLE)
+    assert screen.text()
+    assert "ещё не готов" not in screen.text()
     assert screen.all_rows()[-1][0].text == "Назад"
-    assert step(content, hero, stub, "Назад").screen is ScreenId.CITY
+    assert step(content, hero, opened, "Назад").screen is ScreenId.CITY
+
+
+def test_the_tavern_reads_the_watch_summary(
+    content: GameContent, hero: Character, in_city: PlayState
+) -> None:
+    from mmorpg.presentation.telegram.flows.play import rumours_of
+
+    tavern = step(content, hero, in_city, "Таверна")
+    rumours = rumours_of(content, hero, tavern, world_seed=WORLD_SEED, cycle=CYCLE)
+    assert rumours
+    text = render(content, hero, tavern, world_seed=WORLD_SEED, cycle=CYCLE).text()
+    assert rumours[0].location_name in text
+
+    asked = advance(
+        content,
+        hero,
+        tavern,
+        f"Расспросить: {rumours[0].location_name}",
+        cycle=CYCLE,
+        world_seed=WORLD_SEED,
+    )
+    assert rumours[0].location_name in asked.notice
+    assert "стражи" in asked.notice
+
+
+def test_the_mentor_defers_the_point_to_the_handler(
+    content: GameContent, hero: Character, in_city: PlayState
+) -> None:
+    """The flow decides which stat grows; the handler saves the character."""
+    trainee = replace(hero, unspent_stat_points=1)
+    mentor = step(content, trainee, in_city, "Наставник")
+
+    spent = advance(content, trainee, mentor, "Поднять силу", cycle=CYCLE, world_seed=WORLD_SEED)
+    assert spent.pending_stat == "STR"
+    assert "Свободных очков: 0" in spent.notice
+
+    empty = advance(content, hero, mentor, "Поднять силу", cycle=CYCLE, world_seed=WORLD_SEED)
+    assert empty.pending_stat == ""
+    assert "Свободных очков нет" in empty.notice
+
+
+def test_the_vault_takes_gold_in_and_hands_it_back(
+    content: GameContent, hero: Character, in_city: PlayState
+) -> None:
+    rich = replace(hero, gold=1000)
+    bank = step(content, rich, in_city, "Банк")
+
+    deposited = advance(content, rich, bank, "Положить 100", cycle=CYCLE, world_seed=WORLD_SEED)
+    assert deposited.pending_transfer is not None
+    assert deposited.pending_transfer.amount == 100
+    assert deposited.pending_transfer.fee == 2
+
+    # Typing the same thing is the same act (accessibility rule 10).
+    typed = advance(content, rich, bank, "положить 100", cycle=CYCLE, world_seed=WORLD_SEED)
+    assert typed.pending_transfer == deposited.pending_transfer
+
+    holder = replace(hero, bank_gold=50)
+    stored = step(content, holder, in_city, "Банк")
+    taken = advance(content, holder, stored, "Снять всё", cycle=CYCLE, world_seed=WORLD_SEED)
+    assert taken.pending_transfer is not None
+    assert taken.pending_transfer.amount == 50
+    assert taken.pending_transfer.fee == 0
+
+    broke = advance(content, hero, bank, "Положить 1000", cycle=CYCLE, world_seed=WORLD_SEED)
+    assert broke.pending_transfer is None
+    assert broke.notice
+
+
+async def test_the_handler_writes_what_the_flow_decided(
+    content: GameContent, hero: Character, in_city: PlayState
+) -> None:
+    """The intent is not a promise: the character comes back changed and saved."""
+    from mmorpg.infrastructure.persistence.memory import InMemoryCharacterRepository
+    from mmorpg.presentation.telegram.handlers.play import _settle
+
+    characters = InMemoryCharacterRepository()
+    stored = await characters.create(replace(hero, gold=500, unspent_stat_points=1))
+
+    mentor = step(content, stored, in_city, "Наставник")
+    trained = advance(
+        content, stored, mentor, "Поднять выносливость", cycle=CYCLE, world_seed=WORLD_SEED
+    )
+    after_lesson = await _settle(characters, stored, trained)
+    assert after_lesson.allocated.END == stored.allocated.END + 1
+    assert after_lesson.unspent_stat_points == 0
+
+    bank = step(content, after_lesson, in_city, "Банк")
+    moved = advance(content, after_lesson, bank, "Положить 200", cycle=CYCLE, world_seed=WORLD_SEED)
+    after_deposit = await _settle(characters, after_lesson, moved)
+    assert after_deposit.bank_gold == 200
+    assert after_deposit.gold == after_lesson.gold - 204
+
+    saved = await characters.get(stored.id)
+    assert saved == after_deposit
+
+
+def test_a_dungeon_entrance_can_be_looked_at(
+    content: GameContent, hero: Character, in_city: PlayState
+) -> None:
+    from mmorpg.presentation.telegram.flows.play import dungeons_of
+
+    gates = step(content, hero, in_city, "Данжи")
+    dungeons = dungeons_of(content, hero, gates, world_seed=WORLD_SEED)
+    assert dungeons
+
+    looked = advance(
+        content,
+        hero,
+        gates,
+        f"{dungeons[0].name}, осмотреть вход",
+        cycle=CYCLE,
+        world_seed=WORLD_SEED,
+    )
+    assert "первый ярус" in looked.notice
+    assert looked.screen is ScreenId.DUNGEONS
+
+
+def test_skills_open_from_the_menu_and_read_a_skill_back(
+    content: GameContent, hero: Character, menu: PlayState
+) -> None:
+    from mmorpg.presentation.telegram.screens.skills import known_skills
+
+    skills = step(content, hero, menu, "Умения")
+    assert skills.screen is ScreenId.SKILLS
+    text = render(content, hero, skills, world_seed=WORLD_SEED).text()
+    assert "Активные слоты:" in text
+
+    first = known_skills(content, hero)[0]
+    read = step(content, hero, skills, f"{first.name}, активное")
+    assert first.name in read.notice
+    assert step(content, hero, skills, "Назад").screen is ScreenId.MAIN_MENU
 
 
 # --- locations --------------------------------------------------------

@@ -16,9 +16,13 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from mmorpg.config import Settings
+from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
+from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.ports.repositories import CharacterRepository, UserRepository
 from mmorpg.domain.procgen.seeds import cycle_index
+from mmorpg.domain.rules.bank import apply_transfer
+from mmorpg.domain.rules.training import train_stat
 from mmorpg.presentation.telegram.flows.play import PlayState, advance, begin, render
 from mmorpg.presentation.telegram.handlers.creation import welcome_screen
 from mmorpg.presentation.telegram.messaging import send_screen
@@ -60,19 +64,43 @@ async def play(
     data = await state.get_data()
     flow = PlayState.deserialise(data[STATE_KEY]) if data.get(STATE_KEY) else begin(character)
 
+    cycle = cycle_index(int(time.time()), settings.cycle_seconds)
     updated = advance(
         content,
         character,
         flow,
         message.text,
-        cycle=cycle_index(int(time.time()), settings.cycle_seconds),
+        cycle=cycle,
         world_seed=settings.world_seed,
     )
+    character = await _settle(characters, character, updated)
 
     await state.set_state(STATE_FOR_SCREEN[updated.screen])
     await state.update_data({STATE_KEY: updated.serialise()})
     await send_screen(
         message,
-        render(content, character, updated, world_seed=settings.world_seed),
+        render(content, character, updated, world_seed=settings.world_seed, cycle=cycle),
         emoji=emoji,
     )
+
+
+async def _settle(
+    characters: CharacterRepository, character: Character, state: PlayState
+) -> Character:
+    """Perform what the flow decided.
+
+    The flow records an intent and stays pure; the write happens here, through the
+    same domain function that produced the sentence the player was told. One save
+    per update at most, and none at all when nothing changed.
+    """
+    changed = character
+    if state.pending_stat:
+        trained = train_stat(changed, StatCode(state.pending_stat))
+        if trained is not None:
+            changed = trained
+    if state.pending_transfer is not None:
+        changed = apply_transfer(changed, state.pending_transfer)
+
+    if changed is not character:
+        await characters.save(changed)
+    return changed

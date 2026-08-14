@@ -135,6 +135,4 @@ def resolve(text: str, screen: Screen) -> Command:
 
 def stale_button_answer(screen_title: str) -> str:
     """The answer to a button that belongs to a different screen (rule 12)."""
-    return (
-        f"Это действие сейчас недоступно, вы находитесь в: {screen_title}. Ниже актуальные кнопки."
-    )
+    return f"Действие сейчас недоступно, вы находитесь в: {screen_title}. Ниже актуальные кнопки."

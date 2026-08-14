@@ -209,7 +209,7 @@ def _handle_race(content: GameContent, state: CreationState, command: Command) -
                 f"Раса {race.name}: {screens.describe_bonuses(race.bonuses)}. "
                 "Нажмите «Продолжить» или выберите другую расу."
             )
-    return state.with_notice("Не узнал эту расу. Нажмите расу из списка.")
+    return state.with_notice("Не узнал расу. Нажмите расу из списка.")
 
 
 def _handle_class(content: GameContent, state: CreationState, command: Command) -> CreationState:
@@ -232,7 +232,7 @@ def _handle_class(content: GameContent, state: CreationState, command: Command) 
                 f"Класс {klass.name}: {klass.role.lower()}, ресурс {klass.resource.name}. "
                 "Нажмите «Продолжить» или выберите другой класс."
             )
-    return state.with_notice("Не узнал этот класс. Нажмите класс из списка.")
+    return state.with_notice("Не узнал класс. Нажмите класс из списка.")
 
 
 def _visible_traits(content: GameContent, state: CreationState) -> tuple[str, ...]:
@@ -280,7 +280,7 @@ def _handle_traits(content: GameContent, state: CreationState, command: Command)
             return replace(state, draft=updated).with_notice(
                 f"Особенность {trait.name} {verb}. {trait.text}"
             )
-    return state.with_notice("Не узнал эту особенность. Нажмите её в списке.")
+    return state.with_notice("Не узнал особенность. Нажмите её в списке.")
 
 
 def _handle_points(content: GameContent, state: CreationState, command: Command) -> CreationState:
@@ -309,7 +309,7 @@ def _handle_points(content: GameContent, state: CreationState, command: Command)
             return replace(state, draft=updated).with_notice(
                 f"{name} повышена. Осталось распределить {left}."
             )
-    return state.with_notice("Не узнал эту характеристику.")
+    return state.with_notice("Не узнал характеристику.")
 
 
 def _handle_confirm(content: GameContent, state: CreationState, command: Command) -> CreationState:

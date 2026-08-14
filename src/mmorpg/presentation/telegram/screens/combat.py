@@ -87,7 +87,7 @@ def describe_event(event: CombatEvent) -> str:
         case EventKind.ON_COOLDOWN:
             return f"Умение {event.skill_name} на откате ещё {turns(event.turns)}."
         case EventKind.EMPTY_SLOT:
-            return "Этот слот пуст. Наберите умения в меню, вне боя."
+            return "Слот пуст. Наберите умения в меню, вне боя."
         case EventKind.TURN_SKIPPED:
             return f"{event.actor} пропускает ход."
         case _:

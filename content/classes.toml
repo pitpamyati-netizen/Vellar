@@ -59,7 +59,7 @@ health = { base = 95, per_level = 7.5, per_endurance = 6.0 }
 id = "rogue"
 name = "Разбойник"
 role = "Максимальный урон и скрытность"
-description = "Бьёт один раз и очень точно выбирает этот раз."
+description = "Бьёт один раз и очень точно выбирает момент."
 key_stats = ["AGI", "LCK"]
 bonuses = { AGI = 2, LCK = 1 }
 resource = { id = "energy", name = "Энергия", base = 60, per_level = 1.0, stat = "AGI", per_stat = 1.0, regen_per_turn = 10 }

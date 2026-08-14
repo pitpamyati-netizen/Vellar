@@ -7,6 +7,8 @@ deliberate: a screen nobody listed is a screen nobody checked.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from mmorpg.application.dto.creation import CharacterDraft
@@ -21,13 +23,17 @@ from mmorpg.domain.entities.combat import CombatState
 from mmorpg.domain.entities.content import Item
 from mmorpg.domain.entities.location import Enemy, EnemyKind
 from mmorpg.domain.procgen import generate_location
+from mmorpg.domain.procgen.dungeons import Dungeon, roll_dungeons
 from mmorpg.domain.rules.combat import start_combat
 from mmorpg.domain.rules.economy import buy_price, roll_assortment
 from mmorpg.domain.rules.stats import derived_stats
+from mmorpg.domain.rules.tavern import Rumour, roll_rumours
 from mmorpg.infrastructure.content import load_content
 from mmorpg.presentation.telegram.handlers import creation as handlers_creation
 from mmorpg.presentation.telegram.screens import combat as combat_screens
 from mmorpg.presentation.telegram.screens import creation, play, shop
+from mmorpg.presentation.telegram.screens import services as service_screens
+from mmorpg.presentation.telegram.screens import skills as skill_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
@@ -104,6 +110,22 @@ def sample_stock(content: GameContent) -> tuple[Item, ...]:
     )
 
 
+@pytest.fixture(scope="session")
+def sample_rumours(content: GameContent) -> tuple[Rumour, ...]:
+    return roll_rumours(world_seed="vellar-test", city=content.city("farhold"), cycle=100, level=3)
+
+
+@pytest.fixture(scope="session")
+def sample_dungeons(content: GameContent) -> tuple[Dungeon, ...]:
+    city = content.city("farhold")
+    return roll_dungeons(
+        world_seed="vellar-test",
+        city_id=city.id,
+        level_min=city.level_min,
+        level_max=city.level_max,
+    )
+
+
 @pytest.fixture
 def complete_draft() -> CharacterDraft:
     return CharacterDraft(
@@ -124,6 +146,8 @@ def all_screens(
     fighter: Character,
     sample_fight: CombatState,
     sample_stock: tuple[Item, ...],
+    sample_rumours: tuple[Rumour, ...],
+    sample_dungeons: tuple[Dungeon, ...],
 ) -> list[Screen]:
     """Every screen in the game, rendered with sample data.
 
@@ -154,7 +178,23 @@ def all_screens(
             sample_location, sample_location.exit_node, cleared=0b101, notice="Узел пройден."
         ),
         play.character_screen(content, hero, derived_stats(content, hero)),
-        play.stub_screen("Таверна"),
+        skill_screens.skills_screen(content, hero, PageState()),
+        skill_screens.skills_screen(content, fighter, PageState(page=2)),
+        service_screens.tavern_screen(content.city("farhold"), sample_rumours),
+        service_screens.tavern_screen(content.city("farhold"), ()),
+        service_screens.mentor_screen(content, content.city("farhold"), hero),
+        service_screens.mentor_screen(
+            content,
+            content.city("farhold"),
+            replace(hero, unspent_stat_points=3),
+            notice="Сила теперь 7. Свободных очков: 2.",
+        ),
+        service_screens.bank_screen(content.city("farhold"), hero),
+        service_screens.bank_screen(
+            content.city("farhold"), replace(hero, gold=1200, bank_gold=400)
+        ),
+        service_screens.dungeons_screen(content.city("farhold"), sample_dungeons, hero),
+        service_screens.dungeons_screen(content.city("farhold"), (), hero),
         combat_screens.combat_screen(content, fighter, sample_fight),
         combat_screens.bag_screen(content, (("small_healing_potion", "Малое зелье лечения", 3),)),
         combat_screens.bag_screen(content, ()),

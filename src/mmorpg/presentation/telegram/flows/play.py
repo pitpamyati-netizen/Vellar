@@ -12,29 +12,44 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import GameContent, Item
+from mmorpg.domain.entities.content import City, GameContent, Item
 from mmorpg.domain.entities.location import GeneratedLocation, NodeKind
+from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.ports.repositories import AccessibilitySettings
+from mmorpg.domain.procgen.dungeons import Dungeon, dungeon_floor, roll_dungeons
 from mmorpg.domain.procgen.location import cleared_mask, generate_location, is_cleared
+from mmorpg.domain.rules.bank import (
+    Transfer,
+    TransferKind,
+    VaultRefusal,
+    apply_transfer,
+    plan_deposit,
+    plan_withdrawal,
+)
 from mmorpg.domain.rules.stats import derived_stats
+from mmorpg.domain.rules.tavern import Rumour, roll_rumours
+from mmorpg.domain.rules.training import train_stat
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.routing import Command, Intent, resolve
 from mmorpg.presentation.telegram.screens import play as screens
+from mmorpg.presentation.telegram.screens import services as service_screens
 from mmorpg.presentation.telegram.screens import settings as settings_screens
 from mmorpg.presentation.telegram.screens import shop as shop_screens
+from mmorpg.presentation.telegram.screens import skills as skill_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
+from mmorpg.presentation.telegram.screens.format import gold as gold_words
 from mmorpg.presentation.telegram.screens.paginated import PageState, total_pages
 from mmorpg.presentation.telegram.screens.shop import OwnedItem
 from mmorpg.presentation.telegram.states.screens import NavigationStack, back_target
 
-# Sections that exist as screens but have no content yet. Each one is a real
-# screen with a working "Назад" - never silence.
-STUBS: dict[str, str] = {
-    labels.DUNGEONS.text: "Данжи",
-    labels.TAVERN.text: "Таверна",
-    labels.MENTOR.text: "Наставник",
-    labels.BANK.text: "Банк",
-    labels.SKILLS.text: "Умения",
+# Which city screen button opens which section.
+CITY_SECTIONS: dict[str, ScreenId] = {
+    labels.LOCATIONS.text: ScreenId.LOCATION_LIST,
+    labels.SHOP.text: ScreenId.SHOP,
+    labels.DUNGEONS.text: ScreenId.DUNGEONS,
+    labels.TAVERN.text: ScreenId.TAVERN,
+    labels.MENTOR.text: ScreenId.MENTOR,
+    labels.BANK.text: ScreenId.BANK,
 }
 
 DEFAULT_SETTINGS = AccessibilitySettings()
@@ -80,13 +95,15 @@ class PlayState:
     location_page: PageState = field(default_factory=PageState)
     city_id: str = ""
     session: LocationSession = field(default_factory=LocationSession)
-    stub_title: str = ""
     notice: str = ""
     list_page: PageState = field(default_factory=PageState)
     # Set when the player pressed "buy": the handler performs the purchase, since
-    # writing to the database is not the flow's job. Same for a settings switch.
+    # writing to the database is not the flow's job. Same for a settings switch,
+    # for a point placed at the mentor and for gold moved at the vault.
     pending_purchase: str = ""
     pending_settings: AccessibilitySettings | None = None
+    pending_stat: str = ""
+    pending_transfer: Transfer | None = None
 
     def at(self, screen: ScreenId) -> PlayState:
         return replace(self, screen=screen, stack=self.stack.push(screen), notice="")
@@ -109,7 +126,6 @@ class PlayState:
                     self.session.node,
                     self.session.cleared,
                 ],
-                "stub": self.stub_title,
             },
             ensure_ascii=False,
         )
@@ -118,8 +134,13 @@ class PlayState:
     def deserialise(cls, raw: str) -> PlayState:
         data = json.loads(raw)
         city_id, slot, cycle, node, cleared = data.get("session", ["", 0, 0, 0, 0])
+        # A screen that no longer exists - a section rebuilt between releases -
+        # puts the player in the main menu rather than raising at them.
+        stored = data.get("screen", "")
+        known = {item.value for item in ScreenId}
+        screen = ScreenId(stored) if stored in known else ScreenId.MAIN_MENU
         return cls(
-            screen=ScreenId(data["screen"]),
+            screen=screen,
             stack=NavigationStack.deserialise(data.get("stack", "")),
             world_page=PageState(page=int(data.get("world_page", 1))),
             location_page=PageState(page=int(data.get("location_page", 1))),
@@ -131,7 +152,6 @@ class PlayState:
                 node=int(node),
                 cleared=int(cleared),
             ),
-            stub_title=data.get("stub", ""),
         )
 
 
@@ -157,12 +177,42 @@ def build_location(
     )
 
 
+def city_of(content: GameContent, character: Character, state: PlayState) -> City:
+    return content.city(state.city_id or character.city_id)
+
+
+def rumours_of(
+    content: GameContent, character: Character, state: PlayState, *, world_seed: str, cycle: int
+) -> tuple[Rumour, ...]:
+    """The watch summary the tavern is repeating right now."""
+    return roll_rumours(
+        world_seed=world_seed,
+        city=city_of(content, character, state),
+        cycle=cycle,
+        level=character.level,
+    )
+
+
+def dungeons_of(
+    content: GameContent, character: Character, state: PlayState, *, world_seed: str
+) -> tuple[Dungeon, ...]:
+    """The runs under the city. They do not rotate with the watch."""
+    city = city_of(content, character, state)
+    return roll_dungeons(
+        world_seed=world_seed,
+        city_id=city.id,
+        level_min=city.level_min,
+        level_max=city.level_max,
+    )
+
+
 def render(
     content: GameContent,
     character: Character,
     state: PlayState,
     *,
     world_seed: str,
+    cycle: int = 0,
     goods: Goods | None = None,
     settings: AccessibilitySettings | None = None,
 ) -> Screen:
@@ -207,8 +257,29 @@ def render(
             return screens.character_screen(
                 content, character, derived_stats(content, character), state.notice
             )
-        case ScreenId.STUB:
-            return screens.stub_screen(state.stub_title, state.notice)
+        case ScreenId.SKILLS:
+            return skill_screens.skills_screen(content, character, state.list_page, state.notice)
+        case ScreenId.TAVERN:
+            return service_screens.tavern_screen(
+                city_of(content, character, state),
+                rumours_of(content, character, state, world_seed=world_seed, cycle=cycle),
+                state.notice,
+            )
+        case ScreenId.MENTOR:
+            return service_screens.mentor_screen(
+                content, city_of(content, character, state), character, state.notice
+            )
+        case ScreenId.BANK:
+            return service_screens.bank_screen(
+                city_of(content, character, state), character, state.notice
+            )
+        case ScreenId.DUNGEONS:
+            return service_screens.dungeons_screen(
+                city_of(content, character, state),
+                dungeons_of(content, character, state, world_seed=world_seed),
+                character,
+                state.notice,
+            )
         case _:
             return screens.main_menu_screen(
                 content, character, derived_stats(content, character), state.notice
@@ -228,7 +299,13 @@ def advance(
 ) -> PlayState:
     """Apply one message. Always answers; never raises on unexpected input."""
     screen = render(
-        content, character, state, world_seed=world_seed, goods=goods, settings=settings
+        content,
+        character,
+        state,
+        world_seed=world_seed,
+        cycle=cycle,
+        goods=goods,
+        settings=settings,
     )
     command = resolve(text, screen)
 
@@ -244,7 +321,9 @@ def advance(
     if command.intent is Intent.BACK:
         return _go_back(state)
 
-    state = replace(state, pending_purchase="", pending_settings=None)
+    state = replace(
+        state, pending_purchase="", pending_settings=None, pending_stat="", pending_transfer=None
+    )
 
     match state.screen:
         case ScreenId.SETTINGS:
@@ -253,10 +332,24 @@ def advance(
             return _handle_goods(content, state, command, goods or Goods(gold=character.gold))
         case ScreenId.MAIN_MENU:
             return _handle_main_menu(state, command)
+        case ScreenId.CHARACTER:
+            return _handle_character(state, command)
+        case ScreenId.SKILLS:
+            return _handle_skills(content, character, state, command)
         case ScreenId.WORLD:
             return _handle_world(content, character, state, command)
         case ScreenId.CITY:
             return _handle_city(state, command)
+        case ScreenId.TAVERN:
+            return _handle_tavern(
+                content, character, state, command, world_seed=world_seed, cycle=cycle
+            )
+        case ScreenId.MENTOR:
+            return _handle_mentor(content, character, state, command)
+        case ScreenId.BANK:
+            return _handle_bank(character, state, command)
+        case ScreenId.DUNGEONS:
+            return _handle_dungeons(content, character, state, command, world_seed=world_seed)
         case ScreenId.LOCATION_LIST:
             return _handle_location_list(content, character, state, command, cycle=cycle)
         case ScreenId.LOCATION:
@@ -280,11 +373,111 @@ def _go_back(state: PlayState) -> PlayState:
     )
 
 
-def _stub_for(state: PlayState, command: Command) -> PlayState | None:
-    title = STUBS.get(command.argument)
-    if title is None:
-        return None
-    return replace(state, stub_title=title).at(ScreenId.STUB)
+def _handle_character(state: PlayState, command: Command) -> PlayState:
+    if command.intent is Intent.SELECT and labels.SKILLS.matches(command.argument):
+        return replace(state, list_page=PageState()).at(ScreenId.SKILLS)
+    return state.with_notice("Нажмите «Умения», «Назад» или «Главное меню».")
+
+
+def _handle_skills(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    pages = total_pages(len(skill_screens.known_skills(content, character)))
+    if command.intent in {Intent.NEXT_PAGE, Intent.PREVIOUS_PAGE}:
+        delta = 1 if command.intent is Intent.NEXT_PAGE else -1
+        return replace(state, list_page=state.list_page.moved(delta, pages), notice="")
+    if command.intent is Intent.PAGE and command.number is not None:
+        return replace(state, list_page=state.list_page.jumped(command.number, pages), notice="")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите умение из списка.")
+
+    skill = skill_screens.skill_from_button(content, character, command.argument)
+    if skill is None:
+        return state.with_notice("Нажмите умение из списка.")
+    return state.with_notice(skill_screens.describe_skill(content, character, skill))
+
+
+def _handle_tavern(
+    content: GameContent,
+    character: Character,
+    state: PlayState,
+    command: Command,
+    *,
+    world_seed: str,
+    cycle: int,
+) -> PlayState:
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите строку сводки, чтобы расспросить хозяина.")
+
+    rumours = rumours_of(content, character, state, world_seed=world_seed, cycle=cycle)
+    rumour = service_screens.rumour_from_button(command.argument, rumours)
+    if rumour is None:
+        return state.with_notice("Нажмите строку сводки, чтобы расспросить хозяина.")
+    return state.with_notice(service_screens.describe_rumour(rumour))
+
+
+def _handle_mentor(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите характеристику из списка.")
+
+    code = service_screens.stat_from_button(command.argument)
+    if code is None:
+        return state.with_notice("Нажмите характеристику из списка.")
+
+    trained = train_stat(character, code)
+    if trained is None:
+        return state.with_notice("Свободных очков нет: они приходят с уровнем.")
+    # The flow decides, the handler writes: the sentence below describes exactly
+    # what the handler will apply, because both go through ``train_stat``.
+    return replace(state, pending_stat=StatCode(code).value).with_notice(
+        service_screens.trained_line(content, trained, code)
+    )
+
+
+def _handle_bank(character: Character, state: PlayState, command: Command) -> PlayState:
+    parsed = service_screens.parse_transfer(command.argument, character)
+    if parsed is None:
+        return state.with_notice("Нажмите сумму или напишите «положить 100», «снять 100».")
+
+    kind, amount = parsed
+    plan = (
+        plan_deposit(character, amount)
+        if kind is TransferKind.DEPOSIT
+        else plan_withdrawal(character, amount)
+    )
+    if isinstance(plan, VaultRefusal):
+        return state.with_notice(service_screens.VAULT_REFUSALS[plan])
+
+    after = apply_transfer(character, plan)
+    if plan.kind is TransferKind.DEPOSIT:
+        said = f"Принято {gold_words(plan.amount)}, пошлина {gold_words(plan.fee)}."
+    else:
+        said = f"Выдано {gold_words(plan.amount)}."
+    return replace(state, pending_transfer=plan).with_notice(
+        f"{said} В хранилище {gold_words(after.bank_gold)}, на руках {gold_words(after.gold)}."
+    )
+
+
+def _handle_dungeons(
+    content: GameContent,
+    character: Character,
+    state: PlayState,
+    command: Command,
+    *,
+    world_seed: str,
+) -> PlayState:
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите ход из списка, чтобы осмотреть вход.")
+
+    dungeons = dungeons_of(content, character, state, world_seed=world_seed)
+    dungeon = service_screens.dungeon_from_button(command.argument, dungeons)
+    if dungeon is None:
+        return state.with_notice("Нажмите ход из списка, чтобы осмотреть вход.")
+
+    floor = dungeon_floor(world_seed=world_seed, dungeon=dungeon, floor=1)
+    return state.with_notice(service_screens.describe_entrance(dungeon, floor))
 
 
 def _handle_goods(
@@ -352,8 +545,9 @@ def _handle_main_menu(state: PlayState, command: Command) -> PlayState:
         return replace(state, list_page=PageState()).at(ScreenId.INVENTORY)
     if labels.SETTINGS.matches(command.argument):
         return state.at(ScreenId.SETTINGS)
-    stub = _stub_for(state, command)
-    return stub if stub is not None else state.with_notice("Нажмите кнопку из меню.")
+    if labels.SKILLS.matches(command.argument):
+        return replace(state, list_page=PageState()).at(ScreenId.SKILLS)
+    return state.with_notice("Нажмите кнопку из меню.")
 
 
 def _handle_world(
@@ -386,12 +580,14 @@ def _handle_world(
 def _handle_city(state: PlayState, command: Command) -> PlayState:
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите кнопку города.")
-    if labels.LOCATIONS.matches(command.argument):
-        return state.at(ScreenId.LOCATION_LIST)
-    if labels.SHOP.matches(command.argument):
-        return replace(state, list_page=PageState()).at(ScreenId.SHOP)
-    stub = _stub_for(state, command)
-    return stub if stub is not None else state.with_notice("Нажмите кнопку города.")
+
+    target = CITY_SECTIONS.get(command.argument)
+    if target is None:
+        return state.with_notice("Нажмите кнопку города.")
+    # The shop is a list and opens on its first page, like every other list.
+    if target is ScreenId.SHOP:
+        return replace(state, list_page=PageState()).at(target)
+    return state.at(target)
 
 
 def _handle_location_list(
@@ -421,7 +617,7 @@ def _handle_location_list(
                 city_id=city.id, slot=location.slot, cycle=cycle, node=0, cleared=0
             )
             return replace(state, session=session).at(ScreenId.LOCATION)
-    return state.with_notice("Не узнал эту локацию. Нажмите локацию из списка.")
+    return state.with_notice("Не узнал локацию. Нажмите локацию из списка.")
 
 
 def _handle_location(
@@ -449,7 +645,7 @@ def _handle_location(
     if command.argument == screens.NODE_ACTIONS[node.kind]:
         return _resolve_node_action(state, location, node.index)
 
-    return state.with_notice("Не узнал это действие. Нажмите кнопку узла.")
+    return state.with_notice("Не узнал действие. Нажмите кнопку узла.")
 
 
 def _resolve_node_action(state: PlayState, location: GeneratedLocation, index: int) -> PlayState:

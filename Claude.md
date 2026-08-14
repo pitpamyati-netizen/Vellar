@@ -21,8 +21,9 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   `entities/`: `character`, `stats`, `combat`, `effects`, `location`, `content`.
   `rules/`: `combat` (движок боя), `stats`, `progression`, `economy`,
   `modifiers`, `skill_effects` (эффект → спецификация), `group_commands`
-  (грамматика группы), `group_offers` (предложения). `procgen/`: `seeds`,
-  `location`, `enemies`. `ports/repositories.py` — протоколы хранилищ.
+  (грамматика группы), `group_offers`, `bank` (хранилище), `training`
+  (наставник), `tavern` (сводка). `procgen/`: `seeds`, `location`, `enemies`,
+  `dungeons` (ходы под городом, вне цикла). `ports/repositories.py` — протоколы.
 - `application/` — `dto/creation.py` (черновик), `services/`: `group_trade.py`
   (операции группы), `offers.py` (предложения в кэше).
 - `infrastructure/` — `persistence/`: `postgres`, `memory`, `pool`; `cache/`:
@@ -30,7 +31,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   `content/changelog.py` (обновления для канала).
 - `presentation/telegram/` — `handlers/` (`creation`, `play`, `group`), `flows/`
   (`creation`, `play`, `combat` — чистые автоматы), `screens/` (`base`, `format`,
-  `paginated`, `creation`, `play`, `combat`, `shop`, `settings`, `group`),
+  `paginated`, `creation`, `play`, `combat`, `shop`, `settings`, `group`,
+  `services` — таверна, наставник, банк, данжи; `skills` — панель),
   `keyboards/` (`labels`, `reply`), `middlewares/` (`dependencies`, `errors`,
   `idempotency`), `states/screens.py`, `routing.py`, `messaging.py`,
   `broadcast.py` (канал), `throttle.py` (лимит), `cleanup.py` (уборка в группе).
@@ -44,7 +46,7 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 `procgen.md`, `content-guide.md`, `skills.md`, `deployment.md`,
 `release-checklist.md`, `adr/0001..0005`.
 
-**`tests/`** — `domain/` (9, слои держит `test_layering.py`), `content/` (5),
+**`tests/`** — `domain/` (10, слои держит `test_layering.py`), `content/` (5),
 `presentation/` (9: доступность, канал, группа), `application/` (2),
 `integration/` (маркер `integration`), `test_config.py`, `test_health.py`,
 `test_main.py`, `conftest.py`.
@@ -52,7 +54,7 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 **`scripts/`** — `ci.ps1`/`ci.sh` (гейт), `healthcheck.py`, `broadcast.py` (пост
 в канал: `--headline` или `--changelog latest`), `install-hooks.ps1`/`.sh`.
 **`migrations/`** — `env.py`, `versions/0001_initial_schema`, `0002_trades`,
-`0003_privacy`. **`.githooks/pre-commit`** — гейт на коммите.
+`0003_privacy`, `0004_bank`. **`.githooks/pre-commit`** — гейт на коммите.
 
 ## 2. Правила разработки
 

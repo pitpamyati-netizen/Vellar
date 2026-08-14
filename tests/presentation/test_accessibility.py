@@ -84,7 +84,7 @@ def test_duplicate_labels_are_rejected_at_construction() -> None:
 
     with pytest.raises(ValueError, match="duplicate button label"):
         Screen(
-            id=ScreenId.STUB,
+            id=ScreenId.TAVERN,
             lines=("Тест.",),
             rows=((label("Повтор"), label("Повтор")),),
         )

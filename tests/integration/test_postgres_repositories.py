@@ -78,6 +78,7 @@ def a_character(user_id: int, name: str = "Тестовый") -> Character:
         level=7,
         experience=1234,
         gold=250,
+        bank_gold=180,
         allocated=StatBlock(STR=3, AGI=2, END=4, INT=1, WIS=0, CHA=1, LCK=2),
         trait_ids=("stoic", "keen_eye"),
         loadout=SkillLoadout(
@@ -234,6 +235,8 @@ async def test_a_character_survives_a_round_trip(pool, clean_user) -> None:
     assert dict(read.loadout.edges) == {"cleave": "wide"}
     assert dict(read.equipment.items) == {"weapon": "iron_axe"}
     assert read.unspent_stat_points == 5
+    # The vault is a column of its own: the purse must never absorb it.
+    assert (read.gold, read.bank_gold) == (250, 180)
 
 
 async def test_saving_a_character_updates_every_column(pool, clean_user) -> None:
@@ -241,11 +244,14 @@ async def test_saving_a_character_updates_every_column(pool, clean_user) -> None
     characters = PostgresCharacterRepository(pool)
     created = await characters.create(a_character(clean_user))
 
-    await characters.save(replace(created, level=42, experience=99_999, gold=7, city_id="dunmoor"))
+    await characters.save(
+        replace(created, level=42, experience=99_999, gold=7, bank_gold=9, city_id="dunmoor")
+    )
 
     read = await characters.get(created.id)
     assert read is not None
     assert (read.level, read.experience, read.gold, read.city_id) == (42, 99_999, 7, "dunmoor")
+    assert read.bank_gold == 9
 
 
 async def test_the_active_character_is_the_first_one(pool, clean_user) -> None:
