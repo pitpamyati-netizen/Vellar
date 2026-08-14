@@ -32,11 +32,13 @@ Every part is separated by a `\x00` byte before hashing, so `("ab", "c")` and
 ## Cycles
 
 `CYCLE_SECONDS = 21600` - six hours, four cycles a day. See
-`docs/adr/0003-six-hour-world-cycle.md` for why.
+`docs/adr/0003-six-hour-world-cycle.md` for why. In fiction a cycle is a
+**стража**, a quarter of the day: at its end the road posts send a fresh dispatch
+and the land, which belongs to nobody, has moved on (`Narrative.md`, section 1).
 
 When the cycle rolls over the world regenerates. Players are told in-fiction:
 
-> Наступил новый прилив. Тропы Сумеречной рощи изменились.
+> Сменилась стража. Тропы Сумеречной Рощи легли иначе.
 
 A player already inside a location keeps the cycle index captured in their session
 until they leave, so the map never shifts under their feet. No teleports, no

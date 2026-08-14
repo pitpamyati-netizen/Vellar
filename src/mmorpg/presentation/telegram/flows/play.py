@@ -465,5 +465,5 @@ def _resolve_node_action(state: PlayState, location: GeneratedLocation, index: i
     cleared = state.session.cleared | cleared_mask([index])
     session = replace(state.session, cleared=cleared)
     return replace(state, session=session).with_notice(
-        f"Узел {index}: {node.name} — сделано. Отметка сохранится до конца прилива."
+        f"Узел {index}: {node.name} — сделано. Отметка сохранится до конца стражи."
     )

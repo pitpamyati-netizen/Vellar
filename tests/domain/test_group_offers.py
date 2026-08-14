@@ -215,7 +215,7 @@ def test_offer_numbers_stay_short_enough_to_type() -> None:
 CATALOGUE = (
     ItemOption(item_id="leather_armor", name="Кожаная броня"),
     ItemOption(item_id="leather_boots", name="Кожаные сапоги"),
-    ItemOption(item_id="salt_blade", name="Соляной клинок, щербатый"),
+    ItemOption(item_id="bronze_blade", name="Бронзовый клинок, щербатый"),
 )
 
 
@@ -230,9 +230,9 @@ def test_an_exact_name_wins_however_it_is_typed(query: str) -> None:
 
 
 def test_a_prefix_is_enough_when_it_is_unambiguous() -> None:
-    found = match_items("соляной", CATALOGUE)
+    found = match_items("бронзовый", CATALOGUE)
 
-    assert [option.item_id for option in found] == ["salt_blade"]
+    assert [option.item_id for option in found] == ["bronze_blade"]
 
 
 def test_an_ambiguous_prefix_returns_every_candidate() -> None:
@@ -245,7 +245,7 @@ def test_an_ambiguous_prefix_returns_every_candidate() -> None:
 def test_a_word_from_the_middle_still_finds_the_item() -> None:
     found = match_items("щербатый", CATALOGUE)
 
-    assert [option.item_id for option in found] == ["salt_blade"]
+    assert [option.item_id for option in found] == ["bronze_blade"]
 
 
 def test_nothing_matches_nothing() -> None:
