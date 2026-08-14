@@ -82,6 +82,10 @@ uv run pytest -m integration
       arrives - a broadcast nobody saw is a broadcast that does not work
 - [ ] New broadcast texts follow `Narrative.md`, section 8, and are covered by
       `tests/presentation/test_broadcast.py`
+- [ ] This version has a section in `content/changelog.toml`, written as what a
+      player can now do, and `--changelog latest --dry-run` renders it
+- [ ] The update is posted **after** the code is live - a changelog announcing
+      something nobody can do yet is a bug report from every player at once
 - [ ] Group commands answer in one message and stay silent for other bots' traffic
 
 ## 8. Release

@@ -26,7 +26,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 - `application/` — `dto/creation.py` (черновик), `services/`: `group_trade.py`
   (операции группы), `offers.py` (предложения в кэше).
 - `infrastructure/` — `persistence/`: `postgres`, `memory`, `pool`; `cache/`:
-  `redis_cache`, `memory`; `content/loader.py` (TOML → dataclass).
+  `redis_cache`, `memory`; `content/loader.py` (TOML → dataclass),
+  `content/changelog.py` (обновления для канала).
 - `presentation/telegram/` — `handlers/` (`creation`, `play`, `group`), `flows/`
   (`creation`, `play`, `combat` — чистые автоматы), `screens/` (`base`, `format`,
   `paginated`, `creation`, `play`, `combat`, `shop`, `settings`, `group`),
@@ -36,20 +37,22 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 
 **`content/`** — `world.toml` (15 городов × 5 локаций, 1–300), `races.toml`,
 `classes.toml`, `traits.toml`, `skills.toml`, `items.toml`, `enemies.toml`.
-Правится без кода, валидируется на старте.
+Правится без кода, валидируется на старте. Отдельно — `changelog.toml`: что
+изменилось, словами игрока; читается только при посте в канал.
 
 **`docs/`** — `architecture.md`, `accessibility.md` (спецификация, не пожелания),
 `procgen.md`, `content-guide.md`, `skills.md`, `deployment.md`,
 `release-checklist.md`, `adr/0001..0005`.
 
-**`tests/`** — `domain/` (9, слои держит `test_layering.py`), `content/` (4),
+**`tests/`** — `domain/` (9, слои держит `test_layering.py`), `content/` (5),
 `presentation/` (9: доступность, канал, группа), `application/` (2),
 `integration/` (маркер `integration`), `test_config.py`, `test_health.py`,
 `test_main.py`, `conftest.py`.
 
 **`scripts/`** — `ci.ps1`/`ci.sh` (гейт), `healthcheck.py`, `broadcast.py` (пост
-в канал), `install-hooks.ps1`/`.sh`. **`migrations/`** — `env.py`,
-`versions/0001_initial_schema.py`. **`.githooks/pre-commit`** — гейт на коммите.
+в канал: `--headline` или `--changelog latest`), `install-hooks.ps1`/`.sh`.
+**`migrations/`** — `env.py`, `versions/0001_initial_schema.py`.
+**`.githooks/pre-commit`** — гейт на коммите.
 
 ## 2. Правила разработки
 

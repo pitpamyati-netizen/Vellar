@@ -10,6 +10,11 @@ from __future__ import annotations
 import pytest
 
 from mmorpg.presentation.telegram import broadcast as bc
+from tests.conftest import SOURCE_ROOT
+
+# Where gameplay lives. Nothing here may reach the channel: a level, a kill or a
+# trade concerns the people in the group, and only them (Roadmap 2.4).
+GAMEPLAY_DIRS = ("handlers", "flows", "screens")
 
 
 class RecordingSink:
@@ -89,6 +94,44 @@ def test_every_post_is_plain_short_text(event: bc.BroadcastEvent) -> None:
     assert not set(text) & set("*_`[]")
     # No pseudo-graphics (rule 5).
     assert "#" not in text and "|" not in text
+
+
+def test_no_gameplay_code_posts_to_the_channel() -> None:
+    """The guard for "player actions stay in the group" is mechanical, not a habit."""
+    telegram = SOURCE_ROOT / "presentation" / "telegram"
+    offenders = [
+        path.name
+        for directory in GAMEPLAY_DIRS
+        for path in sorted((telegram / directory).rglob("*.py"))
+        if ".announce(" in path.read_text(encoding="utf-8")
+    ]
+
+    assert offenders == [], f"gameplay code announces to the channel: {offenders}"
+
+
+@pytest.mark.parametrize(
+    "headline",
+    [
+        "Добавлен модуль арены.",
+        "Починили баг с лавкой.",
+        "Выкатили хотфикс.",
+        "Обновлён API бота.",
+    ],
+)
+def test_a_post_written_for_the_team_is_refused(headline: str) -> None:
+    with pytest.raises(ValueError, match="what a player can do"):
+        bc.render_broadcast(bc.news(headline))
+
+
+def test_the_same_fact_passes_when_it_is_said_to_players() -> None:
+    text = bc.render_broadcast(bc.news("Лавка больше не забывает выкупленный товар."), emoji=False)
+
+    assert bc.jargon_in(text) is None
+
+
+def test_a_word_that_only_looks_like_jargon_is_left_alone() -> None:
+    """Багровый Причал is a place in Веллар, not a defect (``Narrative.md``, 7)."""
+    assert bc.jargon_in("Открыт Багровый Причал.") is None
 
 
 def test_an_empty_headline_is_refused() -> None:

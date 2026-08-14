@@ -17,13 +17,19 @@ Enforced here:
 - no pseudo-graphics, no bars, numbers spelled as ``X из Y`` by the caller (rule 5);
 - one emoji at most, at the head of the line, chosen by meaning - never decoration
   (rule 6: the text is unambiguous with every emoji stripped);
-- a hard length limit, because a channel post is not paginated.
+- a hard length limit, because a channel post is not paginated;
+- the words of a player, not of the team that ships the game: a post naming a
+  module, a commit or a database is refused at render, before anyone sees it.
+
+The text of an update lives in ``content/changelog.toml`` and is read by
+``scripts/broadcast.py``; this module only turns it into a post.
 
 A broadcast never blocks or breaks gameplay: a failed send is logged and dropped.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
@@ -36,6 +42,39 @@ BROADCAST_LIMIT = 700
 # A changelog earns more room than a notice, because cutting it would mean
 # splitting one update across two posts.
 CHANGELOG_LIMIT = 2000
+
+# Words that give away a post written for the team instead of for the players.
+# A player cannot act on a module name, so it is not news: the same fact is
+# always sayable as something they can now do (``Narrative.md``, section 8).
+# Stems are matched from the start of a word and are long enough to be
+# unambiguous; short words are matched whole, or "баг" would flag "Багровый".
+JARGON_STEMS = (
+    "модул",
+    "коммит",
+    "рефактор",
+    "хендлер",
+    "хэндлер",
+    "эндпоинт",
+    "деплой",
+    "миграц",
+    "бэкенд",
+    "бекенд",
+    "фронтенд",
+    "конфиг",
+    "багфикс",
+    "хотфикс",
+    "postgres",
+    "backend",
+    "frontend",
+    "refactor",
+    "endpoint",
+    "hotfix",
+    "bugfix",
+)
+JARGON_WORDS = frozenset(
+    {"баг", "баги", "багов", "багам", "багами", "фикс", "фиксы", "патч", "патчи", "api", "sql"}
+)
+_WORD = re.compile(r"[a-zа-яё]+")
 
 
 class BroadcastKind(StrEnum):
@@ -71,6 +110,15 @@ class BroadcastEvent:
             raise ValueError(msg)
 
 
+def jargon_in(text: str) -> str | None:
+    """The first word that would give the post away as a commit message."""
+    words: list[str] = _WORD.findall(text.lower())
+    for word in words:
+        if word in JARGON_WORDS or word.startswith(JARGON_STEMS):
+            return word
+    return None
+
+
 def render_broadcast(event: BroadcastEvent, *, emoji: bool = True) -> str:
     """Render the post. The first line stands on its own; details follow."""
     head = event.headline.strip()
@@ -81,6 +129,10 @@ def render_broadcast(event: BroadcastEvent, *, emoji: bool = True) -> str:
     limit = limit_for(event.kind)
     if len(text) > limit:
         msg = f"broadcast is {len(text)} characters, limit is {limit}"
+        raise ValueError(msg)
+    offender = jargon_in(text)
+    if offender is not None:
+        msg = f"the channel says what a player can do, not {offender!r}"
         raise ValueError(msg)
     return text
 
