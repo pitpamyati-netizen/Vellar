@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.claude/autocommit.sh\"",
+            "timeout": 900,
+            "statusMessage": "Автокоммит: гейт и коммит"
+          }
+        ]
+      }
+    ]
+  }
+}
