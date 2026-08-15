@@ -110,12 +110,13 @@ class CraftRules:
 class CraftProgress:
     """What one character has done in one craft.
 
-    ``gathered_cycle`` is the watch the last gathering happened in: the road
-    refills between watches, and it refills whether or not anybody is playing.
+    ``gathered_at`` is the unix time of the last gathering. The cooldown is
+    personal and short: the road refills for this character on their own clock,
+    not on a shared watch everybody had to wait out together.
     """
 
     experience: int = 0
-    gathered_cycle: int = -1
+    gathered_at: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,7 +133,7 @@ class CraftLog:
         updated = replace(current, experience=current.experience + max(0, gained))
         return CraftLog(MappingProxyType({**self.entries, craft_id: updated}))
 
-    def with_gathered_cycle(self, craft_id: str, cycle: int) -> CraftLog:
+    def with_gathered_at(self, craft_id: str, moment: int) -> CraftLog:
         current = self.progress(craft_id)
-        updated = replace(current, gathered_cycle=cycle)
+        updated = replace(current, gathered_at=moment)
         return CraftLog(MappingProxyType({**self.entries, craft_id: updated}))

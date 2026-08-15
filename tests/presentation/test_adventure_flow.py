@@ -43,9 +43,9 @@ from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.states.screens import Play
 
 ACCOUNT = 500_001
-# A cycle that will not turn over while the test runs: the location a player
+# A shelf that will not turn over while the test runs: the location a player
 # walks into must be the one the test computed.
-SETTINGS = Settings(_env_file=None, cycle_seconds=10**9)  # type: ignore[call-arg]
+SETTINGS = Settings(_env_file=None, shop_rotation_seconds=10**9)  # type: ignore[call-arg]
 
 
 class Recorder:
@@ -88,9 +88,9 @@ def users() -> InMemoryUserRepository:
 
 @pytest.fixture
 def deltas() -> Any:
-    from mmorpg.infrastructure.cache.memory import InMemoryLocationDeltaCache
+    from mmorpg.infrastructure.cache.memory import InMemoryLocationStateCache
 
-    return InMemoryLocationDeltaCache()
+    return InMemoryLocationStateCache()
 
 
 @pytest.fixture
@@ -424,3 +424,108 @@ async def test_a_skill_point_buys_a_skill_and_a_slot_holds_it(
     equipped = await characters.get_active(ACCOUNT)
     assert equipped is not None
     assert equipped.loadout.actives[1] == fresh.code
+
+
+# --- the location is common ground ------------------------------------
+
+
+async def test_a_cleared_node_is_cleared_for_everybody(
+    player: Player,
+    content: GameContent,
+    characters: InMemoryCharacterRepository,
+    inventory: InMemoryInventoryRepository,
+    users: InMemoryUserRepository,
+    deltas: Any,
+    state: FSMContext,
+    sent: Recorder,
+) -> None:
+    """A location is not a private instance: one player's work shows in it."""
+    quiet = next(
+        kind
+        for kind in (NodeKind.GATHER, NodeKind.CACHE, NodeKind.EVENT, NodeKind.SHRINE)
+        if path_to(
+            build_location(
+                content,
+                SETTINGS.world_seed,
+                LocationSession(city_id="farhold", slot=1, generation=0),
+            ),
+            kind,
+        )
+        is not None
+    )
+    node = await walk_to(player, content, quiet)
+    await player.press(play_screens.NODE_ACTIONS[quiet])
+
+    stored = await deltas.state("farhold", 1)
+    assert stored.cleared & (1 << node), "the cache was emptied and nobody was told"
+
+    # A second player walks the same road and finds the cache already searched.
+    other_account = ACCOUNT + 1
+    other = await characters.create(
+        Character(
+            id=0,
+            user_id=other_account,
+            name="Мерла",
+            race_id="human",
+            class_id="warrior",
+            level=4,
+        )
+    )
+    assert other.id != 0
+    second_state = FSMContext(
+        storage=MemoryStorage(),
+        key=StorageKey(bot_id=1, chat_id=other_account, user_id=other_account),
+    )
+    await second_state.set_state(Play.main_menu)
+
+    def their_message(text: str) -> Message:
+        return Message(
+            message_id=1,
+            date=datetime.now(UTC),
+            chat=Chat(id=other_account, type="private"),
+            from_user=User(id=other_account, is_bot=False, first_name="Мерла"),
+            text=text,
+        )
+
+    for text in ("Мир", "Дубно", "Локации", "1. Луга у Заставы"):
+        await play_handler.play(
+            their_message(text),
+            second_state,
+            content,
+            SETTINGS,
+            characters,
+            inventory,
+            users,
+            deltas,
+        )
+    data = await second_state.get_data()
+    theirs = PlayState.deserialise(data["play"])
+    assert theirs.session.cleared & (1 << node), "the second player got a fresh copy of the place"
+
+
+async def test_clearing_the_place_out_rolls_it_over(
+    player: Player, content: GameContent, deltas: Any
+) -> None:
+    """The map lives until it is cleared - and then it is a different map."""
+    await player.press("Мир")
+    await player.press("Дубно")
+    await player.press("Локации")
+    await player.press("1. Луга у Заставы")
+
+    flow = await player.flow()
+    location = build_location(content, SETTINGS.world_seed, flow.session)
+    worth_doing = [
+        node.index for node in location.nodes if node.kind not in {NodeKind.ENTRANCE, NodeKind.EXIT}
+    ]
+    # Everything but the doors is already done by the time the last one falls.
+    await deltas.mark_cleared("farhold", 1, generation=0, node=worth_doing[0], ttl=600)
+    for index in worth_doing[1:]:
+        await deltas.mark_cleared("farhold", 1, generation=0, node=index, ttl=600)
+
+    await player.press("Назад")
+    await player.press("1. Луга у Заставы")
+
+    rolled = await deltas.state("farhold", 1)
+    assert rolled.generation == 1
+    assert rolled.cleared == 0
+    assert (await player.flow()).session.generation == 1

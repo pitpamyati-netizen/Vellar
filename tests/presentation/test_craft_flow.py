@@ -9,12 +9,19 @@ import pytest
 
 from mmorpg.domain.entities import Character, GameContent
 from mmorpg.domain.entities.craft import CraftLog, CraftProgress
-from mmorpg.presentation.telegram.flows.play import Goods, PlayState, advance, begin, render
+from mmorpg.presentation.telegram.flows.play import (
+    Clock,
+    Goods,
+    PlayState,
+    advance,
+    begin,
+    render,
+)
 from mmorpg.presentation.telegram.screens.base import ScreenId
 from mmorpg.presentation.telegram.screens.shop import OwnedItem
 
 WORLD_SEED = "vellar-test"
-CYCLE = 100
+CLOCK = Clock(now=1_700_000_000, shop_rotation=100, gather_cooldown=900)
 
 
 @pytest.fixture
@@ -48,12 +55,12 @@ def step(
     state: PlayState,
     *messages: str,
     goods: Goods | None = None,
-    cycle: int = CYCLE,
+    clock: Clock = CLOCK,
 ) -> PlayState:
     current = state
     for message in messages:
         current = advance(
-            content, hero, current, message, cycle=cycle, world_seed=WORLD_SEED, goods=goods
+            content, hero, current, message, clock=clock, world_seed=WORLD_SEED, goods=goods
         )
     return current
 
@@ -137,7 +144,7 @@ def test_gathering_puts_material_in_the_bag_and_records_the_work(
     assert count > 0
 
 
-def test_the_second_gathering_in_one_watch_is_refused(
+def test_a_second_gathering_inside_the_cooldown_is_refused(
     content: GameContent, hero: Character
 ) -> None:
     listed = step(content, hero, begin(hero), "Ремёсла")
@@ -147,7 +154,7 @@ def test_the_second_gathering_in_one_watch_is_refused(
     worked = first.pending.character
     assert worked is not None
     again = step(content, worked, first, "Собрать сырьё")
-    assert "стражу" in again.notice
+    assert "Следующий сбор через" in again.notice
     assert again.pending.empty, "a refused gathering writes nothing"
 
 
@@ -209,4 +216,4 @@ def test_the_walk_survives_a_round_trip_through_storage(
     restored = PlayState.deserialise(state.serialise())
     assert restored.screen is ScreenId.CRAFT
     assert restored.craft_id == "mining"
-    assert restored.craft_cycle == CYCLE
+    assert restored.craft_moment == CLOCK.now

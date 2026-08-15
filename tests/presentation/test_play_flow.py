@@ -8,6 +8,7 @@ import pytest
 
 from mmorpg.domain.entities import Character, GameContent
 from mmorpg.presentation.telegram.flows.play import (
+    Clock,
     PlayState,
     advance,
     begin,
@@ -17,7 +18,7 @@ from mmorpg.presentation.telegram.flows.play import (
 from mmorpg.presentation.telegram.screens.base import ScreenId
 
 WORLD_SEED = "vellar-test"
-CYCLE = 100
+CLOCK = Clock(now=1_700_000_000, shop_rotation=100, gather_cooldown=900)
 
 
 @pytest.fixture
@@ -28,7 +29,7 @@ def hero(content: GameContent) -> Character:
 def step(content: GameContent, hero: Character, state: PlayState, *messages: str) -> PlayState:
     current = state
     for message in messages:
-        current = advance(content, hero, current, message, cycle=CYCLE, world_seed=WORLD_SEED)
+        current = advance(content, hero, current, message, clock=CLOCK, world_seed=WORLD_SEED)
     return current
 
 
@@ -94,7 +95,11 @@ def test_shop_and_inventory_are_real_screens(
     from mmorpg.presentation.telegram.screens.shop import OwnedItem
 
     stock = roll_assortment(
-        content, world_seed=WORLD_SEED, city_id="farhold", cycle=CYCLE, character_level=hero.level
+        content,
+        world_seed=WORLD_SEED,
+        city_id="farhold",
+        rotation=CLOCK.shop_rotation,
+        character_level=hero.level,
     )
     goods = Goods(
         gold=500,
@@ -103,7 +108,7 @@ def test_shop_and_inventory_are_real_screens(
         prices={item.id: buy_price(content, item) for item in stock},
     )
 
-    shop = advance(content, hero, in_city, "Лавка", cycle=CYCLE, world_seed=WORLD_SEED, goods=goods)
+    shop = advance(content, hero, in_city, "Лавка", clock=CLOCK, world_seed=WORLD_SEED, goods=goods)
     assert shop.screen is ScreenId.SHOP
     assert (
         "Лавка города Дубно"
@@ -111,7 +116,7 @@ def test_shop_and_inventory_are_real_screens(
     )
 
     inventory = advance(
-        content, hero, menu, "Инвентарь", cycle=CYCLE, world_seed=WORLD_SEED, goods=goods
+        content, hero, menu, "Инвентарь", clock=CLOCK, world_seed=WORLD_SEED, goods=goods
     )
     assert inventory.screen is ScreenId.INVENTORY
     assert (
@@ -130,27 +135,31 @@ def test_buying_defers_the_write_to_the_handler(
 
     wealthy = replace(hero, gold=100_000)
     stock = roll_assortment(
-        content, world_seed=WORLD_SEED, city_id="farhold", cycle=CYCLE, character_level=hero.level
+        content,
+        world_seed=WORLD_SEED,
+        city_id="farhold",
+        rotation=CLOCK.shop_rotation,
+        character_level=hero.level,
     )
     prices = {item.id: buy_price(content, item) for item in stock}
     rich = Goods(gold=wealthy.gold, stock=stock, prices=prices)
     poor = Goods(gold=0, stock=stock, prices=prices)
 
     shop = advance(
-        content, wealthy, in_city, "Лавка", cycle=CYCLE, world_seed=WORLD_SEED, goods=rich
+        content, wealthy, in_city, "Лавка", clock=CLOCK, world_seed=WORLD_SEED, goods=rich
     )
     first = stock[0]
     pressed = buy_label(first, prices[first.id]).text
 
     bought = advance(
-        content, wealthy, shop, pressed, cycle=CYCLE, world_seed=WORLD_SEED, goods=rich
+        content, wealthy, shop, pressed, clock=CLOCK, world_seed=WORLD_SEED, goods=rich
     )
     assert bought.pending.items == ((first.id, 1),)
     assert bought.pending.character is not None
     assert bought.pending.character.gold == wealthy.gold - prices[first.id]
     assert "куплен" in bought.notice
 
-    broke = advance(content, hero, shop, pressed, cycle=CYCLE, world_seed=WORLD_SEED, goods=poor)
+    broke = advance(content, hero, shop, pressed, clock=CLOCK, world_seed=WORLD_SEED, goods=poor)
     assert broke.pending.empty
     assert "Не хватает" in broke.notice
 
@@ -198,7 +207,7 @@ def test_entering_a_location_starts_at_the_entrance(
     assert in_location.screen is ScreenId.LOCATION
     assert in_location.session.active
     assert in_location.session.node == 0
-    assert in_location.session.cycle == CYCLE
+    assert in_location.session.generation == 0
     text = render(content, hero, in_location, world_seed=WORLD_SEED).text()
     assert text.startswith("Локация Луга у Заставы, узел 0: Вход.")
 
@@ -238,7 +247,7 @@ def test_every_node_is_reachable_from_the_entrance(
     assert location.exit_node.index in seen
 
 
-def test_clearing_a_node_is_remembered_for_the_cycle(
+def test_clearing_a_node_is_remembered_for_the_visit(
     content: GameContent, hero: Character, in_location: PlayState
 ) -> None:
     location = build_location(content, WORLD_SEED, in_location.session)
@@ -261,13 +270,18 @@ def test_leaving_a_location_clears_the_session(
     assert left.session.active is False
 
 
-def test_the_cycle_is_captured_on_entry(
+def test_the_map_does_not_move_under_your_feet(
     content: GameContent, hero: Character, in_location: PlayState
 ) -> None:
     """The map must not change under a player who is standing in it."""
     before = render(content, hero, in_location, world_seed=WORLD_SEED).text()
     later = advance(
-        content, hero, in_location, "Осмотреться", cycle=CYCLE + 5, world_seed=WORLD_SEED
+        content,
+        hero,
+        in_location,
+        "Осмотреться",
+        clock=replace(CLOCK, now=CLOCK.now + 5),
+        world_seed=WORLD_SEED,
     )
     assert render(content, hero, later, world_seed=WORLD_SEED).text() == before
 

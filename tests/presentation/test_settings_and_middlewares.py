@@ -13,13 +13,19 @@ from mmorpg.domain.entities import Character, GameContent
 from mmorpg.domain.ports import AccessibilitySettings
 from mmorpg.infrastructure.cache import InMemoryIdempotencyStore
 from mmorpg.monitoring import install_slow_callback_detector, measure
-from mmorpg.presentation.telegram.flows.play import PlayState, advance, begin, render
+from mmorpg.presentation.telegram.flows.play import (
+    Clock,
+    PlayState,
+    advance,
+    begin,
+    render,
+)
 from mmorpg.presentation.telegram.middlewares.idempotency import IdempotencyMiddleware
 from mmorpg.presentation.telegram.screens.base import ScreenId
 from mmorpg.presentation.telegram.screens.settings import settings_screen
 
 WORLD_SEED = "vellar-test"
-CYCLE = 100
+CLOCK = Clock(now=1_700_000_000, shop_rotation=100, gather_cooldown=900)
 
 
 @pytest.fixture
@@ -35,7 +41,7 @@ def step(
     settings: AccessibilitySettings | None = None,
 ) -> PlayState:
     return advance(
-        content, hero, state, text, cycle=CYCLE, world_seed=WORLD_SEED, settings=settings
+        content, hero, state, text, clock=CLOCK, world_seed=WORLD_SEED, settings=settings
     )
 
 

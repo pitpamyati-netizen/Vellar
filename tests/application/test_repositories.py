@@ -11,19 +11,20 @@ from dataclasses import replace
 import pytest
 
 from mmorpg.domain.entities import Character, StatBlock
+from mmorpg.domain.entities.location import LocationState, Presence
 from mmorpg.domain.ports import (
     AccessibilitySettings,
     CharacterRepository,
     IdempotencyStore,
     InventoryRepository,
-    LocationDeltaCache,
+    LocationStateCache,
     StateCache,
     User,
     UserRepository,
 )
 from mmorpg.infrastructure.cache import (
     InMemoryIdempotencyStore,
-    InMemoryLocationDeltaCache,
+    InMemoryLocationStateCache,
     InMemoryStateCache,
 )
 from mmorpg.infrastructure.persistence import (
@@ -58,7 +59,7 @@ def test_in_memory_adapters_implement_the_ports() -> None:
     assert isinstance(InMemoryCharacterRepository(), CharacterRepository)
     assert isinstance(InMemoryInventoryRepository(), InventoryRepository)
     assert isinstance(InMemoryStateCache(), StateCache)
-    assert isinstance(InMemoryLocationDeltaCache(), LocationDeltaCache)
+    assert isinstance(InMemoryLocationStateCache(), LocationStateCache)
     assert isinstance(InMemoryIdempotencyStore(), IdempotencyStore)
 
 
@@ -189,31 +190,62 @@ async def test_state_cache_delete() -> None:
     assert await cache.get("screen:1") is None
 
 
-async def test_location_deltas_accumulate_in_one_bitmask() -> None:
-    cache = InMemoryLocationDeltaCache()
-    assert await cache.get_mask(1, "farhold", 1, 100) == 0
+async def test_cleared_nodes_are_shared_by_everybody_in_the_location() -> None:
+    """A node one player emptied is empty for the next one who walks in."""
+    cache = InMemoryLocationStateCache()
+    assert await cache.state("farhold", 1) == LocationState()
 
-    await cache.mark_cleared(1, "farhold", 1, 100, node=2, ttl=600)
-    mask = await cache.mark_cleared(1, "farhold", 1, 100, node=5, ttl=600)
-    assert mask == (1 << 2) | (1 << 5)
-    assert await cache.get_mask(1, "farhold", 1, 100) == mask
-
-
-async def test_location_deltas_are_scoped_to_the_cycle() -> None:
-    """A new cycle regenerates the world, so old progress must not leak into it."""
-    cache = InMemoryLocationDeltaCache()
-    await cache.mark_cleared(1, "farhold", 1, 100, node=2, ttl=600)
-    assert await cache.get_mask(1, "farhold", 1, 101) == 0
-    assert await cache.get_mask(2, "farhold", 1, 100) == 0
-    assert await cache.get_mask(1, "farhold", 2, 100) == 0
+    await cache.mark_cleared("farhold", 1, generation=0, node=2, ttl=600)
+    state = await cache.mark_cleared("farhold", 1, generation=0, node=5, ttl=600)
+    assert state.cleared == (1 << 2) | (1 << 5)
+    assert await cache.state("farhold", 1) == state
 
 
-async def test_location_deltas_expire_with_the_cycle() -> None:
+async def test_a_location_rolls_over_once_however_many_ask() -> None:
+    """Two players finishing the last node together get one new map, not two."""
+    cache = InMemoryLocationStateCache()
+    await cache.mark_cleared("farhold", 1, generation=0, node=1, ttl=600)
+
+    rolled = await cache.rotate("farhold", 1, generation=0, ttl=600)
+    assert rolled == LocationState(generation=1, cleared=0)
+
+    late = await cache.rotate("farhold", 1, generation=0, ttl=600)
+    assert late == rolled
+
+
+async def test_a_mark_from_the_previous_map_is_ignored() -> None:
+    cache = InMemoryLocationStateCache()
+    await cache.rotate("farhold", 1, generation=0, ttl=600)
+    state = await cache.mark_cleared("farhold", 1, generation=0, node=3, ttl=600)
+    assert state == LocationState(generation=1, cleared=0)
+
+
+async def test_an_untouched_location_is_re_rolled_eventually() -> None:
     clock = FakeClock()
-    cache = InMemoryLocationDeltaCache(clock=clock)
-    await cache.mark_cleared(1, "farhold", 1, 100, node=1, ttl=600)
+    cache = InMemoryLocationStateCache(clock=clock)
+    await cache.mark_cleared("farhold", 1, generation=0, node=1, ttl=600)
     clock.advance(601)
-    assert await cache.get_mask(1, "farhold", 1, 100) == 0
+    assert await cache.state("farhold", 1) == LocationState()
+
+
+async def test_people_are_seen_on_their_own_node_only() -> None:
+    cache = InMemoryLocationStateCache()
+    await cache.arrive("farhold", 1, Presence(7, "Мерла", 12, node=3), now=1000, ttl=600)
+    await cache.arrive("farhold", 1, Presence(8, "Довен", 9, node=4), now=1000, ttl=600)
+
+    here = await cache.others_at("farhold", 1, 3, exclude=1, now=1000, ttl=600)
+    assert [presence.name for presence in here] == ["Мерла"]
+    assert await cache.others_at("farhold", 1, 3, exclude=7, now=1000, ttl=600) == ()
+
+
+async def test_somebody_who_walked_off_stops_being_seen() -> None:
+    cache = InMemoryLocationStateCache()
+    await cache.arrive("farhold", 1, Presence(7, "Мерла", 12, node=3), now=1000, ttl=600)
+    assert await cache.others_at("farhold", 1, 3, exclude=1, now=1601, ttl=600) == ()
+
+    await cache.arrive("farhold", 1, Presence(7, "Мерла", 12, node=3), now=2000, ttl=600)
+    await cache.leave("farhold", 1, 7)
+    assert await cache.others_at("farhold", 1, 3, exclude=1, now=2000, ttl=600) == ()
 
 
 async def test_duplicate_updates_are_dropped() -> None:

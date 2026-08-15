@@ -1,19 +1,21 @@
 # Procedural generation
 
 Locations are **not stored anywhere**. A location is a pure function of a seed and
-a cycle index, so the server rebuilds it on demand and throws it away after
-rendering. The only thing persisted is what the player *changed* - cleared nodes,
-looted caches - and that is a single integer in Redis with a TTL.
+a generation, so the server rebuilds it on demand and throws it away after
+rendering. The only thing kept is what the players *changed* - which nodes are
+cleared and which generation is standing - and that is two integers in Redis with
+a time to live.
 
 ## The seed chain
 
 ```
 world_seed              constant, from configuration (WORLD_SEED)
-cycle_index             = unix_time // CYCLE_SECONDS         # CYCLE_SECONDS = 21600
-location_seed           = blake2b(world_seed, city_id, slot, cycle_index)
+generation              goes up when a location is cleared out; never on a clock
+location_seed           = blake2b(world_seed, city_id, slot, generation)
 node_seed(i)            = blake2b(location_seed, i)
 enemy_seed(node, try)   = blake2b(node_seed, "enemy", try)
-shop_seed               = blake2b(world_seed, "shop", city_id, cycle_index)
+rotation                = unix_time // SHOP_ROTATION_SECONDS  # 1800, half an hour
+shop_seed               = blake2b(world_seed, "shop", city_id, rotation)
 ```
 
 Every part is separated by a `\x00` byte before hashing, so `("ab", "c")` and
@@ -25,28 +27,30 @@ Every part is separated by a `\x00` byte before hashing, so `("ab", "c")` and
    forbidden. Every generator receives an explicit `random.Random` built from its
    seed by `procgen.seeds.rng`. A test seeds the global generator, runs generation,
    and asserts the global stream is untouched.
-2. **The domain does not know the time.** `cycle_index` is always an argument.
-   `mmorpg.domain.procgen` never calls `time.time()`.
+2. **The domain does not know the time.** The generation and the rotation are
+   always arguments. `mmorpg.domain.procgen` never calls `time.time()`.
 3. **Same seed, same bytes.** A test compares 10 000 derivations of the same seed.
 
-## Cycles
+## Generations
 
-`CYCLE_SECONDS = 21600` - six hours, four cycles a day. See
-`docs/adr/0003-six-hour-world-cycle.md` for why. In fiction a cycle is a
-**стража**, a quarter of the day: at its end the road posts send a fresh dispatch,
-and by the middle of the next watch the land has already moved on - paths drift,
-beasts follow the water, caravans come and go (`Narrative.md`, section 1).
+A location keeps its map until it is **cleared out**: every node except the two
+doors worked through. Then, and only then, its generation goes up and the place
+is generated anew - different nodes, different paths, different enemies. See
+`docs/adr/0003-location-generations.md` for why this replaced the six-hour world
+cycle.
 
-When the cycle rolls over the world regenerates. Players are told in-fiction:
+The state is shared by everybody standing in the location, so a node one player
+emptied is empty for the next one who walks in, and the last node any of them
+finishes changes the place for all of them.
 
-> Сменилась стража. Тропы Ольшаника легли иначе.
+A player already inside keeps the generation captured in their session until they
+leave, so the map never shifts under their feet mid-visit. No teleports, no "you
+have been moved".
 
-A player already inside a location keeps the cycle index captured in their session
-until they leave, so the map never shifts under their feet. No teleports, no
-"you have been moved".
-
-`seconds_left_in_cycle(now)` is used directly as the Redis TTL, so delta keys
-expire exactly when they stop being meaningful and the database never grows.
+The shop is the one thing left on a clock: `SHOP_ROTATION_SECONDS = 1800`, so the
+shelf turns over every half hour and there is a reason to come back to a city.
+Gathering has a personal cooldown, `GATHER_COOLDOWN_SECONDS = 900`, which belongs
+to a character rather than to the world.
 
 ## Location structure
 
@@ -117,18 +121,25 @@ words, so the name stays a name.
 Three full-strength opponents made an "ordinary" fight nine turns long - three
 fights in a row wearing one name.
 
-## The delta log
+## The shared state of a location
 
-What the player changed inside the current cycle is a bitmask:
+Which generation is standing and what has been cleared in it:
 
 ```
-key    loc:{city}:{slot}:{cycle}:{user}
-value  bitmask of cleared node indexes
-ttl    seconds_left_in_cycle(now)
+key    loc:{city}:{slot}          hash {generation, cleared}
+ttl    a week, refreshed on every write
 ```
 
-14 nodes fit in 14 bits, so the whole state of a location for one player is one
-small integer that disappears when the cycle ends. PostgreSQL never sees it.
+Who is standing in it, and where:
+
+```
+key    loc:{city}:{slot}:who      hash {character_id: {node, name, level, seen}}
+ttl    ten minutes of silence and a player is no longer there
+```
+
+14 nodes fit in 14 bits, so the whole state of a location is two small integers.
+PostgreSQL never sees any of it: losing Redis re-rolls a map and forgets who was
+where, which costs a visit and never a character.
 
 ## What is generated versus stored
 

@@ -1,8 +1,9 @@
 """Navigation and every action outside a fight, as a pure state machine.
 
 Same shape as the creation flow: ``advance(state, message) -> state``, no I/O and
-no clock. The current world cycle arrives as an argument, which is what keeps
-location generation reproducible (``docs/procgen.md``).
+no clock. What the world looks like arrives as values - the standing generation
+of a location, the shop rotation, the moment gathering is judged at - which is
+what keeps generation reproducible (``docs/procgen.md``).
 
 The flow never writes anything. When a step should change stored data - gold, a
 loadout, a contract, the bag - it puts the result into :class:`PendingWrite` and
@@ -90,6 +91,21 @@ class PendingWrite:
 
 
 @dataclass(frozen=True, slots=True)
+class Clock:
+    """The two timed things left in the game, and the moment they are read at.
+
+    The world no longer turns over on a shared watch: a location keeps its map
+    until it is cleared out. What is still timed is a shop shelf and a personal
+    gathering cooldown, and both arrive here as values so the flow stays free of
+    the clock (``docs/adr/0003-location-generations.md``).
+    """
+
+    now: int = 0
+    shop_rotation: int = 0
+    gather_cooldown: int = 900
+
+
+@dataclass(frozen=True, slots=True)
 class Goods:
     """What the player owns and what the current city sells.
 
@@ -106,13 +122,15 @@ class Goods:
 class LocationSession:
     """A visit to one location.
 
-    The cycle index is captured on entry and kept until the player leaves, so the
-    map never changes under their feet mid-visit (docs/adr/0003).
+    ``generation`` is which map of this place is standing: it is captured on
+    entry and kept until the player leaves, so the ground never changes under
+    their feet mid-visit. It goes up only when the location is cleared out, and
+    it is shared by everybody in it (docs/adr/0003).
     """
 
     city_id: str = ""
     slot: int = 0
-    cycle: int = 0
+    generation: int = 0
     node: int = 0
     cleared: int = 0
 
@@ -123,12 +141,16 @@ class LocationSession:
 
 @dataclass(frozen=True, slots=True)
 class Descent:
-    """An unfinished run into the dungeons of a city."""
+    """An unfinished run into the dungeons of a city.
+
+    ``started_at`` is the moment the descent began; it is part of the seed, so
+    two descents in a row are two different descents.
+    """
 
     city_id: str = ""
     level: int = 0
     depth: int = 0
-    cycle: int = 0
+    started_at: int = 0
 
     @property
     def active(self) -> bool:
@@ -156,9 +178,9 @@ class PlayState:
     edge_skill: str = ""
     quest_id: str = ""
     craft_id: str = ""
-    # The watch the craft screen was opened in: gathering is once per watch,
-    # and the answer must not change while the player is reading it.
-    craft_cycle: int = 0
+    # The moment the craft screen was opened at: the cooldown line must not tick
+    # down while the player is still reading the screen it was printed on.
+    craft_moment: int = 0
     # Transient: cleared at the start of every step, read by the handler.
     pending: PendingWrite = field(default_factory=PendingWrite)
     fight: str = ""
@@ -183,7 +205,7 @@ class PlayState:
                 "session": [
                     self.session.city_id,
                     self.session.slot,
-                    self.session.cycle,
+                    self.session.generation,
                     self.session.node,
                     self.session.cleared,
                 ],
@@ -191,13 +213,13 @@ class PlayState:
                     self.descent.city_id,
                     self.descent.level,
                     self.descent.depth,
-                    self.descent.cycle,
+                    self.descent.started_at,
                 ],
                 "stub": self.stub_title,
                 "pick": [self.pick_kind, self.pick_slot],
                 "edge": self.edge_skill,
                 "quest": self.quest_id,
-                "craft": [self.craft_id, self.craft_cycle],
+                "craft": [self.craft_id, self.craft_moment],
                 "pages": [self.list_page.page, self.skill_page.page, self.board_page.page],
             },
             ensure_ascii=False,
@@ -206,11 +228,11 @@ class PlayState:
     @classmethod
     def deserialise(cls, raw: str) -> PlayState:
         data = json.loads(raw)
-        city_id, slot, cycle, node, cleared = data.get("session", ["", 0, 0, 0, 0])
-        descent_city, descent_level, depth, descent_cycle = data.get("descent", ["", 0, 0, 0])
+        city_id, slot, generation, node, cleared = data.get("session", ["", 0, 0, 0, 0])
+        descent_city, descent_level, depth, descent_started = data.get("descent", ["", 0, 0, 0])
         pick_kind, pick_slot = data.get("pick", ["", 0])
         list_page, skill_page, board_page = data.get("pages", [1, 1, 1])
-        craft_id, craft_cycle = data.get("craft", ["", 0])
+        craft_id, craft_moment = data.get("craft", ["", 0])
         return cls(
             screen=ScreenId(data["screen"]),
             stack=NavigationStack.deserialise(data.get("stack", "")),
@@ -220,7 +242,7 @@ class PlayState:
             session=LocationSession(
                 city_id=city_id,
                 slot=int(slot),
-                cycle=int(cycle),
+                generation=int(generation),
                 node=int(node),
                 cleared=int(cleared),
             ),
@@ -228,7 +250,7 @@ class PlayState:
                 city_id=descent_city,
                 level=int(descent_level),
                 depth=int(depth),
-                cycle=int(descent_cycle),
+                started_at=int(descent_started),
             ),
             stub_title=data.get("stub", ""),
             list_page=PageState(page=int(list_page)),
@@ -239,7 +261,7 @@ class PlayState:
             edge_skill=data.get("edge", ""),
             quest_id=data.get("quest", ""),
             craft_id=craft_id,
-            craft_cycle=int(craft_cycle),
+            craft_moment=int(craft_moment),
         )
 
 
@@ -280,7 +302,7 @@ def build_location(
         world_seed=world_seed,
         city_id=city.id,
         slot=location.slot,
-        cycle=session.cycle,
+        generation=session.generation,
         name=location.name,
         biome=location.biome,
         level_min=location.level_min,
@@ -290,12 +312,12 @@ def build_location(
 
 def node_fight_seed(world_seed: str, session: LocationSession) -> bytes:
     """The seed of the fight standing at the current node."""
-    parent = location_seed(world_seed, session.city_id, session.slot, session.cycle)
+    parent = location_seed(world_seed, session.city_id, session.slot, session.generation)
     return derive(parent, "fight", session.node)
 
 
 def descent_fight_seed(world_seed: str, descent: Descent) -> bytes:
-    return derive(world_seed, "descent", descent.city_id, descent.cycle, descent.depth)
+    return derive(world_seed, "descent", descent.city_id, descent.started_at, descent.depth)
 
 
 def dungeon_level(content: GameContent, character: Character, city_id: str) -> int:
@@ -315,8 +337,10 @@ def render(
     world_seed: str,
     goods: Goods | None = None,
     settings: AccessibilitySettings | None = None,
+    clock: Clock | None = None,
 ) -> Screen:
     shelf = goods or Goods(gold=character.gold)
+    clock = clock or Clock()
     city = known_city(content, state.city_id, character.city_id)
     match state.screen:
         case ScreenId.SETTINGS:
@@ -402,7 +426,8 @@ def render(
                 character,
                 content.craft(state.craft_id),
                 _bag(shelf),
-                cycle=state.craft_cycle,
+                now=state.craft_moment,
+                cooldown=clock.gather_cooldown,
                 notice=state.notice,
             )
         # A craft that content no longer has is not an error: the player is put
@@ -468,8 +493,8 @@ def advance(
     state: PlayState,
     text: str,
     *,
-    cycle: int,
     world_seed: str,
+    clock: Clock | None = None,
     goods: Goods | None = None,
     settings: AccessibilitySettings | None = None,
 ) -> PlayState:
@@ -535,6 +560,7 @@ def advance(
 
     state = replace(state, pending=PendingWrite(), fight="")
     shelf = goods or Goods(gold=character.gold)
+    ticking = clock or Clock()
 
     match state.screen:
         case ScreenId.SETTINGS:
@@ -548,7 +574,7 @@ def advance(
         case ScreenId.SELL:
             return _handle_sell(content, character, state, command, shelf)
         case ScreenId.MAIN_MENU:
-            return _handle_main_menu(character, state, command, cycle=cycle)
+            return _handle_main_menu(character, state, command, clock=ticking)
         case ScreenId.KEEPER:
             return _handle_keeper(content, character, state, command)
         case ScreenId.WORLD:
@@ -570,10 +596,10 @@ def advance(
         case ScreenId.TAVERN:
             return _handle_tavern(content, character, state, command)
         case ScreenId.CRAFTS:
-            return _handle_crafts(content, character, state, command, cycle=cycle)
+            return _handle_crafts(content, character, state, command, clock=ticking)
         case ScreenId.CRAFT:
             return _handle_craft(
-                content, character, state, command, shelf, cycle=cycle, world_seed=world_seed
+                content, character, state, command, shelf, clock=ticking, world_seed=world_seed
             )
         case ScreenId.QUEST_BOARD:
             return _handle_board(content, character, state, command)
@@ -584,9 +610,9 @@ def advance(
         case ScreenId.BANK:
             return _handle_bank(content, character, state, command)
         case ScreenId.DUNGEON:
-            return _handle_dungeon(content, character, state, command, cycle=cycle)
+            return _handle_dungeon(content, character, state, command, clock=ticking)
         case ScreenId.LOCATION_LIST:
-            return _handle_location_list(content, character, state, command, cycle=cycle)
+            return _handle_location_list(content, character, state, command)
         case ScreenId.LOCATION:
             return _handle_location(content, character, state, command, world_seed=world_seed)
         case _:
@@ -682,7 +708,7 @@ def _page_move(command: Command, current: PageState, pages: int) -> PageState | 
 
 
 def _handle_main_menu(
-    character: Character, state: PlayState, command: Command, *, cycle: int
+    character: Character, state: PlayState, command: Command, *, clock: Clock
 ) -> PlayState:
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите кнопку из меню.")
@@ -697,7 +723,7 @@ def _handle_main_menu(
     if labels.QUESTS.matches(command.argument):
         return state.at(ScreenId.QUESTS)
     if labels.CRAFTS.matches(command.argument):
-        return replace(state, craft_cycle=cycle).at(ScreenId.CRAFTS)
+        return replace(state, craft_moment=clock.now).at(ScreenId.CRAFTS)
     if labels.SETTINGS.matches(command.argument):
         return state.at(ScreenId.SETTINGS)
     if labels.TUTORIAL.matches(command.argument):
@@ -764,13 +790,13 @@ def _handle_crafts(
     state: PlayState,
     command: Command,
     *,
-    cycle: int,
+    clock: Clock,
 ) -> PlayState:
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите ремесло из списка.")
     for craft in content.crafts:
         if command.argument.startswith(craft.name):
-            chosen = replace(state, craft_id=craft.id, craft_cycle=cycle)
+            chosen = replace(state, craft_id=craft.id, craft_moment=clock.now)
             return chosen.at(ScreenId.CRAFT)
     return state.with_notice("Не узнал ремесло. Нажмите ремесло из списка.")
 
@@ -782,7 +808,7 @@ def _handle_craft(
     command: Command,
     goods: Goods,
     *,
-    cycle: int,
+    clock: Clock,
     world_seed: str,
 ) -> PlayState:
     if command.intent is not Intent.SELECT:
@@ -790,13 +816,15 @@ def _handle_craft(
     craft = content.craft(state.craft_id)
 
     if labels.GATHER.matches(command.argument):
-        seed = derive(world_seed, "gather", character.id, craft.id, cycle)
-        worked, gathered = craft_rules.gather(content, character, craft, cycle=cycle, seed=seed)
+        seed = derive(world_seed, "gather", character.id, craft.id, clock.now)
+        worked, gathered = craft_rules.gather(
+            content, character, craft, now=clock.now, cooldown=clock.gather_cooldown, seed=seed
+        )
         line = craft_screens.gathered_line(content, gathered)
         if not gathered.ok:
             return state.with_notice(line)
         write = PendingWrite(character=worked).with_items((gathered.item_id, gathered.count))
-        return replace(state, craft_cycle=cycle).storing(write).with_notice(line)
+        return replace(state, craft_moment=clock.now).storing(write).with_notice(line)
 
     owned = _bag(goods)
     for recipe in content.recipes_of(craft.id):
@@ -805,7 +833,7 @@ def _handle_craft(
         # The work already done is part of the seed, so two batches in a row are
         # not the same batch twice.
         experience = character.crafts.progress(craft.id).experience
-        seed = derive(world_seed, "craft", character.id, recipe.id, cycle, experience)
+        seed = derive(world_seed, "craft", character.id, recipe.id, clock.now, experience)
         worked, made = craft_rules.make(content, character, recipe, owned, seed=seed)
         line = craft_screens.made_line(content, made)
         if not made.ok:
@@ -1299,7 +1327,7 @@ def _handle_dungeon(
     state: PlayState,
     command: Command,
     *,
-    cycle: int,
+    clock: Clock,
 ) -> PlayState:
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите «Спуститься» или «Назад».")
@@ -1311,7 +1339,7 @@ def _handle_dungeon(
         city_id=city.id,
         level=dungeon_level(content, character, city.id),
         depth=1,
-        cycle=cycle,
+        started_at=clock.now,
     )
     return replace(state, descent=descent, fight="dungeon").at(ScreenId.COMBAT)
 
@@ -1324,8 +1352,6 @@ def _handle_location_list(
     character: Character,
     state: PlayState,
     command: Command,
-    *,
-    cycle: int,
 ) -> PlayState:
     city = known_city(content, state.city_id, character.city_id)
     moved = _page_move(command, state.location_page, total_pages(len(city.locations)))
@@ -1341,9 +1367,10 @@ def _handle_location_list(
                     f"Локация {location.name} рассчитана на уровни с {location.level_min} "
                     f"по {location.level_max}. Ваш уровень: {character.level}."
                 )
-            session = LocationSession(
-                city_id=city.id, slot=location.slot, cycle=cycle, node=0, cleared=0
-            )
+            # The generation and the cleared mask are shared by everybody in the
+            # place, so the handler fills them in from the cache before the
+            # screen is drawn; the flow only says which location was entered.
+            session = LocationSession(city_id=city.id, slot=location.slot, node=0, cleared=0)
             return replace(state, session=session).at(ScreenId.LOCATION)
     return state.with_notice("Не узнал эту локацию. Нажмите локацию из списка.")
 
@@ -1399,7 +1426,7 @@ def _resolve_node_action(
     node = location.node(index)
     if node.kind.is_combat:
         if is_cleared(state.session.cleared, index):
-            return state.with_notice("Здесь уже пусто: этот бой прошёл в эту стражу.")
+            return state.with_notice("Здесь уже пусто: этот бой прошёл.")
         # The handler builds the fight itself: it owns the enemy generation and
         # the cache the fight lives in.
         return replace(state, fight="node").at(ScreenId.COMBAT)
@@ -1414,7 +1441,9 @@ def _resolve_node_action(
         return state.with_notice(f"Узел {index} уже пройден, здесь больше ничего нет.")
 
     seed = derive(
-        location_seed(world_seed, state.session.city_id, state.session.slot, state.session.cycle),
+        location_seed(
+            world_seed, state.session.city_id, state.session.slot, state.session.generation
+        ),
         "search",
         index,
     )

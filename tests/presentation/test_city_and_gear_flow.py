@@ -16,7 +16,14 @@ from mmorpg.domain.entities import Character, GameContent, SkillLoadout
 from mmorpg.domain.entities.content import SkillKind
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.economy import mentor_price, sell_price
-from mmorpg.presentation.telegram.flows.play import Goods, PlayState, advance, begin, render
+from mmorpg.presentation.telegram.flows.play import (
+    Clock,
+    Goods,
+    PlayState,
+    advance,
+    begin,
+    render,
+)
 from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import play as play_screens
 from mmorpg.presentation.telegram.screens import skills as skill_screens
@@ -24,7 +31,7 @@ from mmorpg.presentation.telegram.screens.base import ScreenId
 from mmorpg.presentation.telegram.screens.shop import OwnedItem
 
 WORLD_SEED = "vellar-test"
-CYCLE = 100
+CLOCK = Clock(now=1_700_000_000, shop_rotation=100, gather_cooldown=900)
 
 
 @pytest.fixture
@@ -60,7 +67,7 @@ def step(
             hero,
             current,
             message,
-            cycle=CYCLE,
+            clock=CLOCK,
             world_seed=WORLD_SEED,
             goods=goods,
         )

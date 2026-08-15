@@ -2,12 +2,12 @@
 
 from mmorpg.infrastructure.cache.memory import (
     InMemoryIdempotencyStore,
-    InMemoryLocationDeltaCache,
+    InMemoryLocationStateCache,
     InMemoryStateCache,
 )
 
 __all__ = [
     "InMemoryIdempotencyStore",
-    "InMemoryLocationDeltaCache",
+    "InMemoryLocationStateCache",
     "InMemoryStateCache",
 ]

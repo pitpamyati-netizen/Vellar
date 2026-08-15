@@ -66,7 +66,7 @@ def sample_location() -> GeneratedLocation:
         world_seed="vellar-test",
         city_id="farhold",
         slot=1,
-        cycle=100,
+        generation=100,
         name="Луга у Заставы",
         biome="луга",
         level_min=1,
@@ -163,7 +163,7 @@ def craftsman(fighter: Character) -> Character:
         crafts=CraftLog(
             MappingProxyType(
                 {
-                    "mining": CraftProgress(experience=260, gathered_cycle=100),
+                    "mining": CraftProgress(experience=260, gathered_at=1_700_000_000),
                     "smithing": CraftProgress(experience=140),
                 }
             )
@@ -180,7 +180,7 @@ def keeper(fighter: Character) -> Character:
 @pytest.fixture(scope="session")
 def sample_stock(content: GameContent) -> tuple[Item, ...]:
     return roll_assortment(
-        content, world_seed="vellar-test", city_id="farhold", cycle=100, character_level=8
+        content, world_seed="vellar-test", city_id="farhold", rotation=100, character_level=8
     )
 
 
@@ -268,18 +268,29 @@ def all_screens(
         skill_screens.edge_screen(content, fighter, content.skill("warrior_cleave")),
         craft_screens.crafts_screen(content, hero),
         craft_screens.crafts_screen(content, craftsman),
-        craft_screens.craft_screen(content, craftsman, content.craft("mining"), {}, cycle=100),
         craft_screens.craft_screen(
-            content, hero, content.craft("mining"), {}, cycle=7, notice="Собрано: Железный лом."
+            content, craftsman, content.craft("mining"), {}, now=1_700_000_000, cooldown=900
+        ),
+        craft_screens.craft_screen(
+            content,
+            hero,
+            content.craft("mining"),
+            {},
+            now=1_700_000_000,
+            cooldown=900,
+            notice="Собрано: Железный лом.",
         ),
         craft_screens.craft_screen(
             content,
             craftsman,
             content.craft("smithing"),
             {"iron_scrap": 4, "mountain_ore": 3},
-            cycle=100,
+            now=1_700_000_000,
+            cooldown=900,
         ),
-        craft_screens.craft_screen(content, hero, content.craft("alchemy"), {}, cycle=100),
+        craft_screens.craft_screen(
+            content, hero, content.craft("alchemy"), {}, now=1_700_000_000, cooldown=900
+        ),
         quest_screens.journal_screen(content, fighter),
         quest_screens.journal_screen(content, hero),
         quest_screens.board_screen(content, hero, PageState()),

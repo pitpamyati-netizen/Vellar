@@ -12,31 +12,31 @@ from hypothesis import strategies as st
 from mmorpg.domain.entities import GameContent, NodeKind
 from mmorpg.domain.entities.location import EnemyRank
 from mmorpg.domain.procgen import (
-    DEFAULT_CYCLE_SECONDS,
+    DEFAULT_SHOP_ROTATION_SECONDS,
     MAX_NODES,
     MIN_NODES,
     cleared_mask,
     combat_nodes,
-    cycle_ends_at,
-    cycle_index,
     generate_enemy,
     generate_group,
     generate_location,
     is_cleared,
     location_seed,
-    seconds_left_in_cycle,
+    rotation_ends_at,
+    rotation_index,
+    seconds_left_in_rotation,
 )
 from mmorpg.domain.procgen.seeds import enemy_seed, node_seed
 
 WORLD_SEED = "vellar-test"
 
 
-def build(city_id: str = "farhold", slot: int = 1, cycle: int = 100, seed: str = WORLD_SEED):
+def build(city_id: str = "farhold", slot: int = 1, generation: int = 100, seed: str = WORLD_SEED):
     return generate_location(
         world_seed=seed,
         city_id=city_id,
         slot=slot,
-        cycle=cycle,
+        generation=generation,
         name="Луга у Заставы",
         biome="луга",
         level_min=1,
@@ -44,22 +44,23 @@ def build(city_id: str = "farhold", slot: int = 1, cycle: int = 100, seed: str =
     )
 
 
-# --- cycles ----------------------------------------------------------
+# --- the one thing still on a clock ----------------------------------
 
 
-def test_cycle_index_is_six_hours() -> None:
-    assert DEFAULT_CYCLE_SECONDS == 21_600
-    assert cycle_index(0) == 0
-    assert cycle_index(21_599) == 0
-    assert cycle_index(21_600) == 1
-    assert cycle_index(86_400) == 4  # four cycles a day
+def test_the_shop_rotates_every_half_hour() -> None:
+    """The world no longer turns over on a watch; only the shelf does."""
+    assert DEFAULT_SHOP_ROTATION_SECONDS == 1_800
+    assert rotation_index(0) == 0
+    assert rotation_index(1_799) == 0
+    assert rotation_index(1_800) == 1
+    assert rotation_index(86_400) == 48
 
 
-def test_seconds_left_in_cycle_is_a_valid_ttl() -> None:
-    for moment in (0, 5_000, 21_599, 43_200):
-        left = seconds_left_in_cycle(moment)
-        assert 0 < left <= DEFAULT_CYCLE_SECONDS
-        assert moment + left == cycle_ends_at(cycle_index(moment))
+def test_seconds_left_in_rotation_is_a_valid_ttl() -> None:
+    for moment in (0, 500, 1_799, 43_200):
+        left = seconds_left_in_rotation(moment)
+        assert 0 < left <= DEFAULT_SHOP_ROTATION_SECONDS
+        assert moment + left == rotation_ends_at(rotation_index(moment))
 
 
 # --- determinism -----------------------------------------------------
@@ -75,8 +76,9 @@ def test_ten_thousand_runs_are_byte_identical() -> None:
     assert all(location_seed(WORLD_SEED, "farhold", 1, 100) == reference for _ in range(10_000))
 
 
-def test_a_new_cycle_regenerates_the_world() -> None:
-    assert build(cycle=100) != build(cycle=101)
+def test_a_new_generation_regenerates_the_location() -> None:
+    """The map changes when the place is cleared out, and not before."""
+    assert build(generation=100) != build(generation=101)
 
 
 def test_different_slots_and_cities_differ() -> None:
@@ -92,11 +94,12 @@ def test_a_different_world_seed_changes_everything() -> None:
 
 
 @given(
-    cycle=st.integers(min_value=0, max_value=200_000), slot=st.integers(min_value=1, max_value=5)
+    generation=st.integers(min_value=0, max_value=200_000),
+    slot=st.integers(min_value=1, max_value=5),
 )
 @settings(max_examples=400, suppress_health_check=[HealthCheck.function_scoped_fixture])
-def test_structure_invariants(cycle: int, slot: int) -> None:
-    location = build(slot=slot, cycle=cycle)
+def test_structure_invariants(generation: int, slot: int) -> None:
+    location = build(slot=slot, generation=generation)
 
     assert MIN_NODES <= len(location.nodes) <= MAX_NODES
     assert location.entrance.kind is NodeKind.ENTRANCE
@@ -115,15 +118,15 @@ def test_structure_invariants(cycle: int, slot: int) -> None:
 
 @given(
     city=st.sampled_from(["farhold", "dusk_harbor", "bone_marches", "last_beacon"]),
-    cycle=st.integers(min_value=0, max_value=50_000),
+    generation=st.integers(min_value=0, max_value=50_000),
 )
 @settings(max_examples=200)
-def test_exit_is_always_reachable_across_cities(city: str, cycle: int) -> None:
+def test_exit_is_always_reachable_across_cities(city: str, generation: int) -> None:
     location = generate_location(
         world_seed=WORLD_SEED,
         city_id=city,
         slot=3,
-        cycle=cycle,
+        generation=generation,
         name="Локация",
         biome="лес",
         level_min=10,
@@ -137,7 +140,7 @@ def test_node_levels_increase_with_depth() -> None:
         world_seed=WORLD_SEED,
         city_id="farhold",
         slot=5,
-        cycle=7,
+        generation=7,
         name="Выработки",
         biome="подземелье",
         level_min=22,
@@ -234,5 +237,5 @@ def test_generation_never_touches_the_global_random(content: GameContent) -> Non
     build()
     first = random.random()
     random.seed(1)
-    build(cycle=999)
+    build(generation=999)
     assert random.random() == first

@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import pytest
 
+from mmorpg.domain.entities.location import LocationState, Presence
 from mmorpg.infrastructure.cache.redis_cache import (
     RedisIdempotencyStore,
-    RedisLocationDeltaCache,
+    RedisLocationStateCache,
     RedisStateCache,
 )
 
@@ -68,40 +69,57 @@ async def test_deleting_removes_the_key(redis) -> None:
     assert await cache.get("__test_state:gone") is None
 
 
-# --- location deltas ---------------------------------------------------------
+# --- the shared state of a location -----------------------------------------
 
 
 async def test_cleared_nodes_accumulate_in_the_mask(redis) -> None:
-    deltas = RedisLocationDeltaCache(redis)
-    assert await deltas.get_mask(TEST_CHARACTER, TEST_CITY, slot=1, cycle=5) == 0
+    locations = RedisLocationStateCache(redis)
+    assert await locations.state(TEST_CITY, 1) == LocationState()
 
-    await deltas.mark_cleared(TEST_CHARACTER, TEST_CITY, slot=1, cycle=5, node=0, ttl=60)
-    mask = await deltas.mark_cleared(TEST_CHARACTER, TEST_CITY, slot=1, cycle=5, node=3, ttl=60)
+    await locations.mark_cleared(TEST_CITY, 1, generation=0, node=0, ttl=60)
+    state = await locations.mark_cleared(TEST_CITY, 1, generation=0, node=3, ttl=60)
 
-    assert mask == 0b1001
-    # Written as an integer, read back as an integer, through a text protocol.
-    assert await deltas.get_mask(TEST_CHARACTER, TEST_CITY, slot=1, cycle=5) == 0b1001
+    assert state.cleared == 0b1001
+    # Written as integers, read back as integers, through a text protocol.
+    assert await locations.state(TEST_CITY, 1) == state
 
 
 async def test_marking_the_same_node_twice_changes_nothing(redis) -> None:
-    deltas = RedisLocationDeltaCache(redis)
-    await deltas.mark_cleared(TEST_CHARACTER, TEST_CITY, slot=1, cycle=5, node=2, ttl=60)
-    mask = await deltas.mark_cleared(TEST_CHARACTER, TEST_CITY, slot=1, cycle=5, node=2, ttl=60)
-    assert mask == 0b100
+    locations = RedisLocationStateCache(redis)
+    await locations.mark_cleared(TEST_CITY, 1, generation=0, node=2, ttl=60)
+    state = await locations.mark_cleared(TEST_CITY, 1, generation=0, node=2, ttl=60)
+    assert state.cleared == 0b100
 
 
-async def test_each_cycle_starts_from_a_clean_location(redis) -> None:
-    """The world regenerates every cycle, so last cycle's progress must not leak in."""
-    deltas = RedisLocationDeltaCache(redis)
-    await deltas.mark_cleared(TEST_CHARACTER, TEST_CITY, slot=1, cycle=5, node=1, ttl=60)
-    assert await deltas.get_mask(TEST_CHARACTER, TEST_CITY, slot=1, cycle=6) == 0
+async def test_a_cleared_location_rolls_over_exactly_once(redis) -> None:
+    """Two players finishing the last node together must not roll it twice."""
+    locations = RedisLocationStateCache(redis)
+    await locations.mark_cleared(TEST_CITY, 1, generation=0, node=1, ttl=60)
+
+    rolled = await locations.rotate(TEST_CITY, 1, generation=0, ttl=60)
+    assert rolled == LocationState(generation=1, cleared=0)
+    assert await locations.rotate(TEST_CITY, 1, generation=0, ttl=60) == rolled
 
 
-async def test_resetting_clears_the_mask(redis) -> None:
-    deltas = RedisLocationDeltaCache(redis)
-    await deltas.mark_cleared(TEST_CHARACTER, TEST_CITY, slot=1, cycle=5, node=1, ttl=60)
-    await deltas.reset(TEST_CHARACTER, TEST_CITY, slot=1, cycle=5)
-    assert await deltas.get_mask(TEST_CHARACTER, TEST_CITY, slot=1, cycle=5) == 0
+async def test_people_in_a_location_are_seen_by_node(redis) -> None:
+    locations = RedisLocationStateCache(redis)
+    await locations.arrive(
+        TEST_CITY, 1, Presence(TEST_CHARACTER, "Мерла", 12, node=2), now=1000, ttl=600
+    )
+    here = await locations.others_at(TEST_CITY, 1, 2, exclude=0, now=1000, ttl=600)
+    assert [presence.name for presence in here] == ["Мерла"]
+    assert await locations.others_at(TEST_CITY, 1, 3, exclude=0, now=1000, ttl=600) == ()
+
+    await locations.leave(TEST_CITY, 1, TEST_CHARACTER)
+    assert await locations.others_at(TEST_CITY, 1, 2, exclude=0, now=1000, ttl=600) == ()
+
+
+async def test_a_stale_presence_is_forgotten(redis) -> None:
+    locations = RedisLocationStateCache(redis)
+    await locations.arrive(
+        TEST_CITY, 1, Presence(TEST_CHARACTER, "Мерла", 12, node=2), now=1000, ttl=600
+    )
+    assert await locations.others_at(TEST_CITY, 1, 2, exclude=0, now=1601, ttl=600) == ()
 
 
 # --- idempotency -------------------------------------------------------------

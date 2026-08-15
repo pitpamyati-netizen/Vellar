@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
 from mmorpg.domain.entities.character import Character, InventoryEntry
+from mmorpg.domain.entities.location import LocationState, Presence
 from mmorpg.domain.entities.trade import Offer, TradeRecord, TradeStatus
 
 
@@ -144,20 +145,38 @@ class TradeRepository(Protocol):
 
 
 @runtime_checkable
-class LocationDeltaCache(Protocol):
-    """Which nodes a player already cleared in the current world cycle.
+class LocationStateCache(Protocol):
+    """The shared state of a location: its generation, its cleared nodes, its people.
 
-    The value is a bitmask and the key expires with the cycle, so PostgreSQL never
-    sees any of it (``docs/procgen.md``).
+    A location is common ground. Everyone standing in one sees the same map and
+    the same emptied nodes, and can see each other. None of it is a source of
+    truth - losing Redis re-rolls the map and forgets who was where, which costs
+    a visit and never a character (``docs/procgen.md``).
     """
 
-    async def get_mask(self, character_id: int, city_id: str, slot: int, cycle: int) -> int: ...
+    async def state(self, city_id: str, slot: int) -> LocationState: ...
 
     async def mark_cleared(
-        self, character_id: int, city_id: str, slot: int, cycle: int, node: int, ttl: int
-    ) -> int: ...
+        self, city_id: str, slot: int, generation: int, node: int, ttl: int
+    ) -> LocationState: ...
 
-    async def reset(self, character_id: int, city_id: str, slot: int, cycle: int) -> None: ...
+    async def rotate(self, city_id: str, slot: int, generation: int, ttl: int) -> LocationState:
+        """Roll the location into its next generation, once, when it is cleared out.
+
+        Passing the generation the caller saw is what makes two players finishing
+        the last node at the same time roll it over once, not twice.
+        """
+
+    async def arrive(
+        self, city_id: str, slot: int, presence: Presence, *, now: int, ttl: int
+    ) -> None: ...
+
+    async def leave(self, city_id: str, slot: int, character_id: int) -> None: ...
+
+    async def others_at(
+        self, city_id: str, slot: int, node: int, *, exclude: int, now: int, ttl: int
+    ) -> tuple[Presence, ...]:
+        """Who else is standing on this node right now, freshest first."""
 
 
 @runtime_checkable

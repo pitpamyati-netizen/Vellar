@@ -33,7 +33,7 @@ from mmorpg.domain.ports.repositories import IdempotencyStore
 from mmorpg.health import heartbeat
 from mmorpg.infrastructure.cache import (
     InMemoryIdempotencyStore,
-    InMemoryLocationDeltaCache,
+    InMemoryLocationStateCache,
     InMemoryStateCache,
 )
 from mmorpg.infrastructure.content import load_content
@@ -144,7 +144,7 @@ async def _build_adapters(
             trades=InMemoryTradeRepository(),
             privacy=InMemoryPrivacyRepository(),
             state_cache=InMemoryStateCache(),
-            location_deltas=InMemoryLocationDeltaCache(),
+            locations=InMemoryLocationStateCache(),
             # The sink is attached once the Bot exists; until then, and whenever
             # CHANNEL_ID is empty, announcing is a no-op.
             broadcasts=ChannelBroadcaster(sink=None, chat_id=settings.channel_id),
@@ -155,7 +155,7 @@ async def _build_adapters(
 
     from mmorpg.infrastructure.cache.redis_cache import (
         RedisIdempotencyStore,
-        RedisLocationDeltaCache,
+        RedisLocationStateCache,
         RedisStateCache,
     )
     from mmorpg.infrastructure.persistence.pool import create_postgres_pool, create_redis_client
@@ -183,7 +183,7 @@ async def _build_adapters(
         trades=PostgresTradeRepository(pool),
         privacy=PostgresPrivacyRepository(pool),
         state_cache=RedisStateCache(redis),
-        location_deltas=RedisLocationDeltaCache(redis),
+        locations=RedisLocationStateCache(redis),
         broadcasts=ChannelBroadcaster(sink=None, chat_id=settings.channel_id),
     )
     return RedisStorage(redis), dependencies, RedisIdempotencyStore(redis)

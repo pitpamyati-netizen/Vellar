@@ -34,9 +34,9 @@ def test_pool_bounds_are_validated() -> None:
         _settings(postgres_pool_min=10, postgres_pool_max=5)
 
 
-def test_cycle_seconds_must_be_positive() -> None:
+def test_shop_rotation_seconds_must_be_positive() -> None:
     with pytest.raises(ValidationError):
-        _settings(cycle_seconds=0)
+        _settings(shop_rotation_seconds=0)
 
 
 def test_the_build_stamp_defaults_to_unknown() -> None:

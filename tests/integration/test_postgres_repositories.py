@@ -97,7 +97,7 @@ def a_character(user_id: int, name: str = "Тестовый") -> Character:
         bank_gold=900,
         quests=QuestLog(taken=MappingProxyType({"farhold_tallies": 2}), done=("prologue",)),
         crafts=CraftLog(
-            MappingProxyType({"mining": CraftProgress(experience=260, gathered_cycle=12)})
+            MappingProxyType({"mining": CraftProgress(experience=260, gathered_at=1_700_000_000)})
         ),
         is_admin=True,
     )
@@ -249,7 +249,9 @@ async def test_a_character_survives_a_round_trip(pool, clean_user) -> None:
     assert read.bank_gold == 900
     assert dict(read.quests.taken) == {"farhold_tallies": 2}
     assert read.quests.done == ("prologue",)
-    assert read.crafts.progress("mining") == CraftProgress(experience=260, gathered_cycle=12)
+    assert read.crafts.progress("mining") == CraftProgress(
+        experience=260, gathered_at=1_700_000_000
+    )
     assert read.unspent_stat_points == 5
     assert read.is_admin is True
     # The vault is a column of its own: the purse must never absorb it.
@@ -272,7 +274,7 @@ async def test_saving_a_character_updates_every_column(pool, clean_user) -> None
             bank_gold=1_500,
             quests=QuestLog(taken=MappingProxyType({"farhold_tallies": 3}), done=()),
             crafts=CraftLog(
-                MappingProxyType({"smithing": CraftProgress(experience=40, gathered_cycle=-1)})
+                MappingProxyType({"smithing": CraftProgress(experience=40, gathered_at=0)})
             ),
             is_admin=True,
         )

@@ -97,7 +97,7 @@ def _crafts_from_json(raw: str | None) -> CraftLog:
     entries = {
         str(craft_id): CraftProgress(
             experience=int(progress.get("experience", 0)),
-            gathered_cycle=int(progress.get("cycle", -1)),
+            gathered_at=int(progress.get("gathered_at", 0)),
         )
         for craft_id, progress in dict(data).items()
     }
@@ -107,7 +107,7 @@ def _crafts_from_json(raw: str | None) -> CraftLog:
 def _crafts_to_json(log: CraftLog) -> str:
     return json.dumps(
         {
-            craft_id: {"experience": progress.experience, "cycle": progress.gathered_cycle}
+            craft_id: {"experience": progress.experience, "gathered_at": progress.gathered_at}
             for craft_id, progress in log.entries.items()
         },
         ensure_ascii=False,

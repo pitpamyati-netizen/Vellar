@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from dataclasses import replace
+
+from mmorpg.domain.entities.location import LocationState, Presence
 
 
 class InMemoryStateCache:
@@ -33,35 +36,67 @@ class InMemoryStateCache:
         self._values.pop(key, None)
 
 
-class InMemoryLocationDeltaCache:
+class InMemoryLocationStateCache:
+    """The shared state of every location, for a game running without Redis."""
+
     def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
         self._clock = clock
-        self._masks: dict[str, tuple[int, float]] = {}
+        self._states: dict[str, tuple[LocationState, float]] = {}
+        self._people: dict[str, dict[int, tuple[Presence, int]]] = {}
 
     @staticmethod
-    def _key(character_id: int, city_id: str, slot: int, cycle: int) -> str:
-        return f"loc:{city_id}:{slot}:{cycle}:{character_id}"
+    def _key(city_id: str, slot: int) -> str:
+        return f"loc:{city_id}:{slot}"
 
-    async def get_mask(self, character_id: int, city_id: str, slot: int, cycle: int) -> int:
-        entry = self._masks.get(self._key(character_id, city_id, slot, cycle))
+    async def state(self, city_id: str, slot: int) -> LocationState:
+        entry = self._states.get(self._key(city_id, slot))
         if entry is None:
-            return 0
-        mask, expires_at = entry
-        if expires_at <= self._clock():
-            return 0
-        return mask
+            return LocationState()
+        state, expires_at = entry
+        # An untouched location goes back to its first generation eventually,
+        # which is the same thing as being generated fresh.
+        return state if expires_at > self._clock() else LocationState()
 
     async def mark_cleared(
-        self, character_id: int, city_id: str, slot: int, cycle: int, node: int, ttl: int
-    ) -> int:
-        key = self._key(character_id, city_id, slot, cycle)
-        current = await self.get_mask(character_id, city_id, slot, cycle)
-        updated = current | (1 << node)
-        self._masks[key] = (updated, self._clock() + ttl)
+        self, city_id: str, slot: int, generation: int, node: int, ttl: int
+    ) -> LocationState:
+        current = await self.state(city_id, slot)
+        if current.generation != generation:
+            return current
+        updated = replace(current, cleared=current.cleared | (1 << node))
+        self._states[self._key(city_id, slot)] = (updated, self._clock() + ttl)
         return updated
 
-    async def reset(self, character_id: int, city_id: str, slot: int, cycle: int) -> None:
-        self._masks.pop(self._key(character_id, city_id, slot, cycle), None)
+    async def rotate(self, city_id: str, slot: int, generation: int, ttl: int) -> LocationState:
+        current = await self.state(city_id, slot)
+        if current.generation != generation:
+            return current
+        rolled = LocationState(generation=generation + 1, cleared=0)
+        self._states[self._key(city_id, slot)] = (rolled, self._clock() + ttl)
+        return rolled
+
+    async def arrive(
+        self, city_id: str, slot: int, presence: Presence, *, now: int, ttl: int
+    ) -> None:
+        people = self._people.setdefault(self._key(city_id, slot), {})
+        people[presence.character_id] = (presence, now)
+
+    async def leave(self, city_id: str, slot: int, character_id: int) -> None:
+        people = self._people.get(self._key(city_id, slot))
+        if people is not None:
+            people.pop(character_id, None)
+
+    async def others_at(
+        self, city_id: str, slot: int, node: int, *, exclude: int, now: int, ttl: int
+    ) -> tuple[Presence, ...]:
+        people = self._people.get(self._key(city_id, slot), {})
+        fresh = [
+            (presence, seen)
+            for character_id, (presence, seen) in people.items()
+            if character_id != exclude and presence.node == node and seen + ttl > now
+        ]
+        fresh.sort(key=lambda item: item[1], reverse=True)
+        return tuple(presence for presence, _ in fresh)
 
 
 class InMemoryIdempotencyStore:

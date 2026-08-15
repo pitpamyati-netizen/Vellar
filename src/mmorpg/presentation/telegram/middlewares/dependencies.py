@@ -19,7 +19,7 @@ from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.ports.repositories import (
     CharacterRepository,
     InventoryRepository,
-    LocationDeltaCache,
+    LocationStateCache,
     PrivacyRepository,
     StateCache,
     TradeRepository,
@@ -40,7 +40,7 @@ class Dependencies:
     trades: TradeRepository
     privacy: PrivacyRepository
     state_cache: StateCache
-    location_deltas: LocationDeltaCache
+    locations: LocationStateCache
     broadcasts: ChannelBroadcaster
 
     def as_data(self) -> dict[str, Any]:
@@ -53,7 +53,7 @@ class Dependencies:
             "trades": self.trades,
             "privacy": self.privacy,
             "state_cache": self.state_cache,
-            "location_deltas": self.location_deltas,
+            "locations": self.locations,
             "broadcasts": self.broadcasts,
         }
 

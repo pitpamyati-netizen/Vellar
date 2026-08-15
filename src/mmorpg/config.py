@@ -79,7 +79,12 @@ class Settings(BaseSettings):
     admin_ids: str = ""
 
     world_seed: str = "vellar-prime"
-    cycle_seconds: int = Field(default=21_600, gt=0)
+    # The world no longer turns over on a clock: a location holds its map until it
+    # is cleared out. Two things are still timed, and both are short, because both
+    # exist to give a player a reason to come back rather than to make them wait:
+    # the shelf in a shop, and the cooldown on gathering raw stuff.
+    shop_rotation_seconds: int = Field(default=1_800, gt=0)
+    gather_cooldown_seconds: int = Field(default=900, gt=0)
 
     postgres_dsn: str = "postgresql://vellar:vellar@localhost:5432/vellar"
     postgres_pool_min: int = Field(default=5, ge=1)

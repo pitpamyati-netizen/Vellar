@@ -20,7 +20,8 @@ presentation  ->  application  ->  domain
 
 **The domain is synchronous and side-effect free.** No `async def`, no I/O, no
 imports of `aiogram`, `asyncpg`, `redis`, `pydantic` or `datetime.now`. Everything
-it needs - the current cycle index, random seeds, the clock - is passed in as an
+it needs - the standing generation of a location, random seeds, the clock - is
+passed in as an
 argument. That makes it testable without a database, a bot token or a network.
 
 *Enforced by:* `tests/domain/test_layering.py`, which walks the AST of every module
@@ -64,7 +65,7 @@ src/mmorpg/
 
 Each screen family has a **flow**: a pure function
 `advance(content, state, message) -> state`, with `render(content, state) -> Screen`
-beside it. No I/O, no aiogram, no clock - the world cycle and the player's goods
+beside it. No I/O, no aiogram, no clock - the location's generation and the goods
 arrive as arguments.
 
 That is what makes the whole interface testable without a bot token: the tests
@@ -88,16 +89,17 @@ because the play router filters on the whole `Play` state group.
 | Where | What |
 | --- | --- |
 | PostgreSQL | users, characters (raw stats, level, experience, gold, vault gold), inventory, equipment, skill loadout with ranks and edges, chosen traits, city, quest and craft progress, accessibility settings, world seed, trades (pending escrow and the settled journal), privacy (profile visibility on the user row, black lists in `blocks`) |
-| Redis (with TTL) | FSM state, current screen, active combat, location deltas for the current cycle, update deduplication, shop assortment cache |
-| Nowhere - recomputed | location layout, nodes, enemies, loot, total character stats, shop assortment (all pure functions of seed and cycle) |
+| Redis (with TTL) | FSM state, current screen, active combat, the shared state of every location and who is standing in it, update deduplication, shop assortment cache |
+| Nowhere - recomputed | location layout, nodes, enemies, loot, total character stats, shop assortment (all pure functions of seed, generation and rotation) |
 
 Redis keys:
 
 | Key | Value | TTL |
 | --- | --- | --- |
-| `loc:{city}:{slot}:{cycle}:{user}` | cleared-node bitmask | until end of cycle |
+| `loc:{city}:{slot}` | generation and cleared-node bitmask | a week |
+| `loc:{city}:{slot}:who` | who stands on which node | ten minutes |
 | `upd:{update_id}` | idempotency marker | 300 s |
-| `shop:{city}:{cycle}` | rolled assortment | until end of cycle |
+| `shop:{city}:{rotation}` | rolled assortment | until the shelf turns over |
 | `fsm:*` | aiogram `RedisStorage` | 7 days |
 
 `APP_ENV=local` substitutes in-memory implementations of every port, so the bot

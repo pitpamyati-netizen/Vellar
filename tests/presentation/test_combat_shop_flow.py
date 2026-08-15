@@ -294,39 +294,39 @@ def test_effects_and_cooldowns_survive_the_round_trip(
 # --- shop economy -----------------------------------------------------
 
 
-def test_assortment_is_deterministic_per_cycle(content: GameContent) -> None:
+def test_assortment_is_deterministic_per_rotation(content: GameContent) -> None:
     first = roll_assortment(
-        content, world_seed=WORLD_SEED, city_id="farhold", cycle=10, character_level=5
+        content, world_seed=WORLD_SEED, city_id="farhold", rotation=10, character_level=5
     )
     second = roll_assortment(
-        content, world_seed=WORLD_SEED, city_id="farhold", cycle=10, character_level=5
+        content, world_seed=WORLD_SEED, city_id="farhold", rotation=10, character_level=5
     )
     assert first == second
 
 
-def test_assortment_rotates_with_the_cycle(content: GameContent) -> None:
+def test_assortment_rotates_with_the_shelf(content: GameContent) -> None:
     first = roll_assortment(
-        content, world_seed=WORLD_SEED, city_id="farhold", cycle=10, character_level=5
+        content, world_seed=WORLD_SEED, city_id="farhold", rotation=10, character_level=5
     )
     later = roll_assortment(
-        content, world_seed=WORLD_SEED, city_id="farhold", cycle=11, character_level=5
+        content, world_seed=WORLD_SEED, city_id="farhold", rotation=11, character_level=5
     )
     assert first != later
 
 
 def test_assortment_differs_between_cities(content: GameContent) -> None:
     farhold = roll_assortment(
-        content, world_seed=WORLD_SEED, city_id="farhold", cycle=10, character_level=5
+        content, world_seed=WORLD_SEED, city_id="farhold", rotation=10, character_level=5
     )
     harbor = roll_assortment(
-        content, world_seed=WORLD_SEED, city_id="dusk_harbor", cycle=10, character_level=5
+        content, world_seed=WORLD_SEED, city_id="dusk_harbor", rotation=10, character_level=5
     )
     assert farhold != harbor
 
 
 def test_assortment_matches_the_player_level(content: GameContent) -> None:
     stock = roll_assortment(
-        content, world_seed=WORLD_SEED, city_id="farhold", cycle=3, character_level=20
+        content, world_seed=WORLD_SEED, city_id="farhold", rotation=3, character_level=20
     )
     assert stock
     assert all(14 <= item.level <= 24 for item in stock)
@@ -334,13 +334,13 @@ def test_assortment_matches_the_player_level(content: GameContent) -> None:
 
 def test_reputation_widens_the_shelf(content: GameContent) -> None:
     plain = roll_assortment(
-        content, world_seed=WORLD_SEED, city_id="farhold", cycle=3, character_level=10
+        content, world_seed=WORLD_SEED, city_id="farhold", rotation=3, character_level=10
     )
     trusted = roll_assortment(
         content,
         world_seed=WORLD_SEED,
         city_id="farhold",
-        cycle=3,
+        rotation=3,
         character_level=10,
         reputation=400,
     )
@@ -372,7 +372,7 @@ def test_rarity_raises_the_price(content: GameContent) -> None:
 
 def test_shop_screen_states_price_and_affordability(content: GameContent) -> None:
     stock = roll_assortment(
-        content, world_seed=WORLD_SEED, city_id="farhold", cycle=3, character_level=5
+        content, world_seed=WORLD_SEED, city_id="farhold", rotation=3, character_level=5
     )
     prices = {item.id: buy_price(content, item) for item in stock}
     screen = shop_screens.shop_screen(
@@ -387,7 +387,7 @@ def test_shop_screen_states_price_and_affordability(content: GameContent) -> Non
 
 def test_shop_buttons_map_back_to_items(content: GameContent) -> None:
     stock = roll_assortment(
-        content, world_seed=WORLD_SEED, city_id="farhold", cycle=3, character_level=5
+        content, world_seed=WORLD_SEED, city_id="farhold", rotation=3, character_level=5
     )
     prices = {item.id: buy_price(content, item) for item in stock}
     first = stock[0]

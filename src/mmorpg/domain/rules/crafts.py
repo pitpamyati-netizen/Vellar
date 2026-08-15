@@ -1,12 +1,12 @@
-"""What a watch of craft work is worth.
+"""What craft work is worth.
 
 Pure, like every rule module: no clock, no global random, no I/O. The seed of a
-batch arrives as an argument, so the same character working the same recipe in
-the same watch always gets the same result and a test can name it.
+batch and the current moment arrive as arguments, so the same character working
+the same recipe always gets the same result and a test can name it.
 
 Two shapes of work, and both answer the same question - what comes out:
 
-- **сбор**: one gathering per craft per watch, and the amount grows with rank;
+- **сбор**: one gathering per craft per cooldown, and the amount grows with rank;
 - **изготовление**: materials in, an item out, and the quality of the batch
   decides whether anything extra comes with it.
 """
@@ -75,15 +75,34 @@ class GatherResult:
         return not self.refused
 
 
-def can_gather(content: GameContent, character: Character, craft: Craft, cycle: int) -> str:
+def gather_ready_at(character: Character, craft: Craft, cooldown: int) -> int:
+    """The moment this character may gather this craft again."""
+    return character.crafts.progress(craft.id).gathered_at + max(0, cooldown)
+
+
+def can_gather(
+    content: GameContent, character: Character, craft: Craft, *, now: int, cooldown: int
+) -> str:
     """Empty when gathering is allowed now, otherwise the reason it is not."""
     if not craft.gathers:
         return "Это ремесло ничего не собирает: из сырья делают вещи."
-    if character.crafts.progress(craft.id).gathered_cycle == cycle:
-        return "Здесь уже собрано в эту стражу. Сырьё родится к следующей."
+    ready_at = gather_ready_at(character, craft, cooldown)
+    if now < ready_at:
+        left = ready_at - now
+        return f"Здесь уже собрано. Следующий сбор через {_minutes(left)}."
     if not _reachable_yields(craft, character.level):
         return "Для вашего уровня тут пока нечего брать."
     return ""
+
+
+def _minutes(seconds: int) -> str:
+    """A wait as a player hears it: whole minutes, and never "0 минут"."""
+    minutes = max(1, (seconds + 59) // 60)
+    if minutes % 10 == 1 and minutes % 100 != 11:
+        return f"{minutes} минуту"
+    if minutes % 10 in {2, 3, 4} and minutes % 100 not in {12, 13, 14}:
+        return f"{minutes} минуты"
+    return f"{minutes} минут"
 
 
 def gather(
@@ -91,11 +110,12 @@ def gather(
     character: Character,
     craft: Craft,
     *,
-    cycle: int,
+    now: int,
+    cooldown: int,
     seed: bytes,
 ) -> tuple[Character, GatherResult]:
-    """Work a gathering craft for one watch. The character comes back changed."""
-    refused = can_gather(content, character, craft, cycle)
+    """Work a gathering craft once. The character comes back changed."""
+    refused = can_gather(content, character, craft, now=now, cooldown=cooldown)
     if refused:
         return character, GatherResult(refused=refused)
 
@@ -109,7 +129,7 @@ def gather(
     count = max(1, round(amount * percent(modifiers, GATHER_YIELD_KEY)))
 
     log = character.crafts.with_experience(craft.id, rules.gather_experience)
-    log = log.with_gathered_cycle(craft.id, cycle)
+    log = log.with_gathered_at(craft.id, now)
     return (
         character.with_crafts(log),
         GatherResult(

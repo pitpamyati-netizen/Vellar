@@ -12,7 +12,8 @@ from mmorpg.domain.entities.craft import CraftKind, CraftLog, CraftProgress
 from mmorpg.domain.procgen.seeds import derive
 from mmorpg.domain.rules import crafts as craft_rules
 
-CYCLE = 100
+NOW = 1_700_000_000
+COOLDOWN = 900
 
 
 @pytest.fixture
@@ -69,45 +70,57 @@ def test_gathering_brings_back_a_material_and_records_the_work(
     content: GameContent, miner: Character
 ) -> None:
     craft = content.craft("mining")
-    worked, result = craft_rules.gather(content, miner, craft, cycle=CYCLE, seed=seed("gather", 1))
+    worked, result = craft_rules.gather(
+        content, miner, craft, now=NOW, cooldown=COOLDOWN, seed=seed("gather", 1)
+    )
     assert result.ok
     assert result.item_id in {entry.item_id for entry in craft.yields}
     assert result.count >= content.craft_rules.gather_base
     assert worked.crafts.progress("mining").experience > miner.crafts.progress("mining").experience
-    assert worked.crafts.progress("mining").gathered_cycle == CYCLE
+    assert worked.crafts.progress("mining").gathered_at == NOW
 
 
-def test_the_same_watch_is_gathered_only_once(content: GameContent, miner: Character) -> None:
+def test_a_second_gathering_inside_the_cooldown_is_refused(
+    content: GameContent, miner: Character
+) -> None:
     craft = content.craft("mining")
-    worked, first = craft_rules.gather(content, miner, craft, cycle=CYCLE, seed=seed("gather", 1))
-    _, second = craft_rules.gather(content, worked, craft, cycle=CYCLE, seed=seed("gather", 2))
+    worked, first = craft_rules.gather(
+        content, miner, craft, now=NOW, cooldown=COOLDOWN, seed=seed("gather", 1)
+    )
+    _, second = craft_rules.gather(
+        content, worked, craft, now=NOW, cooldown=COOLDOWN, seed=seed("gather", 2)
+    )
     assert first.ok
     assert not second.ok
-    assert "стражу" in second.refused
+    assert "Следующий сбор через" in second.refused
 
-    _, next_watch = craft_rules.gather(
-        content, worked, craft, cycle=CYCLE + 1, seed=seed("gather", 3)
+    _, later = craft_rules.gather(
+        content, worked, craft, now=NOW + COOLDOWN + 1, cooldown=COOLDOWN, seed=seed("gather", 3)
     )
-    assert next_watch.ok, "the road refills between watches"
+    assert later.ok, "the road refills once the cooldown is out"
 
 
 def test_a_higher_rank_gathers_more(content: GameContent, miner: Character) -> None:
     craft = content.craft("mining")
     novice = replace(miner, crafts=CraftLog())
-    _, small = craft_rules.gather(content, novice, craft, cycle=CYCLE, seed=seed("g", 1))
+    _, small = craft_rules.gather(
+        content, novice, craft, now=NOW, cooldown=COOLDOWN, seed=seed("g", 1)
+    )
     master = replace(
         miner,
         crafts=CraftLog(
             MappingProxyType({"mining": CraftProgress(experience=10_000)}),
         ),
     )
-    _, large = craft_rules.gather(content, master, craft, cycle=CYCLE, seed=seed("g", 1))
+    _, large = craft_rules.gather(
+        content, master, craft, now=NOW, cooldown=COOLDOWN, seed=seed("g", 1)
+    )
     assert large.count > small.count
 
 
 def test_a_making_craft_gathers_nothing(content: GameContent, miner: Character) -> None:
     _, result = craft_rules.gather(
-        content, miner, content.craft("smithing"), cycle=CYCLE, seed=seed("g", 1)
+        content, miner, content.craft("smithing"), now=NOW, cooldown=COOLDOWN, seed=seed("g", 1)
     )
     assert not result.ok
 
@@ -120,7 +133,9 @@ def test_a_level_below_every_yield_is_told_so(content: GameContent, miner: Chara
     )
     assert deep.yields, "mining is expected to have a material above level one"
     novice = replace(miner, level=1, crafts=CraftLog())
-    _, result = craft_rules.gather(content, novice, deep, cycle=CYCLE, seed=seed("g", 1))
+    _, result = craft_rules.gather(
+        content, novice, deep, now=NOW, cooldown=COOLDOWN, seed=seed("g", 1)
+    )
     assert not result.ok
     assert "уровня" in result.refused
 

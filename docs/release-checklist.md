@@ -46,7 +46,7 @@ uv run pytest tests/content
 ## 4. Determinism
 
 - [ ] `tests/domain/test_procgen.py` green - a change that makes generation
-      non-reproducible breaks every player's map mid-cycle
+      non-reproducible breaks every player's map mid-visit
 - [ ] No new use of the global `random` module anywhere
 
 ## 5. Data and migrations

@@ -5,8 +5,9 @@ index 0 and the exit at the last index. Connectivity and exit reachability are
 guaranteed by construction: every node is linked to an earlier node before any
 extra shortcuts are added, so the graph is a spanning tree plus edges.
 
-The generator knows nothing about time or storage: the cycle index arrives as an
-argument and the result is thrown away after rendering.
+The generator knows nothing about time or storage: the generation arrives as an
+argument and the result is thrown away after rendering. A generation goes up when
+the place is cleared out, so the same map stands until somebody finishes it.
 """
 
 from __future__ import annotations
@@ -50,14 +51,14 @@ def generate_location(
     world_seed: str,
     city_id: str,
     slot: int,
-    cycle: int,
+    generation: int,
     name: str,
     biome: str,
     level_min: int,
     level_max: int,
 ) -> GeneratedLocation:
-    """Build the location for one city slot in one world cycle."""
-    seed = location_seed(world_seed, city_id, slot, cycle)
+    """Build the location standing in one city slot right now."""
+    seed = location_seed(world_seed, city_id, slot, generation)
     source = rng(seed)
 
     count = source.randint(MIN_NODES, MAX_NODES)
@@ -82,7 +83,7 @@ def generate_location(
         biome=biome,
         level_min=level_min,
         level_max=level_max,
-        cycle_index=cycle,
+        generation=generation,
         nodes=nodes,
     )
 

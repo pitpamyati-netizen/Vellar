@@ -16,12 +16,18 @@ from mmorpg.config import Settings
 from mmorpg.domain.entities import Character, GameContent
 from mmorpg.domain.rules import keeper as keeper_rules
 from mmorpg.infrastructure.persistence.memory import InMemoryCharacterRepository
-from mmorpg.presentation.telegram.flows.play import PlayState, advance, begin, render
+from mmorpg.presentation.telegram.flows.play import (
+    Clock,
+    PlayState,
+    advance,
+    begin,
+    render,
+)
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.screens.base import ScreenId
 
 WORLD_SEED = "vellar-test"
-CYCLE = 100
+CLOCK = Clock(now=1_700_000_000, shop_rotation=100, gather_cooldown=900)
 PLAYER = 500_100
 
 
@@ -38,7 +44,7 @@ def keeper(player: Character) -> Character:
 def step(content: GameContent, who: Character, state: PlayState, *messages: str) -> PlayState:
     current = state
     for message in messages:
-        current = advance(content, who, current, message, cycle=CYCLE, world_seed=WORLD_SEED)
+        current = advance(content, who, current, message, clock=CLOCK, world_seed=WORLD_SEED)
     return current
 
 

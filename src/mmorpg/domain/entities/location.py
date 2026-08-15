@@ -108,6 +108,30 @@ class Enemy:
 
 
 @dataclass(frozen=True, slots=True)
+class LocationState:
+    """What everybody standing in one location shares.
+
+    ``generation`` says which map is up; ``cleared`` is the bitmask of nodes
+    already worked through, by anyone. The place is common ground: a node another
+    player emptied is empty for you too, and when the last one falls the location
+    rolls over into its next generation.
+    """
+
+    generation: int = 0
+    cleared: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class Presence:
+    """One player seen standing in a location, as others see them."""
+
+    character_id: int
+    name: str
+    level: int
+    node: int
+
+
+@dataclass(frozen=True, slots=True)
 class LocationNode:
     """One point of interest inside a location."""
 
@@ -124,7 +148,11 @@ class LocationNode:
 
 @dataclass(frozen=True, slots=True)
 class GeneratedLocation:
-    """A location as it exists during one world cycle."""
+    """A location as it stands in one generation of itself.
+
+    The generation changes only when the place is cleared out; until then every
+    player who walks in sees the same map, the same nodes and the same enemies.
+    """
 
     city_id: str
     slot: int
@@ -132,7 +160,7 @@ class GeneratedLocation:
     biome: str
     level_min: int
     level_max: int
-    cycle_index: int
+    generation: int
     nodes: tuple[LocationNode, ...]
 
     @property

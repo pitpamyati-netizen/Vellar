@@ -2,14 +2,19 @@
 
 Every generated thing in the game descends from one world seed through blake2b:
 
-    cycle_index    = unix_time // CYCLE_SECONDS
-    location_seed  = blake2b(world_seed, city_id, slot, cycle_index)
+    location_seed  = blake2b(world_seed, city_id, slot, generation)
     node_seed(i)   = blake2b(location_seed, i)
     enemy_seed     = blake2b(node_seed, attempt)
+    shop_seed      = blake2b(world_seed, "shop", city_id, rotation)
+
+A location's ``generation`` is not a clock: it goes up when the place is cleared
+out, and until then the map stays exactly where the players left it. The only
+thing still counted in wall time is the shop, which turns over every half hour
+(``rotation``) - a shelf that never changed would make coming back pointless.
 
 No global ``random`` anywhere: callers get an explicit ``random.Random`` instance
-built from a seed. This module knows nothing about the clock - ``cycle_index`` is
-always passed in, which is what keeps generation testable and pure.
+built from a seed. This module knows nothing about the clock - the rotation index
+is always passed in, which is what keeps generation testable and pure.
 """
 
 from __future__ import annotations
@@ -18,28 +23,34 @@ import random
 from hashlib import blake2b
 
 DIGEST_SIZE = 16
-DEFAULT_CYCLE_SECONDS = 21_600  # six hours, see docs/adr/0003-six-hour-world-cycle.md
+# Half an hour. Short enough that a player who came for a weapon can wait for the
+# next shelf, long enough that the shop is not a slot machine.
+DEFAULT_SHOP_ROTATION_SECONDS = 1_800
 
 
-def cycle_index(unix_time: int, cycle_seconds: int = DEFAULT_CYCLE_SECONDS) -> int:
-    """Which world cycle a moment in time belongs to."""
-    if cycle_seconds <= 0:
-        msg = "cycle_seconds must be positive"
+def rotation_index(unix_time: int, rotation_seconds: int = DEFAULT_SHOP_ROTATION_SECONDS) -> int:
+    """Which shop rotation a moment in time belongs to."""
+    if rotation_seconds <= 0:
+        msg = "rotation_seconds must be positive"
         raise ValueError(msg)
-    return unix_time // cycle_seconds
+    return unix_time // rotation_seconds
 
 
-def cycle_started_at(index: int, cycle_seconds: int = DEFAULT_CYCLE_SECONDS) -> int:
-    return index * cycle_seconds
+def rotation_started_at(index: int, rotation_seconds: int = DEFAULT_SHOP_ROTATION_SECONDS) -> int:
+    return index * rotation_seconds
 
 
-def cycle_ends_at(index: int, cycle_seconds: int = DEFAULT_CYCLE_SECONDS) -> int:
-    return (index + 1) * cycle_seconds
+def rotation_ends_at(index: int, rotation_seconds: int = DEFAULT_SHOP_ROTATION_SECONDS) -> int:
+    return (index + 1) * rotation_seconds
 
 
-def seconds_left_in_cycle(unix_time: int, cycle_seconds: int = DEFAULT_CYCLE_SECONDS) -> int:
-    """Used as the TTL for the location delta log in Redis."""
-    return cycle_ends_at(cycle_index(unix_time, cycle_seconds), cycle_seconds) - unix_time
+def seconds_left_in_rotation(
+    unix_time: int, rotation_seconds: int = DEFAULT_SHOP_ROTATION_SECONDS
+) -> int:
+    """How long the current shelf still stands. Used for cache lifetimes."""
+    return (
+        rotation_ends_at(rotation_index(unix_time, rotation_seconds), rotation_seconds) - unix_time
+    )
 
 
 def derive(*parts: str | int | bytes) -> bytes:
@@ -51,8 +62,9 @@ def derive(*parts: str | int | bytes) -> bytes:
     return digest.digest()
 
 
-def location_seed(world_seed: str, city_id: str, slot: int, cycle: int) -> bytes:
-    return derive(world_seed, city_id, slot, cycle)
+def location_seed(world_seed: str, city_id: str, slot: int, generation: int) -> bytes:
+    """The map of one location in one generation of it."""
+    return derive(world_seed, city_id, slot, generation)
 
 
 def node_seed(parent: bytes, index: int) -> bytes:
@@ -63,8 +75,8 @@ def enemy_seed(parent: bytes, attempt: int) -> bytes:
     return derive(parent, "enemy", attempt)
 
 
-def shop_seed(world_seed: str, city_id: str, cycle: int) -> bytes:
-    return derive(world_seed, "shop", city_id, cycle)
+def shop_seed(world_seed: str, city_id: str, rotation: int) -> bytes:
+    return derive(world_seed, "shop", city_id, rotation)
 
 
 def to_int(seed: bytes) -> int:

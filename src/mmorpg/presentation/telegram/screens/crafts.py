@@ -45,7 +45,7 @@ def crafts_screen(content: GameContent, character: Character, notice: str = "") 
     lines = [
         notice or "Ремёсла. Сырьё собирают, из сырья делают вещи.",
         "Ремесло не выбирают раз и навсегда: работайте любым, ранг растёт от работы.",
-        "Собирать можно раз за стражу, шесть часов; к следующей сырьё родится снова.",
+        "Собирать можно раз в четверть часа: сырьё родится заново само.",
     ]
     rows = [(craft_button(content, character, craft),) for craft in content.crafts]
     return Screen(id=ScreenId.CRAFTS, lines=tuple(lines), rows=tuple(rows))
@@ -63,7 +63,8 @@ def craft_screen(
     craft: Craft,
     owned: Owned,
     *,
-    cycle: int,
+    now: int,
+    cooldown: int,
     notice: str = "",
 ) -> Screen:
     """One craft: the gathering button, or the recipes it knows."""
@@ -75,7 +76,7 @@ def craft_screen(
     rows: list[tuple[Label, ...]] = []
 
     if craft.gathers:
-        refused = craft_rules.can_gather(content, character, craft, cycle)
+        refused = craft_rules.can_gather(content, character, craft, now=now, cooldown=cooldown)
         brought = ", ".join(
             content.item(entry.item_id).name
             for entry in craft.yields
@@ -98,7 +99,7 @@ def craft_screen(
 
 
 def gathered_line(content: GameContent, result: craft_rules.GatherResult) -> str:
-    """What one watch of gathering brought back, in one sentence."""
+    """What one gathering brought back, in one sentence."""
     if not result.ok:
         return result.refused
     item = content.item(result.item_id)

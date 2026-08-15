@@ -1,8 +1,8 @@
 """Shop assortment, prices, and the duty on a trade between players.
 
-The assortment is a pure function of ``(city, cycle, reputation)`` - it is rolled
-from a seed, never stored, and it rotates once per world cycle, which gives a
-player a reason to come back (``docs/procgen.md``).
+The assortment is a pure function of ``(city, rotation, reputation)`` - it is
+rolled from a seed, never stored, and the shelf turns over every half hour, which
+is the one reason left to come back to a city on a clock (``docs/procgen.md``).
 """
 
 from __future__ import annotations
@@ -33,15 +33,15 @@ def roll_assortment(
     *,
     world_seed: str,
     city_id: str,
-    cycle: int,
+    rotation: int,
     character_level: int,
     reputation: int = 0,
 ) -> tuple[Item, ...]:
-    """What this city sells during this cycle.
+    """What this city sells in this rotation of its shelf.
 
     Higher reputation widens the shelf, so a regular customer sees more.
     """
-    source = rng(shop_seed(world_seed, city_id, cycle))
+    source = rng(shop_seed(world_seed, city_id, rotation))
     low = max(1, character_level - LEVEL_WINDOW_BELOW)
     high = character_level + LEVEL_WINDOW_ABOVE + reputation // 100
 

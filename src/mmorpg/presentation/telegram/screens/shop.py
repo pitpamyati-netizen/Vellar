@@ -163,7 +163,7 @@ def shop_screen(
         state=state,
         lead_lines=(
             notice or f"У вас {gold_words(gold)}.",
-            "Ассортимент меняется со сменой стражи, раз в шесть часов.",
+            "Ассортимент лавки меняется раз в полчаса.",
         ),
         empty_text="Сегодня лавка пуста.",
         extra_rows=((SELL_ITEMS,),),
