@@ -1,0 +1,165 @@
+# Crafts: what an adventurer gathers and what they make out of it for pay.
+#
+# A craft is not a class and not a race - it is work anybody on the road can
+# learn (Narrative.md, section 2). Gathering crafts bring raw stuff in, making
+# crafts turn it into items that already exist in items.toml: nothing here
+# invents a new item, so the shop, the bag and the loot tables stay one list.
+#
+# Ranks are earned by working: `experience_per_rank` of work is one rank, up to
+# `max_rank`. A rank never gates a screen, only recipes - the panel and the
+# buttons stay the same shape at rank one and at rank five.
+#
+# Gathering is allowed once per watch per craft (six hours, docs/procgen.md):
+# the road refills between watches whether or not anybody is playing.
+
+[meta]
+max_rank = 5
+experience_per_rank = 100
+rank_names = ["Ученик", "Подручный", "Мастеровой", "Мастер", "Старшина"]
+
+# Gathering: how much one watch of work brings back, before modifiers.
+gather_base = 2
+gather_per_rank = 1
+gather_experience = 8
+
+# Quality of a made thing. Vellar has no item instances - a bag holds ids and
+# counts - so quality pays in what comes out of the work, not in a label on the
+# item: a good batch yields one extra, an excellent one also leaves half the
+# materials unspent.
+qualities = [
+    { id = "plain", name = "Обычное", extra = 0, refund_percent = 0 },
+    { id = "good", name = "Ладное", extra = 1, refund_percent = 0 },
+    { id = "fine", name = "Отменное", extra = 1, refund_percent = 50 },
+]
+good_chance_base = 12.0
+good_chance_per_rank = 6.0
+fine_chance_base = 4.0
+fine_chance_per_rank = 3.0
+
+# --- Gathering ---
+
+[[craft]]
+id = "mining"
+name = "Горное дело"
+kind = "gathering"
+stat = "END"
+description = "Бьёте породу в осыпях и старых выработках у дороги."
+yields = [
+    { item = "iron_scrap", level = 1 },
+    { item = "mountain_ore", level = 8 },
+]
+
+[[craft]]
+id = "herbalism"
+name = "Травничество"
+kind = "gathering"
+stat = "WIS"
+description = "Берёте траву и смолу там, где другие проходят мимо."
+yields = [
+    { item = "meadow_herbs", level = 1 },
+    { item = "grove_resin", level = 6 },
+]
+
+# --- Making ---
+
+[[craft]]
+id = "smithing"
+name = "Кузнечное дело"
+kind = "making"
+stat = "STR"
+description = "Куёте железо в городской кузне: за угол платите, за работу берёте."
+
+[[craft]]
+id = "alchemy"
+name = "Алхимия"
+kind = "making"
+stat = "INT"
+description = "Варите настои по счёту и весу, без обещаний чуда."
+
+[[craft]]
+id = "leatherwork"
+name = "Кожевенное дело"
+kind = "making"
+stat = "AGI"
+description = "Выделываете шкуры, добытые в дороге, и шьёте из них."
+
+# --- Recipes ---
+#
+# A batch is worth more than the materials that went into it, always: work that
+# pays less than selling the raw stuff is a trap, and tests/content refuses it.
+
+[[recipe]]
+id = "smith_whetstone"
+craft = "smithing"
+rank = 1
+inputs = [{ item = "iron_scrap", count = 2 }]
+output = { item = "whetstone", count = 1 }
+experience = 12
+
+[[recipe]]
+id = "smith_iron_helm"
+craft = "smithing"
+rank = 2
+inputs = [{ item = "mountain_ore", count = 2 }, { item = "iron_scrap", count = 1 }]
+output = { item = "iron_helm", count = 1 }
+experience = 25
+
+[[recipe]]
+id = "smith_chain_shirt"
+craft = "smithing"
+rank = 3
+inputs = [{ item = "mountain_ore", count = 5 }, { item = "iron_scrap", count = 3 }]
+output = { item = "chain_shirt", count = 1 }
+experience = 40
+
+[[recipe]]
+id = "alchemy_small_healing"
+craft = "alchemy"
+rank = 1
+inputs = [{ item = "meadow_herbs", count = 2 }]
+output = { item = "small_healing_potion", count = 1 }
+experience = 12
+
+[[recipe]]
+id = "alchemy_antidote"
+craft = "alchemy"
+rank = 2
+inputs = [{ item = "meadow_herbs", count = 3 }]
+output = { item = "antidote", count = 1 }
+experience = 22
+
+[[recipe]]
+id = "alchemy_draught"
+craft = "alchemy"
+rank = 3
+inputs = [{ item = "meadow_herbs", count = 3 }, { item = "grove_resin", count = 1 }]
+output = { item = "resource_draught", count = 1 }
+experience = 38
+
+[[recipe]]
+id = "leather_jacket"
+craft = "leatherwork"
+rank = 1
+inputs = [{ item = "wolf_pelt", count = 1 }]
+output = { item = "padded_jacket", count = 1 }
+experience = 14
+
+[[recipe]]
+id = "leather_armor"
+craft = "leatherwork"
+rank = 2
+inputs = [{ item = "wolf_pelt", count = 3 }, { item = "grove_resin", count = 1 }]
+output = { item = "leather_armor", count = 1 }
+experience = 26
+
+[[recipe]]
+id = "leather_bracers"
+craft = "leatherwork"
+rank = 3
+inputs = [
+    { item = "wolf_pelt", count = 6 },
+    { item = "iron_scrap", count = 2 },
+    { item = "grove_resin", count = 1 },
+]
+output = { item = "bracers_of_grip", count = 1 }
+experience = 42

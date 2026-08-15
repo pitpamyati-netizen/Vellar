@@ -2005,7 +2005,7 @@ edges = [
 
 [[skill]]
 code = "race_dark_elf_gloom_cloud"
-name = "Рудничная пыль"
+name = "Облако мрака"
 owner = "race:dark_elf"
 kind = "active"
 level = 1
@@ -2016,8 +2016,8 @@ effect = "debuff_accuracy"
 power = 50
 text = "Точность противников ниже на 50 процентов 2 хода."
 edges = [
-    { name = "Густая пыль", text = "Действует 4 хода." },
-    { name = "Едкая пыль", text = "Дополнительно наносит урон каждый ход." },
+    { name = "Густой мрак", text = "Действует 4 хода." },
+    { name = "Едкий мрак", text = "Дополнительно наносит урон каждый ход." },
 ]
 
 [[skill]]
@@ -2163,7 +2163,7 @@ edges = [
 
 [[skill]]
 code = "race_dragonborn_breath"
-name = "Горсть пепла"
+name = "Дыхание дракона"
 owner = "race:dragonborn"
 kind = "active"
 level = 1
@@ -2173,10 +2173,10 @@ target = "all_enemies"
 effect = "damage_aoe_elemental"
 power = 115
 scaling = "CHA"
-text = "Горячий пепел в лицо всем противникам."
+text = "Стихийный урон по всем противникам."
 edges = [
-    { name = "Тлеющий пепел", text = "Цели горят ещё 2 хода." },
-    { name = "Точный бросок", text = "Урон по одной цели выше вдвое." },
+    { name = "Долгое дыхание", text = "Цели горят ещё 2 хода." },
+    { name = "Сжатое дыхание", text = "Урон по одной цели выше вдвое." },
 ]
 
 [[skill]]
@@ -2217,7 +2217,7 @@ edges = [
 
 [[skill]]
 code = "race_lizardfolk_tail_drop"
-name = "Уйти в воду"
+name = "Сброс хвоста"
 owner = "race:lizardfolk"
 kind = "active"
 level = 1
@@ -2228,6 +2228,6 @@ effect = "cleanse_dodge"
 power = 10
 text = "Снимает отрицательный эффект и даёт 10 процентов уклонения."
 edges = [
-    { name = "Уйти с головой", text = "Снимает все отрицательные эффекты." },
+    { name = "Полный сброс", text = "Снимает все отрицательные эффекты." },
     { name = "Отдышаться", text = "Дополнительно лечит 10 процентов здоровья." },
 ]

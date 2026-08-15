@@ -11,6 +11,14 @@ rem  The Docker path is the one to use for actual players: state survives a
 rem  restart and the bot is restarted automatically if it dies or wedges.
 rem  The local path is for trying a change quickly - it forgets everything on
 rem  exit, so never leave players on it.
+rem
+rem  What runs is always this working tree: the image is rebuilt from it before
+rem  anything starts, stamped with the commit it came from, and the stamp is read
+rem  back out of the running container afterwards. A build that fails stops here
+rem  and never touches what is already serving.
+rem
+rem  Already running and only want the new code? Update.bat swaps the bot without
+rem  taking PostgreSQL and Redis down with it.
 rem ============================================================================
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
@@ -34,14 +42,29 @@ rem ---------------------------------------------------------------------------
 call :ensure_env    || exit /b 1
 call :ensure_hooks
 call :ensure_docker || exit /b 1
+call :stamp_build
 
-echo [Vellar] Building the image and starting PostgreSQL, Redis and the bot...
+echo [Vellar] Building the image from this working tree (%VELLAR_BUILD%)...
 echo [Vellar] The first build downloads the base images and takes a few minutes.
+echo.
+rem Built before anything is stopped. A broken build then costs nothing: whatever
+rem was serving keeps serving, and this script says so instead of leaving a half
+rem started stack behind.
+docker compose build bot
+if errorlevel 1 (
+    echo.
+    echo [Vellar] The build failed, so nothing was started or replaced.
+    echo [Vellar] Fix the error above and run this again.
+    exit /b 1
+)
+
+echo.
+echo [Vellar] Starting PostgreSQL, Redis and the bot...
 echo.
 rem --wait blocks until every service is healthy and the migration has finished.
 rem The bot only reports healthy once its event loop is beating, so reaching this
 rem point means it is genuinely serving - see src/mmorpg/health.py.
-docker compose up -d --build --wait --wait-timeout 300
+docker compose up -d --wait --wait-timeout 300
 if errorlevel 1 (
     echo.
     echo [Vellar] The stack did not come up. Recent output:
@@ -55,6 +78,7 @@ if errorlevel 1 (
 echo.
 echo [Vellar] Healthy.
 docker compose ps
+call :report_build
 echo.
 echo [Vellar] The bot is running and will keep running after this window closes.
 echo [Vellar] Stop it with stop.bat.
@@ -70,6 +94,9 @@ rem ---------------------------------------------------------------------------
 :mode_local
 call :ensure_env || exit /b 1
 call :ensure_hooks
+rem Same stamp as the Docker path, so the log line says which tree this is even
+rem when there is no image involved.
+call :stamp_build
 
 where uv >nul 2>&1
 if errorlevel 1 (
@@ -100,6 +127,10 @@ rem ---------------------------------------------------------------------------
 :mode_status
 call :ensure_docker || exit /b 1
 docker compose ps
+call :stamp_build
+echo.
+echo [Vellar] This working tree: %VELLAR_BUILD%
+call :report_build
 exit /b 0
 
 rem ---------------------------------------------------------------------------
@@ -150,4 +181,12 @@ if errorlevel 1 (
     echo [Vellar] No Docker? Use "Start.bat local" instead.
     exit /b 1
 )
+exit /b 0
+
+:stamp_build
+call scripts\vellar-tools.bat stamp
+exit /b 0
+
+:report_build
+call scripts\vellar-tools.bat report
 exit /b 0

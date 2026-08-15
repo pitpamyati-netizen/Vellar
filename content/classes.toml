@@ -1,7 +1,8 @@
-# Eight crafts, chosen right after the race during character creation.
+# Eight classes, chosen right after the race during character creation.
 #
-# A class says what work a character lives by (Narrative.md, section 2). Ids are
-# frozen - characters in the database point at them.
+# A class says how the adventurer fights, not what they do for a living: making
+# things for pay is a craft, and crafts live in crafts.toml (Narrative.md,
+# section 2). Ids are frozen - characters in the database point at them.
 #
 # Each class contributes 8 active and 6 passive skills across the whole
 # progression (skills.toml, owner = "class:<id>"), unlocked at the levels in
@@ -20,7 +21,7 @@ racial_slots = 1
 
 [[class]]
 id = "warrior"
-name = "Ратник"
+name = "Воин"
 role = "Стойкий боец ближнего боя"
 description = "Держит строй и принимает удар на себя."
 key_stats = ["STR", "END"]
@@ -30,7 +31,7 @@ health = { base = 110, per_level = 9.0, per_endurance = 6.0 }
 
 [[class]]
 id = "barbarian"
-name = "Забойщик"
+name = "Варвар"
 role = "Урон в обмен на защиту"
 description = "Дерётся почти без брони и берёт напором в первые ходы."
 key_stats = ["STR"]
@@ -40,9 +41,9 @@ health = { base = 120, per_level = 10.0, per_endurance = 6.0 }
 
 [[class]]
 id = "paladin"
-name = "Заступник"
+name = "Паладин"
 role = "Защита и поддержка"
-description = "Ходит при храме и стоит за чужую спину: прикрывает и держится дольше остальных."
+description = "Стоит за чужую спину: прикрывает и держится дольше остальных."
 key_stats = ["STR", "CHA"]
 bonuses = { STR = 1, CHA = 1, END = 1 }
 resource = { id = "grace", name = "Благодать", base = 45, per_level = 1.2, stat = "CHA", per_stat = 1.5, regen_per_turn = 5 }
@@ -50,9 +51,9 @@ health = { base = 105, per_level = 8.5, per_endurance = 6.0 }
 
 [[class]]
 id = "ranger"
-name = "Ловчий"
+name = "Следопыт"
 role = "Дальний бой и выслеживание"
-description = "Живёт промыслом: бьёт издали и читает следы."
+description = "Бьёт издали и читает следы там, где их никто не видит."
 key_stats = ["AGI", "WIS"]
 bonuses = { AGI = 2, WIS = 1 }
 resource = { id = "focus", name = "Выдержка", base = 50, per_level = 1.2, stat = "WIS", per_stat = 1.5, regen_per_turn = 8 }
@@ -60,7 +61,7 @@ health = { base = 95, per_level = 7.5, per_endurance = 6.0 }
 
 [[class]]
 id = "rogue"
-name = "Головорез"
+name = "Разбойник"
 role = "Максимальный урон и скрытность"
 description = "Ждёт удобного момента и вкладывает всё в один удар."
 key_stats = ["AGI", "LCK"]
@@ -70,9 +71,9 @@ health = { base = 90, per_level = 7.0, per_endurance = 6.0 }
 
 [[class]]
 id = "mage"
-name = "Чародей"
+name = "Маг"
 role = "Стихийный урон по площади"
-description = "Работает по патенту: бьёт стихией по площади, пока хватает чар."
+description = "Бьёт стихией по площади, пока хватает чар."
 key_stats = ["INT"]
 bonuses = { INT = 3 }
 resource = { id = "mana", name = "Чары", base = 70, per_level = 2.0, stat = "INT", per_stat = 2.5, regen_per_turn = 7 }
@@ -80,9 +81,9 @@ health = { base = 80, per_level = 6.0, per_endurance = 6.0 }
 
 [[class]]
 id = "cleric"
-name = "Лекарь"
+name = "Жрец"
 role = "Лечение и снятие эффектов"
-description = "Лечит за плату и снимает с человека дурные последствия."
+description = "Лечит и снимает с человека дурные последствия."
 key_stats = ["WIS"]
 bonuses = { WIS = 2, CHA = 1 }
 resource = { id = "faith", name = "Вера", base = 65, per_level = 1.8, stat = "WIS", per_stat = 2.2, regen_per_turn = 7 }
@@ -90,7 +91,7 @@ health = { base = 90, per_level = 7.0, per_endurance = 6.0 }
 
 [[class]]
 id = "druid"
-name = "Ведун"
+name = "Друид"
 role = "Контроль, превращения, регенерация"
 description = "Меняет облик, держит врага на месте и лечит понемногу, но долго."
 key_stats = ["WIS", "END"]

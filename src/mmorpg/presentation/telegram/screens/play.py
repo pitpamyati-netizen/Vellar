@@ -98,28 +98,33 @@ def main_menu_screen(
             f"Нераспределено: очков характеристик {character.unspent_stat_points}, "
             f"очков умений {character.unspent_skill_points}."
         )
-    return Screen(
-        id=ScreenId.MAIN_MENU,
-        lines=tuple(lines),
-        rows=(
-            (labels.WORLD,),
-            (labels.CHARACTER, labels.INVENTORY),
-            (labels.SKILLS, labels.QUESTS),
-            (labels.SETTINGS,),
-        ),
-    )
+    rows = [
+        (labels.WORLD,),
+        (labels.CHARACTER, labels.INVENTORY),
+        (labels.SKILLS, labels.QUESTS),
+        (labels.CRAFTS, labels.SETTINGS),
+    ]
+    # The service door, and only for whoever keeps the game: an ordinary player
+    # never hears this row at all.
+    if character.is_admin:
+        rows.append((labels.KEEPER,))
+    return Screen(id=ScreenId.MAIN_MENU, lines=tuple(lines), rows=tuple(rows))
 
 
 def world_screen(
     content: GameContent, character: Character, state: PageState, notice: str = ""
 ) -> Screen:
+    # A keeper walks the whole road: the level gate is a rule for players.
+    open_cities = (
+        content.cities if character.is_admin else content.cities_available_at(character.level)
+    )
     entries = [
         ListEntry(
             key=city.id,
             text=city.name,
             detail=f"уровни с {city.level_min} по {city.level_max}",
         )
-        for city in content.cities_available_at(character.level)
+        for city in open_cities
     ]
     locked = len(content.cities) - len(entries)
     return paginated_screen(

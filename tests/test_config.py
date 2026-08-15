@@ -39,6 +39,19 @@ def test_cycle_seconds_must_be_positive() -> None:
         _settings(cycle_seconds=0)
 
 
+def test_the_build_stamp_defaults_to_unknown() -> None:
+    """Set by Start.bat and Update.bat; a hand-run process simply has no answer."""
+    assert _settings().vellar_build == "unknown"
+    assert _settings(vellar_build="6139bf8-dirty").vellar_build == "6139bf8-dirty"
+
+
+def test_keepers_are_read_from_a_comma_separated_list() -> None:
+    settings = _settings(admin_ids="42, 7 ;9")
+    assert settings.admins == frozenset({42, 7, 9})
+    assert settings.is_admin(7) is True
+    assert _settings().admins == frozenset()
+
+
 def test_webhook_url_joins_base_and_path() -> None:
     settings = _settings(
         app_env="prod",

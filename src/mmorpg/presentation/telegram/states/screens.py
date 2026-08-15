@@ -45,6 +45,8 @@ class Play(StatesGroup):
     skill_slots = State()
     skill_pick = State()
     skill_edge = State()
+    crafts = State()
+    craft = State()
     quests = State()
     quest_board = State()
     quest_offer = State()
@@ -53,6 +55,7 @@ class Play(StatesGroup):
     bank = State()
     dungeon = State()
     settings = State()
+    keeper = State()
     stub = State()
 
 
@@ -82,6 +85,8 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.SKILL_SLOTS: Play.skill_slots,
     ScreenId.SKILL_PICK: Play.skill_pick,
     ScreenId.SKILL_EDGE: Play.skill_edge,
+    ScreenId.CRAFTS: Play.crafts,
+    ScreenId.CRAFT: Play.craft,
     ScreenId.QUESTS: Play.quests,
     ScreenId.QUEST_BOARD: Play.quest_board,
     ScreenId.QUEST_OFFER: Play.quest_offer,
@@ -90,6 +95,7 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.BANK: Play.bank,
     ScreenId.DUNGEON: Play.dungeon,
     ScreenId.SETTINGS: Play.settings,
+    ScreenId.KEEPER: Play.keeper,
     ScreenId.STUB: Play.stub,
 }
 
@@ -119,6 +125,8 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.SKILL_SLOTS: ScreenId.SKILLS,
     ScreenId.SKILL_PICK: ScreenId.SKILL_SLOTS,
     ScreenId.SKILL_EDGE: ScreenId.SKILLS,
+    ScreenId.CRAFTS: ScreenId.MAIN_MENU,
+    ScreenId.CRAFT: ScreenId.CRAFTS,
     ScreenId.QUESTS: ScreenId.MAIN_MENU,
     ScreenId.QUEST_BOARD: ScreenId.TAVERN,
     ScreenId.QUEST_OFFER: ScreenId.QUEST_BOARD,
@@ -127,6 +135,7 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.BANK: ScreenId.CITY,
     ScreenId.DUNGEON: ScreenId.CITY,
     ScreenId.SETTINGS: ScreenId.MAIN_MENU,
+    ScreenId.KEEPER: ScreenId.MAIN_MENU,
     ScreenId.STUB: ScreenId.CITY,
 }
 

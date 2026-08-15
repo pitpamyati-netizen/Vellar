@@ -106,7 +106,11 @@ services:
   # Runs to completion before the bot starts, so the bot never meets a schema it
   # does not know. Idempotent: on an up-to-date database it is a no-op.
   migrate:
-    build: .
+    build:
+      context: .
+      args:
+        # Stamped by Start.bat and Update.bat; "unknown" for a hand-run build.
+        VELLAR_BUILD: ${VELLAR_BUILD:-unknown}
     image: vellar-bot
     depends_on:
       postgres:
@@ -123,7 +127,10 @@ services:
     logging: *logging
 
   bot:
-    build: .
+    build:
+      context: .
+      args:
+        VELLAR_BUILD: ${VELLAR_BUILD:-unknown}
     image: vellar-bot
     container_name: vellar-bot
     depends_on:

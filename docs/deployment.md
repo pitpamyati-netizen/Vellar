@@ -26,6 +26,28 @@ docker compose logs -f bot
 docker compose down           # or stop.bat
 ```
 
+## Updating a game that is running
+
+`Update.bat` replaces the bot without stopping the world: dump into `backups\`,
+tag the serving image `previous` (before the build moves `latest` and the old
+image is collected), build, `alembic upgrade head` on its own, then
+`up -d --no-deps --wait bot`. Each step fails where it can be understood: a build
+error leaves the old bot serving, a bad migration leaves both alone.
+
+PostgreSQL and Redis are never touched, so characters, bags and the fight a
+player is mid-way through survive the swap - the new process reads them back on
+its first update. The cost is a few seconds in which a press gets no answer;
+Telegram holds it and the new process replies.
+
+`Update.bat rollback` retags `previous` as `latest` and swaps back. A migration
+that already ran stays applied: the schema only moves forward, and going back
+past that means restoring a dump.
+
+Which build is running is not a matter of memory. Both scripts stamp the image
+with the commit (`-dirty` when anything is uncommitted or untracked), the bot
+logs it as `build ref=...`, and they read it back out of the container
+afterwards. `Start.bat status` prints tree and container side by side.
+
 Four services:
 
 - **postgres** - durable state. Tuned in `docker-compose.yml`, published on
@@ -137,6 +159,12 @@ Back up the database before anything irreversible:
 docker compose exec postgres pg_dump -U vellar vellar > backup.sql
 ```
 
+A plain `stop.bat` saves first: `redis-cli SAVE` writes the temporary state -
+screens, fights, offers - on top of the append-only log, and `pg_dump` puts
+everything permanent in `backups\`, newest twenty kept. Neither is what makes a
+stop safe (no volume is touched), but a dump is what turns "the world is still
+there" into something you can carry elsewhere.
+
 `stop.bat purge` and `docker compose down --volumes` delete every character in the
 world. There is no undo, which is why the batch file asks first.
 
@@ -150,3 +178,6 @@ world. There is no undo, which is why the batch file asks first.
   your webhook URL from posting updates to it.
 - Leave `SLOW_CALLBACK_DETECTOR=false` in the stack. It needs asyncio debug mode,
   which timestamps every callback - useful while developing, wasteful under load.
+- Keep `ADMIN_IDS` short and true. Every id on that list hands itself gold and
+  levels from inside the game (`docs/keeper.md`); an id left there by accident is
+  a keeper nobody remembers appointing.

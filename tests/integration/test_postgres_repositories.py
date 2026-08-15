@@ -14,6 +14,7 @@ from types import MappingProxyType
 import pytest
 
 from mmorpg.domain.entities.character import Character, Equipment, SkillLoadout
+from mmorpg.domain.entities.craft import CraftLog, CraftProgress
 from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatBlock
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeStatus
@@ -95,6 +96,10 @@ def a_character(user_id: int, name: str = "Тестовый") -> Character:
         health=33,
         bank_gold=900,
         quests=QuestLog(taken=MappingProxyType({"farhold_tallies": 2}), done=("prologue",)),
+        crafts=CraftLog(
+            MappingProxyType({"mining": CraftProgress(experience=260, gathered_cycle=12)})
+        ),
+        is_admin=True,
     )
 
 
@@ -241,7 +246,9 @@ async def test_a_character_survives_a_round_trip(pool, clean_user) -> None:
     assert read.bank_gold == 900
     assert dict(read.quests.taken) == {"farhold_tallies": 2}
     assert read.quests.done == ("prologue",)
+    assert read.crafts.progress("mining") == CraftProgress(experience=260, gathered_cycle=12)
     assert read.unspent_stat_points == 5
+    assert read.is_admin is True
     # The vault is a column of its own: the purse must never absorb it.
     assert (read.gold, read.bank_gold) == (250, 900)
 
@@ -261,15 +268,22 @@ async def test_saving_a_character_updates_every_column(pool, clean_user) -> None
             health=11,
             bank_gold=1_500,
             quests=QuestLog(taken=MappingProxyType({"farhold_tallies": 3}), done=()),
+            crafts=CraftLog(
+                MappingProxyType({"smithing": CraftProgress(experience=40, gathered_cycle=-1)})
+            ),
+            is_admin=True,
         )
     )
 
     read = await characters.get(created.id)
     assert read is not None
     assert (read.level, read.experience, read.gold, read.city_id) == (42, 99_999, 7, "dunmoor")
+    assert read.is_admin is True
     assert (read.health, read.bank_gold) == (11, 1_500)
     assert read.quests.progress("farhold_tallies") == 3
     assert read.quests.done == ()
+    assert read.crafts.progress("smithing").experience == 40
+    assert read.crafts.progress("mining").experience == 0, "the whole document is replaced"
 
 
 async def test_the_active_character_is_the_first_one(pool, clean_user) -> None:

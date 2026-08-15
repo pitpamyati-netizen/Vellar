@@ -2,7 +2,7 @@
 
 Three screens, and no more, because the panel itself never changes shape:
 
-- **Умения** - every skill of the craft, its rank and what one point would do;
+- **Умения** - every skill of the class, its rank and what one point would do;
 - **Слоты умений** - the six active, three passive and one racial position;
 - **Грань** - the single rank-three choice.
 
@@ -100,8 +100,8 @@ def slots_screen(content: GameContent, character: Character, notice: str = "") -
     lines = [
         notice or "Слоты умений. Нажмите слот, чтобы положить в него умение.",
         f"Боевых слотов {rules.active_slots}, постоянных {rules.passive_slots}, "
-        "родовой один и меняться не может.",
-        f"Умение рода: {racial}.",
+        "расовый один и меняться не может.",
+        f"Расовое умение: {racial}.",
     ]
     rows: list[tuple[Label, ...]] = [
         (slot_label(content, character, SkillKind.ACTIVE, slot),)

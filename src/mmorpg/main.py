@@ -72,6 +72,7 @@ class Application:
 
 async def build_application(settings: Settings) -> Application:
     """Load content, choose adapters, wire routers. Nothing runs yet."""
+    logger.info("build", ref=settings.vellar_build, env=settings.app_env.value)
     content = load_content(settings.content_dir)
     logger.info(
         "content_loaded",
@@ -80,6 +81,8 @@ async def build_application(settings: Settings) -> Application:
         traits=len(content.traits),
         skills=len(content.skills),
         cities=len(content.cities),
+        crafts=len(content.crafts),
+        recipes=len(content.recipes),
     )
 
     stack = AsyncExitStack()

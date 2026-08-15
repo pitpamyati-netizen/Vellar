@@ -19,6 +19,10 @@ htmlcov/
 .env
 *.log
 
+# Database dumps written by stop.bat and Update.bat. Real player data: it stays
+# on the machine that made it.
+backups/
+
 # Editors
 .idea/
 .vscode/

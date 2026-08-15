@@ -324,3 +324,63 @@ def test_state_survives_a_round_trip(
     assert restored.screen is in_location.screen
     assert restored.session == in_location.session
     assert restored.stack == in_location.stack
+
+
+# --- state that came back from an older release -----------------------
+#
+# Storage outlives content and outlives the code that wrote it. A screen that
+# names something the game can no longer build must land the player somewhere
+# real: a crash here is answered with an apology on *every* press afterwards,
+# because the state that caused it is read again each time.
+
+# Written by a release that stored the location screen without the visit behind
+# it. This exact document was found in Redis, and every press against it raised.
+STALE_LOCATION = (
+    '{"screen": "location", "stack": "main_menu,world,city,location_list,location",'
+    ' "world_page": 1, "location_page": 1, "city": "farhold",'
+    ' "session": ["", 0, 0, 0, 0], "descent": ["", 0, 0, 0], "stub": "",'
+    ' "pick": ["", 0], "edge": "", "quest": "", "pages": [1, 1, 1]}'
+)
+
+
+def test_a_location_screen_without_a_visit_lands_on_the_location_list(
+    content: GameContent, hero: Character
+) -> None:
+    stale = PlayState.deserialise(STALE_LOCATION)
+    screen = render(content, hero, stale, world_seed=WORLD_SEED)
+
+    assert screen.id is ScreenId.LOCATION_LIST
+    assert "Та вылазка уже закончилась." in screen.text()
+
+
+def test_a_step_on_a_lost_visit_answers_instead_of_raising(
+    content: GameContent, hero: Character
+) -> None:
+    stale = PlayState.deserialise(STALE_LOCATION)
+    moved = step(content, hero, stale, "Осмотреться")
+
+    assert moved.screen is ScreenId.LOCATION_LIST
+    assert not moved.session.active
+
+
+def test_a_city_content_no_longer_has_falls_back_to_the_players_own(
+    content: GameContent, hero: Character, menu: PlayState
+) -> None:
+    lost = replace(menu, city_id="a_city_that_burned_down", screen=ScreenId.CITY)
+    screen = render(content, hero, lost, world_seed=WORLD_SEED)
+
+    assert content.city(hero.city_id).name in screen.text()
+
+
+def test_a_skill_edge_screen_for_an_unknown_skill_falls_back_to_the_list(
+    content: GameContent, hero: Character, menu: PlayState
+) -> None:
+    lost = replace(menu, edge_skill="skill_that_was_renamed", screen=ScreenId.SKILL_EDGE)
+    assert render(content, hero, lost, world_seed=WORLD_SEED).id is ScreenId.SKILLS
+
+
+def test_a_quest_offer_for_an_unknown_contract_falls_back_to_the_board(
+    content: GameContent, hero: Character, menu: PlayState
+) -> None:
+    lost = replace(menu, quest_id="quest_that_was_cut", screen=ScreenId.QUEST_OFFER)
+    assert render(content, hero, lost, world_seed=WORLD_SEED).id is ScreenId.QUEST_BOARD

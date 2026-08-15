@@ -11,6 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 
+from mmorpg.domain.entities.craft import CraftLog
 from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatBlock
 
@@ -125,6 +126,14 @@ class Character:
     health: int = 0
     bank_gold: int = 0
     quests: QuestLog = field(default_factory=QuestLog)
+    # Craft work already done. A rank is never stored - it is counted back from
+    # the experience here by ``mmorpg.domain.rules.crafts``.
+    crafts: CraftLog = field(default_factory=CraftLog)
+    # A keeper of the game, not a stronger character: the flag only says that the
+    # keeper screen is theirs to open. Who is a keeper is decided by ADMIN_IDS in
+    # the environment; this column mirrors that decision so the screens can read
+    # it without the settings object.
+    is_admin: bool = False
 
     def health_or(self, maximum: int) -> int:
         """Current health, clamped into the range the totals allow right now.
@@ -153,3 +162,9 @@ class Character:
 
     def with_gold(self, delta: int) -> Character:
         return replace(self, gold=max(0, self.gold + delta))
+
+    def with_crafts(self, crafts: CraftLog) -> Character:
+        return replace(self, crafts=crafts)
+
+    def as_admin(self, is_admin: bool) -> Character:
+        return replace(self, is_admin=is_admin)

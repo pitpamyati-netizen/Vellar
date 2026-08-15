@@ -13,6 +13,8 @@ from aiogram.filters import CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
+from mmorpg.application.services.keeper import sync_keeper
+from mmorpg.config import Settings
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.ports.repositories import CharacterRepository, User, UserRepository
 from mmorpg.presentation.telegram.flows.creation import (
@@ -70,6 +72,7 @@ async def start(
     message: Message,
     state: FSMContext,
     content: GameContent,
+    settings: Settings,
     users: UserRepository,
     characters: CharacterRepository,
 ) -> None:
@@ -82,6 +85,9 @@ async def start(
 
     existing = await characters.get_active(message.from_user.id)
     if existing is not None:
+        # ``/start`` is the one moment every player passes through, so it is where
+        # the keeper flag is reconciled with ADMIN_IDS.
+        existing = await sync_keeper(existing, message.from_user.id, settings, characters)
         await state.set_state(Play.main_menu)
         city = content.city(existing.city_id)
         await send_screen(message, created_screen(existing.name, city.name))
@@ -98,6 +104,7 @@ async def step(
     message: Message,
     state: FSMContext,
     content: GameContent,
+    settings: Settings,
     characters: CharacterRepository,
 ) -> None:
     """One creation step per incoming message."""
@@ -123,6 +130,7 @@ async def step(
         character = await characters.create(
             updated.draft.to_character(content, message.from_user.id)
         )
+        character = await sync_keeper(character, message.from_user.id, settings, characters)
         await state.clear()
         await state.set_state(Play.main_menu)
         city = content.city(character.city_id)

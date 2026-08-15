@@ -9,11 +9,12 @@ wrong - the bot refuses to start on broken content.
 | File | Contains |
 | --- | --- |
 | `world.toml` | 15 cities, 5 locations each, level bands, unlock conditions |
-| `races.toml` | 16 trade families: stat bonuses, passive ability, racial active reference |
-| `classes.toml` | 8 crafts: key stats, resource curve, health curve, progression meta |
+| `races.toml` | 16 races: stat bonuses, passive ability, racial active reference |
+| `classes.toml` | 8 classes: key stats, resource curve, health curve, progression meta |
 | `traits.toml` | 60+ traits, the modifier vocabulary, categories |
 | `skills.toml` | 8 active + 6 passive per class, 1 active per race, both edges of each |
 | `items.toml` | equipment, consumables, materials, rarities, slots |
+| `crafts.toml` | gathering and making crafts, recipes, rank and quality rules |
 
 ## Ground rules
 
@@ -30,20 +31,21 @@ wrong - the bot refuses to start on broken content.
    and `text` fields are what the player hears; ids, codes and comments are English.
 5. **No pseudo-graphics in any text field** - screen readers read them character by
    character. Numbers as words: `"выше на 15 процентов"`.
-6. **Names belong to Vellar.** There are no peoples here, only work: a "race" is
-   the trade family a character was born into (plural), a class is the craft they
-   live by now (singular). Both name a trade this world actually has - nothing
-   borrows from the fantasy shelf or the black list in `Narrative.md`, section 2.
-   `tests/content/test_naming.py` reads every name and description in this
-   directory and fails on either.
+6. **Race, class and craft are three different things.** A race says what the
+   adventurer is, a class says how they fight, a craft says what they make for
+   pay - and crafts live in `crafts.toml` and nowhere else. Races and classes
+   are read out on the creation screen, so they carry familiar words; what they
+   must never do is drift into a craft, or into the black list in
+   `Narrative.md`, section 2. `tests/content/test_naming.py` reads every name
+   and description in this directory and fails on either.
 
-## Add a trade family
+## Add a race
 
 ```toml
 [[race]]
 id = "seaborn"                       # snake_case, unique, never changes
-name = "Бакенщики"                   # a trade of this world, plural, <= 12 letters
-description = "Одна фраза: чем промысел занят и что он делает с человеком."
+name = "Морской народ"               # one or two Russian words, <= 20 letters
+description = "Одна фраза: какие они и что это даёт в дороге."
 bonuses = { AGI = 2, WIS = 1, STR = -1 }
 passive = { id = "tide_born", name = "Приливная выучка", text = "Одна фраза об эффекте." }
 active = "race_seaborn_undertow"     # must exist in skills.toml
@@ -69,7 +71,7 @@ asserted deliberately, so growing the roster is a conscious decision.
 ```toml
 [[class]]
 id = "monk"
-name = "Кулачник"                    # a craft, singular: what the character lives by
+name = "Монах"                       # one Russian word: how the character fights
 role = "Ближний бой без оружия"
 description = "Одна фраза."
 key_stats = ["AGI", "WIS"]
@@ -82,6 +84,37 @@ A class needs exactly **8 active** skills at levels `[1, 4, 8, 14, 22, 35, 60,
 100]` and exactly **6 passive** skills at levels `[2, 6, 12, 20, 30, 50]` (the lists
 in `classes.toml [meta]`). The loader checks both the counts and the exact level
 sequence.
+
+## Add a craft or a recipe
+
+```toml
+[[craft]]
+id = "fishing"                       # snake_case, unique, never changes
+name = "Рыбный лов"                  # what the work is called, in Russian
+kind = "gathering"                   # or "making"
+stat = "AGI"                         # the stat the work leans on
+description = "Одна фраза о работе."
+yields = [{ item = "river_fish", level = 1 }]   # gathering only, item from items.toml
+
+[[recipe]]
+id = "alchemy_fish_oil"
+craft = "alchemy"                    # a making craft
+rank = 2                             # 1..max_rank from [meta]
+inputs = [{ item = "river_fish", count = 3 }]
+output = { item = "small_healing_potion", count = 1 }
+experience = 20
+```
+
+A gathering craft brings in materials and needs at least one `yields` entry
+starting at level one; a making craft has no `yields` and needs at least one
+recipe at rank one. A recipe only ever outputs an item that already exists in
+`items.toml`, and it must be worth more than its materials - work that pays less
+than selling the raw stuff is a trap, and
+`tests/content/test_crafts_content.py` refuses it.
+
+Ranks, gathering amounts and the three quality tiers live in `crafts.toml
+[meta]`; the rules that read them are `domain/rules/crafts.py`. See
+`docs/crafts.md`.
 
 ## Add a skill
 

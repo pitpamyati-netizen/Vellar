@@ -21,6 +21,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
+from mmorpg.application.services.keeper import sync_keeper
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
@@ -81,6 +82,7 @@ async def play(
         await state.clear()
         await send_screen(message, welcome_screen())
         return
+    character = await sync_keeper(character, message.from_user.id, settings, characters)
 
     user = await users.get(message.from_user.id)
     emoji = user.settings.emoji if user is not None else False

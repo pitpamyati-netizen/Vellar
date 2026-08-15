@@ -11,9 +11,11 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-# Dependency layer: cached until the lock file changes.
+# Dependency layer: cached until the lock file changes. --locked, not --frozen:
+# a dependency added to pyproject.toml without re-locking is a build error here
+# rather than an ImportError in front of players.
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --locked --no-dev --no-install-project
 
 COPY src/ ./src/
 COPY content/ ./content/
@@ -22,7 +24,7 @@ COPY scripts/healthcheck.py ./scripts/
 # alembic.ini for the migration run; README.md because pyproject.toml names it as
 # the package readme and hatchling refuses to build the project without it.
 COPY alembic.ini README.md ./
-RUN uv sync --frozen --no-dev
+RUN uv sync --locked --no-dev
 
 ENV PATH="/opt/venv/bin:${PATH}"
 
@@ -40,5 +42,12 @@ HEALTHCHECK --interval=15s --timeout=10s --start-period=45s --retries=3 \
 # Explicit because the shutdown path depends on it: polling drains through
 # aiogram's handler, the webhook through the stop event in mmorpg.main.
 STOPSIGNAL SIGTERM
+
+# Which working tree this image was built from - stamped by Start.bat and
+# Update.bat, logged on startup, and printed back by both scripts. Last layer on
+# purpose: a new value rebuilds this line and nothing else.
+ARG VELLAR_BUILD="unknown"
+ENV VELLAR_BUILD=${VELLAR_BUILD}
+LABEL org.opencontainers.image.revision=${VELLAR_BUILD}
 
 CMD ["python", "-m", "mmorpg.main"]

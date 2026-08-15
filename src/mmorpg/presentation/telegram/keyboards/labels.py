@@ -82,13 +82,26 @@ DUNGEON_ENTER = label("Спуститься", "🕳")
 DUNGEON_DEEPER = label("Идти глубже", "⬇️")
 DUNGEON_LEAVE = label("Выйти на воздух", "🚪")
 
+# --- keeper (ADMIN_IDS only; ordinary players never see this row) ---
+
+KEEPER = label("Смотритель", "🗝")
+KEEPER_GOLD = label("Выдать золото", "🪙")
+KEEPER_LEVEL = label("Поднять уровень", "🔼")
+KEEPER_HEAL = label("Залечить раны", "🩹")
+KEEPER_POINTS = label("Выдать очки", "🎯")
+
+# --- crafts ---
+
+CRAFTS = label("Ремёсла", "🛠")
+GATHER = label("Собрать сырьё", "🌿")
+
 # --- creation ---
 
 CREATE_CHARACTER = label("Создать персонажа", "✳️")
 CONTINUE = label("Продолжить", "▶️")
 CONFIRM = label("Подтвердить", "✅")
-RACE_DETAILS = label("Подробно о роде", "❔")
-CLASS_DETAILS = label("Подробно о ремесле", "❔")
+RACE_DETAILS = label("Подробно о расе", "❔")
+CLASS_DETAILS = label("Подробно о классе", "❔")
 
 # --- paginated lists (accessibility rule 8 and section 13 of the spec) ---
 

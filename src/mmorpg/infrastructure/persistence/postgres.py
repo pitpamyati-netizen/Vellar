@@ -13,6 +13,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from mmorpg.domain.entities.character import Character, Equipment, InventoryEntry, SkillLoadout
+from mmorpg.domain.entities.craft import CraftLog, CraftProgress
 from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatBlock
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeRecord, TradeStatus
@@ -26,7 +27,7 @@ CHARACTER_COLUMNS = """
     id, user_id, name, race_id, class_id, level, experience, gold,
     stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
     trait_ids, loadout, equipment, city_id, unspent_stat_points, unspent_skill_points,
-    health, bank_gold, quests
+    health, bank_gold, quests, crafts, is_admin
 """
 
 TRADE_COLUMNS = """
@@ -73,6 +74,8 @@ def _character_from_row(row: Any) -> Character:
         health=row["health"],
         bank_gold=row["bank_gold"],
         quests=_quests_from_json(row["quests"]),
+        crafts=_crafts_from_json(row["crafts"]),
+        is_admin=bool(row["is_admin"]),
     )
 
 
@@ -85,6 +88,29 @@ def _quests_from_json(raw: str | None) -> QuestLog:
 
 def _quests_to_json(log: QuestLog) -> str:
     return json.dumps({"taken": dict(log.taken), "done": list(log.done)}, ensure_ascii=False)
+
+
+def _crafts_from_json(raw: str | None) -> CraftLog:
+    """Craft work done, read whole. An absent column means nothing learned yet."""
+    data = json.loads(raw) if raw else {}
+    entries = {
+        str(craft_id): CraftProgress(
+            experience=int(progress.get("experience", 0)),
+            gathered_cycle=int(progress.get("cycle", -1)),
+        )
+        for craft_id, progress in dict(data).items()
+    }
+    return CraftLog(MappingProxyType(entries))
+
+
+def _crafts_to_json(log: CraftLog) -> str:
+    return json.dumps(
+        {
+            craft_id: {"experience": progress.experience, "cycle": progress.gathered_cycle}
+            for craft_id, progress in log.entries.items()
+        },
+        ensure_ascii=False,
+    )
 
 
 def _loadout_to_json(loadout: SkillLoadout) -> str:
@@ -249,10 +275,11 @@ class PostgresCharacterRepository:
                 stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
                 trait_ids, loadout, equipment, city_id,
                 unspent_stat_points, unspent_skill_points,
-                health, bank_gold, quests
+                health, bank_gold, quests, crafts, is_admin
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                    $15, $16::jsonb, $17::jsonb, $18, $19, $20, $21, $22, $23::jsonb)
+                    $15, $16::jsonb, $17::jsonb, $18, $19, $20, $21, $22, $23::jsonb,
+                    $24::jsonb, $25)
             RETURNING id
             """,
             character.user_id,
@@ -278,6 +305,8 @@ class PostgresCharacterRepository:
             character.health,
             character.bank_gold,
             _quests_to_json(character.quests),
+            _crafts_to_json(character.crafts),
+            character.is_admin,
         )
         return replace(character, id=row["id"])
 
@@ -291,7 +320,7 @@ class PostgresCharacterRepository:
                 trait_ids = $12, loadout = $13::jsonb, equipment = $14::jsonb,
                 city_id = $15, unspent_stat_points = $16, unspent_skill_points = $17,
                 health = $18, bank_gold = $19, quests = $20::jsonb,
-                updated_at = now()
+                crafts = $21::jsonb, is_admin = $22, updated_at = now()
             WHERE id = $1
             """,
             character.id,
@@ -314,6 +343,8 @@ class PostgresCharacterRepository:
             character.health,
             character.bank_gold,
             _quests_to_json(character.quests),
+            _crafts_to_json(character.crafts),
+            character.is_admin,
         )
 
     async def name_taken(self, name: str) -> bool:

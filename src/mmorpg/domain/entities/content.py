@@ -16,6 +16,7 @@ from enum import StrEnum
 from types import MappingProxyType
 
 from mmorpg.domain.entities.combat import ActionTag
+from mmorpg.domain.entities.craft import Craft, CraftKind, CraftRules, Recipe
 from mmorpg.domain.entities.location import EnemyArchetype
 from mmorpg.domain.entities.quest import Quest
 from mmorpg.domain.entities.stats import StatBlock, StatCode
@@ -223,6 +224,9 @@ class City:
         msg = f"city {self.id} has no location slot {slot}"
         raise KeyError(msg)
 
+    def has_location(self, slot: int) -> bool:
+        return any(location.slot == slot for location in self.locations)
+
 
 @dataclass(frozen=True, slots=True)
 class ProgressionRules:
@@ -257,6 +261,9 @@ class GameContent:
     enemy_archetypes: tuple[EnemyArchetype, ...]
     elite_titles: tuple[str, ...]
     quests: tuple[Quest, ...]
+    crafts: tuple[Craft, ...]
+    recipes: tuple[Recipe, ...]
+    craft_rules: CraftRules
     trait_categories: Mapping[str, str]
     inverted_modifiers: frozenset[str]
     rules: ProgressionRules
@@ -270,6 +277,8 @@ class GameContent:
     _cities_by_id: Mapping[str, City]
     _rarities_by_id: Mapping[str, Rarity]
     _quests_by_id: Mapping[str, Quest]
+    _crafts_by_id: Mapping[str, Craft]
+    _recipes_by_id: Mapping[str, Recipe]
 
     @classmethod
     def build(
@@ -287,7 +296,10 @@ class GameContent:
         trait_categories: Mapping[str, str],
         inverted_modifiers: frozenset[str],
         rules: ProgressionRules,
+        craft_rules: CraftRules,
         quests: Sequence[Quest] = (),
+        crafts: Sequence[Craft] = (),
+        recipes: Sequence[Recipe] = (),
     ) -> GameContent:
         """Build the registry and its indexes."""
         by_owner: dict[str, list[Skill]] = {}
@@ -305,6 +317,9 @@ class GameContent:
             enemy_archetypes=tuple(enemy_archetypes),
             elite_titles=tuple(elite_titles),
             quests=tuple(quests),
+            crafts=tuple(crafts),
+            recipes=tuple(recipes),
+            craft_rules=craft_rules,
             trait_categories=MappingProxyType(dict(trait_categories)),
             inverted_modifiers=inverted_modifiers,
             rules=rules,
@@ -319,6 +334,8 @@ class GameContent:
             _cities_by_id=MappingProxyType({city.id: city for city in cities}),
             _rarities_by_id=MappingProxyType({rarity.id: rarity for rarity in rarities}),
             _quests_by_id=MappingProxyType({quest.id: quest for quest in quests}),
+            _crafts_by_id=MappingProxyType({craft.id: craft for craft in crafts}),
+            _recipes_by_id=MappingProxyType({recipe.id: recipe for recipe in recipes}),
         )
 
     # --- lookups -----------------------------------------------------
@@ -344,6 +361,9 @@ class GameContent:
     def city(self, city_id: str) -> City:
         return self._cities_by_id[city_id]
 
+    def has_city(self, city_id: str) -> bool:
+        return city_id in self._cities_by_id
+
     def rarity(self, rarity_id: str) -> Rarity:
         return self._rarities_by_id[rarity_id]
 
@@ -359,6 +379,27 @@ class GameContent:
             sorted(
                 (quest for quest in self.quests if quest.city_id == city_id),
                 key=lambda quest: (quest.level, quest.id),
+            )
+        )
+
+    def craft(self, craft_id: str) -> Craft:
+        return self._crafts_by_id[craft_id]
+
+    def has_craft(self, craft_id: str) -> bool:
+        return craft_id in self._crafts_by_id
+
+    def recipe(self, recipe_id: str) -> Recipe:
+        return self._recipes_by_id[recipe_id]
+
+    def crafts_of_kind(self, kind: CraftKind) -> tuple[Craft, ...]:
+        return tuple(craft for craft in self.crafts if craft.kind is kind)
+
+    def recipes_of(self, craft_id: str) -> tuple[Recipe, ...]:
+        """Recipes a craft knows, easiest first - the order the screen lists them."""
+        return tuple(
+            sorted(
+                (recipe for recipe in self.recipes if recipe.craft_id == craft_id),
+                key=lambda recipe: (recipe.rank, recipe.id),
             )
         )
 

@@ -412,6 +412,28 @@ stack = 99
 text = "Обломки железа: гвозди, пряжки, куски оковки."
 
 [[item]]
+id = "mountain_ore"
+name = "Горная руда"
+kind = "material"
+slot = "none"
+rarity = "common"
+level = 8
+price = 22
+stack = 99
+text = "Куски породы с рыжими прожилками, тяжелее, чем кажутся."
+
+[[item]]
+id = "meadow_herbs"
+name = "Луговые травы"
+kind = "material"
+slot = "none"
+rarity = "common"
+level = 1
+price = 6
+stack = 99
+text = "Пучок травы, перевязанный лыком, ещё влажный."
+
+[[item]]
 id = "grove_resin"
 name = "Смола рощи"
 kind = "material"

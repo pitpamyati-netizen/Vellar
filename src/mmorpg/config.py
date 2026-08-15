@@ -51,6 +51,11 @@ class Settings(BaseSettings):
 
     bot_token: SecretStr = SecretStr("")
 
+    # Which working tree the running image was built from. Stamped into the image
+    # by Start.bat and Update.bat and logged on startup, so "is the bot running
+    # my latest change" has an answer that does not depend on memory.
+    vellar_build: str = "unknown"
+
     webhook_base_url: str = "https://example.com"
     webhook_path: str = "/telegram/webhook"
     webhook_secret: SecretStr = SecretStr("")
@@ -66,6 +71,12 @@ class Settings(BaseSettings):
     # Shown to players as "where to find the others"; empty hides the line.
     channel_url: str = ""
     group_url: str = ""
+
+    # --- Keepers ---
+    # Telegram ids allowed to open the keeper screen, comma separated. Kept in the
+    # environment and not in the database on purpose: a right that outlives a
+    # wiped table, and one nobody can grant themselves from inside the game.
+    admin_ids: str = ""
 
     world_seed: str = "vellar-prime"
     cycle_seconds: int = Field(default=21_600, gt=0)
@@ -120,6 +131,19 @@ class Settings(BaseSettings):
     def group_chat_enabled(self) -> bool:
         """Whether public group commands are answered."""
         return bool(self.group_id.strip())
+
+    @property
+    def admins(self) -> frozenset[int]:
+        """Telegram ids of the keepers. Anything unparsable is simply not one."""
+        ids: set[int] = set()
+        for part in self.admin_ids.replace(";", ",").split(","):
+            stripped = part.strip()
+            if stripped.lstrip("-").isdigit():
+                ids.add(int(stripped))
+        return frozenset(ids)
+
+    def is_admin(self, telegram_id: int) -> bool:
+        return telegram_id in self.admins
 
     @property
     def uses_external_storage(self) -> bool:

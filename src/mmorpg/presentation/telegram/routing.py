@@ -58,10 +58,10 @@ SIMPLE_COMMANDS: dict[str, Intent] = {
     "/bag": Intent.BAG,
     "/бежать": Intent.FLEE,
     "/flee": Intent.FLEE,
-    # "/народ" and "/раса" stay: both named this slot before "род" did.
+    # "/род" and "/народ" stay: both named this slot before "/раса" came back.
+    "/раса": Intent.RACIAL,
     "/род": Intent.RACIAL,
     "/народ": Intent.RACIAL,
-    "/раса": Intent.RACIAL,
     "/racial": Intent.RACIAL,
 }
 

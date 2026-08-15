@@ -38,7 +38,7 @@ def _class_pool(content: GameContent, character: Character, kind: SkillKind) -> 
 
 
 def teachable(content: GameContent, character: Character) -> tuple[Skill, ...]:
-    """Every skill of the character's craft unlocked by their level, learned or not.
+    """Every skill of the character's class unlocked by their level, learned or not.
 
     The list is stable: a skill keeps its place once it appears, so a player can
     remember "the fourth one" between sessions.

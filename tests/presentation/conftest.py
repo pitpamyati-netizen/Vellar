@@ -23,6 +23,7 @@ from mmorpg.domain.entities import (
 )
 from mmorpg.domain.entities.combat import ActionTag, CombatState, Trace
 from mmorpg.domain.entities.content import Item, SkillKind
+from mmorpg.domain.entities.craft import CraftLog, CraftProgress
 from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
 from mmorpg.domain.procgen import generate_location
 from mmorpg.domain.rules.combat import start_combat
@@ -33,7 +34,9 @@ from mmorpg.presentation.telegram.handlers import creation as handlers_creation
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import combat as combat_screens
+from mmorpg.presentation.telegram.screens import crafts as craft_screens
 from mmorpg.presentation.telegram.screens import creation, play, shop
+from mmorpg.presentation.telegram.screens import keeper as keeper_screens
 from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import skills as skill_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
@@ -152,6 +155,28 @@ def boss_fight(content: GameContent, fighter: Character) -> CombatState:
 
 
 @pytest.fixture(scope="session")
+def craftsman(fighter: Character) -> Character:
+    """Somebody who has already put a watch or two into two crafts."""
+    return replace(
+        fighter,
+        crafts=CraftLog(
+            MappingProxyType(
+                {
+                    "mining": CraftProgress(experience=260, gathered_cycle=100),
+                    "smithing": CraftProgress(experience=140),
+                }
+            )
+        ),
+    )
+
+
+@pytest.fixture(scope="session")
+def keeper(fighter: Character) -> Character:
+    """Somebody whose Telegram id is in ADMIN_IDS: one extra row, nothing else."""
+    return replace(fighter, is_admin=True)
+
+
+@pytest.fixture(scope="session")
 def sample_stock(content: GameContent) -> tuple[Item, ...]:
     return roll_assortment(
         content, world_seed="vellar-test", city_id="farhold", cycle=100, character_level=8
@@ -180,6 +205,8 @@ def all_screens(
     crowded_fight: CombatState,
     boss_fight: CombatState,
     sample_stock: tuple[Item, ...],
+    craftsman: Character,
+    keeper: Character,
 ) -> list[Screen]:
     """Every screen in the game, rendered with sample data.
 
@@ -202,7 +229,13 @@ def all_screens(
         handlers_creation.welcome_screen(),
         handlers_creation.created_screen("Аргус", "Порубежье"),
         play.main_menu_screen(content, hero, derived_stats(content, hero)),
+        play.main_menu_screen(content, keeper, derived_stats(content, keeper)),
+        keeper_screens.keeper_screen(content, keeper, derived_stats(content, keeper)),
+        keeper_screens.keeper_screen(
+            content, keeper, derived_stats(content, keeper), notice="Выдано 1000 золота."
+        ),
         play.world_screen(content, hero, PageState()),
+        play.world_screen(content, keeper, PageState()),
         play.city_screen(content, content.city("farhold"), hero),
         play.location_list_screen(content, content.city("farhold"), hero, PageState()),
         play.location_screen(sample_location, sample_location.entrance, cleared=0),
@@ -223,6 +256,20 @@ def all_screens(
         skill_screens.pick_screen(content, fighter, SkillKind.ACTIVE, 2, PageState()),
         skill_screens.pick_screen(content, hero, SkillKind.PASSIVE, 0, PageState()),
         skill_screens.edge_screen(content, fighter, content.skill("warrior_cleave")),
+        craft_screens.crafts_screen(content, hero),
+        craft_screens.crafts_screen(content, craftsman),
+        craft_screens.craft_screen(content, craftsman, content.craft("mining"), {}, cycle=100),
+        craft_screens.craft_screen(
+            content, hero, content.craft("mining"), {}, cycle=7, notice="Собрано: Железный лом."
+        ),
+        craft_screens.craft_screen(
+            content,
+            craftsman,
+            content.craft("smithing"),
+            {"iron_scrap": 4, "mountain_ore": 3},
+            cycle=100,
+        ),
+        craft_screens.craft_screen(content, hero, content.craft("alchemy"), {}, cycle=100),
         quest_screens.journal_screen(content, fighter),
         quest_screens.journal_screen(content, hero),
         quest_screens.board_screen(content, hero, PageState()),

@@ -58,7 +58,7 @@ is the same everywhere, so a player learns it once instead of 288 times.
 
 Three screens, and no more (`presentation/telegram/screens/skills.py`):
 
-- **Умения** - every skill of the craft unlocked by level, with its rank and what
+- **Умения** - every skill of the class unlocked by level, with its rank and what
   one point would buy. Pressing one learns it, or raises it a rank; at rank 3 the
   press opens the edge screen instead, and nothing else happens until it is
   chosen.

@@ -17,13 +17,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import GameContent, Item, SkillKind
+from mmorpg.domain.entities.content import City, GameContent, Item, SkillKind
 from mmorpg.domain.entities.location import GeneratedLocation, NodeKind
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.ports.repositories import AccessibilitySettings
 from mmorpg.domain.procgen.location import cleared_mask, generate_location, is_cleared
 from mmorpg.domain.procgen.seeds import derive, location_seed
 from mmorpg.domain.rules import adventure, economy
+from mmorpg.domain.rules import crafts as craft_rules
+from mmorpg.domain.rules import keeper as keeper_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.progression import LevelUp
@@ -31,6 +33,8 @@ from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.routing import Command, Intent, resolve
 from mmorpg.presentation.telegram.screens import city as city_screens
+from mmorpg.presentation.telegram.screens import crafts as craft_screens
+from mmorpg.presentation.telegram.screens import keeper as keeper_screens
 from mmorpg.presentation.telegram.screens import play as screens
 from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import settings as settings_screens
@@ -57,6 +61,9 @@ SERVICES: dict[str, tuple[str, ScreenId]] = {
 # A descent is three fights deep. Short enough to hold in the head, long enough
 # that walking in wounded is a decision (Roadmap 1.5).
 DUNGEON_DEPTH = 3
+
+# Said when the screen claims a location the game can no longer rebuild.
+LOST_VISIT = "Та вылазка уже закончилась. Выберите локацию заново."
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,6 +152,10 @@ class PlayState:
     pick_slot: int = 0
     edge_skill: str = ""
     quest_id: str = ""
+    craft_id: str = ""
+    # The watch the craft screen was opened in: gathering is once per watch,
+    # and the answer must not change while the player is reading it.
+    craft_cycle: int = 0
     # Transient: cleared at the start of every step, read by the handler.
     pending: PendingWrite = field(default_factory=PendingWrite)
     fight: str = ""
@@ -183,6 +194,7 @@ class PlayState:
                 "pick": [self.pick_kind, self.pick_slot],
                 "edge": self.edge_skill,
                 "quest": self.quest_id,
+                "craft": [self.craft_id, self.craft_cycle],
                 "pages": [self.list_page.page, self.skill_page.page, self.board_page.page],
             },
             ensure_ascii=False,
@@ -195,6 +207,7 @@ class PlayState:
         descent_city, descent_level, depth, descent_cycle = data.get("descent", ["", 0, 0, 0])
         pick_kind, pick_slot = data.get("pick", ["", 0])
         list_page, skill_page, board_page = data.get("pages", [1, 1, 1])
+        craft_id, craft_cycle = data.get("craft", ["", 0])
         return cls(
             screen=ScreenId(data["screen"]),
             stack=NavigationStack.deserialise(data.get("stack", "")),
@@ -222,11 +235,36 @@ class PlayState:
             pick_slot=int(pick_slot),
             edge_skill=data.get("edge", ""),
             quest_id=data.get("quest", ""),
+            craft_id=craft_id,
+            craft_cycle=int(craft_cycle),
         )
 
 
 def begin(character: Character) -> PlayState:
     return PlayState(city_id=character.city_id)
+
+
+def known_city(content: GameContent, city_id: str, fallback_id: str) -> City:
+    """The city this id names, or the one the character stands in.
+
+    State comes back from storage, and storage outlives content: a city id written
+    by an older release may name nothing at all today. That is not an error the
+    player should ever meet - they get their own city instead of a crash
+    (accessibility rule 12, same principle as ``NavigationStack.deserialise``).
+    """
+    for candidate in (city_id, fallback_id):
+        if content.has_city(candidate):
+            return content.city(candidate)
+    return content.cities[0]
+
+
+def location_known(content: GameContent, session: LocationSession) -> bool:
+    """Whether the visit in this session can still be rebuilt from content."""
+    return (
+        session.active
+        and content.has_city(session.city_id)
+        and content.city(session.city_id).has_location(session.slot)
+    )
 
 
 def build_location(
@@ -276,7 +314,7 @@ def render(
     settings: AccessibilitySettings | None = None,
 ) -> Screen:
     shelf = goods or Goods(gold=character.gold)
-    city = content.city(state.city_id or character.city_id)
+    city = known_city(content, state.city_id, character.city_id)
     match state.screen:
         case ScreenId.SETTINGS:
             return settings_screens.settings_screen(settings or DEFAULT_SETTINGS, state.notice)
@@ -312,13 +350,20 @@ def render(
             return screens.location_list_screen(
                 content, city, character, state.location_page, state.notice
             )
-        case ScreenId.LOCATION:
+        case ScreenId.LOCATION if location_known(content, state.session):
             location = build_location(content, world_seed, state.session)
             return screens.location_screen(
                 location,
                 location.node(state.session.node),
                 cleared=state.session.cleared,
                 notice=state.notice,
+            )
+        # The screen says "location" but the visit behind it is gone: state saved
+        # by an older release, or a location content no longer has. The player is
+        # put back on the list they walked in from, never left with a crash.
+        case ScreenId.LOCATION:
+            return screens.location_list_screen(
+                content, city, character, state.location_page, state.notice or LOST_VISIT
             )
         case ScreenId.CHARACTER:
             return screens.character_screen(
@@ -337,14 +382,31 @@ def render(
                 state.list_page,
                 state.notice,
             )
-        case ScreenId.SKILL_EDGE:
+        case ScreenId.SKILL_EDGE if content.has_skill(state.edge_skill):
             return skill_screens.edge_screen(content, character, content.skill(state.edge_skill))
+        case ScreenId.SKILL_EDGE:
+            return skill_screens.skills_screen(content, character, state.skill_page, state.notice)
+        case ScreenId.CRAFT if content.has_craft(state.craft_id):
+            return craft_screens.craft_screen(
+                content,
+                character,
+                content.craft(state.craft_id),
+                _bag(shelf),
+                cycle=state.craft_cycle,
+                notice=state.notice,
+            )
+        # A craft that content no longer has is not an error: the player is put
+        # back on the list they came from (accessibility rule 12).
+        case ScreenId.CRAFTS | ScreenId.CRAFT:
+            return craft_screens.crafts_screen(content, character, state.notice)
         case ScreenId.QUESTS:
             return quest_screens.journal_screen(content, character, state.notice)
         case ScreenId.QUEST_BOARD:
             return quest_screens.board_screen(content, character, state.board_page, state.notice)
-        case ScreenId.QUEST_OFFER:
+        case ScreenId.QUEST_OFFER if content.has_quest(state.quest_id):
             return quest_screens.offer_screen(content, content.quest(state.quest_id))
+        case ScreenId.QUEST_OFFER:
+            return quest_screens.board_screen(content, character, state.board_page, state.notice)
         case ScreenId.TAVERN:
             return city_screens.tavern_screen(content, character, city, state.notice)
         case ScreenId.MENTOR:
@@ -362,6 +424,14 @@ def render(
                 depth=state.descent.depth,
                 total=DUNGEON_DEPTH,
                 notice=state.notice,
+            )
+        case ScreenId.KEEPER if character.is_admin:
+            return keeper_screens.keeper_screen(
+                content, character, derived_stats(content, character), state.notice
+            )
+        case ScreenId.KEEPER:
+            return screens.main_menu_screen(
+                content, character, derived_stats(content, character), "Этот экран больше не ваш."
             )
         case ScreenId.STUB:
             return screens.stub_screen(state.stub_title, state.notice)
@@ -394,6 +464,46 @@ def advance(
     settings: AccessibilitySettings | None = None,
 ) -> PlayState:
     """Apply one message. Always answers; never raises on unexpected input."""
+    # A visit that can no longer be rebuilt is dropped before anything reads it,
+    # so the state written back is a state that works. Healing in ``render`` alone
+    # would fix the answer and leave the stored screen broken for ever.
+    if state.screen is ScreenId.LOCATION and not location_known(content, state.session):
+        # The dead screen leaves the stack too, so "Назад" walks on to the city
+        # instead of back into the place that is gone.
+        walked, _ = (
+            state.stack.pop()
+            if state.stack.current is ScreenId.LOCATION
+            else (
+                state.stack,
+                None,
+            )
+        )
+        healed = (
+            replace(
+                state,
+                session=LocationSession(),
+                stack=walked,
+                pending=PendingWrite(),
+                fight="",
+            )
+            .at(ScreenId.LOCATION_LIST)
+            .with_notice(LOST_VISIT)
+        )
+        # The buttons that were on screen belong to a place that is gone, so this
+        # press only explains and hands over a working keyboard (rule 12) - except
+        # for the service row, which means what it says everywhere.
+        intent = resolve(text, render(content, character, healed, world_seed=world_seed)).intent
+        if intent is Intent.MAIN_MENU:
+            return replace(
+                healed,
+                screen=ScreenId.MAIN_MENU,
+                stack=NavigationStack((ScreenId.MAIN_MENU,)),
+                notice="",
+            )
+        if intent is Intent.BACK:
+            return _go_back(healed)
+        return healed
+
     screen = render(
         content, character, state, world_seed=world_seed, goods=goods, settings=settings
     )
@@ -426,7 +536,9 @@ def advance(
         case ScreenId.SELL:
             return _handle_sell(content, character, state, command, shelf)
         case ScreenId.MAIN_MENU:
-            return _handle_main_menu(state, command)
+            return _handle_main_menu(character, state, command, cycle=cycle)
+        case ScreenId.KEEPER:
+            return _handle_keeper(content, character, state, command)
         case ScreenId.WORLD:
             return _handle_world(content, character, state, command)
         case ScreenId.CITY:
@@ -443,6 +555,12 @@ def advance(
             return _handle_edge(content, character, state, command)
         case ScreenId.TAVERN:
             return _handle_tavern(content, character, state, command)
+        case ScreenId.CRAFTS:
+            return _handle_crafts(content, character, state, command, cycle=cycle)
+        case ScreenId.CRAFT:
+            return _handle_craft(
+                content, character, state, command, shelf, cycle=cycle, world_seed=world_seed
+            )
         case ScreenId.QUEST_BOARD:
             return _handle_board(content, character, state, command)
         case ScreenId.QUEST_OFFER:
@@ -490,7 +608,9 @@ def _page_move(command: Command, current: PageState, pages: int) -> PageState | 
 # --- menu, world, city ------------------------------------------------
 
 
-def _handle_main_menu(state: PlayState, command: Command) -> PlayState:
+def _handle_main_menu(
+    character: Character, state: PlayState, command: Command, *, cycle: int
+) -> PlayState:
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите кнопку из меню.")
     if labels.WORLD.matches(command.argument):
@@ -503,15 +623,132 @@ def _handle_main_menu(state: PlayState, command: Command) -> PlayState:
         return replace(state, skill_page=PageState()).at(ScreenId.SKILLS)
     if labels.QUESTS.matches(command.argument):
         return state.at(ScreenId.QUESTS)
+    if labels.CRAFTS.matches(command.argument):
+        return replace(state, craft_cycle=cycle).at(ScreenId.CRAFTS)
     if labels.SETTINGS.matches(command.argument):
         return state.at(ScreenId.SETTINGS)
+    # Pressed from an older keyboard by somebody who is no longer a keeper, the
+    # button is simply not a button any more.
+    if labels.KEEPER.matches(command.argument) and character.is_admin:
+        return state.at(ScreenId.KEEPER)
     return state.with_notice("Нажмите кнопку из меню.")
+
+
+# --- keeper -----------------------------------------------------------
+
+
+def _handle_keeper(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    """Service actions. Everything here reports the number it changed."""
+    if not character.is_admin:
+        # The right lives in ADMIN_IDS, so it can be taken away between two
+        # presses. The screen then stops working, and says so plainly.
+        return state.at(ScreenId.MAIN_MENU).with_notice("Этот экран больше не ваш.")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите кнопку смотрителя.")
+
+    if labels.KEEPER_GOLD.matches(command.argument):
+        grown = keeper_rules.grant_gold(character)
+        return state.storing(PendingWrite(character=grown)).with_notice(
+            f"Выдано {keeper_rules.GOLD_STEP} золота. Теперь: {grown.gold}."
+        )
+    if labels.KEEPER_LEVEL.matches(command.argument):
+        grown, level_up = keeper_rules.raise_level(content, character)
+        if not level_up.levels_gained:
+            return state.with_notice("Выше некуда: это последний уровень.")
+        return state.storing(PendingWrite(character=grown)).with_notice(
+            f"Уровень {grown.level}. Очков характеристик: {level_up.stat_points}, "
+            f"очков умений: {level_up.skill_points}."
+        )
+    if labels.KEEPER_HEAL.matches(command.argument):
+        healed = keeper_rules.heal(content, character)
+        return state.storing(PendingWrite(character=healed)).with_notice(
+            f"Раны залечены. Здоровье: {healed.health}."
+        )
+    if labels.KEEPER_POINTS.matches(command.argument):
+        granted = keeper_rules.grant_points(character)
+        return state.storing(PendingWrite(character=granted)).with_notice(
+            f"Выдано очков: характеристик {granted.unspent_stat_points}, "
+            f"умений {granted.unspent_skill_points} всего."
+        )
+    return state.with_notice("Нажмите кнопку смотрителя.")
+
+
+# --- crafts -----------------------------------------------------------
+
+
+def _bag(goods: Goods) -> dict[str, int]:
+    """The bag as the craft rules want it: item id to how many are in it."""
+    return {held.item_id: held.quantity for held in goods.owned}
+
+
+def _handle_crafts(
+    content: GameContent,
+    character: Character,
+    state: PlayState,
+    command: Command,
+    *,
+    cycle: int,
+) -> PlayState:
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите ремесло из списка.")
+    for craft in content.crafts:
+        if command.argument.startswith(craft.name):
+            chosen = replace(state, craft_id=craft.id, craft_cycle=cycle)
+            return chosen.at(ScreenId.CRAFT)
+    return state.with_notice("Не узнал ремесло. Нажмите ремесло из списка.")
+
+
+def _handle_craft(
+    content: GameContent,
+    character: Character,
+    state: PlayState,
+    command: Command,
+    goods: Goods,
+    *,
+    cycle: int,
+    world_seed: str,
+) -> PlayState:
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите кнопку работы или «Назад».")
+    craft = content.craft(state.craft_id)
+
+    if labels.GATHER.matches(command.argument):
+        seed = derive(world_seed, "gather", character.id, craft.id, cycle)
+        worked, gathered = craft_rules.gather(content, character, craft, cycle=cycle, seed=seed)
+        line = craft_screens.gathered_line(content, gathered)
+        if not gathered.ok:
+            return state.with_notice(line)
+        write = PendingWrite(character=worked).with_items((gathered.item_id, gathered.count))
+        return replace(state, craft_cycle=cycle).storing(write).with_notice(line)
+
+    owned = _bag(goods)
+    for recipe in content.recipes_of(craft.id):
+        if not command.argument.startswith(content.item(recipe.output_id).name):
+            continue
+        # The work already done is part of the seed, so two batches in a row are
+        # not the same batch twice.
+        experience = character.crafts.progress(craft.id).experience
+        seed = derive(world_seed, "craft", character.id, recipe.id, cycle, experience)
+        worked, made = craft_rules.make(content, character, recipe, owned, seed=seed)
+        line = craft_screens.made_line(content, made)
+        if not made.ok:
+            return state.with_notice(line)
+        write = PendingWrite(character=worked).with_items(*made.spent, (made.item_id, made.count))
+        return state.storing(write).with_notice(line)
+
+    return state.with_notice("Не узнал работу. Нажмите кнопку из списка.")
 
 
 def _handle_world(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    available = content.cities_available_at(character.level)
+    # The keyboard the keeper is answering lists every city, so the step that
+    # reads it must agree with it (screens.world_screen).
+    available = (
+        content.cities if character.is_admin else content.cities_available_at(character.level)
+    )
     moved = _page_move(command, state.world_page, total_pages(len(available)))
     if moved is not None:
         return replace(state, world_page=moved, notice="")
@@ -537,7 +774,7 @@ def _handle_city(
 ) -> PlayState:
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите кнопку города.")
-    city = content.city(state.city_id or character.city_id)
+    city = known_city(content, state.city_id, character.city_id)
     service = SERVICES.get(command.argument)
     if service is None:
         return state.with_notice("Нажмите кнопку города.")
@@ -1003,7 +1240,7 @@ def _handle_location_list(
     *,
     cycle: int,
 ) -> PlayState:
-    city = content.city(state.city_id or character.city_id)
+    city = known_city(content, state.city_id, character.city_id)
     moved = _page_move(command, state.location_page, total_pages(len(city.locations)))
     if moved is not None:
         return replace(state, location_page=moved, notice="")
@@ -1012,7 +1249,7 @@ def _handle_location_list(
 
     for location in city.locations:
         if command.argument.startswith(f"{location.slot}. {location.name}"):
-            if character.level < location.level_min:
+            if character.level < location.level_min and not character.is_admin:
                 return state.with_notice(
                     f"Локация {location.name} рассчитана на уровни с {location.level_min} "
                     f"по {location.level_max}. Ваш уровень: {character.level}."
@@ -1032,6 +1269,12 @@ def _handle_location(
     *,
     world_seed: str,
 ) -> PlayState:
+    if not location_known(content, state.session):
+        return (
+            replace(state, session=LocationSession())
+            .at(ScreenId.LOCATION_LIST)
+            .with_notice(LOST_VISIT)
+        )
     location = build_location(content, world_seed, state.session)
     node = location.node(state.session.node)
 

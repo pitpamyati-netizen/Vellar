@@ -35,6 +35,15 @@ from mmorpg.domain.entities.content import (
     SkillKind,
     Trait,
 )
+from mmorpg.domain.entities.craft import (
+    Craft,
+    CraftKind,
+    CraftRules,
+    CraftYield,
+    QualityTier,
+    Recipe,
+    RecipeInput,
+)
 from mmorpg.domain.entities.location import EnemyArchetype, EnemyKind
 from mmorpg.domain.entities.quest import ObjectiveKind, Quest
 from mmorpg.domain.entities.stats import StatBlock, StatCode
@@ -48,12 +57,14 @@ CONTENT_FILES = (
     "items.toml",
     "enemies.toml",
     "quests.toml",
+    "crafts.toml",
 )
 
 # Node kinds a "search" contract may ask for. Kept as strings rather than as an
 # import of NodeKind, because content speaks the content vocabulary.
 SEARCHABLE_NODES = frozenset({"gather", "cache", "shrine", "event"})
 
+MINIMUM_CRAFTS = 4
 EXPECTED_RACES = 16
 EXPECTED_CLASSES = 8
 MINIMUM_TRAITS = 60
@@ -113,6 +124,8 @@ def load_content(content_dir: Path) -> GameContent:
     enemies, elite_titles = _parse_enemies(raw["enemies.toml"], item_ids, problems)
     _validate_enemies(enemies, cities, problems)
     quests = _parse_quests(raw["quests.toml"], item_ids, cities, problems)
+    craft_rules = _build_craft_rules(raw["crafts.toml"], problems)
+    crafts, recipes = _parse_crafts(raw["crafts.toml"], item_ids, craft_rules, problems)
 
     rules = _build_rules(raw, problems)
 
@@ -120,6 +133,7 @@ def load_content(content_dir: Path) -> GameContent:
     _validate_classes(classes, skills, rules, problems)
     _validate_traits(traits, problems)
     _validate_world(cities, rules, problems)
+    _validate_crafts(crafts, recipes, problems)
 
     if problems:
         raise ContentError(problems)
@@ -135,6 +149,9 @@ def load_content(content_dir: Path) -> GameContent:
         enemy_archetypes=enemies,
         elite_titles=elite_titles,
         quests=quests,
+        crafts=crafts,
+        recipes=recipes,
+        craft_rules=craft_rules,
         trait_categories=categories,
         inverted_modifiers=inverted_modifiers,
         rules=rules,
@@ -787,6 +804,159 @@ def _validate_world(cities: Sequence[City], rules: ProgressionRules, problems: l
             problems.append(f"world.toml: city bands must increase: {earlier.id} then {later.id}")
         if later.level_min > earlier.level_max:
             problems.append(f"world.toml: gap between city {earlier.id} and {later.id}")
+
+
+# --- crafts ----------------------------------------------------------
+
+
+def _build_craft_rules(raw: Mapping[str, Any], problems: list[str]) -> CraftRules:
+    meta = raw.get("meta", {})
+    qualities = tuple(
+        QualityTier(
+            id=str(entry["id"]),
+            name=str(entry["name"]),
+            extra=int(entry.get("extra", 0)),
+            refund_percent=int(entry.get("refund_percent", 0)),
+        )
+        for entry in meta.get("qualities", ())
+    )
+    rules = CraftRules(
+        max_rank=int(meta.get("max_rank", 5)),
+        experience_per_rank=int(meta.get("experience_per_rank", 100)),
+        rank_names=tuple(str(name) for name in meta.get("rank_names", ())),
+        gather_base=int(meta.get("gather_base", 2)),
+        gather_per_rank=int(meta.get("gather_per_rank", 1)),
+        gather_experience=int(meta.get("gather_experience", 8)),
+        qualities=qualities,
+        good_chance_base=float(meta.get("good_chance_base", 0.0)),
+        good_chance_per_rank=float(meta.get("good_chance_per_rank", 0.0)),
+        fine_chance_base=float(meta.get("fine_chance_base", 0.0)),
+        fine_chance_per_rank=float(meta.get("fine_chance_per_rank", 0.0)),
+    )
+    if rules.experience_per_rank < 1:
+        problems.append("crafts.toml: [meta].experience_per_rank must be at least 1")
+    if len(rules.rank_names) != rules.max_rank:
+        problems.append(
+            f"crafts.toml: [meta].rank_names must name all {rules.max_rank} ranks, "
+            f"found {len(rules.rank_names)}"
+        )
+    if {tier.id for tier in qualities} != {"plain", "good", "fine"}:
+        problems.append("crafts.toml: [meta].qualities must be exactly plain, good and fine")
+    return rules
+
+
+def _parse_crafts(
+    raw: Mapping[str, Any],
+    item_ids: set[str],
+    rules: CraftRules,
+    problems: list[str],
+) -> tuple[tuple[Craft, ...], tuple[Recipe, ...]]:
+    known_kinds = {kind.value for kind in CraftKind}
+    crafts: list[Craft] = []
+    for entry in raw.get("craft", ()):
+        craft_id = str(entry.get("id", ""))
+        kind_raw = str(entry.get("kind", ""))
+        if kind_raw not in known_kinds:
+            problems.append(f"crafts.toml: {craft_id} has unknown kind {kind_raw!r}")
+            continue
+        stat_raw = str(entry.get("stat", ""))
+        if stat_raw not in {code.value for code in StatCode}:
+            problems.append(f"crafts.toml: {craft_id} leans on unknown stat {stat_raw!r}")
+            continue
+
+        yields: list[CraftYield] = []
+        for produced in entry.get("yields", ()):
+            item_id = str(produced.get("item", ""))
+            if item_id not in item_ids:
+                problems.append(f"crafts.toml: {craft_id} gathers unknown item {item_id!r}")
+                continue
+            yields.append(CraftYield(item_id=item_id, level=int(produced.get("level", 1))))
+
+        kind = CraftKind(kind_raw)
+        if kind is CraftKind.GATHERING and not yields:
+            problems.append(f"crafts.toml: gathering craft {craft_id} brings nothing back")
+        if kind is CraftKind.MAKING and yields:
+            problems.append(f"crafts.toml: making craft {craft_id} cannot gather")
+
+        crafts.append(
+            Craft(
+                id=craft_id,
+                name=str(entry["name"]),
+                kind=kind,
+                stat=StatCode(stat_raw),
+                description=str(entry.get("description", "")),
+                yields=tuple(yields),
+            )
+        )
+
+    craft_ids = {craft.id for craft in crafts}
+    making = {craft.id for craft in crafts if craft.kind is CraftKind.MAKING}
+    recipes: list[Recipe] = []
+    for entry in raw.get("recipe", ()):
+        recipe_id = str(entry.get("id", ""))
+        craft_id = str(entry.get("craft", ""))
+        if craft_id not in craft_ids:
+            problems.append(f"crafts.toml: {recipe_id} belongs to unknown craft {craft_id!r}")
+            continue
+        if craft_id not in making:
+            problems.append(f"crafts.toml: {recipe_id} hangs on a gathering craft {craft_id!r}")
+            continue
+
+        rank = int(entry.get("rank", 1))
+        if not 1 <= rank <= rules.max_rank:
+            problems.append(
+                f"crafts.toml: {recipe_id} asks for rank {rank}, outside 1..{rules.max_rank}"
+            )
+
+        inputs: list[RecipeInput] = []
+        for need in entry.get("inputs", ()):
+            item_id = str(need.get("item", ""))
+            count = int(need.get("count", 0))
+            if item_id not in item_ids:
+                problems.append(f"crafts.toml: {recipe_id} needs unknown item {item_id!r}")
+                continue
+            if count < 1:
+                problems.append(f"crafts.toml: {recipe_id} needs less than one {item_id}")
+                continue
+            inputs.append(RecipeInput(item_id=item_id, count=count))
+        if not inputs:
+            problems.append(f"crafts.toml: {recipe_id} needs no materials at all")
+
+        output_raw = entry.get("output", {})
+        output_id = str(output_raw.get("item", ""))
+        if output_id not in item_ids:
+            problems.append(f"crafts.toml: {recipe_id} makes unknown item {output_id!r}")
+
+        recipes.append(
+            Recipe(
+                id=recipe_id,
+                craft_id=craft_id,
+                rank=rank,
+                inputs=tuple(inputs),
+                output_id=output_id,
+                output_count=max(1, int(output_raw.get("count", 1))),
+                experience=int(entry.get("experience", 0)),
+            )
+        )
+    return tuple(crafts), tuple(recipes)
+
+
+def _validate_crafts(
+    crafts: Sequence[Craft], recipes: Sequence[Recipe], problems: list[str]
+) -> None:
+    if len(crafts) < MINIMUM_CRAFTS:
+        problems.append(
+            f"crafts.toml: expected at least {MINIMUM_CRAFTS} crafts, found {len(crafts)}"
+        )
+    _check_unique((craft.id for craft in crafts), "crafts.toml", problems)
+    _check_unique((craft.name for craft in crafts), "crafts.toml (names)", problems)
+    _check_unique((recipe.id for recipe in recipes), "crafts.toml (recipes)", problems)
+
+    for craft in crafts:
+        if craft.kind is CraftKind.MAKING and not any(
+            recipe.craft_id == craft.id for recipe in recipes
+        ):
+            problems.append(f"crafts.toml: making craft {craft.id} has no recipes")
 
 
 # --- helpers ---------------------------------------------------------
