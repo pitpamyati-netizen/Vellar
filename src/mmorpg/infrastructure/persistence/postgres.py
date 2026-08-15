@@ -14,10 +14,11 @@ from typing import TYPE_CHECKING, Any
 
 from mmorpg.domain.entities.character import Character, Equipment, InventoryEntry, SkillLoadout
 from mmorpg.domain.entities.craft import CraftLog, CraftProgress
+from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatBlock
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeRecord, TradeStatus
-from mmorpg.domain.ports.repositories import AccessibilitySettings, User
+from mmorpg.domain.ports.repositories import AccessibilitySettings, Census, User
 from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -183,6 +184,36 @@ class PostgresUserRepository:
             settings.verbose,
             settings.page_size,
         )
+
+    async def unchecked(self, *, limit: int, before: int) -> tuple[int, ...]:
+        """Кого давно не спрашивали. Уже заблокировавшие второй раз не спрашиваются."""
+        rows = await self._pool.fetch(
+            "SELECT telegram_id FROM users"
+            " WHERE blocked_at = 0 AND checked_at < $1 ORDER BY checked_at, telegram_id LIMIT $2",
+            before,
+            limit,
+        )
+        return tuple(row["telegram_id"] for row in rows)
+
+    async def mark_checked(self, telegram_id: int, *, at: int, blocked: bool) -> None:
+        await self._pool.execute(
+            "UPDATE users SET checked_at = $2, blocked_at = $3 WHERE telegram_id = $1",
+            telegram_id,
+            at,
+            at if blocked else 0,
+        )
+
+    async def blocked_count(self) -> int:
+        value = await self._pool.fetchval("SELECT count(*) FROM users WHERE blocked_at > 0")
+        return int(value or 0)
+
+    async def purge_blocked(self) -> int:
+        """Персонажи и сумки уходят каскадом с аккаунтом - так объявлено в 0001."""
+        value = await self._pool.fetchval(
+            "WITH gone AS (DELETE FROM users WHERE blocked_at > 0 RETURNING 1)"
+            " SELECT count(*) FROM gone"
+        )
+        return int(value or 0)
 
 
 class PostgresPrivacyRepository:
@@ -393,6 +424,146 @@ class PostgresCharacterRepository:
             limit,
         )
         return tuple(_character_from_row(row) for row in rows)
+
+    async def find_by_name(self, name: str) -> Character | None:
+        row = await self._pool.fetchrow(
+            f"SELECT {CHARACTER_COLUMNS} FROM characters WHERE lower(name) = lower($1)",
+            name.strip(),
+        )
+        return _character_from_row(row) if row else None
+
+    async def newest(self, *, limit: int = 8) -> tuple[Character, ...]:
+        rows = await self._pool.fetch(
+            f"SELECT {CHARACTER_COLUMNS} FROM characters ORDER BY id DESC LIMIT $1",
+            limit,
+        )
+        return tuple(_character_from_row(row) for row in rows)
+
+    async def census(self, *, day: int, week: int, stale: int) -> Census:
+        """Игра в числах: один проход по таблице и короткий список сильнейших."""
+        row = await self._pool.fetchrow(
+            """
+            SELECT
+                count(*)                                        AS characters,
+                count(DISTINCT user_id)                         AS accounts,
+                count(*) FILTER (WHERE updated_at >= to_timestamp($1)) AS fresh_day,
+                count(*) FILTER (WHERE updated_at >= to_timestamp($2)) AS fresh_week,
+                count(*) FILTER (
+                    WHERE level = 1 AND experience = 0 AND tutorial = 0
+                      AND updated_at < to_timestamp($3)
+                )                                               AS abandoned,
+                coalesce(max(level), 0)                         AS top_level,
+                coalesce(round(avg(level)), 0)                  AS average_level,
+                coalesce(sum(gold), 0)                          AS gold_on_hand,
+                coalesce(sum(bank_gold), 0)                     AS gold_in_bank,
+                coalesce(sum(jsonb_array_length(quests -> 'done')), 0) AS quests_done,
+                coalesce(sum(arena_wins + arena_losses), 0)     AS arena_fights
+            FROM characters
+            """,
+            day,
+            week,
+            stale,
+        )
+        leaders = await self._pool.fetch(
+            "SELECT name, level FROM characters ORDER BY level DESC, name LIMIT 5"
+        )
+        blocked = await self._pool.fetchval("SELECT count(*) FROM users WHERE blocked_at > 0")
+        return Census(
+            characters=int(row["characters"]),
+            accounts=int(row["accounts"]),
+            fresh_day=int(row["fresh_day"]),
+            fresh_week=int(row["fresh_week"]),
+            abandoned=int(row["abandoned"]),
+            blocked=int(blocked or 0),
+            top_level=int(row["top_level"]),
+            average_level=int(row["average_level"]),
+            gold_on_hand=int(row["gold_on_hand"]),
+            gold_in_bank=int(row["gold_in_bank"]),
+            quests_done=int(row["quests_done"]),
+            arena_fights=int(row["arena_fights"]),
+            leaders=tuple((entry["name"], int(entry["level"])) for entry in leaders),
+        )
+
+    async def purge_abandoned(self, *, before: int) -> int:
+        value = await self._pool.fetchval(
+            """
+            WITH gone AS (
+                DELETE FROM characters
+                WHERE level = 1 AND experience = 0 AND tutorial = 0
+                  AND updated_at < to_timestamp($1)
+                RETURNING 1
+            )
+            SELECT count(*) FROM gone
+            """,
+            before,
+        )
+        return int(value or 0)
+
+    async def delete(self, character_id: int) -> bool:
+        row = await self._pool.fetchrow(
+            "DELETE FROM characters WHERE id = $1 RETURNING id", character_id
+        )
+        return row is not None
+
+
+class PostgresContentOverlayRepository:
+    """Правки смотрителя: одна строка на сущность, поля - в JSONB.
+
+    Схема нарочно не знает, какие у сущности поля: их знает
+    ``domain/rules/overlay.py``, и он один. Иначе каждая новая правка была бы
+    миграцией, а смысл панели в том, чтобы менять мир без выкатки.
+    """
+
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        self._pool = pool
+
+    async def all(self) -> tuple[OverlayRecord, ...]:
+        rows = await self._pool.fetch(
+            "SELECT kind, entity_id, fields, removed, author_id, updated_at"
+            " FROM content_overlay ORDER BY updated_at, entity_id"
+        )
+        return tuple(
+            OverlayRecord(
+                kind=OverlayKind(row["kind"]),
+                entity_id=row["entity_id"],
+                fields=MappingProxyType(
+                    {str(key): str(value) for key, value in json.loads(row["fields"]).items()}
+                ),
+                removed=bool(row["removed"]),
+                author_id=row["author_id"],
+                updated_at=row["updated_at"],
+            )
+            for row in rows
+        )
+
+    async def put(self, record: OverlayRecord) -> None:
+        await self._pool.execute(
+            """
+            INSERT INTO content_overlay (
+                kind, entity_id, fields, removed, author_id, updated_at
+            )
+            VALUES ($1, $2, $3::jsonb, $4, $5, $6)
+            ON CONFLICT (kind, entity_id) DO UPDATE SET
+                fields = EXCLUDED.fields,
+                removed = EXCLUDED.removed,
+                author_id = EXCLUDED.author_id,
+                updated_at = EXCLUDED.updated_at
+            """,
+            record.kind.value,
+            record.entity_id,
+            json.dumps(dict(record.fields), ensure_ascii=False),
+            record.removed,
+            record.author_id,
+            record.updated_at,
+        )
+
+    async def forget(self, kind: OverlayKind, entity_id: str) -> bool:
+        row = await self._pool.fetchrow(
+            "DELETE FROM content_overlay WHERE kind = $1 AND entity_id = $2 RETURNING entity_id",
+            kind.value,
+            entity_id,
+        )
+        return row is not None
 
 
 def _trade_from_row(row: Any) -> TradeRecord:

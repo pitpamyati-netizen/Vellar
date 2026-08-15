@@ -13,9 +13,8 @@ database (``docs/architecture.md``).
 
 from __future__ import annotations
 
-import json
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from collections.abc import Sequence
+from dataclasses import replace
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, GameContent, Item, SkillKind
@@ -27,7 +26,6 @@ from mmorpg.domain.procgen.seeds import derive, location_seed
 from mmorpg.domain.rules import adventure, economy
 from mmorpg.domain.rules import arena as arena_rules
 from mmorpg.domain.rules import crafts as craft_rules
-from mmorpg.domain.rules import keeper as keeper_rules
 from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import skills as skill_rules
@@ -35,12 +33,22 @@ from mmorpg.domain.rules import tutorial as tutorial_rules
 from mmorpg.domain.rules.progression import LevelUp
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.domain.rules.tutorial import TutorialTask
+from mmorpg.presentation.telegram.flows import keeper as keeper_flow
+from mmorpg.presentation.telegram.flows.state import (
+    Clock,
+    Descent,
+    Goods,
+    LocationSession,
+    PendingWrite,
+    PlayState,
+    go_back,
+    page_move,
+)
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.routing import Command, Intent, resolve
 from mmorpg.presentation.telegram.screens import arena as arena_screens
 from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import crafts as craft_screens
-from mmorpg.presentation.telegram.screens import keeper as keeper_screens
 from mmorpg.presentation.telegram.screens import play as screens
 from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import settings as settings_screens
@@ -49,11 +57,16 @@ from mmorpg.presentation.telegram.screens import skills as skill_screens
 from mmorpg.presentation.telegram.screens import tutorial as tutorial_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.creation import STAT_NAMES
+from mmorpg.presentation.telegram.screens.keeper import KeeperView
 from mmorpg.presentation.telegram.screens.paginated import PageState, total_pages
 from mmorpg.presentation.telegram.screens.shop import OwnedItem
-from mmorpg.presentation.telegram.states.screens import NavigationStack, back_target
+from mmorpg.presentation.telegram.states.screens import NavigationStack
 
 DEFAULT_SETTINGS = AccessibilitySettings()
+
+# Экраны, состояние которых живёт не здесь: панель смотрителя и разговор с
+# жителем города (``flows/keeper.py``).
+KEEPER_SCREENS = keeper_flow.SCREENS
 
 # Which city service each button opens, and the id the city declares it under.
 SERVICES: dict[str, tuple[str, ScreenId]] = {
@@ -72,201 +85,6 @@ DUNGEON_DEPTH = 3
 
 # Said when the screen claims a location the game can no longer rebuild.
 LOST_VISIT = "Та вылазка уже закончилась. Выберите локацию заново."
-
-
-@dataclass(frozen=True, slots=True)
-class PendingWrite:
-    """What the handler must store after this step.
-
-    ``items`` is a list of bag changes: a positive number adds, a negative one
-    takes away. Nothing here is applied by the flow itself.
-    """
-
-    character: Character | None = None
-    settings: AccessibilitySettings | None = None
-    items: tuple[tuple[str, int], ...] = ()
-
-    @property
-    def empty(self) -> bool:
-        return self.character is None and self.settings is None and not self.items
-
-    def with_items(self, *changes: tuple[str, int]) -> PendingWrite:
-        return replace(self, items=(*self.items, *changes))
-
-
-@dataclass(frozen=True, slots=True)
-class Clock:
-    """The two timed things left in the game, and the moment they are read at.
-
-    The world no longer turns over on a shared watch: a location keeps its map
-    until it is cleared out. What is still timed is a shop shelf and a personal
-    gathering cooldown, and both arrive here as values so the flow stays free of
-    the clock (``docs/adr/0003-location-generations.md``).
-    """
-
-    now: int = 0
-    shop_rotation: int = 0
-    gather_cooldown: int = 900
-
-
-@dataclass(frozen=True, slots=True)
-class Goods:
-    """What the player owns and what the current city sells.
-
-    Passed in from the handler: the flow itself never touches a repository.
-    """
-
-    gold: int = 0
-    owned: tuple[OwnedItem, ...] = ()
-    stock: tuple[Item, ...] = ()
-    prices: Mapping[str, int] = field(default_factory=dict)
-
-
-@dataclass(frozen=True, slots=True)
-class LocationSession:
-    """A visit to one location.
-
-    ``generation`` is which map of this place is standing: it is captured on
-    entry and kept until the player leaves, so the ground never changes under
-    their feet mid-visit. It goes up only when the location is cleared out, and
-    it is shared by everybody in it (docs/adr/0003).
-    """
-
-    city_id: str = ""
-    slot: int = 0
-    generation: int = 0
-    node: int = 0
-    cleared: int = 0
-
-    @property
-    def active(self) -> bool:
-        return bool(self.city_id and self.slot)
-
-
-@dataclass(frozen=True, slots=True)
-class Descent:
-    """An unfinished run into the dungeons of a city.
-
-    ``started_at`` is the moment the descent began; it is part of the seed, so
-    two descents in a row are two different descents.
-    """
-
-    city_id: str = ""
-    level: int = 0
-    depth: int = 0
-    started_at: int = 0
-
-    @property
-    def active(self) -> bool:
-        return bool(self.city_id)
-
-
-@dataclass(frozen=True, slots=True)
-class PlayState:
-    screen: ScreenId = ScreenId.MAIN_MENU
-    stack: NavigationStack = field(default_factory=lambda: NavigationStack((ScreenId.MAIN_MENU,)))
-    world_page: PageState = field(default_factory=PageState)
-    location_page: PageState = field(default_factory=PageState)
-    city_id: str = ""
-    session: LocationSession = field(default_factory=LocationSession)
-    descent: Descent = field(default_factory=Descent)
-    stub_title: str = ""
-    notice: str = ""
-    list_page: PageState = field(default_factory=PageState)
-    skill_page: PageState = field(default_factory=PageState)
-    mentor_page: PageState = field(default_factory=PageState)
-    board_page: PageState = field(default_factory=PageState)
-    # What the player is in the middle of choosing: a slot, an edge, a contract.
-    pick_kind: str = ""
-    pick_slot: int = 0
-    edge_skill: str = ""
-    quest_id: str = ""
-    craft_id: str = ""
-    # The moment the craft screen was opened at: the cooldown line must not tick
-    # down while the player is still reading the screen it was printed on.
-    craft_moment: int = 0
-    # Transient: cleared at the start of every step, read by the handler.
-    pending: PendingWrite = field(default_factory=PendingWrite)
-    fight: str = ""
-
-    def at(self, screen: ScreenId) -> PlayState:
-        return replace(self, screen=screen, stack=self.stack.push(screen), notice="")
-
-    def with_notice(self, notice: str) -> PlayState:
-        return replace(self, notice=notice)
-
-    def storing(self, write: PendingWrite) -> PlayState:
-        return replace(self, pending=write)
-
-    def serialise(self) -> str:
-        return json.dumps(
-            {
-                "screen": self.screen.value,
-                "stack": self.stack.serialise(),
-                "world_page": self.world_page.page,
-                "location_page": self.location_page.page,
-                "city": self.city_id,
-                "session": [
-                    self.session.city_id,
-                    self.session.slot,
-                    self.session.generation,
-                    self.session.node,
-                    self.session.cleared,
-                ],
-                "descent": [
-                    self.descent.city_id,
-                    self.descent.level,
-                    self.descent.depth,
-                    self.descent.started_at,
-                ],
-                "stub": self.stub_title,
-                "pick": [self.pick_kind, self.pick_slot],
-                "edge": self.edge_skill,
-                "quest": self.quest_id,
-                "craft": [self.craft_id, self.craft_moment],
-                "pages": [self.list_page.page, self.skill_page.page, self.board_page.page],
-            },
-            ensure_ascii=False,
-        )
-
-    @classmethod
-    def deserialise(cls, raw: str) -> PlayState:
-        data = json.loads(raw)
-        city_id, slot, generation, node, cleared = data.get("session", ["", 0, 0, 0, 0])
-        descent_city, descent_level, depth, descent_started = data.get("descent", ["", 0, 0, 0])
-        pick_kind, pick_slot = data.get("pick", ["", 0])
-        list_page, skill_page, board_page = data.get("pages", [1, 1, 1])
-        craft_id, craft_moment = data.get("craft", ["", 0])
-        return cls(
-            screen=ScreenId(data["screen"]),
-            stack=NavigationStack.deserialise(data.get("stack", "")),
-            world_page=PageState(page=int(data.get("world_page", 1))),
-            location_page=PageState(page=int(data.get("location_page", 1))),
-            city_id=data.get("city", ""),
-            session=LocationSession(
-                city_id=city_id,
-                slot=int(slot),
-                generation=int(generation),
-                node=int(node),
-                cleared=int(cleared),
-            ),
-            descent=Descent(
-                city_id=descent_city,
-                level=int(descent_level),
-                depth=int(depth),
-                started_at=int(descent_started),
-            ),
-            stub_title=data.get("stub", ""),
-            list_page=PageState(page=int(list_page)),
-            skill_page=PageState(page=int(skill_page)),
-            board_page=PageState(page=int(board_page)),
-            pick_kind=str(pick_kind),
-            pick_slot=int(pick_slot),
-            edge_skill=data.get("edge", ""),
-            quest_id=data.get("quest", ""),
-            craft_id=craft_id,
-            craft_moment=int(craft_moment),
-        )
 
 
 def begin(character: Character) -> PlayState:
@@ -351,10 +169,15 @@ def render(
     clock: Clock | None = None,
     neighbours: Sequence[Presence] = (),
     arena_table: Sequence[Character] = (),
+    keeper: KeeperView | None = None,
 ) -> Screen:
     shelf = goods or Goods(gold=character.gold)
     clock = clock or Clock()
     city = known_city(content, state.city_id, character.city_id)
+    # Панель смотрителя и разговор с жителем рисуются своим модулем: это не
+    # исключение из правил экрана, а просто другая половина того же автомата.
+    if state.screen in KEEPER_SCREENS:
+        return keeper_flow.render(content, character, state, keeper or KeeperView())
     match state.screen:
         case ScreenId.SETTINGS:
             return settings_screens.settings_screen(settings or DEFAULT_SETTINGS, state.notice)
@@ -477,14 +300,6 @@ def render(
                 total=DUNGEON_DEPTH,
                 notice=state.notice,
             )
-        case ScreenId.KEEPER if character.is_admin:
-            return keeper_screens.keeper_screen(
-                content, character, derived_stats(content, character), state.notice
-            )
-        case ScreenId.KEEPER:
-            return screens.main_menu_screen(
-                content, character, derived_stats(content, character), "Этот экран больше не ваш."
-            )
         case ScreenId.STUB:
             return screens.stub_screen(state.stub_title, state.notice)
         case _:
@@ -515,6 +330,7 @@ def advance(
     goods: Goods | None = None,
     settings: AccessibilitySettings | None = None,
     neighbours: Sequence[Presence] = (),
+    keeper: KeeperView | None = None,
 ) -> PlayState:
     """Apply one message. Always answers; never raises on unexpected input."""
     # A visit that can no longer be rebuilt is dropped before anything reads it,
@@ -554,9 +370,10 @@ def advance(
                 notice="",
             )
         if intent is Intent.BACK:
-            return _go_back(healed)
+            return go_back(healed)
         return healed
 
+    view = keeper or KeeperView()
     screen = render(
         content,
         character,
@@ -566,8 +383,14 @@ def advance(
         settings=settings,
         clock=clock,
         neighbours=neighbours,
+        keeper=view,
     )
     command = resolve(text, screen)
+
+    # Набранное значение на экране поля - это не «неизвестная кнопка», а ответ на
+    # заданный вопрос, и разобрать его может только та ветка, что его задавала.
+    if keeper_flow.awaits_text(state, command):
+        return keeper_flow.typed(content, character, state, text.strip(), view)
 
     if command.intent is Intent.LOOK:
         return replace(state, notice="", pending=PendingWrite(), fight="")
@@ -581,11 +404,14 @@ def advance(
             fight="",
         )
     if command.intent is Intent.BACK:
-        return _go_back(state)
+        return go_back(state)
 
     state = replace(state, pending=PendingWrite(), fight="")
     shelf = goods or Goods(gold=character.gold)
     ticking = clock or Clock()
+
+    if state.screen in KEEPER_SCREENS:
+        return keeper_flow.advance(content, character, state, command, view)
 
     match state.screen:
         case ScreenId.SETTINGS:
@@ -602,8 +428,6 @@ def advance(
             return _handle_sell(content, character, state, command, shelf)
         case ScreenId.MAIN_MENU:
             return _handle_main_menu(character, state, command, clock=ticking)
-        case ScreenId.KEEPER:
-            return _handle_keeper(content, character, state, command)
         case ScreenId.WORLD:
             return _handle_world(content, character, state, command)
         case ScreenId.CITY:
@@ -721,32 +545,6 @@ def _handle_tutorial(
     return opened
 
 
-def _go_back(state: PlayState) -> PlayState:
-    stack, previous = state.stack.pop()
-    cleaned = replace(state, pending=PendingWrite(), fight="")
-    if previous is None:
-        target = back_target(state.screen) or ScreenId.MAIN_MENU
-        return replace(cleaned, screen=target, stack=NavigationStack((target,)), notice="")
-    leaving_location = state.screen is ScreenId.LOCATION
-    return replace(
-        cleaned,
-        screen=previous,
-        stack=stack,
-        notice="",
-        session=LocationSession() if leaving_location else state.session,
-    )
-
-
-def _page_move(command: Command, current: PageState, pages: int) -> PageState | None:
-    """Shared paging arithmetic. ``None`` when this command was not a page move."""
-    if command.intent in {Intent.NEXT_PAGE, Intent.PREVIOUS_PAGE}:
-        delta = 1 if command.intent is Intent.NEXT_PAGE else -1
-        return current.moved(delta, pages)
-    if command.intent is Intent.PAGE and command.number is not None:
-        return current.jumped(command.number, pages)
-    return None
-
-
 # --- menu, world, city ------------------------------------------------
 
 
@@ -776,47 +574,6 @@ def _handle_main_menu(
     if labels.KEEPER.matches(command.argument) and character.is_admin:
         return state.at(ScreenId.KEEPER)
     return state.with_notice("Нажмите кнопку из меню.")
-
-
-# --- keeper -----------------------------------------------------------
-
-
-def _handle_keeper(
-    content: GameContent, character: Character, state: PlayState, command: Command
-) -> PlayState:
-    """Service actions. Everything here reports the number it changed."""
-    if not character.is_admin:
-        # The right lives in ADMIN_IDS, so it can be taken away between two
-        # presses. The screen then stops working, and says so plainly.
-        return state.at(ScreenId.MAIN_MENU).with_notice("Этот экран больше не ваш.")
-    if command.intent is not Intent.SELECT:
-        return state.with_notice("Нажмите кнопку смотрителя.")
-
-    if labels.KEEPER_GOLD.matches(command.argument):
-        grown = keeper_rules.grant_gold(character)
-        return state.storing(PendingWrite(character=grown)).with_notice(
-            f"Выдано {keeper_rules.GOLD_STEP} золота. Теперь: {grown.gold}."
-        )
-    if labels.KEEPER_LEVEL.matches(command.argument):
-        grown, level_up = keeper_rules.raise_level(content, character)
-        if not level_up.levels_gained:
-            return state.with_notice("Выше некуда: это последний уровень.")
-        return state.storing(PendingWrite(character=grown)).with_notice(
-            f"Уровень {grown.level}. Очков характеристик: {level_up.stat_points}, "
-            f"очков умений: {level_up.skill_points}."
-        )
-    if labels.KEEPER_HEAL.matches(command.argument):
-        healed = keeper_rules.heal(content, character)
-        return state.storing(PendingWrite(character=healed)).with_notice(
-            f"Раны залечены. Здоровье: {healed.health}."
-        )
-    if labels.KEEPER_POINTS.matches(command.argument):
-        granted = keeper_rules.grant_points(character)
-        return state.storing(PendingWrite(character=granted)).with_notice(
-            f"Выдано очков: характеристик {granted.unspent_stat_points}, "
-            f"умений {granted.unspent_skill_points} всего."
-        )
-    return state.with_notice("Нажмите кнопку смотрителя.")
 
 
 # --- crafts -----------------------------------------------------------
@@ -895,7 +652,7 @@ def _handle_world(
     available = (
         content.cities if character.is_admin else content.cities_available_at(character.level)
     )
-    moved = _page_move(command, state.world_page, total_pages(len(available)))
+    moved = page_move(command, state.world_page, total_pages(len(available)))
     if moved is not None:
         return replace(state, world_page=moved, notice="")
 
@@ -921,6 +678,11 @@ def _handle_city(
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите кнопку города.")
     city = known_city(content, state.city_id, character.city_id)
+    if labels.NPCS.matches(command.argument):
+        # Кнопки может уже не быть: жителя убрали правкой между двумя нажатиями.
+        if not content.npcs_in(city.id):
+            return state.with_notice(f"В городе {city.name} сейчас никого нет.")
+        return state.at(ScreenId.NPCS)
     service = SERVICES.get(command.argument)
     if service is None:
         return state.with_notice("Нажмите кнопку города.")
@@ -986,7 +748,7 @@ def _handle_shop(
     command: Command,
     goods: Goods,
 ) -> PlayState:
-    moved = _page_move(command, state.list_page, total_pages(len(goods.stock)))
+    moved = page_move(command, state.list_page, total_pages(len(goods.stock)))
     if moved is not None:
         return replace(state, list_page=moved, notice="")
     if command.intent is not Intent.SELECT:
@@ -1018,7 +780,7 @@ def _handle_sell(
     command: Command,
     goods: Goods,
 ) -> PlayState:
-    moved = _page_move(command, state.list_page, total_pages(len(goods.owned)))
+    moved = page_move(command, state.list_page, total_pages(len(goods.owned)))
     if moved is not None:
         return replace(state, list_page=moved, notice="")
     if command.intent is not Intent.SELECT:
@@ -1044,7 +806,7 @@ def _handle_inventory(
     command: Command,
     goods: Goods,
 ) -> PlayState:
-    moved = _page_move(command, state.list_page, total_pages(len(goods.owned)))
+    moved = page_move(command, state.list_page, total_pages(len(goods.owned)))
     if moved is not None:
         return replace(state, list_page=moved, notice="")
     if command.intent is not Intent.SELECT:
@@ -1106,7 +868,7 @@ def _handle_skills(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
     pool = skill_rules.teachable(content, character)
-    moved = _page_move(command, state.skill_page, total_pages(len(pool)))
+    moved = page_move(command, state.skill_page, total_pages(len(pool)))
     if moved is not None:
         return replace(state, skill_page=moved, notice="")
     if command.intent is not Intent.SELECT:
@@ -1167,7 +929,7 @@ def _handle_pick(
 ) -> PlayState:
     kind = _pick_kind(state)
     available = skill_rules.equippable(content, character, kind)
-    moved = _page_move(command, state.list_page, total_pages(len(available)))
+    moved = page_move(command, state.list_page, total_pages(len(available)))
     if moved is not None:
         return replace(state, list_page=moved, notice="")
     if command.intent is not Intent.SELECT:
@@ -1274,7 +1036,7 @@ def _handle_board(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
     offered = quest_rules.available(content, character)
-    moved = _page_move(command, state.board_page, total_pages(len(offered)))
+    moved = page_move(command, state.board_page, total_pages(len(offered)))
     if moved is not None:
         return replace(state, board_page=moved, notice="")
     if command.intent is not Intent.SELECT:
@@ -1298,7 +1060,7 @@ def _handle_offer(
         )
     if labels.QUEST_LEAVE.matches(command.argument):
         # Refusing never closes a contract for good (Narrative.md, section 4).
-        return _go_back(state).with_notice("Вы ушли. Подряд останется на доске.")
+        return go_back(state).with_notice("Вы ушли. Подряд останется на доске.")
     if not labels.QUEST_ACCEPT.matches(command.argument):
         return state.with_notice("Согласитесь, спросите или уйдите.")
 
@@ -1306,7 +1068,7 @@ def _handle_offer(
     if accepted == character:
         return state.with_notice("Этот подряд уже у вас или уже закрыт.")
     taken = (
-        _go_back(replace(state, quest_id=""))
+        go_back(replace(state, quest_id=""))
         .storing(PendingWrite(character=accepted))
         .with_notice(f"Подряд «{quest.name}» взят. Счёт идёт с этой минуты.")
     )
@@ -1317,7 +1079,7 @@ def _handle_mentor(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
     known = sorted(code for code in skill_rules.known_codes(character) if content.has_skill(code))
-    moved = _page_move(command, state.mentor_page, total_pages(len(known)))
+    moved = page_move(command, state.mentor_page, total_pages(len(known)))
     if moved is not None:
         return replace(state, mentor_page=moved, notice="")
     if command.intent is not Intent.SELECT:
@@ -1397,7 +1159,7 @@ def _handle_location_list(
     command: Command,
 ) -> PlayState:
     city = known_city(content, state.city_id, character.city_id)
-    moved = _page_move(command, state.location_page, total_pages(len(city.locations)))
+    moved = page_move(command, state.location_page, total_pages(len(city.locations)))
     if moved is not None:
         return replace(state, location_page=moved, notice="")
     if command.intent is not Intent.SELECT:

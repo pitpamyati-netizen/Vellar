@@ -14,10 +14,11 @@ from typing import Any
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
+from mmorpg.application.services.content import ContentRegistry
 from mmorpg.config import Settings
-from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.ports.repositories import (
     CharacterRepository,
+    ContentOverlayRepository,
     InventoryRepository,
     LocationStateCache,
     PrivacyRepository,
@@ -33,7 +34,7 @@ class Dependencies:
     """Everything a handler can ask for."""
 
     settings: Settings
-    content: GameContent
+    registry: ContentRegistry
     users: UserRepository
     characters: CharacterRepository
     inventory: InventoryRepository
@@ -41,12 +42,17 @@ class Dependencies:
     privacy: PrivacyRepository
     state_cache: StateCache
     locations: LocationStateCache
+    overlays: ContentOverlayRepository
     broadcasts: ChannelBroadcaster
 
     def as_data(self) -> dict[str, Any]:
         return {
             "settings": self.settings,
-            "content": self.content,
+            # Содержимое берётся у реестра, а не запоминается: правка смотрителя
+            # должна быть видна со следующего нажатия, а не с перезапуска
+            # (``application/services/content.py``).
+            "content": self.registry.current,
+            "registry": self.registry,
             "users": self.users,
             "characters": self.characters,
             "inventory": self.inventory,
@@ -54,13 +60,14 @@ class Dependencies:
             "privacy": self.privacy,
             "state_cache": self.state_cache,
             "locations": self.locations,
+            "overlays": self.overlays,
             "broadcasts": self.broadcasts,
         }
 
 
 class DependencyMiddleware(BaseMiddleware):
     def __init__(self, dependencies: Dependencies) -> None:
-        self._data = dependencies.as_data()
+        self._dependencies = dependencies
 
     async def __call__(
         self,
@@ -68,5 +75,6 @@ class DependencyMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        data.update(self._data)
+        # Словарь собирается на каждом обновлении: одно поле в нём живое.
+        data.update(self._dependencies.as_data())
         return await handler(event, data)

@@ -190,6 +190,11 @@ CITY_SERVICES: tuple[tuple[str, Label], ...] = (
 
 def city_screen(content: GameContent, city: City, character: Character, notice: str = "") -> Screen:
     offered = [item for service, item in CITY_SERVICES if service in city.services]
+    # Жители - не услуга города, а люди в нём: кнопка есть там, где кто-то стоит,
+    # и нет там, где никого нет. Объявлять их в world.toml незачем - они приходят
+    # правкой смотрителя (``docs/keeper.md``).
+    if content.npcs_in(city.id):
+        offered.append(labels.NPCS)
     rows: list[tuple[Label, ...]] = [
         tuple(offered[index : index + 2]) for index in range(0, len(offered), 2)
     ]

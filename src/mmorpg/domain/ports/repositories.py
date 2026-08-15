@@ -17,6 +17,7 @@ from typing import Protocol, runtime_checkable
 
 from mmorpg.domain.entities.character import Character, InventoryEntry
 from mmorpg.domain.entities.location import LocationState, Presence
+from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, TradeRecord, TradeStatus
 
 
@@ -41,6 +42,30 @@ class User:
     settings: AccessibilitySettings = field(default_factory=AccessibilitySettings)
 
 
+@dataclass(frozen=True, slots=True)
+class Census:
+    """Игра в числах: то, что смотритель проверяет, а не то, что интересно считать.
+
+    Всё считается одним запросом на открытие экрана и нигде не хранится: счётчик,
+    который живёт отдельно от того, что он считает, однажды расходится с ним
+    (``Claude.md``, правило 8).
+    """
+
+    characters: int = 0
+    accounts: int = 0
+    fresh_day: int = 0
+    fresh_week: int = 0
+    abandoned: int = 0
+    blocked: int = 0
+    top_level: int = 0
+    average_level: int = 0
+    gold_on_hand: int = 0
+    gold_in_bank: int = 0
+    quests_done: int = 0
+    arena_fights: int = 0
+    leaders: tuple[tuple[str, int], ...] = ()
+
+
 @runtime_checkable
 class UserRepository(Protocol):
     async def get(self, telegram_id: int) -> User | None: ...
@@ -48,6 +73,20 @@ class UserRepository(Protocol):
     async def upsert(self, user: User) -> User: ...
 
     async def save_settings(self, telegram_id: int, settings: AccessibilitySettings) -> None: ...
+
+    async def unchecked(self, *, limit: int, before: int) -> tuple[int, ...]:
+        """Аккаунты, которых давно не проверяли на «бот заблокирован».
+
+        Проверка стоит одного обращения к Telegram на человека, поэтому она идёт
+        порциями и запоминает, кого уже спросили.
+        """
+
+    async def mark_checked(self, telegram_id: int, *, at: int, blocked: bool) -> None: ...
+
+    async def blocked_count(self) -> int: ...
+
+    async def purge_blocked(self) -> int:
+        """Убрать тех, кто заблокировал бота, вместе со всем, что им принадлежит."""
 
 
 @runtime_checkable
@@ -98,6 +137,24 @@ class CharacterRepository(Protocol):
 
     async def arena_table(self, *, limit: int = 10) -> tuple[Character, ...]:
         """The season table: most wins first."""
+
+    async def find_by_name(self, name: str) -> Character | None:
+        """Персонаж по имени, без учёта регистра. Имена в игре уникальны."""
+
+    async def newest(self, *, limit: int = 8) -> tuple[Character, ...]:
+        """Кого завели последними: с этого списка смотритель обычно и начинает."""
+
+    async def census(self, *, day: int, week: int, stale: int) -> Census:
+        """Игра в числах на этот момент. Границы приходят снаружи: домен без часов."""
+
+    async def purge_abandoned(self, *, before: int) -> int:
+        """Убрать персонажей, которых завели и бросили, не начав играть.
+
+        Брошенный — это первый уровень, ноль опыта, ни одного задания обучения и
+        давно не тронут. Такой персонаж занимает имя, которое кому-то нужно.
+        """
+
+    async def delete(self, character_id: int) -> bool: ...
 
 
 @runtime_checkable
@@ -153,6 +210,25 @@ class TradeRepository(Protocol):
 
     async def journal(self, character_id: int, *, limit: int = 20) -> tuple[TradeRecord, ...]:
         """The latest trades this character was a side of, newest first."""
+
+
+@runtime_checkable
+class ContentOverlayRepository(Protocol):
+    """Правки смотрителя поверх ``content/``.
+
+    Это единственное содержимое, которое живёт в базе, и оно живёт там по той же
+    причине, по которой персонаж живёт в базе: потерять его нельзя. Файлы в
+    ``content/`` остаются нетронутыми, поэтому любую правку можно снять, а
+    исходная строка при этом никуда не девалась (``docs/keeper.md``).
+    """
+
+    async def all(self) -> tuple[OverlayRecord, ...]:
+        """Все правки, старые сначала. Читается на старте и после каждой записи."""
+
+    async def put(self, record: OverlayRecord) -> None: ...
+
+    async def forget(self, kind: OverlayKind, entity_id: str) -> bool:
+        """Снять правку целиком. Ложь — правки и не было."""
 
 
 @runtime_checkable

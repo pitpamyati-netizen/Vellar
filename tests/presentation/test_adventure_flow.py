@@ -22,12 +22,14 @@ from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import Chat, Message, User
 
+from mmorpg.application.services.content import ContentRegistry
 from mmorpg.config import Settings
 from mmorpg.domain.entities import Character, GameContent, QuestLog, SkillLoadout
 from mmorpg.domain.entities.location import NodeKind
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.infrastructure.persistence.memory import (
     InMemoryCharacterRepository,
+    InMemoryContentOverlayRepository,
     InMemoryInventoryRepository,
     InMemoryUserRepository,
 )
@@ -84,6 +86,16 @@ def inventory() -> InMemoryInventoryRepository:
 @pytest.fixture
 def users() -> InMemoryUserRepository:
     return InMemoryUserRepository()
+
+
+@pytest.fixture
+def overlays() -> InMemoryContentOverlayRepository:
+    return InMemoryContentOverlayRepository()
+
+
+@pytest.fixture
+def registry(content: GameContent) -> ContentRegistry:
+    return ContentRegistry(content)
 
 
 @pytest.fixture
@@ -156,12 +168,14 @@ class Player:
             await play_handler.play(
                 message,
                 self.state,
-                self.deps["content"],
+                self.deps["registry"].current,
                 SETTINGS,
                 self.deps["characters"],
                 self.deps["inventory"],
                 self.deps["users"],
                 self.deps["deltas"],
+                self.deps["overlays"],
+                self.deps["registry"],
             )
         return self.sent.last
 
@@ -179,6 +193,8 @@ async def player(
     inventory: InMemoryInventoryRepository,
     users: InMemoryUserRepository,
     deltas: Any,
+    overlays: InMemoryContentOverlayRepository,
+    registry: ContentRegistry,
     argus: Character,
 ) -> Player:
     await state.set_state(Play.main_menu)
@@ -190,6 +206,8 @@ async def player(
         inventory=inventory,
         users=users,
         deltas=deltas,
+        overlays=overlays,
+        registry=registry,
     )
 
 
@@ -436,6 +454,8 @@ async def test_a_cleared_node_is_cleared_for_everybody(
     inventory: InMemoryInventoryRepository,
     users: InMemoryUserRepository,
     deltas: Any,
+    overlays: InMemoryContentOverlayRepository,
+    registry: ContentRegistry,
     state: FSMContext,
     sent: Recorder,
 ) -> None:
@@ -497,6 +517,8 @@ async def test_a_cleared_node_is_cleared_for_everybody(
             inventory,
             users,
             deltas,
+            overlays,
+            registry,
         )
     data = await second_state.get_data()
     theirs = PlayState.deserialise(data["play"])

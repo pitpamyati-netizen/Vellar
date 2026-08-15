@@ -52,6 +52,9 @@ class Quest:
     reward_experience: int = 0
     reward_item: str = ""
     follows: str = ""
+    #: Житель, который его раздаёт (``content.Npc``), если это не безымянная
+    #: строка на доске. Подряд с нанимателем виден и на доске, и у него самого.
+    giver_id: str = ""
 
     @property
     def summary(self) -> str:

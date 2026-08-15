@@ -76,7 +76,20 @@ send one message.
 Anything that writes to a database is *recorded as an intent* on the state - one
 `PendingWrite` holding the new character, the new settings and the changes to the
 bag - and executed by the handler, so the flow stays pure and every write in the
-game goes through a single function (`handlers/play.py::_apply`).
+game goes through a single function (`handlers/play.py::_apply`). The keeper panel
+uses the same intent for the things only it can do - an edit to the world, another
+player's character, a sweep - and those are carried out beside it, in `_serve`.
+
+## Content that can change while the game runs
+
+`GameContent` is still read once from `content/` and still immutable. What changed
+is that handlers no longer receive it as a value captured at startup: they receive
+whatever `ContentRegistry.current` holds right now
+(`application/services/content.py`). The registry keeps two builds - the one parsed
+from TOML, which never changes, and that same one with the keeper's edits applied
+on top (`domain/rules/overlay.py`). An edit is therefore visible on the next press
+without a restart, and dropping it rebuilds the world from the untouched original
+rather than undoing anything. See `docs/keeper.md`.
 
 A fight is the one thing the play flow hands over rather than resolves: pressing
 "Вступить в бой" sets `PlayState.fight`, and the fight handler generates the

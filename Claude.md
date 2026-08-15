@@ -21,8 +21,9 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   единственный доступ к env), `logging.py`, `monitoring.py` (детектор медленных
   колбэков), `health.py` (heartbeat).
 - `domain/` — чистая логика, только stdlib, без async и I/O.
-  `entities/`: `character`, `stats`, `combat`, `effects`, `location`, `content`,
-  `quest` (подряд и журнал подрядов), `craft` (ремёсла, рецепты, качество).
+  `entities/`: `character`, `stats`, `combat`, `effects`, `location`, `content`
+  (в том числе `Npc` — житель города), `quest` (подряд и журнал подрядов),
+  `craft` (ремёсла, рецепты, качество), `overlay` (правка смотрителя).
   `rules/`: `combat` (движок боя), `tempo` (намерение, след, брешь), `stats`,
   `progression`, `economy`, `modifiers`, `skill_effects` (эффект →
   спецификация), `skills` (изучение, ранги, грани, слоты), `quests` (счёт и
@@ -31,22 +32,25 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   вне боя), `tutorial` (шесть заданий обучения, маска на персонаже), `pvp`
   (поединок со слепком, защита новичков, ставка), `arena` (долговой круг:
   ставка, выплата, счёт сезона), `keeper`
-  (служебные выдачи смотрителя), `group_commands` (грамматика группы),
+  (выдачи смотрителя себе и чужому персонажу), `overlay` (поля правки, проверка,
+  наложение правок на содержимое), `group_commands` (грамматика группы),
   `group_offers` (предложения).
   `procgen/`: `seeds`, `location`, `enemies`. `ports/repositories.py` —
   протоколы хранилищ.
 - `application/` — `dto/creation.py` (черновик), `services/`: `group_trade.py`
   (операции группы), `offers.py` (предложения в кэше), `keeper.py` (сверка флага
-  смотрителя с `ADMIN_IDS`).
+  смотрителя с `ADMIN_IDS`), `content.py` (реестр: содержимое плюс правки, живое),
+  `keeper_panel.py` (запись правок и уборка).
 - `infrastructure/` — `persistence/`: `postgres`, `memory`, `pool`; `cache/`:
   `redis_cache`, `memory`; `content/loader.py` (TOML → dataclass),
   `content/changelog.py` (обновления для канала).
 - `presentation/telegram/` — `handlers/` (`creation`, `play`, `combat`, `group`;
   бой включается перед `play`, иначе его перехватит фильтр по группе состояний),
-  `flows/` (`creation`, `play`, `combat` — чистые автоматы), `screens/` (`base`,
+  `flows/` (`state` — состояние автомата и `PendingWrite`, общие для веток;
+  `creation`, `play`, `combat`, `keeper` — чистые автоматы), `screens/` (`base`,
   `format`, `paginated`, `creation`, `play`, `combat`, `shop`, `skills`,
-  `quests`, `crafts`, `city`, `settings`, `tutorial`, `arena`, `keeper`,
-  `group`),
+  `quests`, `crafts`, `city` (в том числе жители), `settings`, `tutorial`,
+  `arena`, `keeper` (панель), `group`),
   `keyboards/` (`labels`, `reply`), `middlewares/` (`dependencies`, `errors`,
   `idempotency`), `states/screens.py`, `routing.py`, `messaging.py`,
   `broadcast.py` (канал), `throttle.py` (лимит), `cleanup.py` (уборка в группе).
@@ -74,7 +78,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 `vellar-tools.bat` (общие подпрограммы трёх .bat: штамп версии, дамп, SAVE).
 **`migrations/`** — `env.py`, `versions/0001_initial_schema`, `0002_trades`,
 `0003_privacy`, `0004_wounds_bank_quests`, `0005_crafts`, `0006_admin`,
-`0007_tutorial`, `0008_arena`.
+`0007_tutorial`, `0008_arena`, `0009_keeper_panel` (правки поверх содержимого,
+учёт заблокировавших бота).
 **`backups/`** — дампы от `stop.bat` и `Update.bat`; не в репозитории.
 **`.githooks/pre-commit`** — гейт на коммите.
 
@@ -104,7 +109,11 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 7. **Контент — в TOML, не в коде.** Новое умение — строка в `skills.toml`, новое
    поведение — запись в `skill_effects.py`. Сила умения — всегда процент: урон от
    стандартного удара, лечение и щит от максимума здоровья, усиление от самого
-   модификатора. Абсолютных чисел в контенте нет (ADR 0007).
+   модификатора. Абсолютных чисел в контенте нет (ADR 0007). Единственное
+   исключение — правки смотрителя: они ложатся **поверх** прочитанных файлов и
+   живут в базе, но `content/` при этом не трогают (`docs/keeper.md`). Новое поле
+   у правимой сущности — строка в `FIELDS` (`domain/rules/overlay.py`), а не
+   кнопка на экране: карточка рисуется по описанию.
 8. **Ничего производного не хранится**: тотал статов, лут, ассортимент и карта
    считаются заново из сида. Карта локации живёт до зачистки и общая для всех,
    кто в ней (ADR 0003); стражи в мире нет. Ключи Redis всегда с TTL. **Сохранённому

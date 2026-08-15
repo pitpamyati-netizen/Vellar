@@ -191,6 +191,29 @@ class Rarity:
 
 
 @dataclass(frozen=True, slots=True)
+class Npc:
+    """Человек, который стоит в городе и с которым можно заговорить.
+
+    Житель — не услуга и не лавка: он ничего не продаёт и ничем не торгует. Всё,
+    что он делает, — стоит на своём месте, называет своё занятие и держит подряды,
+    которые сам же и раздаёт (``domain/rules/overlay.py``). Приходит он только от
+    смотрителя: в ``content/`` жителей нет, потому что мир пишется правками, а не
+    перезапуском.
+    """
+
+    id: str
+    city_id: str
+    name: str
+    role: str = ""
+    text: str = ""
+
+    @property
+    def title(self) -> str:
+        """Как его называют одной строкой: имя и занятие, если оно названо."""
+        return f"{self.name}, {self.role}" if self.role else self.name
+
+
+@dataclass(frozen=True, slots=True)
 class Location:
     id: str
     slot: int
@@ -271,6 +294,7 @@ class GameContent:
     trait_categories: Mapping[str, str]
     inverted_modifiers: frozenset[str]
     rules: ProgressionRules
+    npcs: tuple[Npc, ...]
 
     _races_by_id: Mapping[str, Race]
     _classes_by_id: Mapping[str, CharacterClass]
@@ -283,6 +307,7 @@ class GameContent:
     _quests_by_id: Mapping[str, Quest]
     _crafts_by_id: Mapping[str, Craft]
     _recipes_by_id: Mapping[str, Recipe]
+    _npcs_by_id: Mapping[str, Npc]
 
     @classmethod
     def build(
@@ -304,6 +329,7 @@ class GameContent:
         quests: Sequence[Quest] = (),
         crafts: Sequence[Craft] = (),
         recipes: Sequence[Recipe] = (),
+        npcs: Sequence[Npc] = (),
     ) -> GameContent:
         """Build the registry and its indexes."""
         by_owner: dict[str, list[Skill]] = {}
@@ -327,6 +353,7 @@ class GameContent:
             trait_categories=MappingProxyType(dict(trait_categories)),
             inverted_modifiers=inverted_modifiers,
             rules=rules,
+            npcs=tuple(npcs),
             _races_by_id=MappingProxyType({race.id: race for race in races}),
             _classes_by_id=MappingProxyType({klass.id: klass for klass in classes}),
             _traits_by_id=MappingProxyType({trait.id: trait for trait in traits}),
@@ -340,6 +367,7 @@ class GameContent:
             _quests_by_id=MappingProxyType({quest.id: quest for quest in quests}),
             _crafts_by_id=MappingProxyType({craft.id: craft for craft in crafts}),
             _recipes_by_id=MappingProxyType({recipe.id: recipe for recipe in recipes}),
+            _npcs_by_id=MappingProxyType({npc.id: npc for npc in npcs}),
         )
 
     # --- lookups -----------------------------------------------------
@@ -382,6 +410,27 @@ class GameContent:
         return tuple(
             sorted(
                 (quest for quest in self.quests if quest.city_id == city_id),
+                key=lambda quest: (quest.level, quest.id),
+            )
+        )
+
+    def npc(self, npc_id: str) -> Npc:
+        return self._npcs_by_id[npc_id]
+
+    def has_npc(self, npc_id: str) -> bool:
+        return npc_id in self._npcs_by_id
+
+    def npcs_in(self, city_id: str) -> tuple[Npc, ...]:
+        """Кто стоит в этом городе, по имени."""
+        return tuple(
+            sorted((npc for npc in self.npcs if npc.city_id == city_id), key=lambda npc: npc.name)
+        )
+
+    def quests_of(self, npc_id: str) -> tuple[Quest, ...]:
+        """Подряды, которые раздаёт этот житель, от лёгкого к тяжёлому."""
+        return tuple(
+            sorted(
+                (quest for quest in self.quests if quest.giver_id == npc_id),
                 key=lambda quest: (quest.level, quest.id),
             )
         )

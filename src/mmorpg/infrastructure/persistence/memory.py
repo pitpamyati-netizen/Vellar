@@ -7,17 +7,23 @@ deployment target (``docs/adr/0005-in-memory-adapters.md``).
 
 from __future__ import annotations
 
+import time
 from dataclasses import replace
 
 from mmorpg.domain.entities.character import Character, InventoryEntry
+from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, TradeRecord, TradeStatus
-from mmorpg.domain.ports.repositories import AccessibilitySettings, User
+from mmorpg.domain.ports.repositories import AccessibilitySettings, Census, User
 from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
 
 
 class InMemoryUserRepository:
     def __init__(self) -> None:
         self._users: dict[int, User] = {}
+        # Когда аккаунт последний раз проверяли и когда он заблокировал бота.
+        # Ноль в обоих означает «не проверяли» и «не блокировал».
+        self._checked: dict[int, int] = {}
+        self._blocked: dict[int, int] = {}
 
     async def get(self, telegram_id: int) -> User | None:
         return self._users.get(telegram_id)
@@ -31,6 +37,32 @@ class InMemoryUserRepository:
     async def save_settings(self, telegram_id: int, settings: AccessibilitySettings) -> None:
         user = self._users.get(telegram_id) or User(telegram_id=telegram_id)
         self._users[telegram_id] = replace(user, settings=settings)
+
+    async def unchecked(self, *, limit: int, before: int) -> tuple[int, ...]:
+        stale = [
+            telegram_id
+            for telegram_id in sorted(self._users)
+            if self._checked.get(telegram_id, 0) < before and not self._blocked.get(telegram_id)
+        ]
+        return tuple(stale[:limit])
+
+    async def mark_checked(self, telegram_id: int, *, at: int, blocked: bool) -> None:
+        self._checked[telegram_id] = at
+        if blocked:
+            self._blocked[telegram_id] = at
+        else:
+            self._blocked.pop(telegram_id, None)
+
+    async def blocked_count(self) -> int:
+        return len(self._blocked)
+
+    async def purge_blocked(self) -> int:
+        gone = tuple(self._blocked)
+        for telegram_id in gone:
+            self._users.pop(telegram_id, None)
+            self._checked.pop(telegram_id, None)
+        self._blocked.clear()
+        return len(gone)
 
 
 class InMemoryPrivacyRepository:
@@ -74,6 +106,9 @@ class InMemoryPrivacyRepository:
 class InMemoryCharacterRepository:
     def __init__(self) -> None:
         self._characters: dict[int, Character] = {}
+        # Когда строку последний раз трогали - то же, что ``updated_at`` в SQL.
+        # Без него «давно брошенный» ничем не отличается от «только что создан».
+        self._touched: dict[int, int] = {}
         self._next_id = 1
 
     async def get(self, character_id: int) -> Character | None:
@@ -93,11 +128,13 @@ class InMemoryCharacterRepository:
     async def create(self, character: Character) -> Character:
         stored = replace(character, id=self._next_id)
         self._characters[stored.id] = stored
+        self._touched[stored.id] = int(time.time())
         self._next_id += 1
         return stored
 
     async def save(self, character: Character) -> None:
         self._characters[character.id] = character
+        self._touched[character.id] = int(time.time())
 
     async def name_taken(self, name: str) -> bool:
         folded = name.casefold()
@@ -124,6 +161,67 @@ class InMemoryCharacterRepository:
             key=lambda character: (-character.arena_wins, -character.level, character.name),
         )
         return tuple(ranked[:limit])
+
+    async def find_by_name(self, name: str) -> Character | None:
+        folded = name.strip().casefold()
+        for character in self._characters.values():
+            if character.name.casefold() == folded:
+                return character
+        return None
+
+    async def newest(self, *, limit: int = 8) -> tuple[Character, ...]:
+        ordered = sorted(self._characters.values(), key=lambda character: -character.id)
+        return tuple(ordered[:limit])
+
+    async def census(self, *, day: int, week: int, stale: int) -> Census:
+        everybody = tuple(self._characters.values())
+        if not everybody:
+            return Census(blocked=0)
+        levels = [character.level for character in everybody]
+        leaders = sorted(everybody, key=lambda character: (-character.level, character.name))[:5]
+        return Census(
+            characters=len(everybody),
+            accounts=len({character.user_id for character in everybody}),
+            fresh_day=self._touched_since(day),
+            fresh_week=self._touched_since(week),
+            abandoned=len(self._abandoned(stale)),
+            top_level=max(levels),
+            average_level=round(sum(levels) / len(levels)),
+            gold_on_hand=sum(character.gold for character in everybody),
+            gold_in_bank=sum(character.bank_gold for character in everybody),
+            quests_done=sum(len(character.quests.done) for character in everybody),
+            arena_fights=sum(
+                character.arena_wins + character.arena_losses for character in everybody
+            ),
+            leaders=tuple((character.name, character.level) for character in leaders),
+        )
+
+    async def purge_abandoned(self, *, before: int) -> int:
+        gone = self._abandoned(before)
+        for character_id in gone:
+            del self._characters[character_id]
+            self._touched.pop(character_id, None)
+        return len(gone)
+
+    async def delete(self, character_id: int) -> bool:
+        if character_id not in self._characters:
+            return False
+        del self._characters[character_id]
+        self._touched.pop(character_id, None)
+        return True
+
+    def _touched_since(self, moment: int) -> int:
+        return sum(1 for touched in self._touched.values() if touched >= moment)
+
+    def _abandoned(self, before: int) -> tuple[int, ...]:
+        return tuple(
+            character.id
+            for character in self._characters.values()
+            if character.level == 1
+            and character.experience == 0
+            and character.tutorial == 0
+            and self._touched.get(character.id, 0) < before
+        )
 
 
 class InMemoryInventoryRepository:
@@ -153,6 +251,28 @@ class InMemoryInventoryRepository:
 
     async def count(self, character_id: int, item_id: str) -> int:
         return self._items.get(character_id, {}).get(item_id, 0)
+
+
+class InMemoryContentOverlayRepository:
+    """Правки смотрителя в словаре.
+
+    Ключ — разновидность и идентификатор: одна сущность правится один раз, а не
+    десятью записями, которые пришлось бы складывать в правильном порядке.
+    """
+
+    def __init__(self) -> None:
+        self._records: dict[tuple[str, str], OverlayRecord] = {}
+
+    async def all(self) -> tuple[OverlayRecord, ...]:
+        return tuple(
+            sorted(self._records.values(), key=lambda record: (record.updated_at, record.entity_id))
+        )
+
+    async def put(self, record: OverlayRecord) -> None:
+        self._records[(record.kind.value, record.entity_id)] = record
+
+    async def forget(self, kind: OverlayKind, entity_id: str) -> bool:
+        return self._records.pop((kind.value, entity_id), None) is not None
 
 
 class InMemoryTradeRepository:

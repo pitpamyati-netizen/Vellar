@@ -9,6 +9,7 @@ an integer in the next.
 from __future__ import annotations
 
 import pytest
+import pytest_asyncio
 
 from mmorpg.domain.entities.location import LocationState, Presence
 from mmorpg.infrastructure.cache.redis_cache import (
@@ -17,14 +18,16 @@ from mmorpg.infrastructure.cache.redis_cache import (
     RedisStateCache,
 )
 
-pytestmark = pytest.mark.integration
+# Один цикл событий на весь пакет: соединения открываются раз на прогон
+# (``conftest.py``), а привязаны они к тому циклу, в котором созданы.
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
 # A city id no content file uses, so these keys cannot collide with a running game.
 TEST_CITY = "__test_city"
 TEST_CHARACTER = -999_002
 
 
-@pytest.fixture(autouse=True)
+@pytest_asyncio.fixture(loop_scope="session", autouse=True)
 async def clean_keys(redis):
     """Remove this test's keys before and after, and leave every other key alone."""
 

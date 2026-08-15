@@ -56,9 +56,19 @@ class Play(StatesGroup):
     bank = State()
     dungeon = State()
     arena = State()
+    npcs = State()
+    npc = State()
     settings = State()
     tutorial = State()
     keeper = State()
+    keeper_content = State()
+    keeper_list = State()
+    keeper_entity = State()
+    keeper_field = State()
+    keeper_players = State()
+    keeper_player = State()
+    keeper_stats = State()
+    keeper_service = State()
     stub = State()
 
 
@@ -99,9 +109,19 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.BANK: Play.bank,
     ScreenId.DUNGEON: Play.dungeon,
     ScreenId.ARENA: Play.arena,
+    ScreenId.NPCS: Play.npcs,
+    ScreenId.NPC: Play.npc,
     ScreenId.SETTINGS: Play.settings,
     ScreenId.TUTORIAL: Play.tutorial,
     ScreenId.KEEPER: Play.keeper,
+    ScreenId.KEEPER_CONTENT: Play.keeper_content,
+    ScreenId.KEEPER_LIST: Play.keeper_list,
+    ScreenId.KEEPER_ENTITY: Play.keeper_entity,
+    ScreenId.KEEPER_FIELD: Play.keeper_field,
+    ScreenId.KEEPER_PLAYERS: Play.keeper_players,
+    ScreenId.KEEPER_PLAYER: Play.keeper_player,
+    ScreenId.KEEPER_STATS: Play.keeper_stats,
+    ScreenId.KEEPER_SERVICE: Play.keeper_service,
     ScreenId.STUB: Play.stub,
 }
 
@@ -142,9 +162,19 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.BANK: ScreenId.CITY,
     ScreenId.DUNGEON: ScreenId.CITY,
     ScreenId.ARENA: ScreenId.CITY,
+    ScreenId.NPCS: ScreenId.CITY,
+    ScreenId.NPC: ScreenId.NPCS,
     ScreenId.SETTINGS: ScreenId.MAIN_MENU,
     ScreenId.TUTORIAL: ScreenId.MAIN_MENU,
     ScreenId.KEEPER: ScreenId.MAIN_MENU,
+    ScreenId.KEEPER_CONTENT: ScreenId.KEEPER,
+    ScreenId.KEEPER_LIST: ScreenId.KEEPER_CONTENT,
+    ScreenId.KEEPER_ENTITY: ScreenId.KEEPER_LIST,
+    ScreenId.KEEPER_FIELD: ScreenId.KEEPER_ENTITY,
+    ScreenId.KEEPER_PLAYERS: ScreenId.KEEPER,
+    ScreenId.KEEPER_PLAYER: ScreenId.KEEPER_PLAYERS,
+    ScreenId.KEEPER_STATS: ScreenId.KEEPER,
+    ScreenId.KEEPER_SERVICE: ScreenId.KEEPER,
     ScreenId.STUB: ScreenId.CITY,
 }
 

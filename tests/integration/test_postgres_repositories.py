@@ -12,22 +12,27 @@ from dataclasses import replace
 from types import MappingProxyType
 
 import pytest
+import pytest_asyncio
 
 from mmorpg.domain.entities.character import Character, Equipment, SkillLoadout
 from mmorpg.domain.entities.craft import CraftLog, CraftProgress
+from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatBlock
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeStatus
 from mmorpg.domain.ports.repositories import AccessibilitySettings, User
 from mmorpg.infrastructure.persistence.postgres import (
     PostgresCharacterRepository,
+    PostgresContentOverlayRepository,
     PostgresInventoryRepository,
     PostgresPrivacyRepository,
     PostgresTradeRepository,
     PostgresUserRepository,
 )
 
-pytestmark = pytest.mark.integration
+# Один цикл событий на весь пакет: соединения открываются раз на прогон
+# (``conftest.py``), а привязаны они к тому циклу, в котором созданы.
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
 # Far outside the range Telegram issues, so a test can never collide with a real
 # player's row in a database someone is also playing on.
@@ -35,7 +40,7 @@ TEST_TELEGRAM_ID = -999_001
 OTHER_TELEGRAM_ID = -999_002
 
 
-@pytest.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def clean_user(pool) -> AsyncIterator[int]:
     """One user id, with everything it owns removed before and after."""
 
@@ -50,7 +55,7 @@ async def clean_user(pool) -> AsyncIterator[int]:
         await purge()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def clean_blocks(pool) -> AsyncIterator[tuple[int, int]]:
     """Two account ids with no black list rows between them, before and after."""
     pair = (TEST_TELEGRAM_ID, OTHER_TELEGRAM_ID)
@@ -376,7 +381,7 @@ TEST_SCOPE = "test-group"
 NOW = 1_700_000_000
 
 
-@pytest.fixture
+@pytest_asyncio.fixture(loop_scope="session")
 async def two_parties(pool, clean_user) -> tuple[Party, Party]:
     """Two characters to trade with each other, cascading away with the user."""
     await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user, username="tester"))
@@ -542,3 +547,151 @@ async def test_the_journal_lists_both_sides_newest_first(pool, two_parties) -> N
         journal = await trades.journal(character_id)
         assert [record.offer.price for record in journal] == [20, 10]
         assert journal[1].tax == 1
+
+
+# --- панель смотрителя -------------------------------------------------
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def clean_overlay(pool) -> AsyncIterator[str]:
+    """Ключ для правки, которого нет ни до, ни после теста."""
+    entity_id = "keeper_test_1"
+
+    async def purge() -> None:
+        await pool.execute("DELETE FROM content_overlay WHERE entity_id = $1", entity_id)
+
+    await purge()
+    try:
+        yield entity_id
+    finally:
+        await purge()
+
+
+async def test_an_edit_survives_a_round_trip(pool, clean_overlay) -> None:
+    overlays = PostgresContentOverlayRepository(pool)
+    record = OverlayRecord(
+        kind=OverlayKind.NPC,
+        entity_id=clean_overlay,
+        fields=MappingProxyType({"name": "Довен", "city": "farhold", "role": "писарь"}),
+        author_id=TEST_TELEGRAM_ID,
+        updated_at=NOW,
+    )
+
+    await overlays.put(record)
+    stored = next(found for found in await overlays.all() if found.entity_id == clean_overlay)
+
+    assert stored.kind is OverlayKind.NPC
+    assert dict(stored.fields) == dict(record.fields)
+    assert stored.author_id == TEST_TELEGRAM_ID
+    assert stored.removed is False
+
+
+async def test_one_entity_keeps_exactly_one_edit(pool, clean_overlay) -> None:
+    """Вторая правка той же сущности заменяет первую, а не ложится рядом."""
+    overlays = PostgresContentOverlayRepository(pool)
+    first = OverlayRecord(
+        kind=OverlayKind.NPC, entity_id=clean_overlay, fields=MappingProxyType({"name": "Довен"})
+    )
+    await overlays.put(first)
+    await overlays.put(replace(first, fields=MappingProxyType({"name": "Мерла"}), removed=True))
+
+    mine = [found for found in await overlays.all() if found.entity_id == clean_overlay]
+
+    assert len(mine) == 1
+    assert mine[0].value("name") == "Мерла"
+    assert mine[0].removed is True
+
+
+async def test_dropping_an_edit_says_whether_there_was_one(pool, clean_overlay) -> None:
+    overlays = PostgresContentOverlayRepository(pool)
+    await overlays.put(OverlayRecord(kind=OverlayKind.QUEST, entity_id=clean_overlay))
+
+    assert await overlays.forget(OverlayKind.QUEST, clean_overlay) is True
+    assert await overlays.forget(OverlayKind.QUEST, clean_overlay) is False
+
+
+async def test_the_census_counts_what_the_panel_shows(pool, clean_user) -> None:
+    characters = PostgresCharacterRepository(pool)
+    await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user))
+    await characters.create(a_character(clean_user, name="Перепись"))
+
+    counted = await characters.census(day=NOW, week=NOW, stale=NOW)
+
+    assert counted.characters >= 1
+    assert counted.accounts >= 1
+    assert counted.top_level >= 7
+    assert counted.gold_on_hand >= 250
+    assert counted.leaders
+
+
+async def test_a_character_is_found_by_name_whatever_the_case(pool, clean_user) -> None:
+    characters = PostgresCharacterRepository(pool)
+    await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user))
+    stored = await characters.create(a_character(clean_user, name="Мерла"))
+
+    found = await characters.find_by_name("мЕрЛа")
+
+    assert found is not None and found.id == stored.id
+    assert await characters.find_by_name("Никто") is None
+
+
+async def test_the_newest_characters_come_first(pool, clean_user) -> None:
+    characters = PostgresCharacterRepository(pool)
+    await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user))
+    older = await characters.create(a_character(clean_user, name="Старший"))
+    newer = await characters.create(a_character(clean_user, name="Младший"))
+
+    listed = await characters.newest(limit=2)
+
+    assert [person.id for person in listed] == [newer.id, older.id]
+
+
+async def test_a_character_is_deleted_once(pool, clean_user) -> None:
+    characters = PostgresCharacterRepository(pool)
+    await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user))
+    stored = await characters.create(a_character(clean_user, name="Ушедший"))
+
+    assert await characters.delete(stored.id) is True
+    assert await characters.delete(stored.id) is False
+    assert await characters.get(stored.id) is None
+
+
+async def test_only_untouched_first_level_characters_are_swept(pool, clean_user) -> None:
+    """Брошенный — тот, кто ничего не начал. Игравший остаётся, что бы ни было."""
+    characters = PostgresCharacterRepository(pool)
+    await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user))
+    played = await characters.create(a_character(clean_user, name="Игравший"))
+    abandoned = await characters.create(
+        replace(a_character(clean_user, name="Брошенный"), level=1, experience=0, tutorial=0)
+    )
+
+    swept = await characters.purge_abandoned(before=NOW + 10**10)
+
+    assert swept >= 1
+    assert await characters.get(abandoned.id) is None
+    assert await characters.get(played.id) is not None
+
+
+async def test_a_blocked_account_is_remembered_and_then_removed(pool, clean_user) -> None:
+    users = PostgresUserRepository(pool)
+    await users.upsert(User(telegram_id=clean_user))
+    before = await users.blocked_count()
+
+    assert clean_user in await users.unchecked(limit=1000, before=NOW)
+    await users.mark_checked(clean_user, at=NOW, blocked=True)
+
+    assert await users.blocked_count() == before + 1
+    # Проверенного и заблокировавшего второй раз не спрашивают.
+    assert clean_user not in await users.unchecked(limit=1000, before=NOW)
+    assert await users.purge_blocked() >= 1
+    assert await users.get(clean_user) is None
+
+
+async def test_an_account_that_still_reads_the_bot_is_only_marked_checked(pool, clean_user) -> None:
+    users = PostgresUserRepository(pool)
+    await users.upsert(User(telegram_id=clean_user))
+
+    await users.mark_checked(clean_user, at=NOW, blocked=False)
+
+    assert clean_user not in await users.unchecked(limit=1000, before=NOW - 1)
+    assert await users.get(clean_user) is not None

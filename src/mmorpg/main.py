@@ -27,6 +27,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.base import BaseStorage
 from aiogram.fsm.storage.memory import MemoryStorage
 
+from mmorpg.application.services.content import ContentRegistry
 from mmorpg.config import AppEnv, Settings, load_settings
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.ports.repositories import IdempotencyStore
@@ -39,6 +40,7 @@ from mmorpg.infrastructure.cache import (
 from mmorpg.infrastructure.content import load_content
 from mmorpg.infrastructure.persistence import (
     InMemoryCharacterRepository,
+    InMemoryContentOverlayRepository,
     InMemoryInventoryRepository,
     InMemoryPrivacyRepository,
     InMemoryTradeRepository,
@@ -86,7 +88,12 @@ async def build_application(settings: Settings) -> Application:
     )
 
     stack = AsyncExitStack()
-    storage, dependencies, idempotency = await _build_adapters(settings, content, stack)
+    # Правки смотрителя ложатся поверх прочитанного и живут в хранилище, поэтому
+    # реестр наполняется здесь же, до первого обновления (``docs/keeper.md``).
+    registry = ContentRegistry(content)
+    storage, dependencies, idempotency = await _build_adapters(settings, registry, stack)
+    edits = await dependencies.registry.reload(dependencies.overlays)
+    logger.info("overlay_loaded", edits=edits, broken=len(registry.problems()))
 
     bot = Bot(
         token=settings.bot_token.get_secret_value(),
@@ -127,7 +134,7 @@ async def build_application(settings: Settings) -> Application:
 
 
 async def _build_adapters(
-    settings: Settings, content: GameContent, stack: AsyncExitStack
+    settings: Settings, registry: ContentRegistry, stack: AsyncExitStack
 ) -> tuple[BaseStorage, Dependencies, IdempotencyStore]:
     """In-memory for local, PostgreSQL and Redis otherwise (ADR 0005)."""
     if not settings.uses_external_storage:
@@ -137,7 +144,7 @@ async def _build_adapters(
         )
         dependencies = Dependencies(
             settings=settings,
-            content=content,
+            registry=registry,
             users=InMemoryUserRepository(),
             characters=InMemoryCharacterRepository(),
             inventory=InMemoryInventoryRepository(),
@@ -145,6 +152,7 @@ async def _build_adapters(
             privacy=InMemoryPrivacyRepository(),
             state_cache=InMemoryStateCache(),
             locations=InMemoryLocationStateCache(),
+            overlays=InMemoryContentOverlayRepository(),
             # The sink is attached once the Bot exists; until then, and whenever
             # CHANNEL_ID is empty, announcing is a no-op.
             broadcasts=ChannelBroadcaster(sink=None, chat_id=settings.channel_id),
@@ -161,6 +169,7 @@ async def _build_adapters(
     from mmorpg.infrastructure.persistence.pool import create_postgres_pool, create_redis_client
     from mmorpg.infrastructure.persistence.postgres import (
         PostgresCharacterRepository,
+        PostgresContentOverlayRepository,
         PostgresInventoryRepository,
         PostgresPrivacyRepository,
         PostgresTradeRepository,
@@ -176,7 +185,7 @@ async def _build_adapters(
 
     dependencies = Dependencies(
         settings=settings,
-        content=content,
+        registry=registry,
         users=PostgresUserRepository(pool),
         characters=PostgresCharacterRepository(pool),
         inventory=PostgresInventoryRepository(pool),
@@ -184,6 +193,7 @@ async def _build_adapters(
         privacy=PostgresPrivacyRepository(pool),
         state_cache=RedisStateCache(redis),
         locations=RedisLocationStateCache(redis),
+        overlays=PostgresContentOverlayRepository(pool),
         broadcasts=ChannelBroadcaster(sink=None, chat_id=settings.channel_id),
     )
     return RedisStorage(redis), dependencies, RedisIdempotencyStore(redis)

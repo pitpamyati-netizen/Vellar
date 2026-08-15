@@ -7,6 +7,12 @@ gap is what this package exists to close.
 
 Skipped, never failed, when the services are not up: ``docker compose up -d
 postgres redis`` and they run.
+
+The connections are opened **once for the whole run**, not once per test. Opening
+them costs about two seconds apiece here - name resolution, not the database -
+and forty-six of those made this package sixteen times slower than the entire
+rest of the suite. Sharing is safe because nothing is shared *through* them: each
+test owns its rows and cleans them up, and a pool is a pool.
 """
 
 from __future__ import annotations
@@ -14,24 +20,27 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 
 import pytest
+import pytest_asyncio
 
 from mmorpg.config import Settings
 
-pytestmark = pytest.mark.integration
+# Общий на прогон цикл событий: пул asyncpg и клиент Redis привязаны к тому
+# циклу, в котором созданы, поэтому «на прогон» должно быть и то, и другое.
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
 
 def _settings() -> Settings:
     return Settings(app_env="dev", bot_token="0:test")  # type: ignore[call-arg]
 
 
-@pytest.fixture
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def pool() -> AsyncIterator[object]:
     """An asyncpg pool against the migrated database, or a skip."""
     import asyncpg
 
     settings = _settings()
     try:
-        created = await asyncpg.create_pool(dsn=settings.postgres_dsn, min_size=1, max_size=2)
+        created = await asyncpg.create_pool(dsn=settings.postgres_dsn, min_size=1, max_size=4)
     except (OSError, asyncpg.PostgresError) as unreachable:
         pytest.skip(f"PostgreSQL is not reachable: {unreachable}")
 
@@ -46,9 +55,9 @@ async def pool() -> AsyncIterator[object]:
         await created.close()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def redis() -> AsyncIterator[object]:
-    """A Redis client on a database of its own, flushed around each test."""
+    """A Redis client on a database of its own."""
     from redis.asyncio import Redis
 
     settings = _settings()

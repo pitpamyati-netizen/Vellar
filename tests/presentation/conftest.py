@@ -25,11 +25,13 @@ from mmorpg.domain.entities.combat import ActionTag, CombatState, Trace
 from mmorpg.domain.entities.content import Item, SkillKind
 from mmorpg.domain.entities.craft import CraftLog, CraftProgress
 from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
+from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
+from mmorpg.domain.ports.repositories import Census
 from mmorpg.domain.procgen import generate_location
+from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules.combat import start_combat
 from mmorpg.domain.rules.economy import buy_price, roll_assortment
 from mmorpg.domain.rules.stats import derived_stats
-from mmorpg.infrastructure.content import load_content
 from mmorpg.presentation.telegram.handlers import creation as handlers_creation
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.screens import arena as arena_screens
@@ -48,12 +50,6 @@ from mmorpg.presentation.telegram.screens.paginated import (
     PageState,
     paginated_screen,
 )
-from tests.conftest import CONTENT_ROOT
-
-
-@pytest.fixture(scope="session")
-def content() -> GameContent:
-    return load_content(CONTENT_ROOT)
 
 
 @pytest.fixture(scope="session")
@@ -179,6 +175,62 @@ def keeper(fighter: Character) -> Character:
 
 
 @pytest.fixture(scope="session")
+def edits() -> tuple[OverlayRecord, ...]:
+    """Две правки: заведённый житель и его подряд, один из них недописанный."""
+    return (
+        OverlayRecord(
+            kind=OverlayKind.NPC,
+            entity_id="keeper_npc_1",
+            fields=MappingProxyType(
+                {
+                    "name": "Довен",
+                    "city": "farhold",
+                    "role": "писарь заставы",
+                    "text": "Водит пальцем по строкам сводки и не поднимает головы.",
+                }
+            ),
+            author_id=42,
+        ),
+        OverlayRecord(
+            kind=OverlayKind.QUEST,
+            entity_id="keeper_quest_1",
+            fields=MappingProxyType({"city": "farhold", "objective": "kill"}),
+            author_id=42,
+        ),
+    )
+
+
+@pytest.fixture(scope="session")
+def edited(content: GameContent, edits: tuple[OverlayRecord, ...]) -> GameContent:
+    """Мир, в котором правки смотрителя уже стоят."""
+    return overlay_rules.apply(content, edits)
+
+
+@pytest.fixture(scope="session")
+def keeper_view(edits: tuple[OverlayRecord, ...], fighter: Character) -> keeper_screens.KeeperView:
+    return keeper_screens.KeeperView(
+        records=edits,
+        players=(fighter, replace(fighter, id=3, name="Мерла", level=22)),
+        target=fighter,
+        census=Census(
+            characters=128,
+            accounts=97,
+            fresh_day=14,
+            fresh_week=61,
+            abandoned=9,
+            blocked=3,
+            top_level=41,
+            average_level=7,
+            gold_on_hand=812_400,
+            gold_in_bank=310_000,
+            quests_done=402,
+            arena_fights=88,
+            leaders=(("Мерла", 41), ("Аргус", 22)),
+        ),
+    )
+
+
+@pytest.fixture(scope="session")
 def sample_stock(content: GameContent) -> tuple[Item, ...]:
     return roll_assortment(
         content, world_seed="vellar-test", city_id="farhold", rotation=100, character_level=8
@@ -209,6 +261,8 @@ def all_screens(
     sample_stock: tuple[Item, ...],
     craftsman: Character,
     keeper: Character,
+    edited: GameContent,
+    keeper_view: keeper_screens.KeeperView,
 ) -> list[Screen]:
     """Every screen in the game, rendered with sample data.
 
@@ -234,8 +288,110 @@ def all_screens(
         play.main_menu_screen(content, keeper, derived_stats(content, keeper)),
         keeper_screens.keeper_screen(content, keeper, derived_stats(content, keeper)),
         keeper_screens.keeper_screen(
-            content, keeper, derived_stats(content, keeper), notice="Выдано 1000 золота."
+            edited,
+            keeper,
+            derived_stats(content, keeper),
+            keeper_view,
+            notice="Выдано 1000 золота.",
         ),
+        keeper_screens.content_screen(edited, keeper_view),
+        *(
+            keeper_screens.list_screen(edited, kind, PageState(), keeper_view)
+            for kind in keeper_screens.KINDS
+        ),
+        keeper_screens.list_screen(edited, OverlayKind.QUEST, PageState(page=2), keeper_view),
+        *(
+            keeper_screens.entity_screen(
+                edited,
+                overlay_rules.effective(edited, keeper_view.records, kind, entity_id),
+                PageState(page=page),
+                keeper_view,
+            )
+            for kind, entity_id, page in (
+                (OverlayKind.NPC, "keeper_npc_1", 1),
+                # Пустая запись: у неё отказ на каждом обязательном поле, и
+                # карточка всё равно обязана поместиться в сообщение.
+                (OverlayKind.QUEST, "нет такого", 1),
+                (OverlayKind.QUEST, "keeper_quest_1", 1),
+                (OverlayKind.QUEST, "keeper_quest_1", 2),
+                (OverlayKind.QUEST, "farhold_tallies", 1),
+                (OverlayKind.LOCATION, "quiet_meadows", 1),
+                (OverlayKind.ENEMY, "grey_wolf", 1),
+                (OverlayKind.CITY, "farhold", 1),
+            )
+        ),
+        keeper_screens.entity_screen(
+            edited,
+            replace(
+                overlay_rules.effective(
+                    edited, keeper_view.records, OverlayKind.ENEMY, "grey_wolf"
+                ),
+                removed=True,
+            ),
+            PageState(),
+            keeper_view,
+        ),
+        # Самая длинная карточка, какую смотритель может набрать: у подряда
+        # четырнадцать полей, и каждое заполнено до предела.
+        *(
+            keeper_screens.entity_screen(
+                edited,
+                OverlayRecord(
+                    kind=OverlayKind.QUEST,
+                    entity_id="keeper_quest_9",
+                    fields=MappingProxyType(
+                        {
+                            spec.key: "а" * overlay_rules.MAX_TEXT
+                            for spec in overlay_rules.FIELDS[OverlayKind.QUEST]
+                        }
+                    ),
+                ),
+                PageState(page=page),
+                keeper_view,
+            )
+            for page in (1, 2)
+        ),
+        *(
+            keeper_screens.field_screen(
+                edited,
+                overlay_rules.effective(edited, keeper_view.records, OverlayKind.QUEST, key),
+                spec,
+                PageState(),
+            )
+            for key in ("keeper_quest_1",)
+            for spec in overlay_rules.FIELDS[OverlayKind.QUEST]
+        ),
+        *(
+            keeper_screens.field_screen(
+                edited,
+                overlay_rules.effective(
+                    edited, keeper_view.records, OverlayKind.ENEMY, "grey_wolf"
+                ),
+                spec,
+                PageState(),
+            )
+            for spec in overlay_rules.FIELDS[OverlayKind.ENEMY]
+        ),
+        keeper_screens.field_screen(
+            edited,
+            overlay_rules.effective(
+                edited, keeper_view.records, OverlayKind.LOCATION, "quiet_meadows"
+            ),
+            overlay_rules.FIELDS[OverlayKind.LOCATION][-1],
+            PageState(),
+        ),
+        keeper_screens.players_screen(edited, keeper_view, PageState()),
+        keeper_screens.players_screen(
+            edited, keeper_screens.KeeperView(), PageState(), notice="Никого не нашли."
+        ),
+        keeper_screens.player_screen(edited, fighter, derived_stats(content, fighter)),
+        keeper_screens.stats_screen(keeper_view.census),
+        keeper_screens.stats_screen(Census()),
+        keeper_screens.service_screen(keeper_view),
+        city_screens.npcs_screen(edited, edited.city("farhold")),
+        city_screens.npcs_screen(edited, edited.city("dusk_harbor")),
+        city_screens.npc_screen(edited, fighter, edited.npc("keeper_npc_1")),
+        play.city_screen(edited, edited.city("farhold"), hero),
         play.world_screen(content, hero, PageState()),
         play.world_screen(content, keeper, PageState()),
         play.city_screen(content, content.city("farhold"), hero),

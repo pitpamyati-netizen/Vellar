@@ -4,14 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mmorpg.domain.entities import Character, GameContent
-from mmorpg.infrastructure.content import load_content
-from tests.conftest import CONTENT_ROOT
-
-
-@pytest.fixture(scope="session")
-def content() -> GameContent:
-    return load_content(CONTENT_ROOT)
+from mmorpg.domain.entities import Character
 
 
 @pytest.fixture

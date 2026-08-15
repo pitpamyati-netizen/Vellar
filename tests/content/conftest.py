@@ -2,12 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
-from mmorpg.domain.entities import GameContent
-from mmorpg.infrastructure.content import load_content
-from tests.conftest import CONTENT_ROOT
-
 # The black list from Narrative.md, section 2, as stems: one word here is enough
 # to make a name sound like the generic fantasy set the world is written against.
 FORBIDDEN_WORDS = (
@@ -23,8 +17,3 @@ FORBIDDEN_WORDS = (
     "избранн",
     "легендарн",
 )
-
-
-@pytest.fixture(scope="session")
-def content() -> GameContent:
-    return load_content(CONTENT_ROOT)

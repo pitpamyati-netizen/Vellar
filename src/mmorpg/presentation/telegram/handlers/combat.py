@@ -38,14 +38,12 @@ from mmorpg.logging import get_logger
 from mmorpg.presentation.telegram.flows import combat as fight_flow
 from mmorpg.presentation.telegram.flows.play import (
     DUNGEON_DEPTH,
-    Descent,
-    LocationSession,
-    PlayState,
     build_location,
     descent_fight_seed,
     level_up_line,
     node_fight_seed,
 )
+from mmorpg.presentation.telegram.flows.state import Descent, LocationSession, PlayState
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.messaging import send_screen

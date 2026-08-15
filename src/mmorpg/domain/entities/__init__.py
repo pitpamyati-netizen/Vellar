@@ -16,6 +16,7 @@ from mmorpg.domain.entities.content import (
     ItemEffect,
     ItemKind,
     Location,
+    Npc,
     OwnerKind,
     ProgressionRules,
     Race,
@@ -46,6 +47,7 @@ from mmorpg.domain.entities.location import (
     LocationNode,
     NodeKind,
 )
+from mmorpg.domain.entities.overlay import KEEPER_PREFIX, OverlayKind, OverlayRecord
 from mmorpg.domain.entities.quest import ObjectiveKind, Quest, QuestLog
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.entities.trade import (
@@ -57,6 +59,7 @@ from mmorpg.domain.entities.trade import (
 )
 
 __all__ = [
+    "KEEPER_PREFIX",
     "ActiveEffect",
     "Character",
     "CharacterClass",
@@ -83,9 +86,12 @@ __all__ = [
     "Location",
     "LocationNode",
     "NodeKind",
+    "Npc",
     "ObjectiveKind",
     "Offer",
     "OfferKind",
+    "OverlayKind",
+    "OverlayRecord",
     "OwnerKind",
     "Party",
     "ProgressionRules",

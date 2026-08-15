@@ -20,14 +20,12 @@ from mmorpg.domain.rules.group_offers import (
     SWEEP_GRACE_SECONDS,
     Refusal,
 )
-from mmorpg.infrastructure.content import load_content
 from mmorpg.infrastructure.persistence import (
     InMemoryCharacterRepository,
     InMemoryInventoryRepository,
     InMemoryPrivacyRepository,
     InMemoryTradeRepository,
 )
-from tests.conftest import CONTENT_ROOT
 
 ARGUS_ACCOUNT = 1
 MERLA_ACCOUNT = 2
@@ -35,11 +33,6 @@ STRANGER_ACCOUNT = 3
 NOW = 10_000
 SWORD = "rusty_sword"
 SWORD_NAME = "Ржавый меч"
-
-
-@pytest.fixture(scope="module")
-def content() -> GameContent:
-    return load_content(CONTENT_ROOT)
 
 
 @pytest.fixture

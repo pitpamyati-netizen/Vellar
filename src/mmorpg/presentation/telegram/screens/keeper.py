@@ -1,44 +1,484 @@
-"""The keeper screen: a service door, not a part of the game.
+"""Панель смотрителя: служебная дверь, а не часть игры.
 
-It is drawn only for the Telegram ids listed in ``ADMIN_IDS``, and it says so on
-its first line, because a screen a player was never meant to hear must announce
-itself before it offers anything. Every button here is a shortcut through work
-the game would otherwise ask for, and each one reports the number it changed -
-a keeper is checking the game, so they need the result, not a reassurance.
+Рисуется только для тех, чей Telegram id стоит в ``ADMIN_IDS``, и говорит об этом
+первой строкой: экран, который игрок слышать не должен, обязан назваться раньше,
+чем что-то предложит.
+
+Правил здесь два, и оба взяты у остальной игры, а не придуманы для служебного
+экрана. Первое: каждое действие отвечает числом, которое получилось, — смотритель
+сверяет игру, а не выслушивает заверения. Второе: доступность обычная. Служебный
+ряд на месте, псевдографики нет, значение поля читается словом («не заполнено»,
+«вольная земля: да»), а не пустотой, которую нечем озвучить.
+
+Карточка сущности рисуется по описанию полей из ``domain/rules/overlay.py``, а не
+по списку кнопок, набранному здесь: новое поле у подряда должно появляться на
+экране само, иначе панель начнёт отставать от того, что она правит.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from dataclasses import dataclass
+
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
+from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
+from mmorpg.domain.ports.repositories import Census
+from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules.keeper import GOLD_STEP, POINTS_STEP
+from mmorpg.domain.rules.overlay import FieldKind, FieldSpec
 from mmorpg.domain.rules.stats import DerivedStats
 from mmorpg.presentation.telegram.keyboards import labels
+from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import amount, gold
+from mmorpg.presentation.telegram.screens.paginated import (
+    ListEntry,
+    PageState,
+    paginated_screen,
+)
+
+#: Сколько знаков значения помещается в строку списка. Длинное значение целиком
+#: читается на экране самого поля: там оно одно и помещается заведомо.
+BUTTON_VALUE = 34
+
+#: Сколько причин отказа показывать на карточке. Три - это уже понятно, что
+#: запись недописана; остальные считаются числом.
+PROBLEMS_SHOWN = 3
+
+#: Порядок разновидностей на экране содержимого: сначала люди, потом работа, потом
+#: земля. Тот же порядок, в котором о мире рассказывают.
+KINDS: tuple[OverlayKind, ...] = (
+    OverlayKind.NPC,
+    OverlayKind.QUEST,
+    OverlayKind.LOCATION,
+    OverlayKind.ENEMY,
+    OverlayKind.CITY,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class KeeperView:
+    """Всё, что панель показывает, но не считает сама.
+
+    Читает это хендлер - и только когда открыт экран смотрителя: игроку эти
+    запросы не стоят ничего, потому что не выполняются.
+    """
+
+    records: tuple[OverlayRecord, ...] = ()
+    players: tuple[Character, ...] = ()
+    target: Character | None = None
+    census: Census | None = None
+    found: str = ""
+
+
+def kind_label(kind: OverlayKind) -> Label:
+    return label(overlay_rules.TITLES[kind][1])
+
+
+def kind_from_button(pressed: str) -> OverlayKind | None:
+    return next((kind for kind in KINDS if kind_label(kind).matches(pressed)), None)
+
+
+# --- панель ------------------------------------------------------------
 
 
 def keeper_screen(
-    content: GameContent, character: Character, stats: DerivedStats, notice: str = ""
+    content: GameContent,
+    character: Character,
+    stats: DerivedStats,
+    view: KeeperView = KeeperView(),
+    notice: str = "",
 ) -> Screen:
-    lines = (
+    """Четыре двери и четыре быстрых выдачи себе."""
+    broken = sum(1 for record in view.records if overlay_rules.problems(content, record))
+    standing = f"Правок в мире: {len(view.records)}."
+    if broken:
+        standing += f" Из них не работают: {broken}."
+    lines = [
         notice or "Смотритель. Служебный экран, игроки его не видят.",
         f"{character.name}, уровень {character.level}, "
         f"{content.race(character.race_id).name}, "
         f"{content.character_class(character.class_id).name}.",
-        f"Здоровье: {amount(character.health_or(stats.max_health), stats.max_health)}.",
+        f"Здоровье: {amount(character.health_or(stats.max_health), stats.max_health)}. "
         f"Золото: {gold(character.gold)}.",
-        f"Нераспределено: очков характеристик {character.unspent_stat_points}, "
-        f"очков умений {character.unspent_skill_points}.",
-        f"Кнопки дают: {GOLD_STEP} золота, один уровень, "
+        standing,
+        f"Кнопки внизу дают вам: {GOLD_STEP} золота, один уровень, "
         f"полное здоровье, по {POINTS_STEP} очков каждого рода.",
         "Города открыты все, независимо от уровня.",
-    )
+    ]
     return Screen(
         id=ScreenId.KEEPER,
+        lines=tuple(lines),
+        rows=(
+            (labels.KEEPER_WORLD, labels.KEEPER_PLAYERS),
+            (labels.KEEPER_STATS, labels.KEEPER_SERVICE),
+            (labels.KEEPER_GOLD, labels.KEEPER_LEVEL),
+            (labels.KEEPER_HEAL, labels.KEEPER_POINTS),
+        ),
+    )
+
+
+def content_screen(content: GameContent, view: KeeperView, notice: str = "") -> Screen:
+    """Из чего состоит мир, и сколько чего в нём сейчас."""
+    counts = {kind: len(overlay_rules.listing(content, kind)) for kind in KINDS}
+    lines = [
+        notice or "Мир и содержимое. Здесь правят то, из чего игра сделана.",
+        "Правка ложится поверх файлов в content и снимается целиком: "
+        "исходная строка никуда не девается.",
+        *(f"{overlay_rules.TITLES[kind][1]}: {counts[kind]}." for kind in KINDS),
+        f"Правок стоит: {len(view.records)}.",
+    ]
+    empty = overlay_rules.orphaned_biomes(content)
+    if empty:
+        lines.append(f"Некому водиться в местностях: {', '.join(empty)}. Там не с кем драться.")
+    rows: list[tuple[Label, ...]] = [
+        tuple(kind_label(kind) for kind in KINDS[index : index + 2])
+        for index in range(0, len(KINDS), 2)
+    ]
+    rows.append((labels.KEEPER_RELOAD,))
+    return Screen(id=ScreenId.KEEPER_CONTENT, lines=tuple(lines), rows=tuple(rows))
+
+
+# --- список сущностей --------------------------------------------------
+
+
+def numbered(index: int, text: str) -> str:
+    """Строка списка с номером.
+
+    Номер здесь не украшение: два жителя могут зваться одинаково, а маршрутизация
+    идёт по тексту кнопки, и две одинаковые кнопки - это экран, который не
+    соберётся (``screens/base.py``).
+    """
+    return f"{index}. {text}"
+
+
+def list_screen(
+    content: GameContent,
+    kind: OverlayKind,
+    state: PageState,
+    view: KeeperView = KeeperView(),
+    notice: str = "",
+) -> Screen:
+    entries = [
+        ListEntry(key=entity_id, text=numbered(index, title))
+        for index, (entity_id, title) in enumerate(overlay_rules.listing(content, kind), start=1)
+    ]
+    edited = sum(1 for record in view.records if record.kind is kind)
+    single, many = overlay_rules.TITLES[kind]
+    rows: tuple[tuple[Label, ...], ...] = (
+        ((labels.KEEPER_ADD,),) if kind in overlay_rules.CREATABLE else ()
+    )
+    return paginated_screen(
+        screen_id=ScreenId.KEEPER_LIST,
+        title=many,
+        entries=entries,
+        state=state,
+        lead_lines=(
+            notice or f"{many}. Нажмите запись, чтобы открыть карточку.",
+            f"Правок в этом разделе: {edited}.",
+        ),
+        empty_text=f"Ни одной записи. {single} можно добавить кнопкой ниже.",
+        extra_rows=rows,
+        show_filters=False,
+    )
+
+
+def entity_from_button(content: GameContent, kind: OverlayKind, pressed: str) -> str:
+    """Идентификатор сущности по нажатой строке списка. Пусто - не узнали."""
+    for index, (entity_id, title) in enumerate(overlay_rules.listing(content, kind), start=1):
+        if pressed.strip() == numbered(index, title):
+            return entity_id
+    return ""
+
+
+# --- карточка сущности -------------------------------------------------
+
+
+def field_button(spec: FieldSpec) -> Label:
+    """Кнопка поля — его название. Что в нём стоит, сказано строкой над ней.
+
+    Значение на кнопке пришлось бы резать до неузнаваемости: у подряда условие
+    занимает две строки, а кнопка — одну.
+    """
+    return label(spec.name)
+
+
+def field_from_button(record: OverlayRecord, pressed: str) -> FieldSpec | None:
+    for spec in overlay_rules.FIELDS[record.kind]:
+        if field_button(spec).matches(pressed):
+            return spec
+    return None
+
+
+def entity_screen(
+    content: GameContent,
+    record: OverlayRecord,
+    state: PageState,
+    view: KeeperView = KeeperView(),
+    notice: str = "",
+) -> Screen:
+    """Одна сущность: что в ней стоит, и что с ней можно сделать.
+
+    Карточка — это список полей, поэтому она и рисуется списком: у подряда их
+    четырнадцать, и все четырнадцать в одном сообщении не поместились бы. Строка
+    говорит, что стоит в поле, кнопка под ней его меняет.
+    """
+    single = overlay_rules.TITLES[record.kind][0]
+    stored = overlay_rules.held(view.records, record.kind, record.entity_id)
+    entries = [
+        ListEntry(key=spec.key, text=spec.name, detail=_short(content, spec, record))
+        for spec in overlay_rules.FIELDS[record.kind]
+    ]
+
+    named = overlay_rules.clipped(record.value("name")) or record.entity_id
+    lead = [
+        notice or f"{single}: {named}.",
+        f"Ключ: {record.entity_id}. {_standing(record, stored)}",
+    ]
+    why = overlay_rules.problems(content, record)
+    if why:
+        lead.append("Пока не работает в игре:")
+        lead.extend(why[:PROBLEMS_SHOWN])
+        if len(why) > PROBLEMS_SHOWN:
+            lead.append(f"И ещё причин: {len(why) - PROBLEMS_SHOWN}.")
+
+    rows: list[tuple[Label, ...]] = [
+        (labels.KEEPER_RETURN,) if record.removed else (labels.KEEPER_REMOVE,)
+    ]
+    if stored is not None:
+        rows.append((labels.KEEPER_FORGET,))
+    return paginated_screen(
+        screen_id=ScreenId.KEEPER_ENTITY,
+        title=single,
+        entries=entries,
+        state=state,
+        lead_lines=tuple(lead),
+        extra_rows=tuple(rows),
+        show_filters=False,
+    )
+
+
+def _short(content: GameContent, spec: FieldSpec, record: OverlayRecord) -> str:
+    """Значение поля так, как оно помещается в строку списка."""
+    value = overlay_rules.shown(content, spec, record)
+    if len(value) > BUTTON_VALUE:
+        value = f"{value[:BUTTON_VALUE].rstrip()}…"
+    return value
+
+
+def _standing(record: OverlayRecord, stored: OverlayRecord | None) -> str:
+    if record.removed:
+        return "Убрано из игры. Вернуть можно кнопкой ниже."
+    if stored is None:
+        return "Из содержимого, правок нет."
+    if record.is_keepers:
+        return "Заведено смотрителем."
+    return "Из содержимого, с правкой смотрителя."
+
+
+# --- одно поле ---------------------------------------------------------
+
+
+def field_screen(
+    content: GameContent,
+    record: OverlayRecord,
+    spec: FieldSpec,
+    state: PageState,
+    notice: str = "",
+) -> Screen:
+    """Значение одного поля: выбрать из списка или набрать сообщением."""
+    lead = [
+        notice or f"{spec.name}. Сейчас: {overlay_rules.shown(content, spec, record)}.",
+        _how_to_fill(spec),
+    ]
+    if spec.hint:
+        lead.append(f"Например: {spec.hint}.")
+
+    if spec.kind in {FieldKind.CHOICE, FieldKind.LIST}:
+        return _choice_screen(content, record, spec, state, lead)
+
+    rows: list[tuple[Label, ...]] = []
+    if spec.kind is FieldKind.FLAG:
+        rows.append((label("Да"), label("Нет")))
+    if not spec.required:
+        rows.append((labels.KEEPER_CLEAR,))
+    return Screen(id=ScreenId.KEEPER_FIELD, lines=tuple(lead), rows=tuple(rows))
+
+
+def _how_to_fill(spec: FieldSpec) -> str:
+    match spec.kind:
+        case FieldKind.NUMBER:
+            return "Наберите целое число сообщением."
+        case FieldKind.RATE:
+            return "Наберите долю сообщением: 1 — обычная, 1,5 — в полтора раза больше."
+        case FieldKind.FLAG:
+            return "Нажмите «Да» или «Нет»."
+        case FieldKind.LIST:
+            return "Нажимайте варианты: нажатое добавляется, нажатое второй раз убирается."
+        case FieldKind.CHOICE:
+            return "Нажмите вариант из списка."
+        case _:
+            return "Наберите значение сообщением. Оно заменит то, что стоит сейчас."
+
+
+def option_button(index: int, name: str, *, chosen: bool) -> Label:
+    """Вариант списка. Отмеченный говорит об этом словом, а не значком."""
+    return label(numbered(index, f"{name}{', выбрано' if chosen else ''}"))
+
+
+def _choice_screen(
+    content: GameContent,
+    record: OverlayRecord,
+    spec: FieldSpec,
+    state: PageState,
+    lead: Sequence[str],
+) -> Screen:
+    picked = (
+        set(record.listed(spec.key)) if spec.kind is FieldKind.LIST else {record.value(spec.key)}
+    )
+    entries = [
+        ListEntry(
+            key=value,
+            text=option_button(
+                index, overlay_rules.option_name(content, spec, value), chosen=value in picked
+            ).text,
+        )
+        for index, value in enumerate(overlay_rules.options(content, spec, record), start=1)
+    ]
+    extra: tuple[tuple[Label, ...], ...] = () if spec.required else ((labels.KEEPER_CLEAR,),)
+    return paginated_screen(
+        screen_id=ScreenId.KEEPER_FIELD,
+        title=spec.name,
+        entries=entries,
+        state=state,
+        lead_lines=tuple(lead),
+        empty_text="Выбирать не из чего: сначала заполните поля выше.",
+        extra_rows=extra,
+        show_filters=False,
+    )
+
+
+def option_from_button(
+    content: GameContent, record: OverlayRecord, spec: FieldSpec, pressed: str
+) -> str | None:
+    picked = (
+        set(record.listed(spec.key)) if spec.kind is FieldKind.LIST else {record.value(spec.key)}
+    )
+    for index, value in enumerate(overlay_rules.options(content, spec, record), start=1):
+        name = overlay_rules.option_name(content, spec, value)
+        if option_button(index, name, chosen=value in picked).matches(pressed):
+            return value
+    return None
+
+
+# --- игроки ------------------------------------------------------------
+
+
+def player_entry(content: GameContent, index: int, player: Character) -> str:
+    city = content.city(player.city_id).name if content.has_city(player.city_id) else player.city_id
+    return numbered(index, f"{player.name} — уровень {player.level}, {city}")
+
+
+def players_screen(
+    content: GameContent, view: KeeperView, state: PageState, notice: str = ""
+) -> Screen:
+    entries = [
+        ListEntry(key=str(player.id), text=player_entry(content, index, player))
+        for index, player in enumerate(view.players, start=1)
+    ]
+    return paginated_screen(
+        screen_id=ScreenId.KEEPER_PLAYERS,
+        title="Игроки",
+        entries=entries,
+        state=state,
+        lead_lines=(
+            notice or "Последние заведённые персонажи. Кого нет в списке — ищите по имени.",
+            "Имя набирается сообщением после нажатия «Найти по имени».",
+        ),
+        empty_text="Ни одного персонажа.",
+        extra_rows=((labels.KEEPER_FIND,),),
+        show_filters=False,
+    )
+
+
+def player_from_button(content: GameContent, view: KeeperView, pressed: str) -> Character | None:
+    for index, player in enumerate(view.players, start=1):
+        if pressed.strip() == player_entry(content, index, player):
+            return player
+    return None
+
+
+def player_screen(
+    content: GameContent,
+    player: Character,
+    stats: DerivedStats,
+    notice: str = "",
+) -> Screen:
+    """Чужой персонаж и то же, что смотритель может сделать себе."""
+    city = content.city(player.city_id).name if content.has_city(player.city_id) else player.city_id
+    lines = (
+        notice or f"{player.name}, уровень {player.level}.",
+        f"{content.race(player.race_id).name}, "
+        f"{content.character_class(player.class_id).name}. Аккаунт: {player.user_id}.",
+        f"Здоровье: {amount(player.health_or(stats.max_health), stats.max_health)}.",
+        f"Золото: {gold(player.gold)}, в ячейке {gold(player.bank_gold)}. Город: {city}.",
+        f"Нераспределено: очков характеристик {player.unspent_stat_points}, "
+        f"очков умений {player.unspent_skill_points}.",
+        f"Подрядов закрыто: {len(player.quests.done)}. "
+        f"Круг: {player.arena_wins} побед, {player.arena_losses} поражений.",
+        "Уровень поднимается по одному и только вверх: очки уже вложены.",
+    )
+    return Screen(
+        id=ScreenId.KEEPER_PLAYER,
         lines=lines,
         rows=(
             (labels.KEEPER_GOLD, labels.KEEPER_LEVEL),
             (labels.KEEPER_HEAL, labels.KEEPER_POINTS),
+            (labels.KEEPER_MOVE,),
+            (labels.KEEPER_DELETE,),
+        ),
+    )
+
+
+# --- статистика и обслуживание -----------------------------------------
+
+
+def stats_screen(census: Census, notice: str = "") -> Screen:
+    """Игра числами. Ни одного процента и ни одной полоски - только счёт."""
+    lines = [
+        notice or "Статистика игры.",
+        f"Персонажей: {census.characters}. Аккаунтов: {census.accounts}.",
+        f"Заходили за сутки: {census.fresh_day}. За неделю: {census.fresh_week}.",
+        f"Уровень: высший {census.top_level}, средний {census.average_level}.",
+        f"Золото: на руках {census.gold_on_hand}, в ячейках {census.gold_in_bank}.",
+        f"Подрядов закрыто всего: {census.quests_done}. Боёв в круге: {census.arena_fights}.",
+        f"Брошенных персонажей: {census.abandoned}. Заблокировали бота: {census.blocked}.",
+    ]
+    if census.leaders:
+        lines.append("Впереди всех:")
+        lines.extend(f"{name}, уровень {level}." for name, level in census.leaders)
+    return Screen(id=ScreenId.KEEPER_STATS, lines=tuple(lines))
+
+
+def service_screen(view: KeeperView, notice: str = "") -> Screen:
+    """Уборка. Каждая кнопка стирает, и каждая говорит, сколько стёрла."""
+    census = view.census or Census()
+    lines = (
+        notice or "Обслуживание. Всё, что здесь, убирает записи насовсем.",
+        f"Брошенных персонажей: {census.abandoned}. "
+        "Брошенный — первый уровень, ноль опыта, ни одного задания обучения, "
+        "и неделю никто не заходил.",
+        f"Заблокировали бота: {census.blocked}. "
+        "Узнать это можно только спросив Telegram, и спрашивается по сорок за нажатие.",
+        "Проверка идёт порциями: нажмите ещё раз, если осталось.",
+    )
+    return Screen(
+        id=ScreenId.KEEPER_SERVICE,
+        lines=lines,
+        rows=(
+            (labels.KEEPER_SWEEP_DRAFTS,),
+            (labels.KEEPER_CHECK_BLOCKED,),
+            (labels.KEEPER_DROP_BLOCKED,),
         ),
     )

@@ -20,20 +20,25 @@ import time
 from collections.abc import Sequence
 from dataclasses import replace
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.enums import ChatType
+from aiogram.exceptions import TelegramAPIError, TelegramForbiddenError
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
+from mmorpg.application.services import keeper_panel
+from mmorpg.application.services.content import ContentRegistry
 from mmorpg.application.services.keeper import sync_keeper
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.location import NodeKind, Presence
+from mmorpg.domain.entities.overlay import OverlayKind
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.ports.repositories import (
     CharacterRepository,
+    ContentOverlayRepository,
     InventoryRepository,
     LocationStateCache,
     UserRepository,
@@ -42,25 +47,37 @@ from mmorpg.domain.procgen.location import is_cleared
 from mmorpg.domain.procgen.seeds import rotation_index
 from mmorpg.domain.rules.economy import buy_price, roll_assortment
 from mmorpg.domain.rules.stats import primary_stats
+from mmorpg.presentation.telegram.flows import keeper as keeper_flow
 from mmorpg.presentation.telegram.flows.play import (
-    Clock,
-    Goods,
-    LocationSession,
-    PendingWrite,
-    PlayState,
     advance,
     begin,
     build_location,
     render,
 )
+from mmorpg.presentation.telegram.flows.state import (
+    TYPING_NAME,
+    Clock,
+    Goods,
+    LocationSession,
+    PendingWrite,
+    PlayState,
+)
 from mmorpg.presentation.telegram.handlers.combat import open_fight
 from mmorpg.presentation.telegram.handlers.creation import welcome_screen
 from mmorpg.presentation.telegram.messaging import send_screen
 from mmorpg.presentation.telegram.screens.base import ScreenId
+from mmorpg.presentation.telegram.screens.keeper import KeeperView
 from mmorpg.presentation.telegram.screens.shop import OwnedItem
 from mmorpg.presentation.telegram.states.screens import STATE_FOR_SCREEN, Play
 
 STATE_KEY = "play"
+
+# Сколько персонажей показывает список игроков. Больше не нужно: кого нет в
+# последних, ищут по имени.
+PLAYERS_SHOWN = 24
+
+DAY = 24 * 60 * 60
+WEEK = 7 * DAY
 
 # A location holds its map for a week of being ignored; after that it is re-rolled,
 # which is the same thing as nobody having been there. Presence is much shorter:
@@ -89,6 +106,8 @@ async def play(
     inventory: InventoryRepository,
     users: UserRepository,
     locations: LocationStateCache,
+    overlays: ContentOverlayRepository,
+    registry: ContentRegistry,
 ) -> None:
     if message.from_user is None or message.text is None:
         return
@@ -115,6 +134,7 @@ async def play(
     )
     goods = await _goods(content, character, flow, inventory, settings, clock.shop_rotation)
     company = await _company(flow, character, locations, now)
+    view = await _keeper_view(flow, character, message.text, characters, users, registry, now)
 
     updated = advance(
         content,
@@ -126,11 +146,25 @@ async def play(
         goods=goods,
         settings=accessibility,
         neighbours=company,
+        keeper=view,
     )
 
     character = await _apply(
         updated.pending, character, message.from_user.id, characters, inventory, users
     )
+    served = await _serve(
+        updated.pending,
+        characters=characters,
+        users=users,
+        overlays=overlays,
+        registry=registry,
+        bot=message.bot,
+        now=now,
+    )
+    if served:
+        updated = updated.with_notice(f"{updated.notice} {served}".strip())
+    # Правка могла только что изменить мир, а рисовать надо уже изменённый.
+    content = registry.current
     updated = await sync_location(content, updated, flow, character, locations, now, settings)
 
     if updated.fight:
@@ -150,6 +184,7 @@ async def play(
     # bag may have changed on the way, so what it shows is read again.
     shelf = await _goods(content, character, updated, inventory, settings, clock.shop_rotation)
     company = await _company(updated, character, locations, now)
+    shown = await _keeper_view(updated, character, "", characters, users, registry, now)
     await state.set_state(STATE_FOR_SCREEN[updated.screen])
     await state.update_data({STATE_KEY: updated.serialise()})
     await render_play(
@@ -162,6 +197,7 @@ async def play(
         goods=shelf,
         clock=clock,
         neighbours=company,
+        keeper=shown,
     )
 
 
@@ -176,6 +212,7 @@ async def render_play(
     goods: Goods | None = None,
     clock: Clock | None = None,
     neighbours: Sequence[Presence] = (),
+    keeper: KeeperView | None = None,
 ) -> None:
     """Draw one play screen. Used by this handler and by the fight handler."""
     shelf = goods if goods is not None else Goods(gold=character.gold)
@@ -189,6 +226,7 @@ async def render_play(
             goods=shelf,
             clock=clock,
             neighbours=neighbours,
+            keeper=keeper,
         ),
         emoji=emoji,
     )
@@ -245,6 +283,117 @@ async def _goods(
     charisma = primary_stats(content, character)[StatCode.CHA]
     prices = {item.id: buy_price(content, item, charisma=charisma) for item in stock}
     return Goods(gold=character.gold, owned=owned, stock=stock, prices=prices)
+
+
+async def _keeper_view(
+    flow: PlayState,
+    character: Character,
+    text: str | None,
+    characters: CharacterRepository,
+    users: UserRepository,
+    registry: ContentRegistry,
+    now: int,
+) -> KeeperView:
+    """Что панели показать. Для игрока это ноль запросов: ветка не выполняется.
+
+    Считает ровно то, что нужно открытому экрану: список игроков не читается на
+    статистике, а перепись не считается на карточке жителя.
+    """
+    if flow.screen not in keeper_flow.PANEL or not character.is_admin:
+        return KeeperView()
+
+    players: tuple[Character, ...] = ()
+    target: Character | None = None
+    census = None
+
+    if flow.screen is ScreenId.KEEPER_PLAYERS:
+        players = await characters.newest(limit=PLAYERS_SHOWN)
+        # Имя набирают сообщением, и ищет его тот, у кого есть хранилище: автомат
+        # получает уже найденного персонажа или пустоту.
+        if flow.keeper_typing == TYPING_NAME and text and not text.startswith("/"):
+            target = await characters.find_by_name(text)
+    elif flow.screen in {ScreenId.KEEPER_PLAYER, ScreenId.KEEPER_FIELD} and flow.keeper_target:
+        target = await characters.get(flow.keeper_target)
+    elif flow.screen in {ScreenId.KEEPER_STATS, ScreenId.KEEPER_SERVICE}:
+        counted = await characters.census(
+            day=now - DAY, week=now - WEEK, stale=now - keeper_panel.ABANDONED_AFTER_DAYS * DAY
+        )
+        # Заблокировавшие - счёт по аккаунтам, а не по персонажам, поэтому он
+        # приходит из другого хранилища и подставляется здесь.
+        census = replace(counted, blocked=await users.blocked_count())
+
+    return KeeperView(records=registry.records, players=players, target=target, census=census)
+
+
+async def _serve(
+    write: PendingWrite,
+    *,
+    characters: CharacterRepository,
+    users: UserRepository,
+    overlays: ContentOverlayRepository,
+    registry: ContentRegistry,
+    bot: Bot | None,
+    now: int,
+) -> str:
+    """Сделать то, о чём попросила панель, и сказать числом, что получилось."""
+    said: list[str] = []
+
+    if write.edit is not None:
+        why = await keeper_panel.save_edit(overlays, registry, write.edit)
+        if why:
+            said.append("Пока не в игре: " + " ".join(why))
+    if write.forget is not None:
+        kind, entity_id = write.forget
+        await keeper_panel.drop_edit(overlays, registry, OverlayKind(kind), entity_id)
+    if write.reload:
+        said.append(f"Правок перечитано: {await registry.reload(overlays)}.")
+    if write.other is not None:
+        await characters.save(write.other)
+    if write.remove_character:
+        await characters.delete(write.remove_character)
+    if write.service:
+        said.append(await _sweep(write.service, characters, users, bot, now))
+    return " ".join(said)
+
+
+async def _sweep(
+    service: str,
+    characters: CharacterRepository,
+    users: UserRepository,
+    bot: Bot | None,
+    now: int,
+) -> str:
+    """Одна уборка. Каждая отвечает числом, потому что каждая стирает."""
+    if service == keeper_flow.SWEEP_DRAFTS:
+        swept = await keeper_panel.sweep_drafts(characters, now=now)
+        return f"Убрано брошенных персонажей: {swept.removed}."
+    if service == keeper_flow.SWEEP_BLOCKED:
+        swept = await keeper_panel.drop_blocked(users)
+        return f"Убрано заблокировавших: {swept.removed}."
+
+    async def probe(telegram_id: int) -> bool:
+        return await _reachable(bot, telegram_id)
+
+    swept = await keeper_panel.sweep_blocked(users, probe, now=now)
+    return f"Проверено аккаунтов: {swept.checked}. Из них заблокировали бота: {swept.blocked}."
+
+
+async def _reachable(bot: Bot | None, telegram_id: int) -> bool:
+    """Читает ли этот человек бота.
+
+    Спрашивается самым дешёвым, что есть: «печатает» не оставляет сообщения в
+    переписке. Непонятная ошибка считается «читает»: сеть моргнула — не повод
+    стирать человека.
+    """
+    if bot is None:  # pragma: no cover - у сообщения всегда есть бот
+        return True
+    try:
+        await bot.send_chat_action(chat_id=telegram_id, action="typing")
+    except TelegramForbiddenError:
+        return False
+    except TelegramAPIError:
+        return True
+    return True
 
 
 async def _apply(

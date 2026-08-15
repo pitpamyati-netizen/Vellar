@@ -8,7 +8,8 @@ out of reach of a bad fight, and the descent is where the money comes from.
 from __future__ import annotations
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import City, GameContent
+from mmorpg.domain.entities.content import City, GameContent, Npc
+from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.economy import inn_price, mentor_price
 from mmorpg.domain.rules.quests import ready_to_hand_in
@@ -108,6 +109,52 @@ def bank_screen(content: GameContent, character: Character, city: City, notice: 
         tuple(withdraw_label(step) for step in DEPOSIT_STEPS),
     ]
     return Screen(id=ScreenId.BANK, lines=tuple(lines), rows=tuple(rows))
+
+
+def npc_label(npc: Npc) -> Label:
+    return label(npc.title)
+
+
+def npcs_screen(content: GameContent, city: City, notice: str = "") -> Screen:
+    """Кто стоит в этом городе.
+
+    Экран появляется только там, где кто-то живёт: кнопка «Жители», за которой
+    пусто, — это обещание, которого город не давал.
+    """
+    people = content.npcs_in(city.id)
+    lines = [notice or f"Жители города {city.name}.", f"Здесь стоят: {len(people)}."]
+    lines.extend(f"{npc.title}." for npc in people)
+    if not people:
+        lines.append("Сейчас никого. Загляните позже.")
+    return Screen(
+        id=ScreenId.NPCS,
+        lines=tuple(lines),
+        rows=tuple((npc_label(npc),) for npc in people),
+    )
+
+
+def npc_screen(content: GameContent, character: Character, npc: Npc, notice: str = "") -> Screen:
+    """Один человек: что говорит и что предлагает.
+
+    Подряды у него те же, что на доске, и берутся тем же разговором: житель — не
+    вторая доска, а лицо у той же работы (``Narrative.md``, раздел 4).
+    """
+    from mmorpg.presentation.telegram.screens.quests import quest_button
+
+    offered = tuple(
+        quest for quest in content.quests_of(npc.id) if quest_rules.is_open(quest, character)
+    )
+    lines = [notice or f"{npc.title}.", npc.text or "Молчит и смотрит мимо."]
+    if offered:
+        lines.append(f"Работа есть: {len(offered)}.")
+    else:
+        lines.append("Работы для вас у него сейчас нет.")
+    lines.extend(f"{quest.name}: плата {quest.reward_gold}." for quest in offered)
+    return Screen(
+        id=ScreenId.NPC,
+        lines=tuple(lines),
+        rows=tuple((quest_button(quest),) for quest in offered),
+    )
 
 
 def dungeon_screen(

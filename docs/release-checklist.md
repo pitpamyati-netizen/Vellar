@@ -43,6 +43,21 @@ uv run pytest tests/content
 - [ ] New modifier keys added to `traits.toml [meta].modifier_keys` first
 - [ ] World table still covers levels 1-300 with no gaps
 
+## 3a. The keeper panel
+
+Only when the panel or what it edits changed. The rules are in
+[keeper.md](keeper.md).
+
+- [ ] A new field on an editable entity is a row in `FIELDS`
+      (`domain/rules/overlay.py`), not a button in the screen - the card is drawn
+      from the description
+- [ ] A field whose value ends up on a button carries a `limit`, or a keeper can
+      type a paragraph into one
+- [ ] `overlay.apply` still leaves `content/` untouched: dropping every edit gives
+      back exactly the world the files describe
+- [ ] A half-written edit is stored, is *not* in the game, and the card says why
+- [ ] Anything the panel deletes for good is confirmed twice or reports its number
+
 ## 4. Determinism
 
 - [ ] `tests/domain/test_procgen.py` green - a change that makes generation

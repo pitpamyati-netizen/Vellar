@@ -99,6 +99,34 @@ KEEPER_LEVEL = label("Поднять уровень", "🔼")
 KEEPER_HEAL = label("Залечить раны", "🩹")
 KEEPER_POINTS = label("Выдать очки", "🎯")
 
+# The panel: four doors, and behind them everything the game is made of.
+KEEPER_WORLD = label("Мир и содержимое", "🧱")
+KEEPER_PLAYERS = label("Игроки", "👥")
+KEEPER_STATS = label("Статистика", "📈")
+KEEPER_SERVICE = label("Обслуживание", "🧹")
+
+# Editing one entity: add, change, take back.
+KEEPER_ADD = label("Добавить", "➕")
+KEEPER_REMOVE = label("Убрать из игры", "🚫")
+KEEPER_RETURN = label("Вернуть в игру", "↩️")
+KEEPER_FORGET = label("Снять правку", "🧽")
+KEEPER_CLEAR = label("Очистить поле", "␡")
+KEEPER_RELOAD = label("Перечитать правки", "🔄")
+
+# Players.
+KEEPER_FIND = label("Найти по имени", "🔤")
+KEEPER_MOVE = label("Перевести в город", "🧭")
+KEEPER_DELETE = label("Удалить персонажа", "🗑")
+
+# Maintenance.
+KEEPER_SWEEP_DRAFTS = label("Убрать брошенных", "🧺")
+KEEPER_CHECK_BLOCKED = label("Проверить, кто заблокировал", "📮")
+KEEPER_DROP_BLOCKED = label("Убрать заблокировавших", "🚮")
+
+# --- residents of a city (only where somebody actually lives) ---
+
+NPCS = label("Жители", "🧑")
+
 # --- crafts ---
 
 CRAFTS = label("Ремёсла", "🛠")
