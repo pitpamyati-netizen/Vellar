@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, GameContent, Npc
+from mmorpg.domain.rules import adventure
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.economy import inn_price, mentor_price
@@ -175,7 +176,11 @@ def dungeon_screen(
         f"Спуск рассчитан на уровень {level}. Ваш уровень: {character.level}.",
         "Три схватки подряд, без передышки. Здоровье не восстанавливается между ними.",
         f"Здоровье: {amount(health, stats.max_health)}.",
-        "Награда выдаётся внизу и целиком: уйти на середине — уйти ни с чем.",
+        "Третий внизу — сильный противник, и за ним дно: "
+        f"{adventure.descent_gold(level)} золота, опыт и находка сверх того, "
+        "что возьмёте в схватках.",
+        "Дно платит только тем, кто до него дошёл: уйти на середине — уйти со "
+        "взятым в схватках и без этого.",
     ]
     if depth:
         lines.insert(1, f"Пройдено схваток: {depth} из {total}.")

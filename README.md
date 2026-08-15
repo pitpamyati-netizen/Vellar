@@ -92,7 +92,7 @@ tests/
 | Main menu, world list, city hub, five locations, node-by-node movement | Cities 2-15 (they unlock by level; content is generated for all of them) |
 | Turn-based combat with the fixed 6+3+1 panel, one to three enemies | Skill loadout editing, PvP, guilds |
 | Inventory and city shop on the shared paginated list | |
-| Crafts: gathering once a watch, recipes, batch quality | Craft contracts, gathering tied to a biome |
+| Crafts: gathering by biome, recipes, batch quality, contracts for made goods | |
 | Accessibility settings: emoji, verbose descriptions, repeat | |
 
 ## Documentation

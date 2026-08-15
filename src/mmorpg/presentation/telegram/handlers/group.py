@@ -29,7 +29,7 @@ from aiogram.enums import ChatType
 from aiogram.types import Chat, Message
 
 from mmorpg.application.services.group_trade import GroupResult, GroupTrade
-from mmorpg.config import Settings
+from mmorpg.config import ANY_GROUP, Settings
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.ports.repositories import (
     CharacterRepository,
@@ -39,11 +39,18 @@ from mmorpg.domain.ports.repositories import (
 )
 from mmorpg.domain.rules.group_commands import UNADDRESSED, GroupIntent, parse_group_command
 from mmorpg.domain.rules.group_offers import Refusal
+from mmorpg.logging import get_logger
 from mmorpg.presentation.telegram.broadcast import chat_id_of
 from mmorpg.presentation.telegram.cleanup import Deleter, MessageReaper
 from mmorpg.presentation.telegram.messaging import send_group_reply
 from mmorpg.presentation.telegram.screens.group import REFUSALS, GroupReply, render
 from mmorpg.presentation.telegram.throttle import RateLimiter
+
+logger = get_logger(__name__)
+
+# Groups already written down by ``announce_chat_id``. Per process, and only ever
+# chat ids - it is a note to whoever is reading the log, not state the game uses.
+_SEEN_CHATS: set[int] = set()
 
 # Answers that close an offer, and so take the two buttons back.
 ANSWERS = (GroupIntent.ACCEPT, GroupIntent.DECLINE)
@@ -90,11 +97,37 @@ def build_router(reaper: MessageReaper, limiter: RateLimiter | None = None) -> R
 
 
 def is_game_group(chat: Chat, configured: str) -> bool:
-    """Whether this chat is *the* group. Accepts a numeric id or an @username."""
+    """Whether this chat is *the* group. Accepts a numeric id or an @username.
+
+    ``*`` accepts any group. Somebody has to be able to try the group half of the
+    game before they know the id of the group they are standing in.
+    """
+    if configured.strip() == ANY_GROUP:
+        return True
     wanted = chat_id_of(configured)
     if isinstance(wanted, int):
         return chat.id == wanted
     return bool(chat.username) and chat.username == wanted.lstrip("@")
+
+
+def announce_chat_id(chat: Chat, configured: str) -> None:
+    """Write down the id of a group the bot is in but does not answer in.
+
+    The one thing missing to test the group commands used to be a number nobody
+    could see: the id is not in the client's interface, and the bot knew it and
+    said nothing (Roadmap, "Риски"). Once per chat per run, so a busy group does
+    not fill the log with the same line.
+    """
+    if chat.id in _SEEN_CHATS:
+        return
+    _SEEN_CHATS.add(chat.id)
+    logger.info(
+        "group_not_configured",
+        chat_id=chat.id,
+        title=chat.title or "",
+        configured=configured or "(пусто)",
+        hint="поставьте это значение в GROUP_ID, или GROUP_ID=* для любой группы",
+    )
 
 
 async def handle_group_message(
@@ -116,6 +149,7 @@ async def handle_group_message(
     if message.text is None or author is None or author.is_bot:
         return None
     if not settings.group_chat_enabled or not is_game_group(message.chat, settings.group_id):
+        announce_chat_id(message.chat, settings.group_id)
         return None
 
     command = parse_group_command(message.text)

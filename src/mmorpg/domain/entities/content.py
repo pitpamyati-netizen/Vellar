@@ -254,6 +254,15 @@ class City:
     def has_location(self, slot: int) -> bool:
         return any(location.slot == slot for location in self.locations)
 
+    @property
+    def biomes(self) -> frozenset[str]:
+        """What kind of ground lies around this city.
+
+        The city itself has no biome - what it has is five locations, and their
+        biomes are what a gathering craft can work here (``domain/rules/crafts``).
+        """
+        return frozenset(location.biome for location in self.locations)
+
 
 @dataclass(frozen=True, slots=True)
 class ProgressionRules:

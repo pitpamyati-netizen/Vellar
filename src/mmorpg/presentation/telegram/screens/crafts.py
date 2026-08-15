@@ -65,9 +65,16 @@ def craft_screen(
     *,
     now: int,
     cooldown: int,
+    biomes: frozenset[str] = frozenset(),
+    place: str = "",
     notice: str = "",
 ) -> Screen:
-    """One craft: the gathering button, or the recipes it knows."""
+    """One craft: the gathering button, or the recipes it knows.
+
+    ``biomes`` and ``place`` are the ground around the city the player is
+    standing in and its name: what a gathering craft finds depends on where it
+    is worked (``domain/rules/crafts``).
+    """
     rank = craft_rules.character_rank(content, character, craft.id)
     lines = [
         notice or f"{craft.name}: {rank_line(content, character, craft)}.",
@@ -76,13 +83,23 @@ def craft_screen(
     rows: list[tuple[Label, ...]] = []
 
     if craft.gathers:
-        refused = craft_rules.can_gather(content, character, craft, now=now, cooldown=cooldown)
+        refused = craft_rules.can_gather(
+            content, character, craft, now=now, cooldown=cooldown, biomes=biomes
+        )
         brought = ", ".join(
             content.item(entry.item_id).name
             for entry in craft.yields
-            if entry.level <= character.level
+            if entry.level <= character.level and (not biomes or entry.found_in(biomes))
         )
-        lines.append(f"Берут отсюда: {brought}." if brought else "Для вашего уровня тут пусто.")
+        where = f" вокруг города {place}" if place else ""
+        lines.append(f"Берут{where}: {brought}." if brought else f"Для вашего уровня{where} пусто.")
+        elsewhere = ", ".join(
+            content.item(entry.item_id).name
+            for entry in craft.yields
+            if entry.level <= character.level and biomes and not entry.found_in(biomes)
+        )
+        if elsewhere:
+            lines.append(f"В других краях этим ремеслом берут и другое: {elsewhere}.")
         lines.append(refused or "Можно собирать: нажмите «Собрать сырьё».")
         rows.append((labels.GATHER,))
         return Screen(id=ScreenId.CRAFT, lines=tuple(lines), rows=tuple(rows))

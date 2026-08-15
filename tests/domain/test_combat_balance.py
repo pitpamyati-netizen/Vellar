@@ -15,6 +15,7 @@ is wrong.
 from __future__ import annotations
 
 import statistics
+from typing import NamedTuple
 
 import pytest
 
@@ -33,7 +34,7 @@ from mmorpg.domain.procgen.enemies import generate_group
 from mmorpg.domain.procgen.seeds import derive
 from mmorpg.domain.rules.combat import blow_of, enemy_intent, resolve_turn, start_combat
 from mmorpg.domain.rules.skill_effects import EffectCategory, spec_for, tag_of_skill
-from mmorpg.domain.rules.stats import stat_allowance
+from mmorpg.domain.rules.stats import derived_stats, stat_allowance
 
 #: A fight sampled across the whole level band, not just at the levels a
 #: developer happens to play.
@@ -49,6 +50,22 @@ ORDINARY_FLOOR = 2
 ORDINARY_CEILING = 8
 ELITE_FLOOR = 1.5
 BOSS_FLOOR = 2.5
+
+#: An ordinary fight is won, but it is not free: this share of the health pool is
+#: what makes a run through a location a series of decisions instead of a
+#: formality. Pooled across classes - a warrior in plate spends less than a mage,
+#: and that is the point of wearing plate.
+ORDINARY_HEALTH_COST = 0.07
+#: How many ordinary fights in a row a run through a location is worth measuring
+#: over: about what stands between the entrance and the exit of one.
+RUN_LENGTH_FLOOR = 4
+#: How much faster reading the announced intent may make a fight. It has to pay
+#: (``test_reading_the_intent_shortens_the_fight``), and it has to stay a way of
+#: fighting well rather than the only fight that exists.
+TEMPO_CEILING = 2.0
+#: How far apart the fastest and the slowest class may be on a boss. A class is
+#: allowed a character; it is not allowed to make the same boss a different game.
+CLASS_SPREAD = 1.75
 
 
 def build(content: GameContent, class_id: str, level: int) -> Character:
@@ -129,6 +146,20 @@ def _value(
     return worth
 
 
+class FightResult(NamedTuple):
+    """One simulated fight, in the three numbers the promises are about."""
+
+    turns: int
+    outcome: CombatOutcome
+    health_left: int
+    health_start: int
+
+    @property
+    def health_spent(self) -> float:
+        """The share of the pool this fight cost, between 0 and 1."""
+        return (self.health_start - max(0, self.health_left)) / self.health_start
+
+
 def fight(
     content: GameContent,
     character: Character,
@@ -136,8 +167,8 @@ def fight(
     rank: EnemyRank,
     trial: int,
     clever: bool = True,
-) -> tuple[int, CombatOutcome]:
-    """Run one whole fight and report how many turns it took."""
+) -> FightResult:
+    """Run one whole fight and report what it took out of the character."""
     seed = derive(b"balance", character.class_id, character.level, trial, rank.value)
     enemies = generate_group(
         seed,
@@ -148,6 +179,7 @@ def fight(
         elite_titles=content.elite_titles,
     )
     state = start_combat(content, character, enemies)
+    started_with = state.player.health
     turn = 0
     while not state.is_over and turn < 60:
         turn += 1
@@ -160,17 +192,22 @@ def fight(
             else CombatAction(kind=ActionKind.ATTACK)
         )
         state = resolve_turn(content, character, state, action, derive(seed, "turn", turn))
-    return turn, state.outcome
+    return FightResult(turn, state.outcome, state.player.health, started_with)
+
+
+def trials(
+    content: GameContent, class_id: str, level: int, *, rank: EnemyRank, clever: bool = True
+) -> list[FightResult]:
+    character = build(content, class_id, level)
+    return [
+        fight(content, character, rank=rank, trial=trial, clever=clever) for trial in range(TRIALS)
+    ]
 
 
 def sample(
     content: GameContent, class_id: str, level: int, *, rank: EnemyRank, clever: bool = True
 ) -> list[int]:
-    character = build(content, class_id, level)
-    return [
-        fight(content, character, rank=rank, trial=trial, clever=clever)[0]
-        for trial in range(TRIALS)
-    ]
+    return [result.turns for result in trials(content, class_id, level, rank=rank, clever=clever)]
 
 
 # --- the promise ------------------------------------------------------
@@ -194,11 +231,8 @@ def test_an_ordinary_fight_at_your_own_level_is_won(
 ) -> None:
     """A fight the world hands you is not a coin flip. Losing is for the tiers
     that announce themselves as long."""
-    character = build(content, class_id, level)
-    outcomes = [
-        fight(content, character, rank=EnemyRank.NORMAL, trial=trial)[1] for trial in range(TRIALS)
-    ]
-    assert all(outcome is CombatOutcome.VICTORY for outcome in outcomes)
+    results = trials(content, class_id, level, rank=EnemyRank.NORMAL)
+    assert all(result.outcome is CombatOutcome.VICTORY for result in results)
 
 
 def test_the_long_tiers_are_the_only_long_fights(content: GameContent) -> None:
@@ -217,16 +251,84 @@ def test_the_long_tiers_are_the_only_long_fights(content: GameContent) -> None:
     assert boss >= ordinary * BOSS_FLOOR, f"boss {boss} against ordinary {ordinary}"
 
 
+@pytest.mark.parametrize("level", LEVELS)
+def test_an_ordinary_fight_is_won_but_not_for_free(content: GameContent, level: int) -> None:
+    """A fight that costs nothing is not a fight, it is a button.
+
+    Ordinary opponents used to take about a twentieth of the health pool, so a
+    location could be walked end to end without a thought: the wounds that
+    outlive a fight, the potions and the beds were all decoration (Roadmap,
+    "Риски"). Pooled across classes, because plate is *supposed* to spend less
+    than a robe.
+    """
+    spent = [
+        result.health_spent
+        for class_id in CLASSES
+        for result in trials(content, class_id, level, rank=EnemyRank.NORMAL)
+    ]
+    median = statistics.median(spent)
+    assert median >= ORDINARY_HEALTH_COST, f"at {level}: an ordinary fight costs {median:.0%}"
+
+
+@pytest.mark.parametrize("class_id", CLASSES)
+def test_wounds_add_up_over_a_run(content: GameContent, class_id: str) -> None:
+    """Wounds carry, so a location is walked with an eye on the health line.
+
+    Fight after fight with nothing drunk and no bed paid for. How far a character
+    gets is theirs - a paladin patches themselves up mid-fight and a mage does
+    not - but by the end of a run of ordinary fights, everybody is short of
+    something: health, or the resource they spent instead of hitting.
+    """
+    character = build(content, class_id, 40)
+    stats = derived_stats(content, character)
+    for trial in range(RUN_LENGTH_FLOOR):
+        result = fight(content, character, rank=EnemyRank.NORMAL, trial=trial)
+        assert result.outcome is CombatOutcome.VICTORY, (
+            f"{class_id}: lost fight {trial + 1} of a run of {RUN_LENGTH_FLOOR}"
+        )
+        character = character.with_health(result.health_left, stats.max_health)
+
+    assert character.health < stats.max_health, (
+        f"{class_id}: {RUN_LENGTH_FLOOR} fights in a row and not a scratch"
+    )
+
+
+def test_no_class_makes_a_boss_a_different_game(content: GameContent) -> None:
+    """The classes are allowed to feel different, not to be a different length.
+
+    A rogue used to finish a boss in half the turns a cleric needed, which made
+    the same content a ten-turn fight for one player and a five-turn one for
+    another (Roadmap, "Риски"). Sampled at both ends of the band: the gap used to
+    be widest at the top, where crit caps out.
+    """
+    for level in (10, 40, 150, 300):
+        medians = {
+            class_id: statistics.median(sample(content, class_id, level, rank=EnemyRank.BOSS))
+            for class_id in (klass.id for klass in content.classes)
+        }
+        fastest = min(medians.values())
+        slowest = max(medians.values())
+        assert slowest <= fastest * CLASS_SPREAD, f"at {level}: {medians}"
+
+
 @pytest.mark.parametrize("class_id", CLASSES)
 def test_reading_the_intent_shortens_the_fight(content: GameContent, class_id: str) -> None:
     """The whole point of intent, trace and breach: choosing well has to pay.
 
     Ordinary fights, where both players win, so the comparison is turns and not
     survival - a player who dies on turn four also "finished" in four turns.
+
+    The ceiling is the other half of the promise: tempo is how a fight is fought
+    well, not the only fight there is. If a breach ever becomes worth more than
+    everything else put together, the thresholds in ``domain/rules/combat.py``
+    are what moves - not the mechanic (Roadmap, "Риски").
     """
     clever = sum(sample(content, class_id, 40, rank=EnemyRank.NORMAL))
     plain = sum(sample(content, class_id, 40, rank=EnemyRank.NORMAL, clever=False))
     assert clever < plain, f"{class_id}: {clever} turns played well vs {plain} turns of attacking"
+    assert clever * TEMPO_CEILING >= plain, (
+        f"{class_id}: tempo alone is worth {plain / clever:.1f} fights"
+    )
 
 
 @pytest.mark.parametrize("level", (1, 40, 300))

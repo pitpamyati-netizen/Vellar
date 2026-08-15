@@ -719,9 +719,30 @@ def test_a_group_reply_carries_no_service_row(content: GameContent) -> None:
         ("vellar_chat", Chat(id=1, type="supergroup", username="vellar_chat"), True),
         ("@vellar_chat", Chat(id=1, type="supergroup", username="other"), False),
         ("@vellar_chat", Chat(id=1, type="supergroup"), False),
+        # A wildcard is how the group half of the game is tried before anybody
+        # has looked up a numeric id (Roadmap, "Риски").
+        ("*", Chat(id=OTHER_CHAT, type="supergroup"), True),
+        ("*", Chat(id=GROUP_ID, type="group"), True),
     ],
 )
 def test_the_group_is_recognised_by_id_or_by_username(
     configured: str, chat: Chat, expected: bool
 ) -> None:
     assert is_game_group(chat, configured) is expected
+
+
+def test_a_group_the_bot_does_not_answer_in_is_written_down(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The one thing missing to test the group commands was a number nobody could
+    see. The bot knows it, so the bot says it - once per chat, into the log."""
+    from mmorpg.presentation.telegram.handlers import group as group_handlers
+
+    group_handlers._SEEN_CHATS.clear()
+    chat = Chat(id=OTHER_CHAT, type="supergroup", title="Проба")
+    group_handlers.announce_chat_id(chat, "")
+    group_handlers.announce_chat_id(chat, "")
+
+    written = capsys.readouterr().out
+    assert written.count("group_not_configured") == 1, "written down once, not every message"
+    assert str(OTHER_CHAT) in written

@@ -9,8 +9,16 @@
 # `max_rank`. A rank never gates a screen, only recipes - the panel and the
 # buttons stay the same shape at rank one and at rank five.
 #
-# Gathering is allowed once per watch per craft (six hours, docs/procgen.md):
-# the road refills between watches whether or not anybody is playing.
+# Gathering is allowed once per watch per craft (docs/procgen.md, GATHER_COOLDOWN_
+# SECONDS): the road refills whether or not anybody is playing.
+#
+# Where a material lies is `biomes` - the biomes of the locations around a city
+# (content/world.toml). One button used to bring back the same two things in all
+# fifteen cities, which made the whole mainland one place; now Дубно gives grass
+# and road iron, Мезень gives lichen off the rock, and Мглин gives what is under
+# the crypts. A yield without `biomes` is found everywhere, and every city has at
+# least one - tests/content/test_crafts_content.py refuses a map where somebody
+# is standing where no craft can work at all.
 
 [meta]
 max_rank = 5
@@ -45,8 +53,21 @@ kind = "gathering"
 stat = "END"
 description = "Бьёте породу в осыпях и старых выработках у дороги."
 yields = [
-    { item = "iron_scrap", level = 1 },
-    { item = "mountain_ore", level = 8 },
+    { item = "iron_scrap", level = 1, biomes = [
+        "дорога", "руины", "шахта", "карьер", "крепость", "кузни", "тоннели",
+        "склепы", "город мёртвых", "порт", "корабли", "башня", "чертоги",
+        "тронный зал", "подземелье",
+    ] },
+    { item = "bog_iron", level = 5, biomes = [
+        "болото", "река", "берег", "море", "разлом", "кратер",
+    ] },
+    { item = "mountain_ore", level = 8, biomes = [
+        "горы", "скалы", "холмы", "ущелье", "карьер", "шахта", "плато",
+        "вершина", "вулкан", "пепел", "утёсы", "край",
+    ] },
+    { item = "cave_crystal", level = 12, biomes = [
+        "пещеры", "подземелье", "тоннели", "склепы", "разлом", "курганы",
+    ] },
 ]
 
 [[craft]]
@@ -56,8 +77,16 @@ kind = "gathering"
 stat = "WIS"
 description = "Берёте траву и смолу там, где другие проходят мимо."
 yields = [
-    { item = "meadow_herbs", level = 1 },
-    { item = "grove_resin", level = 6 },
+    { item = "meadow_herbs", level = 1, biomes = [
+        "луга", "лес", "сады", "река", "холмы", "дорога", "берег", "плато",
+        "овраги", "тундра", "небо",
+    ] },
+    { item = "grove_resin", level = 6, biomes = [
+        "лес", "сады", "болото", "курганы", "роща", "чертоги",
+    ] },
+    { item = "frost_lichen", level = 14, biomes = [
+        "снега", "тундра", "горы", "скалы", "вершина", "утёсы", "ущелье",
+    ] },
 ]
 
 # --- Making ---
@@ -163,3 +192,31 @@ inputs = [
 ]
 output = { item = "bracers_of_grip", count = 1 }
 experience = 42
+
+# Рецепты четвёртого ранга: работа для тех, кто дошёл до дальних краёв. Сырьё для
+# них лежит не у заставы — болотная руда, пещерный кристалл и мёрзлый лишайник
+# берутся там, где для этого есть земля.
+
+[[recipe]]
+id = "smith_stone_maul"
+craft = "smithing"
+rank = 4
+inputs = [{ item = "mountain_ore", count = 6 }, { item = "bog_iron", count = 3 }]
+output = { item = "dwarven_maul", count = 1 }
+experience = 60
+
+[[recipe]]
+id = "alchemy_healing"
+craft = "alchemy"
+rank = 4
+inputs = [{ item = "meadow_herbs", count = 3 }, { item = "frost_lichen", count = 1 }]
+output = { item = "healing_potion", count = 1 }
+experience = 55
+
+[[recipe]]
+id = "leather_silent_steps"
+craft = "leatherwork"
+rank = 4
+inputs = [{ item = "wolf_pelt", count = 6 }, { item = "cave_crystal", count = 2 }]
+output = { item = "silent_steps", count = 1 }
+experience = 64

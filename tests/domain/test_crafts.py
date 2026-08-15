@@ -205,3 +205,63 @@ def test_crafts_split_into_gathering_and_making(content: GameContent) -> None:
     making = content.crafts_of_kind(CraftKind.MAKING)
     assert gathering and making
     assert len(gathering) + len(making) == len(content.crafts)
+
+
+# --- where the work is done -------------------------------------------
+
+
+def test_what_a_craft_brings_back_depends_on_where_it_is_worked(
+    content: GameContent, miner: Character
+) -> None:
+    """One button used to give the same thing in every city (Roadmap, "Риски")."""
+    mining = content.craft("mining")
+    stony = frozenset({"горы"})
+    roadside = frozenset({"дорога"})
+
+    _, in_the_hills = craft_rules.gather(
+        content, miner, mining, now=NOW, cooldown=COOLDOWN, seed=seed("g", 1), biomes=stony
+    )
+    _, on_the_road = craft_rules.gather(
+        content, miner, mining, now=NOW, cooldown=COOLDOWN, seed=seed("g", 1), biomes=roadside
+    )
+
+    assert in_the_hills.ok and on_the_road.ok
+    assert in_the_hills.item_id != on_the_road.item_id, "the same seed, two different places"
+    assert content.item(in_the_hills.item_id).id in {
+        entry.item_id for entry in mining.yields if entry.found_in(stony)
+    }
+
+
+def test_ground_that_holds_nothing_for_this_craft_says_so(
+    content: GameContent, miner: Character
+) -> None:
+    nowhere = frozenset({"небо"})
+    refused = craft_rules.can_gather(
+        content, miner, content.craft("mining"), now=NOW, cooldown=COOLDOWN, biomes=nowhere
+    )
+    assert "В этих краях" in refused
+
+    _, result = craft_rules.gather(
+        content,
+        miner,
+        content.craft("mining"),
+        now=NOW,
+        cooldown=COOLDOWN,
+        seed=seed("g", 2),
+        biomes=nowhere,
+    )
+    assert not result.ok
+    # A refused gathering costs nothing: the cooldown has not started either.
+    assert miner.crafts.progress("mining").gathered_at == 0
+
+
+def test_a_place_that_only_holds_deeper_materials_talks_about_the_level(
+    content: GameContent, miner: Character
+) -> None:
+    """Two different silences: "not for you yet" and "not here at all"."""
+    junior = replace(miner, level=1)
+    deep = frozenset({"пещеры"})
+    refused = craft_rules.can_gather(
+        content, junior, content.craft("mining"), now=NOW, cooldown=COOLDOWN, biomes=deep
+    )
+    assert "Для вашего уровня" in refused

@@ -28,7 +28,8 @@ CHARACTER_COLUMNS = """
     id, user_id, name, race_id, class_id, level, experience, gold,
     stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
     trait_ids, loadout, equipment, city_id, unspent_stat_points, unspent_skill_points,
-    health, bank_gold, quests, crafts, tutorial, arena_wins, arena_losses, is_admin
+    health, bank_gold, quests, crafts, tutorial, arena_wins, arena_losses,
+    arena_credit, is_admin
 """
 
 TRADE_COLUMNS = """
@@ -79,6 +80,7 @@ def _character_from_row(row: Any) -> Character:
         tutorial=row["tutorial"],
         arena_wins=row["arena_wins"],
         arena_losses=row["arena_losses"],
+        arena_credit=row["arena_credit"],
         is_admin=bool(row["is_admin"]),
     )
 
@@ -309,11 +311,12 @@ class PostgresCharacterRepository:
                 stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
                 trait_ids, loadout, equipment, city_id,
                 unspent_stat_points, unspent_skill_points,
-                health, bank_gold, quests, crafts, tutorial, arena_wins, arena_losses, is_admin
+                health, bank_gold, quests, crafts, tutorial, arena_wins, arena_losses,
+                arena_credit, is_admin
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                     $15, $16::jsonb, $17::jsonb, $18, $19, $20, $21, $22, $23::jsonb,
-                    $24::jsonb, $25, $26, $27, $28)
+                    $24::jsonb, $25, $26, $27, $28, $29)
             RETURNING id
             """,
             character.user_id,
@@ -343,6 +346,7 @@ class PostgresCharacterRepository:
             character.tutorial,
             character.arena_wins,
             character.arena_losses,
+            character.arena_credit,
             character.is_admin,
         )
         return replace(character, id=row["id"])
@@ -358,7 +362,8 @@ class PostgresCharacterRepository:
                 city_id = $15, unspent_stat_points = $16, unspent_skill_points = $17,
                 health = $18, bank_gold = $19, quests = $20::jsonb,
                 crafts = $21::jsonb, tutorial = $22, arena_wins = $23,
-                arena_losses = $24, is_admin = $25, updated_at = now()
+                arena_losses = $24, arena_credit = $25, is_admin = $26,
+                updated_at = now()
             WHERE id = $1
             """,
             character.id,
@@ -385,7 +390,33 @@ class PostgresCharacterRepository:
             character.tutorial,
             character.arena_wins,
             character.arena_losses,
+            character.arena_credit,
             character.is_admin,
+        )
+
+    async def spend_gold(self, character_id: int, amount: int) -> bool:
+        """One UPDATE decides both whether the gold is there and that it is gone.
+
+        ``save`` writes a purse read some steps ago; this writes the difference,
+        so two settlements racing over the same purse cannot both succeed.
+        """
+        if amount < 0:
+            return False
+        row = await self._pool.fetchval(
+            "UPDATE characters SET gold = gold - $2, updated_at = now()"
+            " WHERE id = $1 AND gold >= $2 RETURNING id",
+            character_id,
+            amount,
+        )
+        return row is not None
+
+    async def grant_gold(self, character_id: int, amount: int) -> None:
+        if amount <= 0:
+            return
+        await self._pool.execute(
+            "UPDATE characters SET gold = gold + $2, updated_at = now() WHERE id = $1",
+            character_id,
+            amount,
         )
 
     async def name_taken(self, name: str) -> bool:

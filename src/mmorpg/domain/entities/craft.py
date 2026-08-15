@@ -28,10 +28,22 @@ class CraftKind(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class CraftYield:
-    """One material a gathering craft can bring back, from ``level`` up."""
+    """One material a gathering craft can bring back, from ``level`` up.
+
+    ``biomes`` is where it is found - the biomes of the locations around a city
+    (``content/world.toml``). Gathering used to ignore the map entirely: one
+    button gave the same thing in every city on the road, so fifteen cities held
+    the same two materials (Roadmap, "Риски"). An empty tuple still means
+    "anywhere", because a craft has to have something a player can always work.
+    """
 
     item_id: str
     level: int
+    biomes: tuple[str, ...] = ()
+
+    def found_in(self, biomes: frozenset[str]) -> bool:
+        """Whether this material is in the ground around these places."""
+        return not self.biomes or bool(biomes.intersection(self.biomes))
 
 
 @dataclass(frozen=True, slots=True)

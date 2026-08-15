@@ -443,3 +443,39 @@ level = 6
 price = 30
 stack = 99
 text = "Тягучая смола, пахнет хвоей."
+
+# Сырьё, которое лежит не везде: у каждого материала в crafts.toml есть биомы, и
+# города берут из своей земли, а не из общего списка.
+
+[[item]]
+id = "bog_iron"
+name = "Болотная руда"
+kind = "material"
+slot = "none"
+rarity = "common"
+level = 5
+price = 18
+stack = 99
+text = "Бурые комья со дна, тяжелее, чем кажутся."
+
+[[item]]
+id = "cave_crystal"
+name = "Пещерный кристалл"
+kind = "material"
+slot = "none"
+rarity = "uncommon"
+level = 12
+price = 44
+stack = 99
+text = "Скол с натёка, холодный и мутный внутри."
+
+[[item]]
+id = "frost_lichen"
+name = "Мёрзлый лишайник"
+kind = "material"
+slot = "none"
+rarity = "uncommon"
+level = 14
+price = 36
+stack = 99
+text = "Серые пластины с камня, ломаются в пальцах."

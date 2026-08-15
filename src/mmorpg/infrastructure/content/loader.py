@@ -650,7 +650,16 @@ def _parse_quests(
         objective = ObjectiveKind(objective_raw)
         target_kind = str(entry.get("target_kind", ""))
         if target_kind:
-            allowed = SEARCHABLE_NODES if objective is ObjectiveKind.SEARCH else enemy_kinds
+            allowed: frozenset[str]
+            match objective:
+                case ObjectiveKind.SEARCH:
+                    allowed = SEARCHABLE_NODES
+                case ObjectiveKind.CRAFT:
+                    # A contract for made goods names the thing itself, because
+                    # that is what the person asking for it would name.
+                    allowed = frozenset(item_ids)
+                case _:
+                    allowed = frozenset(enemy_kinds)
             if target_kind not in allowed:
                 problems.append(
                     f"quests.toml: {quest_id} narrows to unknown target {target_kind!r}"
@@ -871,7 +880,15 @@ def _parse_crafts(
             if item_id not in item_ids:
                 problems.append(f"crafts.toml: {craft_id} gathers unknown item {item_id!r}")
                 continue
-            yields.append(CraftYield(item_id=item_id, level=int(produced.get("level", 1))))
+            yields.append(
+                CraftYield(
+                    item_id=item_id,
+                    level=int(produced.get("level", 1)),
+                    # Where it is in the ground. No biomes means everywhere, which
+                    # is what keeps a craft workable in a city of gardens and sky.
+                    biomes=tuple(str(biome) for biome in produced.get("biomes", ())),
+                )
+            )
 
         kind = CraftKind(kind_raw)
         if kind is CraftKind.GATHERING and not yields:

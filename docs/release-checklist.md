@@ -78,6 +78,20 @@ uv run pytest -m integration
 - [ ] Every new query is covered there, or it ships unverified
 - [ ] Nothing derived was added to a table: totals are recomputed, not stored
 - [ ] Redis keys carry a TTL
+- [ ] A purse two players can reach at once moves by `spend_gold`/`grant_gold`,
+      never by writing back a character read earlier in the step
+
+## 5a. The economy
+
+Only when something that pays or charges changed.
+
+- [ ] Every new movement of gold writes a `gold_flow` line
+      (`mmorpg.economy_log`), or the next tuning pass is a guess again
+- [ ] Nothing new hands out gold that does not come from somewhere: the Circle
+      pays out of what it holds, the duty removes, fights and contracts create
+- [ ] Combat numbers still meet their promises -
+      `tests/domain/test_combat_balance.py` covers length, the cost of an
+      ordinary fight, and the spread between classes
 
 ## 6. Runtime
 
@@ -102,6 +116,8 @@ uv run pytest -m integration
 - [ ] The update is posted **after** the code is live - a changelog announcing
       something nobody can do yet is a bug report from every player at once
 - [ ] Group commands answer in one message and stay silent for other bots' traffic
+- [ ] `GROUP_ID` names the real group. `*` is for trying the commands out; left in
+      production it answers in every group anybody adds the bot to
 
 ## 8. Release
 

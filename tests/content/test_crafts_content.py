@@ -22,6 +22,40 @@ def test_every_gathering_craft_pays_from_the_first_level(content: GameContent) -
         assert min(produced.level for produced in craft.yields) == 1, craft.id
 
 
+def test_gathering_is_tied_to_the_ground_it_is_done_on(content: GameContent) -> None:
+    """One button used to give the same thing in all fifteen cities.
+
+    Now a material names the biomes it lies in, so what Дубно gives and what
+    Мезень gives are two different lists (Roadmap, "Риски"). At least one
+    material has to be picky, or the map is decoration again.
+    """
+    picky = [
+        produced
+        for craft in content.crafts_of_kind(CraftKind.GATHERING)
+        for produced in craft.yields
+        if produced.biomes
+    ]
+    assert picky, "no gathered material cares where it is gathered"
+
+    ground = {biome for city in content.cities for biome in city.biomes}
+    for produced in picky:
+        assert ground.intersection(produced.biomes), (
+            f"{produced.item_id} is gathered in biomes no location on the road has"
+        )
+
+
+def test_every_city_has_something_to_work(content: GameContent) -> None:
+    """Standing somewhere no craft can work at all is a dead end, not a choice."""
+    for city in content.cities:
+        reachable = [
+            produced
+            for craft in content.crafts_of_kind(CraftKind.GATHERING)
+            for produced in craft.yields
+            if produced.found_in(city.biomes)
+        ]
+        assert reachable, f"nothing can be gathered around {city.name}"
+
+
 def test_recipes_open_from_rank_one_upwards(content: GameContent) -> None:
     for craft in content.crafts_of_kind(CraftKind.MAKING):
         ranks = [recipe.rank for recipe in content.recipes_of(craft.id)]

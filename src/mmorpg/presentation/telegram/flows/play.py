@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import replace
 
+from mmorpg import economy_log
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, GameContent, Item, SkillKind
 from mmorpg.domain.entities.location import GeneratedLocation, NodeKind, Presence
@@ -261,6 +262,7 @@ def render(
         case ScreenId.SKILL_EDGE:
             return skill_screens.skills_screen(content, character, state.skill_page, state.notice)
         case ScreenId.CRAFT if content.has_craft(state.craft_id):
+            here = known_city(content, state.city_id, character.city_id)
             return craft_screens.craft_screen(
                 content,
                 character,
@@ -268,6 +270,8 @@ def render(
                 _bag(shelf),
                 now=state.craft_moment,
                 cooldown=clock.gather_cooldown,
+                biomes=here.biomes,
+                place=here.name,
                 notice=state.notice,
             )
         # A craft that content no longer has is not an error: the player is put
@@ -616,9 +620,18 @@ def _handle_craft(
     craft = content.craft(state.craft_id)
 
     if labels.GATHER.matches(command.argument):
-        seed = derive(world_seed, "gather", character.id, craft.id, clock.now)
+        # The place is part of the seed as well as of the rules: the same watch of
+        # work in two cities is two different pieces of work.
+        here = known_city(content, state.city_id, character.city_id)
+        seed = derive(world_seed, "gather", character.id, craft.id, here.id, clock.now)
         worked, gathered = craft_rules.gather(
-            content, character, craft, now=clock.now, cooldown=clock.gather_cooldown, seed=seed
+            content,
+            character,
+            craft,
+            now=clock.now,
+            cooldown=clock.gather_cooldown,
+            seed=seed,
+            biomes=here.biomes,
         )
         line = craft_screens.gathered_line(content, gathered)
         if not gathered.ok:
@@ -638,6 +651,12 @@ def _handle_craft(
         line = craft_screens.made_line(content, made)
         if not made.ok:
             return state.with_notice(line)
+        # Somebody in a city may be waiting for exactly this thing: a contract for
+        # made goods counts here, where the work happens.
+        log, steps = quest_rules.record_craft(content, worked, made.item_id, made.count)
+        worked = replace(worked, quests=log)
+        for step in steps:
+            line += f" Подряд «{step.quest.name}»: {step.progress} из {step.quest.target_count}."
         write = PendingWrite(character=worked).with_items(*made.spent, (made.item_id, made.count))
         return state.storing(write).with_notice(line)
 
@@ -768,7 +787,9 @@ def _handle_shop(
         return state.with_notice(
             f"{item.name} стоит {price} золота, у вас {goods.gold}. Не хватает."
         )
-    write = PendingWrite(character=character.with_gold(-price), items=((item.id, 1),))
+    write = PendingWrite(character=character.with_gold(-price), items=((item.id, 1),)).because(
+        economy_log.SHOP
+    )
     bought = state.storing(write).with_notice(f"{item.name} куплен за {price} золота.")
     return mark_task(bought, character, TutorialTask.TRADE)
 
@@ -794,7 +815,9 @@ def _handle_sell(
     if item is None:
         return state.with_notice("Нажмите вещь из списка.")
     price = economy.sell_price(content, item)
-    write = PendingWrite(character=character.with_gold(price), items=((item.id, -1),))
+    write = PendingWrite(character=character.with_gold(price), items=((item.id, -1),)).because(
+        economy_log.SHOP
+    )
     sold = state.storing(write).with_notice(f"{item.name} продан за {price} золота.")
     return mark_task(sold, character, TutorialTask.TRADE)
 
@@ -1008,7 +1031,8 @@ def _handle_tavern(
         said = f"Ночь в комнате: {result.cost} золота, здоровье полное."
     else:
         said = f"Ночь на соломе: восстановлено {result.healed} здоровья, спина не в счёт."
-    return state.storing(PendingWrite(character=result.character)).with_notice(said)
+    rested = PendingWrite(character=result.character).because(economy_log.SERVICE)
+    return state.storing(rested).with_notice(said)
 
 
 def _hand_in(content: GameContent, character: Character, state: PlayState) -> PlayState:
@@ -1019,7 +1043,7 @@ def _hand_in(content: GameContent, character: Character, state: PlayState) -> Pl
     if payout is None:  # pragma: no cover - ready_to_hand_in already checked it
         return state.with_notice("Сдавать нечего.")
 
-    write = PendingWrite(character=payout.character)
+    write = PendingWrite(character=payout.character).because(economy_log.QUEST)
     said = (
         f"Подряд «{payout.quest.name}» закрыт. "
         f"Плата: {payout.gold} золота и {payout.experience} опыта."
@@ -1097,7 +1121,7 @@ def _handle_mentor(
         if forgotten is None:  # pragma: no cover - the list only holds known skills
             return state.with_notice("Это умение вы не изучали.")
         paid = forgotten.with_gold(-price)
-        return state.storing(PendingWrite(character=paid)).with_notice(
+        return state.storing(PendingWrite(character=paid).because(economy_log.SERVICE)).with_notice(
             f"{skill.name} забыто. Вернулось очков: {rank}. Заплачено {price} золота."
         )
     return state.with_notice("Нажмите умение из списка.")

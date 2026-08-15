@@ -18,8 +18,9 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 
 **`src/mmorpg/`** — код.
 - Корень пакета: `main.py` (композиция, polling/webhook), `config.py` (Settings,
-  единственный доступ к env), `logging.py`, `monitoring.py` (детектор медленных
-  колбэков), `health.py` (heartbeat).
+  единственный доступ к env), `logging.py`, `economy_log.py` (журнал движений
+  золота: `gold_flow`), `monitoring.py` (детектор медленных колбэков),
+  `health.py` (heartbeat).
 - `domain/` — чистая логика, только stdlib, без async и I/O.
   `entities/`: `character`, `stats`, `combat`, `effects`, `location`, `content`
   (в том числе `Npc` — житель города), `quest` (подряд и журнал подрядов),
@@ -79,7 +80,7 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 **`migrations/`** — `env.py`, `versions/0001_initial_schema`, `0002_trades`,
 `0003_privacy`, `0004_wounds_bank_quests`, `0005_crafts`, `0006_admin`,
 `0007_tutorial`, `0008_arena`, `0009_keeper_panel` (правки поверх содержимого,
-учёт заблокировавших бота).
+учёт заблокировавших бота), `0010_arena_credit` (что круг держит с игрока).
 **`backups/`** — дампы от `stop.bat` и `Update.bat`; не в репозитории.
 **`.githooks/pre-commit`** — гейт на коммите.
 
@@ -120,7 +121,11 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
    состоянию не верят**: оно переживает и код, и контент, поэтому экран, чей
    город, умение, подряд или вылазка больше не существуют, не падает, а
    возвращает игрока на живой экран (`flows/play.py`, `known_city`,
-   `location_known`).
+   `location_known`). **Кошелёк, за который могут тягаться двое** (сделка в
+   группе), меняется только `spend_gold`/`grant_gold` — одним условным `UPDATE`,
+   а не записью персонажа, прочитанного несколькими `await` назад. Каждое
+   движение золота, кроме передачи из рук в руки, пишет `gold_flow`
+   (`economy_log.py`): без счёта экономику нечем править по живой игре.
 9. **Новый экран** добавляется в `tests/presentation/conftest.py::all_screens` —
    иначе он не проверен. **Группа — не экран**: там нет служебного ряда и нет
    «Назад», бот отвечает только на reply и молчит на всё остальное.

@@ -21,10 +21,17 @@ from mmorpg.domain.procgen.seeds import rng
 HEALTH_BASE = 24.0
 HEALTH_PER_LEVEL = 9.0
 # Damage is set against the player's health pool rather than against their blow:
-# an ordinary opponent should cost about a quarter of it over the three turns it
-# lives, which leaves a boss fight of ten turns genuinely dangerous.
-DAMAGE_BASE = 3.5
-DAMAGE_PER_LEVEL = 0.7
+# an ordinary opponent should cost a noticeable share of it over the three turns
+# it lives, so that a run through a location is a series of decisions - press on,
+# drink, walk back and pay for a bed - and not a formality.
+#
+# It used to cost about a twentieth. Every fight was won, nothing was ever spent,
+# and the inn, the potions and the wounds that outlive a fight were all decoration
+# (Roadmap, "Риски"). Tripling it is the whole change; the long tiers give the
+# tripling back in ``RANK_FACTORS`` so that an epic and a boss hurt exactly as
+# much as they did before - they were already dangerous.
+DAMAGE_BASE = 8.75
+DAMAGE_PER_LEVEL = 1.75
 ARMOR_PER_LEVEL = 1.15
 INITIATIVE_BASE = 8.0
 INITIATIVE_PER_LEVEL = 0.35
@@ -47,9 +54,11 @@ def group_scale(size: int) -> float:
 class RankFactors:
     """What a tier multiplies. Health buys the turns, gold pays for them.
 
-    Damage grows far more slowly than health on purpose: a boss lasts four times
-    as long as an ordinary opponent, so a matching damage multiplier would simply
-    kill the player on turn three of ten.
+    Damage does not grow with the tier - it shrinks. A boss lasts four times as
+    long as an ordinary opponent, so it lands four times as many blows: a blow of
+    the same size would kill the player on turn three of ten. What a tier costs is
+    counted over the whole fight, and over the whole fight a boss still takes far
+    more health than an ordinary opponent does.
     """
 
     health: float
@@ -64,8 +73,8 @@ class RankFactors:
 #: in the location is always the best one to grind.
 RANK_FACTORS: dict[EnemyRank, RankFactors] = {
     EnemyRank.NORMAL: RankFactors(health=1.0, damage=1.0, armor=1.0, gold=1.0, experience=1.0),
-    EnemyRank.ELITE: RankFactors(health=2.6, damage=1.25, armor=1.2, gold=3.0, experience=2.5),
-    EnemyRank.BOSS: RankFactors(health=5.2, damage=1.25, armor=1.35, gold=7.0, experience=5.0),
+    EnemyRank.ELITE: RankFactors(health=2.6, damage=0.5, armor=1.2, gold=3.0, experience=2.5),
+    EnemyRank.BOSS: RankFactors(health=5.2, damage=0.5, armor=1.35, gold=7.0, experience=5.0),
 }
 
 # Same enemy at the same level still varies a little, so two fights do not feel

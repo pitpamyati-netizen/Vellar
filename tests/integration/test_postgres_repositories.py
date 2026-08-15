@@ -7,6 +7,7 @@ parse or a JSONB cast that does not round-trip; these tests can.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import replace
 from types import MappingProxyType
@@ -104,6 +105,9 @@ def a_character(user_id: int, name: str = "Тестовый") -> Character:
         crafts=CraftLog(
             MappingProxyType({"mining": CraftProgress(experience=260, gathered_at=1_700_000_000)})
         ),
+        arena_wins=3,
+        arena_losses=1,
+        arena_credit=120,
         is_admin=True,
     )
 
@@ -261,6 +265,9 @@ async def test_a_character_survives_a_round_trip(pool, clean_user) -> None:
     assert read.is_admin is True
     # The vault is a column of its own: the purse must never absorb it.
     assert (read.gold, read.bank_gold) == (250, 900)
+    # What the Circle holds is stored gold too: without it, a win would have
+    # nothing to be paid out of after a restart (``domain/rules/arena.py``).
+    assert (read.arena_wins, read.arena_losses, read.arena_credit) == (3, 1, 120)
 
 
 async def test_saving_a_character_updates_every_column(pool, clean_user) -> None:
@@ -281,6 +288,7 @@ async def test_saving_a_character_updates_every_column(pool, clean_user) -> None
             crafts=CraftLog(
                 MappingProxyType({"smithing": CraftProgress(experience=40, gathered_at=0)})
             ),
+            arena_credit=60,
             is_admin=True,
         )
     )
@@ -294,6 +302,34 @@ async def test_saving_a_character_updates_every_column(pool, clean_user) -> None
     assert read.quests.done == ()
     assert read.crafts.progress("smithing").experience == 40
     assert read.crafts.progress("mining").experience == 0, "the whole document is replaced"
+    assert read.arena_credit == 60
+
+
+async def test_gold_is_spent_in_one_step_or_not_at_all(pool, clean_user) -> None:
+    """The hole this closes: a purse read, then written back a few awaits later.
+
+    A trade settles against gold its owner may be spending in that very instant
+    (Roadmap, "Риски"), so the check and the subtraction have to be the same
+    statement. Two settlements racing over one purse: exactly one may win.
+    """
+    await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user, username="tester"))
+    characters = PostgresCharacterRepository(pool)
+    created = await characters.create(replace(a_character(clean_user), gold=100))
+
+    both = await asyncio.gather(
+        characters.spend_gold(created.id, 100),
+        characters.spend_gold(created.id, 100),
+    )
+    assert sorted(both) == [False, True], "one purse paid twice"
+
+    read = await characters.get(created.id)
+    assert read is not None
+    assert read.gold == 0
+
+    assert await characters.spend_gold(created.id, 1) is False
+    await characters.grant_gold(created.id, 40)
+    after = await characters.get(created.id)
+    assert after is not None and after.gold == 40
 
 
 async def test_the_active_character_is_the_first_one(pool, clean_user) -> None:

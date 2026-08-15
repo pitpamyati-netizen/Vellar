@@ -709,3 +709,52 @@ async def test_a_number_is_free_again_once_its_offer_closes(
 
     assert second.offer is not None
     assert second.offer.number == first.offer.number
+
+
+# --- the gap between checking a purse and taking from it ---------------
+
+
+class RacingCharacters(InMemoryCharacterRepository):
+    """A repository where the purse empties between the check and the payment.
+
+    Which is not a contrivance: the target of an offer is a player, and a player
+    is somewhere else in the bot buying a bed with the same gold. What the trade
+    read one await ago is a claim, not a fact.
+    """
+
+    async def spend_gold(self, character_id: int, amount: int) -> bool:
+        return False
+
+
+async def test_a_settlement_pays_out_of_the_purse_at_that_instant(
+    content: GameContent,
+    inventory: InMemoryInventoryRepository,
+    trades: InMemoryTradeRepository,
+    privacy: InMemoryPrivacyRepository,
+) -> None:
+    """The buyer's gold went elsewhere between "принять" and the payment.
+
+    Nothing may move: not the sword out of escrow, not the price to the seller.
+    """
+    characters = RacingCharacters()
+    seller = await make(characters, ARGUS_ACCOUNT, "Аргус", gold=500)
+    buyer = await make(characters, MERLA_ACCOUNT, "Мерла", gold=300)
+    trade = GroupTrade(
+        content=content,
+        characters=characters,
+        inventory=inventory,
+        trades=trades,
+        privacy=privacy,
+    )
+    await inventory.add(seller.id, SWORD, 1)
+    await run(trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+
+    outcome = await run(trade, "принять 1", author=MERLA_ACCOUNT, target=None)
+
+    assert outcome.refusal is Refusal.TARGET_LACKS_GOLD
+    # The sword is back with its owner, and nobody was paid for nothing.
+    assert await inventory.count(seller.id, SWORD) == 1
+    assert await inventory.count(buyer.id, SWORD) == 0
+    assert await purse(characters, seller) == 500
+    assert await purse(characters, buyer) == 300
+    assert (await trades.pending(1, scope="group")) is None

@@ -133,6 +133,31 @@ def test_searching_counts_only_for_search_contracts(
     assert log.progress("farhold_tallies") == 0
 
 
+def test_a_made_thing_counts_for_the_contract_that_asked_for_it(
+    content: GameContent, veteran: Character
+) -> None:
+    """Contracts and crafts used to be two games in one bot (Roadmap, "Риски")."""
+    ready = replace(veteran, quests=QuestLog(done=("farhold_tallies",)))
+    took = quest_rules.take(content, ready, content.quest("farhold_whetstones"))
+    log, steps = quest_rules.record_craft(content, took, "whetstone", 2)
+    assert log.progress("farhold_whetstones") == 2
+    assert steps and steps[0].progress == 2
+
+    # Something else out of the same workshop is still something else.
+    other, _ = quest_rules.record_craft(content, took, "iron_helm")
+    assert other.progress("farhold_whetstones") == 0
+
+
+def test_a_craft_contract_never_counts_past_what_was_asked(
+    content: GameContent, veteran: Character
+) -> None:
+    quest = content.quest("farhold_whetstones")
+    ready = replace(veteran, quests=QuestLog(done=("farhold_tallies",)))
+    took = quest_rules.take(content, ready, quest)
+    log, _ = quest_rules.record_craft(content, took, "whetstone", quest.target_count + 5)
+    assert log.progress(quest.id) == quest.target_count
+
+
 def test_nothing_counts_for_a_contract_that_was_never_taken(
     content: GameContent, newcomer: Character
 ) -> None:

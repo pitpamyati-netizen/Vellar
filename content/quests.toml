@@ -9,6 +9,9 @@
 #   elite  - defeat N strong opponents (an elite node)
 #   search - work through N nodes without a fight; target_kind narrows it to one
 #            node kind: gather, cache, shrine, event
+#   craft  - make N things with your own hands; target_kind is the item id from
+#            items.toml. The counter moves when the batch comes out of the work,
+#            so a craft is a way of taking a job and not only a way of selling
 #
 # follows chains the act: a contract with a predecessor stays off the board until
 # that one is paid out. Ids are frozen keys - they live in the character's ledger.
@@ -45,6 +48,22 @@ target_count = 6
 reward_gold = 70
 reward_experience = 140
 reward_item = "travel_boots"
+
+[[quest]]
+id = "farhold_whetstones"
+city = "farhold"
+level = 4
+follows = "farhold_tallies"
+name = "Точила для заставы"
+giver = "Ольда, весовщица Палаты"
+intro = "Проводит пальцем по зазубренному лезвию и морщится."
+terms = "Косы и мечи на заставе тупые, кузня занята. Сделайте три точила своими руками — плачу 90."
+objective = "craft"
+target_kind = "whetstone"
+target_count = 3
+reward_gold = 90
+reward_experience = 150
+reward_item = "iron_scrap"
 
 [[quest]]
 id = "farhold_grove_toll"
@@ -120,6 +139,22 @@ objective = "search"
 target_count = 4
 reward_gold = 450
 reward_experience = 1400
+
+[[quest]]
+id = "harbor_salves"
+city = "dusk_harbor"
+level = 26
+follows = "harbor_manifest"
+name = "Настой для мостков"
+giver = "Мерет, лекарка при складах"
+intro = "Считает пустые склянки и кладёт их обратно в ящик."
+terms = "Грузчики режутся о тросы, а лечить нечем. Сварите четыре малых зелья лечения, с меня 520."
+objective = "craft"
+target_kind = "small_healing_potion"
+target_count = 4
+reward_gold = 520
+reward_experience = 1600
+reward_item = "grove_resin"
 
 [[quest]]
 id = "harbor_undertow"

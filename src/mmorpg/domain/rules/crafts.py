@@ -81,17 +81,31 @@ def gather_ready_at(character: Character, craft: Craft, cooldown: int) -> int:
 
 
 def can_gather(
-    content: GameContent, character: Character, craft: Craft, *, now: int, cooldown: int
+    content: GameContent,
+    character: Character,
+    craft: Craft,
+    *,
+    now: int,
+    cooldown: int,
+    biomes: frozenset[str] = frozenset(),
 ) -> str:
-    """Empty when gathering is allowed now, otherwise the reason it is not."""
+    """Empty when gathering is allowed now, otherwise the reason it is not.
+
+    ``biomes`` is the ground around the city the character is standing in. Empty
+    means "do not ask where they are" - the caller that has no map, such as a
+    test of the cooldown alone.
+    """
     if not craft.gathers:
         return "Это ремесло ничего не собирает: из сырья делают вещи."
     ready_at = gather_ready_at(character, craft, cooldown)
     if now < ready_at:
         left = ready_at - now
         return f"Здесь уже собрано. Следующий сбор через {_minutes(left)}."
-    if not _reachable_yields(craft, character.level):
-        return "Для вашего уровня тут пока нечего брать."
+    here = _reachable_yields(craft, character.level, biomes)
+    if not here:
+        if _reachable_yields(craft, content.rules.max_character_level, biomes):
+            return "Для вашего уровня тут пока нечего брать."
+        return "В этих краях этому ремеслу работать не с чем. Ищите другие места."
     return ""
 
 
@@ -113,15 +127,20 @@ def gather(
     now: int,
     cooldown: int,
     seed: bytes,
+    biomes: frozenset[str] = frozenset(),
 ) -> tuple[Character, GatherResult]:
-    """Work a gathering craft once. The character comes back changed."""
-    refused = can_gather(content, character, craft, now=now, cooldown=cooldown)
+    """Work a gathering craft once. The character comes back changed.
+
+    What comes back depends on where the work was done: the same button in Дубно
+    and in Мезень reaches into different ground.
+    """
+    refused = can_gather(content, character, craft, now=now, cooldown=cooldown, biomes=biomes)
     if refused:
         return character, GatherResult(refused=refused)
 
     rules = content.craft_rules
     rank = character_rank(content, character, craft.id)
-    reachable = _reachable_yields(craft, character.level)
+    reachable = _reachable_yields(craft, character.level, biomes)
     picked = rng(seed).choice(reachable)
 
     modifiers = collect_modifiers(content, character)
@@ -140,8 +159,18 @@ def gather(
     )
 
 
-def _reachable_yields(craft: Craft, level: int) -> list[CraftYield]:
-    return [entry for entry in craft.yields if entry.level <= level]
+def _reachable_yields(craft: Craft, level: int, biomes: frozenset[str]) -> list[CraftYield]:
+    """What this craft can bring back here, at this level.
+
+    Without a map (an empty ``biomes``) the place is not asked about at all, so
+    the level alone decides - the behaviour every caller had before the ground
+    started mattering.
+    """
+    return [
+        entry
+        for entry in craft.yields
+        if entry.level <= level and (not biomes or entry.found_in(biomes))
+    ]
 
 
 # --- making -----------------------------------------------------------

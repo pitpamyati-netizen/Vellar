@@ -136,6 +136,21 @@ class InMemoryCharacterRepository:
         self._characters[character.id] = character
         self._touched[character.id] = int(time.time())
 
+    async def spend_gold(self, character_id: int, amount: int) -> bool:
+        """Списать золото одним шагом. Здесь это и так один шаг: цикл событий
+        один, между чтением и записью никто не вклинится."""
+        character = self._characters.get(character_id)
+        if character is None or amount < 0 or character.gold < amount:
+            return False
+        await self.save(character.with_gold(-amount))
+        return True
+
+    async def grant_gold(self, character_id: int, amount: int) -> None:
+        character = self._characters.get(character_id)
+        if character is None or amount <= 0:
+            return
+        await self.save(character.with_gold(amount))
+
     async def name_taken(self, name: str) -> bool:
         folded = name.casefold()
         return any(character.name.casefold() == folded for character in self._characters.values())

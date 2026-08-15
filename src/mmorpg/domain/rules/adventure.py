@@ -21,7 +21,7 @@ from mmorpg.domain.entities.location import LocationNode, NodeKind
 from mmorpg.domain.procgen.seeds import rng
 from mmorpg.domain.rules import economy
 from mmorpg.domain.rules import quests as quest_rules
-from mmorpg.domain.rules.progression import LevelUp, grant_experience
+from mmorpg.domain.rules.progression import LevelUp, experience_reward, grant_experience
 from mmorpg.domain.rules.quests import QuestStep
 from mmorpg.domain.rules.stats import derived_stats
 
@@ -154,6 +154,68 @@ def resolve_search(
         healed=healed,
         level_up=level_up,
         quest_steps=steps,
+    )
+
+
+# --- the bottom of a descent ------------------------------------------
+#
+# A descent used to be three fights that happened to be in a row: the epic
+# opponent on the last floor was the only thing separating it from three fights
+# in a location, and the screen promised a reward "внизу и целиком" that nothing
+# in the code paid (Roadmap, "Риски"). This is that reward.
+#
+# It is worth about another epic fight - enough that walking down wounded is a
+# real decision and that leaving on the second floor costs something.
+DESCENT_GOLD_BASE = 25.0
+DESCENT_GOLD_PER_LEVEL = 9.0
+#: The bottom pays experience like one more opponent of the depth's own level.
+DESCENT_EXPERIENCE_BASE = 30
+
+
+@dataclass(frozen=True, slots=True)
+class DescentPrize:
+    """What the bottom of a descent handed over."""
+
+    character: Character
+    gold: int = 0
+    experience: int = 0
+    item_id: str = ""
+    level_up: LevelUp | None = None
+
+    @property
+    def levelled(self) -> bool:
+        return self.level_up is not None and self.level_up.levels_gained > 0
+
+
+def descent_gold(level: int) -> int:
+    """What the bottom pays, before anything is rolled."""
+    return max(1, round(DESCENT_GOLD_BASE + DESCENT_GOLD_PER_LEVEL * max(1, level)))
+
+
+def descent_prize(
+    content: GameContent, character: Character, *, level: int, seed: bytes
+) -> DescentPrize:
+    """Pay for a descent walked to the bottom. Deterministic from the seed.
+
+    The find is never a material: the bottom of a hole in the ground is where a
+    thing is, not where herbs grow, and a descent that paid in wolf pelts would
+    read as a bug.
+    """
+    source = rng(seed)
+    gold = descent_gold(level)
+    item_id = _pick_item(content, source, level, materials_only=False)
+    experience = max(
+        1,
+        DESCENT_EXPERIENCE_BASE
+        + experience_reward(enemy_level=max(1, level), character_level=character.level),
+    )
+    grown, level_up = grant_experience(content, character.with_gold(gold), experience)
+    return DescentPrize(
+        character=grown,
+        gold=gold,
+        experience=experience,
+        item_id=item_id,
+        level_up=level_up,
     )
 
 

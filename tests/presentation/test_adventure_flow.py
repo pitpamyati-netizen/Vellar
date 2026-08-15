@@ -26,7 +26,8 @@ from mmorpg.application.services.content import ContentRegistry
 from mmorpg.config import Settings
 from mmorpg.domain.entities import Character, GameContent, QuestLog, SkillLoadout
 from mmorpg.domain.entities.location import NodeKind
-from mmorpg.domain.rules.stats import derived_stats
+from mmorpg.domain.entities.stats import StatBlock
+from mmorpg.domain.rules.stats import derived_stats, stat_allowance
 from mmorpg.infrastructure.persistence.memory import (
     InMemoryCharacterRepository,
     InMemoryContentOverlayRepository,
@@ -554,6 +555,56 @@ async def test_clearing_the_place_out_rolls_it_over(
 
 
 # --- the Debt Circle --------------------------------------------------
+
+
+async def test_a_descent_pays_at_the_bottom_and_not_before(
+    player: Player,
+    content: GameContent,
+    characters: InMemoryCharacterRepository,
+    argus: Character,
+) -> None:
+    """Three fights in a row used to be worth three fights (Roadmap, "Риски").
+
+    The screen promised a reward "внизу"; nothing in the game paid one. Now the
+    bottom hands over gold, experience and something to carry out - and only to
+    somebody who got that far.
+    """
+    # Points spent the way a player would spend them: the bottom of a descent is
+    # an epic opponent, and a bare level-12 character has no business winning it.
+    allowance = stat_allowance(content, 12)
+    strong = replace(
+        argus,
+        level=12,
+        gold=1_000,
+        health=0,
+        allocated=StatBlock(STR=allowance // 2, END=allowance - allowance // 2),
+    )
+    await characters.save(strong)
+
+    await player.press("Мир")
+    await player.press("Дубно")
+    screen = await player.press("Данжи")
+    assert screen.id is ScreenId.DUNGEON
+    assert "дно" in screen.text().casefold()
+
+    screen = await player.press("Спуститься")
+    bottom = ""
+    for _ in range(120):
+        text = screen.text()
+        if "Дно спуска:" in text:
+            bottom = text
+            break
+        if text.startswith("Поражение."):
+            pytest.skip("the descent was lost; the prize is for whoever gets down")
+        button = "Идти глубже" if "Пройдено схваток:" in text else "Атака"
+        screen = await player.press(button)
+    else:  # pragma: no cover - a descent that never ends is the bug this catches
+        pytest.fail("the descent never reached the bottom")
+
+    assert "Спуск пройден до дна" in bottom
+    stored = await characters.get_active(ACCOUNT)
+    assert stored is not None
+    assert stored.gold > strong.gold
 
 
 async def test_a_round_of_the_circle_is_fought_and_paid_out(

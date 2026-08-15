@@ -101,7 +101,7 @@ because the play router filters on the whole `Play` state group.
 
 | Where | What |
 | --- | --- |
-| PostgreSQL | users, characters (raw stats, level, experience, gold, vault gold), inventory, equipment, skill loadout with ranks and edges, chosen traits, city, quest and craft progress, accessibility settings, world seed, trades (pending escrow and the settled journal), privacy (profile visibility on the user row, black lists in `blocks`) |
+| PostgreSQL | users, characters (raw stats, level, experience, gold, vault gold, what the Debt Circle holds), inventory, equipment, skill loadout with ranks and edges, chosen traits, city, quest and craft progress, accessibility settings, world seed, trades (pending escrow and the settled journal), privacy (profile visibility on the user row, black lists in `blocks`) |
 | Redis (with TTL) | FSM state, current screen, active combat, the shared state of every location and who is standing in it, update deduplication, shop assortment cache |
 | Nowhere - recomputed | location layout, nodes, enemies, loot, total character stats, shop assortment (all pure functions of seed, generation and rotation) |
 
@@ -126,6 +126,17 @@ a store that expires by itself would swallow it. `trades` is closed by a single
 keeps two live offers from sharing a number. Stakes of offers nobody answered are
 returned by a sweep that runs at the start of the next group command - there is
 no background timer.
+
+Gold moves the same way, and for the same reason. `save` writes back a character
+that was read several `await`s ago, so a purse checked in one step and written in
+another can swallow whatever its owner did in between - and the owner of a purse
+in a group trade is a player who may be buying a bed in their private chat at
+that exact moment. Every purse the group touches moves by `spend_gold` (one
+conditional `UPDATE ... WHERE gold >= $2 RETURNING`) or `grant_gold` (one
+increment). Every movement of gold that is not one player handing another a coin
+also writes a `gold_flow` line (`mmorpg.economy_log`): the duty, the stake of the
+Circle and what a fight pays are all numbers to be corrected against a day of
+real play, and a number nobody can measure is only ever re-guessed.
 
 ## Latency budget
 

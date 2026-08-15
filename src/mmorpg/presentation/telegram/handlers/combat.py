@@ -20,6 +20,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
+from mmorpg import economy_log
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import ActionKind, CombatAction, CombatOutcome
@@ -162,6 +163,7 @@ async def _spawn_arena(
         arena=True,
     )
     logger.info("arena_round_started", character_id=paid.id, opponent_id=other.id, stake=stake)
+    economy_log.record(economy_log.ARENA_STAKE, -stake, character_id=paid.id)
     return paid, session
 
 
@@ -276,6 +278,7 @@ async def _store_and_show(
         case CombatOutcome.VICTORY:
             won = adventure.resolve_victory(content, character, session.state)
             character = won.character
+            economy_log.record(economy_log.FIGHT, won.gold, character_id=character.id)
             for item_id in session.state.loot:
                 if content.has_item(item_id):
                     await inventory.add(character.id, item_id, 1)
@@ -290,6 +293,8 @@ async def _store_and_show(
                 updated_flow = flow
             else:
                 updated_flow, rows = _after_victory(session, flow, extra)
+                if session.in_descent and session.depth >= DUNGEON_DEPTH:
+                    character = await _pay_the_bottom(content, character, flow, extra, inventory)
             # Winning a fight is one of the introduction tasks, and it is ticked
             # off by the win itself - wherever it happened.
             marked = tutorial_rules.complete(character, TutorialTask.FIGHT)
@@ -300,6 +305,7 @@ async def _store_and_show(
             lost = adventure.resolve_defeat(content, character)
             character = lost.character
             gold_lost = lost.gold_lost
+            economy_log.record(economy_log.DEFEAT, -gold_lost, character_id=character.id)
             updated_flow = _back_to_city(flow, character)
         case _:
             character = adventure.carry_wounds(content, character, session.state)
@@ -307,6 +313,12 @@ async def _store_and_show(
     if session.arena and session.state.outcome in {CombatOutcome.VICTORY, CombatOutcome.DEFEAT}:
         result = arena_rules.settle(character, won=session.state.outcome is CombatOutcome.VICTORY)
         character = result.character
+        economy_log.record(
+            economy_log.ARENA_PAYOUT,
+            result.payout,
+            character_id=character.id,
+            detail=f"held {result.held}",
+        )
         extra.append(arena_screens.round_line(result))
         updated_flow = _back_to_city(flow, character)
     elif session.is_duel and session.state.outcome in {
@@ -351,6 +363,8 @@ async def _settle_duel(
 
     if won is CombatOutcome.VICTORY:
         character, other, spoils = pvp_rules.settle(character, other)
+        economy_log.record(economy_log.DUEL, spoils.gold, character_id=character.id)
+        economy_log.record(economy_log.DUEL, -spoils.gold, character_id=other.id)
         extra.append(f"Поединок выигран. С {other.name} снято {spoils.gold} золота.")
         told = (
             f"На вас напал {character.name}, уровень {character.level}. "
@@ -359,6 +373,8 @@ async def _settle_duel(
         )
     else:
         other, character, spoils = pvp_rules.settle(other, character)
+        economy_log.record(economy_log.DUEL, -spoils.gold, character_id=character.id)
+        economy_log.record(economy_log.DUEL, spoils.gold, character_id=other.id)
         extra.append(f"Поединок проигран. {other.name} забрал {spoils.gold} золота.")
         told = (
             f"На вас напал {character.name}, уровень {character.level}, и проиграл. "
@@ -381,6 +397,39 @@ async def _tell(message: Message, telegram_id: int, text: str) -> None:
         # Blocked the bot, deleted the chat, never started it: their gold still
         # moved, and a duel is not worth failing a turn over.
         logger.info("duel_notice_undelivered", telegram_id=telegram_id)
+
+
+async def _pay_the_bottom(
+    content: GameContent,
+    character: Character,
+    flow: PlayState,
+    extra: list[str],
+    inventory: InventoryRepository,
+) -> Character:
+    """Hand over what the bottom of a descent is for.
+
+    The descent screen has always promised a reward "внизу и целиком"; until now
+    the only thing down there was a longer fight (Roadmap, "Риски"). The seed is
+    the run's own, so the prize is decided by the descent and not by the moment
+    the last blow landed.
+    """
+    descent = flow.descent
+    prize = adventure.descent_prize(
+        content,
+        character,
+        level=descent.level,
+        seed=derive("descent-prize", descent.city_id, descent.started_at, descent.level),
+    )
+    economy_log.record(economy_log.DESCENT, prize.gold, character_id=prize.character.id)
+    if prize.item_id and content.has_item(prize.item_id):
+        await inventory.add(prize.character.id, prize.item_id, 1)
+        found = f" Со дна поднято: {content.item(prize.item_id).name}."
+    else:  # pragma: no cover - content always has something at this level
+        found = ""
+    extra.append(f"Дно спуска: {prize.gold} золота и {prize.experience} опыта.{found}")
+    if prize.level_up is not None and prize.level_up.levels_gained:
+        extra.append(level_up_line(prize.level_up))
+    return prize.character
 
 
 def _after_victory(

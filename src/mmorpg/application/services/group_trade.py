@@ -25,6 +25,13 @@ Three things follow from that, and they are the whole point of Roadmap 2.3:
   PostgreSQL rather than in a cache that expires on its own;
 - every settled trade pays a duty, which is the one place gold leaves the game
   (``domain/rules/economy.trade_tax``).
+
+What the target answers *with*, though, has to be there in the instant they
+answer, and it is checked one step earlier. So every purse in this module moves
+by ``spend_gold``/``grant_gold`` - one conditional step in the database - and
+never by writing back a character read a few awaits ago. Checking a purse and
+then writing a purse are two different moments, and a player who is fighting in
+their private chat while their group offer settles lives in between them.
 """
 
 from __future__ import annotations
@@ -32,6 +39,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
+from mmorpg import economy_log
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.trade import (
@@ -252,9 +260,13 @@ class GroupTrade:
         if refusal is not None:
             return _refused(refusal, author_name=author.name, target_name=target.name)
 
-        receiver = await self._character(target)
-        await self.characters.save(giver.with_gold(-command.amount))
-        await self.characters.save(receiver.with_gold(command.amount))
+        # Both sides move as increments, not as whole characters written back: a
+        # purse read a moment ago is already out of date if its owner is playing.
+        if not await self.characters.spend_gold(author.character_id, command.amount):
+            return _refused(
+                Refusal.AUTHOR_LACKS_GOLD, author_name=author.name, target_name=target.name
+            )
+        await self.characters.grant_gold(target.character_id, command.amount)
         return GroupOutcome(
             result=GroupResult.GOLD_GIVEN,
             gold=command.amount,
@@ -414,26 +426,45 @@ class GroupTrade:
             await self._close(offer.number, TradeStatus.DECLINED, now=now)
             return _refused(Refusal.TARGET_LACKS_ITEM, offer=offer)
 
+        # The target's side is taken before the row closes, and taken atomically:
+        # a buyer answering a sale pays out of a purse they may be spending in
+        # this very instant, and ``check_settlement`` only read it (Roadmap,
+        # "Риски"). A buyer who *proposed* the purchase paid at publication, and
+        # their gold is already in escrow.
+        paid = stakes_item(offer) and await self.characters.spend_gold(
+            offer.payer.character_id, offer.price
+        )
+        if stakes_item(offer) and not paid:
+            await self._close(offer.number, TradeStatus.DECLINED, now=now)
+            if took_item:  # pragma: no cover - a sale never takes an item first
+                await self.inventory.add(offer.target.character_id, offer.item_id, offer.quantity)
+            return _refused(Refusal.TARGET_LACKS_GOLD, offer=offer)
+
         closed = await self._close(offer.number, TradeStatus.ACCEPTED, now=now, tax=tax)
         if closed is None:
-            # Somebody answered first. Undo the one thing already done.
+            # Somebody answered first. Undo whatever was already done.
             if took_item:
                 await self.inventory.add(offer.target.character_id, offer.item_id, offer.quantity)
+            if paid:
+                await self.characters.grant_gold(offer.payer.character_id, offer.price)
             return _refused(Refusal.UNKNOWN_OFFER)
 
         # The item goes to whoever paid for it, whichever way the offer was worded:
         # out of escrow for a sale, straight from the target for a purchase.
         await self.inventory.add(offer.payer.character_id, offer.item_id, offer.quantity)
-        if stakes_item(offer):
-            # A buyer answering a sale pays now; a buyer who proposed one paid
-            # when they proposed it, and their gold is already in escrow.
-            payer = await self._character(offer.payer)
-            await self.characters.save(payer.with_gold(-offer.price))
 
         # The seller is paid out of escrow or out of the buyer's purse; either way
-        # the duty is simply never credited to anyone.
-        giver = await self._character(offer.giver)
-        await self.characters.save(giver.with_gold(payout(offer.price)))
+        # the duty is simply never credited to anyone. Both halves are written
+        # down, because "is five per cent the right number" is a question about a
+        # day of real trading and not about arithmetic (``mmorpg.economy_log``).
+        await self.characters.grant_gold(offer.giver.character_id, payout(offer.price))
+        economy_log.record(
+            economy_log.TRADE_PRICE,
+            offer.price,
+            character_id=offer.giver.character_id,
+            detail=f"payer {offer.payer.character_id}",
+        )
+        economy_log.record(economy_log.TRADE_DUTY, -tax, character_id=offer.giver.character_id)
         return GroupOutcome(result=GroupResult.OFFER_ACCEPTED, offer=offer, tax=tax)
 
     # --- escrow -------------------------------------------------------
@@ -444,19 +475,14 @@ class GroupTrade:
             return await self.inventory.remove(
                 offer.author.character_id, offer.item_id, offer.quantity
             )
-        author = await self._character(offer.author)
-        if author.gold < offer.price:
-            return False
-        await self.characters.save(author.with_gold(-offer.price))
-        return True
+        return await self.characters.spend_gold(offer.author.character_id, offer.price)
 
     async def _return_stake(self, offer: Offer) -> None:
         """Give the author back what publishing the offer took from them."""
         if stakes_item(offer):
             await self.inventory.add(offer.author.character_id, offer.item_id, offer.quantity)
             return
-        author = await self._character(offer.author)
-        await self.characters.save(author.with_gold(offer.price))
+        await self.characters.grant_gold(offer.author.character_id, offer.price)
 
     async def _close(
         self, number: int, status: TradeStatus, *, now: int, tax: int = 0

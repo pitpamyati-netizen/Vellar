@@ -125,6 +125,25 @@ class CharacterRepository(Protocol):
 
     async def save(self, character: Character) -> None: ...
 
+    async def spend_gold(self, character_id: int, amount: int) -> bool:
+        """Take gold off a character in one step, or take nothing at all.
+
+        ``save`` writes back a whole character that was read some steps earlier,
+        so between reading the purse and writing it back another update may have
+        spent the same coins - and the write would put them back. A trade settles
+        against a purse the payer may be spending elsewhere in that instant, which
+        is the one place in the game where that gap is a hole and not a rounding
+        error (Roadmap, "Риски"). ``False`` means the gold was not there.
+        """
+
+    async def grant_gold(self, character_id: int, amount: int) -> None:
+        """Put gold on a character in one step, whatever else is happening to it.
+
+        The other half of :meth:`spend_gold`: paying somebody by writing back a
+        whole character read a moment ago would undo whatever that character did
+        in between - a fight won, a potion bought.
+        """
+
     async def name_taken(self, name: str) -> bool: ...
 
     async def arena_opponent(self, *, level: int, window: int, exclude_id: int) -> Character | None:

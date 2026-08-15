@@ -27,6 +27,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
+from mmorpg import economy_log
 from mmorpg.application.services import keeper_panel
 from mmorpg.application.services.content import ContentRegistry
 from mmorpg.application.services.keeper import sync_keeper
@@ -418,6 +419,13 @@ async def _apply(
         await users.save_settings(telegram_id, write.settings)
 
     if write.character is not None:
+        if write.gold_flow:
+            # Signed, and counting the strongbox: gold moved into the bank has not
+            # left the game, so a deposit is not an outflow (``mmorpg.economy_log``).
+            moved = (write.character.gold + write.character.bank_gold) - (
+                character.gold + character.bank_gold
+            )
+            economy_log.record(write.gold_flow, moved, character_id=character.id)
         await characters.save(write.character)
         return write.character
     return character

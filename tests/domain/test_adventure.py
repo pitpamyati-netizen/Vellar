@@ -13,6 +13,7 @@ import pytest
 
 from mmorpg.domain.entities import Character, GameContent, QuestLog
 from mmorpg.domain.entities.combat import CombatOutcome, CombatState, EnemyState, PlayerState
+from mmorpg.domain.entities.content import ItemKind
 from mmorpg.domain.entities.location import (
     Enemy,
     EnemyKind,
@@ -230,3 +231,38 @@ def test_what_is_not_a_potion_does_nothing_out_here(content: GameContent, hero: 
 def test_the_city_charges_more_the_higher_you_climb() -> None:
     assert inn_price(1) < inn_price(50) < inn_price(300)
     assert mentor_price(1) < mentor_price(50) < mentor_price(300)
+
+
+# --- the bottom of a descent ------------------------------------------
+
+
+def test_the_bottom_of_a_descent_pays_for_the_walk_down(
+    content: GameContent, hero: Character
+) -> None:
+    """Three fights in a row used to be worth exactly three fights (Roadmap,
+    "Риски"): the epic opponent was the only thing down there."""
+    prize = adventure.descent_prize(content, hero, level=hero.level + 1, seed=b"bottom")
+
+    assert prize.gold == adventure.descent_gold(hero.level + 1)
+    assert prize.gold > 0
+    assert prize.experience > 0
+    assert prize.character.gold == hero.gold + prize.gold
+    assert prize.character.experience == hero.experience + prize.experience
+    # Something to carry out, and never a handful of herbs from under the floor.
+    assert prize.item_id
+    assert content.item(prize.item_id).kind is not ItemKind.MATERIAL
+
+
+def test_a_deeper_descent_is_worth_more(content: GameContent, hero: Character) -> None:
+    shallow = adventure.descent_prize(content, hero, level=5, seed=b"bottom")
+    deep = adventure.descent_prize(content, hero, level=40, seed=b"bottom")
+    assert deep.gold > shallow.gold
+    assert deep.experience > shallow.experience
+
+
+def test_the_same_descent_pays_the_same_thing_twice(content: GameContent, hero: Character) -> None:
+    """Seeded, like everything else: the prize belongs to the run, not to the
+    instant the last blow landed."""
+    first = adventure.descent_prize(content, hero, level=8, seed=b"one-run")
+    second = adventure.descent_prize(content, hero, level=8, seed=b"one-run")
+    assert (first.gold, first.item_id) == (second.gold, second.item_id)

@@ -89,8 +89,29 @@ def test_no_contract_speaks_the_forbidden_vocabulary(content: GameContent) -> No
 def test_a_narrowed_target_is_one_the_game_can_count(content: GameContent) -> None:
     enemy_kinds = {archetype.kind.value for archetype in content.enemy_archetypes}
     nodes = {"gather", "cache", "shrine", "event"}
+    items = {item.id for item in content.items}
     for quest in content.quests:
         if not quest.target_kind:
             continue
-        allowed = nodes if quest.objective is ObjectiveKind.SEARCH else enemy_kinds
+        match quest.objective:
+            case ObjectiveKind.SEARCH:
+                allowed = nodes
+            case ObjectiveKind.CRAFT:
+                allowed = items
+            case _:
+                allowed = enemy_kinds
         assert quest.target_kind in allowed, quest.id
+
+
+def test_a_contract_for_made_goods_asks_for_something_makeable(content: GameContent) -> None:
+    """Nobody may be asked for a thing no recipe in the game produces.
+
+    Contracts and crafts used to be two games in one bot: nothing on any board
+    asked for a made thing, so the work had no customer but the shopkeeper
+    (Roadmap, "Риски").
+    """
+    made = {recipe.output_id for recipe in content.recipes}
+    asked = [quest for quest in content.quests if quest.objective is ObjectiveKind.CRAFT]
+    assert asked, "no city asks anybody to make anything"
+    for quest in asked:
+        assert quest.target_kind in made, f"{quest.id} asks for something no recipe makes"

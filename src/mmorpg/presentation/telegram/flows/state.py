@@ -60,6 +60,9 @@ class PendingWrite:
     service: str = ""
     #: Перечитать правки из хранилища.
     reload: bool = False
+    #: Почему изменился кошелёк: метка для денежного журнала
+    #: (``mmorpg.economy_log``). Сама по себе ничего не записывает.
+    gold_flow: str = ""
 
     @property
     def empty(self) -> bool:
@@ -77,6 +80,14 @@ class PendingWrite:
 
     def with_items(self, *changes: tuple[str, int]) -> PendingWrite:
         return replace(self, items=(*self.items, *changes))
+
+    def because(self, flow: str) -> PendingWrite:
+        """Say why the purse changed, for the gold journal (``mmorpg.economy_log``).
+
+        A label and nothing more: the flow stays pure and the handler that does
+        the writing is the one that writes the line.
+        """
+        return replace(self, gold_flow=flow)
 
 
 @dataclass(frozen=True, slots=True)

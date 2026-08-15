@@ -20,6 +20,8 @@ DEFAULT_CONTENT_DIR = PROJECT_ROOT / "content"
 # The temporary directory, not the project tree: the container runs the bot as a
 # non-root user that owns nothing under /app.
 DEFAULT_HEARTBEAT_PATH = Path(tempfile.gettempdir()) / "vellar-heartbeat"
+#: ``GROUP_ID=*``: answer in any group the bot is a member of. See ``Settings``.
+ANY_GROUP = "*"
 
 
 class AppEnv(StrEnum):
@@ -67,6 +69,11 @@ class Settings(BaseSettings):
     # accept either a numeric chat id (-100...) or an @username. Empty means the
     # feature is simply off: a local run has no channel and must still play.
     channel_id: str = ""
+    # ``*`` means "whatever group the bot has been added to". That is a testing
+    # setting, not a production one: it exists so the group half of the game can
+    # be played the minute somebody adds the bot to a chat, without first hunting
+    # down a numeric id (Roadmap, "Риски"). With a real id set, every other chat
+    # is ignored exactly as before.
     group_id: str = ""
     # Shown to players as "where to find the others"; empty hides the line.
     channel_url: str = ""
@@ -136,6 +143,11 @@ class Settings(BaseSettings):
     def group_chat_enabled(self) -> bool:
         """Whether public group commands are answered."""
         return bool(self.group_id.strip())
+
+    @property
+    def any_group_allowed(self) -> bool:
+        """Whether the bot answers in every group it has been added to."""
+        return self.group_id.strip() == ANY_GROUP
 
     @property
     def admins(self) -> frozenset[int]:

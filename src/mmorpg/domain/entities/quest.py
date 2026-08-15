@@ -22,12 +22,15 @@ class ObjectiveKind(StrEnum):
 
     ``KILL`` counts defeated opponents, optionally of one kind; ``ELITE`` counts
     the strong ones only; ``SEARCH`` counts nodes worked through without a fight -
-    gathering, caches and shrines.
+    gathering, caches and shrines. ``CRAFT`` counts things made with your own
+    hands, narrowed by ``target_kind`` to one item id: somebody in the city needs
+    a thing, and a craft is how it gets made (Roadmap, "Риски").
     """
 
     KILL = "kill"
     ELITE = "elite"
     SEARCH = "search"
+    CRAFT = "craft"
 
 
 @dataclass(frozen=True, slots=True)

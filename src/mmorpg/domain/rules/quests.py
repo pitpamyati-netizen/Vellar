@@ -109,6 +109,41 @@ def record_kills(
     )
 
 
+def _counts_craft(quest: Quest, item_id: str) -> bool:
+    if quest.objective is not ObjectiveKind.CRAFT:
+        return False
+    return not quest.target_kind or quest.target_kind == item_id
+
+
+def record_craft(
+    content: GameContent, character: Character, item_id: str, count: int = 1
+) -> tuple[QuestLog, tuple[QuestStep, ...]]:
+    """Count a batch that came out of a craft into the contracts that asked for it.
+
+    Made, not bought: the counter moves where the work happens, so a contract for
+    three whetstones is three whetstones somebody actually forged. Nothing is
+    taken out of the bag - what was made stays made, and the payment comes on
+    handing the contract in like every other one.
+    """
+    log = character.quests
+    moved: dict[str, int] = {}
+    for quest_id in tuple(log.taken):
+        if not content.has_quest(quest_id):
+            continue
+        quest = content.quest(quest_id)
+        if not _counts_craft(quest, item_id):
+            continue
+        room = max(0, quest.target_count - log.progress(quest_id))
+        gained = min(max(0, count), room)
+        if gained:
+            log = log.advanced(quest_id, gained)
+            moved[quest_id] = log.progress(quest_id)
+    return log, tuple(
+        QuestStep(quest=content.quest(quest_id), progress=progress)
+        for quest_id, progress in moved.items()
+    )
+
+
 def record_search(
     content: GameContent, character: Character, node: NodeKind
 ) -> tuple[QuestLog, tuple[QuestStep, ...]]:
