@@ -52,6 +52,11 @@ class Panel:
         self.state = begin(who)
         self.services: list[str] = []
         self.removed: list[int] = []
+        # Раздача самого права смотрителя: кому её показывают и что она застаёт.
+        self.granting = False
+        self.target_keeper = False
+        self.target_locked = False
+        self.granted: list[tuple[int, bool]] = []
 
     @property
     def view(self) -> KeeperView:
@@ -60,6 +65,9 @@ class Panel:
             players=self.players,
             target=self.target,
             census=Census(characters=len(self.players)),
+            granting=self.granting,
+            target_keeper=self.target_keeper,
+            target_locked=self.target_locked,
         )
 
     def press(self, *messages: str) -> Panel:
@@ -112,6 +120,9 @@ class Panel:
             )
         if pending.remove_character:
             self.removed.append(pending.remove_character)
+        if pending.keeper_grant is not None:
+            self.granted.append(pending.keeper_grant)
+            self.target_keeper = pending.keeper_grant[1]
         if pending.service:
             self.services.append(pending.service)
         self.content = overlay_rules.apply(self.base, self.records)
@@ -415,6 +426,52 @@ def test_any_other_button_disarms_the_deletion(with_players: Panel) -> None:
     with_players.press(labels.KEEPER_DELETE.text)
 
     assert with_players.removed == []
+
+
+def test_the_right_is_asked_for_by_account_and_says_so(with_players: Panel) -> None:
+    with_players.granting = True
+    with_players.target = with_players.players[0]
+    with_players.press(labels.KEEPER_PLAYERS.text)
+    with_players.press(with_players.button_with("Мерла"))
+    assert labels.KEEPER_PROMOTE.text in with_players.buttons()
+
+    with_players.press(labels.KEEPER_PROMOTE.text)
+
+    # Спрашивается аккаунт, а не персонаж: право одно на человека.
+    assert with_players.granted == [(900, True)]
+    assert "теперь смотритель" in with_players.state.notice
+    assert labels.KEEPER_DEMOTE.text in with_players.buttons()
+
+
+def test_the_right_is_neither_shown_nor_given_by_somebody_who_cannot_hand_it_out(
+    with_players: Panel,
+) -> None:
+    """Кнопки нет, строки нет, и набранная руками надпись отвечает как обычно."""
+    with_players.target = with_players.players[0]
+    with_players.press(labels.KEEPER_PLAYERS.text)
+    with_players.press(with_players.button_with("Мерла"))
+    assert labels.KEEPER_PROMOTE.text not in with_players.buttons()
+    assert "Права смотрителя" not in with_players.screen().text()
+
+    with_players.press(labels.KEEPER_PROMOTE.text)
+
+    assert with_players.granted == []
+    assert with_players.state.notice == keeper_flow.PRESS_A_BUTTON
+
+
+def test_an_account_the_setting_names_keeps_its_right(with_players: Panel) -> None:
+    with_players.granting = True
+    with_players.target_keeper = True
+    with_players.target_locked = True
+    with_players.target = with_players.players[0]
+    with_players.press(labels.KEEPER_PLAYERS.text)
+    with_players.press(with_players.button_with("Мерла"))
+    assert "из настройки" in with_players.screen().text()
+    assert labels.KEEPER_DEMOTE.text not in with_players.buttons()
+
+    with_players.press(labels.KEEPER_DEMOTE.text)
+
+    assert with_players.granted == []
 
 
 def test_a_name_that_belongs_to_nobody_is_answered_plainly(panel: Panel) -> None:

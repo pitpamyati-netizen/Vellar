@@ -80,9 +80,11 @@ class Settings(BaseSettings):
     group_url: str = ""
 
     # --- Keepers ---
-    # Telegram ids allowed to open the keeper screen, comma separated. Kept in the
+    # Telegram ids the keeper right starts from, comma separated. Kept in the
     # environment and not in the database on purpose: a right that outlives a
     # wiped table, and one nobody can grant themselves from inside the game.
+    # Everybody else who holds the right holds it because one of these ids handed
+    # it to them, and it is stored on their account instead (``docs/keeper.md``).
     admin_ids: str = ""
 
     world_seed: str = "vellar-prime"
@@ -151,7 +153,7 @@ class Settings(BaseSettings):
 
     @property
     def admins(self) -> frozenset[int]:
-        """Telegram ids of the keepers. Anything unparsable is simply not one."""
+        """Telegram ids the right comes from. Anything unparsable is simply not one."""
         ids: set[int] = set()
         for part in self.admin_ids.replace(";", ",").split(","):
             stripped = part.strip()
@@ -160,6 +162,11 @@ class Settings(BaseSettings):
         return frozenset(ids)
 
     def is_admin(self, telegram_id: int) -> bool:
+        """Whether this account's right comes from the environment rather than the game.
+
+        Such an account is a keeper always, cannot be stripped of it from inside
+        the game, and is the only one that can hand the right to somebody else.
+        """
         return telegram_id in self.admins
 
     @property

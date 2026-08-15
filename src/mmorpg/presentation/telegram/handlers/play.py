@@ -30,7 +30,7 @@ from aiogram.types import Message
 from mmorpg import economy_log
 from mmorpg.application.services import keeper_panel
 from mmorpg.application.services.content import ContentRegistry
-from mmorpg.application.services.keeper import sync_keeper
+from mmorpg.application.services.keeper import set_keeper, sync_keeper
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
@@ -118,9 +118,14 @@ async def play(
         await state.clear()
         await send_screen(message, welcome_screen())
         return
-    character = await sync_keeper(character, message.from_user.id, settings, characters)
-
     user = await users.get(message.from_user.id)
+    character = await sync_keeper(
+        character,
+        message.from_user.id,
+        settings,
+        characters,
+        granted=user is not None and user.keeper,
+    )
     emoji = user.settings.emoji if user is not None else False
     accessibility = user.settings if user is not None else None
 
@@ -135,7 +140,9 @@ async def play(
     )
     goods = await _goods(content, character, flow, inventory, settings, clock.shop_rotation)
     company = await _company(flow, character, locations, now)
-    view = await _keeper_view(flow, character, message.text, characters, users, registry, now)
+    view = await _keeper_view(
+        flow, character, message.text, characters, users, registry, now, settings
+    )
 
     updated = advance(
         content,
@@ -161,6 +168,8 @@ async def play(
         registry=registry,
         bot=message.bot,
         now=now,
+        settings=settings,
+        granting=settings.is_admin(message.from_user.id),
     )
     if served:
         updated = updated.with_notice(f"{updated.notice} {served}".strip())
@@ -185,7 +194,7 @@ async def play(
     # bag may have changed on the way, so what it shows is read again.
     shelf = await _goods(content, character, updated, inventory, settings, clock.shop_rotation)
     company = await _company(updated, character, locations, now)
-    shown = await _keeper_view(updated, character, "", characters, users, registry, now)
+    shown = await _keeper_view(updated, character, "", characters, users, registry, now, settings)
     await state.set_state(STATE_FOR_SCREEN[updated.screen])
     await state.update_data({STATE_KEY: updated.serialise()})
     await render_play(
@@ -294,6 +303,7 @@ async def _keeper_view(
     users: UserRepository,
     registry: ContentRegistry,
     now: int,
+    settings: Settings,
 ) -> KeeperView:
     """Что панели показать. Для игрока это ноль запросов: ветка не выполняется.
 
@@ -306,6 +316,7 @@ async def _keeper_view(
     players: tuple[Character, ...] = ()
     target: Character | None = None
     census = None
+    granting = settings.is_admin(character.user_id)
 
     if flow.screen is ScreenId.KEEPER_PLAYERS:
         players = await characters.newest(limit=PLAYERS_SHOWN)
@@ -323,7 +334,25 @@ async def _keeper_view(
         # приходит из другого хранилища и подставляется здесь.
         census = replace(counted, blocked=await users.blocked_count())
 
-    return KeeperView(records=registry.records, players=players, target=target, census=census)
+    # Право открытого игрока читается по аккаунту, а не по флагу персонажа:
+    # персонажей у него может быть несколько, а право одно. Спрашивается только
+    # тогда, когда его есть кому увидеть.
+    target_keeper = False
+    target_locked = False
+    if granting and target is not None:
+        target_locked = settings.is_admin(target.user_id)
+        account = await users.get(target.user_id)
+        target_keeper = target_locked or (account is not None and account.keeper)
+
+    return KeeperView(
+        records=registry.records,
+        players=players,
+        target=target,
+        census=census,
+        granting=granting,
+        target_keeper=target_keeper,
+        target_locked=target_locked,
+    )
 
 
 async def _serve(
@@ -335,6 +364,8 @@ async def _serve(
     registry: ContentRegistry,
     bot: Bot | None,
     now: int,
+    settings: Settings,
+    granting: bool = False,
 ) -> str:
     """Сделать то, о чём попросила панель, и сказать числом, что получилось."""
     said: list[str] = []
@@ -352,6 +383,11 @@ async def _serve(
         await characters.save(write.other)
     if write.remove_character:
         await characters.delete(write.remove_character)
+    if write.keeper_grant is not None and granting:
+        # Автомат уже спросил то же самое; здесь оно спрашивается ещё раз, потому
+        # что раздача права - единственное, что раздаёт саму панель.
+        account, keeper = write.keeper_grant
+        await set_keeper(users, characters, account, keeper=keeper, settings=settings)
     if write.service:
         said.append(await _sweep(write.service, characters, users, bot, now))
     return " ".join(said)

@@ -70,6 +70,14 @@ class KeeperView:
     target: Character | None = None
     census: Census | None = None
     found: str = ""
+    #: Пришло ли право того, кто смотрит, из настройки, а не из игры. Читается
+    #: только на карточке игрока; всё остальное в панели одинаково для всех.
+    granting: bool = False
+    #: Держит ли право аккаунт открытого игрока. Читается по аккаунту, а не по
+    #: флагу персонажа: персонажей у него может быть несколько.
+    target_keeper: bool = False
+    #: Пришло ли право открытого игрока из настройки. Такое из игры не снимается.
+    target_locked: bool = False
 
 
 def kind_label(kind: OverlayKind) -> Label:
@@ -414,10 +422,16 @@ def player_screen(
     player: Character,
     stats: DerivedStats,
     notice: str = "",
+    view: KeeperView = KeeperView(),
 ) -> Screen:
-    """Чужой персонаж и то же, что смотритель может сделать себе."""
+    """Чужой персонаж и то же, что смотритель может сделать себе.
+
+    Раздача самого права смотрителя дорисовывается только тому, чьё право пришло
+    из настройки: остальные не видят ни строки об этом, ни кнопки, потому что
+    экран для них выглядит ровно так же, как выглядел всегда.
+    """
     city = content.city(player.city_id).name if content.has_city(player.city_id) else player.city_id
-    lines = (
+    lines = [
         notice or f"{player.name}, уровень {player.level}.",
         f"{content.race(player.race_id).name}, "
         f"{content.character_class(player.class_id).name}. Аккаунт: {player.user_id}.",
@@ -428,17 +442,28 @@ def player_screen(
         f"Подрядов закрыто: {len(player.quests.done)}. "
         f"Круг: {player.arena_wins} побед, {player.arena_losses} поражений.",
         "Уровень поднимается по одному и только вверх: очки уже вложены.",
-    )
-    return Screen(
-        id=ScreenId.KEEPER_PLAYER,
-        lines=lines,
-        rows=(
-            (labels.KEEPER_GOLD, labels.KEEPER_LEVEL),
-            (labels.KEEPER_HEAL, labels.KEEPER_POINTS),
-            (labels.KEEPER_MOVE,),
-            (labels.KEEPER_DELETE,),
-        ),
-    )
+    ]
+    rows: list[tuple[Label, ...]] = [
+        (labels.KEEPER_GOLD, labels.KEEPER_LEVEL),
+        (labels.KEEPER_HEAL, labels.KEEPER_POINTS),
+        (labels.KEEPER_MOVE,),
+        (labels.KEEPER_DELETE,),
+    ]
+    if view.granting:
+        lines.append(_right(view))
+        if not view.target_locked:
+            rows.insert(
+                2, (labels.KEEPER_DEMOTE,) if view.target_keeper else (labels.KEEPER_PROMOTE,)
+            )
+    return Screen(id=ScreenId.KEEPER_PLAYER, lines=tuple(lines), rows=tuple(rows))
+
+
+def _right(view: KeeperView) -> str:
+    if view.target_locked:
+        return "Права смотрителя: есть, из настройки. Отсюда не снимаются."
+    if view.target_keeper:
+        return "Права смотрителя: есть."
+    return "Права смотрителя: нет."
 
 
 # --- статистика и обслуживание -----------------------------------------

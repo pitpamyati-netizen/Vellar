@@ -38,6 +38,10 @@ class InMemoryUserRepository:
         user = self._users.get(telegram_id) or User(telegram_id=telegram_id)
         self._users[telegram_id] = replace(user, settings=settings)
 
+    async def set_keeper(self, telegram_id: int, keeper: bool) -> None:
+        user = self._users.get(telegram_id) or User(telegram_id=telegram_id)
+        self._users[telegram_id] = replace(user, keeper=keeper)
+
     async def unchecked(self, *, limit: int, before: int) -> tuple[int, ...]:
         stale = [
             telegram_id

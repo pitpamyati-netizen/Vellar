@@ -83,11 +83,23 @@ class FakeTelegram:
 
 
 class Keeper:
-    """Смотритель за настоящей панелью: одно нажатие — один вызов хендлера."""
+    """Смотритель за настоящей панелью: одно нажатие — один вызов хендлера.
 
-    def __init__(self, sent: Recorder, telegram: FakeTelegram, **deps: Any) -> None:
+    ``account`` — от чьего имени нажимают. По умолчанию это тот, кого назвал
+    ``ADMIN_IDS``, но за панель садится и тот, кому право выдали изнутри игры, а
+    ему панель показывает не то же самое.
+    """
+
+    def __init__(
+        self,
+        sent: Recorder,
+        telegram: FakeTelegram,
+        account: int = KEEPER_ACCOUNT,
+        **deps: Any,
+    ) -> None:
         self.sent = sent
         self.telegram = telegram
+        self.account = account
         self.deps = deps
 
     async def press(self, *messages: str) -> Screen:
@@ -95,8 +107,8 @@ class Keeper:
             message = Message(
                 message_id=1,
                 date=datetime.now(UTC),
-                chat=Chat(id=KEEPER_ACCOUNT, type="private"),
-                from_user=User(id=KEEPER_ACCOUNT, is_bot=False, first_name="Смотритель"),
+                chat=Chat(id=self.account, type="private"),
+                from_user=User(id=self.account, is_bot=False, first_name="Смотритель"),
                 text=text,
             ).as_(cast(Bot, self.telegram))
             await play_handler.play(
@@ -452,6 +464,118 @@ async def test_blocked_accounts_and_everything_they_owned_are_removed(
     assert await users.get(900_030) is None
     # Смотритель на месте: его не спрашивали, потому что он только что писал.
     assert await characters.get_active(KEEPER_ACCOUNT) is not None
+
+
+# --- само право --------------------------------------------------------
+
+
+async def _seat(keeper: Keeper, account: int) -> Keeper:
+    """Тот же бот и те же хранилища, но за панелью другой человек."""
+    state = FSMContext(
+        storage=MemoryStorage(), key=StorageKey(bot_id=1, chat_id=account, user_id=account)
+    )
+    await state.set_state(Play.main_menu)
+    return Keeper(keeper.sent, keeper.telegram, account, **{**keeper.deps, "state": state})
+
+
+async def test_the_right_is_handed_out_and_lands_on_the_account(
+    keeper: Keeper,
+    users: InMemoryUserRepository,
+    characters: InMemoryCharacterRepository,
+    merla: Character,
+) -> None:
+    """Выдача права: она пишется аккаунту, а персонажу — только зеркало."""
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(keeper.button_with("Мерла"))
+    assert "Права смотрителя: нет." in keeper.sent.last.text()
+
+    await keeper.press(labels.KEEPER_PROMOTE.text)
+
+    assert "Мерла теперь смотритель." in keeper.sent.last.text()
+    account = await users.get(merla.user_id)
+    assert account is not None and account.keeper is True
+    stored = await characters.get(merla.id)
+    assert stored is not None and stored.is_admin is True
+    # Карточка сразу показывает новое положение дел, и кнопка на ней обратная.
+    assert "Права смотрителя: есть." in keeper.sent.last.text()
+    assert labels.KEEPER_DEMOTE.text in keeper.buttons()
+
+
+async def test_the_right_is_taken_back_the_same_way(
+    keeper: Keeper,
+    users: InMemoryUserRepository,
+    characters: InMemoryCharacterRepository,
+    merla: Character,
+) -> None:
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(keeper.button_with("Мерла"))
+    await keeper.press(labels.KEEPER_PROMOTE.text)
+
+    await keeper.press(labels.KEEPER_DEMOTE.text)
+
+    assert "Мерла больше не смотритель." in keeper.sent.last.text()
+    account = await users.get(merla.user_id)
+    assert account is not None and account.keeper is False
+    stored = await characters.get(merla.id)
+    assert stored is not None and stored.is_admin is False
+
+
+async def test_a_keeper_who_got_the_right_from_the_panel_sees_the_panel(
+    keeper: Keeper, merla: Character
+) -> None:
+    """Выданное право работает: панель у неё открывается с того же нажатия."""
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(keeper.button_with("Мерла"))
+    await keeper.press(labels.KEEPER_PROMOTE.text)
+
+    second = await _seat(keeper, merla.user_id)
+    await second.press(labels.KEEPER.text)
+
+    assert second.sent.last.id is ScreenId.KEEPER
+
+
+async def test_a_keeper_who_got_the_right_cannot_pass_it_on(
+    keeper: Keeper,
+    users: InMemoryUserRepository,
+    characters: InMemoryCharacterRepository,
+    merla: Character,
+) -> None:
+    """Ни кнопки, ни строки — и набранная руками надпись ничего не даёт."""
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(keeper.button_with("Мерла"))
+    await keeper.press(labels.KEEPER_PROMOTE.text)
+    other = await characters.create(
+        Character(id=0, user_id=900_500, name="Тишь", race_id="human", class_id="warrior")
+    )
+
+    second = await _seat(keeper, merla.user_id)
+    await second.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await second.press(second.button_with("Тишь"))
+    said = second.sent.last.text()
+    assert labels.KEEPER_PROMOTE.text not in second.buttons()
+    assert "Права смотрителя" not in said
+
+    await second.press(labels.KEEPER_PROMOTE.text)
+
+    assert "Нажмите кнопку панели." in second.sent.last.text()
+    account = await users.get(other.user_id)
+    assert account is None or account.keeper is False
+
+
+async def test_the_right_from_the_setting_is_not_taken_away_from_the_panel(
+    keeper: Keeper, characters: InMemoryCharacterRepository
+) -> None:
+    """Оно живёт в окружении: снять его отсюда значило бы соврать экрану."""
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(labels.KEEPER_FIND.text, "смотритель")
+    said = keeper.sent.last.text()
+    assert "Права смотрителя: есть, из настройки." in said
+    assert labels.KEEPER_DEMOTE.text not in keeper.buttons()
+
+    await keeper.press(labels.KEEPER_DEMOTE.text)
+
+    mine = await characters.get_active(KEEPER_ACCOUNT)
+    assert mine is not None and mine.is_admin is True
 
 
 # --- дверь остаётся закрытой -------------------------------------------

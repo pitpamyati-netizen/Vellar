@@ -138,7 +138,7 @@ class PostgresUserRepository:
 
     async def get(self, telegram_id: int) -> User | None:
         row = await self._pool.fetchrow(
-            "SELECT telegram_id, username, emoji, verbose_descriptions, page_size"
+            "SELECT telegram_id, username, emoji, verbose_descriptions, page_size, keeper"
             " FROM users WHERE telegram_id = $1",
             telegram_id,
         )
@@ -153,6 +153,7 @@ class PostgresUserRepository:
                 verbose=row["verbose_descriptions"],
                 page_size=row["page_size"],
             ),
+            keeper=row["keeper"],
         )
 
     async def upsert(self, user: User) -> User:
@@ -185,6 +186,18 @@ class PostgresUserRepository:
             settings.emoji,
             settings.verbose,
             settings.page_size,
+        )
+
+    async def set_keeper(self, telegram_id: int, keeper: bool) -> None:
+        """Право выдают и тому, кто ни разу не трогал настройки, поэтому upsert."""
+        await self._pool.execute(
+            """
+            INSERT INTO users (telegram_id, keeper)
+            VALUES ($1, $2)
+            ON CONFLICT (telegram_id) DO UPDATE SET keeper = EXCLUDED.keeper
+            """,
+            telegram_id,
+            keeper,
         )
 
     async def unchecked(self, *, limit: int, before: int) -> tuple[int, ...]:

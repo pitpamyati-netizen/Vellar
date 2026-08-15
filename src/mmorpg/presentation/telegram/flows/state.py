@@ -56,6 +56,8 @@ class PendingWrite:
     other: Character | None = None
     #: Чей персонаж стереть. Ноль - ничей.
     remove_character: int = 0
+    #: Кому дать или у кого отобрать право смотрителя: аккаунт и что с ним делать.
+    keeper_grant: tuple[int, bool] | None = None
     #: Какую уборку выполнить (``application/services/keeper_panel.py``).
     service: str = ""
     #: Перечитать правки из хранилища.
@@ -74,6 +76,7 @@ class PendingWrite:
             and self.forget is None
             and self.other is None
             and not self.remove_character
+            and self.keeper_grant is None
             and not self.service
             and not self.reload
         )

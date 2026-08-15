@@ -1,8 +1,8 @@
 """The keeper screen: who sees it, what it does, and who it stops.
 
-The right lives in ``ADMIN_IDS``; the character column only mirrors it. Both
-halves are tested here, because a service door that opens for a player is the
-one bug this feature can have.
+The right comes from ``ADMIN_IDS`` or from an account that was handed it; the
+character column only mirrors the two. Every half is tested here, because a
+service door that opens for a player is the one bug this feature can have.
 """
 
 from __future__ import annotations
@@ -11,11 +11,14 @@ from dataclasses import replace
 
 import pytest
 
-from mmorpg.application.services.keeper import sync_keeper
+from mmorpg.application.services.keeper import is_keeper, set_keeper, sync_keeper
 from mmorpg.config import Settings
 from mmorpg.domain.entities import Character, GameContent
 from mmorpg.domain.rules import keeper as keeper_rules
-from mmorpg.infrastructure.persistence.memory import InMemoryCharacterRepository
+from mmorpg.infrastructure.persistence.memory import (
+    InMemoryCharacterRepository,
+    InMemoryUserRepository,
+)
 from mmorpg.presentation.telegram.flows.play import (
     Clock,
     PlayState,
@@ -202,3 +205,78 @@ def test_a_malformed_admin_ids_names_nobody() -> None:
     assert settings.admins == frozenset({42})
     assert settings.is_admin(42) is True
     assert settings.is_admin(PLAYER) is False
+
+
+# --- the right handed out from inside the game -------------------------
+
+
+async def test_a_granted_account_gets_the_flag_without_the_setting(player: Character) -> None:
+    characters = InMemoryCharacterRepository()
+    stored = await characters.create(player)
+    settings = Settings(_env_file=None, admin_ids="")  # type: ignore[call-arg]
+
+    synced = await sync_keeper(stored, PLAYER, settings, characters, granted=True)
+
+    assert synced.is_admin is True
+
+
+async def test_the_right_lands_on_the_account_and_on_every_character() -> None:
+    """Персонажей у человека может быть несколько, а право у него одно."""
+    characters = InMemoryCharacterRepository()
+    users = InMemoryUserRepository()
+    settings = Settings(_env_file=None, admin_ids="")  # type: ignore[call-arg]
+    first = await characters.create(
+        Character(id=0, user_id=PLAYER, name="Аргус", race_id="human", class_id="warrior")
+    )
+    second = await characters.create(
+        Character(id=0, user_id=PLAYER, name="Мерла", race_id="human", class_id="warrior")
+    )
+
+    assert await set_keeper(users, characters, PLAYER, keeper=True, settings=settings) is True
+
+    account = await users.get(PLAYER)
+    assert account is not None and account.keeper is True
+    for character_id in (first.id, second.id):
+        read = await characters.get(character_id)
+        assert read is not None and read.is_admin is True
+
+    assert await set_keeper(users, characters, PLAYER, keeper=False, settings=settings) is True
+
+    account = await users.get(PLAYER)
+    assert account is not None and account.keeper is False
+    read = await characters.get(first.id)
+    assert read is not None and read.is_admin is False
+
+
+async def test_the_right_that_comes_from_the_setting_cannot_be_taken_here() -> None:
+    characters = InMemoryCharacterRepository()
+    users = InMemoryUserRepository()
+    settings = Settings(_env_file=None, admin_ids=str(PLAYER))  # type: ignore[call-arg]
+    stored = await characters.create(
+        Character(
+            id=0,
+            user_id=PLAYER,
+            name="Аргус",
+            race_id="human",
+            class_id="warrior",
+            is_admin=True,
+        )
+    )
+
+    assert await set_keeper(users, characters, PLAYER, keeper=False, settings=settings) is False
+
+    read = await characters.get(stored.id)
+    assert read is not None and read.is_admin is True
+
+
+async def test_is_keeper_answers_from_either_source() -> None:
+    users = InMemoryUserRepository()
+    named = Settings(_env_file=None, admin_ids=str(PLAYER))  # type: ignore[call-arg]
+    nameless = Settings(_env_file=None, admin_ids="")  # type: ignore[call-arg]
+
+    assert await is_keeper(users, PLAYER, named) is True
+    assert await is_keeper(users, PLAYER, nameless) is False
+
+    await users.set_keeper(PLAYER, True)
+
+    assert await is_keeper(users, PLAYER, nameless) is True

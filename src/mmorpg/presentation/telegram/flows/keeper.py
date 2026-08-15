@@ -142,7 +142,7 @@ def _render_panel(
             return keeper_screens.players_screen(content, view, state.keeper_page, state.notice)
         case ScreenId.KEEPER_PLAYER if view.target is not None:
             return keeper_screens.player_screen(
-                content, view.target, derived_stats(content, view.target), state.notice
+                content, view.target, derived_stats(content, view.target), state.notice, view
             )
         case ScreenId.KEEPER_STATS if view.census is not None:
             return keeper_screens.stats_screen(view.census, state.notice)
@@ -583,8 +583,37 @@ def _step_player(
     if labels.KEEPER_DELETE.matches(command.argument):
         return _delete(state, view)
 
+    right = _right(state, command, view)
+    if right is not None:
+        return right
+
     # Любая другая кнопка снимает взведённое удаление: смотритель передумал.
     return _grant(content, view.target, replace(state, keeper_typing=""), command, own=False)
+
+
+def _right(state: PlayState, command: Command, view: KeeperView) -> PlayState | None:
+    """Само право смотрителя: выдать или отобрать. ``None`` - нажали не это.
+
+    Кнопки этих надписей нет у того, чьё право не из настройки, но набрать надпись
+    руками может кто угодно, поэтому проверка стоит здесь, а не только на экране.
+    Отказ при этом обычный, «нажмите кнопку панели»: кто не раздаёт право, тот и
+    не должен узнать, что такая кнопка вообще бывает.
+    """
+    target = view.target
+    if target is None:  # pragma: no cover - проверено вызывающим
+        return None
+    giving = labels.KEEPER_PROMOTE.matches(command.argument)
+    taking = labels.KEEPER_DEMOTE.matches(command.argument)
+    if not giving and not taking:
+        return None
+    if not view.granting or view.target_locked:
+        return state.with_notice(PRESS_A_BUTTON)
+    said = f"{target.name} теперь смотритель." if giving else f"{target.name} больше не смотритель."
+    return (
+        replace(state, keeper_typing="")
+        .storing(PendingWrite(keeper_grant=(target.user_id, giving)))
+        .with_notice(said)
+    )
 
 
 def _delete(state: PlayState, view: KeeperView) -> PlayState:

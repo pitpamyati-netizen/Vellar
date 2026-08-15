@@ -179,5 +179,6 @@ world. There is no undo, which is why the batch file asks first.
 - Leave `SLOW_CALLBACK_DETECTOR=false` in the stack. It needs asyncio debug mode,
   which timestamps every callback - useful while developing, wasteful under load.
 - Keep `ADMIN_IDS` short and true. Every id on that list hands itself gold and
-  levels from inside the game (`docs/keeper.md`); an id left there by accident is
-  a keeper nobody remembers appointing.
+  levels from inside the game, and hands the keeper right to anybody else
+  (`docs/keeper.md`); an id left there by accident is a keeper nobody remembers
+  appointing, with keepers of its own.

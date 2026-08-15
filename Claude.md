@@ -40,7 +40,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   протоколы хранилищ.
 - `application/` — `dto/creation.py` (черновик), `services/`: `group_trade.py`
   (операции группы), `offers.py` (предложения в кэше), `keeper.py` (сверка флага
-  смотрителя с `ADMIN_IDS`), `content.py` (реестр: содержимое плюс правки, живое),
+  смотрителя с `ADMIN_IDS` и с правом, выданным из панели; выдача такого права),
+  `content.py` (реестр: содержимое плюс правки, живое),
   `keeper_panel.py` (запись правок и уборка).
 - `infrastructure/` — `persistence/`: `postgres`, `memory`, `pool`; `cache/`:
   `redis_cache`, `memory`; `content/loader.py` (TOML → dataclass),
@@ -65,8 +66,9 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 
 **`docs/`** — `architecture.md`, `accessibility.md` (спецификация, не пожелания),
 `procgen.md`, `content-guide.md`, `skills.md`, `crafts.md`, `keeper.md`,
-`deployment.md`, `release-checklist.md`, `adr/0001..0007`
-(`0003` — поколения локаций вместо шестичасовой стражи).
+`deployment.md`, `release-checklist.md`, `adr/0001..0008`
+(`0003` — поколения локаций вместо шестичасовой стражи; `0008` — право
+смотрителя раздаётся из панели, корень остаётся в окружении).
 
 **`tests/`** — `domain/` (слои держит `test_layering.py`, длину боя —
 `test_combat_balance.py`), `content/`, `presentation/` (доступность, канал,
@@ -80,7 +82,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 **`migrations/`** — `env.py`, `versions/0001_initial_schema`, `0002_trades`,
 `0003_privacy`, `0004_wounds_bank_quests`, `0005_crafts`, `0006_admin`,
 `0007_tutorial`, `0008_arena`, `0009_keeper_panel` (правки поверх содержимого,
-учёт заблокировавших бота), `0010_arena_credit` (что круг держит с игрока).
+учёт заблокировавших бота), `0010_arena_credit` (что круг держит с игрока),
+`0011_keeper_grants` (право смотрителя, выданное изнутри игры).
 **`backups/`** — дампы от `stop.bat` и `Update.bat`; не в репозитории.
 **`.githooks/pre-commit`** — гейт на коммите.
 **`.claude/`** — `settings.json` (хук `Stop`) и `autocommit.sh`: если после

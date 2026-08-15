@@ -117,6 +117,8 @@ KEEPER_RELOAD = label("Перечитать правки", "🔄")
 KEEPER_FIND = label("Найти по имени", "🔤")
 KEEPER_MOVE = label("Перевести в город", "🧭")
 KEEPER_DELETE = label("Удалить персонажа", "🗑")
+KEEPER_PROMOTE = label("Сделать смотрителем", "🗝")
+KEEPER_DEMOTE = label("Убрать из смотрителей", "🚷")
 
 # Maintenance.
 KEEPER_SWEEP_DRAFTS = label("Убрать брошенных", "🧺")

@@ -171,6 +171,25 @@ async def test_upsert_does_not_reset_settings(pool, clean_user) -> None:
     assert read.settings.page_size == 20
 
 
+async def test_the_keeper_right_is_stored_on_the_account_and_read_back(pool, clean_user) -> None:
+    """Право выдают и тому, кто ни разу не трогал настройки, поэтому строки может не быть."""
+    users = PostgresUserRepository(pool)
+
+    await users.set_keeper(clean_user, True)
+
+    read = await users.get(clean_user)
+    assert read is not None and read.keeper is True
+
+    # Обычный upsert на каждом обновлении не должен его снимать.
+    await users.upsert(User(telegram_id=clean_user, username="tester"))
+    read = await users.get(clean_user)
+    assert read is not None and read.keeper is True
+
+    await users.set_keeper(clean_user, False)
+    read = await users.get(clean_user)
+    assert read is not None and read.keeper is False
+
+
 # --- privacy -----------------------------------------------------------------
 
 

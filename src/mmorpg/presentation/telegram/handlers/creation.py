@@ -79,15 +79,18 @@ async def start(
     """Entry point. An existing character skips creation entirely."""
     if message.from_user is None:  # pragma: no cover - Telegram always sets it
         return
-    await users.upsert(
+    account = await users.upsert(
         User(telegram_id=message.from_user.id, username=message.from_user.username or "")
     )
 
     existing = await characters.get_active(message.from_user.id)
     if existing is not None:
         # ``/start`` is the one moment every player passes through, so it is where
-        # the keeper flag is reconciled with ADMIN_IDS.
-        existing = await sync_keeper(existing, message.from_user.id, settings, characters)
+        # the keeper flag is reconciled with the setting and with what the account
+        # was handed from inside the game.
+        existing = await sync_keeper(
+            existing, message.from_user.id, settings, characters, granted=account.keeper
+        )
         await state.set_state(Play.main_menu)
         city = content.city(existing.city_id)
         await send_screen(message, created_screen(existing.name, city.name))

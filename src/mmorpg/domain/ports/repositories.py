@@ -35,11 +35,19 @@ class AccessibilitySettings:
 
 @dataclass(frozen=True, slots=True)
 class User:
-    """A Telegram user, independent of their characters."""
+    """A Telegram user, independent of their characters.
+
+    ``keeper`` is the right that was handed out from inside the game. It lives on
+    the account and not on the character for the same reason a black list does: a
+    right a player could walk around by rolling a second character would not be
+    one. The right that comes from ``ADMIN_IDS`` is not stored here at all - it is
+    read from the environment every time (``docs/keeper.md``).
+    """
 
     telegram_id: int
     username: str = ""
     settings: AccessibilitySettings = field(default_factory=AccessibilitySettings)
+    keeper: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +81,14 @@ class UserRepository(Protocol):
     async def upsert(self, user: User) -> User: ...
 
     async def save_settings(self, telegram_id: int, settings: AccessibilitySettings) -> None: ...
+
+    async def set_keeper(self, telegram_id: int, keeper: bool) -> None:
+        """Дать или снять право смотрителя, выданное изнутри игры.
+
+        Аккаунт, о котором ничего не записано, права не имеет, поэтому строку
+        приходится заводить: право выдают и тому, кто ещё ни разу не менял
+        настройки.
+        """
 
     async def unchecked(self, *, limit: int, before: int) -> tuple[int, ...]:
         """Аккаунты, которых давно не проверяли на «бот заблокирован».
