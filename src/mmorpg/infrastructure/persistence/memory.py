@@ -103,6 +103,28 @@ class InMemoryCharacterRepository:
         folded = name.casefold()
         return any(character.name.casefold() == folded for character in self._characters.values())
 
+    async def arena_opponent(self, *, level: int, window: int, exclude_id: int) -> Character | None:
+        """The nearest level match. Deterministic here, unlike the SQL one.
+
+        A game running in memory has a handful of characters and no reason to
+        randomise: the test that asks for an opponent wants the same one twice.
+        """
+        pool = [
+            character
+            for character in self._characters.values()
+            if character.id != exclude_id and abs(character.level - level) <= window
+        ]
+        if not pool:
+            return None
+        return min(pool, key=lambda character: (abs(character.level - level), character.id))
+
+    async def arena_table(self, *, limit: int = 10) -> tuple[Character, ...]:
+        ranked = sorted(
+            (character for character in self._characters.values() if character.arena_wins),
+            key=lambda character: (-character.arena_wins, -character.level, character.name),
+        )
+        return tuple(ranked[:limit])
+
 
 class InMemoryInventoryRepository:
     def __init__(self) -> None:

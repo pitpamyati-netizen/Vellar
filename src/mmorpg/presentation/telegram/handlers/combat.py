@@ -15,6 +15,7 @@ from dataclasses import replace
 
 from aiogram import F, Router
 from aiogram.enums import ChatType
+from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
@@ -26,10 +27,14 @@ from mmorpg.domain.entities.content import GameContent, ItemKind
 from mmorpg.domain.entities.location import EnemyRank
 from mmorpg.domain.ports.repositories import CharacterRepository, InventoryRepository
 from mmorpg.domain.procgen.location import cleared_mask
+from mmorpg.domain.procgen.seeds import derive
 from mmorpg.domain.rules import adventure
+from mmorpg.domain.rules import arena as arena_rules
+from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
 from mmorpg.domain.rules.combat import resolve_turn
 from mmorpg.domain.rules.tutorial import TutorialTask
+from mmorpg.logging import get_logger
 from mmorpg.presentation.telegram.flows import combat as fight_flow
 from mmorpg.presentation.telegram.flows.play import (
     DUNGEON_DEPTH,
@@ -44,10 +49,13 @@ from mmorpg.presentation.telegram.flows.play import (
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.messaging import send_screen
+from mmorpg.presentation.telegram.screens import arena as arena_screens
 from mmorpg.presentation.telegram.screens import combat as combat_screens
 from mmorpg.presentation.telegram.screens import tutorial as tutorial_screens
 from mmorpg.presentation.telegram.screens.base import ScreenId
 from mmorpg.presentation.telegram.states.screens import STATE_FOR_SCREEN, NavigationStack, Play
+
+logger = get_logger(__name__)
 
 STATE_KEY = "combat"
 PLAY_KEY = "play"
@@ -73,15 +81,90 @@ async def open_fight(
     character: Character,
     flow: PlayState,
     emoji: bool = False,
+    characters: CharacterRepository | None = None,
 ) -> None:
     """Build the fight the play flow asked for and show its first screen."""
-    session = _spawn(content, character, flow, world_seed=settings.world_seed)
+    session = await _spawn_duel(content, character, flow, characters)
+    if session is None and flow.fight == "arena":
+        character, session = await _spawn_arena(content, character, characters)
+        if session is None:
+            await send_screen(
+                message,
+                arena_screens.arena_screen(
+                    character, notice="В круге сейчас не с кем драться. Зайдите позже."
+                ),
+                emoji=emoji,
+            )
+            return
+    if session is None:
+        session = _spawn(content, character, flow, world_seed=settings.world_seed)
     landing = replace(flow, screen=ScreenId.COMBAT, fight="")
     await state.set_state(Play.combat)
     await state.update_data(
         {PLAY_KEY: landing.serialise(), STATE_KEY: fight_flow.serialise(session)}
     )
     await send_screen(message, fight_flow.render(content, character, session), emoji=emoji)
+
+
+async def _spawn_duel(
+    content: GameContent,
+    character: Character,
+    flow: PlayState,
+    characters: CharacterRepository | None,
+) -> fight_flow.CombatSession | None:
+    """A fight against another player, fought against a snapshot of them.
+
+    ``None`` when this step is not a duel at all. A target who is gone since the
+    button was drawn is also ``None``: the play flow will simply draw the node
+    again, and nobody is charged for a fight that did not happen.
+    """
+    if not flow.fight.startswith("pvp:") or characters is None:
+        return None
+    target_id = int(flow.fight.removeprefix("pvp:") or 0)
+    target = await characters.get(target_id)
+    if target is None:
+        return None
+    seed = derive("duel", character.id, target.id, flow.session.node)
+    return fight_flow.begin(
+        content,
+        character,
+        (pvp_rules.as_enemy(content, target),),
+        seed=seed,
+        node=flow.session.node,
+        opponent=target.id,
+    )
+
+
+async def _spawn_arena(
+    content: GameContent, character: Character, characters: CharacterRepository | None
+) -> tuple[Character, fight_flow.CombatSession | None]:
+    """Find somebody of about this level and take the stake before the bell.
+
+    The opponent is never told and never waits: what the player fights is a
+    snapshot of a stored character (``domain/rules/arena.py``). Nobody found means
+    nobody is charged - the stake is taken only once a fight exists.
+    """
+    if characters is None:  # pragma: no cover - the handler always passes one
+        return character, None
+    other = await characters.arena_opponent(
+        level=character.level, window=arena_rules.LEVEL_WINDOW, exclude_id=character.id
+    )
+    if other is None:
+        return character, None
+
+    paid, stake = arena_rules.place_stake(character)
+    await characters.save(paid)
+    seed = derive("arena", paid.id, other.id, paid.arena_wins + paid.arena_losses)
+    session = fight_flow.begin(
+        content,
+        paid,
+        (pvp_rules.as_enemy(content, other),),
+        seed=seed,
+        node=0,
+        arena=True,
+    )
+    logger.info("arena_round_started", character_id=paid.id, opponent_id=other.id, stake=stake)
+    return paid, session
 
 
 def _spawn(
@@ -204,7 +287,11 @@ async def _store_and_show(
                 f"Подряд «{step.quest.name}»: {step.progress} из {step.quest.target_count}."
                 for step in won.quest_steps
             )
-            updated_flow, rows = _after_victory(session, flow, extra)
+            if session.is_duel:
+                character, rows = character, []
+                updated_flow = flow
+            else:
+                updated_flow, rows = _after_victory(session, flow, extra)
             # Winning a fight is one of the introduction tasks, and it is ticked
             # off by the win itself - wherever it happened.
             marked = tutorial_rules.complete(character, TutorialTask.FIGHT)
@@ -219,6 +306,19 @@ async def _store_and_show(
         case _:
             character = adventure.carry_wounds(content, character, session.state)
 
+    if session.arena and session.state.outcome in {CombatOutcome.VICTORY, CombatOutcome.DEFEAT}:
+        result = arena_rules.settle(character, won=session.state.outcome is CombatOutcome.VICTORY)
+        character = result.character
+        extra.append(arena_screens.round_line(result))
+        updated_flow = _back_to_city(flow, character)
+    elif session.is_duel and session.state.outcome in {
+        CombatOutcome.VICTORY,
+        CombatOutcome.DEFEAT,
+    }:
+        character = await _settle_duel(
+            message, content, character, session, characters, extra, won=session.state.outcome
+        )
+
     await characters.save(character)
     await state.set_state(Play.combat)
     await state.update_data(
@@ -228,6 +328,61 @@ async def _store_and_show(
         message,
         fight_flow.render(content, character, session, extra=extra, rows=rows, gold_lost=gold_lost),
     )
+
+
+async def _settle_duel(
+    message: Message,
+    content: GameContent,
+    character: Character,
+    session: fight_flow.CombatSession,
+    characters: CharacterRepository,
+    extra: list[str],
+    *,
+    won: CombatOutcome,
+) -> Character:
+    """Move the stake of a duel, and tell the other side what happened to them.
+
+    The defender was not at their phone - that is the whole point of fighting a
+    snapshot - so they learn about it from a message, not from a screen they were
+    staring at. If they cannot be reached, the gold still moved: the fight
+    happened either way.
+    """
+    other = await characters.get(session.opponent)
+    if other is None:  # pragma: no cover - the other character was deleted mid-fight
+        return character
+
+    if won is CombatOutcome.VICTORY:
+        character, other, spoils = pvp_rules.settle(character, other)
+        extra.append(f"Поединок выигран. С {other.name} снято {spoils.gold} золота.")
+        told = (
+            f"На вас напал {character.name}, уровень {character.level}. "
+            f"Вы проиграли поединок и потеряли {spoils.gold} золота. "
+            "Золото в банке не трогают."
+        )
+    else:
+        other, character, spoils = pvp_rules.settle(other, character)
+        extra.append(f"Поединок проигран. {other.name} забрал {spoils.gold} золота.")
+        told = (
+            f"На вас напал {character.name}, уровень {character.level}, и проиграл. "
+            f"Вам досталось {spoils.gold} золота."
+        )
+
+    await characters.save(other)
+    await _tell(message, other.user_id, told)
+    return character
+
+
+async def _tell(message: Message, telegram_id: int, text: str) -> None:
+    """One line to somebody who is not looking at the game right now."""
+    bot = message.bot
+    if bot is None:  # pragma: no cover - a message always carries its bot
+        return
+    try:
+        await bot.send_message(chat_id=telegram_id, text=text)
+    except TelegramAPIError:
+        # Blocked the bot, deleted the chat, never started it: their gold still
+        # moved, and a duel is not worth failing a turn over.
+        logger.info("duel_notice_undelivered", telegram_id=telegram_id)
 
 
 def _after_victory(

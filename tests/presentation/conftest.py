@@ -32,6 +32,7 @@ from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.infrastructure.content import load_content
 from mmorpg.presentation.telegram.handlers import creation as handlers_creation
 from mmorpg.presentation.telegram.keyboards import labels
+from mmorpg.presentation.telegram.screens import arena as arena_screens
 from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import combat as combat_screens
 from mmorpg.presentation.telegram.screens import crafts as craft_screens
@@ -259,6 +260,15 @@ def all_screens(
         tutorial_screens.tutorial_screen(hero),
         tutorial_screens.tutorial_screen(replace(hero, tutorial=0b000111)),
         tutorial_screens.tutorial_screen(replace(hero, tutorial=0b111111)),
+        arena_screens.arena_screen(fighter),
+        arena_screens.arena_screen(
+            replace(fighter, arena_wins=4, arena_losses=2),
+            table=(
+                replace(fighter, name="Мерла", arena_wins=9),
+                replace(fighter, name="Довен", arena_wins=4),
+            ),
+        ),
+        arena_screens.arena_screen(replace(hero, gold=0)),
         play.stub_screen("Арена"),
         skill_screens.skills_screen(content, fighter, PageState()),
         skill_screens.skills_screen(content, hero, PageState(page=2)),

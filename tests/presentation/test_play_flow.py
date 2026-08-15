@@ -457,3 +457,78 @@ def test_a_finished_introduction_says_so_and_offers_nothing(
 
     pressed = step(content, taught, standing, "Выполнить задание")
     assert pressed.pending.empty
+
+
+# --- other players on the road ----------------------------------------
+
+
+def test_a_free_location_shows_who_else_is_here(
+    content: GameContent, hero: Character, in_city: PlayState
+) -> None:
+    """On a free location the news that matters is who is standing next to you."""
+    from mmorpg.domain.entities.location import Presence
+
+    grown = replace(hero, level=20)
+    listed = step(content, grown, in_city, "Локации")
+    text = render(content, grown, listed, world_seed=WORLD_SEED).text()
+    assert "вольная" in text, "a location where you can be robbed must say so"
+
+    walked = step(content, grown, listed, "4. Тракт на Затон")
+    company = (Presence(character_id=99, name="Мерла", level=21, node=0),)
+    screen = render(content, grown, walked, world_seed=WORLD_SEED, neighbours=company)
+    assert "Мерла, уровень 21." in screen.text()
+    assert "Напасть: Мерла" in [item.text for row in screen.rows for item in row]
+
+
+def test_a_peaceful_location_offers_nobody_to_attack(
+    content: GameContent, hero: Character, in_city: PlayState
+) -> None:
+    from mmorpg.domain.entities.location import Presence
+
+    grown = replace(hero, level=20)
+    walked = step(content, grown, in_city, "Локации", "1. Луга у Заставы")
+    company = (Presence(character_id=99, name="Мерла", level=21, node=0),)
+    screen = render(content, grown, walked, world_seed=WORLD_SEED, neighbours=company)
+    assert "Напасть: Мерла" not in [item.text for row in screen.rows for item in row]
+
+
+def test_an_attack_on_a_newcomer_is_refused_in_words(
+    content: GameContent, hero: Character, in_city: PlayState
+) -> None:
+    from mmorpg.domain.entities.location import Presence
+
+    grown = replace(hero, level=20)
+    walked = step(content, grown, in_city, "Локации", "4. Тракт на Затон")
+    company = (Presence(character_id=99, name="Мерла", level=3, node=0),)
+    refused = advance(
+        content,
+        grown,
+        walked,
+        "Напасть: Мерла",
+        clock=CLOCK,
+        world_seed=WORLD_SEED,
+        neighbours=company,
+    )
+    assert refused.fight == ""
+    assert "под защитой" in refused.notice
+
+
+def test_an_allowed_attack_hands_the_fight_to_the_handler(
+    content: GameContent, hero: Character, in_city: PlayState
+) -> None:
+    from mmorpg.domain.entities.location import Presence
+
+    grown = replace(hero, level=20)
+    walked = step(content, grown, in_city, "Локации", "4. Тракт на Затон")
+    company = (Presence(character_id=99, name="Мерла", level=21, node=0),)
+    started = advance(
+        content,
+        grown,
+        walked,
+        "Напасть: Мерла",
+        clock=CLOCK,
+        world_seed=WORLD_SEED,
+        neighbours=company,
+    )
+    assert started.fight == "pvp:99"
+    assert started.screen is ScreenId.COMBAT

@@ -17,6 +17,7 @@ answer to "where does the game store things".
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 from dataclasses import replace
 
 from aiogram import F, Router
@@ -113,6 +114,7 @@ async def play(
         gather_cooldown=settings.gather_cooldown_seconds,
     )
     goods = await _goods(content, character, flow, inventory, settings, clock.shop_rotation)
+    company = await _company(flow, character, locations, now)
 
     updated = advance(
         content,
@@ -123,6 +125,7 @@ async def play(
         clock=clock,
         goods=goods,
         settings=accessibility,
+        neighbours=company,
     )
 
     character = await _apply(
@@ -139,16 +142,26 @@ async def play(
             character=character,
             flow=updated,
             emoji=emoji,
+            characters=characters,
         )
         return
 
     # The screen the step landed on is not the screen it started from, and the
     # bag may have changed on the way, so what it shows is read again.
     shelf = await _goods(content, character, updated, inventory, settings, clock.shop_rotation)
+    company = await _company(updated, character, locations, now)
     await state.set_state(STATE_FOR_SCREEN[updated.screen])
     await state.update_data({STATE_KEY: updated.serialise()})
     await render_play(
-        message, content, settings, updated, character, emoji=emoji, goods=shelf, clock=clock
+        message,
+        content,
+        settings,
+        updated,
+        character,
+        emoji=emoji,
+        goods=shelf,
+        clock=clock,
+        neighbours=company,
     )
 
 
@@ -162,6 +175,7 @@ async def render_play(
     emoji: bool = False,
     goods: Goods | None = None,
     clock: Clock | None = None,
+    neighbours: Sequence[Presence] = (),
 ) -> None:
     """Draw one play screen. Used by this handler and by the fight handler."""
     shelf = goods if goods is not None else Goods(gold=character.gold)
@@ -174,8 +188,28 @@ async def render_play(
             world_seed=settings.world_seed,
             goods=shelf,
             clock=clock,
+            neighbours=neighbours,
         ),
         emoji=emoji,
+    )
+
+
+async def _company(
+    flow: PlayState,
+    character: Character,
+    locations: LocationStateCache,
+    now: int,
+) -> tuple[Presence, ...]:
+    """Who else is standing on this node. Empty everywhere but in a location."""
+    if flow.screen is not ScreenId.LOCATION or not flow.session.active:
+        return ()
+    return await locations.others_at(
+        flow.session.city_id,
+        flow.session.slot,
+        flow.session.node,
+        exclude=character.id,
+        now=now,
+        ttl=PRESENCE_TTL,
     )
 
 

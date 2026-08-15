@@ -199,6 +199,10 @@ class Location:
     level_min: int
     level_max: int
     city_id: str
+    # Whether players may attack each other here. Off everywhere by default: a
+    # place where somebody can take your gold has to say so before you walk in
+    # (``domain/rules/pvp.py``).
+    pvp: bool = False
 
     def covers(self, level: int) -> bool:
         return self.level_min <= level <= self.level_max

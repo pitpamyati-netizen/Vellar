@@ -720,6 +720,7 @@ def _parse_world(raw: Mapping[str, Any], problems: list[str]) -> tuple[City, ...
                 level_min=int(loc["level_min"]),
                 level_max=int(loc["level_max"]),
                 city_id=city_id,
+                pvp=bool(loc.get("pvp", False)),
             )
             for loc in entry.get("location", ())
         )

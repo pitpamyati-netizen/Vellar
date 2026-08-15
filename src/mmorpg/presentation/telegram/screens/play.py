@@ -7,9 +7,16 @@ to stop listening as soon as they know enough (accessibility rule 4).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, GameContent, Location
-from mmorpg.domain.entities.location import GeneratedLocation, LocationNode, NodeKind
+from mmorpg.domain.entities.location import (
+    GeneratedLocation,
+    LocationNode,
+    NodeKind,
+    Presence,
+)
 from mmorpg.domain.rules.progression import experience_into_level
 from mmorpg.domain.rules.stats import DerivedStats
 from mmorpg.presentation.telegram.keyboards import labels
@@ -174,6 +181,7 @@ CITY_SERVICES: tuple[tuple[str, Label], ...] = (
     ("locations", labels.LOCATIONS),
     ("shop", labels.SHOP),
     ("dungeons", labels.DUNGEONS),
+    ("arena", labels.ARENA),
     ("tavern", labels.TAVERN),
     ("mentor", labels.MENTOR),
     ("bank", labels.BANK),
@@ -231,6 +239,8 @@ def location_list_screen(
 def _location_fit(location: Location, level: int) -> str:
     """Whether this place is worth the walk right now, in one phrase."""
     band = f"уровни с {location.level_min} по {location.level_max}"
+    if location.pvp:
+        band = f"{band}, вольная: здесь нападают друг на друга"
     if level < location.level_min:
         return f"{band}, вам сюда рано"
     if level > location.level_max:
@@ -262,12 +272,18 @@ def risk_line(node: LocationNode, character_level: int) -> str:
     return f"Уровень узла {node.level}, ваш {character_level}: {risk}.{tier}"
 
 
+def attack_label(name: str) -> Label:
+    return label(f"Напасть: {name}")
+
+
 def location_screen(
     location: GeneratedLocation,
     node: LocationNode,
     *,
     cleared: int,
     character_level: int = 1,
+    others: Sequence[Presence] = (),
+    pvp: bool = False,
     notice: str = "",
 ) -> Screen:
     from mmorpg.domain.procgen.location import is_cleared
@@ -312,8 +328,18 @@ def location_screen(
             f"Узел {neighbour.index}: {neighbour.name}, {NODE_DESCRIPTIONS[neighbour.kind]}{mark}."
         )
 
+    # Who else is here comes after the way out and before the neighbours: it is
+    # news, not navigation, and on a free location it is the news that matters.
+    if others:
+        lines.append("Здесь же:")
+        lines.extend(f"{person.name}, уровень {person.level}." for person in others)
+    elif pvp:
+        lines.append("Здесь вольная земля: на этом узле могут напасть. Сейчас никого нет.")
+
     action = label(NODE_ACTIONS[node.kind])
     rows: list[tuple[Label, ...]] = [(action,)]
+    if pvp:
+        rows.extend((attack_label(person.name),) for person in others)
     rows.extend((node_button(neighbour),) for neighbour in neighbours)
     rows.append((LEAVE_LOCATION,))
 

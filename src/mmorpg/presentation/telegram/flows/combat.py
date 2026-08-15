@@ -47,16 +47,28 @@ class CombatSession:
     ``depth`` is zero for a fight standing at a location node, and one to three
     for a descent into the city dungeons, where fights follow one another with no
     break in between.
+
+    ``opponent`` is the character id of another player when this is a duel on a
+    free location: the fight is against a snapshot of them, and the id is what
+    the handler settles the stake against afterwards (``domain/rules/pvp.py``).
     """
 
     state: CombatState
     seed: bytes
     node: int = 0
     depth: int = 0
+    opponent: int = 0
+    # A round of the Debt Circle. The stake is already paid when the fight opens,
+    # and the outcome settles against the Circle rather than against a player.
+    arena: bool = False
 
     @property
     def in_descent(self) -> bool:
         return self.depth > 0
+
+    @property
+    def is_duel(self) -> bool:
+        return self.opponent > 0
 
     def turn_seed(self) -> bytes:
         return derive(self.seed, "turn", self.state.turn)
@@ -70,12 +82,16 @@ def begin(
     seed: bytes,
     node: int,
     depth: int = 0,
+    opponent: int = 0,
+    arena: bool = False,
 ) -> CombatSession:
     return CombatSession(
         state=start_combat(content, character, enemies),
         seed=seed,
         node=node,
         depth=depth,
+        opponent=opponent,
+        arena=arena,
     )
 
 
@@ -219,6 +235,8 @@ def serialise(session: CombatSession) -> str:
             "seed": session.seed.hex(),
             "node": session.node,
             "depth": session.depth,
+            "opponent": session.opponent,
+            "arena": session.arena,
             "turn": state.turn,
             "outcome": state.outcome.value,
             "experience": state.experience,
@@ -320,4 +338,6 @@ def deserialise(raw: str) -> CombatSession:
         seed=bytes.fromhex(data["seed"]),
         node=data["node"],
         depth=int(data.get("depth", 0)),
+        opponent=int(data.get("opponent", 0)),
+        arena=bool(data.get("arena", False)),
     )

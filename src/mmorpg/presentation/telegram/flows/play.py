@@ -14,19 +14,21 @@ database (``docs/architecture.md``).
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, GameContent, Item, SkillKind
-from mmorpg.domain.entities.location import GeneratedLocation, NodeKind
+from mmorpg.domain.entities.location import GeneratedLocation, NodeKind, Presence
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.ports.repositories import AccessibilitySettings
 from mmorpg.domain.procgen.location import cleared_mask, generate_location, is_cleared
 from mmorpg.domain.procgen.seeds import derive, location_seed
 from mmorpg.domain.rules import adventure, economy
+from mmorpg.domain.rules import arena as arena_rules
 from mmorpg.domain.rules import crafts as craft_rules
 from mmorpg.domain.rules import keeper as keeper_rules
+from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
@@ -35,6 +37,7 @@ from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.domain.rules.tutorial import TutorialTask
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.routing import Command, Intent, resolve
+from mmorpg.presentation.telegram.screens import arena as arena_screens
 from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import crafts as craft_screens
 from mmorpg.presentation.telegram.screens import keeper as keeper_screens
@@ -57,6 +60,7 @@ SERVICES: dict[str, tuple[str, ScreenId]] = {
     labels.LOCATIONS.text: ("locations", ScreenId.LOCATION_LIST),
     labels.SHOP.text: ("shop", ScreenId.SHOP),
     labels.DUNGEONS.text: ("dungeons", ScreenId.DUNGEON),
+    labels.ARENA.text: ("arena", ScreenId.ARENA),
     labels.TAVERN.text: ("tavern", ScreenId.TAVERN),
     labels.MENTOR.text: ("mentor", ScreenId.MENTOR),
     labels.BANK.text: ("bank", ScreenId.BANK),
@@ -283,6 +287,13 @@ def known_city(content: GameContent, city_id: str, fallback_id: str) -> City:
     return content.cities[0]
 
 
+def _location_allows_pvp(content: GameContent, session: LocationSession) -> bool:
+    """Whether this place is one of the free ones (``domain/rules/pvp.py``)."""
+    if not location_known(content, session):
+        return False
+    return content.city(session.city_id).location(session.slot).pvp
+
+
 def location_known(content: GameContent, session: LocationSession) -> bool:
     """Whether the visit in this session can still be rebuilt from content."""
     return (
@@ -338,6 +349,8 @@ def render(
     goods: Goods | None = None,
     settings: AccessibilitySettings | None = None,
     clock: Clock | None = None,
+    neighbours: Sequence[Presence] = (),
+    arena_table: Sequence[Character] = (),
 ) -> Screen:
     shelf = goods or Goods(gold=character.gold)
     clock = clock or Clock()
@@ -384,6 +397,8 @@ def render(
                 location.node(state.session.node),
                 cleared=state.session.cleared,
                 character_level=character.level,
+                others=neighbours,
+                pvp=_location_allows_pvp(content, state.session),
                 notice=state.notice,
             )
         # The screen says "location" but the visit behind it is gone: state saved
@@ -403,6 +418,8 @@ def render(
             )
         case ScreenId.TUTORIAL:
             return tutorial_screens.tutorial_screen(character, state.notice)
+        case ScreenId.ARENA:
+            return arena_screens.arena_screen(character, arena_table, state.notice)
         case ScreenId.SKILLS:
             return skill_screens.skills_screen(content, character, state.skill_page, state.notice)
         case ScreenId.SKILL_SLOTS:
@@ -497,6 +514,7 @@ def advance(
     clock: Clock | None = None,
     goods: Goods | None = None,
     settings: AccessibilitySettings | None = None,
+    neighbours: Sequence[Presence] = (),
 ) -> PlayState:
     """Apply one message. Always answers; never raises on unexpected input."""
     # A visit that can no longer be rebuilt is dropped before anything reads it,
@@ -540,7 +558,14 @@ def advance(
         return healed
 
     screen = render(
-        content, character, state, world_seed=world_seed, goods=goods, settings=settings
+        content,
+        character,
+        state,
+        world_seed=world_seed,
+        goods=goods,
+        settings=settings,
+        clock=clock,
+        neighbours=neighbours,
     )
     command = resolve(text, screen)
 
@@ -567,6 +592,8 @@ def advance(
             return _handle_settings(state, command, settings or DEFAULT_SETTINGS)
         case ScreenId.TUTORIAL:
             return _handle_tutorial(content, character, state, command)
+        case ScreenId.ARENA:
+            return _handle_arena(character, state, command)
         case ScreenId.INVENTORY:
             return _handle_inventory(content, character, state, command, shelf)
         case ScreenId.SHOP:
@@ -614,7 +641,9 @@ def advance(
         case ScreenId.LOCATION_LIST:
             return _handle_location_list(content, character, state, command)
         case ScreenId.LOCATION:
-            return _handle_location(content, character, state, command, world_seed=world_seed)
+            return _handle_location(
+                content, character, state, command, world_seed=world_seed, neighbours=neighbours
+            )
         case _:
             return state.with_notice("Нажмите «Назад» или «Главное меню».")
 
@@ -636,6 +665,20 @@ def mark_task(state: PlayState, character: Character, task: TutorialTask) -> Pla
         pending=replace(state.pending, character=marked),
         notice=f"{state.notice} {line}".strip() if state.notice else line,
     )
+
+
+def _handle_arena(character: Character, state: PlayState, command: Command) -> PlayState:
+    """One button, and it costs money: the stake is taken before the fight."""
+    if command.intent is not Intent.SELECT or not arena_screens.ARENA_FIGHT.matches(
+        command.argument
+    ):
+        return state.with_notice("Нажмите «Выйти в круг» или «Назад».")
+    refused = arena_rules.refusal(character)
+    if refused:
+        return state.with_notice(refused)
+    # The handler picks the opponent and takes the stake: it is the one that can
+    # read another character out of storage.
+    return replace(state, fight="arena").at(ScreenId.COMBAT)
 
 
 def _handle_tutorial(
@@ -1382,6 +1425,7 @@ def _handle_location(
     command: Command,
     *,
     world_seed: str,
+    neighbours: Sequence[Presence] = (),
 ) -> PlayState:
     if not location_known(content, state.session):
         return (
@@ -1403,6 +1447,21 @@ def _handle_location(
             .at(ScreenId.LOCATION_LIST)
             .with_notice(f"Вы покинули локацию {location.name}.")
         )
+
+    for person in neighbours:
+        if not screens.attack_label(person.name).matches(command.argument):
+            continue
+        refused = pvp_rules.refusal(
+            character,
+            defender_name=person.name,
+            defender_level=person.level,
+            location_allows=_location_allows_pvp(content, state.session),
+        )
+        if refused:
+            return state.with_notice(refused)
+        # The handler owns the fight: it is the one that can read the other
+        # character out of storage and take the snapshot.
+        return replace(state, fight=f"pvp:{person.character_id}").at(ScreenId.COMBAT)
 
     for neighbour in (location.node(index) for index in node.links):
         if screens.node_button(neighbour).matches(command.argument):

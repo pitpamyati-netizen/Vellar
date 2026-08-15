@@ -88,6 +88,17 @@ class CharacterRepository(Protocol):
 
     async def name_taken(self, name: str) -> bool: ...
 
+    async def arena_opponent(self, *, level: int, window: int, exclude_id: int) -> Character | None:
+        """Somebody of about this level to fight a copy of, or ``None``.
+
+        The arena is asynchronous: what comes back is a character record, and the
+        fight is against a snapshot of it (``domain/rules/pvp.as_enemy``). The
+        opponent is never told and never waits.
+        """
+
+    async def arena_table(self, *, limit: int = 10) -> tuple[Character, ...]:
+        """The season table: most wins first."""
+
 
 @runtime_checkable
 class InventoryRepository(Protocol):

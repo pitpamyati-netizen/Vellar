@@ -142,6 +142,10 @@ class Character:
     # Craft work already done. A rank is never stored - it is counted back from
     # the experience here by ``mmorpg.domain.rules.crafts``.
     crafts: CraftLog = field(default_factory=CraftLog)
+    # What the Debt Circle remembers: two counters and nothing else, because the
+    # arena pays in gold at the moment of the fight (``domain/rules/arena.py``).
+    arena_wins: int = 0
+    arena_losses: int = 0
     # Which introduction tasks are behind them, as a bitmask
     # (``mmorpg.domain.rules.tutorial``). Zero is a player who has just arrived.
     tutorial: int = 0
@@ -181,6 +185,11 @@ class Character:
 
     def with_crafts(self, crafts: CraftLog) -> Character:
         return replace(self, crafts=crafts)
+
+    def with_arena_result(self, *, won: bool) -> Character:
+        if won:
+            return replace(self, arena_wins=self.arena_wins + 1)
+        return replace(self, arena_losses=self.arena_losses + 1)
 
     def as_admin(self, is_admin: bool) -> Character:
         return replace(self, is_admin=is_admin)

@@ -51,6 +51,7 @@ class ScreenId(StrEnum):
     MENTOR = "mentor"
     BANK = "bank"
     DUNGEON = "dungeon"
+    ARENA = "arena"
     SETTINGS = "settings"
     TUTORIAL = "tutorial"
     KEEPER = "keeper"

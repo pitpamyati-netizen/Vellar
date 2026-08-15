@@ -27,7 +27,7 @@ CHARACTER_COLUMNS = """
     id, user_id, name, race_id, class_id, level, experience, gold,
     stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
     trait_ids, loadout, equipment, city_id, unspent_stat_points, unspent_skill_points,
-    health, bank_gold, quests, crafts, tutorial, is_admin
+    health, bank_gold, quests, crafts, tutorial, arena_wins, arena_losses, is_admin
 """
 
 TRADE_COLUMNS = """
@@ -76,6 +76,8 @@ def _character_from_row(row: Any) -> Character:
         quests=_quests_from_json(row["quests"]),
         crafts=_crafts_from_json(row["crafts"]),
         tutorial=row["tutorial"],
+        arena_wins=row["arena_wins"],
+        arena_losses=row["arena_losses"],
         is_admin=bool(row["is_admin"]),
     )
 
@@ -276,11 +278,11 @@ class PostgresCharacterRepository:
                 stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
                 trait_ids, loadout, equipment, city_id,
                 unspent_stat_points, unspent_skill_points,
-                health, bank_gold, quests, crafts, tutorial, is_admin
+                health, bank_gold, quests, crafts, tutorial, arena_wins, arena_losses, is_admin
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                     $15, $16::jsonb, $17::jsonb, $18, $19, $20, $21, $22, $23::jsonb,
-                    $24::jsonb, $25, $26)
+                    $24::jsonb, $25, $26, $27, $28)
             RETURNING id
             """,
             character.user_id,
@@ -308,6 +310,8 @@ class PostgresCharacterRepository:
             _quests_to_json(character.quests),
             _crafts_to_json(character.crafts),
             character.tutorial,
+            character.arena_wins,
+            character.arena_losses,
             character.is_admin,
         )
         return replace(character, id=row["id"])
@@ -322,7 +326,8 @@ class PostgresCharacterRepository:
                 trait_ids = $12, loadout = $13::jsonb, equipment = $14::jsonb,
                 city_id = $15, unspent_stat_points = $16, unspent_skill_points = $17,
                 health = $18, bank_gold = $19, quests = $20::jsonb,
-                crafts = $21::jsonb, tutorial = $22, is_admin = $23, updated_at = now()
+                crafts = $21::jsonb, tutorial = $22, arena_wins = $23,
+                arena_losses = $24, is_admin = $25, updated_at = now()
             WHERE id = $1
             """,
             character.id,
@@ -347,6 +352,8 @@ class PostgresCharacterRepository:
             _quests_to_json(character.quests),
             _crafts_to_json(character.crafts),
             character.tutorial,
+            character.arena_wins,
+            character.arena_losses,
             character.is_admin,
         )
 
@@ -355,6 +362,37 @@ class PostgresCharacterRepository:
             "SELECT 1 FROM characters WHERE lower(name) = lower($1) LIMIT 1", name
         )
         return row is not None
+
+    async def arena_opponent(self, *, level: int, window: int, exclude_id: int) -> Character | None:
+        """One character of about this level, picked at random.
+
+        Random rather than nearest: a fixed pairing would let two players farm
+        each other, and the arena pays from its own purse (``domain/rules/arena``).
+        """
+        row = await self._pool.fetchrow(
+            f"""
+            SELECT {CHARACTER_COLUMNS} FROM characters
+            WHERE id <> $1 AND abs(level - $2) <= $3
+            ORDER BY random()
+            LIMIT 1
+            """,
+            exclude_id,
+            level,
+            window,
+        )
+        return _character_from_row(row) if row else None
+
+    async def arena_table(self, *, limit: int = 10) -> tuple[Character, ...]:
+        rows = await self._pool.fetch(
+            f"""
+            SELECT {CHARACTER_COLUMNS} FROM characters
+            WHERE arena_wins > 0
+            ORDER BY arena_wins DESC, level DESC, name
+            LIMIT $1
+            """,
+            limit,
+        )
+        return tuple(_character_from_row(row) for row in rows)
 
 
 def _trade_from_row(row: Any) -> TradeRecord:

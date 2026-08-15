@@ -529,3 +529,80 @@ async def test_clearing_the_place_out_rolls_it_over(
     assert rolled.generation == 1
     assert rolled.cleared == 0
     assert (await player.flow()).session.generation == 1
+
+
+# --- the Debt Circle --------------------------------------------------
+
+
+async def test_a_round_of_the_circle_is_fought_and_paid_out(
+    player: Player,
+    content: GameContent,
+    characters: InMemoryCharacterRepository,
+    argus: Character,
+) -> None:
+    """No queue, no timer: a stake, a snapshot of somebody, and an answer."""
+    from mmorpg.domain.rules import arena as arena_rules
+
+    rich = replace(argus, level=12, gold=5_000)
+    await characters.save(rich)
+    await characters.create(
+        Character(
+            id=0,
+            user_id=ACCOUNT + 7,
+            name="Мерла",
+            race_id="human",
+            class_id="warrior",
+            level=12,
+        )
+    )
+
+    await player.press("Мир")
+    await player.press("Дубно")
+    screen = await player.press("Долговой круг")
+    assert screen.id is ScreenId.ARENA
+    stake = arena_rules.stake_for(rich.level)
+    assert f"Ставка круга: {stake}" in screen.text()
+
+    opened = await player.press("Выйти в круг")
+    assert opened.id is ScreenId.COMBAT
+    # The stake is taken the moment the fight exists, not when it ends.
+    charged = await characters.get(rich.id)
+    assert charged is not None
+    assert charged.gold == rich.gold - stake
+
+    for _ in range(60):
+        screen = await player.press("Атака")
+        if screen.text().startswith(("Победа.", "Поражение.")):
+            break
+    else:  # pragma: no cover - a fight that never ends is the bug this catches
+        raise AssertionError("the arena fight never finished")
+
+    settled = await characters.get(rich.id)
+    assert settled is not None
+    assert settled.arena_wins + settled.arena_losses == 1
+    if settled.arena_wins:
+        assert "Круг выигран" in screen.text()
+        assert settled.gold == rich.gold + stake
+    else:
+        assert "Круг проигран" in screen.text()
+        assert settled.gold == rich.gold - stake
+
+
+async def test_an_empty_circle_says_so_and_charges_nothing(
+    player: Player,
+    characters: InMemoryCharacterRepository,
+    argus: Character,
+) -> None:
+    """Nobody to copy means no round - and no stake taken for it."""
+    rich = replace(argus, level=12, gold=5_000)
+    await characters.save(rich)
+
+    await player.press("Мир")
+    await player.press("Дубно")
+    await player.press("Долговой круг")
+    screen = await player.press("Выйти в круг")
+
+    assert "не с кем драться" in screen.text()
+    unchanged = await characters.get(rich.id)
+    assert unchanged is not None
+    assert unchanged.gold == rich.gold

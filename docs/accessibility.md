@@ -131,10 +131,10 @@ together with the current keyboard. Never stay silent, never raise.
 Combat against the world is turn-based and waits for the player indefinitely.
 Nothing in a location, a dungeon or a quest expires while the player is reading.
 
-The **only** exception is the arena, where a second player is waiting: a turn
-there lasts 60 seconds, and silence plays the auto-action the player configured in
-Settings (attack, defend, skill slot N, potion) rather than passing the turn.
-The rule is stated in `Narrative.md`, section 7, and never leaks into PvE.
+This holds for fighting other players too. An attack on a free location is fought
+against a **snapshot** of the other character, driven by the ordinary engine: the
+attacker plays at their own pace, the defender is told by message what happened.
+Neither side ever waits on a clock, and neither side has to be online.
 
 ## 14. `parse_mode=None`
 

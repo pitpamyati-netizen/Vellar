@@ -28,7 +28,9 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   спецификация), `skills` (изучение, ранги, грани, слоты), `quests` (счёт и
   плата по подрядам), `crafts` (ранг от работы, сбор по личному откату,
   изготовление и качество), `adventure` (последствия боя и узла, ночлег, зелья
-  вне боя), `tutorial` (шесть заданий обучения, маска на персонаже), `keeper`
+  вне боя), `tutorial` (шесть заданий обучения, маска на персонаже), `pvp`
+  (поединок со слепком, защита новичков, ставка), `arena` (долговой круг:
+  ставка, выплата, счёт сезона), `keeper`
   (служебные выдачи смотрителя), `group_commands` (грамматика группы),
   `group_offers` (предложения).
   `procgen/`: `seeds`, `location`, `enemies`. `ports/repositories.py` —
@@ -43,7 +45,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   бой включается перед `play`, иначе его перехватит фильтр по группе состояний),
   `flows/` (`creation`, `play`, `combat` — чистые автоматы), `screens/` (`base`,
   `format`, `paginated`, `creation`, `play`, `combat`, `shop`, `skills`,
-  `quests`, `crafts`, `city`, `settings`, `tutorial`, `keeper`, `group`),
+  `quests`, `crafts`, `city`, `settings`, `tutorial`, `arena`, `keeper`,
+  `group`),
   `keyboards/` (`labels`, `reply`), `middlewares/` (`dependencies`, `errors`,
   `idempotency`), `states/screens.py`, `routing.py`, `messaging.py`,
   `broadcast.py` (канал), `throttle.py` (лимит), `cleanup.py` (уборка в группе).
@@ -71,7 +74,7 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 `vellar-tools.bat` (общие подпрограммы трёх .bat: штамп версии, дамп, SAVE).
 **`migrations/`** — `env.py`, `versions/0001_initial_schema`, `0002_trades`,
 `0003_privacy`, `0004_wounds_bank_quests`, `0005_crafts`, `0006_admin`,
-`0007_tutorial`.
+`0007_tutorial`, `0008_arena`.
 **`backups/`** — дампы от `stop.bat` и `Update.bat`; не в репозитории.
 **`.githooks/pre-commit`** — гейт на коммите.
 
@@ -87,7 +90,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
    «где я / что случилось». Псевдографика запрещена, числа — `X из Y`. Последний
    ряд всегда `Назад · Главное меню`. Каждое действие дублируется
    текстовой командой. `parse_mode=None`. Полный список — `docs/accessibility.md`.
-3. **Никаких таймеров в PvE.** Только арена: 60 с и автодействие из настроек.
+3. **Никаких таймеров нигде.** Ни в PvE, ни в поединке, ни в круге: бой против
+   другого игрока идёт по его слепку, поэтому ждать никого не нужно.
    Длина боя — три хода на обычном противнике, вдвое на эпическом, вчетверо на
    боссе; держит `tests/domain/test_combat_balance.py`.
 4. **Текст игрока — по `Narrative.md`.** Сверяться до написания, не после.
