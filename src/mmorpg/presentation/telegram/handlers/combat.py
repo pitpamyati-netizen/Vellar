@@ -27,7 +27,9 @@ from mmorpg.domain.entities.location import EnemyRank
 from mmorpg.domain.ports.repositories import CharacterRepository, InventoryRepository
 from mmorpg.domain.procgen.location import cleared_mask
 from mmorpg.domain.rules import adventure
+from mmorpg.domain.rules import tutorial as tutorial_rules
 from mmorpg.domain.rules.combat import resolve_turn
+from mmorpg.domain.rules.tutorial import TutorialTask
 from mmorpg.presentation.telegram.flows import combat as fight_flow
 from mmorpg.presentation.telegram.flows.play import (
     DUNGEON_DEPTH,
@@ -43,6 +45,7 @@ from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.messaging import send_screen
 from mmorpg.presentation.telegram.screens import combat as combat_screens
+from mmorpg.presentation.telegram.screens import tutorial as tutorial_screens
 from mmorpg.presentation.telegram.screens.base import ScreenId
 from mmorpg.presentation.telegram.states.screens import STATE_FOR_SCREEN, NavigationStack, Play
 
@@ -202,6 +205,12 @@ async def _store_and_show(
                 for step in won.quest_steps
             )
             updated_flow, rows = _after_victory(session, flow, extra)
+            # Winning a fight is one of the introduction tasks, and it is ticked
+            # off by the win itself - wherever it happened.
+            marked = tutorial_rules.complete(character, TutorialTask.FIGHT)
+            if marked is not None:
+                character = marked
+                extra.append(tutorial_screens.completion_line(TutorialTask.FIGHT, character))
         case CombatOutcome.DEFEAT:
             lost = adventure.resolve_defeat(content, character)
             character = lost.character

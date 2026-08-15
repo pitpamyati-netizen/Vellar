@@ -65,6 +65,8 @@ def skills_screen(
         f"В панели шесть боевых слотов и три постоянных, это не меняется. "
         f"Ваш уровень: {character.level}.",
     ]
+    if not character.unspent_skill_points:
+        lead.append("Очко умений даёт каждый новый уровень. Первое умение выдано без очков.")
     if edge_due:
         lead.append(f"Ждут выбора грани: {', '.join(edge_due)}.")
     return paginated_screen(

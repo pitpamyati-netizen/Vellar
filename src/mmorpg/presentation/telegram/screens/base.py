@@ -6,8 +6,8 @@ and inspect it without a bot token.
 
 Invariants enforced right here, at construction time:
 
-- the service row ``Назад · Осмотреться · Главное меню`` is appended to every
-  screen (accessibility rule 8);
+- the service row ``Назад · Главное меню`` is appended to every screen
+  (accessibility rule 8);
 - button labels are unique within a screen, both with and without emoji, because
   routing is by exact text (rule 9);
 - the body stays under the message limit (rule 11).
@@ -37,6 +37,7 @@ class ScreenId(StrEnum):
     SHOP = "shop"
     SELL = "sell"
     CHARACTER = "character"
+    STATS = "stats"
     SKILLS = "skills"
     SKILL_SLOTS = "skill_slots"
     SKILL_PICK = "skill_pick"
@@ -51,6 +52,7 @@ class ScreenId(StrEnum):
     BANK = "bank"
     DUNGEON = "dungeon"
     SETTINGS = "settings"
+    TUTORIAL = "tutorial"
     KEEPER = "keeper"
     STUB = "stub"
     CREATE_NAME = "create_name"

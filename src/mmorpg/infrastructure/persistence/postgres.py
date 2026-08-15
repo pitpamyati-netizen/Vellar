@@ -27,7 +27,7 @@ CHARACTER_COLUMNS = """
     id, user_id, name, race_id, class_id, level, experience, gold,
     stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
     trait_ids, loadout, equipment, city_id, unspent_stat_points, unspent_skill_points,
-    health, bank_gold, quests, crafts, is_admin
+    health, bank_gold, quests, crafts, tutorial, is_admin
 """
 
 TRADE_COLUMNS = """
@@ -75,6 +75,7 @@ def _character_from_row(row: Any) -> Character:
         bank_gold=row["bank_gold"],
         quests=_quests_from_json(row["quests"]),
         crafts=_crafts_from_json(row["crafts"]),
+        tutorial=row["tutorial"],
         is_admin=bool(row["is_admin"]),
     )
 
@@ -275,11 +276,11 @@ class PostgresCharacterRepository:
                 stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
                 trait_ids, loadout, equipment, city_id,
                 unspent_stat_points, unspent_skill_points,
-                health, bank_gold, quests, crafts, is_admin
+                health, bank_gold, quests, crafts, tutorial, is_admin
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                     $15, $16::jsonb, $17::jsonb, $18, $19, $20, $21, $22, $23::jsonb,
-                    $24::jsonb, $25)
+                    $24::jsonb, $25, $26)
             RETURNING id
             """,
             character.user_id,
@@ -306,6 +307,7 @@ class PostgresCharacterRepository:
             character.bank_gold,
             _quests_to_json(character.quests),
             _crafts_to_json(character.crafts),
+            character.tutorial,
             character.is_admin,
         )
         return replace(character, id=row["id"])
@@ -320,7 +322,7 @@ class PostgresCharacterRepository:
                 trait_ids = $12, loadout = $13::jsonb, equipment = $14::jsonb,
                 city_id = $15, unspent_stat_points = $16, unspent_skill_points = $17,
                 health = $18, bank_gold = $19, quests = $20::jsonb,
-                crafts = $21::jsonb, is_admin = $22, updated_at = now()
+                crafts = $21::jsonb, tutorial = $22, is_admin = $23, updated_at = now()
             WHERE id = $1
             """,
             character.id,
@@ -344,6 +346,7 @@ class PostgresCharacterRepository:
             character.bank_gold,
             _quests_to_json(character.quests),
             _crafts_to_json(character.crafts),
+            character.tutorial,
             character.is_admin,
         )
 

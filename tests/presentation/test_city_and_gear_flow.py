@@ -69,7 +69,7 @@ def step(
 
 @pytest.fixture
 def in_city(content: GameContent, hero: Character) -> PlayState:
-    return step(content, hero, begin(hero), "Мир", "Порубежье")
+    return step(content, hero, begin(hero), "Мир", "Дубно")
 
 
 # --- gear -------------------------------------------------------------
@@ -108,12 +108,23 @@ def test_taking_a_thing_off_from_the_character_screen(
     assert stripped.pending.items == (("rusty_sword", 1),)
 
 
-def test_a_level_point_is_spent_from_the_character_screen(
+def test_a_level_point_is_spent_from_the_stats_screen(
     content: GameContent, hero: Character
 ) -> None:
-    """A point with nowhere to go would be a level that changed nothing."""
+    """A point with nowhere to go would be a level that changed nothing.
+
+    It is spent on «Характеристики», next to the line that says what the point
+    actually buys - the character sheet only points the way there.
+    """
     fresh = replace(hero, unspent_stat_points=2)
     sheet = step(content, fresh, begin(fresh), "Персонаж")
+    assert "Характеристики" in [
+        item.text
+        for row in render(content, fresh, sheet, world_seed=WORLD_SEED).rows
+        for item in row
+    ]
+
+    sheet = step(content, fresh, sheet, "Характеристики")
     assert "Вложить: Сила" in [
         item.text
         for row in render(content, fresh, sheet, world_seed=WORLD_SEED).rows

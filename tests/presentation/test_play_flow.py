@@ -39,7 +39,7 @@ def menu(hero: Character) -> PlayState:
 
 @pytest.fixture
 def in_city(content: GameContent, hero: Character, menu: PlayState) -> PlayState:
-    return step(content, hero, menu, "Мир", "Порубежье")
+    return step(content, hero, menu, "Мир", "Дубно")
 
 
 @pytest.fixture
@@ -54,7 +54,7 @@ def test_main_menu_states_where_you_are(
     content: GameContent, hero: Character, menu: PlayState
 ) -> None:
     text = render(content, hero, menu, world_seed=WORLD_SEED).text()
-    assert text.startswith("Главное меню. Вы в городе Порубежье.")
+    assert text.startswith("Главное меню. Вы в городе Дубно.")
     assert "уровень 3" in text
     assert "Здоровье:" in text
 
@@ -64,7 +64,7 @@ def test_world_lists_only_unlocked_cities(
 ) -> None:
     world = step(content, hero, menu, "Мир")
     text = render(content, hero, world, world_seed=WORLD_SEED).text()
-    assert "Порубежье" in text
+    assert "Дубно" in text
     assert "Закрыто городов: 14" in text
 
 
@@ -72,7 +72,7 @@ def test_a_locked_city_explains_itself(
     content: GameContent, hero: Character, menu: PlayState
 ) -> None:
     world = step(content, hero, menu, "Мир")
-    blocked = step(content, hero, world, "Костница")
+    blocked = step(content, hero, world, "Мглин")
     assert blocked.screen is ScreenId.WORLD
     assert "откроется на уровне" in blocked.notice
 
@@ -80,7 +80,7 @@ def test_a_locked_city_explains_itself(
 def test_entering_a_city(content: GameContent, hero: Character, in_city: PlayState) -> None:
     assert in_city.screen is ScreenId.CITY
     assert in_city.city_id == "farhold"
-    assert "Порубежье" in render(content, hero, in_city, world_seed=WORLD_SEED).text()
+    assert "Дубно" in render(content, hero, in_city, world_seed=WORLD_SEED).text()
 
 
 # --- shop and inventory -----------------------------------------------
@@ -106,7 +106,7 @@ def test_shop_and_inventory_are_real_screens(
     shop = advance(content, hero, in_city, "Лавка", cycle=CYCLE, world_seed=WORLD_SEED, goods=goods)
     assert shop.screen is ScreenId.SHOP
     assert (
-        "Лавка города Порубежье"
+        "Лавка города Дубно"
         in render(content, hero, shop, world_seed=WORLD_SEED, goods=goods).text()
     )
 
@@ -384,3 +384,62 @@ def test_a_quest_offer_for_an_unknown_contract_falls_back_to_the_board(
 ) -> None:
     lost = replace(menu, quest_id="quest_that_was_cut", screen=ScreenId.QUEST_OFFER)
     assert render(content, hero, lost, world_seed=WORLD_SEED).id is ScreenId.QUEST_BOARD
+
+
+# --- the introduction -------------------------------------------------
+
+
+def test_the_introduction_is_offered_until_it_is_done(
+    content: GameContent, hero: Character, menu: PlayState
+) -> None:
+    """A played character does not need a tutorial button for ever."""
+    fresh = render(content, hero, menu, world_seed=WORLD_SEED)
+    assert "Обучение" in [item.text for row in fresh.rows for item in row]
+
+    from mmorpg.domain.rules import tutorial as tutorial_rules
+
+    taught = replace(hero, tutorial=0b111111)
+    assert tutorial_rules.finished(taught)
+    done = render(content, taught, begin(taught), world_seed=WORLD_SEED)
+    assert "Обучение" not in [item.text for row in done.rows for item in row]
+
+
+def test_a_task_button_walks_the_player_to_the_screen(
+    content: GameContent, hero: Character, menu: PlayState
+) -> None:
+    """The point of the button: no route to memorise, no menu to guess."""
+    opened = step(content, hero, menu, "Обучение")
+    assert opened.screen is ScreenId.TUTORIAL
+
+    walked = step(content, hero, opened, "Выполнить задание")
+    assert walked.screen is ScreenId.STATS
+    # Reading them is the task, so it is already ticked off.
+    assert walked.pending.character is not None
+    assert walked.pending.character.tutorial != hero.tutorial
+
+
+def test_a_task_done_by_playing_counts_too(
+    content: GameContent, hero: Character, menu: PlayState
+) -> None:
+    """Nobody has to open the introduction for it to notice what they did."""
+    from mmorpg.domain.rules import tutorial as tutorial_rules
+    from mmorpg.domain.rules.tutorial import TutorialTask
+
+    stats = step(content, hero, menu, "Персонаж", "Характеристики")
+    assert stats.pending.character is not None
+    assert tutorial_rules.is_done(stats.pending.character, TutorialTask.STATS)
+    assert "Задание обучения сделано" in stats.notice
+
+
+def test_a_finished_introduction_says_so_and_offers_nothing(
+    content: GameContent, hero: Character
+) -> None:
+    taught = replace(hero, tutorial=0b111111)
+    # The button is gone from the menu, but the screen still answers whoever
+    # arrives on it from an older keyboard (accessibility rule 12).
+    standing = begin(taught).at(ScreenId.TUTORIAL)
+    text = render(content, taught, standing, world_seed=WORLD_SEED).text()
+    assert "Все задания сделаны" in text
+
+    pressed = step(content, taught, standing, "Выполнить задание")
+    assert pressed.pending.empty

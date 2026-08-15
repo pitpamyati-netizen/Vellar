@@ -38,10 +38,10 @@ def test_the_channel_posts_only_game_news() -> None:
 
 
 def test_headline_comes_first_and_stands_alone() -> None:
-    event = bc.news("Открыто Крестовье.", "Четыре тракта, пять локаций.")
+    event = bc.news("Открыто Стрешин.", "Четыре тракта, пять локаций.")
     text = bc.render_broadcast(event, emoji=False)
 
-    assert text.splitlines()[0] == "Открыто Крестовье."
+    assert text.splitlines()[0] == "Открыто Стрешин."
 
 
 def test_emoji_is_optional_and_never_the_only_meaning() -> None:
@@ -80,7 +80,7 @@ def test_a_changelog_may_be_longer_than_a_notice() -> None:
 @pytest.mark.parametrize(
     "event",
     [
-        bc.news("Открыто Крестовье."),
+        bc.news("Открыто Стрешин."),
         bc.service("Бот перезапущен."),
         bc.changelog("0.2", added=("Арена.",)),
     ],
@@ -130,8 +130,8 @@ def test_the_same_fact_passes_when_it_is_said_to_players() -> None:
 
 
 def test_a_word_that_only_looks_like_jargon_is_left_alone() -> None:
-    """Багровый Причал is a place in Веллар, not a defect (``Narrative.md``, 7)."""
-    assert bc.jargon_in("Открыт Багровый Причал.") is None
+    """Вырь is a place in Веллар, not a defect (``Narrative.md``, 7)."""
+    assert bc.jargon_in("Открыт Вырь.") is None
 
 
 def test_an_empty_headline_is_refused() -> None:

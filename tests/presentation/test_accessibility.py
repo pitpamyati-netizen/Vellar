@@ -61,8 +61,11 @@ def test_only_reply_keyboards_are_imported() -> None:
 
 
 def test_service_row_is_stable() -> None:
-    assert SERVICE_ROW == (BACK, LOOK, MAIN_MENU)
-    assert [item.text for item in SERVICE_ROW] == ["Назад", "Осмотреться", "Главное меню"]
+    assert SERVICE_ROW == (BACK, MAIN_MENU)
+    assert [item.text for item in SERVICE_ROW] == ["Назад", "Главное меню"]
+    # "Осмотреться" left the keyboard but not the game: the command still works,
+    # and so does a button pressed from an older keyboard.
+    assert LOOK not in SERVICE_ROW
 
 
 def test_every_screen_ends_with_the_service_row(all_screens: list[Screen]) -> None:

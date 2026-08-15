@@ -43,9 +43,15 @@ def label(text: str, emoji: str = "") -> Label:
 # --- the service row, identical on every screen (accessibility rule 8) ---
 
 BACK = label("Назад", "◀️")
-LOOK = label("Осмотреться", "🔁")
 MAIN_MENU = label("Главное меню", "🏠")
-SERVICE_ROW: tuple[Label, ...] = (BACK, LOOK, MAIN_MENU)
+SERVICE_ROW: tuple[Label, ...] = (BACK, MAIN_MENU)
+
+# "Осмотреться" is no longer a button: in Telegram nothing scrolls away, and the
+# last message is always there to be read again, so a third button on every single
+# screen was a button that cost attention and bought nothing. The label stays -
+# the command ``/осмотреться`` still works, and so does the button itself if a
+# player presses one left over on an older keyboard.
+LOOK = label("Осмотреться", "🔁")
 
 # --- navigation ---
 
@@ -58,10 +64,12 @@ MENTOR = label("Наставник", "📖")
 BANK = label("Банк", "💰")
 SHOP = label("Лавка", "🛒")
 CHARACTER = label("Персонаж", "🧝")
+STATS = label("Характеристики", "📊")
 INVENTORY = label("Инвентарь", "🎒")
 SKILLS = label("Умения", "✨")
 QUESTS = label("Подряды", "📜")
 SETTINGS = label("Настройки", "⚙️")
+TUTORIAL = label("Обучение", "🧭")
 
 # --- skills, contracts and city services ---
 

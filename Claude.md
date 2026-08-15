@@ -28,8 +28,9 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   спецификация), `skills` (изучение, ранги, грани, слоты), `quests` (счёт и
   плата по подрядам), `crafts` (ранг от работы, сбор раз за стражу,
   изготовление и качество), `adventure` (последствия боя и узла, ночлег, зелья
-  вне боя), `keeper` (служебные выдачи смотрителя), `group_commands` (грамматика
-  группы), `group_offers` (предложения).
+  вне боя), `tutorial` (шесть заданий обучения, маска на персонаже), `keeper`
+  (служебные выдачи смотрителя), `group_commands` (грамматика группы),
+  `group_offers` (предложения).
   `procgen/`: `seeds`, `location`, `enemies`. `ports/repositories.py` —
   протоколы хранилищ.
 - `application/` — `dto/creation.py` (черновик), `services/`: `group_trade.py`
@@ -42,7 +43,7 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   бой включается перед `play`, иначе его перехватит фильтр по группе состояний),
   `flows/` (`creation`, `play`, `combat` — чистые автоматы), `screens/` (`base`,
   `format`, `paginated`, `creation`, `play`, `combat`, `shop`, `skills`,
-  `quests`, `crafts`, `city`, `settings`, `keeper`, `group`),
+  `quests`, `crafts`, `city`, `settings`, `tutorial`, `keeper`, `group`),
   `keyboards/` (`labels`, `reply`), `middlewares/` (`dependencies`, `errors`,
   `idempotency`), `states/screens.py`, `routing.py`, `messaging.py`,
   `broadcast.py` (канал), `throttle.py` (лимит), `cleanup.py` (уборка в группе).
@@ -68,7 +69,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 в канал: `--headline` или `--changelog latest`), `install-hooks.ps1`/`.sh`,
 `vellar-tools.bat` (общие подпрограммы трёх .bat: штамп версии, дамп, SAVE).
 **`migrations/`** — `env.py`, `versions/0001_initial_schema`, `0002_trades`,
-`0003_privacy`, `0004_wounds_bank_quests`, `0005_crafts`, `0006_admin`.
+`0003_privacy`, `0004_wounds_bank_quests`, `0005_crafts`, `0006_admin`,
+`0007_tutorial`.
 **`backups/`** — дампы от `stop.bat` и `Update.bat`; не в репозитории.
 **`.githooks/pre-commit`** — гейт на коммите.
 
@@ -81,7 +83,7 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 2. **Доступность — блокер.** Только reply-клавиатуры, никаких inline и
    `edit_message`. Одно действие — одно новое сообщение. Первая строка отвечает
    «где я / что случилось». Псевдографика запрещена, числа — `X из Y`. Последний
-   ряд всегда `Назад · Осмотреться · Главное меню`. Каждое действие дублируется
+   ряд всегда `Назад · Главное меню`. Каждое действие дублируется
    текстовой командой. `parse_mode=None`. Полный список — `docs/accessibility.md`.
 3. **Никаких таймеров в PvE.** Только арена: 60 с и автодействие из настроек.
    Длина боя — три хода на обычном противнике, вдвое на эпическом, вчетверо на

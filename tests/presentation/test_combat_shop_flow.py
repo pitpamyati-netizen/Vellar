@@ -376,11 +376,11 @@ def test_shop_screen_states_price_and_affordability(content: GameContent) -> Non
     )
     prices = {item.id: buy_price(content, item) for item in stock}
     screen = shop_screens.shop_screen(
-        content, stock, prices, PageState(), gold=50, city_name="Порубежье"
+        content, stock, prices, PageState(), gold=50, city_name="Дубно"
     )
     assert screen.id is ScreenId.SHOP
     text = screen.text()
-    assert "Лавка города Порубежье" in text
+    assert "Лавка города Дубно" in text
     assert "золота" in text
     assert "хватает золота" in text or "не хватает золота" in text
 

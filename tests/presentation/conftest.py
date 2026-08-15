@@ -39,6 +39,7 @@ from mmorpg.presentation.telegram.screens import creation, play, shop
 from mmorpg.presentation.telegram.screens import keeper as keeper_screens
 from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import skills as skill_screens
+from mmorpg.presentation.telegram.screens import tutorial as tutorial_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
@@ -227,7 +228,7 @@ def all_screens(
         creation.points_screen(content, complete_draft),
         creation.confirm_screen(content, complete_draft),
         handlers_creation.welcome_screen(),
-        handlers_creation.created_screen("Аргус", "Порубежье"),
+        handlers_creation.created_screen("Аргус", "Дубно"),
         play.main_menu_screen(content, hero, derived_stats(content, hero)),
         play.main_menu_screen(content, keeper, derived_stats(content, keeper)),
         keeper_screens.keeper_screen(content, keeper, derived_stats(content, keeper)),
@@ -249,6 +250,15 @@ def all_screens(
             replace(fighter, unspent_stat_points=3, unspent_skill_points=1),
             derived_stats(content, fighter),
         ),
+        play.stats_screen(content, hero, derived_stats(content, hero)),
+        play.stats_screen(
+            content,
+            replace(fighter, unspent_stat_points=4),
+            derived_stats(content, fighter),
+        ),
+        tutorial_screens.tutorial_screen(hero),
+        tutorial_screens.tutorial_screen(replace(hero, tutorial=0b000111)),
+        tutorial_screens.tutorial_screen(replace(hero, tutorial=0b111111)),
         play.stub_screen("Арена"),
         skill_screens.skills_screen(content, fighter, PageState()),
         skill_screens.skills_screen(content, hero, PageState(page=2)),
@@ -306,7 +316,7 @@ def all_screens(
             {"wolf_pelt": 3},
             PageState(),
             gold=10,
-            city_name="Порубежье",
+            city_name="Дубно",
         ),
         shop.shop_screen(
             content,
@@ -314,7 +324,7 @@ def all_screens(
             {item.id: buy_price(content, item) for item in sample_stock},
             PageState(),
             gold=250,
-            city_name="Порубежье",
+            city_name="Дубно",
         ),
         paginated_screen(
             screen_id=ScreenId.INVENTORY,

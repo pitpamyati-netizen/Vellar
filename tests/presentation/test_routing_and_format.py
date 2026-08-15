@@ -33,7 +33,7 @@ from mmorpg.presentation.telegram.states.screens import (
 def screen() -> Screen:
     return Screen(
         id=ScreenId.CITY,
-        lines=("Город Порубежье.",),
+        lines=("Город Дубно.",),
         rows=((label("Лавка"), label("Локации")),),
     )
 
@@ -110,9 +110,9 @@ def test_a_stale_button_is_reported_not_swallowed(screen: Screen) -> None:
     """Rule 12: never stay silent, never raise."""
     command = resolve("Вихрь клинков", screen)
     assert command.intent is Intent.UNKNOWN
-    answer = stale_button_answer("Город Порубежье")
+    answer = stale_button_answer("Город Дубно")
     assert answer.startswith("Действие сейчас недоступно")
-    assert "Город Порубежье" in answer
+    assert "Город Дубно" in answer
 
 
 # --- navigation stack (spec section 12) ------------------------------

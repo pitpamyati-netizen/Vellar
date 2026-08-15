@@ -60,13 +60,24 @@ def test_header_states_list_filters_count_and_page() -> None:
     assert "страница 2 из 3" in header
 
 
-def test_navigation_row_keeps_its_place_on_a_single_page() -> None:
-    """Layout must not shift between a one-page list and a ten-page one."""
+def test_a_single_page_list_is_only_its_entries() -> None:
+    """Nothing to page through and nothing to filter: the machinery stays away.
+
+    The entries keep their positions - they are above everything that appears or
+    disappears - and a bag of three things opens straight onto the three things.
+    """
     single = render(3)
+    assert [row[0].text for row in single.all_rows()[:3]] == [
+        "Запись 1",
+        "Запись 2",
+        "Запись 3",
+    ]
+    assert len(single.all_rows()) == 4  # three entries plus the service row
+    assert all(PREVIOUS_PAGE not in row for row in single.all_rows())
+
     many = render(30)
-    assert single.all_rows()[-3][0] is PREVIOUS_PAGE
     assert many.all_rows()[-3][0] is PREVIOUS_PAGE
-    assert single.all_rows()[-3][2] is NEXT_PAGE
+    assert many.all_rows()[-3][2] is NEXT_PAGE
 
 
 def test_page_button_reports_the_position() -> None:
@@ -95,11 +106,18 @@ def test_page_numbers_are_clamped() -> None:
     assert PageState(page=1).jumped(2, 3).page == 2
 
 
-def test_empty_list_says_so_and_keeps_its_buttons() -> None:
+def test_empty_list_says_so() -> None:
     screen = render(0)
     assert "Здесь пока пусто." in screen.text()
     assert "Найдено 0" in screen.text()
-    assert screen.all_rows()[-3][0] is PREVIOUS_PAGE
+    # An empty list still answers, and the way out is the service row.
+    assert [item.text for item in screen.all_rows()[-1]] == ["Назад", "Главное меню"]
+
+
+def test_a_filtered_short_list_keeps_the_filter_row() -> None:
+    """Whoever set a filter must be able to take it off without leaving."""
+    screen = render(3, category="Боевые")
+    assert screen.all_rows()[-2] == (FILTERS, RESET_FILTERS, SEARCH)
 
 
 def test_filters_can_be_cleared_but_sorting_is_kept() -> None:

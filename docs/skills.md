@@ -140,7 +140,7 @@ one table entry.
 [6. Пустой слот]
 [Второе дыхание — расовое, оборона, лечит 24, откат 5 ходов, готово]
 [Сумка] [Бежать]
-[Назад] [Осмотреться] [Главное меню]
+[Назад] [Главное меню]
 ```
 
 Every button answers three questions without being pressed: **what it does**

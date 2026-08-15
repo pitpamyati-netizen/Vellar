@@ -214,7 +214,7 @@ def path_to(location: Any, kind: NodeKind) -> tuple[list[int], int] | None:
 async def walk_to(player: Player, content: GameContent, kind: NodeKind) -> int:
     """Enter the first location of the first city and stand on a node of ``kind``."""
     await player.press("Мир")
-    await player.press("Порубежье")
+    await player.press("Дубно")
     await player.press("Локации")
     await player.press("1. Луга у Заставы")
 
@@ -345,7 +345,7 @@ async def test_the_inn_sells_health_and_the_bank_keeps_gold(
     await characters.save(hurt.with_health(5, derived_stats(content, hurt).max_health))
 
     await player.press("Мир")
-    await player.press("Порубежье")
+    await player.press("Дубно")
     await player.press("Таверна")
     screen = await player.press("Снять комнату")
     assert "здоровье полное" in screen.text()
@@ -367,7 +367,7 @@ async def test_a_contract_is_taken_counted_and_paid(
     player: Player, content: GameContent, characters: InMemoryCharacterRepository
 ) -> None:
     await player.press("Мир")
-    await player.press("Порубежье")
+    await player.press("Дубно")
     await player.press("Таверна")
     board = await player.press("Доска подрядов")
     assert "Столбы на Тракте" in board.text()

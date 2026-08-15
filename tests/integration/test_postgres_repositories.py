@@ -239,7 +239,10 @@ async def test_a_character_survives_a_round_trip(pool, clean_user) -> None:
     assert read.trait_ids == ("stoic", "keen_eye")
     assert read.loadout.actives[0] == "cleave"
     assert read.loadout.racial == "stonesense"
-    assert dict(read.loadout.ranks) == {"cleave": 3}
+    # Skills lying in the panel are known by definition, so the rank of the
+    # passive and of the racial comes back filled in even though the row stored
+    # only the one rank that was raised.
+    assert dict(read.loadout.ranks) == {"cleave": 3, "toughness": 1, "stonesense": 1}
     assert dict(read.loadout.edges) == {"cleave": "wide"}
     assert dict(read.equipment.items) == {"weapon": "iron_axe"}
     assert read.health == 33

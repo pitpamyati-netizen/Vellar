@@ -30,7 +30,7 @@ def settings_screen(settings: AccessibilitySettings, notice: str = "") -> Screen
             f"Подробные описания: {ON if settings.verbose else OFF}. "
             "Подробные описания добавляют пояснения к эффектам и характеристикам.",
             f"Позиций на странице списка: {settings.page_size}.",
-            "«Осмотреться» переслушивает текущий экран в любой момент.",
+            "Команда /осмотреться присылает текущий экран заново, если он потерялся в переписке.",
         ),
         rows=((TOGGLE_EMOJI,), (TOGGLE_VERBOSE,), (REPEAT_SCREEN,)),
     )

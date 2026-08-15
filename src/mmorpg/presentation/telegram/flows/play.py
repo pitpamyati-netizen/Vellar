@@ -28,8 +28,10 @@ from mmorpg.domain.rules import crafts as craft_rules
 from mmorpg.domain.rules import keeper as keeper_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules import tutorial as tutorial_rules
 from mmorpg.domain.rules.progression import LevelUp
 from mmorpg.domain.rules.stats import derived_stats
+from mmorpg.domain.rules.tutorial import TutorialTask
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.routing import Command, Intent, resolve
 from mmorpg.presentation.telegram.screens import city as city_screens
@@ -40,6 +42,7 @@ from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import settings as settings_screens
 from mmorpg.presentation.telegram.screens import shop as shop_screens
 from mmorpg.presentation.telegram.screens import skills as skill_screens
+from mmorpg.presentation.telegram.screens import tutorial as tutorial_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.creation import STAT_NAMES
 from mmorpg.presentation.telegram.screens.paginated import PageState, total_pages
@@ -356,6 +359,7 @@ def render(
                 location,
                 location.node(state.session.node),
                 cleared=state.session.cleared,
+                character_level=character.level,
                 notice=state.notice,
             )
         # The screen says "location" but the visit behind it is gone: state saved
@@ -369,6 +373,12 @@ def render(
             return screens.character_screen(
                 content, character, derived_stats(content, character), state.notice
             )
+        case ScreenId.STATS:
+            return screens.stats_screen(
+                content, character, derived_stats(content, character), state.notice
+            )
+        case ScreenId.TUTORIAL:
+            return tutorial_screens.tutorial_screen(character, state.notice)
         case ScreenId.SKILLS:
             return skill_screens.skills_screen(content, character, state.skill_page, state.notice)
         case ScreenId.SKILL_SLOTS:
@@ -529,6 +539,8 @@ def advance(
     match state.screen:
         case ScreenId.SETTINGS:
             return _handle_settings(state, command, settings or DEFAULT_SETTINGS)
+        case ScreenId.TUTORIAL:
+            return _handle_tutorial(content, character, state, command)
         case ScreenId.INVENTORY:
             return _handle_inventory(content, character, state, command, shelf)
         case ScreenId.SHOP:
@@ -545,6 +557,8 @@ def advance(
             return _handle_city(content, character, state, command)
         case ScreenId.CHARACTER:
             return _handle_character(content, character, state, command)
+        case ScreenId.STATS:
+            return _handle_stats(character, state, command)
         case ScreenId.SKILLS:
             return _handle_skills(content, character, state, command)
         case ScreenId.SKILL_SLOTS:
@@ -577,6 +591,65 @@ def advance(
             return _handle_location(content, character, state, command, world_seed=world_seed)
         case _:
             return state.with_notice("Нажмите «Назад» или «Главное меню».")
+
+
+def mark_task(state: PlayState, character: Character, task: TutorialTask) -> PlayState:
+    """Tick off an introduction task on whatever step happened to finish it.
+
+    The step may already be storing a changed character - a purchase, a contract -
+    so the mark goes on that one; otherwise on the character as loaded. A task
+    already done changes nothing and says nothing.
+    """
+    base = state.pending.character or character
+    marked = tutorial_rules.complete(base, task)
+    if marked is None:
+        return state
+    line = tutorial_screens.completion_line(task, marked)
+    return replace(
+        state,
+        pending=replace(state.pending, character=marked),
+        notice=f"{state.notice} {line}".strip() if state.notice else line,
+    )
+
+
+def _handle_tutorial(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    """One button: open the screen the current task is done on."""
+    if command.intent is not Intent.SELECT or not tutorial_screens.DO_TASK.matches(
+        command.argument
+    ):
+        return state.with_notice("Нажмите «Выполнить задание» или «Назад».")
+    task = tutorial_rules.next_task(character)
+    if task is None:
+        return state.with_notice("Все задания сделаны.")
+
+    card = tutorial_screens.card_for(task)
+    city = known_city(content, state.city_id, character.city_id)
+    # Every task but the first two happens somewhere in a city, so the walk there
+    # is made for the player rather than described to them.
+    needed = {
+        ScreenId.QUEST_BOARD: "tavern",
+        ScreenId.TAVERN: "tavern",
+        ScreenId.SHOP: "shop",
+        ScreenId.LOCATION_LIST: "locations",
+    }.get(card.screen)
+    if needed is not None and needed not in city.services:
+        return state.with_notice(
+            f"В городе {city.name} этого нет. Задание можно сделать в другом городе."
+        )
+    fresh = replace(
+        state,
+        city_id=city.id,
+        list_page=PageState(),
+        board_page=PageState(),
+        location_page=PageState(),
+    )
+    opened = fresh.at(card.screen).with_notice(f"Задание: {card.title}. {card.text}")
+    if card.screen is ScreenId.STATS:
+        # Reading them *is* the task, and the screen is now open.
+        return mark_task(opened, character, TutorialTask.STATS)
+    return opened
 
 
 def _go_back(state: PlayState) -> PlayState:
@@ -627,6 +700,8 @@ def _handle_main_menu(
         return replace(state, craft_cycle=cycle).at(ScreenId.CRAFTS)
     if labels.SETTINGS.matches(command.argument):
         return state.at(ScreenId.SETTINGS)
+    if labels.TUTORIAL.matches(command.argument):
+        return state.at(ScreenId.TUTORIAL)
     # Pressed from an older keyboard by somebody who is no longer a keeper, the
     # button is simply not a button any more.
     if labels.KEEPER.matches(command.argument) and character.is_admin:
@@ -793,20 +868,8 @@ def _handle_character(
         return state.with_notice("Нажмите кнопку из списка.")
     if labels.SKILLS.matches(command.argument):
         return replace(state, skill_page=PageState()).at(ScreenId.SKILLS)
-
-    for code, stat_name in STAT_NAMES.items():
-        if not screens.spend_label(stat_name).matches(command.argument):
-            continue
-        if character.unspent_stat_points < 1:
-            return state.with_notice("Свободных очков характеристик нет.")
-        stronger = replace(
-            character,
-            allocated=character.allocated.with_change(StatCode(code), 1),
-            unspent_stat_points=character.unspent_stat_points - 1,
-        )
-        return state.storing(PendingWrite(character=stronger)).with_notice(
-            f"{stat_name} повышена. Осталось очков: {stronger.unspent_stat_points}."
-        )
+    if labels.STATS.matches(command.argument):
+        return mark_task(state.at(ScreenId.STATS), character, TutorialTask.STATS)
 
     for slot, slot_name in screens.SLOT_NAMES.items():
         if not screens.unequip_label(slot_name).matches(command.argument):
@@ -820,6 +883,26 @@ def _handle_character(
             f"{content.item(item_id).name} снят и убран в сумку."
         )
     return state.with_notice("Нажмите кнопку из списка.")
+
+
+def _handle_stats(character: Character, state: PlayState, command: Command) -> PlayState:
+    """One point, one press. The screen it answers on says what the point bought."""
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите характеристику, чтобы вложить очко.")
+    for code, stat_name in STAT_NAMES.items():
+        if not screens.spend_label(stat_name).matches(command.argument):
+            continue
+        if character.unspent_stat_points < 1:
+            return state.with_notice("Свободных очков характеристик нет, их даёт новый уровень.")
+        stronger = replace(
+            character,
+            allocated=character.allocated.with_change(StatCode(code), 1),
+            unspent_stat_points=character.unspent_stat_points - 1,
+        )
+        return state.storing(PendingWrite(character=stronger)).with_notice(
+            f"{stat_name} повышена. Осталось очков: {stronger.unspent_stat_points}."
+        )
+    return state.with_notice("Нажмите характеристику, чтобы вложить очко.")
 
 
 # --- goods ------------------------------------------------------------
@@ -853,7 +936,8 @@ def _handle_shop(
             f"{item.name} стоит {price} золота, у вас {goods.gold}. Не хватает."
         )
     write = PendingWrite(character=character.with_gold(-price), items=((item.id, 1),))
-    return state.storing(write).with_notice(f"{item.name} куплен за {price} золота.")
+    bought = state.storing(write).with_notice(f"{item.name} куплен за {price} золота.")
+    return mark_task(bought, character, TutorialTask.TRADE)
 
 
 def _handle_sell(
@@ -878,7 +962,8 @@ def _handle_sell(
         return state.with_notice("Нажмите вещь из списка.")
     price = economy.sell_price(content, item)
     write = PendingWrite(character=character.with_gold(price), items=((item.id, -1),))
-    return state.storing(write).with_notice(f"{item.name} продан за {price} золота.")
+    sold = state.storing(write).with_notice(f"{item.name} продан за {price} золота.")
+    return mark_task(sold, character, TutorialTask.TRADE)
 
 
 def _handle_inventory(
@@ -1033,11 +1118,12 @@ def _handle_pick(
         filled = skill_rules.put_in_slot(content, character, kind, state.pick_slot, skill.code)
         if filled is None:
             return state.with_notice("Это умение сюда не встаёт.")
-        return (
+        placed = (
             state.storing(PendingWrite(character=filled))
             .at(ScreenId.SKILL_SLOTS)
             .with_notice(f"{skill.name} занял слот {state.pick_slot + 1}.")
         )
+        return mark_task(placed, character, TutorialTask.SKILL_SLOT)
     return state.with_notice("Нажмите умение из списка.")
 
 
@@ -1110,7 +1196,7 @@ def _hand_in(content: GameContent, character: Character, state: PlayState) -> Pl
         said += f" Сверху дали: {content.item(payout.item_id).name}."
     if payout.level_up.levels_gained:
         said += f" {level_up_line(payout.level_up)}"
-    return state.storing(write).with_notice(said)
+    return mark_task(state.storing(write).with_notice(said), character, TutorialTask.HAND_IN)
 
 
 def _handle_board(
@@ -1148,11 +1234,12 @@ def _handle_offer(
     accepted = quest_rules.take(content, character, quest)
     if accepted == character:
         return state.with_notice("Этот подряд уже у вас или уже закрыт.")
-    return (
+    taken = (
         _go_back(replace(state, quest_id=""))
         .storing(PendingWrite(character=accepted))
         .with_notice(f"Подряд «{quest.name}» взят. Счёт идёт с этой минуты.")
     )
+    return mark_task(taken, character, TutorialTask.QUEST)
 
 
 def _handle_mentor(

@@ -214,11 +214,7 @@ def test_settings_survive_a_flow_round_trip(content: GameContent, hero: Characte
 
 def test_settings_screen_keeps_the_service_row() -> None:
     screen = settings_screen(AccessibilitySettings())
-    assert [item.text for item in screen.all_rows()[-1]] == [
-        "Назад",
-        "Осмотреться",
-        "Главное меню",
-    ]
+    assert [item.text for item in screen.all_rows()[-1]] == ["Назад", "Главное меню"]
 
 
 def test_toggling_twice_returns_to_the_original(content: GameContent, hero: Character) -> None:

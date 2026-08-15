@@ -1,8 +1,8 @@
 """What the bot says in the group.
 
 These are **not** :class:`Screen` objects, and that is deliberate. A screen is a
-place the player stands in, with the service row ``Назад · Осмотреться · Главное
-меню`` at the bottom; the group is a conversation between people, where the bot
+place the player stands in, with the service row ``Назад · Главное меню`` at the
+bottom; the group is a conversation between people, where the bot
 answers a specific message and then gets out of the way. There is nothing to go
 back to, so offering a "Назад" would be a lie.
 

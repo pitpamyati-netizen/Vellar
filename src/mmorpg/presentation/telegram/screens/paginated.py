@@ -7,12 +7,18 @@ page size, same header wording, same navigation row in the same position
 
 Layout, top to bottom:
 
-    <title>. <filters>. Найдено N записей, страница X из Y.
+    <title>. Найдено N записей, страница X из Y.
     [entry 1]                     one entry per row, 8 per page
     ...
     [Предыдущая страница] [Страница X из Y] [Следующая страница]
     [Фильтры] [Сбросить фильтры] [Поиск]
-    [Назад] [Осмотреться] [Главное меню]
+    [Назад] [Главное меню]
+
+The entries come first and the machinery after them: a bag is opened to reach the
+things in it, not to page through it. The paging row appears only when there is
+more than one page, and the filter row only when the list is long enough to need
+filtering or a filter is already on - on a list of three items both rows are
+noise, and the entries themselves never move.
 
 The page button is not decoration: pressing it asks for a page number, which is
 the fastest way to move through a long list by ear.
@@ -74,6 +80,14 @@ class ListFilters:
         )
 
     def describe(self) -> str:
+        """The filters in words. Empty when nothing is filtered.
+
+        The sort order used to be stated on every list header, including the ones
+        nobody had filtered - a sentence the player had to hear past on every
+        single page to reach the contents. It is said only when it is news.
+        """
+        if not self.active:
+            return ""
         parts: list[str] = []
         if self.category:
             parts.append(f"категория «{self.category}»")
@@ -148,8 +162,13 @@ def paginated_screen(
     current = state.clamped(pages)
     visible = page_slice(entries, current, page_size)
 
-    header = f"{title}. {current.filters.describe()}."
-    counts = f"{found(len(entries))}, страница {current.page} из {pages}."
+    described = current.filters.describe()
+    header = f"{title}. {described}." if described else f"{title}."
+    counts = (
+        f"{found(len(entries))}, страница {current.page} из {pages}."
+        if pages > 1
+        else f"{found(len(entries))}."
+    )
 
     lines: list[str] = [header, counts, *lead_lines]
     if not entries:
@@ -159,10 +178,13 @@ def paginated_screen(
             lines.append(f"{entry.text} — {entry.detail}")
 
     rows: list[tuple[Label, ...]] = [(entry.as_label(),) for entry in visible]
-    # The navigation row keeps its position even on a single page, so the layout
-    # never shifts under the player's fingers (accessibility rule 7).
-    rows.append((PREVIOUS_PAGE, page_label(current.page, pages), NEXT_PAGE))
-    if show_filters:
+    # Everything below the entries is machinery, and machinery nobody needs is not
+    # shown: one page means nothing to page through, and a list that fits on one
+    # page with no filter on has nothing to filter down (accessibility rule 7 -
+    # the entries above keep their positions either way).
+    if pages > 1:
+        rows.append((PREVIOUS_PAGE, page_label(current.page, pages), NEXT_PAGE))
+    if show_filters and (pages > 1 or current.filters.active):
         rows.append((FILTERS, RESET_FILTERS, SEARCH))
     rows.extend(extra_rows)
 

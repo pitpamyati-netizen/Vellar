@@ -73,12 +73,19 @@ stays in place and says so in its text:
 
 Never remove the button, never reorder the rows, never collapse empty slots.
 
+The rule is about the actions of a screen, not about its machinery. A paginated
+list drops its paging row when there is only one page and its filter row when
+there is nothing to filter: those rows sit *below* the entries, so no entry ever
+moves, and a bag of three things is opened to reach the things.
+
 ## 8. The last row is always the service row
 
-Every keyboard ends with exactly: `Назад` · `Осмотреться` · `Главное меню`.
+Every keyboard ends with exactly: `Назад` · `Главное меню`.
 
-`Осмотреться` re-sends the description of the current screen without changing any
-state - it is the "say that again, I missed it" button.
+There is no "look around" button. Telegram keeps every message the bot has sent,
+so re-reading the current screen costs a scroll, not a press; a third button on
+every screen only added noise. The command `/осмотреться` still re-sends the
+current screen for anyone who wants it as a fresh message.
 
 *Enforced by:* a test asserting the last row of every screen keyboard.
 
@@ -96,7 +103,7 @@ If the keyboard fails to render, the game must stay playable:
 | Command | Action |
 | --- | --- |
 | `/назад` | Same as the Назад button |
-| `/осмотреться` | Re-send the current screen |
+| `/осмотреться` | Re-send the current screen (no button for it) |
 | `/меню` | Main menu |
 | `/бой атака` | Basic attack in combat |
 | `/умение 3` | Use skill slot 3 |
@@ -114,7 +121,7 @@ belonged to an old screen. The resolver compares the pressed text against the
 current FSM state and, on a mismatch, answers:
 
 ```
-Действие сейчас недоступно, вы находитесь в: Город Порубежье.
+Действие сейчас недоступно, вы находитесь в: Город Дубно.
 ```
 
 together with the current keyboard. Never stay silent, never raise.
@@ -158,13 +165,13 @@ unanswered. See `Narrative.md`, section 9.
 Run through this before merging any change that touches `presentation/`:
 
 - [ ] No `InlineKeyboard*`, no `callback_query`, no `edit_message*` added
-- [ ] New screen ends with the service row `Назад · Осмотреться · Главное меню`
+- [ ] New screen ends with the service row `Назад · Главное меню`
 - [ ] Button labels unique within the screen, and still unique without emoji
 - [ ] Button positions unchanged between refreshes; unavailable actions kept in place with a text reason
 - [ ] First line answers "where am I / what happened"
 - [ ] Numbers spelled out as `X of Y`, no bars, no tables
 - [ ] Message body under ~900 characters, otherwise paginated
-- [ ] `Осмотреться` re-sends this screen without changing state
+- [ ] `/осмотреться` re-sends this screen without changing state
 - [ ] A text command exists for every new action
 - [ ] Pressing the new screen's buttons from a different state produces the "action unavailable" answer
 - [ ] `parse_mode` left at `None`

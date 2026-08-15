@@ -40,6 +40,19 @@ class SkillLoadout:
         if len(self.passives) != PASSIVE_SLOTS:
             msg = f"the panel has exactly {PASSIVE_SLOTS} passive slots"
             raise ValueError(msg)
+        # A skill lying in the panel is a skill the character knows. Without this
+        # the starting skill fought like rank one but the skills screen still
+        # offered to learn it for a point - the same skill, known and unknown at
+        # once. Normalising here fixes characters saved by older releases too.
+        in_panel = (*self.equipped_actives(), *self.equipped_passives())
+        if self.racial is not None:
+            in_panel = (*in_panel, self.racial)
+        missing = [code for code in in_panel if code not in self.ranks]
+        if missing:
+            ranks = dict(self.ranks)
+            for code in missing:
+                ranks[code] = 1
+            object.__setattr__(self, "ranks", MappingProxyType(ranks))
 
     def rank_of(self, skill_code: str) -> int:
         """Rank of a skill; 1 once it is known at all."""
@@ -129,6 +142,9 @@ class Character:
     # Craft work already done. A rank is never stored - it is counted back from
     # the experience here by ``mmorpg.domain.rules.crafts``.
     crafts: CraftLog = field(default_factory=CraftLog)
+    # Which introduction tasks are behind them, as a bitmask
+    # (``mmorpg.domain.rules.tutorial``). Zero is a player who has just arrived.
+    tutorial: int = 0
     # A keeper of the game, not a stronger character: the flag only says that the
     # keeper screen is theirs to open. Who is a keeper is decided by ADMIN_IDS in
     # the environment; this column mirrors that decision so the screens can read

@@ -41,6 +41,7 @@ class Play(StatesGroup):
     shop = State()
     sell = State()
     character = State()
+    stats = State()
     skills = State()
     skill_slots = State()
     skill_pick = State()
@@ -55,6 +56,7 @@ class Play(StatesGroup):
     bank = State()
     dungeon = State()
     settings = State()
+    tutorial = State()
     keeper = State()
     stub = State()
 
@@ -81,6 +83,7 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.SHOP: Play.shop,
     ScreenId.SELL: Play.sell,
     ScreenId.CHARACTER: Play.character,
+    ScreenId.STATS: Play.stats,
     ScreenId.SKILLS: Play.skills,
     ScreenId.SKILL_SLOTS: Play.skill_slots,
     ScreenId.SKILL_PICK: Play.skill_pick,
@@ -95,6 +98,7 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.BANK: Play.bank,
     ScreenId.DUNGEON: Play.dungeon,
     ScreenId.SETTINGS: Play.settings,
+    ScreenId.TUTORIAL: Play.tutorial,
     ScreenId.KEEPER: Play.keeper,
     ScreenId.STUB: Play.stub,
 }
@@ -121,6 +125,7 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.SHOP: ScreenId.CITY,
     ScreenId.SELL: ScreenId.SHOP,
     ScreenId.CHARACTER: ScreenId.MAIN_MENU,
+    ScreenId.STATS: ScreenId.CHARACTER,
     ScreenId.SKILLS: ScreenId.MAIN_MENU,
     ScreenId.SKILL_SLOTS: ScreenId.SKILLS,
     ScreenId.SKILL_PICK: ScreenId.SKILL_SLOTS,
@@ -135,6 +140,7 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.BANK: ScreenId.CITY,
     ScreenId.DUNGEON: ScreenId.CITY,
     ScreenId.SETTINGS: ScreenId.MAIN_MENU,
+    ScreenId.TUTORIAL: ScreenId.MAIN_MENU,
     ScreenId.KEEPER: ScreenId.MAIN_MENU,
     ScreenId.STUB: ScreenId.CITY,
 }

@@ -17,10 +17,7 @@ from mmorpg.logging import get_logger
 
 logger = get_logger(__name__)
 
-APOLOGY = (
-    "Что-то пошло не так, действие не выполнено. "
-    "Нажмите «Осмотреться», чтобы переслушать экран, или «Главное меню»."
-)
+APOLOGY = "Что-то пошло не так, действие не выполнено. Нажмите «Назад» или «Главное меню»."
 
 
 class ErrorMiddleware(BaseMiddleware):

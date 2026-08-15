@@ -98,8 +98,10 @@ class CharacterDraft:
     def to_character(self, content: GameContent, user_id: int) -> Character:
         """Turn the draft into a level 1 character with its starting loadout.
 
-        The first class active and the racial active are slotted, and nothing else:
-        a new skill is never auto-equipped later either (docs/skills.md).
+        The first class active and the racial active are slotted *and known* -
+        given, not bought: a level 1 character has no skill points at all, and the
+        first fight must not be fought with an empty panel. Nothing else is
+        slotted, and a new skill is never auto-equipped later (docs/skills.md).
         """
         from mmorpg.domain.entities.character import SkillLoadout
         from mmorpg.domain.entities.content import SkillKind
