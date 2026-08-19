@@ -236,6 +236,32 @@ that dies is caught by the restart policy; a process whose loop is wedged is cau
 only by that file going stale, which is what the container healthcheck reads.
 Shutdown is graceful on `SIGTERM` in both transports.
 
+## The journal
+
+Everything is written to stdout, and - unless `LOG_DIR` is empty - to two files
+beside it (`src/mmorpg/logging.py`). One line per served update says who did what
+and how it ended:
+
+```text
+action who=4242 chat=private did=Атака result=ok ms=14
+```
+
+`result` is `ok`, `failed`, `duplicate`, `banned` or `ignored`. The outcome is not
+decided by the middleware that writes the line: it opens a note on the update
+(`middlewares/audit.py`) and whoever cuts the path short - the duplicate filter,
+the ban gate, the error boundary - marks it there, so one press is one line
+instead of three. In a group only `failed` and `banned` are written down: the bot
+is silent on anything not addressed to it, and what players say to each other is
+not the business of the game.
+
+`vellar.log` holds all of it and is swept after `LOG_RETENTION_DAYS` days.
+`important.log` holds what the sweep must never take - warnings, errors and
+tracebacks, every `gold_flow` line, every failed or turned-away action, every
+start and stop - and `LOG_IMPORTANT_RETENTION_DAYS=0`, the default, means it is
+never deleted. Deciding importance once, at the sink, is what lets the cleanup be
+automatic: a sweep that cannot tell chatter from evidence eventually erases the
+evidence.
+
 ## Character maths
 
 Nothing derived is ever stored. The character record holds raw values only -

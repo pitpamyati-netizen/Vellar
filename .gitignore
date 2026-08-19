@@ -19,6 +19,10 @@ htmlcov/
 .env
 *.log
 
+# The journal the running game writes (src/mmorpg/logging.py). Who pressed what
+# and what broke: it belongs to the machine that served those players.
+logs/
+
 # Database dumps written by stop.bat. Real player data: it stays
 # on the machine that made it.
 backups/

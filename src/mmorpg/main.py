@@ -62,6 +62,7 @@ from mmorpg.monitoring import install_slow_callback_detector
 from mmorpg.presentation.telegram.broadcast import ChannelBroadcaster
 from mmorpg.presentation.telegram.cleanup import MessageReaper
 from mmorpg.presentation.telegram.handlers import combat, creation, group, play
+from mmorpg.presentation.telegram.middlewares.audit import AuditMiddleware
 from mmorpg.presentation.telegram.middlewares.dependencies import (
     Dependencies,
     DependencyMiddleware,
@@ -139,10 +140,12 @@ async def build_application(settings: Settings) -> Application:
     bot.session.middleware(SendRateMiddleware(SendWindow(limit=settings.telegram_sends_per_second)))
     dispatcher = Dispatcher(storage=storage)
 
-    # Order matters: time everything first, then drop duplicates, then inject,
-    # then catch failures around the handler itself.
+    # Order matters: time everything first, open the note the rest of the way
+    # down writes its outcome into, then drop duplicates, then inject, then catch
+    # failures around the handler itself.
     metrics = Metrics()
     dispatcher.update.outer_middleware(MetricsMiddleware(metrics))
+    dispatcher.update.outer_middleware(AuditMiddleware())
     dispatcher.update.outer_middleware(IdempotencyMiddleware(idempotency))
     dispatcher.update.outer_middleware(DependencyMiddleware(dependencies))
     dispatcher.message.middleware(ErrorMiddleware(metrics))

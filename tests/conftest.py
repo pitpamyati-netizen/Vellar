@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+import logging.handlers
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+import structlog
 
 from mmorpg.domain.entities import GameContent
 from mmorpg.infrastructure.content import load_content
@@ -42,3 +46,25 @@ def content_root() -> Path:
 def iter_source_files(root: Path = SOURCE_ROOT) -> list[Path]:
     """Every Python module shipped in the package."""
     return sorted(root.rglob("*.py"))
+
+
+@pytest.fixture(autouse=True)
+def _logging_stays_where_it_was() -> Iterator[None]:
+    """Вернуть журнал в то состояние, в котором тест его застал.
+
+    ``configure_logging`` — настройка процесса целиком: она перебирает обработчики
+    корневого логгера и открывает файлы. Тест, который её вызвал, иначе решал бы
+    за всех, кто идёт после него, а вдобавок держал бы файл открытым — в Windows
+    такой файл не удалить и не повернуть.
+    """
+    root = logging.getLogger()
+    handlers, level = root.handlers[:], root.level
+    try:
+        yield
+    finally:
+        for handler in root.handlers:
+            if isinstance(handler, logging.handlers.TimedRotatingFileHandler):
+                handler.close()
+        root.handlers[:] = handlers
+        root.setLevel(level)
+        structlog.reset_defaults()

@@ -22,7 +22,10 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 
 **`src/mmorpg/`** — код.
 - Корень пакета: `main.py` (композиция, polling/webhook), `config.py` (Settings,
-  единственный доступ к env), `logging.py`, `economy_log.py` (журнал движений
+  единственный доступ к env), `logging.py` (журнал: stdout и два файла —
+  `logs/vellar.log` со сроком `LOG_RETENTION_DAYS` и `logs/important.log`,
+  который автоочистка не трогает; что важно, решает `KEPT_EVENTS`),
+  `economy_log.py` (журнал движений
   золота: `gold_flow`), `metrics.py` (что игра успела: счёт обновлений, отказов
   и задержки — строка в минуту), `monitoring.py` (детектор медленных колбэков),
   `health.py` (heartbeat), `retry.py` (паузы между повторами и ожидание службы
@@ -67,7 +70,9 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   числе сделки игрока и откат расчёта),
   `moderation` (что читает заблокированный), `group`),
   `keyboards/` (`labels`, `reply`), `middlewares/` (`dependencies`, `errors`,
-  `idempotency`, `metrics` — счёт и замер каждого обновления, `moderation` —
+  `idempotency`, `audit` — строка на действие: кто, что нажал, исход и
+  миллисекунды; исход ставят те, кто обрывает путь до хендлера,
+  `metrics` — счёт и замер каждого обновления, `moderation` —
   дверь, закрытая для заблокированного, `retry` и `sending` — на сессии бота, а
   не на апдейтах: повтор потерянного вызова и очередь в тридцать отправок в
   секунду),
@@ -95,10 +100,12 @@ PostgreSQL держит мир, Redis не нужен; `0011` — Печать �
 
 **`tests/`** — `domain/` (слои держит `test_layering.py`, длину боя —
 `test_combat_balance.py`), `content/`, `presentation/` (доступность, канал,
-группа, сквозной проход по циклу в `test_adventure_flow.py`), `application/`,
+группа, журнал действий в `test_audit.py`, сквозной проход по циклу в
+`test_adventure_flow.py`), `application/`,
 `infrastructure/` (что повторяется после разрыва связи),
 `integration/` (маркер `integration`), `test_config.py`, `test_health.py`,
-`test_main.py`, `test_retry.py`, `conftest.py`.
+`test_logging.py` (что переживает автоочистку), `test_main.py`, `test_retry.py`,
+`conftest.py`.
 
 **`scripts/`** — `ci.ps1`/`ci.sh` (гейт), `healthcheck.py`, `broadcast.py` (пост
 в канал: `--headline` или `--changelog latest`), `backup.ps1` (копия по
@@ -118,6 +125,7 @@ PostgreSQL держит мир, Redis не нужен; `0011` — Печать �
 `0013_moderation` (срок блокировки на аккаунте и журнал смотрителя),
 `0014_trade_rollback` (сделка, которую смотритель откатил).
 **`backups/`** — дампы от `stop.bat`; не в репозитории.
+**`logs/`** — журнал живой игры (`logging.py`); не в репозитории.
 **`.githooks/pre-commit`** — гейт на коммите.
 **`.claude/`** — `settings.json` (хук `Stop`) и `autocommit.sh`: если после
 задачи в дереве остались изменения, они коммитятся сами сообщением
@@ -174,7 +182,9 @@ PostgreSQL держит мир, Redis не нужен; `0011` — Печать �
    выполняется заново (`persistence/reconnect.py`), но только пока ясно, что до
    базы он не дошёл: `SELECT` повторяется всегда, `UPDATE` — никогда после
    отправки, иначе золото спишется дважды (ADR 0009). Оператор, который и читает,
-   и пишет (`UPDATE ... RETURNING`), — это запись.
+   и пишет (`UPDATE ... RETURNING`), — это запись. **Событие, о котором спросят
+   через месяц**, называется в `KEPT_EVENTS` (`mmorpg/logging.py`): всё
+   остальное автоочистка удалит через неделю, и это правильно.
 9. **Новый экран** добавляется в `tests/presentation/conftest.py::all_screens` —
    иначе он не проверен. **Группа — не экран**: там нет служебного ряда и нет
    «Назад», бот отвечает только на reply и молчит на всё остальное.

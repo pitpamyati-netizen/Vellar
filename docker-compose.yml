@@ -152,6 +152,9 @@ services:
       # something to run players on (src/mmorpg/monitoring.py).
       SLOW_CALLBACK_DETECTOR: "false"
       HEARTBEAT_PATH: /tmp/vellar-heartbeat
+      # No log files in the stack: stdout is collected by the daemon below
+      # (rotated at 5 files of 10 MB), and the bot owns nothing under /app.
+      LOG_DIR: ""
     restart: unless-stopped
     # Long enough for aiogram to finish the updates already in flight.
     stop_grace_period: 25s

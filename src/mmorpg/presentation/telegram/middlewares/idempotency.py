@@ -15,11 +15,12 @@ from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Update
 
 from mmorpg.domain.ports.repositories import IdempotencyStore
-from mmorpg.logging import get_logger
-
-logger = get_logger(__name__)
+from mmorpg.presentation.telegram.middlewares.audit import note_of
 
 DEFAULT_TTL = 300
+
+#: Исход, под которым отброшенное обновление попадает в журнал действий.
+DUPLICATE = "duplicate"
 
 
 class IdempotencyMiddleware(BaseMiddleware):
@@ -36,6 +37,10 @@ class IdempotencyMiddleware(BaseMiddleware):
         data: dict[str, Any],
     ) -> Any:
         if isinstance(event, Update) and await self._store.seen(event.update_id, self._ttl):
-            logger.info("duplicate_update_dropped", update_id=event.update_id)
+            # Своей строки в журнале это не пишет: одно нажатие - одна строка, и
+            # исход в ней скажет ровно то же самое (``middlewares.audit``).
+            note = note_of(data)
+            if note is not None:
+                note.done(DUPLICATE)
             return None
         return await handler(event, data)

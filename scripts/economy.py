@@ -5,9 +5,11 @@
 говорят ничего; сложенные по видам — говорят всё: сколько мир выплатил, сколько
 города забрали, сколько убрала пошлина и не печатает ли круг золото.
 
-    uv run python scripts/economy.py game.log            за всё, что в файле
-    uv run python scripts/economy.py game.log --hours 24 за последние сутки
-    Start.bat > game.log 2>&1                            откуда берётся файл
+    uv run python scripts/economy.py logs/important.log            за весь файл
+    uv run python scripts/economy.py logs/important.log --hours 24 за сутки
+
+Файл игра пишет сама (``mmorpg.logging``): ``logs/important.log`` — та половина
+журнала, которую автоочистка не трогает, и ``gold_flow`` лежит именно в ней.
 
 Читает и то, и другое: строки JSON (``LOG_JSON=true``, как в проде) и обычный
 вывод в консоль. Ничего не меняет и никуда не ходит — считает и печатает.

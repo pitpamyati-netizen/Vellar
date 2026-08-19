@@ -25,10 +25,11 @@ from aiogram.types import Message, ReplyKeyboardRemove, TelegramObject
 
 from mmorpg.domain.ports.repositories import UserRepository
 from mmorpg.domain.rules import moderation as rules
-from mmorpg.logging import get_logger
+from mmorpg.presentation.telegram.middlewares.audit import note_of
 from mmorpg.presentation.telegram.screens.moderation import banned_text
 
-logger = get_logger(__name__)
+#: Исход, под которым закрытая дверь попадает в журнал действий.
+BANNED = "banned"
 
 
 class BanMiddleware(BaseMiddleware):
@@ -49,7 +50,9 @@ class BanMiddleware(BaseMiddleware):
         if user is None or not rules.is_banned(user.ban, now=now):
             return await handler(event, data)
 
-        logger.info("banned_user_turned_away", telegram_id=user.telegram_id)
+        note = note_of(data)
+        if note is not None:
+            note.done(BANNED)
         if message.chat.type == ChatType.PRIVATE:
             await message.answer(
                 banned_text(user.ban, now=now),

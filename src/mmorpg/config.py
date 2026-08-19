@@ -57,6 +57,21 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     log_json: bool = False
 
+    # --- What the game writes down about itself (``mmorpg.logging``) ---
+    # Where the log files go. Relative paths hang off the project root; empty
+    # means stdout only, which is what a container wants - there the log belongs
+    # to the daemon that collects it, and the process owns nothing it may write.
+    log_dir: str = "logs"
+    # How long the everyday log is kept. A week is what a report from a player
+    # takes to arrive: "yesterday my gold vanished" is answerable, "back in the
+    # spring" is not, and a busy day of a hundred players is a few megabytes.
+    log_retention_days: int = Field(default=7, ge=1)
+    # And how long the important half is kept - failures, warnings, every
+    # movement of gold, every account turned away. ``0`` means "never delete":
+    # this is the file an argument about a lost purse is settled from, and it
+    # grows by kilobytes where the other grows by megabytes.
+    log_important_retention_days: int = Field(default=0, ge=0)
+
     bot_token: SecretStr = SecretStr("")
 
     # Which working tree this is running from. Stamped by Start.bat - into the
@@ -174,6 +189,15 @@ class Settings(BaseSettings):
             msg = "webhook_secret is required when app_env is 'prod'"
             raise ValueError(msg)
         return self
+
+    @property
+    def log_path(self) -> Path | None:
+        """The directory the log files go into, or ``None`` for stdout only."""
+        stripped = self.log_dir.strip()
+        if not stripped:
+            return None
+        directory = Path(stripped)
+        return directory if directory.is_absolute() else PROJECT_ROOT / directory
 
     @property
     def watching_slow_callbacks(self) -> bool:

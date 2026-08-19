@@ -292,6 +292,29 @@ backup, every five minutes:
 pwsh -Command "Register-ScheduledTask -TaskName 'Vellar watchdog' -Action (New-ScheduledTaskAction -Execute 'uv' -Argument 'run python scripts/watchdog.py' -WorkingDirectory (Get-Location)) -Trigger (New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)) -Force"
 ```
 
+### The journal on disk
+
+A solo run writes two files under `logs/` beside stdout, and keeps writing them
+across restarts (`src/mmorpg/logging.py`):
+
+| File | Holds | Kept |
+| --- | --- | --- |
+| `logs/vellar.log` | every served update: who pressed what, the outcome, the milliseconds | `LOG_RETENTION_DAYS`, 7 by default |
+| `logs/important.log` | warnings, errors and tracebacks, every `gold_flow` line, every action that failed or was turned away, every start and stop | `LOG_IMPORTANT_RETENTION_DAYS`, `0` = forever |
+
+Both roll over at midnight; the cleanup deletes rollovers past their term and
+runs by itself, once at startup and again on every rollover. It only ever touches
+the file it is allowed to, which is the point of the split: a week of chatter is
+worth deleting, a failure is worth reading a year later.
+
+```bash
+Get-Content logsellar.log -Tail 50 -Wait     # follow the game
+Select-String result=failed logs\important.log  # what broke, ever
+```
+
+The Docker stack sets `LOG_DIR=""` instead: there the log belongs to the daemon
+collecting stdout, and the bot owns nothing under `/app`.
+
 ### What the numbers say while it runs
 
 One line a minute, in the same log as everything else:
@@ -305,7 +328,7 @@ above zero is a player who got an apology instead of a screen. `METRICS_SECONDS`
 changes how often it is written. Gold is counted separately and read afterwards:
 
 ```bash
-uv run python scripts/economy.py game.log --hours 24
+uv run python scripts/economy.py logs/important.log --hours 24
 ```
 
 That sums every `gold_flow` line by kind - what the world paid out, what the
