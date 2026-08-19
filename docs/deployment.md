@@ -3,20 +3,74 @@
 How the bot is actually run: locally while working on it, and as a stack that a
 hundred players can be left on.
 
-## Two ways to run
+## Three ways to run
 
-| | `Start.bat local` | `Start.bat` |
-| --- | --- | --- |
-| Processes | one, on the host | PostgreSQL, Redis, migrations, bot |
-| Storage | in memory | PostgreSQL + Redis, on disk |
-| Survives a restart | no | yes |
-| Restarted automatically | no | yes |
-| Needs | `uv`, a bot token | Docker Desktop, a bot token |
-| For | trying a change | players |
+| | `Start.bat local` | `Start.bat solo` | `Start.bat` |
+| --- | --- | --- | --- |
+| Processes | one, on the host | one, on the host | PostgreSQL, Redis, migrations, bot |
+| Storage | in memory | PostgreSQL on this machine | PostgreSQL + Redis, on disk |
+| Characters survive a restart | no | yes | yes |
+| Screens and fights survive it | no | no | yes |
+| Restarted automatically | no | no | yes |
+| Needs | `uv`, a bot token | `uv`, PostgreSQL, a bot token | Docker Desktop, a bot token |
+| For | trying a change | one machine, no Docker | players |
 
 `local` forgets every character the moment the process exits. It is a development
 convenience (`docs/adr/0005-in-memory-adapters.md`), never somewhere to leave
 players.
+
+`solo` is the middle: the world is in a real database and the session is not
+(`docs/adr/0010-a-machine-without-containers.md`). It exists because Docker
+Desktop is several gigabytes to keep a world that one installer already keeps.
+
+## Solo: PostgreSQL without Docker
+
+Once, when setting the machine up:
+
+1. Install PostgreSQL from <https://www.postgresql.org/download/windows/>, taking
+   the defaults. Remember the superuser password it asks for.
+2. `Start.bat setup-db` - creates the role `vellar` with the password from
+   `POSTGRES_PASSWORD` and a database of the same name owned by it. It asks for
+   that superuser password, is idempotent, and touches nothing else.
+
+Then, every time:
+
+```
+Start.bat solo
+```
+
+which brings the schema up to date (`alembic upgrade head`) and starts the bot in
+this window. Ctrl+C stops it. `POSTGRES_DSN` in `.env` is what both of them
+connect to, so pointing it at a database you made yourself works as well.
+
+What a restart costs is the session, not the world: everyone is put back in the
+main menu unhurt, and a fight in progress ends. Characters, gold, bags, contracts
+and keeper edits are in PostgreSQL and are untouched. Updating is the same few
+seconds of silence as an update to the stack - Ctrl+C, then `Start.bat solo`.
+
+`stop.bat` still works without Docker: it cannot stop a process in another window,
+but it takes the same `pg_dump` into `backups\`. The dump is interchangeable with
+the stack's, so a solo world can be carried into Docker later and back.
+
+### Carrying a world out of Docker
+
+A stack that has already been played on holds the world in a Docker volume, which
+goes when Docker does. Move it first, while the stack still runs:
+
+```
+stop.bat                             # dumps into backups\
+Start.bat setup-db                   # once, on the new PostgreSQL
+psql "postgresql://vellar:vellar@localhost:5432/vellar" -f backups\vellar-<stamp>.sql
+Start.bat solo
+```
+
+The dump is taken with `--clean --if-exists`, so it restores over an empty
+database and over an existing one alike. Going back the other way is the same
+file into the container's `psql`.
+
+If PostgreSQL is not answering, its Windows service is usually stopped:
+`net start postgresql-x64-17` from an administrator prompt, or set it to start
+with Windows in `services.msc`.
 
 ## The Docker stack
 
@@ -28,25 +82,27 @@ docker compose down           # or stop.bat
 
 ## Updating a game that is running
 
-`Update.bat` replaces the bot without stopping the world: dump into `backups\`,
-tag the serving image `previous` (before the build moves `latest` and the old
-image is collected), build, `alembic upgrade head` on its own, then
-`up -d --no-deps --wait bot`. Each step fails where it can be understood: a build
-error leaves the old bot serving, a bad migration leaves both alone.
+In solo mode: Ctrl+C in the bot's window, then `Start.bat` again. It brings the
+schema up to date before it starts, and PostgreSQL is never stopped, so
+characters, bags and contracts carry straight over. The session does not - the
+same restart everyone else pays for. Take a dump first if the change touches the
+schema: `stop.bat` writes one into `backups\` without stopping anything of yours.
 
-PostgreSQL and Redis are never touched, so characters, bags and the fight a
-player is mid-way through survive the swap - the new process reads them back on
-its first update. The cost is a few seconds in which a press gets no answer;
-Telegram holds it and the new process replies.
+In the stack: `Start.bat docker` on a stack that is already up rebuilds the image
+and lets compose swap the bot; `migrate` runs to completion first, and PostgreSQL
+and Redis are left alone, so the fight a player is mid-way through survives the
+swap. A build that fails stops before anything is replaced and the old bot keeps
+serving. The cost is a few seconds in which a press gets no answer; Telegram
+holds it and the new process replies.
 
-`Update.bat rollback` retags `previous` as `latest` and swaps back. A migration
-that already ran stays applied: the schema only moves forward, and going back
-past that means restoring a dump.
+Going back is `git checkout` of the commit that worked and starting again - there
+is no saved previous image. A migration that already ran stays applied either
+way: the schema only moves forward, and going back past that means restoring a
+dump.
 
-Which build is running is not a matter of memory. Both scripts stamp the image
-with the commit (`-dirty` when anything is uncommitted or untracked), the bot
-logs it as `build ref=...`, and they read it back out of the container
-afterwards. `Start.bat status` prints tree and container side by side.
+Which build is running is not a matter of memory. `Start.bat` stamps it with the
+commit (`-dirty` when anything is uncommitted or untracked) and the bot logs it
+as `build ref=...`; `Start.bat status` prints tree and container side by side.
 
 Four services:
 
@@ -173,7 +229,9 @@ A plain `stop.bat` saves first: `redis-cli SAVE` writes the temporary state -
 screens, fights, offers - on top of the append-only log, and `pg_dump` puts
 everything permanent in `backups\`, newest twenty kept. Neither is what makes a
 stop safe (no volume is touched), but a dump is what turns "the world is still
-there" into something you can carry elsewhere.
+there" into something you can carry elsewhere. With no stack running it takes the
+same dump through the machine's own `pg_dump`, which is how a solo world is
+backed up.
 
 `stop.bat purge` and `docker compose down --volumes` delete every character in the
 world. There is no undo, which is why the batch file asks first.

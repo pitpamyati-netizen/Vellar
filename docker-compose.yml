@@ -109,7 +109,7 @@ services:
     build:
       context: .
       args:
-        # Stamped by Start.bat and Update.bat; "unknown" for a hand-run build.
+        # Stamped by Start.bat; "unknown" for a hand-run build.
         VELLAR_BUILD: ${VELLAR_BUILD:-unknown}
     image: vellar-bot
     depends_on:

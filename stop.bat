@@ -17,17 +17,16 @@ rem       update already in flight is finished rather than severed.
 rem
 rem  Nothing here deletes a volume, so Start.bat brings the world back exactly as
 rem  it was. Purge is the one exception, and it asks first.
+rem
+rem  Without a stack there is nothing here to stop: a game started with
+rem  "Start.bat solo" or "Start.bat local" is a process in its own window, and
+rem  Ctrl+C there is what stops it. This still runs, though, and takes the dump -
+rem  a solo world is in a PostgreSQL on this machine and can be copied out of it
+rem  exactly like the container's one.
 rem ============================================================================
 setlocal EnableExtensions
 cd /d "%~dp0"
 title Vellar
-
-docker version >nul 2>&1
-if errorlevel 1 (
-    echo [Vellar] Docker is not responding, so nothing of the stack can be running.
-    echo [Vellar] If you started it with "Start.bat local", press Ctrl+C in that window.
-    exit /b 1
-)
 
 if /i "%~1"=="purge" goto purge
 if not "%~1"=="" (
@@ -35,11 +34,11 @@ if not "%~1"=="" (
     exit /b 2
 )
 
+docker version >nul 2>&1
+if errorlevel 1 goto no_stack
+
 call scripts\vellar-tools.bat running
-if errorlevel 1 (
-    echo [Vellar] Nothing is running. There is nothing to stop or to save.
-    exit /b 0
-)
+if errorlevel 1 goto no_stack
 
 echo [Vellar] Saving before stopping.
 echo.
@@ -66,7 +65,34 @@ echo [Vellar] Stopped. Start.bat brings it back with everything intact.
 echo [Vellar] The dump above is a second copy: the database volume is untouched.
 exit /b 0
 
+rem ---------------------------------------------------------------------------
+rem  No containers are running. Either nothing is, or the game is the process in
+rem  its own window. Nothing here can stop that process - and nothing needs to,
+rem  because in solo mode the world is written to PostgreSQL as it happens. The
+rem  dump is taken anyway: it is the copy that can be carried elsewhere.
+rem ---------------------------------------------------------------------------
+:no_stack
+echo [Vellar] No stack is running in Docker.
+echo [Vellar] A game started with "Start.bat solo" or "Start.bat local" is the
+echo [Vellar] process in its own window: Ctrl+C there stops it, and a solo world
+echo [Vellar] is already on disk the moment each action happens.
+echo.
+call scripts\vellar-tools.bat backup
+rem A missing database here means nothing was set up to save, which is not a
+rem failure of stopping - it is the answer to "is there anything to keep".
+exit /b 0
+
 :purge
+docker version >nul 2>&1
+if errorlevel 1 (
+    echo [Vellar] Docker is not responding, and purge only deletes what Docker
+    echo [Vellar] holds. A solo world lives in the PostgreSQL on this machine;
+    echo [Vellar] to start that one over, drop and recreate its database:
+    echo [Vellar]     psql -U postgres -c "DROP DATABASE vellar"
+    echo [Vellar]     Start.bat setup-db
+    echo [Vellar] Take a dump first if there is anything in it: stop.bat
+    exit /b 1
+)
 echo.
 echo [Vellar] ** This deletes the database and the Redis state: every character,
 echo [Vellar] ** every item and every fight in progress. It cannot be undone.

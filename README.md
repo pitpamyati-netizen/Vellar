@@ -15,40 +15,47 @@ specification, not a preference.
 Put your bot token in `.env` first - copy `.env.example` if the file is not there
 yet, and get a token from [@BotFather](https://t.me/BotFather).
 
-On Windows, that is the only step:
+On Windows, install [PostgreSQL](https://www.postgresql.org/download/windows/) and
+create the role once with `Start.bat setup-db`. After that:
 
 ```
 Start.bat
 ```
 
-This builds the image from the working tree as it stands, starts PostgreSQL,
-Redis, the migrations and the bot, waits until the bot reports healthy, and reads
-the build stamp back out of the running container so "am I on my latest change"
-is answered rather than assumed. The bot keeps running after you close the window.
+This runs the bot as one process against a PostgreSQL installed on this machine -
+no Docker and no Redis - brings the schema up to date first, and stamps the build
+with the commit it came from so "am I on my latest change" is answered rather
+than assumed. Ctrl+C stops it.
+
+The world is kept: characters, gold, bags and contracts are in the database. The
+session is not: a restart puts everyone back in the main menu and ends a fight in
+progress (`docs/adr/0010-a-machine-without-containers.md`).
 
 | | |
 | --- | --- |
-| `Start.bat` | build this tree and start everything |
-| `Update.bat` | apply this tree to a game already running: back up, build, migrate, swap the bot only - PostgreSQL and Redis stay up, so characters and fights in progress are untouched |
-| `Update.bat rollback` | put the previous image back |
-| `stop.bat` | flush Redis, dump the database to `backups\`, then stop; nothing is deleted |
+| `Start.bat` | the game, against PostgreSQL on this machine (same as `Start.bat solo`) |
+| `Start.bat setup-db` | create the `vellar` role and database. Once, before the first run |
+| `Start.bat local` | one in-memory process, nothing saved - for trying a change, never for players |
+| `Start.bat docker` | the full stack in containers; run again to rebuild and swap the bot without stopping the world |
+| `stop.bat` | dump the database to `backups\`; with a stack up, flush Redis and stop it too. Nothing is deleted |
 | `stop.bat purge` | stop and delete every character. Asks first |
 
-`Start.bat local` runs a single in-memory process instead, with no Docker and
-nothing saved - good for trying a change, never for players.
+Updating a solo game is Ctrl+C and `Start.bat` again: the migrations run before
+the bot does, and PostgreSQL is never stopped, so characters carry straight over.
 
-Elsewhere, or by hand:
+By hand, anywhere - all you need is [uv](https://docs.astral.sh/uv/) and Python
+3.14. `APP_ENV=local` uses in-memory adapters, so a token is the only
+prerequisite; `APP_ENV=solo` keeps the world in the PostgreSQL named by
+`POSTGRES_DSN` and still needs no Redis:
+
+```bash
+uv sync && uv run alembic upgrade head && uv run python -m mmorpg.main
+```
+
+Or as containers, which is what a server runs:
 
 ```bash
 docker compose up -d && docker compose logs -f bot
-```
-
-Without Docker you need [uv](https://docs.astral.sh/uv/) and Python 3.14. With
-`APP_ENV=local` the bot uses in-memory adapters, so no PostgreSQL and no Redis are
-required and a token is the only prerequisite:
-
-```bash
-uv sync && uv run python -m mmorpg.main
 ```
 
 `docs/deployment.md` covers the whole picture: what the stack is sized for, webhook

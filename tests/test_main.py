@@ -33,8 +33,42 @@ async def app():
 
 async def test_local_mode_needs_no_database_or_redis(app) -> None:
     """The whole point of APP_ENV=local: a bot token is the only requirement."""
-    assert app.settings.uses_external_storage is False
+    assert app.settings.uses_postgres is False
+    assert app.settings.uses_redis is False
     assert app.content.races
+
+
+async def test_solo_keeps_the_session_in_the_process() -> None:
+    """APP_ENV=solo installs one service, not two: nothing reaches for Redis.
+
+    The world still goes to PostgreSQL, which is why only the session half is
+    built here - see ``docs/adr/0010-a-machine-without-containers.md``.
+    """
+    from contextlib import AsyncExitStack
+
+    from aiogram.fsm.storage.memory import MemoryStorage
+
+    from mmorpg.infrastructure.cache import (
+        InMemoryIdempotencyStore,
+        InMemoryLocationStateCache,
+        InMemoryStateCache,
+    )
+    from mmorpg.main import _build_session_state
+
+    settings = Settings(
+        _env_file=None,  # type: ignore[call-arg]
+        app_env=AppEnv.SOLO,
+        bot_token=FAKE_TOKEN,
+    )
+    assert settings.uses_postgres is True
+
+    async with AsyncExitStack() as stack:
+        storage, state_cache, locations, idempotency = await _build_session_state(settings, stack)
+
+    assert isinstance(storage, MemoryStorage)
+    assert isinstance(state_cache, InMemoryStateCache)
+    assert isinstance(locations, InMemoryLocationStateCache)
+    assert isinstance(idempotency, InMemoryIdempotencyStore)
 
 
 async def test_content_is_validated_before_the_bot_starts(app) -> None:

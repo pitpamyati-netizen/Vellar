@@ -4,10 +4,13 @@ Everything is wired here and nowhere else: settings are read, content is loaded
 and validated, adapters are chosen for the environment, pools are opened,
 middlewares and routers are attached, and the bot starts.
 
-Three run modes (``docs/architecture.md``):
+Four run modes (``docs/architecture.md``):
 
 - ``APP_ENV=local`` - long polling with in-memory adapters, no PostgreSQL and no
   Redis required, so the game is playable with just a bot token;
+- ``APP_ENV=solo``  - long polling against real PostgreSQL, with the short-lived
+  state kept in the process instead of in Redis: one machine, no containers
+  (``docs/adr/0010-a-machine-without-containers.md``);
 - ``APP_ENV=dev``   - long polling against real PostgreSQL and Redis;
 - ``APP_ENV=prod``  - aiohttp webhook against real PostgreSQL and Redis.
 
@@ -30,7 +33,11 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from mmorpg.application.services.content import ContentRegistry
 from mmorpg.config import AppEnv, Settings, load_settings
 from mmorpg.domain.entities.content import GameContent
-from mmorpg.domain.ports.repositories import IdempotencyStore
+from mmorpg.domain.ports.repositories import (
+    IdempotencyStore,
+    LocationStateCache,
+    StateCache,
+)
 from mmorpg.health import heartbeat
 from mmorpg.infrastructure.cache import (
     InMemoryIdempotencyStore,
@@ -141,8 +148,13 @@ async def build_application(settings: Settings) -> Application:
 async def _build_adapters(
     settings: Settings, registry: ContentRegistry, stack: AsyncExitStack
 ) -> tuple[BaseStorage, Dependencies, IdempotencyStore]:
-    """In-memory for local, PostgreSQL and Redis otherwise (ADR 0005)."""
-    if not settings.uses_external_storage:
+    """In-memory for local, PostgreSQL from there up, Redis for dev and prod.
+
+    The two halves are chosen separately (ADR 0005, ADR 0010): what a world is
+    made of goes to PostgreSQL, what a session is made of goes to Redis, and
+    ``solo`` takes the first without the second.
+    """
+    if not settings.uses_postgres:
         logger.warning(
             "using_in_memory_adapters",
             detail="APP_ENV=local: state is lost on restart, never deploy this way",
@@ -164,18 +176,7 @@ async def _build_adapters(
         )
         return MemoryStorage(), dependencies, InMemoryIdempotencyStore()
 
-    from aiogram.fsm.storage.redis import RedisStorage
-
-    from mmorpg.infrastructure.cache.redis_cache import (
-        RedisIdempotencyStore,
-        RedisLocationStateCache,
-        RedisStateCache,
-    )
-    from mmorpg.infrastructure.persistence.pool import (
-        create_postgres_pool,
-        create_redis_client,
-        wait_for_redis,
-    )
+    from mmorpg.infrastructure.persistence.pool import create_postgres_pool
     from mmorpg.infrastructure.persistence.postgres import (
         PostgresCharacterRepository,
         PostgresContentOverlayRepository,
@@ -185,17 +186,16 @@ async def _build_adapters(
         PostgresUserRepository,
     )
 
-    # Both waits are patient: a stack that comes up together does not come up in
+    # The wait is patient: a stack that comes up together does not come up in
     # order, and a database that needs five more seconds is not a reason to exit.
     pool = await create_postgres_pool(settings)
     stack.push_async_callback(pool.close)
-    redis = create_redis_client(settings)
-    stack.push_async_callback(redis.aclose)
-    await wait_for_redis(redis, settings)
+    storage, state_cache, locations, idempotency = await _build_session_state(settings, stack)
 
     logger.info(
         "pools_ready",
         postgres_max=settings.postgres_pool_max,
+        redis=settings.uses_redis,
         repeats=settings.reconnect_attempts,
         max_wait=settings.reconnect_max_delay_seconds,
     )
@@ -208,12 +208,56 @@ async def _build_adapters(
         inventory=PostgresInventoryRepository(pool),
         trades=PostgresTradeRepository(pool),
         privacy=PostgresPrivacyRepository(pool),
-        state_cache=RedisStateCache(redis),
-        locations=RedisLocationStateCache(redis),
+        state_cache=state_cache,
+        locations=locations,
         overlays=PostgresContentOverlayRepository(pool),
         broadcasts=ChannelBroadcaster(sink=None, chat_id=settings.channel_id),
     )
-    return RedisStorage(redis), dependencies, RedisIdempotencyStore(redis)
+    return storage, dependencies, idempotency
+
+
+async def _build_session_state(
+    settings: Settings, stack: AsyncExitStack
+) -> tuple[BaseStorage, StateCache, LocationStateCache, IdempotencyStore]:
+    """Where the screen, the fight and the map of a location are kept.
+
+    Redis when there is one. Without it (``APP_ENV=solo``) the same four things
+    live in the process: they are all short-lived by design and all already
+    written to be lost safely - a screen that no longer exists puts the player
+    back in the main menu, and a location without a map is generated again from
+    its seed. What a restart does cost is real, though, and is said out loud
+    here: a fight in progress ends, and everyone is standing in the main menu.
+    """
+    if not settings.uses_redis:
+        logger.info(
+            "session_state_in_memory",
+            detail="APP_ENV=solo: the world is on disk, screens and fights are not",
+        )
+        return (
+            MemoryStorage(),
+            InMemoryStateCache(),
+            InMemoryLocationStateCache(),
+            InMemoryIdempotencyStore(),
+        )
+
+    from aiogram.fsm.storage.redis import RedisStorage
+
+    from mmorpg.infrastructure.cache.redis_cache import (
+        RedisIdempotencyStore,
+        RedisLocationStateCache,
+        RedisStateCache,
+    )
+    from mmorpg.infrastructure.persistence.pool import create_redis_client, wait_for_redis
+
+    redis = create_redis_client(settings)
+    stack.push_async_callback(redis.aclose)
+    await wait_for_redis(redis, settings)
+    return (
+        RedisStorage(redis),
+        RedisStateCache(redis),
+        RedisLocationStateCache(redis),
+        RedisIdempotencyStore(redis),
+    )
 
 
 async def run_polling(app: Application) -> None:

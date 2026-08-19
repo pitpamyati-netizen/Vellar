@@ -43,9 +43,9 @@ HEALTHCHECK --interval=15s --timeout=10s --start-period=45s --retries=3 \
 # aiogram's handler, the webhook through the stop event in mmorpg.main.
 STOPSIGNAL SIGTERM
 
-# Which working tree this image was built from - stamped by Start.bat and
-# Update.bat, logged on startup, and printed back by both scripts. Last layer on
-# purpose: a new value rebuilds this line and nothing else.
+# Which working tree this image was built from - stamped by Start.bat, logged on
+# startup, and printed back by "Start.bat status". Last layer on purpose: a new
+# value rebuilds this line and nothing else.
 ARG VELLAR_BUILD="unknown"
 ENV VELLAR_BUILD=${VELLAR_BUILD}
 LABEL org.opencontainers.image.revision=${VELLAR_BUILD}

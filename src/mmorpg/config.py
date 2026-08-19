@@ -30,9 +30,15 @@ class AppEnv(StrEnum):
     ``LOCAL`` swaps PostgreSQL and Redis for in-memory adapters so the bot can be
     run and played without any external services. See
     ``docs/adr/0005-in-memory-adapters.md``.
+
+    ``SOLO`` keeps PostgreSQL and drops only Redis: the world is on disk and
+    survives a restart, while the screen a player stands on lives in the process
+    that serves them. One machine, one process, no containers - see
+    ``docs/adr/0010-a-machine-without-containers.md``.
     """
 
     LOCAL = "local"
+    SOLO = "solo"
     DEV = "dev"
     PROD = "prod"
 
@@ -53,9 +59,10 @@ class Settings(BaseSettings):
 
     bot_token: SecretStr = SecretStr("")
 
-    # Which working tree the running image was built from. Stamped into the image
-    # by Start.bat and Update.bat and logged on startup, so "is the bot running
-    # my latest change" has an answer that does not depend on memory.
+    # Which working tree this is running from. Stamped by Start.bat - into the
+    # image for the stack, into the environment for a solo run - and logged on
+    # startup, so "is the bot running my latest change" has an answer that does
+    # not depend on memory.
     vellar_build: str = "unknown"
 
     webhook_base_url: str = "https://example.com"
@@ -190,9 +197,21 @@ class Settings(BaseSettings):
         return telegram_id in self.admins
 
     @property
-    def uses_external_storage(self) -> bool:
-        """Whether PostgreSQL and Redis adapters should be used."""
+    def uses_postgres(self) -> bool:
+        """Whether the world is kept in PostgreSQL rather than in memory."""
         return self.app_env is not AppEnv.LOCAL
+
+    @property
+    def uses_redis(self) -> bool:
+        """Whether the short-lived state is kept in Redis rather than in memory.
+
+        ``SOLO`` says no: what Redis holds here is where a player is standing, the
+        fight they are in the middle of and the map of a location, and all three
+        are already written to be survivable losses (``Claude.md``, rule 8). One
+        process serving one machine can hold them itself, and that is one service
+        fewer to install.
+        """
+        return self.app_env in (AppEnv.DEV, AppEnv.PROD)
 
     @property
     def webhook_url(self) -> str:

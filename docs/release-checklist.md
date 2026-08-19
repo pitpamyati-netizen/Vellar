@@ -96,6 +96,8 @@ Only when something that pays or charges changed.
 ## 6. Runtime
 
 - [ ] `Start.bat local` starts and plays
+- [ ] `Start.bat solo` migrates and plays, and a restart puts a player back in
+      the main menu rather than into a screen that no longer exists
 - [ ] `Start.bat` (or `docker compose up -d --wait`) reaches healthy on its own
 - [ ] Startup logs show `content_loaded` with the expected counts, then `connected`
 - [ ] `docker compose stop bot` logs `Polling stopped` and exits 0 - a shutdown

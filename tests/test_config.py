@@ -16,12 +16,21 @@ def _settings(**overrides: object) -> Settings:
 def test_local_is_the_default_environment() -> None:
     settings = _settings()
     assert settings.app_env is AppEnv.LOCAL
-    assert settings.uses_external_storage is False
+    assert settings.uses_postgres is False
+    assert settings.uses_redis is False
 
 
 def test_dev_and_prod_use_external_storage() -> None:
-    assert _settings(app_env="dev").uses_external_storage is True
-    assert _settings(app_env="prod", webhook_secret="s3cret").uses_external_storage is True
+    for settings in (_settings(app_env="dev"), _settings(app_env="prod", webhook_secret="s3cret")):
+        assert settings.uses_postgres is True
+        assert settings.uses_redis is True
+
+
+def test_solo_keeps_the_world_and_drops_redis() -> None:
+    """The world is worth a database of its own; a session is not (ADR 0010)."""
+    settings = _settings(app_env="solo")
+    assert settings.uses_postgres is True
+    assert settings.uses_redis is False
 
 
 def test_prod_requires_a_webhook_secret() -> None:
@@ -40,7 +49,7 @@ def test_shop_rotation_seconds_must_be_positive() -> None:
 
 
 def test_the_build_stamp_defaults_to_unknown() -> None:
-    """Set by Start.bat and Update.bat; a hand-run process simply has no answer."""
+    """Set by Start.bat; a hand-run process simply has no answer."""
     assert _settings().vellar_build == "unknown"
     assert _settings(vellar_build="6139bf8-dirty").vellar_build == "6139bf8-dirty"
 

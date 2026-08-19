@@ -1,12 +1,20 @@
 @echo off
 rem ============================================================================
-rem  Shared routines for Start.bat, stop.bat and Update.bat.
+rem  Shared routines for Start.bat and stop.bat.
 rem
 rem    call scripts\vellar-tools.bat stamp    set VELLAR_BUILD from the git tree
 rem    call scripts\vellar-tools.bat report   say which build is actually running
 rem    call scripts\vellar-tools.bat flush    force Redis to write its state out
 rem    call scripts\vellar-tools.bat backup   pg_dump into backups\, keep 20
 rem    call scripts\vellar-tools.bat running  errorlevel 0 if the stack is up
+rem    call scripts\vellar-tools.bat pgtools  put a local psql/pg_dump on PATH
+rem    call scripts\vellar-tools.bat envvar X read X out of .env into ENV_VALUE
+rem
+rem  backup works both ways round: through the container while the Docker stack
+rem  is up, and through a PostgreSQL installed on this machine when there is no
+rem  stack at all (docs/adr/0010-a-machine-without-containers.md). The file it
+rem  writes is the same either way, which is what lets one be restored into the
+rem  other.
 rem
 rem  Deliberately no setlocal: the caller needs VELLAR_BUILD and BACKUP_FILE back.
 rem  The caller is expected to have cd'd to the repository root already.
@@ -16,6 +24,8 @@ if "%~1"=="report"  goto :report
 if "%~1"=="flush"   goto :flush
 if "%~1"=="backup"  goto :backup
 if "%~1"=="running" goto :running
+if "%~1"=="pgtools" goto :pgtools
+if "%~1"=="envvar"  goto :envvar_entry
 echo [Vellar] vellar-tools: unknown routine "%~1".
 exit /b 2
 
@@ -51,7 +61,7 @@ for /f "usebackq delims=" %%i in (`docker container inspect vellar-bot --format 
 echo [Vellar] Running build: %RUNNING_BUILD%
 if not "%IMAGE_ID%"=="%CONTAINER_IMAGE_ID%" (
     echo [Vellar] ** The running container is NOT the image that was just built.
-    echo [Vellar] ** Run Update.bat to put the new one in its place.
+    echo [Vellar] ** Run "Start.bat docker" again to put the new one in its place.
     exit /b 1
 )
 exit /b 0
@@ -79,6 +89,12 @@ if not exist "backups" mkdir "backups"
 for /f "usebackq delims=" %%t in (`powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd_HHmmss"`) do set "STAMP=%%t"
 set "BACKUP_FILE=backups\vellar-%STAMP%.sql"
 
+rem The container holds the database while the stack is up; a PostgreSQL on this
+rem machine holds it when there is no stack. Which one is asked is decided here
+rem rather than by the caller, so stop.bat reads the same either way.
+call :running
+if errorlevel 1 goto :backup_here
+
 docker compose exec -T postgres pg_dump -U vellar -d vellar --clean --if-exists --no-owner > "%BACKUP_FILE%"
 if errorlevel 1 (
     del /q "%BACKUP_FILE%" 2>nul
@@ -90,7 +106,39 @@ if errorlevel 1 (
 set "CHARACTERS=?"
 for /f "usebackq delims=" %%n in (`docker compose exec -T postgres psql -U vellar -d vellar -tAc "select count(*) from characters" 2^>nul`) do set "CHARACTERS=%%n"
 echo [Vellar] Saved %CHARACTERS% character(s) to %BACKUP_FILE%.
+goto :prune
 
+rem ---------------------------------------------------------------------------
+rem  The same dump, taken from a PostgreSQL installed on this machine instead.
+rem ---------------------------------------------------------------------------
+:backup_here
+call :pgtools
+if errorlevel 1 (
+    del /q "%BACKUP_FILE%" 2>nul
+    set "BACKUP_FILE="
+    echo [Vellar] Nothing is running in Docker and there is no PostgreSQL on this
+    echo [Vellar] machine either, so there is no database to dump.
+    exit /b 1
+)
+call :envvar POSTGRES_DSN
+if not defined ENV_VALUE set "ENV_VALUE=postgresql://vellar:vellar@localhost:5432/vellar"
+set "VELLAR_DSN=%ENV_VALUE%"
+rem Never sit waiting on a database that is not there: this runs inside a stop.
+set "PGCONNECT_TIMEOUT=5"
+
+pg_dump "%VELLAR_DSN%" --clean --if-exists --no-owner > "%BACKUP_FILE%" 2>nul
+if errorlevel 1 (
+    del /q "%BACKUP_FILE%" 2>nul
+    set "BACKUP_FILE="
+    echo [Vellar] PostgreSQL did not answer, so no backup was written.
+    exit /b 1
+)
+
+set "CHARACTERS=?"
+for /f "usebackq delims=" %%n in (`psql "%VELLAR_DSN%" -tAc "select count(*) from characters" 2^>nul`) do set "CHARACTERS=%%n"
+echo [Vellar] Saved %CHARACTERS% character(s) to %BACKUP_FILE%.
+
+:prune
 rem Twenty is a month of daily stops and about as much disk as this deserves.
 set /a KEPT=0
 for /f "usebackq delims=" %%f in (`dir /b /a-d /o-d "backups\vellar-*.sql" 2^>nul`) do (
@@ -113,4 +161,37 @@ rem ---------------------------------------------------------------------------
 set "RUNNING_IDS="
 for /f "usebackq delims=" %%c in (`docker compose ps -q 2^>nul`) do set "RUNNING_IDS=1"
 if not defined RUNNING_IDS exit /b 1
+exit /b 0
+
+rem ---------------------------------------------------------------------------
+rem  A PostgreSQL installed on this machine rather than pulled as an image. The
+rem  Windows installer leaves its bin directory off PATH, so the newest one under
+rem  Program Files is added for this process only - nothing on the machine is
+rem  changed by running a batch file.
+rem ---------------------------------------------------------------------------
+:pgtools
+where psql >nul 2>&1
+if not errorlevel 1 exit /b 0
+for /f "delims=" %%d in ('dir /b /ad /o-n "%ProgramFiles%\PostgreSQL" 2^>nul') do (
+    if exist "%ProgramFiles%\PostgreSQL\%%d\bin\psql.exe" (
+        set "PATH=%ProgramFiles%\PostgreSQL\%%d\bin;%PATH%"
+        exit /b 0
+    )
+)
+exit /b 1
+
+rem ---------------------------------------------------------------------------
+rem  One value out of .env, handed back in ENV_VALUE. The game itself never reads
+rem  the environment except through Settings; this is for the scripts around it,
+rem  which have to know where the database is before there is a process to ask.
+rem ---------------------------------------------------------------------------
+:envvar_entry
+call :envvar "%~2"
+exit /b %errorlevel%
+
+:envvar
+set "ENV_VALUE="
+if not exist ".env" exit /b 1
+for /f "usebackq tokens=1,* delims==" %%a in (`findstr /b /c:"%~1=" ".env"`) do set "ENV_VALUE=%%b"
+if not defined ENV_VALUE exit /b 1
 exit /b 0

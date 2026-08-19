@@ -117,6 +117,10 @@ Redis keys:
 
 `APP_ENV=local` substitutes in-memory implementations of every port, so the bot
 runs with no external services at all. See `docs/adr/0005-in-memory-adapters.md`.
+`APP_ENV=solo` substitutes only the right-hand column: PostgreSQL keeps the
+world, and everything with a TTL above is held by the one process serving it,
+which is one service fewer to install and a session lost on restart
+(`docs/adr/0010-a-machine-without-containers.md`).
 
 A pending offer is the one short-lived thing that is *not* in Redis. Publishing
 one takes the author's item or gold into escrow, so the row now holds real value:
@@ -203,6 +207,7 @@ waiting on the other end and a minute of silence is not an answer.
 | Mode | Transport | Storage |
 | --- | --- | --- |
 | `APP_ENV=local` | long polling | in-memory |
+| `APP_ENV=solo` | long polling | PostgreSQL, session in-memory |
 | `APP_ENV=dev` | long polling | PostgreSQL + Redis |
 | `APP_ENV=prod` | aiohttp webhook | PostgreSQL + Redis |
 
