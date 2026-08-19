@@ -28,6 +28,7 @@ from mmorpg.presentation.telegram.flows.play import (
 )
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.screens.base import ScreenId
+from mmorpg.presentation.telegram.screens.paginated import PageState
 
 WORLD_SEED = "vellar-test"
 CLOCK = Clock(now=1_700_000_000, shop_rotation=100, gather_cooldown=900)
@@ -280,3 +281,28 @@ async def test_is_keeper_answers_from_either_source() -> None:
     await users.set_keeper(PLAYER, True)
 
     assert await is_keeper(users, PLAYER, nameless) is True
+
+
+def test_the_main_menu_survives_a_city_taken_out_of_the_game(content: GameContent) -> None:
+    """Смотритель может убрать город, пока в нём кто-то стоит (docs/keeper.md).
+
+    Экран, который после этого падает у каждого жителя убранного города, — это
+    игра, в которую они больше не могут войти.
+    """
+    from mmorpg.domain.rules.stats import derived_stats
+    from mmorpg.presentation.telegram.screens import play as play_screens
+
+    lost = Character(
+        id=1,
+        user_id=1,
+        name="Аргус",
+        race_id="human",
+        class_id="warrior",
+        city_id="города-такого-нет",
+    )
+    menu = play_screens.main_menu_screen(content, lost, derived_stats(content, lost))
+    assert menu.text().startswith("Главное меню.")
+    assert content.cities[0].name in menu.text()
+
+    world = play_screens.world_screen(content, lost, PageState())
+    assert content.cities[0].name in world.text()

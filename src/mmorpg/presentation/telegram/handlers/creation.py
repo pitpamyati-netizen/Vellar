@@ -99,7 +99,7 @@ async def start(
             existing, message.from_user.id, settings, characters, granted=account.keeper
         )
         await state.set_state(Play.main_menu)
-        city = content.city(existing.city_id)
+        city = play_screens.standing_in(content, existing)
         await send_screen(message, created_screen(existing.name, city.name))
         return
 
@@ -193,7 +193,7 @@ async def step(
         character = await sync_keeper(character, message.from_user.id, settings, characters)
         await state.clear()
         await state.set_state(Play.main_menu)
-        city = content.city(character.city_id)
+        city = play_screens.standing_in(content, character)
         await send_screen(message, created_screen(character.name, city.name))
         return
 

@@ -86,10 +86,23 @@ def node_button(node: LocationNode) -> Label:
     return label(f"Узел {node.index}: {node.name}")
 
 
+def standing_in(content: GameContent, character: Character) -> City:
+    """Город, в котором стоит персонаж, или первый на дороге.
+
+    Смотритель может убрать город правкой, пока в нём кто-то стоит
+    (``docs/keeper.md``). Главное меню обязано открыться и тогда: экран, который
+    падает у всех жителей убранного города, — это игра, в которую они больше не
+    могут войти (``Claude.md``, правило 8).
+    """
+    if content.has_city(character.city_id):
+        return content.city(character.city_id)
+    return content.cities[0]
+
+
 def main_menu_screen(
     content: GameContent, character: Character, stats: DerivedStats, notice: str = ""
 ) -> Screen:
-    city = content.city(character.city_id)
+    city = standing_in(content, character)
     earned, needed = experience_into_level(character.experience)
     progress = (
         f"Опыт: {amount(earned, needed, with_percent=False)} до следующего уровня."
@@ -159,7 +172,7 @@ def world_screen(
     ahead = [city for city in content.cities if city.unlock_level > character.level]
     next_city = min(ahead, key=lambda city: city.unlock_level) if ahead else None
     lead = [
-        notice or f"Вы в городе {content.city(character.city_id).name}.",
+        notice or f"Вы в городе {standing_in(content, character).name}.",
         "Города стоят вдоль одной дороги по порядку: чем дальше, тем выше уровни.",
     ]
     if next_city is not None:

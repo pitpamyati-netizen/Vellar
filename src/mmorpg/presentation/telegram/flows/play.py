@@ -1531,7 +1531,7 @@ def _handle_dungeon(
     if not labels.DUNGEON_ENTER.matches(command.argument):
         return state.with_notice("Нажмите «Спуститься» или «Назад».")
 
-    city = content.city(state.city_id or character.city_id)
+    city = known_city(content, state.city_id, character.city_id)
     descent = Descent(
         city_id=city.id,
         level=dungeon_level(content, character, city.id),
