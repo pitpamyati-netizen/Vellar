@@ -13,6 +13,12 @@
 #            items.toml. The counter moves when the batch comes out of the work,
 #            so a craft is a way of taking a job and not only a way of selling
 #
+# location: which location of the same city the job is done in, by slot. Optional,
+# and never set on a craft - a craft happens at the workbench, not on the road.
+# Without it the contract screen can only say "обойдите три места", which is the
+# single loudest complaint the first act ever got: players did not know where to
+# go. Validated against world.toml by the loader.
+#
 # follows chains the act: a contract with a predecessor stays off the board until
 # that one is paid out. Ids are frozen keys - they live in the character's ledger.
 # Validated by tests/content/test_quests.py.
@@ -26,8 +32,9 @@ level = 1
 name = "Столбы на Тракте"
 giver = "Довен, писарь заставы"
 intro = "Стоит у столба со сводкой, водит пальцем по строкам."
-terms = "Третью неделю числа не сходятся. Обойдите три места на Лугах и скажите, что там на самом деле, плачу 40."
+terms = "Третью неделю числа не сходятся. Сходите на Луга у Заставы, обойдите там три места без драки — заросли, тайник, святилище, что попадётся, — и скажите, что там на самом деле. Плачу 40."
 objective = "search"
+location = 1
 target_count = 3
 reward_gold = 40
 reward_experience = 60
@@ -43,6 +50,7 @@ giver = "Мерла с Отмелей, гуртовщица"
 intro = "Считает овец дважды и оба раза сбивается."
 terms = "Скот убывает, а волки сытые. Шесть шкур зверья с Лугов, и я плачу 70 без торга."
 objective = "kill"
+location = 1
 target_kind = "beast"
 target_count = 6
 reward_gold = 70
@@ -73,8 +81,9 @@ follows = "farhold_meadow_teeth"
 name = "Пошлина в Роще"
 giver = "Довен, писарь заставы"
 intro = "Кладёт на стол подорожную с чужой печатью."
-terms = "В Роще кто-то берёт проезд вместо Палаты. Разберитесь с восемью, плата 120 и молчание."
+terms = "В Ольшанике кто-то берёт проезд вместо Палаты. Разберитесь с восемью, плата 120 и молчание."
 objective = "kill"
+location = 2
 target_count = 8
 reward_gold = 120
 reward_experience = 260
@@ -88,8 +97,9 @@ follows = "farhold_grove_toll"
 name = "Вожак Оврагов"
 giver = "Тарен, ловчий заставы"
 intro = "Показывает капкан, разогнутый изнутри."
-terms = "Стая слушается одного. Уберите вожака в Оврагах, за него дают 200."
+terms = "Стая слушается одного. Уберите вожака в Волчьих Оврагах, за него дают 200."
 objective = "elite"
+location = 3
 target_count = 1
 reward_gold = 200
 reward_experience = 420
@@ -103,8 +113,9 @@ follows = "farhold_ravine_leader"
 name = "Пересчёт на Старом Тракте"
 giver = "Довен, писарь заставы"
 intro = "Сводка за эту неделю опять короче, чем за прошлую."
-terms = "Пять мест на Тракте: тайники, привалы, что найдёте. Опишете все пять — 260."
+terms = "Пять мест на Тракте на Затон: тайники, привалы, что найдёте. Опишете все пять — 260."
 objective = "search"
+location = 4
 target_count = 5
 reward_gold = 260
 reward_experience = 700
@@ -118,8 +129,9 @@ follows = "farhold_road_count"
 name = "Недостача в Шахте"
 giver = "Ольда, весовщица Палаты"
 intro = "Весы сходятся, а рудой в них не пахнет."
-terms = "Шахту закрыли не из-за обвала. Пройдите десять встреч внизу и вернитесь, плата 400."
+terms = "Выработки закрыли не из-за обвала. Пройдите десять встреч внизу и вернитесь, плата 400."
 objective = "kill"
+location = 5
 target_count = 10
 reward_gold = 400
 reward_experience = 1200
@@ -136,6 +148,8 @@ giver = "Кевен, приёмщик мостков"
 intro = "Держит опись, в которой не хватает половины строк."
 terms = "Четыре схрона на Мостках стоят не там, где записаны. Найдите их, плачу 450."
 objective = "search"
+location = 1
+target_kind = "cache"
 target_count = 4
 reward_gold = 450
 reward_experience = 1400
@@ -164,8 +178,9 @@ follows = "harbor_manifest"
 name = "Двое с Топей"
 giver = "Кевен, приёмщик мостков"
 intro = "Говорит тише, чем нужно для разговора у воды."
-terms = "На Топях сидят двое, за которых никто не платит пошлину. Уберите обоих, с меня 600."
+terms = "На Камышовых Топях сидят двое, за которых никто не платит пошлину. Уберите обоих, с меня 600."
 objective = "elite"
+location = 2
 target_count = 2
 reward_gold = 600
 reward_experience = 1900

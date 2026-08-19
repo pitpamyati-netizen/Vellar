@@ -359,11 +359,17 @@ def render(
         case ScreenId.QUESTS:
             return quest_screens.journal_screen(content, character, state.notice)
         case ScreenId.QUEST_BOARD:
-            return quest_screens.board_screen(content, character, state.board_page, state.notice)
+            return quest_screens.board_screen(
+                content, character, state.board_page, state.notice, city_id=city.id
+            )
         case ScreenId.QUEST_OFFER if content.has_quest(state.quest_id):
-            return quest_screens.offer_screen(content, content.quest(state.quest_id))
+            return quest_screens.offer_screen(
+                content, content.quest(state.quest_id), character, state.notice
+            )
         case ScreenId.QUEST_OFFER:
-            return quest_screens.board_screen(content, character, state.board_page, state.notice)
+            return quest_screens.board_screen(
+                content, character, state.board_page, state.notice, city_id=city.id
+            )
         case ScreenId.TAVERN:
             return city_screens.tavern_screen(content, character, city, state.notice)
         case ScreenId.MENTOR:
@@ -982,6 +988,12 @@ def _handle_character(
         if item_id is None:
             return state.with_notice(f"В слоте «{slot_name}» ничего нет.")
         stripped = replace(character, equipment=character.equipment.unequip(slot))
+        # Вещь могла исчезнуть из содержимого, пока лежала надетой: слот всё
+        # равно освобождается, просто в сумку кладётся молча.
+        if not content.has_item(item_id):
+            return state.storing(PendingWrite(character=stripped)).with_notice(
+                f"Слот «{slot_name}» освобождён: этой вещи в игре больше нет."
+            )
         write = PendingWrite(character=stripped, items=((item_id, 1),))
         return state.storing(write).with_notice(
             f"{content.item(item_id).name} снят и убран в сумку."
@@ -1176,7 +1188,7 @@ def _equip(content: GameContent, character: Character, state: PlayState, item: I
     previous = character.equipment.item_in(item.slot)
     dressed = replace(character, equipment=character.equipment.equip(item.slot, item.id))
     write = PendingWrite(character=dressed, items=((item.id, -1),))
-    if previous is not None:
+    if previous is not None and content.has_item(previous):
         write = write.with_items((previous, 1))
         said = f"{item.name} надет, {content.item(previous).name} убран в сумку."
     else:
@@ -1356,7 +1368,8 @@ def _handle_tavern(
 
 
 def _hand_in(content: GameContent, character: Character, state: PlayState) -> PlayState:
-    due = quest_rules.ready_to_hand_in(content, character)
+    city = known_city(content, state.city_id, character.city_id)
+    due = quest_rules.ready_to_hand_in(content, character, city.id)
     if not due:
         return state.with_notice("Сдавать нечего: ни один подряд не досчитан.")
     payout = quest_rules.hand_in(content, character, due[0].quest)
@@ -1379,8 +1392,12 @@ def _hand_in(content: GameContent, character: Character, state: PlayState) -> Pl
 def _handle_board(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    offered = quest_rules.available(content, character)
-    moved = page_move(command, state.board_page, total_pages(len(offered)))
+    city = known_city(content, state.city_id, character.city_id)
+    offered = quest_rules.available(content, character, city.id)
+    working = tuple(
+        step for step in quest_rules.taken(content, character) if step.quest.city_id == city.id
+    )
+    moved = page_move(command, state.board_page, total_pages(len(offered) + len(working)))
     if moved is not None:
         return replace(state, board_page=moved, notice="")
     if command.intent is not Intent.SELECT:
@@ -1388,6 +1405,11 @@ def _handle_board(
     for quest in offered:
         if quest_screens.quest_button(quest).matches(command.argument):
             return replace(state, quest_id=quest.id).at(ScreenId.QUEST_OFFER)
+    # Взятый подряд с доски не пропадает, и нажатие на него открывает тот же
+    # разговор - только уже со счётом и с правом отказаться.
+    for step in working:
+        if quest_screens.taken_button(step.quest, step.progress).matches(command.argument):
+            return replace(state, quest_id=step.quest.id).at(ScreenId.QUEST_OFFER)
     return state.with_notice("Нажмите подряд из списка.")
 
 
@@ -1405,6 +1427,17 @@ def _handle_offer(
     if labels.QUEST_LEAVE.matches(command.argument):
         # Refusing never closes a contract for good (Narrative.md, section 4).
         return go_back(state).with_notice("Вы ушли. Подряд останется на доске.")
+    if labels.QUEST_ABANDON.matches(command.argument):
+        if not character.quests.is_taken(quest.id):
+            return state.with_notice("Этот подряд у вас не взят.")
+        given_back = quest_rules.abandon(character, quest)
+        return (
+            go_back(replace(state, quest_id=""))
+            .storing(PendingWrite(character=given_back))
+            .with_notice(
+                f"Подряд «{quest.name}» возвращён. Счёт потерян, сам подряд остался на доске."
+            )
+        )
     if not labels.QUEST_ACCEPT.matches(command.argument):
         return state.with_notice("Согласитесь, спросите или уйдите.")
 

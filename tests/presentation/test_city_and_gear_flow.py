@@ -26,6 +26,7 @@ from mmorpg.presentation.telegram.flows.play import (
 )
 from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import play as play_screens
+from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import skills as skill_screens
 from mmorpg.presentation.telegram.screens.base import ScreenId
 from mmorpg.presentation.telegram.screens.shop import OwnedItem
@@ -134,10 +135,10 @@ def test_what_it_replaces_goes_back_into_the_bag(content: GameContent, hero: Cha
 def test_raw_stock_says_what_it_is_instead_of_doing_nothing(
     content: GameContent, hero: Character
 ) -> None:
-    """Волчья шкура раньше в ответ на нажатие только читала своё описание."""
+    """Звериная шкура раньше в ответ на нажатие только читала своё описание."""
     goods = Goods(gold=hero.gold, owned=(OwnedItem("wolf_pelt", 3),))
     inventory = step(content, hero, begin(hero), "Инвентарь", goods=goods)
-    card = step(content, hero, inventory, "Волчья шкура, штук 3 — сырьё", goods=goods)
+    card = step(content, hero, inventory, "Звериная шкура, штук 3 — сырьё", goods=goods)
 
     assert card.screen is ScreenId.ITEM
     text = render(content, hero, card, world_seed=WORLD_SEED, goods=goods).text()
@@ -229,7 +230,7 @@ def test_selling_pays_and_takes_exactly_one(
     assert skup.screen is ScreenId.SELL
 
     price = sell_price(content, content.item("wolf_pelt"))
-    sold = step(content, hero, skup, f"Волчья шкура — {price} золота, продать", goods=goods)
+    sold = step(content, hero, skup, f"Звериная шкура — {price} золота, продать", goods=goods)
     assert sold.pending.items == (("wolf_pelt", -1),)
     assert sold.pending.character is not None
     assert sold.pending.character.gold == hero.gold + price
@@ -401,6 +402,72 @@ def test_walking_away_from_a_contract_keeps_it_on_the_board(
     assert quest_still_offered(content, hero)
 
 
+def test_a_contract_says_what_to_do_and_where_to_go(
+    content: GameContent, hero: Character, in_city: PlayState
+) -> None:
+    """Первый подряд читался как «разобраться с местами без боя» и больше ничего."""
+    quest = content.quest("farhold_tallies")
+    board = step(content, hero, in_city, "Таверна", "Доска подрядов")
+    offer = step(
+        content, hero, board, f"{quest.name} — уровень {quest.level}, плата {quest.reward_gold}"
+    )
+    text = render(content, hero, offer, world_seed=WORLD_SEED).text()
+
+    assert "Что делать:" in text
+    assert "Нужно 3 раза" in text
+    assert "Луга у Заставы" in text, "подряд обязан назвать место, куда идти"
+    assert "нажмите его действие" in text, "и то, что там нажимать"
+
+
+def test_a_contract_for_made_goods_opens_instead_of_crashing(
+    content: GameContent, hero: Character
+) -> None:
+    """Разговор о подряде на изготовление падал: строки про «изготовить» не было."""
+    quest = content.quest("farhold_whetstones")
+    screen = quest_screens.offer_screen(content, quest, hero)
+    text = screen.text()
+    assert "изготовить своими руками" in text
+    assert "Точильный камень" in text
+    assert "Ремёсла" in text
+
+
+def test_a_taken_contract_stays_on_the_board_with_its_count(
+    content: GameContent, hero: Character, in_city: PlayState
+) -> None:
+    """Игрок соглашался на подряд и не находил его там, где брал."""
+    quest = content.quest("farhold_tallies")
+    board = step(content, hero, in_city, "Таверна", "Доска подрядов")
+    offer = step(
+        content, hero, board, f"{quest.name} — уровень {quest.level}, плата {quest.reward_gold}"
+    )
+    took = step(content, hero, offer, "Согласиться")
+    assert took.pending.character is not None
+    holder = took.pending.character
+    assert holder.quests.is_taken(quest.id)
+
+    again = step(content, holder, begin(holder), "Мир", "Дубно", "Таверна", "Доска подрядов")
+    text = render(content, holder, again, world_seed=WORLD_SEED).text()
+    assert "Столбы на Тракте — взято, 0 из 3" in text
+    assert "Взято отсюда: 1" in text
+
+
+def test_a_taken_contract_can_be_given_back(content: GameContent, hero: Character) -> None:
+    from mmorpg.domain.rules import quests as quest_rules
+
+    quest = content.quest("farhold_tallies")
+    holder = quest_rules.take(content, hero, quest)
+    board = step(content, holder, begin(holder), "Мир", "Дубно", "Таверна", "Доска подрядов")
+    offer = step(content, holder, board, f"{quest.name} — взято, 0 из 3, в работе")
+    assert offer.screen is ScreenId.QUEST_OFFER
+    text = render(content, holder, offer, world_seed=WORLD_SEED).text()
+    assert "Подряд уже взят: 0 из 3" in text
+
+    given = step(content, holder, offer, "Отказаться от подряда")
+    assert given.pending.character is not None
+    assert not given.pending.character.quests.is_taken(quest.id)
+    assert "возвращён" in given.notice
+
+
 def quest_still_offered(content: GameContent, hero: Character) -> bool:
     from mmorpg.domain.rules import quests as quest_rules
 
@@ -428,7 +495,7 @@ def test_search_narrows_the_bag(content: GameContent, hero: Character) -> None:
     assert found.searching is False
     text = render(content, hero, found, world_seed=WORLD_SEED, goods=goods).text()
     assert "Найдено 1" in text
-    assert "Волчья шкура" in text
+    assert "Звериная шкура" in text
 
 
 def test_sections_cut_the_bag_and_reset_puts_it_back(content: GameContent, hero: Character) -> None:
@@ -444,7 +511,7 @@ def test_sections_cut_the_bag_and_reset_puts_it_back(content: GameContent, hero:
     assert raw.screen is ScreenId.INVENTORY
     text = render(content, hero, raw, world_seed=WORLD_SEED, goods=goods).text()
     assert "Найдено 1" in text
-    assert "Волчья шкура" in text
+    assert "Звериная шкура" in text
 
     cleared = step(content, hero, raw, "Сбросить фильтры", goods=goods)
     assert cleared.list_page.filters.active is False

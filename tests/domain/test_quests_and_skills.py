@@ -292,3 +292,25 @@ def test_forgetting_hands_every_point_back_and_empties_the_slot(
     assert not skill_rules.is_known(forgotten, skill.code)
     assert forgotten.loadout.actives[0] is None
     assert forgotten.loadout.edge_of(skill.code) is None
+
+
+def test_a_contract_belongs_to_the_city_the_player_is_standing_in(
+    content: GameContent,
+) -> None:
+    """Доска в чужом городе показывала подряды родного и ноль своих."""
+    from mmorpg.domain.rules import quests as quest_rules
+
+    traveller = Character(
+        id=9,
+        user_id=9,
+        name="Мерла",
+        race_id="human",
+        class_id="warrior",
+        level=30,
+        city_id="farhold",
+    )
+    at_home = quest_rules.available(content, traveller)
+    assert all(quest.city_id == "farhold" for quest in at_home)
+
+    away = quest_rules.available(content, traveller, "dusk_harbor")
+    assert all(quest.city_id == "dusk_harbor" for quest in away)

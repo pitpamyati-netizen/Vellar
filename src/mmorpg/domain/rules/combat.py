@@ -408,16 +408,22 @@ def blow_of(
 def _resolve_skill(
     content: GameContent, character: Character, action: CombatAction
 ) -> Skill | None:
+    """The skill behind a pressed slot, or ``None`` when there is none.
+
+    A loadout outlives the content it names: a skill dropped between two releases
+    leaves its code sitting in somebody's panel. That slot reads as empty rather
+    than raising in the middle of a fight (``Claude.md``, rule 8).
+    """
     if action.kind is ActionKind.RACIAL:
         code = character.loadout.racial or content.race(character.race_id).active_code
-        return content.skill(code)
+        return content.skill(code) if content.has_skill(code) else None
     if action.slot is None:
         return None
     actives = character.loadout.actives
     if not 0 <= action.slot < len(actives):
         return None
     slotted = actives[action.slot]
-    return content.skill(slotted) if slotted else None
+    return content.skill(slotted) if slotted and content.has_skill(slotted) else None
 
 
 def _attempt_skill(

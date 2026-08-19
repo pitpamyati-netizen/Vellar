@@ -32,13 +32,21 @@ def trait_modifiers(content: GameContent, trait_ids: Iterable[str]) -> dict[str,
 
 
 def equipment_modifiers(content: GameContent, item_ids: Iterable[str]) -> dict[str, float]:
-    return merge(*(content.item(item_id).modifiers for item_id in item_ids))
+    """Надетое переживает содержимое так же, как панель: вещь, которой больше нет,
+    ничего не даёт и ничего не роняет."""
+    return merge(
+        *(content.item(item_id).modifiers for item_id in item_ids if content.has_item(item_id))
+    )
 
 
 def passive_modifiers(content: GameContent, character: Character) -> dict[str, float]:
     """Modifiers from the three equipped passive skills, scaled by their rank."""
     bundles: list[Mapping[str, float]] = []
     for code in character.loadout.equipped_passives():
+        # Панель переживает содержимое: умение, которого больше нет, ничего не
+        # даёт и ничего не роняет (``Claude.md``, правило 8).
+        if not content.has_skill(code):
+            continue
         skill = content.skill(code)
         if skill.kind is not SkillKind.PASSIVE:
             continue

@@ -685,6 +685,7 @@ def _parse_quests(
     that hands it out, the item it pays with, and the contract it follows.
     """
     known_cities = {city.id for city in cities}
+    slots_by_city = {city.id: {location.slot for location in city.locations} for city in cities}
     known_objectives = {kind.value for kind in ObjectiveKind}
     enemy_kinds = {kind.value for kind in EnemyKind}
 
@@ -723,6 +724,19 @@ def _parse_quests(
         if int(entry.get("target_count", 0)) < 1:
             problems.append(f"quests.toml: {quest_id} counts to less than one")
 
+        # Куда идти - часть подряда, а не догадка игрока. Локация проверяется
+        # здесь: подряд, посылающий в несуществующее место, хуже, чем никакой.
+        location_slot = int(entry.get("location", 0))
+        if location_slot and location_slot not in slots_by_city.get(city_id, set()):
+            problems.append(
+                f"quests.toml: {quest_id} sends the player to location {location_slot}, "
+                f"which city {city_id!r} does not have"
+            )
+            location_slot = 0
+        if location_slot and objective is ObjectiveKind.CRAFT:
+            problems.append(f"quests.toml: {quest_id} is a craft and needs no location")
+            location_slot = 0
+
         parsed.append(
             Quest(
                 id=quest_id,
@@ -739,6 +753,7 @@ def _parse_quests(
                 reward_experience=int(entry.get("reward_experience", 0)),
                 reward_item=reward_item,
                 follows=str(entry.get("follows", "")),
+                location_slot=location_slot,
             )
         )
 

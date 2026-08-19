@@ -420,7 +420,7 @@ def test_inventory_filters_narrow_the_list(content: GameContent) -> None:
         gold=0,
     )
     assert "Малое зелье лечения" in filtered.text()
-    assert "Волчья шкура" not in filtered.text()
+    assert "Звериная шкура" not in filtered.text()
 
 
 def test_empty_inventory_says_so(content: GameContent) -> None:

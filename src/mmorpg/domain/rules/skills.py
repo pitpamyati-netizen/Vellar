@@ -159,6 +159,8 @@ def put_in_slot(
         return None
     if code is not None and not is_known(character, code):
         return None
+    if code is not None and not content.has_skill(code):
+        return None
     if code is not None and content.skill(code).kind is not kind:
         return None
     loadout = character.loadout

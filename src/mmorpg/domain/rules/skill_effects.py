@@ -105,6 +105,11 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
     "damage_dot": _damage(dot_turns=3),
     "damage_stun": _damage(stun_turns=1),
     "damage_slow": _damage(target_modifiers=(M("initiative_percent", -30.0),), duration=2),
+    # Финт - не удар, а обман: бьёт вполсилы и сбивает противнику прицел. Тег у
+    # него точность, потому что целятся тут не в цель, а в её ошибку.
+    "damage_feint": _damage(
+        damage_scale=0.85, target_modifiers=(M("accuracy_percent", -25.0),), duration=2
+    ),
     "damage_execute": _damage(execute_scaling=0.6),
     "damage_initiative": _damage(special="haste_self"),
     "damage_steal": _damage(special="steal_gold"),

@@ -91,7 +91,7 @@ rarity = "uncommon"
 level = 9
 price = 230
 modifiers = { crit_chance_percent = 5, crit_damage_percent = 8 }
-skill_modifiers = { rogue_backstab = 20 }
+skill_modifiers = { rogue_feint = 20 }
 text = "Два коротких ножа, заточены под снятие шкур."
 
 [[item]]
@@ -390,15 +390,18 @@ text = "Урон выше на 15 процентов на 3 хода."
 # --- Materials ---
 
 [[item]]
+# Ключ остался волчьим с первой недели разработки, а падала эта шкура и с
+# кабана, и с грифона — игроки это заметили первым делом. Шкура здесь одна на
+# всё зверьё: имя её называет то, чем она и является.
 id = "wolf_pelt"
-name = "Волчья шкура"
+name = "Звериная шкура"
 kind = "material"
 slot = "none"
 rarity = "common"
 level = 1
 price = 12
 stack = 99
-text = "Шкура со следами выделки, годится на продажу."
+text = "Шкура зверя, снятая на месте. Идёт кожевнику в дело и лавочнику в скупку."
 
 [[item]]
 id = "iron_scrap"

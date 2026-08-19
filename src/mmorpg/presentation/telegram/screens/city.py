@@ -34,7 +34,9 @@ def tavern_screen(
     """A bed, a board with contracts, and a clerk who pays for closed ones."""
     stats = derived_stats(content, character)
     health = character.health_or(stats.max_health)
-    due = ready_to_hand_in(content, character)
+    # Города считает тот, в котором игрок стоит, а не тот, где он завёлся: иначе
+    # доска в чужом городе показывала чужие подряды и ноль своих.
+    due = ready_to_hand_in(content, character, city.id)
     price = inn_price(character.level)
 
     lines = [

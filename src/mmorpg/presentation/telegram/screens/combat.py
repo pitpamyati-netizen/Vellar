@@ -194,9 +194,13 @@ def _slot_status(skill: Skill, state: CombatState) -> str:
 
 
 def skill_label(content: GameContent, character: Character, state: CombatState, slot: int) -> Label:
-    """One panel button. The number prefix keeps every label unique and stable."""
+    """One panel button. The number prefix keeps every label unique and stable.
+
+    A slot naming a skill the game no longer has reads as empty: a panel drawn
+    from a loadout older than the content must not raise (rule 12).
+    """
     code = character.loadout.actives[slot]
-    if code is None:
+    if code is None or not content.has_skill(code):
         return label(f"{slot + 1}. {EMPTY_SLOT}")
 
     skill = content.skill(code)
@@ -208,7 +212,7 @@ def skill_label(content: GameContent, character: Character, state: CombatState, 
 
 def racial_label(content: GameContent, character: Character, state: CombatState) -> Label:
     code = character.loadout.racial
-    if code is None:
+    if code is None or not content.has_skill(code):
         return label(f"Расовое умение — {EMPTY_SLOT.lower()}")
     skill = content.skill(code)
     return label(
@@ -331,10 +335,12 @@ def combat_screen(
         f"{amount(state.player.resource, state.player.max_resource, with_percent=False)}."
     )
     lines.append(trace_line(state.trace))
-    # Only the last two events are read out: the message must stay short enough to
-    # listen to before acting.
+    # Весь ход целиком, а не последние две строки. Обрезка съедала как раз то,
+    # ради чего экран читают: удар игрока стоял первым, а разгон, брешь и ответ
+    # врага выталкивали его наружу - и выходило, что игрок бьёт в тишину.
+    # Ход - это несколько строк, и он и должен звучать целиком.
     lines.extend(
-        text for event in state.events[-2:] if (text := describe_event(event, state.player.name))
+        text for event in state.events if (text := describe_event(event, state.player.name))
     )
     lines.append("Ваш ход.")
 
