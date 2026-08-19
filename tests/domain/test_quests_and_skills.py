@@ -314,3 +314,33 @@ def test_a_contract_belongs_to_the_city_the_player_is_standing_in(
 
     away = quest_rules.available(content, traveller, "dusk_harbor")
     assert all(quest.city_id == "dusk_harbor" for quest in away)
+
+
+def test_a_skill_removed_from_the_game_hands_its_points_back(content: GameContent) -> None:
+    """Иначе выкатка, убравшая умение, оставляет игрока без панели и без очка.
+
+    Ровно это и случилось бы с разбойниками, у которых «Удар в спину» перестал
+    быть умением первого уровня.
+    """
+    stranded = Character(
+        id=3,
+        user_id=3,
+        name="Тень",
+        race_id="human",
+        class_id="rogue",
+        level=1,
+        loadout=SkillLoadout(
+            actives=("умения-такого-нет", None, None, None, None, None),
+            racial="расового-тоже-нет",
+            ranks={"умения-такого-нет": 2, "расового-тоже-нет": 1},
+        ),
+    )
+    repaired = skill_rules.reclaim_lost(content, stranded)
+    assert repaired is not None
+    assert repaired.loadout.actives[0] is None
+    assert "умения-такого-нет" not in repaired.loadout.ranks
+    assert repaired.unspent_skill_points == 3, "вернулось ровно столько, сколько было вложено"
+    # Расовое умение не выбирают: вместо пропавшего встаёт то, что есть у расы.
+    assert repaired.loadout.racial == content.race("human").active_code
+
+    assert skill_rules.reclaim_lost(content, repaired) is None, "второй раз забирать нечего"

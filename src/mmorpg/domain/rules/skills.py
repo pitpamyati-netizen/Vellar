@@ -135,6 +135,48 @@ def forget(content: GameContent, character: Character, skill: Skill) -> Characte
     )
 
 
+def reclaim_lost(content: GameContent, character: Character) -> Character | None:
+    """Умения, которых в игре больше нет, забываются и возвращают очки.
+
+    Содержимое переживает сохранённого персонажа не только в одну сторону:
+    умение можно и убрать. Без этой уборки разбойник, у которого «Удар в спину»
+    перестал существовать, остался бы с пустой панелью, с очком, вложенным в
+    ничто, и без единого боевого умения — то есть без игры.
+
+    Возвращается ровно столько очков, сколько стоило умение, — так же, как их
+    возвращает наставник. ``None``, когда терять нечего.
+    """
+    loadout = character.loadout
+    lost = [code for code in loadout.ranks if not content.has_skill(code)]
+    if not lost:
+        return None
+
+    gone = set(lost)
+    points = sum(loadout.rank_of(code) for code in lost)
+    ranks = {key: value for key, value in loadout.ranks.items() if key not in gone}
+    edges = {key: value for key, value in loadout.edges.items() if key not in gone}
+    actives = tuple(None if code in gone else code for code in loadout.actives)
+    passives = tuple(None if code in gone else code for code in loadout.passives)
+    # Расовое умение не выбирают, поэтому его не забывают, а заменяют на то,
+    # которое у этой расы есть сейчас.
+    racial = loadout.racial
+    if racial in gone:
+        fresh = content.race(character.race_id).active_code
+        racial = fresh if content.has_skill(fresh) else None
+    return replace(
+        character,
+        loadout=replace(
+            loadout,
+            ranks=ranks,
+            edges=edges,
+            actives=actives,
+            passives=passives,
+            racial=racial,
+        ),
+        unspent_skill_points=character.unspent_skill_points + points,
+    )
+
+
 def equippable(content: GameContent, character: Character, kind: SkillKind) -> tuple[Skill, ...]:
     """Known skills of one kind that are not already in a slot."""
     loadout = character.loadout

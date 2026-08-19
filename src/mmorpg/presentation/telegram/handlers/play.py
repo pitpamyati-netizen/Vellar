@@ -52,8 +52,10 @@ from mmorpg.domain.ports.repositories import (
 from mmorpg.domain.procgen.seeds import rotation_index
 from mmorpg.domain.rules import moderation as moderation_rules
 from mmorpg.domain.rules import nodes as node_rules
+from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.economy import buy_price, roll_assortment
 from mmorpg.domain.rules.stats import primary_stats
+from mmorpg.logging import get_logger
 from mmorpg.presentation.telegram.flows import keeper as keeper_flow
 from mmorpg.presentation.telegram.flows.play import (
     advance,
@@ -79,6 +81,8 @@ from mmorpg.presentation.telegram.screens.base import ScreenId
 from mmorpg.presentation.telegram.screens.keeper import KeeperView
 from mmorpg.presentation.telegram.screens.shop import OwnedItem
 from mmorpg.presentation.telegram.states.screens import STATE_FOR_SCREEN, Play
+
+logger = get_logger(__name__)
 
 STATE_KEY = "play"
 
@@ -142,6 +146,14 @@ async def play(
         characters,
         granted=user is not None and user.keeper,
     )
+    # Умение, которого в игре больше нет, забывается и возвращает очки: иначе
+    # выкатка, убравшая умение, оставила бы игрока с пустым слотом и без очка,
+    # чтобы занять его заново (``domain/rules/skills.reclaim_lost``).
+    reclaimed = skill_rules.reclaim_lost(content, character)
+    if reclaimed is not None:
+        character = reclaimed
+        await characters.save(character)
+        logger.info("skills_reclaimed", character_id=character.id)
     emoji = user.settings.emoji if user is not None else False
     accessibility = user.settings if user is not None else None
 
