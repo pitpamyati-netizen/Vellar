@@ -78,6 +78,18 @@ list drops its paging row when there is only one page and its filter row when
 there is nothing to filter: those rows sit *below* the entries, so no entry ever
 moves, and a bag of three things is opened to reach the things.
 
+The same goes for a direction that leads nowhere. On the last page there is no
+`Следующая страница` and on the first there is no `Предыдущая`: a button whose
+whole answer is "вы уже в конце" spends a press to say nothing, and by ear that
+is indistinguishable from a bot that has stopped answering. `Сбросить фильтры`
+appears only once something is actually filtered, and `Фильтры` only on a list
+that has sections to cut it by.
+
+A list long enough to page is long enough to search. `Поиск` asks for a word in
+one message and matches it against both the name and the description of every
+entry - a player looks for "уклонение", not for "Кошачья поступь"
+(`screens/paginated.py`).
+
 ## 8. The last row is always the service row
 
 Every keyboard ends with exactly: `Назад` · `Главное меню`.
@@ -108,6 +120,9 @@ If the keyboard fails to render, the game must stay playable:
 | `/бой атака` | Basic attack in combat |
 | `/умение 3` | Use skill slot 3 |
 | `/страница 4` | Jump to page 4 of a paginated list |
+| `/поиск` | Ask for a word to search the current list by |
+| `/фильтры` | Open the sections of the current list |
+| `/сбросить` | Drop the search and the section |
 
 ## 11. Message length up to about 900 characters
 
@@ -173,6 +188,7 @@ Run through this before merging any change that touches `presentation/`:
 - [ ] Message body under ~900 characters, otherwise paginated
 - [ ] `/осмотреться` re-sends this screen without changing state
 - [ ] A text command exists for every new action
+- [ ] A new list offers `Поиск`, and every button on its machinery rows actually does something
 - [ ] Pressing the new screen's buttons from a different state produces the "action unavailable" answer
 - [ ] `parse_mode` left at `None`
 - [ ] Anything new in the group: no service row, deleted after five minutes, and silent unless addressed

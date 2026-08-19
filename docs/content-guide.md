@@ -206,6 +206,12 @@ text = "Одна фраза."
 Consumables must declare `stack` and an `effect` table, and always use `slot =
 "none"` - they live in the combat Bag tab.
 
+Materials declare `source` - what kind of stock they are: `травы`, `руда`,
+`шкуры` or `обломки`. A gathering node hands over only its own kind, so a herb
+patch pays in herbs and an ore vein in ore (`domain/rules/adventure.GATHER_SOURCES`).
+A material without a `source` would be handed out by every node alike, which is
+how "Полезные травы" once paid in iron scrap; `tests/content` refuses one.
+
 ## Add or rebalance a city
 
 ```toml
@@ -259,10 +265,12 @@ follows = ""               # stays off the board until that contract is paid out
 name = "Столбы на Тракте"
 giver = "Довен, писарь заставы"
 intro = "Стоит у столба со сводкой."          # up to 140 characters
-terms = "Обойдите три места на Лугах, плачу 40."  # up to 200
-objective = "search"       # kill | elite | search
+terms = "Сходите на Луга у Заставы, обойдите три места, плачу 40."  # up to 200
+objective = "search"       # kill | elite | search | craft
+location = 1               # which location of that city, by slot. Optional
 target_count = 3
-target_kind = ""           # kill: an enemy kind; search: gather/cache/shrine/event
+target_kind = ""           # kill: an enemy kind; search: gather/cache/shrine/event;
+                           # craft: the item id being asked for
 reward_gold = 40
 reward_experience = 60
 reward_item = "small_healing_potion"   # optional
@@ -270,13 +278,20 @@ reward_item = "small_healing_potion"   # optional
 
 What each objective counts (`domain/rules/quests.py`): `kill` counts defeated
 opponents, narrowed by enemy kind; `elite` counts only the strong ones; `search`
-counts nodes worked through without a fight. A counter never runs past its target,
-and only moves for a contract the character has actually taken.
+counts nodes worked through without a fight; `craft` counts what came out of the
+work, never what was bought. A counter never runs past its target, and only moves
+for a contract the character has actually taken.
 
-Checked by `tests/content/test_quests.py`: the city exists, the reward item
-exists, the chain never loops, the level sits inside the city's band, a contract
-never pays less than the one it follows, and none of it speaks the black-listed
-vocabulary from `Narrative.md`.
+**Say where.** `location` is what turns "обойдите три места" into "город Дубно,
+«Локации», «1. Луга у Заставы»" on the contract screen. Without it the screen can
+only point at the whole city, and the first act shipped without it - players took
+the first contract and had no idea where to go. Set it on everything that happens
+on the road; never on a `craft`, which happens at the workbench.
+
+Checked by `tests/content/test_quests.py`: the city exists, the location exists in
+that city, the reward item exists, the chain never loops, the level sits inside
+the city's band, a contract never pays less than the one it follows, and none of
+it speaks the black-listed vocabulary from `Narrative.md`.
 
 ## Checking your changes
 
