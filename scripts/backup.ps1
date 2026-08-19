@@ -161,6 +161,11 @@ function Run-Sql([string]$target, [string]$sql) {
     return $LASTEXITCODE -eq 0
 }
 
+# ЗАМЕЧАНИЕ про несуществующую базу — не новость, а обычный первый запуск; в
+# журнале задания по расписанию такой строке делать нечего. Гасится окружением,
+# а не вторым запросом: DROP DATABASE не выполняется внутри блока транзакции, а
+# два запроса в одном -c psql именно в него и заворачивает.
+$env:PGOPTIONS = "-c client_min_messages=warning"
 Run-Sql "postgres" "DROP DATABASE IF EXISTS $scratch" | Out-Null
 if (-not (Run-Sql "postgres" "CREATE DATABASE $scratch")) {
     Say "Копия снята, но развернуть её некуда: роли нельзя заводить базы."
