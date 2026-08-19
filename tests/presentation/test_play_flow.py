@@ -152,8 +152,12 @@ def test_buying_defers_the_write_to_the_handler(
     first = stock[0]
     pressed = buy_label(first, prices[first.id]).text
 
+    card = advance(content, wealthy, shop, pressed, clock=CLOCK, world_seed=WORLD_SEED, goods=rich)
+    assert card.screen is ScreenId.SHOP_ITEM
+    assert card.pending.empty, "нажатие на товар открывает карточку, а не кошелёк"
+
     bought = advance(
-        content, wealthy, shop, pressed, clock=CLOCK, world_seed=WORLD_SEED, goods=rich
+        content, wealthy, card, "Купить", clock=CLOCK, world_seed=WORLD_SEED, goods=rich
     )
     assert bought.pending.items == ((first.id, 1),)
     assert bought.pending.character is not None
@@ -162,7 +166,10 @@ def test_buying_defers_the_write_to_the_handler(
 
     broke = advance(content, hero, shop, pressed, clock=CLOCK, world_seed=WORLD_SEED, goods=poor)
     assert broke.pending.empty
-    assert "Не хватает" in broke.notice
+    # Карточка сама говорит, чего не хватает, и кнопки «Купить» на ней нет.
+    card_screen = render(content, hero, broke, world_seed=WORLD_SEED, goods=poor)
+    assert "не хватает" in card_screen.text()
+    assert "Купить" not in [item.text for row in card_screen.rows for item in row]
 
 
 @pytest.mark.parametrize(

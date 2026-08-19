@@ -82,10 +82,32 @@ def in_city(content: GameContent, hero: Character) -> PlayState:
 # --- gear -------------------------------------------------------------
 
 
+def test_a_thing_in_the_bag_opens_its_card_first(content: GameContent, hero: Character) -> None:
+    """Нажатие на вещь больше не действует ею: сперва карточка, потом кнопка."""
+    dressed = replace(hero, equipment=hero.equipment.equip("body", "leather_armor"))
+    goods = Goods(gold=dressed.gold, owned=(OwnedItem("chain_shirt", 1),))
+    inventory = step(content, dressed, begin(dressed), "Инвентарь", goods=goods)
+    card = step(content, dressed, inventory, "Кольчужная рубаха, штук 1 — надеть", goods=goods)
+
+    assert card.screen is ScreenId.ITEM
+    assert card.pending.empty
+    text = render(content, dressed, card, world_seed=WORLD_SEED, goods=goods).text()
+    assert "Кольчужная рубаха" in text
+    # И вот ради чего экран заведён: сравнение с тем, что уже надето.
+    assert "Сейчас надето: Кожаный доспех" in text
+
+
 def test_putting_on_a_thing_takes_it_out_of_the_bag(content: GameContent, hero: Character) -> None:
     goods = Goods(gold=hero.gold, owned=(OwnedItem("chain_shirt", 1),))
     inventory = step(content, hero, begin(hero), "Инвентарь", goods=goods)
-    worn = step(content, hero, inventory, "Кольчужная рубаха, штук 1 — надеть", goods=goods)
+    worn = step(
+        content,
+        hero,
+        inventory,
+        "Кольчужная рубаха, штук 1 — надеть",
+        "Надеть",
+        goods=goods,
+    )
 
     assert worn.pending.character is not None
     assert worn.pending.character.equipment.item_in("body") == "chain_shirt"
@@ -97,9 +119,31 @@ def test_what_it_replaces_goes_back_into_the_bag(content: GameContent, hero: Cha
     dressed = replace(hero, equipment=hero.equipment.equip("body", "leather_armor"))
     goods = Goods(gold=dressed.gold, owned=(OwnedItem("chain_shirt", 1),))
     inventory = step(content, dressed, begin(dressed), "Инвентарь", goods=goods)
-    worn = step(content, dressed, inventory, "Кольчужная рубаха, штук 1 — надеть", goods=goods)
+    worn = step(
+        content,
+        dressed,
+        inventory,
+        "Кольчужная рубаха, штук 1 — надеть",
+        "Надеть",
+        goods=goods,
+    )
 
     assert worn.pending.items == (("chain_shirt", -1), ("leather_armor", 1))
+
+
+def test_raw_stock_says_what_it_is_instead_of_doing_nothing(
+    content: GameContent, hero: Character
+) -> None:
+    """Волчья шкура раньше в ответ на нажатие только читала своё описание."""
+    goods = Goods(gold=hero.gold, owned=(OwnedItem("wolf_pelt", 3),))
+    inventory = step(content, hero, begin(hero), "Инвентарь", goods=goods)
+    card = step(content, hero, inventory, "Волчья шкура, штук 3 — сырьё", goods=goods)
+
+    assert card.screen is ScreenId.ITEM
+    text = render(content, hero, card, world_seed=WORLD_SEED, goods=goods).text()
+    assert "В сумке: 3." in text
+    assert "Скупщик даст" in text
+    assert "Сырьё: идёт в дело" in text
 
 
 def test_taking_a_thing_off_from_the_character_screen(
@@ -155,13 +199,23 @@ def test_a_potion_is_drunk_from_the_bag_and_only_when_it_helps(
     goods = Goods(gold=hurt.gold, owned=(OwnedItem("small_healing_potion", 2),))
     inventory = step(content, hurt, begin(hurt), "Инвентарь", goods=goods)
     drunk = step(
-        content, hurt, inventory, "Малое зелье лечения, штук 2 — использовать", goods=goods
+        content,
+        hurt,
+        inventory,
+        "Малое зелье лечения, штук 2 — использовать",
+        "Использовать",
+        goods=goods,
     )
     assert drunk.pending.items == (("small_healing_potion", -1),)
     assert "восстановлено" in drunk.notice
 
     whole = step(
-        content, hero, inventory, "Малое зелье лечения, штук 2 — использовать", goods=goods
+        content,
+        hero,
+        inventory,
+        "Малое зелье лечения, штук 2 — использовать",
+        "Использовать",
+        goods=goods,
     )
     assert whole.pending.empty
     assert "ничего не даст" in whole.notice
@@ -351,3 +405,46 @@ def quest_still_offered(content: GameContent, hero: Character) -> bool:
     from mmorpg.domain.rules import quests as quest_rules
 
     return any(quest.id == "farhold_tallies" for quest in quest_rules.available(content, hero))
+
+
+# --- finding one thing in a full bag ----------------------------------
+
+
+def test_search_narrows_the_bag(content: GameContent, hero: Character) -> None:
+    goods = Goods(
+        gold=hero.gold,
+        owned=(
+            OwnedItem("wolf_pelt", 4),
+            OwnedItem("small_healing_potion", 2),
+            OwnedItem("chain_shirt", 1),
+        ),
+    )
+    inventory = step(content, hero, begin(hero), "Инвентарь", goods=goods)
+    asked = step(content, hero, inventory, "Поиск", goods=goods)
+    assert asked.searching
+    assert "Наберите" in asked.notice
+
+    found = step(content, hero, asked, "шкура", goods=goods)
+    assert found.searching is False
+    text = render(content, hero, found, world_seed=WORLD_SEED, goods=goods).text()
+    assert "Найдено 1" in text
+    assert "Волчья шкура" in text
+
+
+def test_sections_cut_the_bag_and_reset_puts_it_back(content: GameContent, hero: Character) -> None:
+    goods = Goods(
+        gold=hero.gold,
+        owned=(OwnedItem("wolf_pelt", 4), OwnedItem("chain_shirt", 1)),
+    )
+    inventory = step(content, hero, begin(hero), "Инвентарь", goods=goods)
+    sections = step(content, hero, inventory, "Фильтры", goods=goods)
+    assert sections.screen is ScreenId.LIST_FILTERS
+
+    raw = step(content, hero, sections, "Сырьё", goods=goods)
+    assert raw.screen is ScreenId.INVENTORY
+    text = render(content, hero, raw, world_seed=WORLD_SEED, goods=goods).text()
+    assert "Найдено 1" in text
+    assert "Волчья шкура" in text
+
+    cleared = step(content, hero, raw, "Сбросить фильтры", goods=goods)
+    assert cleared.list_page.filters.active is False

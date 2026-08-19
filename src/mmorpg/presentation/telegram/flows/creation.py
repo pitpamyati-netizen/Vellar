@@ -20,7 +20,12 @@ from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.routing import Command, Intent, resolve
 from mmorpg.presentation.telegram.screens import creation as screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
-from mmorpg.presentation.telegram.screens.paginated import ListFilters, PageState, total_pages
+from mmorpg.presentation.telegram.screens.paginated import (
+    SEARCH_PROMPT,
+    ListFilters,
+    PageState,
+    total_pages,
+)
 from mmorpg.presentation.telegram.states.screens import NavigationStack
 
 SELECTED_PREFIX = "Выбрано: "
@@ -36,6 +41,8 @@ class CreationState:
     race_page: PageState = field(default_factory=PageState)
     trait_page: PageState = field(default_factory=PageState)
     notice: str = ""
+    #: Набранное сообщение сейчас означает не имя, а строку поиска по списку.
+    searching: bool = False
     finished: bool = False
     exited: bool = False
 
@@ -62,6 +69,7 @@ class CreationState:
                 "trait_page": self.trait_page.page,
                 "trait_category": self.trait_page.filters.category,
                 "trait_query": self.trait_page.filters.query,
+                "searching": self.searching,
             },
             ensure_ascii=False,
         )
@@ -87,6 +95,7 @@ class CreationState:
                     query=data.get("trait_query", ""),
                 ),
             ),
+            searching=bool(data.get("searching", False)),
         )
 
 
@@ -109,6 +118,8 @@ def render(content: GameContent, state: CreationState) -> Screen:
             return screens.class_details_screen(content, state.draft.class_id)
         case ScreenId.CREATE_TRAITS:
             return screens.traits_screen(content, state.draft, state.trait_page, state.notice)
+        case ScreenId.CREATE_TRAIT_FILTERS:
+            return screens.trait_filters_screen(content, state.trait_page)
         case ScreenId.CREATE_POINTS:
             return screens.points_screen(content, state.draft, state.notice)
         case _:
@@ -125,6 +136,11 @@ def advance(
     """Apply one incoming message. Never raises, never returns silence."""
     screen = render(content, state)
     command = resolve(text, screen)
+
+    # Набранное на экране списка - это ответ на «что искать», а не незнакомая
+    # кнопка. Разбирает его та ветка, что вопрос задала.
+    if state.searching and command.intent is Intent.UNKNOWN:
+        return _searched(state, text)
 
     if command.intent is Intent.LOOK:
         # "Осмотреться" re-sends the current screen and changes nothing.
@@ -145,6 +161,8 @@ def advance(
             return _handle_class(content, state, command)
         case ScreenId.CREATE_TRAITS:
             return _handle_traits(content, state, command)
+        case ScreenId.CREATE_TRAIT_FILTERS:
+            return _handle_trait_filters(content, state, command)
         case ScreenId.CREATE_POINTS:
             return _handle_points(content, state, command)
         case _:
@@ -235,15 +253,45 @@ def _handle_class(content: GameContent, state: CreationState, command: Command) 
     return state.with_notice("Не узнал класс. Нажмите класс из списка.")
 
 
+def _searched(state: CreationState, text: str) -> CreationState:
+    """Строка поиска, набранная сообщением. Пустая строка снимает поиск."""
+    query = text.strip()
+    filters = replace(state.trait_page.filters, query=query)
+    found = replace(state, searching=False, trait_page=PageState(filters=filters))
+    if not query:
+        return found.with_notice("Поиск снят, список показан целиком.")
+    return found.with_notice(f"Ищу «{query}».")
+
+
+def _reset_traits(state: CreationState) -> CreationState:
+    return replace(
+        state,
+        searching=False,
+        screen=ScreenId.CREATE_TRAITS,
+        trait_page=PageState(filters=state.trait_page.filters.cleared()),
+    ).with_notice("Фильтры сняты, список показан целиком.")
+
+
+def _handle_trait_filters(
+    content: GameContent, state: CreationState, command: Command
+) -> CreationState:
+    """Раздел особенностей: одна кнопка - один раздел, и назад к списку."""
+    if command.intent is Intent.RESET_FILTERS:
+        return _go_back(_reset_traits(state))
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите раздел или «Назад».")
+    for name in screens.trait_categories(content):
+        if name != command.argument:
+            continue
+        chosen = replace(state.trait_page.filters, category=name)
+        return _go_back(replace(state, trait_page=PageState(filters=chosen))).with_notice(
+            f"Раздел «{name}»."
+        )
+    return state.with_notice("Нажмите раздел или «Назад».")
+
+
 def _visible_traits(content: GameContent, state: CreationState) -> tuple[str, ...]:
-    category = state.trait_page.filters.category
-    query = state.trait_page.filters.query.casefold()
-    return tuple(
-        trait.id
-        for trait in content.traits
-        if (not category or content.trait_categories.get(trait.category) == category)
-        and (not query or query in trait.name.casefold())
-    )
+    return tuple(trait.id for trait in screens.matching_traits(content, state.trait_page))
 
 
 def _handle_traits(content: GameContent, state: CreationState, command: Command) -> CreationState:
@@ -256,12 +304,16 @@ def _handle_traits(content: GameContent, state: CreationState, command: Command)
         return replace(state, trait_page=state.trait_page.moved(delta, pages), notice="")
     if command.intent is Intent.PAGE and command.number is not None:
         return replace(state, trait_page=state.trait_page.jumped(command.number, pages), notice="")
+    if command.intent is Intent.RESET_FILTERS:
+        return _reset_traits(state)
+    if command.intent is Intent.FILTERS:
+        return state.at(ScreenId.CREATE_TRAIT_FILTERS)
+    if command.intent is Intent.SEARCH:
+        return replace(state, searching=True).with_notice(SEARCH_PROMPT)
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите особенность из списка.")
 
     argument = command.argument
-    if labels.RESET_FILTERS.matches(argument):
-        return replace(state, trait_page=PageState(filters=state.trait_page.filters.cleared()))
     if labels.CONTINUE.matches(argument):
         if len(state.draft.trait_ids) != required:
             return state.with_notice(f"Нужно выбрать ровно {required}.")

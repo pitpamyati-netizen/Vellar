@@ -27,6 +27,29 @@ from mmorpg.presentation.telegram.screens.paginated import (
 EMPTY_SLOT = "пусто"
 CLEAR_SLOT = label("Освободить слот")
 
+#: Разделы списка умений. Их ровно два, потому что умение либо жмут в бою, либо
+#: оно работает само; третьего вида в игре нет.
+ACTIVE_SECTION = "Боевые"
+PASSIVE_SECTION = "Постоянные"
+SKILL_SECTIONS: tuple[str, ...] = (ACTIVE_SECTION, PASSIVE_SECTION)
+
+
+def matching_skills(
+    content: GameContent, character: Character, pool: tuple[Skill, ...], state: PageState
+) -> tuple[Skill, ...]:
+    """Умения, прошедшие раздел и поиск.
+
+    Ищут по названию и по описанию: игрок помнит «оглушает», а не «Удар щитом».
+    """
+    section = state.filters.category
+    needle = state.filters.query.casefold().strip()
+    return tuple(
+        skill
+        for skill in pool
+        if (not section or section == (ACTIVE_SECTION if skill.is_active else PASSIVE_SECTION))
+        and (not needle or needle in skill.name.casefold() or needle in skill.text.casefold())
+    )
+
 
 def skill_state(content: GameContent, character: Character, skill: Skill) -> str:
     """One phrase that says everything a player needs about a skill's standing."""
@@ -50,7 +73,7 @@ def skills_screen(
     notice: str = "",
 ) -> Screen:
     """The list a skill point is spent from."""
-    pool = skill_rules.teachable(content, character)
+    pool = matching_skills(content, character, skill_rules.teachable(content, character), state)
     entries = [
         ListEntry(
             key=skill.code,
@@ -76,8 +99,8 @@ def skills_screen(
         state=state,
         lead_lines=lead,
         empty_text="Пока учить нечего, следующее умение откроется с уровнем.",
-        show_filters=False,
         extra_rows=((labels.SKILL_SLOTS,),),
+        categories=SKILL_SECTIONS,
     )
 
 

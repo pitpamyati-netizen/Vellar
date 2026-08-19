@@ -8,7 +8,7 @@ repeated on every step, so coming back never leaves the player guessing.
 from __future__ import annotations
 
 from mmorpg.application.dto.creation import CharacterDraft
-from mmorpg.domain.entities.content import GameContent
+from mmorpg.domain.entities.content import GameContent, Trait
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.presentation.telegram.keyboards.labels import (
     CLASS_DETAILS,
@@ -24,6 +24,7 @@ from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
     PageState,
     describe_selection,
+    filters_screen,
     paginated_screen,
 )
 
@@ -188,6 +189,32 @@ def class_details_screen(content: GameContent, class_id: str) -> Screen:
     )
 
 
+def trait_categories(content: GameContent) -> tuple[str, ...]:
+    """Разделы, по которым режется список особенностей, в порядке содержимого."""
+    seen: list[str] = []
+    for trait in content.traits:
+        name = content.trait_categories.get(trait.category, "")
+        if name and name not in seen:
+            seen.append(name)
+    return tuple(seen)
+
+
+def matching_traits(content: GameContent, state: PageState) -> tuple[Trait, ...]:
+    """Особенности, прошедшие раздел и поиск. Экран и автомат берут её одну.
+
+    Поиск идёт и по названию, и по описанию: игрок помнит «уклонение», а не
+    «Кошачья поступь», и должен найти её именно так.
+    """
+    category = state.filters.category
+    needle = state.filters.query.casefold().strip()
+    return tuple(
+        trait
+        for trait in content.traits
+        if (not category or content.trait_categories.get(trait.category) == category)
+        and (not needle or needle in trait.name.casefold() or needle in trait.text.casefold())
+    )
+
+
 def traits_screen(
     content: GameContent,
     draft: CharacterDraft,
@@ -195,15 +222,7 @@ def traits_screen(
     notice: str = "",
 ) -> Screen:
     required = content.rules.traits_at_creation
-    category = state.filters.category
-    pool = [
-        trait
-        for trait in content.traits
-        if not category or content.trait_categories.get(trait.category) == category
-    ]
-    if state.filters.query:
-        needle = state.filters.query.casefold()
-        pool = [trait for trait in pool if needle in trait.name.casefold()]
+    pool = matching_traits(content, state)
 
     entries = [
         ListEntry(
@@ -226,6 +245,17 @@ def traits_screen(
             else "Нажмите «Продолжить», чтобы перейти к распределению очков.",
         ),
         extra_rows=((CONTINUE,),),
+        categories=trait_categories(content),
+        empty_text="По этому поиску ничего нет. Сбросьте фильтры и попробуйте иначе.",
+    )
+
+
+def trait_filters_screen(content: GameContent, state: PageState) -> Screen:
+    return filters_screen(
+        screen_id=ScreenId.CREATE_TRAIT_FILTERS,
+        title="Разделы особенностей",
+        categories=trait_categories(content),
+        current=state.filters,
     )
 
 

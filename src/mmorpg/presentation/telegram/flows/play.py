@@ -50,7 +50,9 @@ from mmorpg.presentation.telegram.flows.state import (
     PendingWrite,
     PlayState,
     go_back,
+    list_page,
     page_move,
+    with_list_page,
 )
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.routing import Command, Intent, resolve
@@ -59,6 +61,7 @@ from mmorpg.presentation.telegram.screens import chamber as chamber_screens
 from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import crafts as craft_screens
 from mmorpg.presentation.telegram.screens import format as format_screens
+from mmorpg.presentation.telegram.screens import items as item_screens
 from mmorpg.presentation.telegram.screens import play as screens
 from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import settings as settings_screens
@@ -68,7 +71,12 @@ from mmorpg.presentation.telegram.screens import tutorial as tutorial_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.creation import STAT_NAMES
 from mmorpg.presentation.telegram.screens.keeper import KeeperView
-from mmorpg.presentation.telegram.screens.paginated import PageState, total_pages
+from mmorpg.presentation.telegram.screens.paginated import (
+    SEARCH_PROMPT,
+    PageState,
+    filters_screen,
+    total_pages,
+)
 from mmorpg.presentation.telegram.screens.shop import OwnedItem
 from mmorpg.presentation.telegram.states.screens import NavigationStack
 
@@ -211,11 +219,44 @@ def render(
     match state.screen:
         case ScreenId.SETTINGS:
             return settings_screens.settings_screen(settings or DEFAULT_SETTINGS, state.notice)
+        case ScreenId.LIST_FILTERS:
+            target = _filtered_screen(state)
+            return filters_screen(
+                screen_id=ScreenId.LIST_FILTERS,
+                title="Разделы списка",
+                categories=list_sections(content, target),
+                current=_page_for(state, target).filters,
+            )
         case ScreenId.INVENTORY:
             return shop_screens.inventory_screen(
                 content, shelf.owned, state.list_page, gold=shelf.gold, notice=state.notice
             )
-        case ScreenId.SHOP:
+        case ScreenId.ITEM if content.has_item(state.item_id):
+            return item_screens.item_screen(
+                content,
+                character,
+                content.item(state.item_id),
+                quantity=_owned_count(shelf, state.item_id),
+                sale=economy.sell_price(content, content.item(state.item_id)),
+                notice=state.notice,
+            )
+        # Вещи с таким ключом больше нет: правка смотрителя или новая выкатка.
+        # Игрок возвращается в сумку, а не встречает ошибку (правило 12).
+        case ScreenId.ITEM:
+            return shop_screens.inventory_screen(
+                content, shelf.owned, state.list_page, gold=shelf.gold, notice=state.notice
+            )
+        case ScreenId.SHOP_ITEM if content.has_item(state.item_id):
+            item = content.item(state.item_id)
+            return item_screens.shop_item_screen(
+                content,
+                character,
+                item,
+                price=shelf.prices.get(item.id, item.price),
+                gold=shelf.gold,
+                notice=state.notice,
+            )
+        case ScreenId.SHOP | ScreenId.SHOP_ITEM:
             return shop_screens.shop_screen(
                 content,
                 shelf.stock,
@@ -349,8 +390,87 @@ def render(
             )
 
 
+def list_sections(content: GameContent, screen: ScreenId) -> tuple[str, ...]:
+    """По каким разделам режется список на этом экране. Пусто - не режется."""
+    match screen:
+        case ScreenId.INVENTORY | ScreenId.SHOP | ScreenId.SELL:
+            return shop_screens.ITEM_SECTIONS
+        case ScreenId.SKILLS:
+            return skill_screens.SKILL_SECTIONS
+        case _:
+            return ()
+
+
+def _search_and_filters(
+    content: GameContent, state: PlayState, command: Command
+) -> PlayState | None:
+    """Поиск, разделы и сброс - одинаково на всех списках. ``None`` - не про них.
+
+    Три кнопки под страницами раньше рисовались на каждом длинном списке и не
+    делали ничего: «Поиск» не был намерением вообще, а «Фильтры» никто не
+    разбирал. Разбор один и живёт здесь.
+    """
+    if command.intent is Intent.SEARCH:
+        return replace(state, searching=True).with_notice(SEARCH_PROMPT)
+    if command.intent is Intent.RESET_FILTERS:
+        cleared = list_page(state).filters.cleared()
+        return with_list_page(state, PageState(filters=cleared)).with_notice(
+            "Фильтры сняты, список показан целиком."
+        )
+    if command.intent is Intent.FILTERS:
+        if not list_sections(content, state.screen):
+            return state.with_notice("Этот список не делится на разделы. Есть поиск.")
+        return state.at(ScreenId.LIST_FILTERS)
+    return None
+
+
+def _searched(state: PlayState, text: str) -> PlayState:
+    """Строка поиска, набранная сообщением. Пустая строка снимает поиск."""
+    query = text.strip()
+    filters = replace(list_page(state).filters, query=query)
+    found = with_list_page(replace(state, searching=False), PageState(filters=filters))
+    if not query:
+        return found.with_notice("Поиск снят, список показан целиком.")
+    return found.with_notice(f"Ищу «{query}».")
+
+
+def _handle_list_filters(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    """Разделы списка: одна кнопка - один раздел, и обратно к списку."""
+    if command.intent is Intent.RESET_FILTERS:
+        back = go_back(replace(state, searching=False))
+        cleared = list_page(back).filters.cleared()
+        return with_list_page(back, PageState(filters=cleared)).with_notice(
+            "Фильтры сняты, список показан целиком."
+        )
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите раздел или «Назад».")
+    for name in list_sections(content, _filtered_screen(state)):
+        if name != command.argument:
+            continue
+        back = go_back(state)
+        chosen = replace(list_page(back).filters, category=name)
+        return with_list_page(back, PageState(filters=chosen)).with_notice(f"Раздел «{name}».")
+    return state.with_notice("Нажмите раздел или «Назад».")
+
+
+def _filtered_screen(state: PlayState) -> ScreenId:
+    """Экран со списком, ради которого открыли разделы."""
+    _, previous = state.stack.pop()
+    return previous or ScreenId.INVENTORY
+
+
+def _page_for(state: PlayState, screen: ScreenId) -> PageState:
+    return list_page(replace(state, screen=screen))
+
+
 def _pick_kind(state: PlayState) -> SkillKind:
     return SkillKind.PASSIVE if state.pick_kind == "passive" else SkillKind.ACTIVE
+
+
+def _owned_count(goods: Goods, item_id: str) -> int:
+    return next((held.quantity for held in goods.owned if held.item_id == item_id), 0)
 
 
 def _sale_prices(content: GameContent, owned: tuple[OwnedItem, ...]) -> dict[str, int]:
@@ -435,6 +555,11 @@ def advance(
     if keeper_flow.awaits_text(state, command):
         return keeper_flow.typed(content, character, state, text.strip(), view)
 
+    # То же самое для списков: набранное после «Поиска» - это строка поиска, а
+    # не незнакомая кнопка.
+    if state.searching and command.intent is Intent.UNKNOWN:
+        return _searched(replace(state, pending=PendingWrite(), fight=""), text)
+
     if command.intent is Intent.LOOK:
         return replace(state, notice="", pending=PendingWrite(), fight="")
     if command.intent is Intent.MAIN_MENU:
@@ -457,6 +582,8 @@ def advance(
         return keeper_flow.advance(content, character, state, command, view)
 
     match state.screen:
+        case ScreenId.LIST_FILTERS:
+            return _handle_list_filters(content, character, state, command)
         case ScreenId.SETTINGS:
             return _handle_settings(state, command, settings or DEFAULT_SETTINGS)
         case ScreenId.TUTORIAL:
@@ -471,8 +598,12 @@ def advance(
             return _handle_pledge(content, character, state, command)
         case ScreenId.INVENTORY:
             return _handle_inventory(content, character, state, command, shelf)
+        case ScreenId.ITEM:
+            return _handle_item(content, character, state, command, shelf)
         case ScreenId.SHOP:
             return _handle_shop(content, character, state, command, shelf)
+        case ScreenId.SHOP_ITEM:
+            return _handle_shop_item(content, character, state, command, shelf)
         case ScreenId.SELL:
             return _handle_sell(content, character, state, command, shelf)
         case ScreenId.MAIN_MENU:
@@ -844,7 +975,7 @@ def _handle_character(
     if labels.STATS.matches(command.argument):
         return mark_task(state.at(ScreenId.STATS), character, TutorialTask.STATS)
 
-    for slot, slot_name in screens.SLOT_NAMES.items():
+    for slot, slot_name in item_screens.SLOT_NAMES.items():
         if not screens.unequip_label(slot_name).matches(command.argument):
             continue
         item_id = character.equipment.item_in(slot)
@@ -888,21 +1019,47 @@ def _handle_shop(
     command: Command,
     goods: Goods,
 ) -> PlayState:
-    moved = page_move(command, state.list_page, total_pages(len(goods.stock)))
+    shown = _visible_stock(content, state, goods)
+    moved = page_move(command, state.list_page, total_pages(len(shown)))
     if moved is not None:
         return replace(state, list_page=moved, notice="")
+    listed = _search_and_filters(content, state, command)
+    if listed is not None:
+        return listed
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите товар из списка.")
-    if labels.RESET_FILTERS.matches(command.argument):
-        return replace(
-            state, list_page=PageState(filters=state.list_page.filters.cleared()), notice=""
-        )
     if labels.SELL.matches(command.argument):
         return replace(state, list_page=PageState()).at(ScreenId.SELL)
 
-    item = shop_screens.item_from_button(content, command.argument, goods.stock)
+    item = shop_screens.item_from_button(content, command.argument, shown)
     if item is None:
         return state.with_notice("Нажмите товар из списка.")
+    # Нажатие открывает карточку, а не кошелёк: сначала игрок узнаёт, что вещь
+    # даёт и чем она лучше надетого, и только потом платит (``screens/items.py``).
+    return replace(state, item_id=item.id).at(ScreenId.SHOP_ITEM)
+
+
+def _visible_stock(content: GameContent, state: PlayState, goods: Goods) -> tuple[Item, ...]:
+    """Товар, прошедший раздел и поиск, - тот же список, что нарисован."""
+    return tuple(
+        item for item in goods.stock if shop_screens.matches_filters(item, state.list_page, content)
+    )
+
+
+def _handle_shop_item(
+    content: GameContent,
+    character: Character,
+    state: PlayState,
+    command: Command,
+    goods: Goods,
+) -> PlayState:
+    """Карточка товара: одна кнопка, и она стоит денег."""
+    if not content.has_item(state.item_id):
+        return go_back(state).with_notice("Этого товара больше нет на прилавке.")
+    item = content.item(state.item_id)
+    if command.intent is not Intent.SELECT or not item_screens.BUY.matches(command.argument):
+        return state.with_notice("Нажмите «Купить» или «Назад».")
+
     price = goods.prices.get(item.id, item.price)
     if price > goods.gold:
         return state.with_notice(
@@ -911,7 +1068,11 @@ def _handle_shop(
     write = PendingWrite(character=character.with_gold(-price), items=((item.id, 1),)).because(
         economy_log.SHOP
     )
-    bought = state.storing(write).with_notice(f"{item.name} куплен за {price} золота.")
+    bought = (
+        go_back(replace(state, item_id=""))
+        .storing(write)
+        .with_notice(f"{item.name} куплен за {price} золота.")
+    )
     return mark_task(bought, character, TutorialTask.TRADE)
 
 
@@ -922,17 +1083,17 @@ def _handle_sell(
     command: Command,
     goods: Goods,
 ) -> PlayState:
-    moved = page_move(command, state.list_page, total_pages(len(goods.owned)))
+    shown = _visible_bag(content, state, goods)
+    moved = page_move(command, state.list_page, total_pages(len(shown)))
     if moved is not None:
         return replace(state, list_page=moved, notice="")
+    listed = _search_and_filters(content, state, command)
+    if listed is not None:
+        return listed
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите вещь из списка.")
-    if labels.RESET_FILTERS.matches(command.argument):
-        return replace(
-            state, list_page=PageState(filters=state.list_page.filters.cleared()), notice=""
-        )
 
-    item = shop_screens.sold_from_button(content, command.argument, goods.owned)
+    item = shop_screens.sold_from_button(content, command.argument, shown)
     if item is None:
         return state.with_notice("Нажмите вещь из списка.")
     price = economy.sell_price(content, item)
@@ -950,31 +1111,64 @@ def _handle_inventory(
     command: Command,
     goods: Goods,
 ) -> PlayState:
-    moved = page_move(command, state.list_page, total_pages(len(goods.owned)))
+    shown = _visible_bag(content, state, goods)
+    moved = page_move(command, state.list_page, total_pages(len(shown)))
     if moved is not None:
         return replace(state, list_page=moved, notice="")
+    listed = _search_and_filters(content, state, command)
+    if listed is not None:
+        return listed
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите предмет из списка.")
-    if labels.RESET_FILTERS.matches(command.argument):
-        return replace(
-            state, list_page=PageState(filters=state.list_page.filters.cleared()), notice=""
-        )
 
-    item = shop_screens.owned_from_button(content, command.argument, goods.owned)
+    item = shop_screens.owned_from_button(content, command.argument, shown)
     if item is None:
         return state.with_notice("Нажмите предмет из списка.")
+    # Нажатие открывает карточку вещи, а не действует ею. Раньше оно сразу
+    # надевало или выпивало, а сырьё в ответ читало описание - и про волчью
+    # шкуру игра не могла сказать ничего (``screens/items.py``).
+    return replace(state, item_id=item.id).at(ScreenId.ITEM)
 
-    if item.is_equipment:
-        return _equip(content, character, state, item)
-    if item.kind.value == "consumable":
+
+def _visible_bag(content: GameContent, state: PlayState, goods: Goods) -> tuple[OwnedItem, ...]:
+    """Сумка, прошедшая раздел и поиск, - тот же список, что нарисован."""
+    return tuple(
+        held
+        for held in goods.owned
+        if content.has_item(held.item_id)
+        and shop_screens.matches_filters(content.item(held.item_id), state.list_page, content)
+    )
+
+
+def _handle_item(
+    content: GameContent,
+    character: Character,
+    state: PlayState,
+    command: Command,
+    goods: Goods,
+) -> PlayState:
+    """Карточка вещи из сумки: надеть, выпить - и всё это по кнопке с именем."""
+    if not content.has_item(state.item_id):
+        return go_back(state).with_notice("Этой вещи у вас больше нет.")
+    item = content.item(state.item_id)
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите действие или «Назад».")
+
+    # Сначала шаг назад, потом запись: ``go_back`` чистит ``pending``, и запись,
+    # сделанная до него, до хендлера бы не доехала.
+    if item_screens.EQUIP.matches(command.argument) and item.is_equipment:
+        return _equip(content, character, go_back(replace(state, item_id="")), item)
+    if item_screens.USE.matches(command.argument) and item.kind.value == "consumable":
         healed_character, healed = adventure.use_consumable(content, character, item.id)
         if healed <= 0:
             return state.with_notice(f"{item.name} сейчас ничего не даст. {item.text}")
         write = PendingWrite(character=healed_character, items=((item.id, -1),))
-        return state.storing(write).with_notice(
-            f"{item.name} выпито, восстановлено {healed} здоровья."
+        return (
+            go_back(replace(state, item_id=""))
+            .storing(write)
+            .with_notice(f"{item.name} выпито, восстановлено {healed} здоровья.")
         )
-    return state.with_notice(f"{item.name}. {item.text}")
+    return state.with_notice("Нажмите действие или «Назад».")
 
 
 def _equip(content: GameContent, character: Character, state: PlayState, item: Item) -> PlayState:
@@ -1011,10 +1205,15 @@ def _handle_settings(
 def _handle_skills(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    pool = skill_rules.teachable(content, character)
+    pool = skill_screens.matching_skills(
+        content, character, skill_rules.teachable(content, character), state.skill_page
+    )
     moved = page_move(command, state.skill_page, total_pages(len(pool)))
     if moved is not None:
         return replace(state, skill_page=moved, notice="")
+    listed = _search_and_filters(content, state, command)
+    if listed is not None:
+        return listed
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите умение из списка.")
     if labels.SKILL_SLOTS.matches(command.argument):
@@ -1227,6 +1426,9 @@ def _handle_mentor(
     moved = page_move(command, state.mentor_page, total_pages(len(known)))
     if moved is not None:
         return replace(state, mentor_page=moved, notice="")
+    listed = _search_and_filters(content, state, command)
+    if listed is not None:
+        return listed
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите умение из списка.")
 

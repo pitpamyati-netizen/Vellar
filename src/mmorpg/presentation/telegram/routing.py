@@ -33,6 +33,9 @@ class Intent(StrEnum):
     PAGE = "page"
     NEXT_PAGE = "next_page"
     PREVIOUS_PAGE = "previous_page"
+    SEARCH = "search"
+    FILTERS = "filters"
+    RESET_FILTERS = "reset_filters"
     SELECT = "select"
     UNKNOWN = "unknown"
 
@@ -58,6 +61,13 @@ SIMPLE_COMMANDS: dict[str, Intent] = {
     "/bag": Intent.BAG,
     "/бежать": Intent.FLEE,
     "/flee": Intent.FLEE,
+    # Списки: то же, что три кнопки под страницами, но набором.
+    "/поиск": Intent.SEARCH,
+    "/search": Intent.SEARCH,
+    "/фильтры": Intent.FILTERS,
+    "/filters": Intent.FILTERS,
+    "/сбросить": Intent.RESET_FILTERS,
+    "/reset": Intent.RESET_FILTERS,
     # "/род" and "/народ" stay: both named this slot before "/раса" came back.
     "/раса": Intent.RACIAL,
     "/род": Intent.RACIAL,
@@ -113,6 +123,9 @@ _BUTTON_INTENTS: tuple[tuple[object, Intent], ...] = (
     (labels.FLEE, Intent.FLEE),
     (labels.NEXT_PAGE, Intent.NEXT_PAGE),
     (labels.PREVIOUS_PAGE, Intent.PREVIOUS_PAGE),
+    (labels.SEARCH, Intent.SEARCH),
+    (labels.FILTERS, Intent.FILTERS),
+    (labels.RESET_FILTERS, Intent.RESET_FILTERS),
 )
 
 

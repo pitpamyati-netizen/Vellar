@@ -50,6 +50,7 @@ from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import combat as combat_screens
 from mmorpg.presentation.telegram.screens import crafts as craft_screens
 from mmorpg.presentation.telegram.screens import creation, play, shop
+from mmorpg.presentation.telegram.screens import items as item_screens
 from mmorpg.presentation.telegram.screens import keeper as keeper_screens
 from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import skills as skill_screens
@@ -59,6 +60,7 @@ from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
     ListFilters,
     PageState,
+    filters_screen,
     paginated_screen,
 )
 
@@ -408,6 +410,13 @@ def all_screens(
         creation.class_details_screen(content, "warrior"),
         creation.traits_screen(content, complete_draft, PageState()),
         creation.traits_screen(content, empty, PageState(page=3)),
+        creation.traits_screen(
+            content, empty, PageState(filters=ListFilters(query="ничего такого нет"))
+        ),
+        creation.trait_filters_screen(content, PageState()),
+        creation.trait_filters_screen(
+            content, PageState(filters=ListFilters(category="Боевые", query="меч"))
+        ),
         creation.points_screen(content, complete_draft),
         creation.confirm_screen(content, complete_draft),
         handlers_creation.welcome_screen(),
@@ -638,6 +647,34 @@ def all_screens(
             gold=120,
         ),
         shop.inventory_screen(content, (), PageState(), gold=0),
+        item_screens.item_screen(content, hero, content.item("rusty_sword"), quantity=1, sale=12),
+        item_screens.item_screen(
+            content,
+            replace(hero, equipment=hero.equipment.equip("body", "leather_armor")),
+            content.item("chain_shirt"),
+            quantity=1,
+            sale=12,
+        ),
+        item_screens.item_screen(
+            content, hero, content.item("small_healing_potion"), quantity=3, sale=4
+        ),
+        item_screens.item_screen(content, hero, content.item("wolf_pelt"), quantity=7, sale=6),
+        item_screens.shop_item_screen(
+            content, hero, content.item("rusty_sword"), price=30, gold=250
+        ),
+        item_screens.shop_item_screen(content, hero, content.item("rusty_sword"), price=30, gold=2),
+        filters_screen(
+            screen_id=ScreenId.LIST_FILTERS,
+            title="Разделы списка",
+            categories=shop.ITEM_SECTIONS,
+            current=ListFilters(),
+        ),
+        filters_screen(
+            screen_id=ScreenId.LIST_FILTERS,
+            title="Разделы списка",
+            categories=shop.ITEM_SECTIONS,
+            current=ListFilters(category="Сырьё", query="шкура"),
+        ),
         shop.sell_screen(
             content,
             (shop.OwnedItem("wolf_pelt", 4),),

@@ -293,3 +293,56 @@ def test_draft_records_allocation_per_stat() -> None:
     assert draft.allocated[StatCode.STR] == 1
     assert draft.allocated[StatCode.LCK] == 1
     assert draft.spend_point(StatCode.AGI, budget=2) == draft
+
+
+# --- finding one trait among sixty ------------------------------------
+
+
+def test_search_narrows_the_trait_list(content: GameContent, classed: CreationState) -> None:
+    """«Поиск» рисовался на каждом длинном списке и не делал ничего."""
+    asked = walk(content, "Поиск", state=classed)
+    assert asked.searching, "нажатие на поиск ждёт следующего сообщения"
+    assert "Наберите" in asked.notice
+
+    found = walk(content, "берсерк", state=asked)
+    assert found.searching is False
+    assert found.trait_page.filters.query == "берсерк"
+    text = render(content, found).text()
+    assert "Берсерк" in text
+    assert "Найдено 1" in text
+
+
+def test_search_reads_descriptions_too(content: GameContent, classed: CreationState) -> None:
+    """Игрок помнит, что особенность делает, а не как она называется."""
+    found = walk(content, "Поиск", "уклон", state=classed)
+    assert render(content, found).text().count("Найдено") == 1
+    assert found.trait_page.filters.query == "уклон"
+
+
+def test_sections_cut_the_trait_list_and_reset_puts_it_back(
+    content: GameContent, classed: CreationState
+) -> None:
+    sections = walk(content, "Фильтры", state=classed)
+    assert sections.screen is ScreenId.CREATE_TRAIT_FILTERS
+
+    combat = walk(content, "Боевые", state=sections)
+    assert combat.screen is ScreenId.CREATE_TRAITS
+    assert combat.trait_page.filters.category == "Боевые"
+    text = render(content, combat).text()
+    assert "категория «Боевые»" in text
+
+    cleared = walk(content, "Сбросить фильтры", state=combat)
+    assert cleared.trait_page.filters.active is False
+
+
+def test_a_search_that_finds_nothing_says_so_and_can_be_undone(
+    content: GameContent, classed: CreationState
+) -> None:
+    empty = walk(content, "Поиск", "квазизаклёпка", state=classed)
+    screen = render(content, empty)
+    assert "Найдено 0" in screen.text()
+    assert "Сбросить фильтры" in [item.text for row in screen.all_rows() for item in row]
+
+    back = walk(content, "Сбросить фильтры", state=empty)
+    assert back.trait_page.filters.active is False
+    assert "Найдено 0" not in render(content, back).text()

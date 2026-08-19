@@ -24,6 +24,7 @@ from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import amount, gold, plural
+from mmorpg.presentation.telegram.screens.items import SLOT_NAMES
 from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
     PageState,
@@ -71,17 +72,6 @@ NODE_COUNT_WORDS: dict[NodeKind, str] = {
 }
 
 LEAVE_LOCATION = label("Покинуть локацию")
-
-# Equipment slots, in the order they are read out. The ids are content keys; the
-# names are what a player hears.
-SLOT_NAMES: dict[str, str] = {
-    "weapon": "Оружие",
-    "head": "Голова",
-    "body": "Тело",
-    "hands": "Руки",
-    "feet": "Ноги",
-    "trinket": "Украшение",
-}
 
 
 def unequip_label(slot_name: str) -> Label:

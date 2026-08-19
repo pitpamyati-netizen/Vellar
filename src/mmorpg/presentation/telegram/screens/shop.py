@@ -26,12 +26,23 @@ USE_SUFFIX = "использовать"
 EQUIP_SUFFIX = "надеть"
 SELL_SUFFIX = "продать"
 
-# What a player can do with a thing, by its kind. A material has no verb: it is
-# raw stock, and pressing it only reads the description out.
+# What a player can do with a thing, by its kind. Pressing a row no longer does
+# it, though: it opens the thing's card, where the verb is a button and the
+# numbers are spelled out (``screens/items.py``).
 ITEM_VERBS: dict[str, str] = {
     "equipment": EQUIP_SUFFIX,
     "consumable": USE_SUFFIX,
+    "material": "сырьё",
 }
+
+#: Разделы, по которым режется любой список вещей. Названия - те же слова, что
+#: игрок слышит в карточке, а не ключи содержимого.
+SECTION_BY_KIND: dict[str, str] = {
+    "equipment": "Снаряжение",
+    "consumable": "Расходники",
+    "material": "Сырьё",
+}
+ITEM_SECTIONS: tuple[str, ...] = ("Снаряжение", "Расходники", "Сырьё")
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,14 +51,21 @@ class OwnedItem:
     quantity: int
 
 
-def _matches_filters(item: Item, state: PageState, content: GameContent) -> bool:
+def matches_filters(item: Item, state: PageState, content: GameContent) -> bool:
+    """Раздел, поиск и уровни. Поиск идёт и по названию, и по описанию.
+
+    Игрок помнит вещь по тому, что она делает («лечение»), а не по её имени, и
+    должен находить её именно так.
+    """
     filters = state.filters
     if filters.rarity and content.rarity(item.rarity).name != filters.rarity:
         return False
-    if filters.category and item.kind.value != filters.category:
+    if filters.category and SECTION_BY_KIND.get(item.kind.value) != filters.category:
         return False
-    if filters.query and filters.query.casefold() not in item.name.casefold():
-        return False
+    if filters.query:
+        needle = filters.query.casefold().strip()
+        if needle not in item.name.casefold() and needle not in item.text.casefold():
+            return False
     if filters.level_min and item.level < filters.level_min:
         return False
     return not (filters.level_max and item.level > filters.level_max)
@@ -69,7 +87,7 @@ def inventory_screen(
             f"уровень {content.item(held.item_id).level}",
         )
         for held in owned
-        if _matches_filters(content.item(held.item_id), state, content)
+        if matches_filters(content.item(held.item_id), state, content)
     ]
     return paginated_screen(
         screen_id=ScreenId.INVENTORY,
@@ -78,9 +96,11 @@ def inventory_screen(
         state=state,
         lead_lines=(
             notice or f"У вас {gold_words(gold)}.",
-            "Снаряжение надевается отсюда, снимается в разделе «Персонаж».",
+            "Нажмите вещь, чтобы открыть её карточку: что даёт, чем лучше "
+            "надетого и что с ней сделать.",
         ),
         empty_text="В инвентаре пусто.",
+        categories=ITEM_SECTIONS,
     )
 
 
@@ -113,7 +133,7 @@ def sell_screen(
             detail=f"в сумке {held.quantity}",
         )
         for held in owned
-        if _matches_filters(content.item(held.item_id), state, content)
+        if matches_filters(content.item(held.item_id), state, content)
     ]
     return paginated_screen(
         screen_id=ScreenId.SELL,
@@ -125,6 +145,7 @@ def sell_screen(
             "Продаётся по одной штуке за нажатие.",
         ),
         empty_text="Продавать нечего.",
+        categories=ITEM_SECTIONS,
     )
 
 
@@ -144,7 +165,7 @@ def shop_screen(
 ) -> Screen:
     entries: list[ListEntry] = []
     for item in stock:
-        if not _matches_filters(item, state, content):
+        if not matches_filters(item, state, content):
             continue
         price = prices.get(item.id, item.price)
         affordable = "хватает золота" if price <= gold else "не хватает золота"
@@ -163,10 +184,12 @@ def shop_screen(
         state=state,
         lead_lines=(
             notice or f"У вас {gold_words(gold)}.",
-            "Ассортимент лавки меняется раз в полчаса.",
+            "Нажмите товар, чтобы узнать, что он даёт и чем отличается от "
+            "надетого. Ассортимент лавки меняется раз в полчаса.",
         ),
         empty_text="Сегодня лавка пуста.",
         extra_rows=((SELL_ITEMS,),),
+        categories=ITEM_SECTIONS,
     )
 
 

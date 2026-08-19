@@ -11,14 +11,20 @@ Layout, top to bottom:
     [entry 1]                     one entry per row, 8 per page
     ...
     [Предыдущая страница] [Страница X из Y] [Следующая страница]
-    [Фильтры] [Сбросить фильтры] [Поиск]
+    [Фильтры] [Поиск] [Сбросить фильтры]
     [Назад] [Главное меню]
 
 The entries come first and the machinery after them: a bag is opened to reach the
 things in it, not to page through it. The paging row appears only when there is
 more than one page, and the filter row only when the list is long enough to need
 filtering or a filter is already on - on a list of three items both rows are
-noise, and the entries themselves never move.
+noise, and the entries themselves never move. "Фильтры" is there only where the
+list has sections to cut it by, and "Сбросить фильтры" only where something is
+actually filtered - the same rule, one row down.
+
+A direction that leads nowhere is not shown. On page 8 of 8 there is no
+"Следующая страница" and on page 1 there is no "Предыдущая": a button that
+answers "вы уже в конце" is a button that wasted a press to say so.
 
 The page button is not decoration: pressing it asks for a page number, which is
 the fastest way to move through a long list by ear.
@@ -140,6 +146,53 @@ def page_label(page: int, pages: int) -> Label:
     return label(f"Страница {page} из {pages}")
 
 
+def paging_row(page: int, pages: int) -> tuple[Label, ...]:
+    """The paging row, with only the directions that lead somewhere.
+
+    "Следующая страница" on the last page was a promise the list could not keep:
+    the press did nothing and said nothing, which by ear is indistinguishable from
+    the game having frozen.
+    """
+    row: list[Label] = []
+    if page > 1:
+        row.append(PREVIOUS_PAGE)
+    row.append(page_label(page, pages))
+    if page < pages:
+        row.append(NEXT_PAGE)
+    return tuple(row)
+
+
+SEARCH_PROMPT = (
+    "Наберите сообщением, что искать в списке. Одно слово или его часть. "
+    "Чтобы отменить поиск, нажмите «Сбросить фильтры»."
+)
+
+
+def filters_screen(
+    *,
+    screen_id: ScreenId,
+    title: str,
+    categories: Sequence[str],
+    current: ListFilters,
+) -> Screen:
+    """Разделы списка, по одному на кнопку. Выбранный назван словами.
+
+    Фильтр здесь ровно один - раздел, - и это нарочно: список из шестидесяти
+    особенностей режется по разделам, а всё остальное быстрее найти поиском.
+    """
+    chosen = current.category or "не выбран"
+    lines = [
+        f"{title}. Разделов: {len(categories)}.",
+        f"Сейчас показан раздел: {chosen}.",
+        "Нажмите раздел, чтобы оставить в списке только его.",
+    ]
+    if current.query:
+        lines.append(f"Поиск: «{current.query}».")
+    rows = [(label(name),) for name in categories]
+    rows.append((RESET_FILTERS,))
+    return Screen(id=screen_id, lines=tuple(lines), rows=tuple(rows))
+
+
 def paginated_screen(
     *,
     screen_id: ScreenId,
@@ -151,6 +204,7 @@ def paginated_screen(
     empty_text: str = "Здесь пока пусто.",
     lead_lines: Sequence[str] = (),
     show_filters: bool = True,
+    categories: Sequence[str] = (),
 ) -> Screen:
     """Render a list page as a screen.
 
@@ -183,9 +237,10 @@ def paginated_screen(
     # page with no filter on has nothing to filter down (accessibility rule 7 -
     # the entries above keep their positions either way).
     if pages > 1:
-        rows.append((PREVIOUS_PAGE, page_label(current.page, pages), NEXT_PAGE))
+        rows.append(paging_row(current.page, pages))
     if show_filters and (pages > 1 or current.filters.active):
-        rows.append((FILTERS, RESET_FILTERS, SEARCH))
+        row = (FILTERS, SEARCH) if categories else (SEARCH,)
+        rows.append((*row, RESET_FILTERS) if current.filters.active else row)
     rows.extend(extra_rows)
 
     return Screen(

@@ -23,6 +23,7 @@ class Creation(StatesGroup):
     character_class = State()
     class_details = State()
     traits = State()
+    trait_filters = State()
     points = State()
     confirm = State()
 
@@ -38,8 +39,11 @@ class Play(StatesGroup):
     combat = State()
     combat_bag = State()
     inventory = State()
+    item = State()
     shop = State()
+    shop_item = State()
     sell = State()
+    list_filters = State()
     character = State()
     stats = State()
     skills = State()
@@ -87,6 +91,7 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.CREATE_CLASS: Creation.character_class,
     ScreenId.CREATE_CLASS_DETAILS: Creation.class_details,
     ScreenId.CREATE_TRAITS: Creation.traits,
+    ScreenId.CREATE_TRAIT_FILTERS: Creation.trait_filters,
     ScreenId.CREATE_POINTS: Creation.points,
     ScreenId.CREATE_CONFIRM: Creation.confirm,
     ScreenId.MAIN_MENU: Play.main_menu,
@@ -97,8 +102,11 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.COMBAT: Play.combat,
     ScreenId.COMBAT_BAG: Play.combat_bag,
     ScreenId.INVENTORY: Play.inventory,
+    ScreenId.ITEM: Play.item,
     ScreenId.SHOP: Play.shop,
+    ScreenId.SHOP_ITEM: Play.shop_item,
     ScreenId.SELL: Play.sell,
+    ScreenId.LIST_FILTERS: Play.list_filters,
     ScreenId.CHARACTER: Play.character,
     ScreenId.STATS: Play.stats,
     ScreenId.SKILLS: Play.skills,
@@ -146,6 +154,7 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.CREATE_CLASS: ScreenId.CREATE_RACE,
     ScreenId.CREATE_CLASS_DETAILS: ScreenId.CREATE_CLASS,
     ScreenId.CREATE_TRAITS: ScreenId.CREATE_CLASS,
+    ScreenId.CREATE_TRAIT_FILTERS: ScreenId.CREATE_TRAITS,
     ScreenId.CREATE_POINTS: ScreenId.CREATE_TRAITS,
     ScreenId.CREATE_CONFIRM: ScreenId.CREATE_POINTS,
     ScreenId.MAIN_MENU: None,
@@ -156,8 +165,11 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.COMBAT: ScreenId.LOCATION,
     ScreenId.COMBAT_BAG: ScreenId.COMBAT,
     ScreenId.INVENTORY: ScreenId.MAIN_MENU,
+    ScreenId.ITEM: ScreenId.INVENTORY,
     ScreenId.SHOP: ScreenId.CITY,
+    ScreenId.SHOP_ITEM: ScreenId.SHOP,
     ScreenId.SELL: ScreenId.SHOP,
+    ScreenId.LIST_FILTERS: ScreenId.INVENTORY,
     ScreenId.CHARACTER: ScreenId.MAIN_MENU,
     ScreenId.STATS: ScreenId.CHARACTER,
     ScreenId.SKILLS: ScreenId.MAIN_MENU,

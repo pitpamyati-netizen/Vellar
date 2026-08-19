@@ -26,12 +26,13 @@ def entries(count: int) -> list[ListEntry]:
     return [ListEntry(key=f"e{index}", text=f"Запись {index}") for index in range(1, count + 1)]
 
 
-def render(count: int, page: int = 1, **filters: object):
+def render(count: int, page: int = 1, categories: tuple[str, ...] = (), **filters: object):
     return paginated_screen(
         screen_id=ScreenId.INVENTORY,
         title="Инвентарь",
         entries=entries(count),
         state=PageState(page=page, filters=ListFilters(**filters)),  # type: ignore[arg-type]
+        categories=categories,
     )
 
 
@@ -75,7 +76,7 @@ def test_a_single_page_list_is_only_its_entries() -> None:
     assert len(single.all_rows()) == 4  # three entries plus the service row
     assert all(PREVIOUS_PAGE not in row for row in single.all_rows())
 
-    many = render(30)
+    many = render(30, page=2)
     assert many.all_rows()[-3][0] is PREVIOUS_PAGE
     assert many.all_rows()[-3][2] is NEXT_PAGE
 
@@ -86,10 +87,34 @@ def test_page_button_reports_the_position() -> None:
     assert page_button.text == "Страница 3 из 4"
 
 
-def test_filter_row_is_present() -> None:
+def test_a_direction_that_leads_nowhere_is_not_offered() -> None:
+    """ "Следующая страница" on the last page was a press that did nothing."""
+    first = render(30, page=1).all_rows()[-3]
+    assert PREVIOUS_PAGE not in first
+    assert NEXT_PAGE in first
+
+    last = render(30, page=4).all_rows()[-3]
+    assert PREVIOUS_PAGE in last
+    assert NEXT_PAGE not in last
+    assert last[-1].text == "Страница 4 из 4"
+
+
+def test_search_is_offered_on_every_long_list() -> None:
     screen = render(30)
-    filter_row = screen.all_rows()[-2]
-    assert filter_row == (FILTERS, RESET_FILTERS, SEARCH)
+    assert screen.all_rows()[-2] == (SEARCH,)
+
+
+def test_sections_are_offered_only_where_the_list_has_them() -> None:
+    plain = render(30)
+    assert FILTERS not in plain.all_rows()[-2]
+
+    sectioned = render(30, categories=("Боевые", "Ремесленные"))
+    assert sectioned.all_rows()[-2] == (FILTERS, SEARCH)
+
+
+def test_reset_is_offered_only_when_something_is_filtered() -> None:
+    assert RESET_FILTERS not in render(30).all_rows()[-2]
+    assert RESET_FILTERS in render(30, query="меч").all_rows()[-2]
 
 
 def test_pages_slice_correctly() -> None:
@@ -117,7 +142,7 @@ def test_empty_list_says_so() -> None:
 def test_a_filtered_short_list_keeps_the_filter_row() -> None:
     """Whoever set a filter must be able to take it off without leaving."""
     screen = render(3, category="Боевые")
-    assert screen.all_rows()[-2] == (FILTERS, RESET_FILTERS, SEARCH)
+    assert screen.all_rows()[-2] == (SEARCH, RESET_FILTERS)
 
 
 def test_filters_can_be_cleared_but_sorting_is_kept() -> None:

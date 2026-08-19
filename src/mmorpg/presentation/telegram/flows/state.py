@@ -22,7 +22,7 @@ from mmorpg.domain.entities.overlay import OverlayRecord
 from mmorpg.domain.ports.repositories import AccessibilitySettings
 from mmorpg.presentation.telegram.routing import Command, Intent
 from mmorpg.presentation.telegram.screens.base import ScreenId
-from mmorpg.presentation.telegram.screens.paginated import PageState
+from mmorpg.presentation.telegram.screens.paginated import ListFilters, PageState
 from mmorpg.presentation.telegram.screens.shop import OwnedItem
 from mmorpg.presentation.telegram.states.screens import NavigationStack, back_target
 
@@ -213,6 +213,10 @@ class PlayState:
     #: Причина блокировки, набранная до выбора срока. Живёт в состоянии, потому
     #: что набирают её одним сообщением, а срок нажимают следующим.
     keeper_reason: str = ""
+    #: Набранное сообщение сейчас означает строку поиска по списку на экране.
+    searching: bool = False
+    #: Вещь, карточку которой открыли из сумки или с прилавка.
+    item_id: str = ""
     # Transient: cleared at the start of every step, read by the handler.
     pending: PendingWrite = field(default_factory=PendingWrite)
     fight: str = ""
@@ -250,6 +254,12 @@ class PlayState:
                 "edge": self.edge_skill,
                 "quest": self.quest_id,
                 "npc": self.npc_id,
+                "item": self.item_id,
+                "searching": self.searching,
+                "list_filters": [
+                    self.list_page.filters.category,
+                    self.list_page.filters.query,
+                ],
                 "craft": [self.craft_id, self.craft_moment],
                 "pages": [self.list_page.page, self.skill_page.page, self.board_page.page],
                 "keeper": [
@@ -276,6 +286,7 @@ class PlayState:
         pick_kind, pick_slot = data.get("pick", ["", 0])
         list_page, skill_page, board_page = data.get("pages", [1, 1, 1])
         craft_id, craft_moment = data.get("craft", ["", 0])
+        list_category, list_query = [*data.get("list_filters", []), "", ""][:2]
         # Хвост списка читается с запасом: состояние переживает выкатку, а
         # сохранённому состоянию не верят (``Claude.md``, правило 8).
         keeper = [*data.get("keeper", []), "", "", "", 0, "", 1, ""][:7]
@@ -293,7 +304,10 @@ class PlayState:
                 started_at=int(descent_started),
             ),
             stub_title=data.get("stub", ""),
-            list_page=PageState(page=int(list_page)),
+            list_page=PageState(
+                page=int(list_page),
+                filters=ListFilters(category=str(list_category), query=str(list_query)),
+            ),
             skill_page=PageState(page=int(skill_page)),
             board_page=PageState(page=int(board_page)),
             pick_kind=str(pick_kind),
@@ -301,6 +315,8 @@ class PlayState:
             edge_skill=data.get("edge", ""),
             quest_id=data.get("quest", ""),
             npc_id=data.get("npc", ""),
+            item_id=data.get("item", ""),
+            searching=bool(data.get("searching", False)),
             craft_id=craft_id,
             craft_moment=int(craft_moment),
             keeper_kind=str(keeper[0]),
@@ -338,3 +354,54 @@ def page_move(command: Command, current: PageState, pages: int) -> PageState | N
     if command.intent is Intent.PAGE and command.number is not None:
         return current.jumped(command.number, pages)
     return None
+
+
+#: Какое состояние списка держит каждый экран со списком. Поиск и разделы
+#: правят именно его, поэтому знать это надо в одном месте, а не в девяти.
+LIST_PAGE_FIELD: dict[ScreenId, str] = {
+    ScreenId.INVENTORY: "list_page",
+    ScreenId.SHOP: "list_page",
+    ScreenId.SELL: "list_page",
+    ScreenId.SKILL_PICK: "list_page",
+    ScreenId.CHAMBER_PLEDGE: "list_page",
+    ScreenId.SKILLS: "skill_page",
+    ScreenId.MENTOR: "mentor_page",
+    ScreenId.QUEST_BOARD: "board_page",
+    ScreenId.WORLD: "world_page",
+    ScreenId.LOCATION_LIST: "location_page",
+}
+
+
+def list_page(state: PlayState) -> PageState:
+    """Состояние списка, который сейчас на экране."""
+    match LIST_PAGE_FIELD.get(state.screen, "list_page"):
+        case "skill_page":
+            return state.skill_page
+        case "mentor_page":
+            return state.mentor_page
+        case "board_page":
+            return state.board_page
+        case "world_page":
+            return state.world_page
+        case "location_page":
+            return state.location_page
+        case _:
+            return state.list_page
+
+
+def with_list_page(state: PlayState, page: PageState) -> PlayState:
+    """Тот же выбор наоборот. Расписан руками: полей всего шесть, а
+    ``replace(**{...})`` — это дыра, в которую пройдёт любая опечатка."""
+    match LIST_PAGE_FIELD.get(state.screen, "list_page"):
+        case "skill_page":
+            return replace(state, skill_page=page)
+        case "mentor_page":
+            return replace(state, mentor_page=page)
+        case "board_page":
+            return replace(state, board_page=page)
+        case "world_page":
+            return replace(state, world_page=page)
+        case "location_page":
+            return replace(state, location_page=page)
+        case _:
+            return replace(state, list_page=page)
