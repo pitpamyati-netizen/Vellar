@@ -69,6 +69,8 @@ class PendingWrite:
     note: KeeperEntry | None = None
     #: Какую уборку выполнить (``application/services/keeper_panel.py``).
     service: str = ""
+    #: Какой расчёт откатить: строка журнала сделок. Ноль — никакой.
+    rollback: int = 0
     #: Перечитать правки из хранилища.
     reload: bool = False
     #: Почему изменился кошелёк: метка для денежного журнала
@@ -89,6 +91,7 @@ class PendingWrite:
             and self.ban is None
             and self.note is None
             and not self.service
+            and not self.rollback
             and not self.reload
         )
 

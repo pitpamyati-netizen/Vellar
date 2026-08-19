@@ -23,7 +23,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 **`src/mmorpg/`** — код.
 - Корень пакета: `main.py` (композиция, polling/webhook), `config.py` (Settings,
   единственный доступ к env), `logging.py`, `economy_log.py` (журнал движений
-  золота: `gold_flow`), `monitoring.py` (детектор медленных колбэков),
+  золота: `gold_flow`), `metrics.py` (что игра успела: счёт обновлений, отказов
+  и задержки — строка в минуту), `monitoring.py` (детектор медленных колбэков),
   `health.py` (heartbeat), `retry.py` (паузы между повторами и ожидание службы
   на старте — общие для всех трёх связей).
 - `domain/` — чистая логика, только stdlib, без async и I/O.
@@ -62,11 +63,14 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   `creation`, `play`, `combat`, `keeper` — чистые автоматы), `screens/` (`base`,
   `format`, `paginated`, `creation`, `play`, `combat`, `shop`, `skills`,
   `quests`, `crafts`, `city` (в том числе жители), `settings`, `tutorial`,
-  `arena`, `chamber` (Палата, заклад, счётный вопрос), `keeper` (панель),
+  `arena`, `chamber` (Палата, заклад, счётный вопрос), `keeper` (панель, в том
+  числе сделки игрока и откат расчёта),
   `moderation` (что читает заблокированный), `group`),
   `keyboards/` (`labels`, `reply`), `middlewares/` (`dependencies`, `errors`,
-  `idempotency`, `moderation` — дверь, закрытая для заблокированного, `retry` —
-  на сессии бота, а не на апдейтах),
+  `idempotency`, `metrics` — счёт и замер каждого обновления, `moderation` —
+  дверь, закрытая для заблокированного, `retry` и `sending` — на сессии бота, а
+  не на апдейтах: повтор потерянного вызова и очередь в тридцать отправок в
+  секунду),
   `states/screens.py`, `routing.py`, `messaging.py`,
   `broadcast.py` (канал), `throttle.py` (лимит), `cleanup.py` (уборка в группе).
 
@@ -86,7 +90,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 смотрителя раздаётся из панели, корень остаётся в окружении; `0009` — что
 повторяется после разрыва связи, а что нет; `0010` — машина без контейнеров:
 PostgreSQL держит мир, Redis не нужен; `0011` — Печать открывает доступы, а не
-силу, и голос весит совершённые Обороты).
+силу, и голос весит совершённые Обороты; `0012` — откат сделки возвращает то,
+что есть, и не печатает пошлину).
 
 **`tests/`** — `domain/` (слои держит `test_layering.py`, длину боя —
 `test_combat_balance.py`), `content/`, `presentation/` (доступность, канал,
@@ -96,7 +101,11 @@ PostgreSQL держит мир, Redis не нужен; `0011` — Печать �
 `test_main.py`, `test_retry.py`, `conftest.py`.
 
 **`scripts/`** — `ci.ps1`/`ci.sh` (гейт), `healthcheck.py`, `broadcast.py` (пост
-в канал: `--headline` или `--changelog latest`), `install-hooks.ps1`/`.sh`,
+в канал: `--headline` или `--changelog latest`), `backup.ps1` (копия по
+расписанию и проверка разворачиванием), `watchdog.py` (сердцебиение снаружи игры:
+пишет смотрителям, когда игра встала), `loadtest.py` (сто игроков сразу — что
+делается с задержкой), `economy.py` (сутки `gold_flow`, сложенные по видам),
+`install-hooks.ps1`/`.sh`,
 `vellar-tools.bat` (общие подпрограммы трёх .bat: штамп версии, дамп — через
 контейнер или через PostgreSQL этой машины, SAVE, поиск psql, чтение `.env`) ·
 `setup-db.sql` (роль и база для `solo`, идемпотентно).
@@ -106,7 +115,8 @@ PostgreSQL держит мир, Redis не нужен; `0011` — Печать �
 учёт заблокировавших бота), `0010_arena_credit` (что круг держит с игрока),
 `0011_keeper_grants` (право смотрителя, выданное изнутри игры),
 `0012_turning` (Печати, заклады и голос в счётном вопросе),
-`0013_moderation` (срок блокировки на аккаунте и журнал смотрителя).
+`0013_moderation` (срок блокировки на аккаунте и журнал смотрителя),
+`0014_trade_rollback` (сделка, которую смотритель откатил).
 **`backups/`** — дампы от `stop.bat`; не в репозитории.
 **`.githooks/pre-commit`** — гейт на коммите.
 **`.claude/`** — `settings.json` (хук `Stop`) и `autocommit.sh`: если после

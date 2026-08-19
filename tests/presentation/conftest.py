@@ -28,6 +28,7 @@ from mmorpg.domain.entities.craft import CraftLog, CraftProgress
 from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
 from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
+from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeRecord, TradeStatus
 from mmorpg.domain.ports.repositories import Census
 from mmorpg.domain.procgen import generate_location
 from mmorpg.domain.rules import overlay as overlay_rules
@@ -237,6 +238,42 @@ def edited(content: GameContent, edits: tuple[OverlayRecord, ...]) -> GameConten
     return overlay_rules.apply(content, edits)
 
 
+def _trade(
+    trade_id: int,
+    kind: OfferKind,
+    status: TradeStatus,
+    *,
+    item: str,
+    price: int,
+) -> TradeRecord:
+    return TradeRecord(
+        offer=Offer(
+            number=trade_id,
+            kind=kind,
+            author=Party(user_id=42, character_id=2, name="Аргус"),
+            target=Party(user_id=900, character_id=3, name="Мерла"),
+            item_id="sword",
+            item_name=item,
+            price=price,
+            created_at=NOW - 3600,
+        ),
+        scope="group",
+        status=status,
+        tax=price // 20,
+        settled_at=NOW - 3500,
+        id=trade_id,
+    )
+
+
+#: Журнал сделок для карточки: расчёт, отказ и уже откаченное - чтобы экран
+#: проверялся на всех трёх, а не только на том, что можно нажать.
+SAMPLE_TRADES: tuple[TradeRecord, ...] = (
+    _trade(3, OfferKind.SELL, TradeStatus.ACCEPTED, item="Короткий меч", price=120),
+    _trade(2, OfferKind.BUY, TradeStatus.DECLINED, item="Кожаный доспех", price=80),
+    _trade(1, OfferKind.SELL, TradeStatus.REVERTED, item="Кольцо", price=400),
+)
+
+
 @pytest.fixture(scope="session")
 def keeper_view(edits: tuple[OverlayRecord, ...], fighter: Character) -> keeper_screens.KeeperView:
     return keeper_screens.KeeperView(
@@ -260,6 +297,7 @@ def keeper_view(edits: tuple[OverlayRecord, ...], fighter: Character) -> keeper_
             leaders=(("Мерла", 41), ("Аргус", 22)),
         ),
         now=NOW,
+        trades=SAMPLE_TRADES,
     )
 
 
@@ -453,6 +491,8 @@ def all_screens(
         keeper_screens.ban_screen(fighter, banned_view, "ругался в группе"),
         keeper_screens.log_screen(banned_view),
         keeper_screens.log_screen(keeper_view),
+        keeper_screens.trades_screen(fighter, keeper_view),
+        keeper_screens.trades_screen(fighter, keeper_screens.KeeperView()),
         keeper_screens.stats_screen(keeper_view.census),
         keeper_screens.stats_screen(Census()),
         keeper_screens.service_screen(keeper_view),

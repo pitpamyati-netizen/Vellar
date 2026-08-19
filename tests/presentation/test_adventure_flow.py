@@ -33,6 +33,7 @@ from mmorpg.infrastructure.persistence.memory import (
     InMemoryContentOverlayRepository,
     InMemoryInventoryRepository,
     InMemoryKeeperLogRepository,
+    InMemoryTradeRepository,
     InMemoryUserRepository,
 )
 from mmorpg.presentation.telegram.flows.play import (
@@ -179,6 +180,7 @@ class Player:
                 self.deps["deltas"],
                 self.deps["overlays"],
                 self.deps["registry"],
+                self.deps["trades"],
             )
         return self.sent.last
 
@@ -212,6 +214,7 @@ async def player(
         deltas=deltas,
         overlays=overlays,
         registry=registry,
+        trades=InMemoryTradeRepository(),
     )
 
 
@@ -524,6 +527,7 @@ async def test_a_cleared_node_is_cleared_for_everybody(
             deltas,
             overlays,
             registry,
+            InMemoryTradeRepository(),
         )
     data = await second_state.get_data()
     theirs = PlayState.deserialise(data["play"])

@@ -104,6 +104,19 @@ def payout(price: int, *, percent: int = TRADE_TAX_PERCENT) -> int:
     return max(0, price - trade_tax(price, percent=percent))
 
 
+def refund(price: int, tax: int) -> int:
+    """What comes back to the payer when a keeper undoes a settled trade.
+
+    Exactly what the seller was handed, and not a coin more. The duty is gone -
+    it left the game when the trade settled, and nobody is holding it - so
+    returning the full price would mint that duty out of nothing, which is the
+    one thing no rule in this module is allowed to do (``Claude.md``, rule 8).
+    The keeper tells the players so; the difference is small and the alternative
+    is an economy that grows every time somebody is scammed.
+    """
+    return max(0, price - max(0, tax))
+
+
 # --- what a city charges for its services ----------------------------
 #
 # A bed, a teacher and a strongbox are the three ways gold leaves a player

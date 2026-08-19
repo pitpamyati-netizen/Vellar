@@ -679,6 +679,38 @@ async def test_the_journal_lists_both_sides_newest_first(pool, two_parties) -> N
         assert journal[1].tax == 1
 
 
+async def test_a_settled_trade_is_rolled_back_once(pool, two_parties) -> None:
+    """Откат — тот же затвор, что и расчёт: два смотрителя двигают вещи один раз."""
+    author, target = two_parties
+    trades = PostgresTradeRepository(pool)
+    opened = await trades.open(an_offer(author, target, price=40), scope=TEST_SCOPE)
+    assert opened is not None
+    settled = await trades.close(
+        opened.number, scope=TEST_SCOPE, status=TradeStatus.ACCEPTED, settled_at=NOW + 1, tax=2
+    )
+    assert settled is not None and settled.id
+
+    undone = await trades.revert(settled.id)
+    again = await trades.revert(settled.id)
+
+    assert undone is not None and undone.offer.price == 40 and undone.tax == 2
+    assert again is None
+    journal = await trades.journal(author.character_id)
+    assert journal[0].status is TradeStatus.REVERTED
+    # Момент расчёта не переписан: когда откатили, знает журнал смотрителя.
+    assert journal[0].settled_at == NOW + 1
+
+
+async def test_an_offer_nobody_settled_cannot_be_rolled_back(pool, two_parties) -> None:
+    author, target = two_parties
+    trades = PostgresTradeRepository(pool)
+    opened = await trades.open(an_offer(author, target), scope=TEST_SCOPE)
+    assert opened is not None and opened.id
+
+    assert await trades.revert(opened.id) is None
+    assert await trades.pending(opened.number, scope=TEST_SCOPE) is not None
+
+
 # --- панель смотрителя -------------------------------------------------
 
 

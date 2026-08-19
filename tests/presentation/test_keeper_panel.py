@@ -596,6 +596,9 @@ def walk_to(panel: Panel, screen: ScreenId) -> Panel:
         case ScreenId.KEEPER_BAN:
             walked = walk_to(panel, ScreenId.KEEPER_PLAYER)
             return walked.press(labels.KEEPER_BAN.text)
+        case ScreenId.KEEPER_TRADES:
+            walked = walk_to(panel, ScreenId.KEEPER_PLAYER)
+            return walked.press(labels.KEEPER_TRADES.text)
         case _:
             return panel.press(labels.KEEPER_SERVICE.text)
 

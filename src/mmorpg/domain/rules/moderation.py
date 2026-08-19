@@ -61,6 +61,7 @@ ACTIONS: Mapping[KeeperAction, str] = {
     KeeperAction.EDIT: "правил содержимое",
     KeeperAction.FORGET: "снял правку",
     KeeperAction.SWEEP: "убрался в базе",
+    KeeperAction.ROLLBACK: "откатил сделку",
 }
 
 

@@ -346,7 +346,9 @@ class InMemoryTradeRepository:
         if free is None:
             return None
 
-        record = TradeRecord(offer=replace(offer, number=free), scope=scope)
+        record = TradeRecord(
+            offer=replace(offer, number=free), scope=scope, id=len(self._records) + 1
+        )
         self._records.append(record)
         return record
 
@@ -382,6 +384,16 @@ class InMemoryTradeRepository:
                 record, status=TradeStatus.EXPIRED, settled_at=before
             )
         return tuple(stale)
+
+    async def revert(self, trade_id: int) -> TradeRecord | None:
+        found = next(
+            (record for record in self._records if record.id == trade_id and record.is_settled),
+            None,
+        )
+        if found is None:
+            return None
+        self._records[self._records.index(found)] = replace(found, status=TradeStatus.REVERTED)
+        return found
 
     async def journal(self, character_id: int, *, limit: int = 20) -> tuple[TradeRecord, ...]:
         involved = [

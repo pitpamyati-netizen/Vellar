@@ -70,6 +70,7 @@ class ScreenId(StrEnum):
     KEEPER_SERVICE = "keeper_service"
     KEEPER_BAN = "keeper_ban"
     KEEPER_LOG = "keeper_log"
+    KEEPER_TRADES = "keeper_trades"
     STUB = "stub"
     CREATE_NAME = "create_name"
     CREATE_RACE = "create_race"

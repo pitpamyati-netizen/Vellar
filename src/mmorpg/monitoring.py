@@ -24,10 +24,12 @@ def install_slow_callback_detector(loop: asyncio.AbstractEventLoop, settings: Se
     ``slow_callback_duration`` only takes effect in debug mode, so both are set
     together. Debug mode also timestamps every callback and keeps coroutine
     origins alive, which is a fine price while one developer is playing and the
-    wrong price with a hundred players connected - hence the switch.
+    wrong price with a hundred players connected - hence the switch, and hence
+    its default: on where the game is being written, off where it is being
+    played (``Settings.watching_slow_callbacks``).
     """
-    if not settings.slow_callback_detector:
-        logger.info("slow_callback_detector_disabled")
+    if not settings.watching_slow_callbacks:
+        logger.info("slow_callback_detector_disabled", env=settings.app_env.value)
         return
 
     if settings.app_env is not AppEnv.LOCAL:

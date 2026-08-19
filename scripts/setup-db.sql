@@ -11,8 +11,16 @@
 
 \set ON_ERROR_STOP on
 
-SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'role', :'pw')
+-- CREATEDB is not for the game, which never creates one: it is for
+-- scripts/backup.ps1, which proves a backup restores by restoring it into a
+-- database of its own and dropping it again. A backup nobody ever unpacked is
+-- not a backup.
+SELECT format('CREATE ROLE %I LOGIN CREATEDB PASSWORD %L', :'role', :'pw')
 WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'role')
+\gexec
+
+-- Existing installations were created without it; granting it is idempotent.
+SELECT format('ALTER ROLE %I CREATEDB', :'role')
 \gexec
 
 -- Owned by that role, so the migrations need nothing granted to them.

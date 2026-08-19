@@ -35,7 +35,7 @@ CHARACTER_COLUMNS = """
 """
 
 TRADE_COLUMNS = """
-    scope, number, kind, status, tax, created_at, settled_at,
+    id, scope, number, kind, status, tax, created_at, settled_at,
     author_user_id, author_character_id, author_name,
     target_user_id, target_character_id, target_name,
     item_id, item_name, quantity, price
@@ -730,6 +730,7 @@ def _trade_from_row(row: Any) -> TradeRecord:
         status=TradeStatus(row["status"]),
         tax=row["tax"],
         settled_at=row["settled_at"],
+        id=row["id"],
     )
 
 
@@ -753,7 +754,7 @@ class PostgresTradeRepository:
 
     async def open(self, offer: Offer, *, scope: str) -> TradeRecord | None:
         for _ in range(self.ATTEMPTS):
-            number = await self._pool.fetchval(
+            row = await self._pool.fetchrow(
                 """
                 INSERT INTO trades (
                     scope, number, kind, created_at,
@@ -773,7 +774,7 @@ class PostgresTradeRepository:
                     ORDER BY n LIMIT 1
                 ) AS free
                 ON CONFLICT DO NOTHING
-                RETURNING number
+                RETURNING id, number
                 """,
                 scope,
                 offer.kind.value,
@@ -790,8 +791,10 @@ class PostgresTradeRepository:
                 offer.price,
                 MAX_OFFER_NUMBER,
             )
-            if number is not None:
-                return TradeRecord(offer=replace(offer, number=number), scope=scope)
+            if row is not None:
+                return TradeRecord(
+                    offer=replace(offer, number=row["number"]), scope=scope, id=row["id"]
+                )
         return None
 
     async def pending(self, number: int, *, scope: str) -> TradeRecord | None:
@@ -839,6 +842,18 @@ class PostgresTradeRepository:
             scope,
         )
         return tuple(_trade_from_row(row) for row in rows)
+
+    async def revert(self, trade_id: int) -> TradeRecord | None:
+        """Undo a settled trade, once. ``None`` means it was never settled, or already undone."""
+        row = await self._pool.fetchrow(
+            f"""
+            UPDATE trades SET status = 'reverted'
+            WHERE id = $1 AND status = 'accepted'
+            RETURNING {TRADE_COLUMNS}
+            """,
+            trade_id,
+        )
+        return _trade_from_row(row) if row else None
 
     async def journal(self, character_id: int, *, limit: int = 20) -> tuple[TradeRecord, ...]:
         rows = await self._pool.fetch(

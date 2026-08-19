@@ -24,6 +24,7 @@ from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.moderation import Ban, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
+from mmorpg.domain.entities.trade import OfferKind, TradeRecord, TradeStatus
 from mmorpg.domain.ports.repositories import Census
 from mmorpg.domain.rules import moderation as moderation_rules
 from mmorpg.domain.rules import overlay as overlay_rules
@@ -84,6 +85,8 @@ class KeeperView:
     target_ban: Ban = field(default_factory=Ban)
     #: Последние записи журнала смотрителя, свежие сначала.
     log: tuple[KeeperEntry, ...] = ()
+    #: Последние сделки открытого игрока, свежие сначала.
+    trades: tuple[TradeRecord, ...] = ()
     #: Момент, которым меряется остаток срока. Ноль — сроков на экране нет.
     now: int = 0
 
@@ -456,7 +459,7 @@ def player_screen(
     rows: list[tuple[Label, ...]] = [
         (labels.KEEPER_GOLD, labels.KEEPER_LEVEL),
         (labels.KEEPER_HEAL, labels.KEEPER_POINTS),
-        (labels.KEEPER_MOVE,),
+        (labels.KEEPER_MOVE, labels.KEEPER_TRADES),
         (labels.KEEPER_UNBAN,) if _under_ban(view) else (labels.KEEPER_BAN,),
         (labels.KEEPER_DELETE,),
     ]
@@ -529,6 +532,72 @@ def ban_screen(player: Character, view: KeeperView, reason: str = "", notice: st
     if _under_ban(view):
         rows.append((labels.KEEPER_UNBAN,))
     return Screen(id=ScreenId.KEEPER_BAN, lines=tuple(lines), rows=tuple(rows))
+
+
+# --- сделки ------------------------------------------------------------
+
+#: Сколько сделок показывает список. Больше не нужно: откатывают свежее, а
+#: давнее уже разошлось по рукам и вернуть его нечем.
+TRADES_SHOWN = 12
+
+STATUSES: dict[TradeStatus, str] = {
+    TradeStatus.PENDING: "стоит",
+    TradeStatus.ACCEPTED: "расчёт прошёл",
+    TradeStatus.DECLINED: "отказ",
+    TradeStatus.EXPIRED: "истекло",
+    TradeStatus.REVERTED: "откачено",
+}
+
+
+def trade_entry(index: int, record: TradeRecord) -> str:
+    """Строка сделки: кто, что, кому и чем кончилось.
+
+    Направление называется словами, а не стрелкой: стрелку экранный диктор
+    читает как «больше» или молчит о ней вовсе (``docs/accessibility.md``).
+    """
+    offer = record.offer
+    what = offer.item_name or offer.item_id
+    count = f" {offer.quantity} шт" if offer.quantity > 1 else ""
+    who = (
+        f"{offer.author.name} продал {offer.target.name}"
+        if offer.kind is OfferKind.SELL
+        else f"{offer.author.name} купил у {offer.target.name}"
+    )
+    return numbered(
+        index, f"{who}: {what}{count} за {gold(offer.price)} — {STATUSES[record.status]}"
+    )
+
+
+def trade_from_button(view: KeeperView, pressed: str) -> TradeRecord | None:
+    for index, record in enumerate(view.trades, start=1):
+        if pressed.strip() == trade_entry(index, record):
+            return record
+    return None
+
+
+def trades_screen(player: Character, view: KeeperView, notice: str = "") -> Screen:
+    """Сделки игрока и откат расчёта.
+
+    Откат — единственное, что панель делает не с персонажем, а между двумя, и
+    поэтому он сказан числом до нажатия: вещь возвращается тому, кто её отдал, а
+    плательщику приходит ровно то, что получил продавец. Пошлина не
+    возвращается — её в игре уже нет.
+    """
+    shown = view.trades[:TRADES_SHOWN]
+    undoable = sum(1 for record in shown if record.is_settled)
+    lines = [
+        notice or f"Сделки: {player.name}. Свежие сначала.",
+        f"Показано: {len(shown)}. Из них можно откатить: {undoable}.",
+        "Откат возвращает вещь тому, кто её отдал, а золото — тому, кто платил. "
+        "Пошлина не возвращается: она ушла из игры при расчёте.",
+        "Нажмите строку, чтобы откатить. Спрошу второй раз.",
+    ]
+    if not shown:
+        lines.append("Сделок нет: этот игрок ни с кем не рассчитывался.")
+    rows = tuple(
+        (label(trade_entry(index, record)),) for index, record in enumerate(shown, start=1)
+    )
+    return Screen(id=ScreenId.KEEPER_TRADES, lines=tuple(lines), rows=rows)
 
 
 # --- журнал ------------------------------------------------------------

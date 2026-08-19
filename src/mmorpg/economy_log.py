@@ -40,6 +40,7 @@ ARENA_STAKE = "arena_stake"  # into the Circle
 ARENA_PAYOUT = "arena_payout"  # back out of it
 TRADE_PRICE = "trade_price"  # what one player paid another
 TRADE_DUTY = "trade_duty"  # what the duty took out of the game
+TRADE_ROLLBACK = "trade_rollback"  # a settled trade a keeper undid
 SHOP = "shop"  # bought from or sold to a city
 SERVICE = "service"  # a bed, a teacher, anything a city charges for
 KEEPER = "keeper"  # granted by a keeper, and therefore not economy at all

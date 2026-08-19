@@ -13,6 +13,7 @@ from mmorpg.application.services.group_trade import (
     GroupResult,
     GroupTrade,
     release_expired_offers,
+    roll_back,
 )
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
@@ -859,3 +860,86 @@ async def test_a_settlement_pays_out_of_the_purse_at_that_instant(
     assert await purse(characters, seller) == 500
     assert await purse(characters, buyer) == 300
     assert (await trades.pending(1, scope="group")) is None
+
+
+# --- откат сделки (работа смотрителя, docs/keeper.md) ------------------
+
+
+async def settled_sale(
+    trade: GroupTrade,
+    characters: InMemoryCharacterRepository,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+) -> int:
+    """Продажа, по которой расчёт уже прошёл. Возвращает строку журнала."""
+    await inventory.add(argus.id, SWORD, 1)
+    await run(trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    accepted = await run(trade, "принять 1", author=MERLA_ACCOUNT, target=None)
+    assert accepted.result is GroupResult.OFFER_ACCEPTED
+    journal = await trade.trades.journal(argus.id)
+    assert [record.status for record in journal] == [TradeStatus.ACCEPTED]
+    return journal[0].id
+
+
+async def test_a_rolled_back_trade_puts_both_sides_back(
+    trade: GroupTrade,
+    characters: InMemoryCharacterRepository,
+    trades: InMemoryTradeRepository,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    """Вещь возвращается отдавшему, золото - платившему, пошлина не печатается."""
+    trade_id = await settled_sale(trade, characters, inventory, argus)
+    tax = trade_tax(100)
+
+    undone = await roll_back(trade_id, trades=trades, characters=characters, inventory=inventory)
+
+    assert undone.whole
+    assert undone.gold_returned == 100 - tax
+    assert await inventory.count(argus.id, SWORD) == 1
+    assert await inventory.count(merla.id, SWORD) == 0
+    # Продавец остался ровно с тем, с чем начинал; у покупателя не хватает
+    # пошлины, и это честно: её в игре больше нет.
+    assert await purse(characters, argus) == 500
+    assert await purse(characters, merla) == 300 - tax
+    assert [record.status for record in await trades.journal(argus.id)] == [TradeStatus.REVERTED]
+
+
+async def test_a_trade_is_rolled_back_once_and_not_twice(
+    trade: GroupTrade,
+    characters: InMemoryCharacterRepository,
+    trades: InMemoryTradeRepository,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    """Второе нажатие ничего не двигает: иначе откат печатал бы вещи."""
+    trade_id = await settled_sale(trade, characters, inventory, argus)
+
+    first = await roll_back(trade_id, trades=trades, characters=characters, inventory=inventory)
+    second = await roll_back(trade_id, trades=trades, characters=characters, inventory=inventory)
+
+    assert first.done and not second.done
+    assert await inventory.count(argus.id, SWORD) == 1
+
+
+async def test_a_rollback_returns_what_it_can_and_names_what_it_cannot(
+    trade: GroupTrade,
+    characters: InMemoryCharacterRepository,
+    trades: InMemoryTradeRepository,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    """Обманувший успел потратить: возвращается вещь, а недостача названа числом."""
+    trade_id = await settled_sale(trade, characters, inventory, argus)
+    assert await characters.spend_gold(argus.id, await purse(characters, argus))
+
+    undone = await roll_back(trade_id, trades=trades, characters=characters, inventory=inventory)
+
+    assert undone.done and not undone.whole
+    assert undone.item_returned
+    assert undone.gold_returned == 0
+    assert undone.gold_missing == 100 - trade_tax(100)
+    assert await inventory.count(argus.id, SWORD) == 1

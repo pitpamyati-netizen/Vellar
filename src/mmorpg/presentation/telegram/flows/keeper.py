@@ -60,6 +60,7 @@ PANEL: frozenset[ScreenId] = frozenset(
         ScreenId.KEEPER_SERVICE,
         ScreenId.KEEPER_BAN,
         ScreenId.KEEPER_LOG,
+        ScreenId.KEEPER_TRADES,
     }
 )
 SCREENS: frozenset[ScreenId] = PANEL | {ScreenId.NPCS, ScreenId.NPC}
@@ -71,6 +72,10 @@ SWEEP_BLOCKED = "blocked"
 
 #: Вооружённое удаление: первое нажатие только предупреждает.
 ARMED = "delete"
+
+#: Взведённый откат сделки: то же второе нажатие, но помнит, какой именно
+#: расчёт откатывают. Строка вида ``rollback:12``.
+ROLLBACK = "rollback"
 
 #: Разновидности правок строками - тем, чем они лежат в состоянии автомата.
 KINDS: frozenset[str] = frozenset(kind.value for kind in OverlayKind)
@@ -162,6 +167,8 @@ def _render_panel(
             return keeper_screens.ban_screen(view.target, view, state.keeper_reason, state.notice)
         case ScreenId.KEEPER_LOG:
             return keeper_screens.log_screen(view, state.notice)
+        case ScreenId.KEEPER_TRADES if view.target is not None:
+            return keeper_screens.trades_screen(view.target, view, state.notice)
         case ScreenId.KEEPER:
             return keeper_screens.keeper_screen(content, character, stats, view, state.notice)
         case _:
@@ -277,6 +284,8 @@ def advance(
             return _step_service(state, command)
         case ScreenId.KEEPER_BAN:
             return _step_ban(state, command, view)
+        case ScreenId.KEEPER_TRADES:
+            return _step_trades(state, command, view)
         case _:
             return state.with_notice("Здесь только чтение. Нажмите «Назад».")
 
@@ -633,6 +642,8 @@ def _step_player(
         return replace(
             state, keeper_kind=PLAYER_MODE, keeper_field="city", keeper_page=PageState()
         ).at(ScreenId.KEEPER_FIELD)
+    if labels.KEEPER_TRADES.matches(command.argument):
+        return replace(state, keeper_typing="").at(ScreenId.KEEPER_TRADES)
     if labels.KEEPER_BAN.matches(command.argument):
         return replace(state, keeper_typing="", keeper_reason="").at(ScreenId.KEEPER_BAN)
     if labels.KEEPER_UNBAN.matches(command.argument):
@@ -717,6 +728,47 @@ def _step_ban(state: PlayState, command: Command, view: KeeperView) -> PlayState
     said = "навсегда" if sentence.forever else sentence.name.lower()
     return walked.storing(PendingWrite(ban=(target.user_id, sentence.key, reason))).with_notice(
         f"{target.name} заблокирован {said}."
+    )
+
+
+def _step_trades(state: PlayState, command: Command, view: KeeperView) -> PlayState:
+    """Список сделок игрока. Откат — в два нажатия, как и всё необратимое здесь.
+
+    Взведён откат ровно одной строки: нажали другую — взводится она, а прежняя
+    забывается. Иначе «ещё раз» означало бы не ту сделку, которую смотритель
+    видит перед собой.
+    """
+    if view.target is None:
+        return go_back(state).with_notice("Того персонажа больше нет.")
+    if command.intent is not Intent.SELECT:
+        return replace(state, keeper_typing="").with_notice("Нажмите сделку из списка.")
+
+    record = keeper_screens.trade_from_button(view, command.argument)
+    if record is None:
+        return replace(state, keeper_typing="").with_notice(
+            "Не узнал сделку. Нажмите строку из списка."
+        )
+    if not record.is_settled:
+        return replace(state, keeper_typing="").with_notice(
+            "Откатывать нечего: по этой сделке расчёт не проходил."
+        )
+
+    armed = f"{ROLLBACK}:{record.id}"
+    if state.keeper_typing != armed:
+        return replace(state, keeper_typing=armed).with_notice(
+            f"Откатить расчёт: {record.offer.item_name} за {record.offer.price}? "
+            "Нажмите ту же строку ещё раз."
+        )
+    detail = f"{record.offer.item_name} за {record.offer.price}"
+    return (
+        replace(state, keeper_typing="")
+        .storing(
+            PendingWrite(
+                rollback=record.id,
+                note=_note(KeeperAction.ROLLBACK, view.target.name, detail),
+            )
+        )
+        .with_notice("Откат сделки:")
     )
 
 

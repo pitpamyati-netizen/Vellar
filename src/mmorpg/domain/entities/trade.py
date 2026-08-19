@@ -33,12 +33,18 @@ class OfferKind(StrEnum):
 
 
 class TradeStatus(StrEnum):
-    """Where a trade ended up. Only ``PENDING`` holds anything in escrow."""
+    """Where a trade ended up. Only ``PENDING`` holds anything in escrow.
+
+    ``REVERTED`` is a settled trade a keeper undid (``docs/keeper.md``). It is a
+    status of its own rather than a return to ``PENDING``: what happened did
+    happen, and the journal has to keep saying so.
+    """
 
     PENDING = "pending"
     ACCEPTED = "accepted"
     DECLINED = "declined"
     EXPIRED = "expired"
+    REVERTED = "reverted"
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +88,11 @@ class TradeRecord:
     ``scope`` is the group the offer was made in, so two groups never collide on
     the short numbers players type. ``tax`` is filled in when the trade settles -
     a trade that never settled cost nobody anything.
+
+    ``id`` is what the journal calls this row and nothing else does: the short
+    number players type is reused as soon as an offer closes, so it names a
+    standing offer and cannot name a settled one. A keeper undoing a trade is
+    pointing at a settled one, which is why the identity exists.
     """
 
     offer: Offer
@@ -89,6 +100,7 @@ class TradeRecord:
     status: TradeStatus = TradeStatus.PENDING
     tax: int = 0
     settled_at: int | None = None
+    id: int = 0
 
     @property
     def number(self) -> int:
@@ -97,3 +109,8 @@ class TradeRecord:
     @property
     def is_pending(self) -> bool:
         return self.status is TradeStatus.PENDING
+
+    @property
+    def is_settled(self) -> bool:
+        """Whether this trade actually moved anything, and so can be undone."""
+        return self.status is TradeStatus.ACCEPTED

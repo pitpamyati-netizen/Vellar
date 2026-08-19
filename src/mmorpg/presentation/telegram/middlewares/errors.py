@@ -3,6 +3,9 @@
 A crash must never turn into silence: the player is blind to a missing answer, so
 an unhandled exception is logged and answered with a plain sentence and a working
 keyboard (accessibility rule 12).
+
+A caught failure is also counted (``mmorpg.metrics``): an apology the player
+reads and nobody else sees is a failure the operator never learns about.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import Message, TelegramObject, Update
 
 from mmorpg.logging import get_logger
+from mmorpg.metrics import Metrics
 
 logger = get_logger(__name__)
 
@@ -21,6 +25,9 @@ APOLOGY = "Что-то пошло не так, действие не выпол�
 
 
 class ErrorMiddleware(BaseMiddleware):
+    def __init__(self, metrics: Metrics | None = None) -> None:
+        self._metrics = metrics
+
     async def __call__(
         self,
         handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
@@ -31,6 +38,8 @@ class ErrorMiddleware(BaseMiddleware):
             return await handler(event, data)
         except Exception:
             logger.exception("handler_failed", event_type=type(event).__name__)
+            if self._metrics is not None:
+                self._metrics.failed()
             message = _message_of(event)
             if message is not None:
                 await message.answer(APOLOGY, parse_mode=None)

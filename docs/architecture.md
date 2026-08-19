@@ -152,8 +152,14 @@ Target: p95 update handling under 100 ms, p99 under 250 ms.
 - Nothing blocks the event loop. `time.sleep`, synchronous HTTP clients and runtime
   file I/O are forbidden; `asyncio` debug mode plus `loop.slow_callback_duration`
   logs any violation. That detector costs a timestamp per callback, so it is a
-  switch (`SLOW_CALLBACK_DETECTOR`) that the Docker stack turns off - see
-  `docs/deployment.md`.
+  switch (`SLOW_CALLBACK_DETECTOR`) that is off by default wherever players are
+  connected - see `docs/deployment.md`.
+- Whether the budget is actually met is written down rather than assumed: one
+  `metrics` line a minute carries how many updates were served, how many failed,
+  and the median and 95th percentile of how long they took (`mmorpg.metrics`).
+  The percentiles are bucket edges, not exact numbers - a hundred players for a
+  day is millions of samples, and the question asked of them is always "which
+  bucket".
 - All static content is loaded once at startup into `@dataclass(frozen=True,
   slots=True)` objects held in memory and indexed by dict for O(1) access.
 - Keyboards are cached with `functools.lru_cache` keyed by screen plus state, so
@@ -165,6 +171,10 @@ Target: p95 update handling under 100 ms, p99 under 250 ms.
 - One player action produces exactly one new message.
 - An idempotency middleware drops duplicate `update_id` values, so a redelivered
   update never applies an effect twice.
+- Outgoing messages pass a queue holding the bot inside Telegram's count of about
+  thirty sends a second (`middlewares/sending.py`). A few milliseconds of waiting
+  is cheaper than a `429`, which for a player listening to a screen reader is an
+  answer that never arrived.
 
 ## Capacity
 

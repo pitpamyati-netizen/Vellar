@@ -55,7 +55,7 @@ from mmorpg.domain.ports.repositories import (
     PrivacyRepository,
     TradeRepository,
 )
-from mmorpg.domain.rules.economy import payout, trade_tax
+from mmorpg.domain.rules.economy import payout, refund, trade_tax
 from mmorpg.domain.rules.group_commands import GroupCommand, GroupIntent
 from mmorpg.domain.rules.group_offers import (
     OFFER_KIND_FOR_INTENT,
@@ -114,6 +114,86 @@ async def release_expired_offers(
     for record in stale:
         await return_stake(record.offer, characters=characters, inventory=inventory)
     return len(stale)
+
+
+@dataclass(frozen=True, slots=True)
+class Rollback:
+    """Чем кончился откат сделки. Числами, а фразу составит экран."""
+
+    #: Сделка, какой она была до отката. ``None`` — откатывать было нечего.
+    record: TradeRecord | None = None
+    #: Вернулась ли вещь тому, кто её отдал.
+    item_returned: bool = False
+    #: Сколько золота вернулось плательщику.
+    gold_returned: int = 0
+    #: Сколько золота вернуть не удалось: у получателя его уже нет.
+    gold_missing: int = 0
+
+    @property
+    def done(self) -> bool:
+        return self.record is not None
+
+    @property
+    def whole(self) -> bool:
+        """Вернулось ли всё, что двигала сделка."""
+        return self.done and self.item_returned and not self.gold_missing
+
+
+async def roll_back(
+    trade_id: int,
+    *,
+    trades: TradeRepository,
+    characters: CharacterRepository,
+    inventory: InventoryRepository,
+) -> Rollback:
+    """Отменить расчёт, который уже прошёл. Работа смотрителя (``docs/keeper.md``).
+
+    Строку журнала переводит в «откачено» само хранилище и только один раз
+    (``TradeRepository.revert``), поэтому два смотрителя, нажавшие вместе,
+    двигают вещи один раз.
+
+    Вещь и золото возвращаются порознь, и это решение, а не недосмотр. Откат
+    нужен там, где сделку признали обманом, а обманувший к этому времени успел и
+    вещь надеть, и золото потратить. Требовать, чтобы вернулось всё или ничего,
+    значило бы, что чаще всего не возвращается ничего. Поэтому возвращается то,
+    что есть, а чего нет — названо числом, и остаток смотритель выдаёт руками.
+
+    Плательщику приходит ровно то, что получил продавец: пошлина ушла из игры в
+    момент расчёта, и вернуть её означало бы её напечатать
+    (``domain/rules/economy.refund``).
+    """
+    record = await trades.revert(trade_id)
+    if record is None:
+        return Rollback()
+
+    offer = record.offer
+    # Вещь у того, кто за неё платил, — в обе стороны: и в продаже, и в скупке.
+    returned = await inventory.remove(offer.payer.character_id, offer.item_id, offer.quantity)
+    if returned:
+        await inventory.add(offer.giver.character_id, offer.item_id, offer.quantity)
+
+    owed = refund(offer.price, record.tax)
+    paid_back = bool(owed) and await characters.spend_gold(offer.giver.character_id, owed)
+    if paid_back:
+        await characters.grant_gold(offer.payer.character_id, owed)
+        economy_log.record(
+            economy_log.TRADE_ROLLBACK,
+            -owed,
+            character_id=offer.giver.character_id,
+            detail=f"trade {trade_id}",
+        )
+        economy_log.record(
+            economy_log.TRADE_ROLLBACK,
+            owed,
+            character_id=offer.payer.character_id,
+            detail=f"trade {trade_id}",
+        )
+    return Rollback(
+        record=record,
+        item_returned=returned,
+        gold_returned=owed if paid_back else 0,
+        gold_missing=0 if paid_back else owed,
+    )
 
 
 class GroupResult(StrEnum):

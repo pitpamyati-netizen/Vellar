@@ -166,11 +166,28 @@ time on average. The settings are sized for the bursts, not the average:
   use is well under those; the gap is burst headroom, and the limit is there so a
   leak takes one container down instead of the host.
 
+### What a hundred players actually cost
+
+Measured rather than assumed, with `scripts/loadtest.py` against the real
+repositories (no Telegram in the path):
+
+| Run | p95 | Slowest |
+| --- | --- | --- |
+| 100 players, a press every ~3 s (`--pause 3`) | 5 ms | 78 ms |
+| 100 players, all pressing in the same instant | 500 ms | 504 ms |
+
+The first line is the game as it will be played and it sits well inside the 100 ms
+budget. The second is the worst case that exists - a hundred simultaneous presses
+against a pool of twenty connections - and it is a queue, not a failure: nothing
+errored, everyone was served. If real traffic ever looks like the second line,
+`POSTGRES_POOL_MAX` is the number to raise, and `UPDATE_CONCURRENCY_LIMIT` with it.
+
 ### Where the ceiling actually is
 
 Telegram rate limits before this stack does: roughly 30 messages a second per bot.
 At a hundred players that is comfortable, at a thousand it is the binding
-constraint, and no amount of local capacity changes it.
+constraint, and no amount of local capacity changes it. The queue that keeps the
+bot inside that count is `middlewares/sending.py`.
 
 The next things to change, in order:
 
@@ -236,6 +253,68 @@ backed up.
 `stop.bat purge` and `docker compose down --volumes` delete every character in the
 world. There is no undo, which is why the batch file asks first.
 
+### Backups on a schedule, and proof that they restore
+
+A world only stopped once a month is a world backed up once a month, so the copy
+is taken on a clock rather than on a stop:
+
+```bash
+pwsh -File scripts/backup.ps1 -Schedule 04:00
+```
+
+That registers a Windows scheduled task ("Vellar backup"); `-Unschedule` removes
+it. Each run dumps, prunes to the newest twenty (`-Keep N`), and then **restores
+the dump into a database of its own**, counts the characters in it, compares that
+with the living database, and drops it again. A file nobody ever unpacked is not
+a backup, and a run that cannot unpack it exits non-zero and says so. The role
+needs `CREATEDB` for that, which `scripts/setup-db.sql` now grants; an older
+installation is one statement behind:
+
+```bash
+psql -U postgres -c "ALTER ROLE vellar CREATEDB;"
+```
+
+### Being told the game stopped
+
+The heartbeat is read by Docker's probe in the stack. Without containers nothing
+reads it: the window is open, the process looks alive, and the players are the
+alarm. `scripts/watchdog.py` is that reader - it lives outside the game on
+purpose, checks the age of the beat, writes to every id in `ADMIN_IDS` when it has
+gone stale, and exits 1 so any scheduler can act on it. Hang it next to the
+backup, every five minutes:
+
+```bash
+pwsh -Command "Register-ScheduledTask -TaskName 'Vellar watchdog' -Action (New-ScheduledTaskAction -Execute 'uv' -Argument 'run python scripts/watchdog.py' -WorkingDirectory (Get-Location)) -Trigger (New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)) -Force"
+```
+
+### What the numbers say while it runs
+
+One line a minute, in the same log as everything else:
+
+```text
+metrics updates=412 failures=0 p50=0.01 p95=0.05 slowest=0.22
+```
+
+`p95` above `SLOW_CALLBACK_SECONDS` is the game missing its promise; `failures`
+above zero is a player who got an apology instead of a screen. `METRICS_SECONDS`
+changes how often it is written. Gold is counted separately and read afterwards:
+
+```bash
+uv run python scripts/economy.py game.log --hours 24
+```
+
+That sums every `gold_flow` line by kind - what the world paid out, what the
+cities took back, what the duty removed - which is the whole reason those lines
+exist (`src/mmorpg/economy_log.py`).
+
+### The rate Telegram counts
+
+Telegram accepts about thirty sends a second from one bot, for the bot as a
+whole. The queue that keeps the game inside that count sits below the retry
+middleware (`middlewares/sending.py`); `telegram_send_queued` in the log means it
+is actually holding messages back, which at a hundred players it should not be.
+`TELEGRAM_SENDS_PER_SECOND` is the knob, and lowering it is safer than raising it.
+
 ## Before exposing this beyond your own machine
 
 - Change `POSTGRES_PASSWORD` in `.env`. The default is `vellar`, which is fine
@@ -244,8 +323,10 @@ world. There is no undo, which is why the batch file asks first.
   reaches a commit or a chat log, revoke it with `@BotFather` and issue a new one.
 - Set `WEBHOOK_SECRET` to a long random string. It is what stops anyone who learns
   your webhook URL from posting updates to it.
-- Leave `SLOW_CALLBACK_DETECTOR=false` in the stack. It needs asyncio debug mode,
-  which timestamps every callback - useful while developing, wasteful under load.
+- Leave `SLOW_CALLBACK_DETECTOR` alone. Unset, it is on for `APP_ENV=local` and
+  off everywhere players are, because that is where it would have been forgotten;
+  it needs asyncio debug mode, which timestamps every callback - useful while
+  developing, wasteful under load.
 - Keep `ADMIN_IDS` short and true. Every id on that list hands itself gold and
   levels from inside the game, and hands the keeper right to anybody else
   (`docs/keeper.md`); an id left there by accident is a keeper nobody remembers

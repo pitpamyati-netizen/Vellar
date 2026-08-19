@@ -12,6 +12,7 @@ from mmorpg.config import Settings
 from mmorpg.domain.entities import Character, GameContent
 from mmorpg.domain.ports import AccessibilitySettings
 from mmorpg.infrastructure.cache import InMemoryIdempotencyStore
+from mmorpg.metrics import Metrics
 from mmorpg.monitoring import install_slow_callback_detector, measure
 from mmorpg.presentation.telegram.flows.play import (
     Clock,
@@ -21,6 +22,7 @@ from mmorpg.presentation.telegram.flows.play import (
     render,
 )
 from mmorpg.presentation.telegram.middlewares.idempotency import IdempotencyMiddleware
+from mmorpg.presentation.telegram.middlewares.metrics import MetricsMiddleware
 from mmorpg.presentation.telegram.screens.base import ScreenId
 from mmorpg.presentation.telegram.screens.settings import settings_screen
 
@@ -230,3 +232,52 @@ def test_toggling_twice_returns_to_the_original(content: GameContent, hero: Char
     assert once.pending.settings is not None
     twice = step(content, hero, once, "Переключить эмодзи", once.pending.settings)
     assert twice.pending.settings == replace(settings, emoji=False)
+
+
+# --- what the operator reads (mmorpg.metrics) --------------------------
+
+
+async def test_every_update_is_counted_and_timed() -> None:
+    metrics = Metrics()
+    middleware = MetricsMiddleware(metrics)
+
+    async def handler(event: Any, data: dict[str, Any]) -> str:
+        return "ok"
+
+    assert await middleware(handler, None, {}) == "ok"  # type: ignore[arg-type]
+    assert metrics.snapshot()["updates"] == 1
+    assert metrics.snapshot()["failures"] == 0
+
+
+async def test_a_crashing_update_is_counted_and_still_crashes() -> None:
+    """Счётчик не глотает исключение: отвечать за него - работа ErrorMiddleware."""
+    metrics = Metrics()
+    middleware = MetricsMiddleware(metrics)
+
+    async def handler(event: Any, data: dict[str, Any]) -> None:
+        raise RuntimeError("сломалось")
+
+    with pytest.raises(RuntimeError):
+        await middleware(handler, None, {})  # type: ignore[arg-type]
+
+    assert metrics.snapshot() == {
+        "updates": 1,
+        "failures": 1,
+        "p50": metrics.quantile(0.5),
+        "p95": metrics.quantile(0.95),
+        "slowest": metrics.snapshot()["slowest"],
+    }
+
+
+def test_the_detector_is_off_by_default_where_players_are() -> None:
+    """Забыть выключить отладку asyncio можно только там, где играют."""
+    for env in ("solo", "dev", "prod"):
+        settings = Settings(_env_file=None, app_env=env, webhook_secret="s")  # type: ignore[call-arg]
+        assert settings.watching_slow_callbacks is False
+    assert Settings(_env_file=None).watching_slow_callbacks is True  # type: ignore[call-arg]
+    assert (
+        Settings(
+            _env_file=None, app_env="prod", webhook_secret="s", slow_callback_detector=True
+        ).watching_slow_callbacks
+        is True
+    )  # type: ignore[call-arg]

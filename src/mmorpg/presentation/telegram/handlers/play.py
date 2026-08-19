@@ -28,7 +28,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from mmorpg import economy_log
-from mmorpg.application.services import keeper_panel, moderation
+from mmorpg.application.services import group_trade, keeper_panel, moderation
 from mmorpg.application.services.content import ContentRegistry
 from mmorpg.application.services.keeper import set_keeper, sync_keeper
 from mmorpg.config import Settings
@@ -38,12 +38,14 @@ from mmorpg.domain.entities.location import NodeKind, Presence
 from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind
 from mmorpg.domain.entities.stats import StatCode
+from mmorpg.domain.entities.trade import TradeRecord
 from mmorpg.domain.ports.repositories import (
     CharacterRepository,
     ContentOverlayRepository,
     InventoryRepository,
     KeeperLogRepository,
     LocationStateCache,
+    TradeRepository,
     User,
     UserRepository,
 )
@@ -115,6 +117,7 @@ async def play(
     locations: LocationStateCache,
     overlays: ContentOverlayRepository,
     registry: ContentRegistry,
+    trades: TradeRepository,
     user: User | None = None,
 ) -> None:
     if message.from_user is None or message.text is None:
@@ -152,7 +155,16 @@ async def play(
     goods = await _goods(content, character, flow, inventory, settings, clock.shop_rotation)
     company = await _company(flow, character, locations, now)
     view = await _keeper_view(
-        flow, character, message.text, characters, users, keeper_log, registry, now, settings
+        flow,
+        character,
+        message.text,
+        characters,
+        users,
+        keeper_log,
+        trades,
+        registry,
+        now,
+        settings,
     )
 
     updated = advance(
@@ -175,6 +187,8 @@ async def play(
         updated.pending,
         characters=characters,
         users=users,
+        inventory=inventory,
+        trades=trades,
         overlays=overlays,
         keeper_log=keeper_log,
         registry=registry,
@@ -209,7 +223,7 @@ async def play(
     company = await _company(updated, character, locations, now)
     counted = await _tally(content, updated, characters)
     shown = await _keeper_view(
-        updated, character, "", characters, users, keeper_log, registry, now, settings
+        updated, character, "", characters, users, keeper_log, trades, registry, now, settings
     )
     await state.set_state(STATE_FOR_SCREEN[updated.screen])
     await state.update_data({STATE_KEY: updated.serialise()})
@@ -335,6 +349,7 @@ async def _keeper_view(
     characters: CharacterRepository,
     users: UserRepository,
     keeper_log: KeeperLogRepository,
+    trades: TradeRepository,
     registry: ContentRegistry,
     now: int,
     settings: Settings,
@@ -363,7 +378,13 @@ async def _keeper_view(
         if flow.keeper_typing == TYPING_NAME and text and not text.startswith("/"):
             target = await characters.find_by_name(text)
     elif (
-        flow.screen in {ScreenId.KEEPER_PLAYER, ScreenId.KEEPER_FIELD, ScreenId.KEEPER_BAN}
+        flow.screen
+        in {
+            ScreenId.KEEPER_PLAYER,
+            ScreenId.KEEPER_FIELD,
+            ScreenId.KEEPER_BAN,
+            ScreenId.KEEPER_TRADES,
+        }
         and flow.keeper_target
     ):
         target = await characters.get(flow.keeper_target)
@@ -395,9 +416,14 @@ async def _keeper_view(
             target_locked = settings.is_admin(target.user_id)
             target_keeper = target_locked or (account is not None and account.keeper)
 
+    journal: tuple[TradeRecord, ...] = ()
+    if flow.screen is ScreenId.KEEPER_TRADES and target is not None:
+        journal = await trades.journal(target.id, limit=keeper_screens.TRADES_SHOWN)
+
     return KeeperView(
         records=registry.records,
         players=players,
+        trades=journal,
         target=target,
         census=census,
         granting=granting,
@@ -414,6 +440,8 @@ async def _serve(
     *,
     characters: CharacterRepository,
     users: UserRepository,
+    inventory: InventoryRepository,
+    trades: TradeRepository,
     overlays: ContentOverlayRepository,
     keeper_log: KeeperLogRepository,
     registry: ContentRegistry,
@@ -452,6 +480,8 @@ async def _serve(
         await set_keeper(users, characters, account, keeper=keeper, settings=settings)
     if write.ban is not None:
         said.append(await _ban(write.ban, users, keeper_log, characters, stamp, now))
+    if write.rollback:
+        said.append(await _roll_back(write.rollback, trades, characters, inventory))
     if write.service:
         swept = await _sweep(write.service, characters, users, bot, now)
         said.append(swept)
@@ -492,6 +522,35 @@ async def _ban(
     if not key:
         return f"{named}: блокировка снята."
     return f"{named}: блокировка наложена."
+
+
+async def _roll_back(
+    trade_id: int,
+    trades: TradeRepository,
+    characters: CharacterRepository,
+    inventory: InventoryRepository,
+) -> str:
+    """Откатить расчёт и сказать числами, что вернулось.
+
+    Числа названы все, включая невернувшееся: сделка, откаченная наполовину, —
+    это работа, которую смотритель должен доделать руками, и узнать об этом он
+    должен здесь, а не от игрока через сутки.
+    """
+    undone = await group_trade.roll_back(
+        trade_id, trades=trades, characters=characters, inventory=inventory
+    )
+    if not undone.done:
+        return "Откатывать нечего: расчёт по этой сделке не проходил или уже откачен."
+    said = [
+        "Вещь вернулась." if undone.item_returned else "Вещи у него уже нет, вернуть нечего.",
+    ]
+    if undone.gold_returned:
+        said.append(f"Возвращено золота: {undone.gold_returned}.")
+    if undone.gold_missing:
+        said.append(f"Не хватило золота: {undone.gold_missing}. Остаток выдайте вручную.")
+    if not undone.gold_returned and not undone.gold_missing:
+        said.append("Золото не двигалось: сделка была без цены.")
+    return " ".join(said)
 
 
 async def _sweep(

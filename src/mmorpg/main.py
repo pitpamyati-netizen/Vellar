@@ -57,6 +57,7 @@ from mmorpg.infrastructure.persistence import (
     InMemoryUserRepository,
 )
 from mmorpg.logging import configure_logging, get_logger
+from mmorpg.metrics import Metrics, reporting
 from mmorpg.monitoring import install_slow_callback_detector
 from mmorpg.presentation.telegram.broadcast import ChannelBroadcaster
 from mmorpg.presentation.telegram.cleanup import MessageReaper
@@ -67,8 +68,10 @@ from mmorpg.presentation.telegram.middlewares.dependencies import (
 )
 from mmorpg.presentation.telegram.middlewares.errors import ErrorMiddleware
 from mmorpg.presentation.telegram.middlewares.idempotency import IdempotencyMiddleware
+from mmorpg.presentation.telegram.middlewares.metrics import MetricsMiddleware
 from mmorpg.presentation.telegram.middlewares.moderation import BanMiddleware
 from mmorpg.presentation.telegram.middlewares.retry import RetryRequestMiddleware
+from mmorpg.presentation.telegram.middlewares.sending import SendRateMiddleware, SendWindow
 from mmorpg.retry import RetryPolicy, keep_trying
 
 logger = get_logger(__name__)
@@ -83,6 +86,8 @@ class Application:
     bot: Bot
     dispatcher: Dispatcher
     stack: AsyncExitStack
+    #: Counters of what has been served since the last report (``mmorpg.metrics``).
+    metrics: Metrics
 
 
 async def build_application(settings: Settings) -> Application:
@@ -128,13 +133,19 @@ async def build_application(settings: Settings) -> Application:
     # A screen that died on a broken socket is sent again rather than becoming
     # silence: the player has no other way to tell the two apart.
     bot.session.middleware(RetryRequestMiddleware(RetryPolicy.from_settings(settings)))
+    # Below it, and therefore closer to the socket: the queue that keeps the bot
+    # inside Telegram's count of sends per second. Waiting a few milliseconds is
+    # cheaper than being told to wait a few seconds.
+    bot.session.middleware(SendRateMiddleware(SendWindow(limit=settings.telegram_sends_per_second)))
     dispatcher = Dispatcher(storage=storage)
 
-    # Order matters: drop duplicates first, then inject, then catch failures
-    # around the handler itself.
+    # Order matters: time everything first, then drop duplicates, then inject,
+    # then catch failures around the handler itself.
+    metrics = Metrics()
+    dispatcher.update.outer_middleware(MetricsMiddleware(metrics))
     dispatcher.update.outer_middleware(IdempotencyMiddleware(idempotency))
     dispatcher.update.outer_middleware(DependencyMiddleware(dependencies))
-    dispatcher.message.middleware(ErrorMiddleware())
+    dispatcher.message.middleware(ErrorMiddleware(metrics))
     # Внешняя, а не внутренняя: заблокированный не должен дойти ни до одного
     # роутера, а внутренние обёртки диспетчера до вложенных роутеров не доходят.
     dispatcher.message.outer_middleware(BanMiddleware())
@@ -160,7 +171,12 @@ async def build_application(settings: Settings) -> Application:
     )
 
     return Application(
-        settings=settings, content=content, bot=bot, dispatcher=dispatcher, stack=stack
+        settings=settings,
+        content=content,
+        bot=bot,
+        dispatcher=dispatcher,
+        stack=stack,
+        metrics=metrics,
     )
 
 
@@ -294,7 +310,7 @@ async def run_polling(app: Application) -> None:
         env=settings.app_env.value,
         concurrency_limit=settings.concurrency_limit,
     )
-    async with app.stack, heartbeat(settings):
+    async with app.stack, heartbeat(settings), reporting(app.metrics, settings.metrics_seconds):
         try:
             await _greet_telegram(app)
             await app.bot.delete_webhook(drop_pending_updates=True)
@@ -379,7 +395,7 @@ async def run_webhook(app: Application) -> None:
     await runner.setup()
     site = web.TCPSite(runner, host=settings.webhook_host, port=settings.webhook_port)
 
-    async with app.stack, heartbeat(settings):
+    async with app.stack, heartbeat(settings), reporting(app.metrics, settings.metrics_seconds):
         stop = _stop_event()
         try:
             await site.start()

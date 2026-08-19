@@ -127,9 +127,21 @@ class Settings(BaseSettings):
     # detector; see docs/architecture.md, "Latency budget".
     slow_callback_seconds: float = Field(default=0.1, gt=0.0)
     # That detector needs asyncio debug mode, which timestamps every callback and
-    # keeps coroutine origins alive. It is a development tool: turn it off
-    # wherever real players are connected.
-    slow_callback_detector: bool = True
+    # keeps coroutine origins alive. It is a development tool, so it is off
+    # wherever real players are connected and the setting is left unset: the
+    # place it was forgotten in is always the place players are, and a guard
+    # rail that costs throughput must be asked for rather than inherited.
+    slow_callback_detector: bool | None = None
+
+    # How often the game writes down what it served (``mmorpg.metrics``). One
+    # line a minute: often enough to see the ten bad minutes, rare enough that
+    # the log stays readable for a day of play.
+    metrics_seconds: float = Field(default=60.0, gt=0.0)
+
+    # Sends per second the bot allows itself. Telegram counts about thirty, for
+    # the bot as a whole; going over is answered with "wait", which for a player
+    # listening to a screen reader is an answer that never came.
+    telegram_sends_per_second: int = Field(default=30, ge=1)
 
     # Ceiling on updates handled at the same time. A burst of players cannot
     # queue more concurrent work than the PostgreSQL pool can serve; 0 lifts the
@@ -162,6 +174,13 @@ class Settings(BaseSettings):
             msg = "webhook_secret is required when app_env is 'prod'"
             raise ValueError(msg)
         return self
+
+    @property
+    def watching_slow_callbacks(self) -> bool:
+        """Whether asyncio debug mode is on. Local by default, elsewhere on request."""
+        if self.slow_callback_detector is None:
+            return self.app_env is AppEnv.LOCAL
+        return self.slow_callback_detector
 
     @property
     def broadcasts_enabled(self) -> bool:

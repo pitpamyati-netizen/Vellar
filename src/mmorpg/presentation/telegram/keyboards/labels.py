@@ -129,6 +129,7 @@ KEEPER_REASON = label("Указать причину", "✍")
 KEEPER_LOG = label("Журнал", "📜")
 KEEPER_PROMOTE = label("Сделать смотрителем", "🗝")
 KEEPER_DEMOTE = label("Убрать из смотрителей", "🚷")
+KEEPER_TRADES = label("Сделки", "🤝")
 
 # Maintenance.
 KEEPER_SWEEP_DRAFTS = label("Убрать брошенных", "🧺")

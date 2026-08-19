@@ -290,6 +290,20 @@ class TradeRepository(Protocol):
     async def journal(self, character_id: int, *, limit: int = 20) -> tuple[TradeRecord, ...]:
         """The latest trades this character was a side of, newest first."""
 
+    async def revert(self, trade_id: int) -> TradeRecord | None:
+        """Mark a settled trade as undone, and return it as it was. ``None`` - it was not.
+
+        The same gate as ``close``, and for the same reason: only a trade that
+        actually settled can be undone, and only once, so two keepers pressing
+        the button together move the goods one time between them. Moving them
+        back is the caller's work
+        (``application/services/group_trade.roll_back``).
+
+        When it settled is not overwritten, and when it was undone is not kept
+        here: that belongs to the keeper's journal, together with who did it
+        (``domain/entities/moderation.KeeperEntry``).
+        """
+
 
 @runtime_checkable
 class ContentOverlayRepository(Protocol):

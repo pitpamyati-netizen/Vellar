@@ -32,6 +32,7 @@ from mmorpg.config import Settings
 from mmorpg.domain.entities import Character, GameContent
 from mmorpg.domain.entities.moderation import KeeperAction
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
+from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeStatus
 from mmorpg.domain.ports.repositories import User as Account
 from mmorpg.domain.rules.keeper import GOLD_STEP
 from mmorpg.infrastructure.cache.memory import InMemoryLocationStateCache
@@ -40,6 +41,7 @@ from mmorpg.infrastructure.persistence.memory import (
     InMemoryContentOverlayRepository,
     InMemoryInventoryRepository,
     InMemoryKeeperLogRepository,
+    InMemoryTradeRepository,
     InMemoryUserRepository,
 )
 from mmorpg.presentation.telegram.handlers import play as play_handler
@@ -125,6 +127,7 @@ class Keeper:
                 self.deps["deltas"],
                 self.deps["overlays"],
                 self.deps["registry"],
+                self.deps["trades"],
             )
         return self.sent.last
 
@@ -170,6 +173,11 @@ def registry(content: GameContent) -> ContentRegistry:
 
 
 @pytest.fixture
+def trades() -> InMemoryTradeRepository:
+    return InMemoryTradeRepository()
+
+
+@pytest.fixture
 def telegram() -> FakeTelegram:
     return FakeTelegram()
 
@@ -183,6 +191,7 @@ async def keeper(
     overlays: InMemoryContentOverlayRepository,
     keeper_log: InMemoryKeeperLogRepository,
     registry: ContentRegistry,
+    trades: InMemoryTradeRepository,
     telegram: FakeTelegram,
 ) -> Keeper:
     await characters.create(
@@ -212,6 +221,7 @@ async def keeper(
         deltas=InMemoryLocationStateCache(),
         overlays=overlays,
         registry=registry,
+        trades=trades,
     )
 
 
@@ -629,6 +639,7 @@ async def test_a_player_who_is_not_a_keeper_gets_nothing_from_the_panel(
         InMemoryLocationStateCache(),
         overlays,
         registry,
+        InMemoryTradeRepository(),
     )
 
     assert sent.last.id is ScreenId.MAIN_MENU
@@ -730,3 +741,99 @@ async def test_the_panel_counts_who_is_banned(
     screen = await keeper.press(labels.MAIN_MENU.text, labels.KEEPER.text, labels.KEEPER_STATS.text)
 
     assert "Заблокировано смотрителем: 1." in screen.text()
+
+
+# --- откат сделки ------------------------------------------------------
+
+
+async def a_settled_sale(
+    trades: InMemoryTradeRepository,
+    inventory: InMemoryInventoryRepository,
+    seller: Character,
+    buyer: Character,
+) -> int:
+    """Расчёт, который уже прошёл: у покупателя вещь, у продавца золото."""
+    record = await trades.open(
+        Offer(
+            number=0,
+            kind=OfferKind.SELL,
+            author=Party(user_id=seller.user_id, character_id=seller.id, name=seller.name),
+            target=Party(user_id=buyer.user_id, character_id=buyer.id, name=buyer.name),
+            item_id="rusty_sword",
+            item_name="Ржавый меч",
+            price=100,
+        ),
+        scope="group",
+    )
+    assert record is not None
+    closed = await trades.close(
+        record.number, scope="group", status=TradeStatus.ACCEPTED, settled_at=1, tax=5
+    )
+    assert closed is not None
+    await inventory.add(buyer.id, "rusty_sword", 1)
+    return record.id
+
+
+async def test_a_keeper_rolls_a_trade_back_and_it_is_written_down(
+    keeper: Keeper,
+    characters: InMemoryCharacterRepository,
+    trades: InMemoryTradeRepository,
+    keeper_log: InMemoryKeeperLogRepository,
+    merla: Character,
+) -> None:
+    """Сквозь всю панель: нажали дважды - вещь и золото вернулись, запись есть."""
+    seller = await characters.create(
+        Character(id=0, user_id=900_002, name="Аргус", race_id="human", class_id="warrior", gold=95)
+    )
+    inventory = keeper.deps["inventory"]
+    await a_settled_sale(trades, inventory, seller, merla)
+
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(keeper.button_with("Мерла"), labels.KEEPER_TRADES.text)
+    row = keeper.button_with("Ржавый меч")
+    armed = await keeper.press(row)
+    assert "ещё раз" in armed.text()
+    # Пока не подтвердили - ничего не двинулось.
+    assert await inventory.count(merla.id, "rusty_sword") == 1
+
+    screen = await keeper.press(row)
+
+    assert "Вещь вернулась" in screen.text()
+    assert await inventory.count(seller.id, "rusty_sword") == 1
+    assert await inventory.count(merla.id, "rusty_sword") == 0
+    paid = await characters.get(merla.id)
+    assert paid is not None and paid.gold == merla.gold + 95
+    written = await keeper_log.latest()
+    assert [entry.action for entry in written] == [KeeperAction.ROLLBACK]
+    assert written[0].target == "Мерла"
+
+
+async def test_a_trade_nobody_settled_is_not_rolled_back(
+    keeper: Keeper,
+    characters: InMemoryCharacterRepository,
+    trades: InMemoryTradeRepository,
+    merla: Character,
+) -> None:
+    """Предложение, по которому расчёта не было, откатывать нечего."""
+    seller = await characters.create(
+        Character(id=0, user_id=900_003, name="Борх", race_id="human", class_id="warrior")
+    )
+    record = await trades.open(
+        Offer(
+            number=0,
+            kind=OfferKind.SELL,
+            author=Party(user_id=seller.user_id, character_id=seller.id, name=seller.name),
+            target=Party(user_id=merla.user_id, character_id=merla.id, name=merla.name),
+            item_id="rusty_sword",
+            item_name="Ржавый меч",
+            price=100,
+        ),
+        scope="group",
+    )
+    assert record is not None
+
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(keeper.button_with("Мерла"), labels.KEEPER_TRADES.text)
+    screen = await keeper.press(keeper.button_with("Ржавый меч"))
+
+    assert "расчёт не проходил" in screen.text()

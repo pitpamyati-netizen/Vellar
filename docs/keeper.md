@@ -66,6 +66,22 @@ ADMIN_IDS=5670700796,431112223
 настройки, там же видно право игрока и кнопка выдать его или снять; у аккаунта
 из `ADMIN_IDS` такой кнопки нет — снять оттуда право нельзя.
 
+## Откат сделки
+
+С карточки игрока — «Сделки»: последние сделки, свежие сначала, с тем, чем каждая
+кончилась. Откатить можно только ту, по которой расчёт прошёл, и только один раз;
+нажатие спрашивает второй раз, как и удаление.
+
+Откат возвращает вещь тому, кто её отдал, а плательщику — ровно то, что получил
+продавец: цену без пошлины. Пошлина не возвращается, потому что её в игре больше
+нет, и напечатать её заново значило бы платить за каждый разобранный обман
+инфляцией (ADR 0012).
+
+Вещь и золото возвращаются порознь. Обманувший обычно успевает и вещь надеть, и
+золото потратить; в таком случае возвращается то, что есть, а недостача названа
+числом — «не хватило золота: 95», — и остаток смотритель выдаёт руками. Всё это
+пишется в `keeper_log` и в денежный журнал (`gold_flow flow=trade_rollback`).
+
 ## Блокировка и журнал
 
 Блокировка — пауза, а не штраф: персонаж, вещи и золото остаются на месте, а бот
@@ -124,9 +140,10 @@ ADMIN_IDS=5670700796,431112223
 | Правки: поля, проверка, применение | `domain/rules/overlay.py` |
 | Запись правки, реестр мира | `application/services/{keeper_panel,content}.py` |
 | Выдачи персонажу | `domain/rules/keeper.py` |
+| Откат сделки | `application/services/group_trade.py` (`roll_back`), `domain/rules/economy.py` (`refund`) |
 | Сроки блокировки, журнал | `domain/rules/moderation.py`, `application/services/moderation.py` |
 | Дверь для заблокированного | `presentation/telegram/middlewares/moderation.py` |
 | Экраны и ветка автомата | `presentation/telegram/{screens,flows}/keeper.py` |
 | Уборка и сбор данных | `presentation/telegram/handlers/play.py` |
-| Таблицы | `migrations/versions/{0009_keeper_panel,0011_keeper_grants,0013_moderation}.py` |
+| Таблицы | `migrations/versions/{0009_keeper_panel,0011_keeper_grants,0013_moderation,0014_trade_rollback}.py` |
 | Тесты | `tests/presentation/test_keeper_{panel,handler,flow}.py`, `test_ban_gate.py`, `tests/domain/test_moderation.py` |

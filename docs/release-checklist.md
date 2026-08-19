@@ -62,6 +62,9 @@ Only when the panel or what it edits changed. The rules are in
       the group
 - [ ] Everything done to somebody else's character reaches `keeper_log`: a keeper
       action nobody can look up is one nobody answers for
+- [ ] A rolled-back trade returns the item to whoever gave it and the *payout* -
+      not the price - to whoever paid, and says what it could not return
+      (`docs/adr/0012-a-rolled-back-trade-returns-what-is-there.md`)
 
 ## 4. Determinism
 
@@ -108,7 +111,16 @@ Only when something that pays or charges changed.
 - [ ] `docker compose stop bot` logs `Polling stopped` and exits 0 - a shutdown
       that has to be killed is dropping players' updates
 - [ ] No `slow_operation` or asyncio slow-callback warnings under normal play
-- [ ] `SLOW_CALLBACK_DETECTOR` is off wherever players are connected
+- [ ] `SLOW_CALLBACK_DETECTOR` is off wherever players are connected - unset is
+      off everywhere except `APP_ENV=local`
+- [ ] A `metrics` line appears every minute, `failures=0`, and `p95` inside
+      `SLOW_CALLBACK_SECONDS`
+- [ ] `uv run python scripts/loadtest.py --pause 3` stays inside the budget, and
+      `--players 100` with no pause is a queue rather than an error
+- [ ] `pwsh -File scripts/backup.ps1` ends with "копия разворачивается", and the
+      scheduled task is registered (`-Schedule 04:00`)
+- [ ] `uv run python scripts/watchdog.py --quiet` exits 0 while the game runs,
+      and the keepers get a message when it is stopped
 
 ## 7. Channel and group
 

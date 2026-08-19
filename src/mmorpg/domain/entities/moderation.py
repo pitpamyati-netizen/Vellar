@@ -35,6 +35,7 @@ class KeeperAction(StrEnum):
     EDIT = "edit"
     FORGET = "forget"
     SWEEP = "sweep"
+    ROLLBACK = "rollback"
 
 
 @dataclass(frozen=True, slots=True)
