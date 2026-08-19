@@ -41,9 +41,12 @@ from mmorpg.presentation.telegram.screens.paginated import (
     paginated_screen,
 )
 
-#: Сколько знаков значения помещается в строку списка. Длинное значение целиком
-#: читается на экране самого поля: там оно одно и помещается заведомо.
-BUTTON_VALUE = 34
+#: Сколько полей карточки на одной странице и сколько знаков значения видно в
+#: строке. Пять и восемьдесят вместо восьми и тридцати четырёх: строку карточки
+#: слушают, и лучше услышать пять полных строк, чем восемь оборванных. Полное
+#: значение всегда есть на экране поля (``field_screen``).
+CARD_FIELDS = 5
+CARD_VALUE = 80
 
 #: Сколько причин отказа показывать на карточке. Три - это уже понятно, что
 #: запись недописана; остальные считаются числом.
@@ -225,7 +228,7 @@ def field_button(spec: FieldSpec) -> Label:
 
 
 def field_from_button(record: OverlayRecord, pressed: str) -> FieldSpec | None:
-    for spec in overlay_rules.FIELDS[record.kind]:
+    for spec in overlay_rules.fields_for(record):
         if field_button(spec).matches(pressed):
             return spec
     return None
@@ -248,7 +251,7 @@ def entity_screen(
     stored = overlay_rules.held(view.records, record.kind, record.entity_id)
     entries = [
         ListEntry(key=spec.key, text=spec.name, detail=_short(content, spec, record))
-        for spec in overlay_rules.FIELDS[record.kind]
+        for spec in overlay_rules.fields_for(record)
     ]
 
     named = overlay_rules.clipped(record.value("name")) or record.entity_id
@@ -273,6 +276,7 @@ def entity_screen(
         title=single,
         entries=entries,
         state=state,
+        page_size=CARD_FIELDS,
         lead_lines=tuple(lead),
         extra_rows=tuple(rows),
         show_filters=False,
@@ -280,10 +284,18 @@ def entity_screen(
 
 
 def _short(content: GameContent, spec: FieldSpec, record: OverlayRecord) -> str:
-    """Значение поля так, как оно помещается в строку списка."""
+    """Значение поля так, как оно помещается в строку карточки.
+
+    Обрезка тут есть и останется: карточка читается вслух целиком, и четырнадцать
+    полей по шестьсот знаков — это не карточка. Но 34 знака, оставшиеся от времён,
+    когда значение попадало на кнопку, обрывали условие подряда на третьем слове,
+    и смотритель считал, что панель съела набранное. Поля на странице теперь
+    вдвое меньше, а видно каждого вдвое больше, и полное значение всегда на один
+    шаг ниже — на экране самого поля.
+    """
     value = overlay_rules.shown(content, spec, record)
-    if len(value) > BUTTON_VALUE:
-        value = f"{value[:BUTTON_VALUE].rstrip()}…"
+    if len(value) > CARD_VALUE:
+        value = f"{value[:CARD_VALUE].rstrip()}…"
     return value
 
 
@@ -361,7 +373,9 @@ def _choice_screen(
         ListEntry(
             key=value,
             text=option_button(
-                index, overlay_rules.option_name(content, spec, value), chosen=value in picked
+                index,
+                overlay_rules.option_name(content, spec, value, record),
+                chosen=value in picked,
             ).text,
         )
         for index, value in enumerate(overlay_rules.options(content, spec, record), start=1)
@@ -386,7 +400,7 @@ def option_from_button(
         set(record.listed(spec.key)) if spec.kind is FieldKind.LIST else {record.value(spec.key)}
     )
     for index, value in enumerate(overlay_rules.options(content, spec, record), start=1):
-        name = overlay_rules.option_name(content, spec, value)
+        name = overlay_rules.option_name(content, spec, value, record)
         if option_button(index, name, chosen=value in picked).matches(pressed):
             return value
     return None

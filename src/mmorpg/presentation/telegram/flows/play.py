@@ -1335,11 +1335,12 @@ def _handle_edge(
         chosen = skill_rules.choose_edge(character, skill, edge.code)
         if chosen is None:
             return state.with_notice("Грань этого умения уже выбрана.")
-        return (
-            state.storing(PendingWrite(character=chosen))
-            .at(ScreenId.SKILLS)
-            .with_notice(f"{skill.name}: грань «{edge.name}» выбрана.")
-        )
+        # Говорится прямо, что press на умение снова покупает ранг: выбор грани
+        # ранга не поднимает, и без этой фразы экран читается как заевший.
+        said = f"{skill.name}: грань «{edge.name}» выбрана."
+        if character.loadout.rank_of(skill.code) < content.rules.max_rank:
+            said += " Ранг снова растёт за очко умений."
+        return state.storing(PendingWrite(character=chosen)).at(ScreenId.SKILLS).with_notice(said)
     return state.with_notice("Выберите одну из двух граней.")
 
 

@@ -27,7 +27,9 @@ import logging
 import logging.handlers
 import sys
 import time
+from collections.abc import Mapping
 from pathlib import Path
+from types import MappingProxyType
 
 import structlog
 
@@ -61,6 +63,13 @@ KEPT_RESULTS = frozenset({"failed", "banned"})
 
 SECONDS_IN_DAY = 86_400
 
+#: Библиотечные журналы, которые говорят то же самое, что уже сказано своими
+#: словами. ``aiogram.event`` пишет строку на каждое обновление ("Update id=...
+#: is handled. Duration 163 ms"), а рядом с ней стоит наша же строка ``action``
+#: с тем же временем, но ещё и с тем, кто и что нажал (``middlewares.audit``).
+#: Две строки на нажатие - это журнал, в котором не видно игры.
+QUIET_LOGGERS: Mapping[str, int] = MappingProxyType({"aiogram.event": logging.WARNING})
+
 
 def configure_logging(settings: Settings) -> None:
     """Configure structlog, the stdlib bridge, and the log files."""
@@ -87,6 +96,9 @@ def configure_logging(settings: Settings) -> None:
     # important file empty on exactly the run somebody turned the noise down.
     # What the level does is decide what the console and the everyday file show.
     root.setLevel(min(level, logging.INFO))
+
+    for name, quiet_at in QUIET_LOGGERS.items():
+        logging.getLogger(name).setLevel(quiet_at)
 
     console = logging.StreamHandler(sys.stdout)
     console.setLevel(level)

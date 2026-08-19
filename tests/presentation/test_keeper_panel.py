@@ -25,6 +25,10 @@ from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.keeper import KeeperView
 
 WORLD_SEED = "vellar-test"
+#: Сколько страниц списка пролистывает поиск кнопки. Больше ни у одного экрана
+#: панели нет.
+_PAGES_SEARCHED = 8
+
 CLOCK = Clock(now=1_700_000_000, shop_rotation=100, gather_cooldown=900)
 KEEPER_ACCOUNT = 500_100
 
@@ -99,9 +103,27 @@ class Panel:
         return [text for row in self.screen().button_texts() for text in row]
 
     def button_with(self, needle: str) -> str:
-        found = [text for text in self.buttons() if needle in text]
-        assert found, f"кнопки со словом {needle!r} нет: {self.buttons()}"
-        return found[0]
+        """Кнопка с этим словом, хоть бы и на следующей странице.
+
+        Смотритель ищет поле листая, а не считая: карточка подряда занимает две
+        страницы, и какое поле на какой - это верстка, а не поведение.
+        """
+        seen: list[str] = []
+        # С начала списка: прошлый поиск мог оставить карточку на другой странице.
+        for _ in range(_PAGES_SEARCHED):
+            if labels.PREVIOUS_PAGE.text not in self.buttons():
+                break
+            self.press(labels.PREVIOUS_PAGE.text)
+        for _ in range(_PAGES_SEARCHED):
+            buttons = self.buttons()
+            seen = buttons
+            found = [text for text in buttons if needle in text]
+            if found:
+                return found[0]
+            if labels.NEXT_PAGE.text not in buttons:
+                break
+            self.press(labels.NEXT_PAGE.text)
+        raise AssertionError(f"кнопки со словом {needle!r} нет: {seen}")
 
     def _store(self, write: object) -> None:
         """То же, что делает хендлер, и в том же порядке."""

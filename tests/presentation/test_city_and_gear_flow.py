@@ -284,6 +284,39 @@ def test_the_third_rank_asks_for_an_edge_before_anything_else(
     assert chosen.screen is ScreenId.SKILLS
 
 
+def test_a_skill_waiting_for_its_edge_says_so_on_its_own_button(
+    content: GameContent, hero: Character
+) -> None:
+    """Кнопка обязана обещать то, что нажатие сделает.
+
+    На ранге грани нажатие уходит на выбор грани, а не на ранг. Пока кнопка
+    говорила «повысить за одно очко», игрок нажимал, выбирал грань, возвращался и
+    видел тот же ранг и ту же надпись - то есть заевший экран.
+    """
+    skill = content.skill("warrior_cleave")
+    ready = replace(
+        hero, loadout=replace(hero.loadout, ranks={skill.code: content.rules.edge_rank})
+    )
+
+    assert "сначала выберите грань" in skill_screens.skill_entry_text(content, ready, skill)
+
+    chosen = replace(ready, loadout=replace(ready.loadout, edges={skill.code: skill.edges[0].code}))
+    assert "повысить за одно очко" in skill_screens.skill_entry_text(content, chosen, skill)
+
+
+def test_choosing_an_edge_says_the_rank_grows_again(content: GameContent, hero: Character) -> None:
+    skill = content.skill("warrior_cleave")
+    ready = replace(
+        hero, loadout=replace(hero.loadout, ranks={skill.code: content.rules.edge_rank})
+    )
+    skills = step(content, ready, begin(ready), "Умения")
+    asked = step(content, ready, skills, skill_screens.skill_entry_text(content, ready, skill))
+
+    chosen = step(content, ready, asked, skill_screens.edge_label(skill.edges[0].name).text)
+
+    assert "Ранг снова растёт" in chosen.notice
+
+
 def test_a_slot_is_filled_and_emptied_from_the_panel(content: GameContent, hero: Character) -> None:
     known = replace(
         hero,

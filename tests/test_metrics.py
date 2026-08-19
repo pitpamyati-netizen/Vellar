@@ -42,6 +42,21 @@ def test_the_slowest_update_survives_the_averages() -> None:
     assert metrics.quantile(0.95) >= 1.0
 
 
+def test_a_percentile_never_claims_a_wait_that_never_happened() -> None:
+    """Потолок корзины - верхняя граница, а не измерение.
+
+    Окно, где самое долгое обновление заняло 266 мс, писало ``p95=0.5``: полсекунды
+    ожидания, которого не было. Читающий журнал видит в этом беду там, где её нет.
+    """
+    metrics = Metrics()
+    for _ in range(11):
+        metrics.observe(0.2)
+    metrics.observe(0.266)
+
+    assert metrics.quantile(0.95) == pytest.approx(0.266)
+    assert metrics.quantile(0.95) <= metrics.slowest
+
+
 def test_anything_slower_than_every_bucket_still_lands_somewhere() -> None:
     metrics = Metrics()
     metrics.observe(30.0)

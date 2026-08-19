@@ -126,7 +126,9 @@ def load_content(content_dir: Path) -> GameContent:
     item_ids = {item.id for item in items}
     enemies, elite_titles = _parse_enemies(raw["enemies.toml"], item_ids, problems)
     _validate_enemies(enemies, cities, problems)
-    quests = _parse_quests(raw["quests.toml"], item_ids, cities, problems)
+    quests = _parse_quests(
+        raw["quests.toml"], item_ids, cities, {enemy.id for enemy in enemies}, problems
+    )
     craft_rules = _build_craft_rules(raw["crafts.toml"], problems)
     crafts, recipes = _parse_crafts(raw["crafts.toml"], item_ids, craft_rules, problems)
     turnings, open_turning_id = _parse_turnings(raw["turnings.toml"], problems)
@@ -678,6 +680,7 @@ def _parse_quests(
     raw: Mapping[str, Any],
     item_ids: set[str],
     cities: Sequence[City],
+    enemy_ids: set[str],
     problems: list[str],
 ) -> tuple[Quest, ...]:
     """Contracts. A broken contract is a dead end for a player, so it is refused.
@@ -714,7 +717,10 @@ def _parse_quests(
                     # that is what the person asking for it would name.
                     allowed = frozenset(item_ids)
                 case _:
-                    allowed = frozenset(enemy_kinds)
+                    # Порода целиком - или один названный противник: «пятеро
+                    # кабанов» это не «пятеро зверей», и оба условия законны
+                    # (``domain/rules/quests._named``).
+                    allowed = frozenset(enemy_kinds | enemy_ids)
             if target_kind not in allowed:
                 problems.append(
                     f"quests.toml: {quest_id} narrows to unknown target {target_kind!r}"

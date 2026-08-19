@@ -151,3 +151,14 @@ def test_a_run_after_a_week_away_sweeps_before_it_writes(tmp_path: Path) -> None
 
     assert not stale.exists()
     assert "log_files" in _written(tmp_path, ACTIVITY_FILE)
+
+
+def test_the_library_line_that_repeats_our_own_is_quieted(tmp_path: Path) -> None:
+    """Одно нажатие - одна строка.
+
+    ``aiogram.event`` пишет «Update id=... is handled» рядом с нашей же строкой
+    ``action``, где сказано то же самое и вдобавок кто и что нажал.
+    """
+    configure_logging(_settings(log_dir=str(tmp_path)))
+
+    assert logging.getLogger("aiogram.event").level == logging.WARNING

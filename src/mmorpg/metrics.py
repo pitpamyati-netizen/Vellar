@@ -67,6 +67,11 @@ class Metrics:
         Zero when nothing has been observed yet, and the ceiling of the last
         bucket for anything slower than every bucket - said plainly rather than
         as an invented number.
+
+        Never above the slowest update actually served. A bucket ceiling is an
+        upper bound, and the slowest observation is a tighter one: without this
+        a window whose worst update took 266 ms reported ``p95=0.5``, which reads
+        as half a second of waiting that never happened.
         """
         if not self.updates:
             return 0.0
@@ -75,7 +80,8 @@ class Metrics:
         for index, count in enumerate(self.counts):
             seen += count
             if seen >= wanted:
-                return BUCKETS[index] if index < len(BUCKETS) else BUCKETS[-1]
+                ceiling = BUCKETS[index] if index < len(BUCKETS) else BUCKETS[-1]
+                return round(min(ceiling, self.slowest), 4)
         return BUCKETS[-1]  # pragma: no cover - the loop always reaches the share
 
     def snapshot(self) -> Mapping[str, float | int]:

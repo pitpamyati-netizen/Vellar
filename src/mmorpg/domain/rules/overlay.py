@@ -31,9 +31,10 @@ from mmorpg.domain.entities.quest import ObjectiveKind, Quest
 #: смотрителя: город, в котором некуда добавить, — город, который нельзя править.
 MAX_LOCATION_SLOT = 12
 
-#: Потолок длины набранного значения. Экран читают вслух, и абзац в кнопке — это
-#: абзац, который слушают целиком (``docs/accessibility.md``).
-MAX_TEXT = 240
+#: Потолок длины набранного значения. Экран читают вслух, поэтому потолок есть;
+#: но условие подряда — это несколько фраз, а не подпись, и на 240 знаках
+#: смотритель упирался в отказ посреди обычного текста (``docs/accessibility.md``).
+MAX_TEXT = 600
 
 #: Потолок для того, что попадёт на кнопку: имя жителя, название подряда,
 #: локации, противника. Кнопка — это одна строка, и она должна оставаться одной.
@@ -67,6 +68,7 @@ class Source(StrEnum):
     BIOME = "biome"
     ITEM = "item"
     QUEST = "quest"
+    LOCATION = "location"
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,7 +115,11 @@ FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
         FieldSpec("name", "Название", required=True, limit=NAME_LIMIT),
         FieldSpec("city", "Город", FieldKind.CHOICE, source=Source.CITY, required=True),
         FieldSpec("npc", "Кто даёт", FieldKind.CHOICE, source=Source.NPC),
-        FieldSpec("giver", "Имя нанимателя", hint="если подряд не от жителя"),
+        # Спрашивается, только пока житель не выбран (``fields_for``). Раньше поле
+        # стояло на карточке всегда, сразу под «Кто даёт», и панель выглядела так,
+        # будто спрашивает нанимателя дважды; имя всё равно берётся у жителя, если
+        # он назван (``_quest_from``).
+        FieldSpec("giver", "Имя нанимателя", hint="когда подряд не от жителя"),
         FieldSpec("intro", "Как встречает"),
         FieldSpec("terms", "Условие словами", required=True),
         FieldSpec(
@@ -125,6 +131,13 @@ FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
         ),
         FieldSpec("target_kind", "Кого именно", FieldKind.CHOICE, choices=()),
         FieldSpec("target_count", "Сколько по счёту", FieldKind.NUMBER, required=True),
+        FieldSpec(
+            "location_slot",
+            "Где делают",
+            FieldKind.CHOICE,
+            source=Source.LOCATION,
+            hint="локация того же города; без неё подряд не говорит, куда идти",
+        ),
         FieldSpec("level", "С какого уровня", FieldKind.NUMBER),
         FieldSpec("reward_gold", "Плата золотом", FieldKind.NUMBER),
         FieldSpec("reward_experience", "Плата опытом", FieldKind.NUMBER),
@@ -164,6 +177,12 @@ FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
 
 #: Порода противника и узлы поиска — разные списки, и какой из них нужен, зависит
 #: от того, что подряд считает. Единственное поле, чьи варианты зависят от соседа.
+#:
+#: Для боевых подрядов список не кончается породами. «Убей пятерых кабанов» — это
+#: не «убей пятерых зверей», и пока в выборе стояли одни породы, смотритель писал
+#: кабанов в условие словами, а счёт шёл по любому зверью. Поэтому следом за
+#: породами идут поимённо все противники мира, включая заведённых этой же панелью
+#: (``options``), а счёт умеет и то и другое (``domain/rules/quests``).
 _TARGETS: Mapping[ObjectiveKind, tuple[str, ...]] = {
     ObjectiveKind.KILL: tuple(kind.value for kind in EnemyKind),
     ObjectiveKind.ELITE: tuple(kind.value for kind in EnemyKind),
@@ -173,6 +192,29 @@ _TARGETS: Mapping[ObjectiveKind, tuple[str, ...]] = {
 
 def spec_of(kind: OverlayKind, key: str) -> FieldSpec | None:
     return next((spec for spec in FIELDS[kind] if spec.key == key), None)
+
+
+def fields_for(record: OverlayRecord) -> tuple[FieldSpec, ...]:
+    """Поля этой карточки — без тех, которые сейчас ничего не значат.
+
+    Список полей у разновидности один, но вопрос, у которого уже есть ответ,
+    задавать не надо: у подряда, выданного жителю, имя нанимателя берётся у
+    жителя, и отдельная строка «Имя нанимателя» под строкой «Кто даёт» читается
+    как второй такой же вопрос.
+    """
+    fields = FIELDS[record.kind]
+    if record.kind is not OverlayKind.QUEST:
+        return fields
+    hidden: set[str] = set()
+    if record.value("npc"):
+        hidden.add("giver")
+    # Сравнивается строка, а не разобранное значение: в поле лежит то, что набрал
+    # смотритель, и оно вполне может не быть ни одним из известных слов
+    # (``Claude.md``, правило 8 - сохранённому не верят).
+    if record.value("objective") == ObjectiveKind.CRAFT:
+        # Изготовление делают руками, где угодно; локация тут ничего не назначает.
+        hidden.add("location_slot")
+    return tuple(spec for spec in fields if spec.key not in hidden)
 
 
 def biomes(content: GameContent) -> tuple[str, ...]:
@@ -188,8 +230,7 @@ def options(content: GameContent, spec: FieldSpec, record: OverlayRecord) -> tup
     экране поля, а не вариант в списке.
     """
     if spec.key == "target_kind":
-        objective = record.value("objective")
-        return _TARGETS.get(ObjectiveKind(objective), ()) if objective in _TARGETS else ()
+        return _target_options(content, record)
     match spec.source:
         case Source.CITY:
             return tuple(city.id for city in content.cities)
@@ -204,14 +245,46 @@ def options(content: GameContent, spec: FieldSpec, record: OverlayRecord) -> tup
         case Source.QUEST:
             city = record.value("city")
             return tuple(quest.id for quest in content.quests if not city or quest.city_id == city)
+        case Source.LOCATION:
+            city = record.value("city")
+            if not content.has_city(city):
+                return ()
+            return tuple(str(location.slot) for location in content.city(city).locations)
         case _:
             return spec.choices
 
 
-def option_name(content: GameContent, spec: FieldSpec, value: str) -> str:
-    """Как вариант зовут по-русски. Идентификатор без имени никому ничего не говорит."""
+def _target_options(content: GameContent, record: OverlayRecord) -> tuple[str, ...]:
+    """Что подряд может считать поимённо: породы, потом сами противники.
+
+    Породы идут первыми, потому что «любое зверьё» — это по-прежнему нормальное
+    условие; за ними именами идут все противники, чтобы можно было заказать
+    именно кабанов, в том числе тех, которых смотритель завёл сам.
+    """
+    objective = record.value("objective")
+    if objective not in _TARGETS:
+        # Изготовление считает вещи, а не противников; всё прочее - ничего.
+        if objective == ObjectiveKind.CRAFT:
+            return tuple(item.id for item in content.items)
+        return ()
+    kinds = _TARGETS[ObjectiveKind(objective)]
+    if objective == ObjectiveKind.SEARCH:
+        return kinds
+    return (*kinds, *(enemy.id for enemy in content.enemy_archetypes))
+
+
+def option_name(
+    content: GameContent, spec: FieldSpec, value: str, record: OverlayRecord | None = None
+) -> str:
+    """Как вариант зовут по-русски. Идентификатор без имени никому ничего не говорит.
+
+    Запись нужна там, где одно и то же значение в разных карточках значит разное:
+    место 3 — это разная локация в разных городах.
+    """
     if not value:
         return "не выбрано"
+    if spec.key == "target_kind":
+        return _target_name(content, value)
     match spec.source:
         case Source.CITY:
             return content.city(value).name if content.has_city(value) else value
@@ -221,8 +294,31 @@ def option_name(content: GameContent, spec: FieldSpec, value: str) -> str:
             return content.item(value).name if content.has_item(value) else value
         case Source.QUEST:
             return content.quest(value).name if content.has_quest(value) else value
+        case Source.LOCATION:
+            return _location_name(content, value, record)
         case _:
             return _WORDS.get(value, value)
+
+
+def _target_name(content: GameContent, value: str) -> str:
+    """Порода, названный противник или вещь — одним словом, каким его слышат."""
+    if value in _WORDS:
+        return _WORDS[value]
+    named = next((enemy for enemy in content.enemy_archetypes if enemy.id == value), None)
+    if named is not None:
+        return named.name
+    return content.item(value).name if content.has_item(value) else value
+
+
+def _location_name(content: GameContent, value: str, record: OverlayRecord | None) -> str:
+    """Номер места плюс название: в списке города локация стоит под этим номером."""
+    city_id = record.value("city") if record is not None else ""
+    if not content.has_city(city_id):
+        return value
+    for location in content.city(city_id).locations:
+        if str(location.slot) == value:
+            return f"{location.slot}. {location.name}"
+    return value
 
 
 #: Служебные слова содержимого по-русски. Смотритель читает экран, а не схему.
@@ -249,9 +345,9 @@ def shown(content: GameContent, spec: FieldSpec, record: OverlayRecord) -> str:
         case FieldKind.FLAG:
             return "да" if record.flag(spec.key) else "нет"
         case FieldKind.CHOICE:
-            return option_name(content, spec, value)
+            return option_name(content, spec, value, record)
         case FieldKind.LIST:
-            named = [option_name(content, spec, part) for part in record.listed(spec.key)]
+            named = [option_name(content, spec, part, record) for part in record.listed(spec.key)]
             return ", ".join(named) if named else "не выбрано"
         case _:
             return value or "не заполнено"
@@ -489,11 +585,26 @@ def _shape_problems(content: GameContent, record: OverlayRecord) -> list[str]:
                 return ["Подряд не может идти после себя самого."]
             if not record.value("npc") and not record.value("giver"):
                 return ["Некому платить: выберите жителя или впишите имя нанимателя."]
+            return _quest_place_problems(content, record)
         case OverlayKind.LOCATION:
             return _location_problems(content, record)
         case OverlayKind.ENEMY:
             if not record.listed("biomes"):
                 return ["Противнику негде водиться: выберите хотя бы одну местность."]
+    return []
+
+
+def _quest_place_problems(content: GameContent, record: OverlayRecord) -> list[str]:
+    """Место, куда подряд посылает, должно быть в том же городе."""
+    slot = record.number("location_slot")
+    if not slot:
+        return []
+    city_id = record.value("city")
+    if not content.has_city(city_id):
+        return []
+    city = content.city(city_id)
+    if not any(location.slot == slot for location in city.locations):
+        return [f"Где делают: в городе {city.name} нет места {slot}."]
     return []
 
 
@@ -563,6 +674,10 @@ def apply(content: GameContent, records: Sequence[OverlayRecord]) -> GameContent
     staged = _rebuilt(content, cities=cities, npcs=npcs)
 
     enemies = _apply_enemies(content, _good(staged, records, OverlayKind.ENEMY))
+    # Противники встают до подрядов, а не рядом с ними: подряд может заказывать
+    # именно того противника, которого смотритель завёл этой же панелью, и
+    # проверять такой подряд надо против мира, в котором тот уже есть.
+    staged = _rebuilt(content, cities=cities, npcs=npcs, enemies=enemies)
     quests = _apply_quests(staged, npcs, _good(staged, records, OverlayKind.QUEST))
     return _rebuilt(content, cities=cities, npcs=npcs, quests=quests, enemies=enemies)
 
@@ -721,6 +836,8 @@ def _quest_from(record: OverlayRecord, npcs: Mapping[str, Npc]) -> Quest:
         reward_item=record.value("reward_item"),
         follows=record.value("follows"),
         giver_id=giver_id,
+        # Изготовление делают руками где угодно, так же как в ``quests.toml``.
+        location_slot=0 if objective == ObjectiveKind.CRAFT else record.number("location_slot"),
     )
 
 

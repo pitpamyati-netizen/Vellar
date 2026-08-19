@@ -52,10 +52,18 @@ def matching_skills(
 
 
 def skill_state(content: GameContent, character: Character, skill: Skill) -> str:
-    """One phrase that says everything a player needs about a skill's standing."""
+    """One phrase that says everything a player needs about a skill's standing.
+
+    Including what the press will actually do. A skill waiting for its edge used
+    to read "повысить за одно очко" and then spend the press on the edge question
+    instead: the player chose an edge, came back, saw the same rank and the same
+    button, and had every reason to think the screen was going in circles.
+    """
     if not skill_rules.is_known(character, skill.code):
         return "не изучено, одно очко умений"
     rank = character.loadout.rank_of(skill.code)
+    if skill_rules.needs_edge(content, character, skill):
+        return f"ранг {rank} из {content.rules.max_rank}, сначала выберите грань"
     if rank >= content.rules.max_rank:
         return f"ранг {rank} из {content.rules.max_rank}, выше некуда"
     return f"ранг {rank} из {content.rules.max_rank}, повысить за одно очко"
@@ -78,7 +86,7 @@ def skills_screen(
         ListEntry(
             key=skill.code,
             text=skill_entry_text(content, character, skill),
-            detail=skill.text[:60],
+            detail=skill.text,
         )
         for skill in pool
     ]
@@ -153,7 +161,7 @@ def pick_screen(
         ListEntry(
             key=skill.code,
             text=f"{skill.name} — ранг {character.loadout.rank_of(skill.code)}",
-            detail=skill.text[:60],
+            detail=skill.text,
         )
         for skill in available
     ]

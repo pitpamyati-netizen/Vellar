@@ -486,7 +486,7 @@ def _step_entity(
     record = _record(content, state, view)
     # Поля карточки листаются своей страницей: у подряда их четырнадцать, и в
     # одно сообщение они не помещаются.
-    fields = total_pages(len(overlay_rules.FIELDS[record.kind]))
+    fields = total_pages(len(overlay_rules.fields_for(record)), keeper_screens.CARD_FIELDS)
     moved = page_move(command, state.list_page, fields)
     if moved is not None:
         return replace(state, list_page=moved, notice="")
@@ -557,7 +557,7 @@ def _step_field(
         return state.with_notice("Не узнал вариант. Нажмите строку из списка.")
     if spec.kind is FieldKind.LIST:
         return _toggled(content, state, record, spec, chosen)
-    name = overlay_rules.option_name(content, spec, chosen)
+    name = overlay_rules.option_name(content, spec, chosen, record)
     return _stored(state, record.with_field(spec.key, chosen), f"{spec.name}: {name}.")
 
 
@@ -572,10 +572,10 @@ def _toggled(
     picked = list(record.listed(spec.key))
     if chosen in picked:
         picked.remove(chosen)
-        said = f"{overlay_rules.option_name(content, spec, chosen)}: убрано."
+        said = f"{overlay_rules.option_name(content, spec, chosen, record)}: убрано."
     else:
         picked.append(chosen)
-        said = f"{overlay_rules.option_name(content, spec, chosen)}: добавлено."
+        said = f"{overlay_rules.option_name(content, spec, chosen, record)}: добавлено."
     edited = record.with_field(spec.key, ", ".join(picked))
     note = _note(KeeperAction.EDIT, edited.entity_id, said)
     return state.storing(PendingWrite(edit=edited, note=note)).with_notice(said)

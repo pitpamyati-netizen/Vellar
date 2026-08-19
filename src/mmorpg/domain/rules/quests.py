@@ -71,11 +71,23 @@ def ready_to_hand_in(
 
 
 def _counts_kill(quest: Quest, enemy: Enemy) -> bool:
+    """Засчитан ли этот побеждённый в этот подряд.
+
+    ``target_kind`` называет либо породу («зверьё»), либо конкретного противника
+    («кабан»). Пустое поле считает любого: подряд на «пятерых кого угодно» — это
+    нормальный подряд, а не недописанный.
+    """
     if quest.objective is ObjectiveKind.ELITE:
-        return enemy.is_elite
+        return enemy.is_elite and _named(quest, enemy)
     if quest.objective is not ObjectiveKind.KILL:
         return False
-    return not quest.target_kind or enemy.kind.value == quest.target_kind
+    return _named(quest, enemy)
+
+
+def _named(quest: Quest, enemy: Enemy) -> bool:
+    """Тот ли это, кого заказывали: по породе или поимённо."""
+    wanted = quest.target_kind
+    return not wanted or enemy.kind.value == wanted or enemy.archetype_id == wanted
 
 
 def _counts_search(quest: Quest, node: NodeKind) -> bool:

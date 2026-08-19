@@ -21,6 +21,7 @@ The event loop is the stdlib ``asyncio.Runner``; uvloop is deliberately absent
 from __future__ import annotations
 
 import asyncio
+import math
 import signal
 import time
 from contextlib import AsyncExitStack, suppress
@@ -40,7 +41,7 @@ from mmorpg.domain.ports.repositories import (
     LocationStateCache,
     StateCache,
 )
-from mmorpg.health import heartbeat
+from mmorpg.health import age_seconds, heartbeat, is_alive
 from mmorpg.infrastructure.cache import (
     InMemoryIdempotencyStore,
     InMemoryLocationStateCache,
@@ -313,6 +314,7 @@ async def run_polling(app: Application) -> None:
         env=settings.app_env.value,
         concurrency_limit=settings.concurrency_limit,
     )
+    await _wait_for_the_previous_copy(settings)
     async with app.stack, heartbeat(settings), reporting(app.metrics, settings.metrics_seconds):
         try:
             await _greet_telegram(app)
@@ -325,6 +327,48 @@ async def run_polling(app: Application) -> None:
             )
         finally:
             await app.bot.session.close()
+
+
+async def _wait_for_the_previous_copy(settings: Settings) -> None:
+    """Let a copy that is still running finish before asking Telegram for updates.
+
+    Telegram hands ``getUpdates`` to one consumer, so a second process starting
+    while the first is still polling is answered with a ``TelegramConflictError``
+    for every attempt - a screenful of red at every start, on a game that is in
+    fact fine. The heartbeat already knows the answer: it is deleted by a clean
+    shutdown and goes stale ``heartbeat_stale_after`` seconds after a hard one, so
+    a fresh beat means somebody else is serving right now.
+
+    Waited out rather than refused. A window closed with the mouse leaves the file
+    behind, and "run it again in half a minute" is not an answer worth giving when
+    the game can simply wait that half minute itself.
+    """
+    if not is_alive(settings):
+        return
+    logger.warning(
+        "another_copy_is_running",
+        detail=(
+            "Другая копия игры ещё отвечает на обновления. Эта подождёт, пока та "
+            "закончит, иначе Telegram ответит обеим отказом."
+        ),
+        heartbeat=str(settings.heartbeat_path),
+    )
+    # Считанные проверки по одному удару сердца, а не ожидание события: то, чего
+    # мы ждём, пишет другой процесс в файл, и узнать об этом можно только посмотрев.
+    beats = math.ceil(settings.heartbeat_stale_after / settings.heartbeat_seconds) + 1
+    for _ in range(beats):
+        if not is_alive(settings):
+            break
+        await asyncio.sleep(settings.heartbeat_seconds)
+    if is_alive(settings):
+        logger.warning(
+            "previous_copy_still_beating",
+            detail=(
+                "Прошлая копия так и не остановилась. Если это её остаток, "
+                "закройте её окно; Telegram будет отказывать, пока их две."
+            ),
+            age_seconds=age_seconds(settings.heartbeat_path),
+        )
 
 
 async def _greet_telegram(app: Application) -> None:

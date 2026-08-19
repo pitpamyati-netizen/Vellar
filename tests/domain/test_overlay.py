@@ -12,9 +12,9 @@ from dataclasses import replace
 import pytest
 
 from mmorpg.domain.entities import Character, GameContent
-from mmorpg.domain.entities.location import EnemyKind
+from mmorpg.domain.entities.location import Enemy, EnemyKind
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
-from mmorpg.domain.entities.quest import ObjectiveKind
+from mmorpg.domain.entities.quest import ObjectiveKind, QuestLog
 from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules.overlay import FieldKind
@@ -480,3 +480,113 @@ def test_a_field_can_be_cleared_without_touching_its_neighbours() -> None:
     assert stripped.value("name") == "Довен"
     # Исходная запись не тронута: записи неизменяемы.
     assert DOVEN.value("role") == "писарь заставы"
+
+
+# --- подряд называет, кого именно и куда идти ---------------------------
+
+
+def _hunt(**extra: str) -> OverlayRecord:
+    """Подряд на охоту: то, что смотритель заводит чаще всего."""
+    fields = {
+        "name": "Охота на кабанов",
+        "city": "farhold",
+        "npc": "keeper_npc_1",
+        "terms": "Убей пятерых кабанов в лугах у заставы.",
+        "objective": "kill",
+        "target_count": "5",
+        "reward_gold": "30",
+    }
+    return OverlayRecord(kind=OverlayKind.QUEST, entity_id="keeper_quest_2", fields=fields | extra)
+
+
+def test_a_contract_can_name_one_opponent_and_not_only_a_breed(content: GameContent) -> None:
+    spec = overlay_rules.spec_of(OverlayKind.QUEST, "target_kind")
+    assert spec is not None
+
+    offered = overlay_rules.options(content, spec, _hunt())
+
+    # Породы остаются первыми: «любое зверьё» - по-прежнему законное условие.
+    assert offered[: len(EnemyKind)] == tuple(kind.value for kind in EnemyKind)
+    assert "wild_boar" in offered
+    assert overlay_rules.option_name(content, spec, "wild_boar") == "Кабан"
+
+
+def _slain(content: GameContent, archetype_id: str) -> Enemy:
+    """Побеждённый противник этой породы - ровно то, что кладут в счёт подряда."""
+    archetype = next(one for one in content.enemy_archetypes if one.id == archetype_id)
+    return Enemy(
+        archetype_id=archetype.id,
+        name=archetype.name,
+        kind=archetype.kind,
+        level=3,
+        max_health=30,
+        damage=5,
+        armor=1,
+        initiative=1.0,
+        loot=(),
+        gold=3,
+    )
+
+
+def test_a_named_opponent_is_counted_and_its_neighbours_are_not(content: GameContent) -> None:
+    world = apply(content, DOVEN, _hunt(target_kind="wild_boar"))
+    hunter = replace(
+        Character(id=1, user_id=1, name="Ловчий", race_id="human", class_id="ranger", level=3),
+        quests=QuestLog().take("keeper_quest_2"),
+    )
+
+    log, moved = quest_rules.record_kills(
+        world, hunter, (_slain(world, "wild_boar"), _slain(world, "grey_wolf"))
+    )
+
+    # Волк - тоже зверьё, но заказывали кабана.
+    assert log.progress("keeper_quest_2") == 1
+    assert [step.quest.id for step in moved] == ["keeper_quest_2"]
+
+
+def test_a_contract_made_by_the_panel_can_hunt_an_opponent_it_also_made(
+    content: GameContent,
+) -> None:
+    """Две правки подряд: сначала противник, потом подряд на него.
+
+    Раньше подряд проверялся против мира без свежего противника и отклонялся
+    целиком - то есть противника завести было можно, а заказать его нельзя.
+    """
+    beast = OverlayRecord(
+        kind=OverlayKind.ENEMY,
+        entity_id="keeper_enemy_1",
+        fields={
+            "name": "Секач",
+            "kind": "beast",
+            "biomes": "луга",
+            "health": "1,2",
+            "damage": "1",
+            "armor": "1",
+            "initiative": "1",
+        },
+    )
+    world = apply(content, beast, DOVEN, _hunt(target_kind="keeper_enemy_1"))
+
+    assert world.quest("keeper_quest_2").target_kind == "keeper_enemy_1"
+
+
+def test_a_contract_says_which_place_it_sends_you_to(content: GameContent) -> None:
+    world = apply(content, DOVEN, _hunt(location_slot="1"))
+
+    assert world.quest("keeper_quest_2").location_slot == 1
+
+
+def test_a_place_the_city_does_not_have_is_refused_in_words(content: GameContent) -> None:
+    assert refused_for(content, _hunt(location_slot="9"), "нет места 9")
+
+
+def test_the_name_of_the_employer_is_asked_only_when_nobody_gives_it(
+    content: GameContent,
+) -> None:
+    """Житель выбран - значит, имя нанимателя уже названо, и второй раз не спрашивается."""
+    del content
+    keys = [spec.key for spec in overlay_rules.fields_for(_hunt())]
+    assert "giver" not in keys
+
+    alone = [spec.key for spec in overlay_rules.fields_for(_hunt(npc=""))]
+    assert "giver" in alone
