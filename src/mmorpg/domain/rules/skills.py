@@ -14,14 +14,20 @@ from __future__ import annotations
 from dataclasses import replace
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import GameContent, OwnerKind, Skill, SkillKind
+from mmorpg.domain.entities.content import (
+    EdgeEffect,
+    GameContent,
+    OwnerKind,
+    Skill,
+    SkillKind,
+)
+from mmorpg.domain.rules import edges as edge_rules
 
-# What the two rank-three edges do. Every skill declares its own pair of names in
-# content, but their mechanical effect is uniform, so a player can choose by ear
-# without learning 128 special cases: the first edge hits harder, the second one
-# costs less. Declared here rather than in content, because it is a rule.
-EDGE_POWER_BONUS = 0.20
-EDGE_COST_FACTOR = 0.65
+# Что делают две грани третьего ранга, здесь больше не решается: каждая грань
+# объявляет это сама, в ``skills.toml``, и словарь объявления живёт в
+# ``domain/rules/edges.py``. Раньше здесь стояли два числа на все 128 умений -
+# плюс двадцать процентов силы первой грани и минус тридцать пять процентов
+# стоимости второй, - и ровно из-за них ни одно описание грани не было правдой.
 
 
 def known_codes(character: Character) -> frozenset[str]:
@@ -222,17 +228,23 @@ def put_in_slot(
     return replace(character, loadout=updated)
 
 
+def chosen_edge(character: Character, skill: Skill) -> EdgeEffect | None:
+    """Механика грани, выбранной этим персонажем. ``None`` — грань не выбрана.
+
+    Грань, которой у умения больше нет, читается как невыбранная: содержимое
+    переживает сохранённого персонажа (``Claude.md``, правило 8).
+    """
+    code = character.loadout.edge_of(skill.code)
+    if code is None:
+        return None
+    return next((edge.effect for edge in skill.edges if edge.code == code), None)
+
+
 def power_factor(character: Character, skill: Skill) -> float:
     """The multiplier the chosen edge puts on a skill's power."""
-    edge = character.loadout.edge_of(skill.code)
-    if edge is not None and edge == skill.edges[0].code:
-        return 1.0 + EDGE_POWER_BONUS
-    return 1.0
+    return edge_rules.power_factor(chosen_edge(character, skill))
 
 
 def cost_factor(character: Character, skill: Skill) -> float:
     """The multiplier the chosen edge puts on a skill's cost."""
-    edge = character.loadout.edge_of(skill.code)
-    if edge is not None and edge == skill.edges[1].code:
-        return EDGE_COST_FACTOR
-    return 1.0
+    return edge_rules.cost_factor(chosen_edge(character, skill))

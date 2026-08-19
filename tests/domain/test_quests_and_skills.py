@@ -13,8 +13,10 @@ import pytest
 from mmorpg.domain.entities import Character, GameContent, QuestLog, SkillLoadout
 from mmorpg.domain.entities.content import SkillKind
 from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank, NodeKind
+from mmorpg.domain.rules import edges as edge_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules.skill_effects import spec_for
 
 
 @pytest.fixture
@@ -242,14 +244,52 @@ def test_the_edge_is_asked_for_at_rank_three_and_only_once(
     assert skill_rules.choose_edge(chosen, skill, skill.edges[1].code) is None
 
 
+def test_every_edge_in_the_game_declares_what_it_does(content: GameContent) -> None:
+    """Ни одной грани-надписи.
+
+    Это и была поломка: у всех 128 умений обе грани описаны своим действием, а
+    движок делал для любой первой одно и то же, для любой второй - другое одно и
+    то же. Грань без объявленной механики - обещание, которое некому выполнить.
+    """
+    silent = [
+        f"{skill.code}:{edge.name}"
+        for skill in content.skills
+        for edge in skill.edges
+        if edge.effect.empty
+    ]
+    assert silent == []
+
+
 def test_an_edge_changes_the_numbers_it_promises(content: GameContent, veteran: Character) -> None:
-    skill = next(s for s in skill_rules.teachable(content, veteran) if s.is_active)
-    sharp = replace(veteran, loadout=SkillLoadout(edges={skill.code: skill.edges[0].code}))
-    quick = replace(veteran, loadout=SkillLoadout(edges={skill.code: skill.edges[1].code}))
-    assert skill_rules.power_factor(sharp, skill) > 1.0
-    assert skill_rules.cost_factor(sharp, skill) == 1.0
-    assert skill_rules.cost_factor(quick, skill) < 1.0
-    assert skill_rules.power_factor(quick, skill) == 1.0
+    """Выбранная грань доходит до умения, а невыбранная ничего не трогает."""
+    skill = content.skill("warrior_cleave")
+    bleeding, splashing = skill.edges
+
+    plain = replace(veteran, loadout=SkillLoadout(ranks={skill.code: 3}))
+    assert skill_rules.chosen_edge(plain, skill) is None
+    assert edge_rules.applied(spec_for(skill.effect), None).dot_turns == 0
+
+    cutting = replace(plain, loadout=replace(plain.loadout, edges={skill.code: bleeding.code}))
+    chosen = skill_rules.chosen_edge(cutting, skill)
+    assert chosen is not None
+    # «Цель теряет здоровье ещё 3 хода» - именно это и происходит.
+    assert edge_rules.applied(spec_for(skill.effect), chosen).dot_turns == 3
+
+    wide = replace(plain, loadout=replace(plain.loadout, edges={skill.code: splashing.code}))
+    reach = skill_rules.chosen_edge(wide, skill)
+    assert reach is not None
+    assert edge_rules.applied(spec_for(skill.effect), reach).splash == pytest.approx(0.6)
+
+
+def test_an_edge_of_a_skill_that_changed_is_read_as_unchosen(
+    content: GameContent, veteran: Character
+) -> None:
+    """Содержимое переживает сохранённого персонажа (``Claude.md``, правило 8)."""
+    skill = content.skill("warrior_cleave")
+    stale = replace(veteran, loadout=SkillLoadout(edges={skill.code: "warrior_cleave_z"}))
+
+    assert skill_rules.chosen_edge(stale, skill) is None
+    assert skill_rules.power_factor(stale, skill) == 1.0
 
 
 def test_a_skill_sits_in_exactly_one_slot(content: GameContent, veteran: Character) -> None:

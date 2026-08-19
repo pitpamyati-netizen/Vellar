@@ -14,6 +14,8 @@ from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, SkillKind
 from mmorpg.domain.entities.effects import EffectStack
 from mmorpg.domain.entities.stats import StatBlock, StatCode
+from mmorpg.domain.rules import edges as edge_rules
+from mmorpg.domain.rules import skills as skill_rules
 
 STAT_MODIFIER_PREFIX = "stat_"
 
@@ -40,7 +42,13 @@ def equipment_modifiers(content: GameContent, item_ids: Iterable[str]) -> dict[s
 
 
 def passive_modifiers(content: GameContent, character: Character) -> dict[str, float]:
-    """Modifiers from the three equipped passive skills, scaled by their rank."""
+    """Modifiers from the three equipped passive skills, scaled by their rank.
+
+    Грань постоянного умения считается здесь и больше нигде: у постоянного умения
+    нет ни хода, ни цели, поэтому всё, что грань может ему сделать, - поднять его
+    собственную прибавку и добавить свою. Долго не делалось и этого: половина
+    выбранных граней в игре была надписью без последствий.
+    """
     bundles: list[Mapping[str, float]] = []
     for code in character.loadout.equipped_passives():
         # Панель переживает содержимое: умение, которого больше нет, ничего не
@@ -51,7 +59,10 @@ def passive_modifiers(content: GameContent, character: Character) -> dict[str, f
         if skill.kind is not SkillKind.PASSIVE:
             continue
         rank = character.loadout.rank_of(code)
-        bundles.append({skill.effect: skill.power_at_rank(rank)})
+        edge = skill_rules.chosen_edge(character, skill)
+        bundles.append({skill.effect: skill.power_at_rank(rank) * edge_rules.power_factor(edge)})
+        if edge is not None and edge.self_modifiers:
+            bundles.append(dict(edge.self_modifiers))
     return merge(*bundles)
 
 

@@ -62,6 +62,13 @@ class EffectSpec:
     guaranteed_crit: bool = False
     crit_bonus: float = 0.0
     lifesteal: float = 0.0
+    #: Доля урона, достающаяся второй цели у одноцелевого удара. Ставится только
+    #: гранью: умение, бьющее двоих, описывается как ``aoe`` или ``damage_chain``.
+    splash: float = 0.0
+    #: Лечение и щит сверх основного действия, в процентах от максимума здоровья.
+    #: Тоже вотчина граней: «дополнительно лечит 10 процентов» у удара.
+    bonus_heal: float = 0.0
+    bonus_shield: float = 0.0
     self_damage_taken: float = 0.0
     dot_turns: int = 0
     stun_turns: int = 0

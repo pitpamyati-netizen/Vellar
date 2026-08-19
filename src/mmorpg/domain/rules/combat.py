@@ -52,6 +52,7 @@ from mmorpg.domain.entities.effects import ActiveEffect, EffectStack
 from mmorpg.domain.entities.location import Enemy
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.procgen.enemies import RANK_FACTORS
+from mmorpg.domain.rules import edges as edge_rules
 from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.progression import experience_reward
@@ -62,6 +63,21 @@ from mmorpg.domain.rules.skill_effects import (
     tag_of_skill,
 )
 from mmorpg.domain.rules.stats import DerivedStats, derived_stats, primary_stats
+
+#: Чем эффект несёт с собой урон или лечение за ход. Ключи служебные и нарочно
+#: не из словаря ``traits.toml``: их читает только конец хода, и попасть в расчёт
+#: характеристик они не должны.
+#:
+#: До этого ``dot_turns`` стоял в описании двух десятков умений, показывался
+#: игроку строкой «и ещё 3 хода» - и не делал ничего: кровотечение, горение и яд
+#: были надписью. Здесь они наконец происходят.
+BLEED_PER_TURN = "_bleed_per_turn"
+MEND_PER_TURN = "_mend_per_turn"
+
+#: Какая доля удара достаётся цели каждый ход, пока она истекает кровью. Четверть:
+#: три хода кровотечения стоят примерно трёх четвертей ещё одного удара, и это
+#: заметно, но не заменяет собой сам удар.
+BLEED_SHARE = 0.25
 
 # --- one scale for every number --------------------------------------
 #
@@ -468,14 +484,18 @@ def _use_skill(
 
     skill, cost = attempt
     rank = character.loadout.rank_of(skill.code)
-    power = skill.power_at_rank(rank) * skill_rules.power_factor(character, skill)
-    spec = spec_for(skill.effect)
+    # Грань переписывает и силу, и само действие: что именно - объявлено в
+    # содержимом и разобрано в ``domain/rules/edges.py``.
+    edge = skill_rules.chosen_edge(character, skill)
+    power = skill.power_at_rank(rank) * edge_rules.power_factor(edge)
+    spec = edge_rules.applied(spec_for(skill.effect), edge)
+    cooldown = edge_rules.cooldown_of(skill.cooldown, edge)
 
     player = replace(state.player, resource=state.player.resource - cost, free_cast=False)
-    if skill.cooldown:
+    if cooldown:
         # +1 because cooldowns tick down at the end of this same turn, so the skill
         # stays unavailable for exactly `cooldown` further turns.
-        player = player.with_cooldown(skill.code, skill.cooldown + 1)
+        player = player.with_cooldown(skill.code, cooldown + 1)
     working = replace(state, player=player)
     return _apply_spec(
         content, character, working, skill, spec, power, action.target, tempo, source
@@ -534,6 +554,28 @@ def _apply_spec(
                 )
             falloff *= 1.0 - spec.chain_falloff
 
+        working = _bleeding(
+            working,
+            spec=spec,
+            skill=skill,
+            blow=blow,
+            power=power,
+            struck=tuple(one.index for one in targets),
+        )
+        working = _splash(
+            working,
+            spec=spec,
+            spared=target_index,
+            blow=blow,
+            power=power,
+            character_level=character.level,
+            stats=stats,
+            modifiers=modifiers,
+            skill_name=skill.name,
+            tempo=tempo,
+            source=source,
+        )
+
     if spec.category is EffectCategory.HEAL or spec.special == "full_heal":
         # Healing and shields are percentages of maximum health, not of a blow:
         # health grows five times faster than a blow does, so a heal priced in
@@ -559,6 +601,26 @@ def _apply_spec(
             )
         )
 
+    if spec.bonus_heal:
+        # Лечение, которое принесла грань бьющему умению: доля максимума здоровья,
+        # как и всякое лечение, и вдобавок к тому, что умение делало и раньше.
+        extra = round(working.player.max_health * spec.bonus_heal / 100.0)
+        player, restored = working.player.healed(extra)
+        working = replace(working, player=player).with_events(
+            CombatEvent(
+                kind=EventKind.HEAL, actor=player.name, amount=restored, skill_name=skill.name
+            )
+        )
+
+    if spec.bonus_shield:
+        extra = round(working.player.max_health * spec.bonus_shield / 100.0)
+        player = replace(working.player, shield=working.player.shield + extra)
+        working = replace(working, player=player).with_events(
+            CombatEvent(
+                kind=EventKind.SHIELD, actor=player.name, amount=extra, skill_name=skill.name
+            )
+        )
+
     if spec.cleanse_count:
         before = len(working.player.effects.penalties())
         cleansed = working.player.effects.cleanse(spec.cleanse_count)
@@ -571,6 +633,80 @@ def _apply_spec(
 
     working = _apply_modifier_bundles(working, skill, spec, power, target_index)
     return _apply_special(working, skill, spec, power)
+
+
+def _bleeding(
+    state: CombatState,
+    *,
+    spec: EffectSpec,
+    skill: Skill,
+    blow: float,
+    power: float,
+    struck: tuple[int, ...],
+) -> CombatState:
+    """Оставить на раненых то, что будет их точить каждый ход.
+
+    Ложится на всех, кого умение только что задело, - у площадного огня горят все.
+    Один источник на цель: повторный поджог обновляет срок, а не жжёт вдвое
+    (``entities/effects.EffectStack.apply``).
+    """
+    if not spec.dot_turns or spec.category is not EffectCategory.DAMAGE:
+        return state
+    per_turn = max(1.0, blow * power / 100.0 * BLEED_SHARE)
+    working = state
+    for index in struck:
+        target = working.enemy_at(index)
+        if target is None or target.health <= 0:
+            continue
+        effect = ActiveEffect(
+            id=f"{skill.code}_dot",
+            name=skill.name,
+            modifiers={BLEED_PER_TURN: per_turn},
+            turns_left=spec.dot_turns,
+            source=skill.code,
+            beneficial=False,
+        )
+        working = working.replace_enemy(replace(target, effects=target.effects.apply(effect)))
+    return working
+
+
+def _splash(
+    state: CombatState,
+    *,
+    spec: EffectSpec,
+    spared: int,
+    blow: float,
+    power: float,
+    character_level: int,
+    stats: DerivedStats,
+    modifiers: dict[str, float],
+    skill_name: str,
+    tempo: TurnTempo,
+    source: random.Random,
+) -> CombatState:
+    """Вторая цель, которую задевает одноцелевой удар.
+
+    Только от грани: умение, бьющее двоих само по себе, описывается как ``aoe``
+    или ``damage_chain``. Задевается один сосед, а не все, - «размах» на то и
+    размах, чтобы отличаться от вихря.
+    """
+    if not spec.splash or spec.aoe:
+        return state
+    neighbour = next((one for one in state.living_enemies if one.index != spared), None)
+    if neighbour is None:
+        return state
+    return _strike(
+        state,
+        target=neighbour,
+        power=blow * power / 100.0 * spec.damage_scale * spec.splash,
+        character_level=character_level,
+        stats=stats,
+        modifiers=modifiers,
+        spec=spec,
+        skill_name=skill_name,
+        tempo=tempo,
+        source=source,
+    )
 
 
 def _single_target(state: CombatState, target_index: int) -> tuple[EnemyState, ...]:
@@ -911,8 +1047,27 @@ def _end_of_turn(content: GameContent, character: Character, state: CombatState)
         resource=min(player.max_resource, player.resource + round(stats.resource_regen)),
     )
 
-    enemies = tuple(replace(enemy, effects=enemy.effects.tick()) for enemy in state.enemies)
-    return replace(state, player=player, enemies=enemies, turn=state.turn + 1)
+    working = spend_bleeding(replace(state, player=player))
+    enemies = tuple(replace(enemy, effects=enemy.effects.tick()) for enemy in working.enemies)
+    return replace(working, enemies=enemies, turn=working.turn + 1)
+
+
+def spend_bleeding(state: CombatState) -> CombatState:
+    """Кровотечение и горение платят по счёту - раз в ход, до самого конца срока."""
+    working = state
+    for current in state.living_enemies:
+        amount = round(current.effects.modifiers().get(BLEED_PER_TURN, 0.0))
+        if amount <= 0:
+            continue
+        hurt = replace(current, health=max(0, current.health - amount))
+        working = working.replace_enemy(hurt).with_events(
+            CombatEvent(kind=EventKind.DAMAGE, target=hurt.name, amount=amount)
+        )
+        if hurt.health <= 0:
+            working = working.with_events(
+                CombatEvent(kind=EventKind.ENEMY_DEFEATED, target=hurt.name)
+            )
+    return working
 
 
 def _check_outcome(content: GameContent, character: Character, state: CombatState) -> CombatState:

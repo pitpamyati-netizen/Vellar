@@ -186,17 +186,24 @@ def edge_label(edge_name: str) -> Label:
 
 
 def edge_screen(content: GameContent, character: Character, skill: Skill) -> Screen:
-    """The rank-three fork. Two ways to use the same skill, not two skills."""
+    """The rank-three fork. Two ways to use the same skill, not two skills.
+
+    Каждая грань говорит только то, что написано у неё в содержимом. Раньше сюда
+    дописывались две общие фразы - «бьёт сильнее на 20 процентов» первой грани и
+    «стоит дешевле на 35» второй, - и они спорили с описанием прямо в той же
+    строке: «Кровопускание. Цель теряет здоровье ещё 3 хода. Бьёт сильнее на 20
+    процентов.» Теперь усиление и скидка - такая же объявленная механика, как
+    всё остальное, и попадают в описание грани, а не после него.
+    """
     first, second = skill.edges
     return Screen(
         id=ScreenId.SKILL_EDGE,
         lines=(
             f"Грань умения {skill.name}. Выбирается один раз, на ранге "
             f"{skill_rules.edge_rank_for(content, character)}.",
-            f"{first.name}: {first.text} Бьёт сильнее на "
-            f"{round(skill_rules.EDGE_POWER_BONUS * 100)} процентов.",
-            f"{second.name}: {second.text} Стоит дешевле на "
-            f"{round((1 - skill_rules.EDGE_COST_FACTOR) * 100)} процентов.",
+            f"{first.name}: {first.text}",
+            f"{second.name}: {second.text}",
+            "Выбор грани ранга не повышает: ранг растёт за очко умений, как и раньше.",
             "Сменить грань потом сможет только наставник, и он берёт за это деньги.",
         ),
         rows=((edge_label(first.name),), (edge_label(second.name),)),

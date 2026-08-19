@@ -54,11 +54,23 @@ one rank earlier for each Turning its owner has made, down to rank 1
 good and cannot be picked again - that is what keeps a free choice from minting
 Seals.
 
-**What an edge does mechanically** is uniform, and deliberately so: the first
-edge listed **hits 20% harder** (`power_factor`), the second one **costs 35%
-less** (`cost_factor`). Content writes what the edge *is* in the world; the rule
-is the same everywhere, so a player learns it once instead of 288 times.
-`domain/rules/skills.py` owns both numbers.
+**What an edge does mechanically** is declared by the edge itself, in
+`skills.toml`, using the vocabulary in `domain/rules/edges.py`: a percentage or a
+number of turns per key (`power`, `cost`, `cooldown`, `duration`, `dot_turns`,
+`stun_turns`, `hits`, `splash`, `aoe`, `pierce`, `crit`, `lifesteal`, `cleanse`,
+`heal`, `shield`, `self_modifiers`, `target_modifiers`). `edges.applied` lays the
+declaration over the skill's effect; the loader refuses an edge that declares
+nothing at all.
+
+It used to be uniform - the first edge hit 20% harder, the second cost 35% less -
+while content described a distinct behaviour for each of the 256. Every one of
+those descriptions was false, and for the 48 passive skills the chosen edge did
+nothing whatsoever: `passive_modifiers` never looked at it. An edge's text now
+says what its numbers do, because it is generated from them.
+
+An edge of a passive skill can only raise that passive's own modifier (`power`)
+and add modifiers of its own (`self_modifiers`) - a passive has no turn and no
+target for anything else to mean something.
 
 ## Spending a point, in the interface
 
@@ -67,7 +79,8 @@ Three screens, and no more (`presentation/telegram/screens/skills.py`):
 - **Умения** - every skill of the class unlocked by level, with its rank and what
   one point would buy. Pressing one learns it, or raises it a rank; at rank 3 the
   press opens the edge screen instead, and nothing else happens until it is
-  chosen.
+  chosen - which is why the button says «сначала выберите грань» there rather
+  than promising a rank it will not buy.
 - **Слоты умений** - the six active, three passive and one racial position, each
   button carrying its number and its contents. A skill sits in exactly one slot:
   putting it in a second one empties the first.

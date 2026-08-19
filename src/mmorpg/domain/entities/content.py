@@ -11,7 +11,7 @@ This module is pure data plus lookups - no I/O, no parsing. Parsing lives in
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
 
@@ -39,15 +39,66 @@ class ItemKind(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class EdgeEffect:
+    """Поправка, которую грань вносит в умение.
+
+    Живёт здесь, а не среди правил, потому что это содержимое: строка из
+    ``skills.toml``, прочитанная загрузчиком. Что с ней делать — знает
+    ``domain/rules/edges.py``, и там же сказано, зачем она вообще нужна.
+
+    Всё в процентах или в ходах: теми же единицами описано и само умение
+    (``Claude.md``, правило 7 — абсолютных чисел в содержимом нет).
+    """
+
+    #: Прибавка к силе умения и поправка к стоимости, в процентах.
+    power: float = 0.0
+    cost: float = 0.0
+    #: Ходы: откат, срок действия, урон по времени, пропуск хода.
+    cooldown: int = 0
+    duration: int = 0
+    dot_turns: int = 0
+    stun_turns: int = 0
+    #: Сколько ударов добавилось и какой силы каждый, в процентах от урона умения.
+    hits: int = 0
+    hit_power: float = 100.0
+    #: Доля урона второй цели; задевает ли всех.
+    splash: float = 0.0
+    aoe: bool = False
+    #: Прибавки в процентах: игнорируемая броня, шанс крита, вампиризм.
+    pierce: float = 0.0
+    crit: float = 0.0
+    lifesteal: float = 0.0
+    #: Сколько отрицательных эффектов снимается сверх снятого умением.
+    cleanse: int = 0
+    #: Лечение и щит сверх основного действия, в процентах от максимума здоровья.
+    heal: float = 0.0
+    shield: float = 0.0
+    #: Модификаторы сверх наложенных умением: ключи из ``traits.toml``.
+    self_modifiers: Mapping[str, float] = field(default_factory=lambda: MappingProxyType({}))
+    target_modifiers: Mapping[str, float] = field(default_factory=lambda: MappingProxyType({}))
+
+    @property
+    def empty(self) -> bool:
+        """Ничего не меняет: такой грани в содержимом быть не должно."""
+        return self == EdgeEffect()
+
+
+@dataclass(frozen=True, slots=True)
 class SkillEdge:
     """One of the two rank-3 modifications of a skill.
 
     An edge changes how a skill behaves; it never adds a button.
+
+    ``effect`` is what it changes, declared in ``skills.toml`` and executed by
+    ``domain/rules/edges.py``. It is what makes ``text`` true: for a long while
+    both edges of every skill described their own behaviour in words while the
+    engine gave all of them the same twenty percent of power or the same discount.
     """
 
     code: str
     name: str
     text: str
+    effect: EdgeEffect = field(default_factory=lambda: EdgeEffect())
 
 
 @dataclass(frozen=True, slots=True)

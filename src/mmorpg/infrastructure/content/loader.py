@@ -12,6 +12,7 @@ import itertools
 import tomllib
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from mmorpg.domain.entities.combat import ActionTag
@@ -19,6 +20,7 @@ from mmorpg.domain.entities.content import (
     CharacterClass,
     City,
     ClassResource,
+    EdgeEffect,
     GameContent,
     HealthCurve,
     Item,
@@ -279,13 +281,14 @@ def _parse_skills(
         if len(raw_edges) != 2:
             problems.append(f"skills.toml: {code} must declare exactly 2 edges")
             continue
-        edges = (
+        edges = tuple(
             SkillEdge(
-                code=f"{code}_a", name=str(raw_edges[0]["name"]), text=str(raw_edges[0]["text"])
-            ),
-            SkillEdge(
-                code=f"{code}_b", name=str(raw_edges[1]["name"]), text=str(raw_edges[1]["text"])
-            ),
+                code=f"{code}_{letter}",
+                name=str(raw["name"]),
+                text=str(raw["text"]),
+                effect=_edge_effect(code, letter, raw, modifier_keys, problems),
+            )
+            for letter, raw in zip("ab", raw_edges, strict=True)
         )
 
         parsed.append(
@@ -299,7 +302,7 @@ def _parse_skills(
                 text=str(entry.get("text", "")),
                 effect=effect,
                 power=float(entry.get("power", 0)),
-                edges=edges,
+                edges=(edges[0], edges[1]),
                 cost=int(entry.get("cost", 0)),
                 cooldown=int(entry.get("cooldown", 0)),
                 target=target,
@@ -312,6 +315,96 @@ def _parse_skills(
 
 
 # --- races -----------------------------------------------------------
+
+
+#: Как грань называет свою механику в ``skills.toml``. Ключи - поля
+#: ``EdgeEffect``; незнакомый ключ это отказ, а не молчание, потому что опечатка
+#: в ключе означала бы грань, которая опять ничего не делает.
+_EDGE_KEYS = frozenset(
+    {
+        "name",
+        "text",
+        "power",
+        "cost",
+        "cooldown",
+        "duration",
+        "dot_turns",
+        "stun_turns",
+        "hits",
+        "hit_power",
+        "splash",
+        "aoe",
+        "pierce",
+        "crit",
+        "lifesteal",
+        "cleanse",
+        "heal",
+        "shield",
+        "self_modifiers",
+        "target_modifiers",
+    }
+)
+
+
+def _edge_effect(
+    code: str,
+    letter: str,
+    raw: Mapping[str, Any],
+    modifier_keys: frozenset[str],
+    problems: list[str],
+) -> EdgeEffect:
+    """Механика грани из содержимого.
+
+    Грань обязана что-то делать: пустое объявление - ровно та поломка, ради
+    которой словарь и заведён, обещание словами без единого числа за ним.
+    """
+    where = f"skills.toml: {code} edge {letter}"
+    unknown = sorted(set(raw) - _EDGE_KEYS)
+    if unknown:
+        problems.append(f"{where} declares unknown keys {unknown}")
+
+    effect = EdgeEffect(
+        power=float(raw.get("power", 0)),
+        cost=float(raw.get("cost", 0)),
+        cooldown=int(raw.get("cooldown", 0)),
+        duration=int(raw.get("duration", 0)),
+        dot_turns=int(raw.get("dot_turns", 0)),
+        stun_turns=int(raw.get("stun_turns", 0)),
+        hits=int(raw.get("hits", 0)),
+        hit_power=float(raw.get("hit_power", 100)),
+        splash=float(raw.get("splash", 0)),
+        aoe=bool(raw.get("aoe", False)),
+        pierce=float(raw.get("pierce", 0)),
+        crit=float(raw.get("crit", 0)),
+        lifesteal=float(raw.get("lifesteal", 0)),
+        cleanse=int(raw.get("cleanse", 0)),
+        heal=float(raw.get("heal", 0)),
+        shield=float(raw.get("shield", 0)),
+        self_modifiers=_edge_modifiers(where, raw.get("self_modifiers"), modifier_keys, problems),
+        target_modifiers=_edge_modifiers(
+            where, raw.get("target_modifiers"), modifier_keys, problems
+        ),
+    )
+    if effect.empty:
+        problems.append(f"{where} changes nothing: a named edge with no mechanics is the promise")
+    return effect
+
+
+def _edge_modifiers(
+    where: str,
+    declared: Mapping[str, Any] | None,
+    modifier_keys: frozenset[str],
+    problems: list[str],
+) -> Mapping[str, float]:
+    """Модификаторы грани. Словарь тот же, что у особенностей и снаряжения."""
+    if not declared:
+        return MappingProxyType({})
+    strange = sorted(set(declared) - modifier_keys)
+    if strange:
+        problems.append(f"{where} names unknown modifiers {strange}")
+    return MappingProxyType(
+        {name: float(value) for name, value in declared.items() if name in modifier_keys}
+    )
 
 
 def _parse_races(

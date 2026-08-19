@@ -21,7 +21,12 @@ from mmorpg.domain.entities.combat import (
 )
 from mmorpg.domain.entities.effects import ActiveEffect
 from mmorpg.domain.entities.location import Enemy, EnemyKind
-from mmorpg.domain.rules.combat import is_low_health, resolve_turn, start_combat
+from mmorpg.domain.rules.combat import (
+    is_low_health,
+    resolve_turn,
+    spend_bleeding,
+    start_combat,
+)
 from mmorpg.domain.rules.skill_effects import EffectCategory, spec_for
 
 
@@ -294,3 +299,105 @@ def test_every_category_is_used_by_content(content: GameContent, category: Effec
         if skill.kind is SkillKind.ACTIVE
     }
     assert category in used
+
+
+# --- грани: то, что они обещают, и происходит --------------------------
+
+
+def with_edge(character: Character, code: str, edge_code: str) -> Character:
+    """Тот же персонаж, но с выбранной гранью и третьим рангом умения."""
+    loadout = replace(
+        character.loadout,
+        ranks={**character.loadout.ranks, code: 3},
+        edges={**character.loadout.edges, code: edge_code},
+    )
+    return replace(character, loadout=loadout)
+
+
+def test_an_edge_that_promises_a_second_target_hits_a_second_target(
+    content: GameContent,
+) -> None:
+    """«Размах» у рассечения: удар по одной цели задевает соседа."""
+    skill = content.skill("warrior_cleave")
+    splashing = skill.edges[1]
+    hero = caster("warrior", "human", skill.code)
+    hero = replace(hero, loadout=replace(hero.loadout, ranks={skill.code: 3}))
+    pair = (enemy("Волк"), enemy("Волчица"))
+
+    plain = use(content, hero, start_combat(content, hero, pair))
+    wide = use(
+        content, with_edge(hero, skill.code, splashing.code), start_combat(content, hero, pair)
+    )
+
+    # Второй противник цел без грани и ранен с гранью.
+    assert plain.enemies[1].health == plain.enemies[1].enemy.max_health
+    assert wide.enemies[1].health < wide.enemies[1].enemy.max_health
+
+
+def test_an_edge_that_promises_bleeding_leaves_the_target_bleeding(
+    content: GameContent,
+) -> None:
+    skill = content.skill("warrior_cleave")
+    bleeding = skill.edges[0]
+    hero = caster("warrior", "human", skill.code)
+    hero = replace(hero, loadout=replace(hero.loadout, ranks={skill.code: 3}))
+    foes = (enemy(),)
+
+    plain = use(content, hero, start_combat(content, hero, foes))
+    cutting = use(
+        content, with_edge(hero, skill.code, bleeding.code), start_combat(content, hero, foes)
+    )
+
+    assert plain.enemies[0].effects.penalties() == ()
+    assert cutting.enemies[0].effects.penalties() != ()
+
+
+def test_an_edge_that_promises_a_discount_is_a_discount(content: GameContent) -> None:
+    """«Экономный шар»: тот же шар за меньшие чары."""
+    skill = content.skill("mage_fireball")
+    cheaper = skill.edges[1]
+    hero = caster("mage", "human", skill.code)
+    hero = replace(hero, loadout=replace(hero.loadout, ranks={skill.code: 3}))
+    foes = (enemy(),)
+
+    plain = use(content, hero, start_combat(content, hero, foes))
+    thrifty = use(
+        content, with_edge(hero, skill.code, cheaper.code), start_combat(content, hero, foes)
+    )
+
+    assert thrifty.player.resource > plain.player.resource
+
+
+def test_a_passive_edge_is_not_just_a_label(content: GameContent) -> None:
+    """Половина выбранных граней в игре - у постоянных умений, и они не делали ничего."""
+    from mmorpg.domain.rules import modifiers as mods
+
+    skill = content.skill("warrior_toughness")
+    hero = caster("warrior", "human")
+    hero = replace(
+        hero,
+        loadout=replace(hero.loadout, passives=(skill.code, None, None), ranks={skill.code: 3}),
+    )
+
+    plain = mods.passive_modifiers(content, hero)
+    edged = mods.passive_modifiers(content, with_edge(hero, skill.code, skill.edges[0].code))
+
+    assert edged != plain
+
+
+def test_bleeding_actually_takes_health_every_turn(content: GameContent) -> None:
+    """«и ещё 3 хода» долго было надписью: ``dot_turns`` не читал никто.
+
+    Проверяется не «эффект висит», а «здоровья стало меньше», потому что сломано
+    было именно второе.
+    """
+    skill = content.skill("rogue_poison_blade")
+    hero = caster("rogue", "human", skill.code)
+    hero = replace(hero, loadout=replace(hero.loadout, ranks={skill.code: 1}))
+
+    after = use(content, hero, start_combat(content, hero, (enemy(),)))
+    poisoned = after.enemies[0]
+    assert poisoned.effects.penalties() != ()
+
+    bleeding = spend_bleeding(after)
+    assert bleeding.enemies[0].health < poisoned.health
