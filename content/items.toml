@@ -388,6 +388,10 @@ effect = { kind = "buff_damage_percent", power = 15, turns = 3 }
 text = "Урон выше на 15 процентов на 3 хода."
 
 # --- Materials ---
+#
+# source: что это за сырьё. По нему узел решает, что в нём вообще может лежать:
+# из зарослей не выкапывают руду, а с останков не срезают травы. Значения —
+# "травы", "руда", "шкуры", "обломки"; материал без source годится отовсюду.
 
 [[item]]
 # Ключ остался волчьим с первой недели разработки, а падала эта шкура и с
@@ -396,6 +400,7 @@ text = "Урон выше на 15 процентов на 3 хода."
 id = "wolf_pelt"
 name = "Звериная шкура"
 kind = "material"
+source = "шкуры"
 slot = "none"
 rarity = "common"
 level = 1
@@ -407,6 +412,7 @@ text = "Шкура зверя, снятая на месте. Идёт кожев
 id = "iron_scrap"
 name = "Железный лом"
 kind = "material"
+source = "обломки"
 slot = "none"
 rarity = "common"
 level = 1
@@ -418,6 +424,7 @@ text = "Обломки железа: гвозди, пряжки, куски ок
 id = "mountain_ore"
 name = "Горная руда"
 kind = "material"
+source = "руда"
 slot = "none"
 rarity = "common"
 level = 8
@@ -429,6 +436,7 @@ text = "Куски породы с рыжими прожилками, тяжел
 id = "meadow_herbs"
 name = "Луговые травы"
 kind = "material"
+source = "травы"
 slot = "none"
 rarity = "common"
 level = 1
@@ -440,6 +448,7 @@ text = "Пучок травы, перевязанный лыком, ещё вл�
 id = "grove_resin"
 name = "Смола рощи"
 kind = "material"
+source = "травы"
 slot = "none"
 rarity = "uncommon"
 level = 6
@@ -454,6 +463,7 @@ text = "Тягучая смола, пахнет хвоей."
 id = "bog_iron"
 name = "Болотная руда"
 kind = "material"
+source = "руда"
 slot = "none"
 rarity = "common"
 level = 5
@@ -465,6 +475,7 @@ text = "Бурые комья со дна, тяжелее, чем кажутся
 id = "cave_crystal"
 name = "Пещерный кристалл"
 kind = "material"
+source = "руда"
 slot = "none"
 rarity = "uncommon"
 level = 12
@@ -476,6 +487,7 @@ text = "Скол с натёка, холодный и мутный внутри.
 id = "frost_lichen"
 name = "Мёрзлый лишайник"
 kind = "material"
+source = "травы"
 slot = "none"
 rarity = "uncommon"
 level = 14

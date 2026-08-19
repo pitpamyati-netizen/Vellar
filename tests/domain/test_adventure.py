@@ -266,3 +266,22 @@ def test_the_same_descent_pays_the_same_thing_twice(content: GameContent, hero: 
     first = adventure.descent_prize(content, hero, level=8, seed=b"one-run")
     second = adventure.descent_prize(content, hero, level=8, seed=b"one-run")
     assert (first.gold, first.item_id) == (second.gold, second.item_id)
+
+
+def test_a_gathering_node_gives_what_it_is_named_after(content: GameContent) -> None:
+    """«Полезные травы», отдающие железный лом, — это та же ошибка, что волчья
+    шкура с кабана."""
+    from mmorpg.domain.entities.location import LocationNode, NodeKind
+    from mmorpg.domain.rules.adventure import GATHER_SOURCES, resolve_search
+
+    hero = Character(id=1, user_id=1, name="Аргус", race_id="human", class_id="warrior", level=5)
+    for name, wanted in GATHER_SOURCES.items():
+        node = LocationNode(index=1, kind=NodeKind.GATHER, name=name, level=4, links=(0,))
+        found = {
+            resolve_search(content, hero, node, seed=f"try-{name}-{attempt}".encode()).item_id
+            for attempt in range(40)
+        }
+        for item_id in found:
+            if not item_id:
+                continue
+            assert content.item(item_id).source == wanted, f"{name} отдал {item_id}"

@@ -332,7 +332,9 @@ class PlayState:
 def go_back(state: PlayState) -> PlayState:
     """Один шаг назад, с сохранением всего, что уже выбрано."""
     stack, previous = state.stack.pop()
-    cleaned = replace(state, pending=PendingWrite(), fight="", keeper_typing="")
+    # Уходя, забываем и заданный вопрос: набранное после «Поиска» на другом
+    # экране означало бы уже не поиск, а неизвестную кнопку.
+    cleaned = replace(state, pending=PendingWrite(), fight="", keeper_typing="", searching=False)
     if previous is None:
         target = back_target(state.screen) or ScreenId.MAIN_MENU
         return replace(cleaned, screen=target, stack=NavigationStack((target,)), notice="")

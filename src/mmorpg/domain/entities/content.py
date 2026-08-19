@@ -176,6 +176,9 @@ class Item:
     skill_modifiers: Mapping[str, float]
     stack: int = 1
     effect: ItemEffect | None = None
+    #: Что это за сырьё - "травы", "руда", "шкуры", "обломки". Пусто у всего,
+    #: что сырьём не является, и у сырья, которое годится отовсюду.
+    source: str = ""
 
     @property
     def is_equipment(self) -> bool:

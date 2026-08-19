@@ -576,6 +576,7 @@ def advance(
             notice="",
             pending=PendingWrite(),
             fight="",
+            searching=False,
         )
     if command.intent is Intent.BACK:
         return go_back(state)
@@ -873,6 +874,11 @@ def _handle_craft(
     clock: Clock,
     world_seed: str,
 ) -> PlayState:
+    # ``render`` уже умеет отступить на список ремёсел, а разбор нажатия - ещё
+    # нет: без этой строки нажатие на экране исчезнувшего ремесла падало
+    # (``Claude.md``, правило 8: сохранённому состоянию не верят).
+    if not content.has_craft(state.craft_id):
+        return go_back(state).with_notice("Такого ремесла в игре больше нет.")
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите кнопку работы или «Назад».")
     craft = content.craft(state.craft_id)
@@ -1318,6 +1324,8 @@ def _handle_pick(
 def _handle_edge(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
+    if not content.has_skill(state.edge_skill):
+        return go_back(replace(state, edge_skill="")).with_notice("Этого умения в игре больше нет.")
     if command.intent is not Intent.SELECT:
         return state.with_notice("Выберите одну из двух граней.")
     skill = content.skill(state.edge_skill)
@@ -1416,6 +1424,10 @@ def _handle_board(
 def _handle_offer(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
+    if not content.has_quest(state.quest_id):
+        return go_back(replace(state, quest_id="")).with_notice(
+            "Этого подряда больше нет. Посмотрите доску заново."
+        )
     if command.intent is not Intent.SELECT:
         return state.with_notice("Согласитесь, спросите или уйдите.")
     quest = content.quest(state.quest_id)
@@ -1619,13 +1631,13 @@ def _handle_location(
     return state.with_notice("Не узнал это действие. Нажмите кнопку узла.")
 
 
-def _empty_node_line(left: node_rules.Standing) -> str:
-    """Сказать, что узел вычищен и когда он снова будет полон."""
-    minutes = max(1, (left.refill_in + 59) // 60)
-    return (
-        f"Здесь сейчас пусто: всё уже разобрали. Новое появится примерно через "
-        f"{minutes} {format_screens.plural(minutes, 'минуту', 'минуты', 'минут')}."
-    )
+def _empty_node_line(node_name: str) -> str:
+    """Ответ на действие в вычищенном узле.
+
+    Сколько ждать, скажет строкой ниже сам экран: повторять это дважды подряд
+    значит заставить слушать одно и то же два раза.
+    """
+    return f"{node_name}: здесь уже всё разобрали. Идите к соседнему узлу или загляните позже."
 
 
 def _resolve_node_action(
@@ -1651,7 +1663,7 @@ def _resolve_node_action(
         visit_seed(world_seed, state.session), location, location_state, index, now
     )
     if left.empty:
-        return state.with_notice(_empty_node_line(left))
+        return state.with_notice(_empty_node_line(node.name))
 
     if node.kind.is_combat:
         # The handler builds the fight itself: it owns the enemy generation and
@@ -1667,11 +1679,10 @@ def _resolve_node_action(
         write = write.with_items((result.item_id, 1))
 
     said = search_line(content, node.name, result)
-    if left.left > 1:
-        word = screens.NODE_COUNT_WORDS.get(node.kind, "Осталось")
-        said = f"{said} {word}: {left.left - 1} из {left.size}."
-    else:
-        said = f"{said} Узел вычищен: новое появится через несколько минут."
+    # Сколько осталось, экран скажет строкой ниже своими словами - здесь это
+    # было бы второй раз подряд об одном и том же.
+    if left.left <= 1:
+        said = f"{said} Узел вычищен."
     return state.storing(write).with_notice(said)
 
 

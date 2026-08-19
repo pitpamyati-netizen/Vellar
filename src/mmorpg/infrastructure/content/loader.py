@@ -578,6 +578,7 @@ def _parse_items(
                 modifiers=modifiers,
                 skill_modifiers=skill_modifiers,
                 stack=int(entry.get("stack", 1)),
+                source=str(entry.get("source", "")),
                 effect=effect,
             )
         )

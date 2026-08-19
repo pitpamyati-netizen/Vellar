@@ -146,3 +146,18 @@ def test_all_problems_are_reported_together(tmp_path: Path) -> None:
     problems = error.value.problems
     assert any("budget" in problem for problem in problems)
     assert any("no_such_skill" in problem for problem in problems)
+
+
+def test_every_material_says_what_kind_of_stock_it_is(content: GameContent) -> None:
+    """Сырьё без вида падало бы из любого узла: травы из рудной жилы и наоборот."""
+    from mmorpg.domain.entities.content import ItemKind
+    from mmorpg.domain.rules.adventure import GATHER_SOURCES
+
+    materials = [item for item in content.items if item.kind is ItemKind.MATERIAL]
+    assert materials
+    for item in materials:
+        assert item.source, item.id
+
+    known = set(GATHER_SOURCES.values())
+    for wanted in known:
+        assert any(item.source == wanted for item in materials), wanted

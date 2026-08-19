@@ -42,6 +42,18 @@ SHRINE_HEAL_PERCENT = 35
 CACHE_ITEM_CHANCE = 45.0
 GATHER_ITEM_CHANCE = 80.0
 
+#: Что лежит в узле для сбора, по его имени. Из зарослей не выкапывают руду, а с
+#: останков не срезают травы: узел, который отдаёт железный лом вместо трав,
+#: читается как ошибка - ровно так же, как волчья шкура с кабана.
+#: Имена приходят из ``procgen/location.NODE_NAMES``; узел, которого тут нет,
+#: отдаёт любое сырьё по уровню.
+GATHER_SOURCES: dict[str, str] = {
+    "Заросли": "травы",
+    "Полезные травы": "травы",
+    "Жила руды": "руда",
+    "Останки": "шкуры",
+}
+
 
 @dataclass(frozen=True, slots=True)
 class Aftermath:
@@ -135,7 +147,13 @@ def resolve_search(
                 item_id = _pick_item(content, source, node.level, materials_only=False)
         case NodeKind.GATHER:
             if source.uniform(0, 100) < GATHER_ITEM_CHANCE:
-                item_id = _pick_item(content, source, node.level, materials_only=True)
+                item_id = _pick_item(
+                    content,
+                    source,
+                    node.level,
+                    materials_only=True,
+                    of_source=GATHER_SOURCES.get(node.name, ""),
+                )
         case NodeKind.SHRINE:
             current = working.health_or(stats.max_health)
             restored = round(stats.max_health * SHRINE_HEAL_PERCENT / 100)
@@ -282,17 +300,38 @@ def use_consumable(
 
 
 def _pick_item(
-    content: GameContent, source: random.Random, level: int, *, materials_only: bool
+    content: GameContent,
+    source: random.Random,
+    level: int,
+    *,
+    materials_only: bool,
+    of_source: str = "",
 ) -> str:
-    """A find that suits the level. Empty when content has nothing that low."""
-    pool = [
+    """A find that suits the level. Empty when content has nothing that low.
+
+    ``of_source`` narrows a gather to what the node actually holds, and it is
+    never given up on: if content has nothing of that kind low enough, the node
+    hands over the cheapest thing of the right kind instead of the wrong kind.
+    An ore vein that pays in herbs is the same bug as a boar wearing a wolf's
+    skin, and the whole point of ``source`` is not to have it.
+    """
+    fits_kind = [
         item
         for item in content.items
-        if item.level <= max(1, level)
-        and (
-            item.kind is ItemKind.MATERIAL if materials_only else item.kind is not ItemKind.MATERIAL
-        )
+        if (item.kind is ItemKind.MATERIAL)
+        is materials_only  # материалы для сбора, всё остальное - для тайников
     ]
+    pool = [item for item in fits_kind if item.level <= max(1, level)]
+    if of_source:
+        right = [item for item in fits_kind if item.source == of_source]
+        by_level = [item for item in right if item.level <= max(1, level)]
+        if by_level:
+            pool = by_level
+        elif right:
+            lowest = min(item.level for item in right)
+            pool = [item for item in right if item.level == lowest]
+        else:
+            pool = []
     if not pool:
         return ""
     return source.choice(pool).id

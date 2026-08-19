@@ -289,8 +289,18 @@ def test_an_emptied_node_says_when_it_fills_up_again(
         location_state=emptied,
     )
     assert refused.pending.node_take < 0
-    assert "пусто" in refused.notice
-    assert "минут" in refused.notice
+    assert "разобрали" in refused.notice
+    # Сколько ждать, говорит сам экран - и говорит это один раз.
+    text = render(
+        content,
+        hero,
+        refused,
+        world_seed=WORLD_SEED,
+        clock=Clock(now=160),
+        location_state=emptied,
+    ).text()
+    assert "Здесь пусто. Новое появится примерно через" in text
+    assert text.count("Новое появится") == 1, "срок называют один раз, а не дважды подряд"
 
 
 def test_leaving_a_location_clears_the_session(

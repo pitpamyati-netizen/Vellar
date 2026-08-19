@@ -71,6 +71,9 @@ NODE_COUNT_WORDS: dict[NodeKind, str] = {
     NodeKind.SHRINE: "Святилищ",
 }
 
+#: Узел, о котором экрану ничего не сказали: держит ноль и ничего не обещает.
+EMPTY_NODE = Standing(index=0, size=0, left=0, taken=0, wave=0, refill_in=0)
+
 LEAVE_LOCATION = label("Покинуть локацию")
 
 
@@ -314,30 +317,36 @@ def location_screen(
     notice: str = "",
 ) -> Screen:
     neighbours = tuple(location.node(index) for index in node.links)
-    here = standing.get(
-        node.index, Standing(index=node.index, size=0, left=0, taken=0, wave=0, refill_in=0)
-    )
+
+    def left_at(index: int) -> Standing:
+        """Что стоит в узле. Про узел, о котором не сказали, экран не падает."""
+        return standing.get(index, EMPTY_NODE)
+
+    here = left_at(node.index)
     # The doors are never counted: they hold nothing, and counting them would make
     # a location look half empty the moment you walked in.
     worth_doing = tuple(
         item for item in location.nodes if item.kind not in {NodeKind.ENTRANCE, NodeKind.EXIT}
     )
-    busy = sum(1 for item in worth_doing if not standing[item.index].empty)
+    busy = sum(1 for item in worth_doing if not left_at(item.index).empty)
     boss = next((item for item in location.nodes if item.kind is NodeKind.BOSS_BATTLE), None)
 
-    lines = [
-        notice or f"Локация {location.name}, узел {node.index}: {node.name}.",
-        f"{NODE_DESCRIPTIONS[node.kind].capitalize()}.",
-    ]
-    risk = risk_line(node, character_level)
-    if risk:
-        lines.append(risk)
+    lines = [notice or f"Локация {location.name}, узел {node.index}: {node.name}."]
     if node.kind in {NodeKind.ENTRANCE, NodeKind.EXIT}:
+        lines.append(f"{NODE_DESCRIPTIONS[node.kind].capitalize()}.")
         lines.append("Это дверь, а не дело: здесь ничего не найти.")
+    elif here.empty:
+        # "Здесь есть что собрать" сразу под "здесь пусто" - это две строки,
+        # которые спорят друг с другом. Пустой узел говорит только одно.
+        lines.append(node_left_line(here, node.kind))
     else:
+        lines.append(f"{NODE_DESCRIPTIONS[node.kind].capitalize()}.")
+        risk = risk_line(node, character_level)
+        if risk:
+            lines.append(risk)
         lines.append(node_left_line(here, node.kind))
 
-    lines.append(f"Узлов с делом: {busy} из {len(worth_doing)}.")
+    lines.append(f"Узлов, где ещё что-то есть: {busy} из {len(worth_doing)}.")
     if busy == len(worth_doing):
         # Said once, at the start of a visit: what this place is and how it works.
         lines.append(
@@ -349,14 +358,17 @@ def location_screen(
             "кто и что в узлах — заводится заново через несколько минут после того, "
             "как узел вычистили."
         )
-    if boss is not None and not standing[boss.index].empty:
+    if boss is not None and not left_at(boss.index).empty:
         lines.append(
             f"Хозяин логова стоит в узле {boss.index}, уровень {boss.level}. Мимо есть путь."
         )
 
     lines.append("Отсюда ведут тропы:")
     for neighbour in neighbours:
-        mark = "" if not standing[neighbour.index].empty else ", сейчас пусто"
+        # Двери не пустеют: у них и не было ничего, и говорить о них "сейчас
+        # пусто" значит обещать, что там когда-то что-то будет.
+        door = neighbour.kind in {NodeKind.ENTRANCE, NodeKind.EXIT}
+        mark = "" if door or not left_at(neighbour.index).empty else ", сейчас пусто"
         lines.append(
             f"Узел {neighbour.index}: {neighbour.name}, {NODE_DESCRIPTIONS[neighbour.kind]}{mark}."
         )
