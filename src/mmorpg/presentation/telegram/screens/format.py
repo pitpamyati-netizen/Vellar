@@ -56,6 +56,23 @@ def found(count: int) -> str:
     return f"Найдено {count} {plural(count, 'запись', 'записи', 'записей')}"
 
 
+def duration(seconds: int) -> str:
+    """Срок словами, самой крупной мерой, какая помещается.
+
+    Точность здесь не нужна и вредна: заблокированному важно «ещё двое суток», а
+    не «двое суток три часа одиннадцать минут». Меньше минуты не бывает: ноль
+    сказать нечем.
+    """
+    if seconds >= 24 * 60 * 60:
+        days = seconds // (24 * 60 * 60)
+        return f"{days} {plural(days, 'сутки', 'суток', 'суток')}"
+    if seconds >= 60 * 60:
+        hours = seconds // (60 * 60)
+        return f"{hours} {plural(hours, 'час', 'часа', 'часов')}"
+    minutes = max(1, seconds // 60)
+    return f"{minutes} {plural(minutes, 'минута', 'минуты', 'минут')}"
+
+
 def gold(value: int) -> str:
     return f"{value} {plural(value, 'золотой', 'золотых', 'золотых')}"
 

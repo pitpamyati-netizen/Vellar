@@ -57,6 +57,11 @@ Only when the panel or what it edits changed. The rules are in
       back exactly the world the files describe
 - [ ] A half-written edit is stored, is *not* in the game, and the card says why
 - [ ] Anything the panel deletes for good is confirmed twice or reports its number
+- [ ] A ban lands on the account, not on the character, and the banned player is
+      turned away before any router - with one sentence in private, in silence in
+      the group
+- [ ] Everything done to somebody else's character reaches `keeper_log`: a keeper
+      action nobody can look up is one nobody answers for
 
 ## 4. Determinism
 
@@ -120,6 +125,10 @@ Only when something that pays or charges changed.
 - [ ] Group commands answer in one message and stay silent for other bots' traffic
 - [ ] `GROUP_ID` names the real group. `*` is for trying the commands out; left in
       production it answers in every group anybody adds the bot to
+- [ ] The group rules are pinned there, in the players' own words: what the bot
+      answers to, that trades settle only through it, and that a keeper may ban an
+      account for a term (`docs/keeper.md`, "Блокировка и журнал"). Rules nobody
+      published are rules nobody agreed to
 
 ## 8. Release
 

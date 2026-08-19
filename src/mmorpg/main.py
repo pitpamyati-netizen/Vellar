@@ -49,6 +49,7 @@ from mmorpg.infrastructure.persistence import (
     InMemoryCharacterRepository,
     InMemoryContentOverlayRepository,
     InMemoryInventoryRepository,
+    InMemoryKeeperLogRepository,
     InMemoryPrivacyRepository,
     InMemoryTradeRepository,
     InMemoryUserRepository,
@@ -64,6 +65,7 @@ from mmorpg.presentation.telegram.middlewares.dependencies import (
 )
 from mmorpg.presentation.telegram.middlewares.errors import ErrorMiddleware
 from mmorpg.presentation.telegram.middlewares.idempotency import IdempotencyMiddleware
+from mmorpg.presentation.telegram.middlewares.moderation import BanMiddleware
 from mmorpg.presentation.telegram.middlewares.retry import RetryRequestMiddleware
 from mmorpg.retry import RetryPolicy, keep_trying
 
@@ -119,6 +121,9 @@ async def build_application(settings: Settings) -> Application:
     dispatcher.update.outer_middleware(IdempotencyMiddleware(idempotency))
     dispatcher.update.outer_middleware(DependencyMiddleware(dependencies))
     dispatcher.message.middleware(ErrorMiddleware())
+    # Внешняя, а не внутренняя: заблокированный не должен дойти ни до одного
+    # роутера, а внутренние обёртки диспетчера до вложенных роутеров не доходят.
+    dispatcher.message.outer_middleware(BanMiddleware())
 
     dispatcher.include_router(creation.build_router())
     # The fight router goes first: it claims the two combat states, and the play
@@ -167,6 +172,7 @@ async def _build_adapters(
             inventory=InMemoryInventoryRepository(),
             trades=InMemoryTradeRepository(),
             privacy=InMemoryPrivacyRepository(),
+            keeper_log=InMemoryKeeperLogRepository(),
             state_cache=InMemoryStateCache(),
             locations=InMemoryLocationStateCache(),
             overlays=InMemoryContentOverlayRepository(),
@@ -181,6 +187,7 @@ async def _build_adapters(
         PostgresCharacterRepository,
         PostgresContentOverlayRepository,
         PostgresInventoryRepository,
+        PostgresKeeperLogRepository,
         PostgresPrivacyRepository,
         PostgresTradeRepository,
         PostgresUserRepository,
@@ -208,6 +215,7 @@ async def _build_adapters(
         inventory=PostgresInventoryRepository(pool),
         trades=PostgresTradeRepository(pool),
         privacy=PostgresPrivacyRepository(pool),
+        keeper_log=PostgresKeeperLogRepository(pool),
         state_cache=state_cache,
         locations=locations,
         overlays=PostgresContentOverlayRepository(pool),

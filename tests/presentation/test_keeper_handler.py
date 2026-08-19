@@ -30,6 +30,7 @@ from mmorpg.application.services import keeper_panel
 from mmorpg.application.services.content import ContentRegistry
 from mmorpg.config import Settings
 from mmorpg.domain.entities import Character, GameContent
+from mmorpg.domain.entities.moderation import KeeperAction
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.ports.repositories import User as Account
 from mmorpg.domain.rules.keeper import GOLD_STEP
@@ -38,6 +39,7 @@ from mmorpg.infrastructure.persistence.memory import (
     InMemoryCharacterRepository,
     InMemoryContentOverlayRepository,
     InMemoryInventoryRepository,
+    InMemoryKeeperLogRepository,
     InMemoryUserRepository,
 )
 from mmorpg.presentation.telegram.handlers import play as play_handler
@@ -119,6 +121,7 @@ class Keeper:
                 self.deps["characters"],
                 self.deps["inventory"],
                 self.deps["users"],
+                self.deps["keeper_log"],
                 self.deps["deltas"],
                 self.deps["overlays"],
                 self.deps["registry"],
@@ -157,6 +160,11 @@ def overlays() -> InMemoryContentOverlayRepository:
 
 
 @pytest.fixture
+def keeper_log() -> InMemoryKeeperLogRepository:
+    return InMemoryKeeperLogRepository()
+
+
+@pytest.fixture
 def registry(content: GameContent) -> ContentRegistry:
     return ContentRegistry(content)
 
@@ -173,6 +181,7 @@ async def keeper(
     characters: InMemoryCharacterRepository,
     users: InMemoryUserRepository,
     overlays: InMemoryContentOverlayRepository,
+    keeper_log: InMemoryKeeperLogRepository,
     registry: ContentRegistry,
     telegram: FakeTelegram,
 ) -> Keeper:
@@ -199,6 +208,7 @@ async def keeper(
         characters=characters,
         inventory=InMemoryInventoryRepository(),
         users=users,
+        keeper_log=keeper_log,
         deltas=InMemoryLocationStateCache(),
         overlays=overlays,
         registry=registry,
@@ -615,6 +625,7 @@ async def test_a_player_who_is_not_a_keeper_gets_nothing_from_the_panel(
         characters,
         InMemoryInventoryRepository(),
         users,
+        InMemoryKeeperLogRepository(),
         InMemoryLocationStateCache(),
         overlays,
         registry,
@@ -642,3 +653,80 @@ async def test_ordinary_play_costs_the_panel_nothing(
     await keeper.press("Мир", "Дубно")
 
     assert counted == []
+
+
+# --- блокировка --------------------------------------------------------
+
+
+async def test_a_ban_lands_on_the_account_and_is_written_down(
+    keeper: Keeper,
+    users: InMemoryUserRepository,
+    keeper_log: InMemoryKeeperLogRepository,
+    merla: Character,
+) -> None:
+    """Наказание доходит до базы, а не только до экрана."""
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(keeper.button_with("Мерла"))
+    assert "Блокировка: нет." in keeper.sent.last.text()
+
+    await keeper.press(labels.KEEPER_BAN.text, labels.KEEPER_REASON.text, "обман в сделке")
+    await keeper.press("На сутки")
+
+    account = await users.get(merla.user_id)
+    assert account is not None
+    assert account.ban.reason == "обман в сделке"
+    assert account.ban.until > int(time.time())
+    # Карточка после наказания говорит о нём, и кнопка на ней обратная.
+    assert "Блокировка: есть" in keeper.sent.last.text()
+    assert labels.KEEPER_UNBAN.text in keeper.buttons()
+
+    written = await keeper_log.latest()
+    assert [entry.action for entry in written] == [KeeperAction.BAN]
+    assert written[0].target == "Мерла"
+    assert written[0].keeper_name == "Смотритель"
+
+
+async def test_a_ban_is_lifted_and_that_is_written_down_too(
+    keeper: Keeper,
+    users: InMemoryUserRepository,
+    keeper_log: InMemoryKeeperLogRepository,
+    merla: Character,
+) -> None:
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(keeper.button_with("Мерла"))
+    await keeper.press(labels.KEEPER_BAN.text, "Навсегда")
+
+    await keeper.press(labels.KEEPER_UNBAN.text)
+
+    account = await users.get(merla.user_id)
+    assert account is not None and account.ban.until == 0
+    assert [entry.action for entry in await keeper_log.latest()] == [
+        KeeperAction.UNBAN,
+        KeeperAction.BAN,
+    ]
+
+
+async def test_the_journal_shows_what_was_done_and_by_whom(
+    keeper: Keeper, keeper_log: InMemoryKeeperLogRepository, merla: Character
+) -> None:
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(keeper.button_with("Мерла"))
+    await keeper.press(labels.KEEPER_GOLD.text)
+
+    screen = await keeper.press(labels.MAIN_MENU.text, labels.KEEPER.text, labels.KEEPER_LOG.text)
+
+    assert screen.id is ScreenId.KEEPER_LOG
+    assert "Смотритель выдал золото Мерла" in screen.text()
+    assert (await keeper_log.latest())[0].keeper_id == KEEPER_ACCOUNT
+
+
+async def test_the_panel_counts_who_is_banned(
+    keeper: Keeper, users: InMemoryUserRepository, merla: Character
+) -> None:
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(keeper.button_with("Мерла"))
+    await keeper.press(labels.KEEPER_BAN.text, "На неделю")
+
+    screen = await keeper.press(labels.MAIN_MENU.text, labels.KEEPER.text, labels.KEEPER_STATS.text)
+
+    assert "Заблокировано смотрителем: 1." in screen.text()

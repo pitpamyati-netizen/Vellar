@@ -19,6 +19,7 @@ from dataclasses import replace
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, GameContent
+from mmorpg.domain.entities.moderation import KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.rules import keeper as keeper_rules
 from mmorpg.domain.rules import overlay as overlay_rules
@@ -28,6 +29,7 @@ from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.flows.state import (
     PLAYER_MODE,
     TYPING_NAME,
+    TYPING_REASON,
     TYPING_VALUE,
     PendingWrite,
     PlayState,
@@ -56,6 +58,8 @@ PANEL: frozenset[ScreenId] = frozenset(
         ScreenId.KEEPER_PLAYER,
         ScreenId.KEEPER_STATS,
         ScreenId.KEEPER_SERVICE,
+        ScreenId.KEEPER_BAN,
+        ScreenId.KEEPER_LOG,
     }
 )
 SCREENS: frozenset[ScreenId] = PANEL | {ScreenId.NPCS, ScreenId.NPC}
@@ -70,6 +74,12 @@ ARMED = "delete"
 
 #: Разновидности правок строками - тем, чем они лежат в состоянии автомата.
 KINDS: frozenset[str] = frozenset(kind.value for kind in OverlayKind)
+
+
+def _note(action: KeeperAction, target: str, detail: str = "") -> KeeperEntry:
+    """Заготовка строки журнала. Момент и имя смотрителя проставит хендлер."""
+    return KeeperEntry(action=action, target=target, detail=detail)
+
 
 LOST_RIGHT = "Этот экран больше не ваш."
 PRESS_A_BUTTON = "Нажмите кнопку панели."
@@ -148,6 +158,10 @@ def _render_panel(
             return keeper_screens.stats_screen(view.census, state.notice)
         case ScreenId.KEEPER_SERVICE:
             return keeper_screens.service_screen(view, state.notice)
+        case ScreenId.KEEPER_BAN if view.target is not None:
+            return keeper_screens.ban_screen(view.target, view, state.keeper_reason, state.notice)
+        case ScreenId.KEEPER_LOG:
+            return keeper_screens.log_screen(view, state.notice)
         case ScreenId.KEEPER:
             return keeper_screens.keeper_screen(content, character, stats, view, state.notice)
         case _:
@@ -179,8 +193,10 @@ def awaits_text(state: PlayState, command: Command) -> bool:
     """Ждёт ли этот экран набранного значения, а не нажатой кнопки."""
     if command.intent is not Intent.UNKNOWN or not state.keeper_typing:
         return False
-    return (state.screen is ScreenId.KEEPER_FIELD and state.keeper_typing == TYPING_VALUE) or (
-        state.screen is ScreenId.KEEPER_PLAYERS and state.keeper_typing == TYPING_NAME
+    return (
+        (state.screen is ScreenId.KEEPER_FIELD and state.keeper_typing == TYPING_VALUE)
+        or (state.screen is ScreenId.KEEPER_PLAYERS and state.keeper_typing == TYPING_NAME)
+        or (state.screen is ScreenId.KEEPER_BAN and state.keeper_typing == TYPING_REASON)
     )
 
 
@@ -194,6 +210,10 @@ def typed(
         return state.with_notice("Это команда, а не значение. Наберите значение без косой черты.")
     if state.screen is ScreenId.KEEPER_PLAYERS:
         return _found(state, view, text)
+    if state.screen is ScreenId.KEEPER_BAN:
+        return replace(state, keeper_typing="", keeper_reason=text.strip()).with_notice(
+            f"Причина записана: {text.strip()}. Теперь нажмите срок."
+        )
     return _value(content, state, view, text)
 
 
@@ -219,7 +239,8 @@ def _stored(state: PlayState, record: OverlayRecord, said: str) -> PlayState:
     walked = replace(state, keeper_typing="", keeper_page=PageState())
     if walked.screen is ScreenId.KEEPER_FIELD:
         walked = go_back(walked)
-    return walked.storing(PendingWrite(edit=record)).with_notice(said)
+    note = _note(KeeperAction.EDIT, record.entity_id, said)
+    return walked.storing(PendingWrite(edit=record, note=note)).with_notice(said)
 
 
 # --- шаг ---------------------------------------------------------------
@@ -254,6 +275,8 @@ def advance(
             return _step_player(content, state, command, view)
         case ScreenId.KEEPER_SERVICE:
             return _step_service(state, command)
+        case ScreenId.KEEPER_BAN:
+            return _step_ban(state, command, view)
         case _:
             return state.with_notice("Здесь только чтение. Нажмите «Назад».")
 
@@ -294,6 +317,8 @@ def _step_panel(
         return state.at(ScreenId.KEEPER_STATS)
     if labels.KEEPER_SERVICE.matches(command.argument):
         return state.at(ScreenId.KEEPER_SERVICE)
+    if labels.KEEPER_LOG.matches(command.argument):
+        return state.at(ScreenId.KEEPER_LOG)
     return _grant(content, character, state, command, own=True)
 
 
@@ -307,13 +332,23 @@ def _grant(
 ) -> PlayState:
     """Четыре выдачи. Те же самые и себе, и чужому персонажу."""
 
-    def store(changed: Character, said: str) -> PlayState:
-        write = PendingWrite(character=changed) if own else PendingWrite(other=changed)
+    def store(changed: Character, said: str, action: KeeperAction) -> PlayState:
+        # Выдача себе не пишется в журнал: смотритель отвечает за то, что сделал
+        # с чужим, а свой персонаж служебный и так.
+        write = (
+            PendingWrite(character=changed)
+            if own
+            else PendingWrite(other=changed, note=_note(action, changed.name, said))
+        )
         return state.storing(write).with_notice(said)
 
     if labels.KEEPER_GOLD.matches(command.argument):
         grown = keeper_rules.grant_gold(character)
-        return store(grown, f"Выдано {keeper_rules.GOLD_STEP} золота. Теперь: {grown.gold}.")
+        return store(
+            grown,
+            f"Выдано {keeper_rules.GOLD_STEP} золота. Теперь: {grown.gold}.",
+            KeeperAction.GOLD,
+        )
     if labels.KEEPER_LEVEL.matches(command.argument):
         grown, level_up = keeper_rules.raise_level(content, character)
         if not level_up.levels_gained:
@@ -322,16 +357,18 @@ def _grant(
             grown,
             f"Уровень {grown.level}. Очков характеристик: {level_up.stat_points}, "
             f"очков умений: {level_up.skill_points}.",
+            KeeperAction.LEVEL,
         )
     if labels.KEEPER_HEAL.matches(command.argument):
         healed = keeper_rules.heal(content, character)
-        return store(healed, f"Раны залечены. Здоровье: {healed.health}.")
+        return store(healed, f"Раны залечены. Здоровье: {healed.health}.", KeeperAction.HEAL)
     if labels.KEEPER_POINTS.matches(command.argument):
         granted = keeper_rules.grant_points(character)
         return store(
             granted,
             f"Выдано очков: характеристик {granted.unspent_stat_points}, "
             f"умений {granted.unspent_skill_points} всего.",
+            KeeperAction.POINTS,
         )
     return state.with_notice(PRESS_A_BUTTON)
 
@@ -450,17 +487,28 @@ def _step_entity(
     if labels.KEEPER_FORGET.matches(command.argument):
         return (
             go_back(state)
-            .storing(PendingWrite(forget=(record.kind.value, record.entity_id)))
+            .storing(
+                PendingWrite(
+                    forget=(record.kind.value, record.entity_id),
+                    note=_note(KeeperAction.FORGET, record.entity_id),
+                )
+            )
             .with_notice("Правка снята. Осталось то, что записано в content.")
         )
     if labels.KEEPER_REMOVE.matches(command.argument):
-        return state.storing(PendingWrite(edit=replace(record, removed=True))).with_notice(
-            "Убрано из игры. Вернуть можно кнопкой «Вернуть в игру»."
-        )
+        return state.storing(
+            PendingWrite(
+                edit=replace(record, removed=True),
+                note=_note(KeeperAction.EDIT, record.entity_id, "убрано из игры"),
+            )
+        ).with_notice("Убрано из игры. Вернуть можно кнопкой «Вернуть в игру».")
     if labels.KEEPER_RETURN.matches(command.argument):
-        return state.storing(PendingWrite(edit=replace(record, removed=False))).with_notice(
-            "Вернулось в игру."
-        )
+        return state.storing(
+            PendingWrite(
+                edit=replace(record, removed=False),
+                note=_note(KeeperAction.EDIT, record.entity_id, "возвращено в игру"),
+            )
+        ).with_notice("Вернулось в игру.")
 
     spec = keeper_screens.field_from_button(record, command.argument)
     if spec is None:
@@ -520,7 +568,8 @@ def _toggled(
         picked.append(chosen)
         said = f"{overlay_rules.option_name(content, spec, chosen)}: добавлено."
     edited = record.with_field(spec.key, ", ".join(picked))
-    return state.storing(PendingWrite(edit=edited)).with_notice(said)
+    note = _note(KeeperAction.EDIT, edited.entity_id, said)
+    return state.storing(PendingWrite(edit=edited, note=note)).with_notice(said)
 
 
 def _step_move(
@@ -545,9 +594,13 @@ def _step_move(
     if chosen is None:
         return state.with_notice("Не узнал город. Нажмите строку из списка.")
     walked = replace(go_back(state), keeper_kind="", keeper_field="")
+    city_name = content.city(chosen).name
     return walked.storing(
-        PendingWrite(other=keeper_rules.move_to(view.target, chosen))
-    ).with_notice(f"{view.target.name} переведён в город {content.city(chosen).name}.")
+        PendingWrite(
+            other=keeper_rules.move_to(view.target, chosen),
+            note=_note(KeeperAction.MOVE, view.target.name, city_name),
+        )
+    ).with_notice(f"{view.target.name} переведён в город {city_name}.")
 
 
 def _step_players(
@@ -580,6 +633,10 @@ def _step_player(
         return replace(
             state, keeper_kind=PLAYER_MODE, keeper_field="city", keeper_page=PageState()
         ).at(ScreenId.KEEPER_FIELD)
+    if labels.KEEPER_BAN.matches(command.argument):
+        return replace(state, keeper_typing="", keeper_reason="").at(ScreenId.KEEPER_BAN)
+    if labels.KEEPER_UNBAN.matches(command.argument):
+        return _unban(state, view)
     if labels.KEEPER_DELETE.matches(command.argument):
         return _delete(state, view)
 
@@ -611,8 +668,55 @@ def _right(state: PlayState, command: Command, view: KeeperView) -> PlayState | 
     said = f"{target.name} теперь смотритель." if giving else f"{target.name} больше не смотритель."
     return (
         replace(state, keeper_typing="")
-        .storing(PendingWrite(keeper_grant=(target.user_id, giving)))
+        .storing(
+            PendingWrite(
+                keeper_grant=(target.user_id, giving),
+                note=_note(KeeperAction.PROMOTE if giving else KeeperAction.DEMOTE, target.name),
+            )
+        )
         .with_notice(said)
+    )
+
+
+def _unban(state: PlayState, view: KeeperView) -> PlayState:
+    """Снять блокировку. Всегда одним нажатием и всегда без вопросов.
+
+    Спрашивать «точно?» здесь нечего: ошибиться в сторону «человек играет» —
+    не та ошибка, ради которой стоит держать второе нажатие.
+    """
+    target = view.target
+    if target is None:  # pragma: no cover - проверено вызывающим
+        return state
+    walked = replace(state, keeper_typing="", keeper_reason="")
+    if walked.screen is ScreenId.KEEPER_BAN:
+        walked = go_back(walked)
+    return walked.storing(PendingWrite(ban=(target.user_id, "", ""))).with_notice(
+        f"{target.name}: блокировка снята."
+    )
+
+
+def _step_ban(state: PlayState, command: Command, view: KeeperView) -> PlayState:
+    """Срок нажимают, причину набирают. Блокировка ложится с нажатием срока."""
+    target = view.target
+    if target is None:
+        return go_back(state).with_notice("Того персонажа больше нет.")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите срок или «Указать причину».")
+    if labels.KEEPER_REASON.matches(command.argument):
+        return replace(state, keeper_typing=TYPING_REASON).with_notice(
+            "Наберите причину сообщением. Её прочитает тот, кого блокируют."
+        )
+    if labels.KEEPER_UNBAN.matches(command.argument):
+        return _unban(state, view)
+
+    sentence = keeper_screens.sentence_from_button(command.argument)
+    if sentence is None:
+        return state.with_notice("Не узнал срок. Нажмите строку из списка.")
+    reason = state.keeper_reason
+    walked = replace(go_back(state), keeper_typing="", keeper_reason="")
+    said = "навсегда" if sentence.forever else sentence.name.lower()
+    return walked.storing(PendingWrite(ban=(target.user_id, sentence.key, reason))).with_notice(
+        f"{target.name} заблокирован {said}."
     )
 
 
@@ -627,7 +731,12 @@ def _delete(state: PlayState, view: KeeperView) -> PlayState:
         )
     return (
         go_back(replace(state, keeper_target=0, keeper_typing=""))
-        .storing(PendingWrite(remove_character=target.id))
+        .storing(
+            PendingWrite(
+                remove_character=target.id,
+                note=_note(KeeperAction.DELETE, target.name),
+            )
+        )
         .with_notice(f"{target.name} удалён вместе с сумкой.")
     )
 

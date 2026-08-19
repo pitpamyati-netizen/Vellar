@@ -39,7 +39,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   вне боя), `tutorial` (шесть заданий обучения, маска на персонаже), `pvp`
   (поединок со слепком, защита новичков, ставка), `arena` (долговой круг:
   ставка, выплата, счёт сезона),
-  `turning` (Оборот на 300 уровне: заклад, Печать, голос и счёт), `keeper`
+  `turning` (Оборот на 300 уровне: заклад, Печать, голос и счёт),
+  `moderation` (сроки блокировки и названия действий для журнала), `keeper`
   (выдачи смотрителя себе и чужому персонажу), `overlay` (поля правки, проверка,
   наложение правок на содержимое), `group_commands` (грамматика группы),
   `group_offers` (предложения).
@@ -49,7 +50,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   (операции группы), `offers.py` (предложения в кэше), `keeper.py` (сверка флага
   смотрителя с `ADMIN_IDS` и с правом, выданным из панели; выдача такого права),
   `content.py` (реестр: содержимое плюс правки, живое),
-  `keeper_panel.py` (запись правок и уборка).
+  `keeper_panel.py` (запись правок и уборка), `moderation.py` (блокировка
+  аккаунта и журнал смотрителя).
 - `infrastructure/` — `persistence/`: `postgres`, `memory`, `pool`,
   `reconnect` (повтор запроса, потерявшего соединение); `cache/`:
   `redis_cache`, `memory`; `content/loader.py` (TOML → dataclass),
@@ -61,9 +63,10 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   `format`, `paginated`, `creation`, `play`, `combat`, `shop`, `skills`,
   `quests`, `crafts`, `city` (в том числе жители), `settings`, `tutorial`,
   `arena`, `chamber` (Палата, заклад, счётный вопрос), `keeper` (панель),
-  `group`),
+  `moderation` (что читает заблокированный), `group`),
   `keyboards/` (`labels`, `reply`), `middlewares/` (`dependencies`, `errors`,
-  `idempotency`, `retry` — на сессии бота, а не на апдейтах),
+  `idempotency`, `moderation` — дверь, закрытая для заблокированного, `retry` —
+  на сессии бота, а не на апдейтах),
   `states/screens.py`, `routing.py`, `messaging.py`,
   `broadcast.py` (канал), `throttle.py` (лимит), `cleanup.py` (уборка в группе).
 
@@ -102,7 +105,8 @@ PostgreSQL держит мир, Redis не нужен; `0011` — Печать �
 `0007_tutorial`, `0008_arena`, `0009_keeper_panel` (правки поверх содержимого,
 учёт заблокировавших бота), `0010_arena_credit` (что круг держит с игрока),
 `0011_keeper_grants` (право смотрителя, выданное изнутри игры),
-`0012_turning` (Печати, заклады и голос в счётном вопросе).
+`0012_turning` (Печати, заклады и голос в счётном вопросе),
+`0013_moderation` (срок блокировки на аккаунте и журнал смотрителя).
 **`backups/`** — дампы от `stop.bat`; не в репозитории.
 **`.githooks/pre-commit`** — гейт на коммите.
 **`.claude/`** — `settings.json` (хук `Stop`) и `autocommit.sh`: если после

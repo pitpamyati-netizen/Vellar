@@ -72,6 +72,8 @@ class Play(StatesGroup):
     keeper_player = State()
     keeper_stats = State()
     keeper_service = State()
+    keeper_ban = State()
+    keeper_log = State()
     stub = State()
 
 
@@ -128,6 +130,8 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.KEEPER_PLAYER: Play.keeper_player,
     ScreenId.KEEPER_STATS: Play.keeper_stats,
     ScreenId.KEEPER_SERVICE: Play.keeper_service,
+    ScreenId.KEEPER_BAN: Play.keeper_ban,
+    ScreenId.KEEPER_LOG: Play.keeper_log,
     ScreenId.STUB: Play.stub,
 }
 
@@ -184,6 +188,8 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.KEEPER_PLAYER: ScreenId.KEEPER_PLAYERS,
     ScreenId.KEEPER_STATS: ScreenId.KEEPER,
     ScreenId.KEEPER_SERVICE: ScreenId.KEEPER,
+    ScreenId.KEEPER_BAN: ScreenId.KEEPER_PLAYER,
+    ScreenId.KEEPER_LOG: ScreenId.KEEPER,
     ScreenId.STUB: ScreenId.CITY,
 }
 

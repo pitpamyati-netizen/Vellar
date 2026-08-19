@@ -18,12 +18,14 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
+from mmorpg.domain.entities.moderation import Ban, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.ports.repositories import Census
+from mmorpg.domain.rules import moderation as moderation_rules
 from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules.keeper import GOLD_STEP, POINTS_STEP
 from mmorpg.domain.rules.overlay import FieldKind, FieldSpec
@@ -31,7 +33,7 @@ from mmorpg.domain.rules.stats import DerivedStats
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
-from mmorpg.presentation.telegram.screens.format import amount, gold
+from mmorpg.presentation.telegram.screens.format import amount, duration, gold
 from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
     PageState,
@@ -78,6 +80,12 @@ class KeeperView:
     target_keeper: bool = False
     #: Пришло ли право открытого игрока из настройки. Такое из игры не снимается.
     target_locked: bool = False
+    #: Что висит на аккаунте открытого игрока. Пустая — не заблокирован.
+    target_ban: Ban = field(default_factory=Ban)
+    #: Последние записи журнала смотрителя, свежие сначала.
+    log: tuple[KeeperEntry, ...] = ()
+    #: Момент, которым меряется остаток срока. Ноль — сроков на экране нет.
+    now: int = 0
 
 
 def kind_label(kind: OverlayKind) -> Label:
@@ -121,6 +129,7 @@ def keeper_screen(
         rows=(
             (labels.KEEPER_WORLD, labels.KEEPER_PLAYERS),
             (labels.KEEPER_STATS, labels.KEEPER_SERVICE),
+            (labels.KEEPER_LOG,),
             (labels.KEEPER_GOLD, labels.KEEPER_LEVEL),
             (labels.KEEPER_HEAL, labels.KEEPER_POINTS),
         ),
@@ -441,12 +450,14 @@ def player_screen(
         f"очков умений {player.unspent_skill_points}.",
         f"Подрядов закрыто: {len(player.quests.done)}. "
         f"Круг: {player.arena_wins} побед, {player.arena_losses} поражений.",
+        ban_line(view.target_ban, view.now),
         "Уровень поднимается по одному и только вверх: очки уже вложены.",
     ]
     rows: list[tuple[Label, ...]] = [
         (labels.KEEPER_GOLD, labels.KEEPER_LEVEL),
         (labels.KEEPER_HEAL, labels.KEEPER_POINTS),
         (labels.KEEPER_MOVE,),
+        (labels.KEEPER_UNBAN,) if _under_ban(view) else (labels.KEEPER_BAN,),
         (labels.KEEPER_DELETE,),
     ]
     if view.granting:
@@ -458,12 +469,104 @@ def player_screen(
     return Screen(id=ScreenId.KEEPER_PLAYER, lines=tuple(lines), rows=tuple(rows))
 
 
+def _under_ban(view: KeeperView) -> bool:
+    return moderation_rules.is_banned(view.target_ban, now=view.now)
+
+
+def ban_line(ban: Ban, now: int) -> str:
+    """Одна строка о блокировке. Её же читает и сам заблокированный."""
+    if not moderation_rules.is_banned(ban, now=now):
+        return "Блокировка: нет."
+    left = (
+        "навсегда"
+        if ban.forever
+        else f"осталось {duration(moderation_rules.remaining(ban, now=now))}"
+    )
+    because = f" Причина: {ban.reason}." if ban.reason else " Причина не названа."
+    return f"Блокировка: есть, {left}.{because}"
+
+
 def _right(view: KeeperView) -> str:
     if view.target_locked:
         return "Права смотрителя: есть, из настройки. Отсюда не снимаются."
     if view.target_keeper:
         return "Права смотрителя: есть."
     return "Права смотрителя: нет."
+
+
+# --- блокировка --------------------------------------------------------
+
+
+def sentence_button(sentence: moderation_rules.Sentence) -> Label:
+    return label(sentence.name)
+
+
+def sentence_from_button(pressed: str) -> moderation_rules.Sentence | None:
+    return moderation_rules.sentence_named(pressed)
+
+
+def ban_screen(player: Character, view: KeeperView, reason: str = "", notice: str = "") -> Screen:
+    """Срок и причина. Ничего не отбирается: блокировка — пауза, а не штраф.
+
+    Причина набирается до срока, потому что читает её не смотритель, а тот, кого
+    заблокировали: сказать «за что» — часть наказания, а не украшение.
+    """
+    lines = [
+        notice or f"Блокировка: {player.name}.",
+        "Заблокированный не играет, пока срок не выйдет. "
+        "Персонаж, вещи и золото остаются на месте.",
+        ban_line(view.target_ban, view.now),
+        f"Причина для следующей блокировки: {reason or 'не названа'}.",
+        "Нажмите срок — блокировка ляжет сразу.",
+    ]
+    rows: list[tuple[Label, ...]] = [
+        tuple(
+            sentence_button(sentence) for sentence in moderation_rules.SENTENCES[index : index + 2]
+        )
+        for index in range(0, len(moderation_rules.SENTENCES), 2)
+    ]
+    rows.append((labels.KEEPER_REASON,))
+    if _under_ban(view):
+        rows.append((labels.KEEPER_UNBAN,))
+    return Screen(id=ScreenId.KEEPER_BAN, lines=tuple(lines), rows=tuple(rows))
+
+
+# --- журнал ------------------------------------------------------------
+
+#: Сколько записей журнала помещается в одно сообщение. Больше не нужно: панель
+#: показывает последнее, а не хранит историю за всё время.
+LOG_SHOWN = 8
+
+
+def log_entry(entry: KeeperEntry, now: int) -> str:
+    """Строка журнала: кто, что, с кем и как давно."""
+    said = moderation_rules.ACTIONS[entry.action]
+    who = entry.keeper_name or str(entry.keeper_id)
+    ago = f"{duration(max(0, now - entry.at))} назад" if entry.at and now else "когда-то"
+    about = f" {entry.target}," if entry.target else ""
+    detail = f" {entry.detail}." if entry.detail else ""
+    return f"{who} {said}{about} {ago}.{detail}"
+
+
+def log_screen(view: KeeperView, notice: str = "") -> Screen:
+    """Что смотрители делали. Только чтение, и ни одной кнопки.
+
+    Журнал существует потому, что смотрителей больше одного (право раздаётся из
+    панели), а панель раздаёт золото, уровни и блокировки. Работа, которую нельзя
+    посмотреть, — это работа, за которую некому отвечать.
+
+    Кнопок нет нарочно: нажимать здесь нечего, а кнопка, которая ничего не
+    делает, для слушающего экран — обещание, которого никто не сдержит.
+    """
+    shown = view.log[:LOG_SHOWN]
+    lines = [
+        notice or "Журнал смотрителя. Свежие записи сначала.",
+        f"Показано записей: {len(shown)}. Записи не правятся и не стираются.",
+    ]
+    if not shown:
+        lines.append("Записей нет: пока никто ничего не делал.")
+    lines.extend(log_entry(entry, view.now) for entry in shown)
+    return Screen(id=ScreenId.KEEPER_LOG, lines=tuple(lines))
 
 
 # --- статистика и обслуживание -----------------------------------------
@@ -479,6 +582,7 @@ def stats_screen(census: Census, notice: str = "") -> Screen:
         f"Золото: на руках {census.gold_on_hand}, в ячейках {census.gold_in_bank}.",
         f"Подрядов закрыто всего: {census.quests_done}. Боёв в круге: {census.arena_fights}.",
         f"Брошенных персонажей: {census.abandoned}. Заблокировали бота: {census.blocked}.",
+        f"Заблокировано смотрителем: {census.banned}.",
     ]
     if census.leaders:
         lines.append("Впереди всех:")

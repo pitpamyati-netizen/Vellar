@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from mmorpg.domain.entities.character import Character, Equipment, InventoryEntry, SkillLoadout
 from mmorpg.domain.entities.craft import CraftLog, CraftProgress
+from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatBlock
@@ -143,7 +144,8 @@ class PostgresUserRepository:
 
     async def get(self, telegram_id: int) -> User | None:
         row = await self._pool.fetchrow(
-            "SELECT telegram_id, username, emoji, verbose_descriptions, page_size, keeper"
+            "SELECT telegram_id, username, emoji, verbose_descriptions, page_size, keeper,"
+            " banned_until, ban_reason"
             " FROM users WHERE telegram_id = $1",
             telegram_id,
         )
@@ -159,6 +161,7 @@ class PostgresUserRepository:
                 page_size=row["page_size"],
             ),
             keeper=row["keeper"],
+            ban=Ban(until=row["banned_until"], reason=row["ban_reason"] or ""),
         )
 
     async def upsert(self, user: User) -> User:
@@ -227,6 +230,28 @@ class PostgresUserRepository:
         value = await self._pool.fetchval("SELECT count(*) FROM users WHERE blocked_at > 0")
         return int(value or 0)
 
+    async def set_ban(self, telegram_id: int, ban: Ban) -> None:
+        """Блокируют и того, кто ни разу не трогал настройки, поэтому upsert."""
+        await self._pool.execute(
+            """
+            INSERT INTO users (telegram_id, banned_until, ban_reason)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (telegram_id) DO UPDATE
+                SET banned_until = EXCLUDED.banned_until,
+                    ban_reason = EXCLUDED.ban_reason
+            """,
+            telegram_id,
+            ban.until,
+            ban.reason,
+        )
+
+    async def banned_count(self, *, now: int) -> int:
+        """Истёкший срок никто не снимает: он просто перестаёт считаться."""
+        value = await self._pool.fetchval(
+            "SELECT count(*) FROM users WHERE banned_until < 0 OR banned_until > $1", now
+        )
+        return int(value or 0)
+
     async def purge_blocked(self) -> int:
         """Персонажи и сумки уходят каскадом с аккаунтом - так объявлено в 0001."""
         value = await self._pool.fetchval(
@@ -234,6 +259,45 @@ class PostgresUserRepository:
             " SELECT count(*) FROM gone"
         )
         return int(value or 0)
+
+
+class PostgresKeeperLogRepository:
+    """Журнал смотрителя: дописывается и читается с конца, больше ничего."""
+
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        self._pool = pool
+
+    async def record(self, entry: KeeperEntry) -> None:
+        await self._pool.execute(
+            """
+            INSERT INTO keeper_log (at, keeper_id, keeper_name, action, target, detail)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            """,
+            entry.at,
+            entry.keeper_id,
+            entry.keeper_name,
+            entry.action.value,
+            entry.target,
+            entry.detail,
+        )
+
+    async def latest(self, *, limit: int = 20) -> tuple[KeeperEntry, ...]:
+        rows = await self._pool.fetch(
+            "SELECT at, keeper_id, keeper_name, action, target, detail"
+            " FROM keeper_log ORDER BY at DESC, id DESC LIMIT $1",
+            limit,
+        )
+        return tuple(
+            KeeperEntry(
+                at=row["at"],
+                keeper_id=row["keeper_id"],
+                keeper_name=row["keeper_name"] or "",
+                action=KeeperAction(row["action"]),
+                target=row["target"] or "",
+                detail=row["detail"] or "",
+            )
+            for row in rows
+        )
 
 
 class PostgresPrivacyRepository:

@@ -13,8 +13,10 @@ from dataclasses import replace
 import pytest
 
 from mmorpg.domain.entities import Character, GameContent
+from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.ports.repositories import Census
+from mmorpg.domain.rules import moderation as moderation_rules
 from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.presentation.telegram.flows import keeper as keeper_flow
 from mmorpg.presentation.telegram.flows.play import Clock, advance, begin, render
@@ -57,6 +59,10 @@ class Panel:
         self.target_keeper = False
         self.target_locked = False
         self.granted: list[tuple[int, bool]] = []
+        # Блокировки, наложенные и снятые за проход, и журнал панели.
+        self.bans: list[tuple[int, str, str]] = []
+        self.target_ban = Ban()
+        self.notes: list[KeeperEntry] = []
 
     @property
     def view(self) -> KeeperView:
@@ -68,6 +74,8 @@ class Panel:
             granting=self.granting,
             target_keeper=self.target_keeper,
             target_locked=self.target_locked,
+            target_ban=self.target_ban,
+            now=CLOCK.now,
         )
 
     def press(self, *messages: str) -> Panel:
@@ -123,6 +131,17 @@ class Panel:
         if pending.keeper_grant is not None:
             self.granted.append(pending.keeper_grant)
             self.target_keeper = pending.keeper_grant[1]
+        if pending.ban is not None:
+            self.bans.append(pending.ban)
+            _, key, reason = pending.ban
+            sentence = moderation_rules.sentence_of(key) if key else None
+            self.target_ban = (
+                moderation_rules.imposed(sentence, reason, now=CLOCK.now)
+                if sentence is not None
+                else moderation_rules.lifted()
+            )
+        if pending.note is not None:
+            self.notes.append(pending.note)
         if pending.service:
             self.services.append(pending.service)
         self.content = overlay_rules.apply(self.base, self.records)
@@ -572,6 +591,11 @@ def walk_to(panel: Panel, screen: ScreenId) -> Panel:
             return walked.press(walked.button_with("Мерла"))
         case ScreenId.KEEPER_STATS:
             return panel.press(labels.KEEPER_STATS.text)
+        case ScreenId.KEEPER_LOG:
+            return panel.press(labels.KEEPER_LOG.text)
+        case ScreenId.KEEPER_BAN:
+            walked = walk_to(panel, ScreenId.KEEPER_PLAYER)
+            return walked.press(labels.KEEPER_BAN.text)
         case _:
             return panel.press(labels.KEEPER_SERVICE.text)
 
@@ -601,3 +625,82 @@ def test_the_service_row_works_on_every_panel_screen(
     panel = walk_to(Panel(content, keeper).press(labels.KEEPER.text), screen)
 
     assert panel.press("Главное меню").state.screen is ScreenId.MAIN_MENU
+
+
+# --- блокировка --------------------------------------------------------
+
+
+def opened(with_players: Panel) -> Panel:
+    """Карточка чужого персонажа, открытая из списка."""
+    with_players.target = with_players.players[0]
+    return with_players.press(labels.KEEPER_PLAYERS.text).press(with_players.button_with("Мерла"))
+
+
+def test_a_ban_takes_a_reason_first_and_a_term_second(with_players: Panel) -> None:
+    """Причину читает не смотритель, а тот, кого блокируют, поэтому она первая."""
+    card = opened(with_players).press(labels.KEEPER_BAN.text)
+    assert card.state.screen is ScreenId.KEEPER_BAN
+
+    card.press(labels.KEEPER_REASON.text, "ругался в группе")
+    assert card.state.keeper_reason == "ругался в группе"
+
+    card.press("На сутки")
+    assert card.bans == [(900, "day", "ругался в группе")]
+    # Панель возвращает туда, откуда пришли: наказание — не отдельная комната.
+    assert card.state.screen is ScreenId.KEEPER_PLAYER
+    assert "Мерла" in card.state.notice
+
+
+def test_a_ban_without_a_reason_still_lands(with_players: Panel) -> None:
+    card = opened(with_players).press(labels.KEEPER_BAN.text, "Навсегда")
+
+    assert card.bans == [(900, "forever", "")]
+    assert card.target_ban.forever
+
+
+def test_an_unknown_term_bans_nobody(with_players: Panel) -> None:
+    card = opened(with_players).press(labels.KEEPER_BAN.text, "На века")
+
+    assert card.bans == []
+    assert card.state.screen is ScreenId.KEEPER_BAN
+    assert card.state.notice
+
+
+def test_a_ban_is_lifted_from_the_card_in_one_press(with_players: Panel) -> None:
+    card = opened(with_players).press(labels.KEEPER_BAN.text, "На час")
+    assert labels.KEEPER_UNBAN.text in card.press(labels.KEEPER_BAN.text).buttons()
+
+    card.press(labels.KEEPER_UNBAN.text)
+
+    assert card.bans[-1] == (900, "", "")
+    assert not moderation_rules.is_banned(card.target_ban, now=CLOCK.now)
+
+
+def test_the_card_says_whether_the_player_is_banned(with_players: Panel) -> None:
+    card = opened(with_players)
+    assert any("Блокировка: нет" in line for line in card.screen().lines)
+
+    card.press(labels.KEEPER_BAN.text, "На неделю")
+    lines = card.screen().lines
+    assert any("Блокировка: есть" in line for line in lines)
+    # Кнопка на карточке меняется вместе со строкой: блокировать снова нечего.
+    assert labels.KEEPER_UNBAN.text in card.buttons()
+
+
+def test_what_is_done_to_somebody_else_is_written_down(with_players: Panel) -> None:
+    """Журнал — это то, ради чего у панели есть имя нажавшего."""
+    card = opened(with_players)
+    card.press(labels.KEEPER_GOLD.text)
+    card.press(labels.KEEPER_DELETE.text, labels.KEEPER_DELETE.text)
+
+    actions = [note.action for note in card.notes]
+    assert actions == [KeeperAction.GOLD, KeeperAction.DELETE]
+    assert all(note.target == "Мерла" for note in card.notes)
+
+
+def test_the_journal_is_a_door_of_its_own_and_only_reads(panel: Panel) -> None:
+    walked = panel.press(labels.KEEPER_LOG.text)
+
+    assert walked.state.screen is ScreenId.KEEPER_LOG
+    # Нажимать здесь нечего: кнопок нет, кроме служебного ряда.
+    assert walked.buttons() == ["Назад", "Главное меню"]

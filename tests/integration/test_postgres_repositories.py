@@ -17,6 +17,7 @@ import pytest_asyncio
 
 from mmorpg.domain.entities.character import Character, Equipment, SkillLoadout
 from mmorpg.domain.entities.craft import CraftLog, CraftProgress
+from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatBlock
@@ -26,6 +27,7 @@ from mmorpg.infrastructure.persistence.postgres import (
     PostgresCharacterRepository,
     PostgresContentOverlayRepository,
     PostgresInventoryRepository,
+    PostgresKeeperLogRepository,
     PostgresPrivacyRepository,
     PostgresTradeRepository,
     PostgresUserRepository,
@@ -809,3 +811,62 @@ async def test_an_account_that_still_reads_the_bot_is_only_marked_checked(pool, 
 
     assert clean_user not in await users.unchecked(limit=1000, before=NOW - 1)
     assert await users.get(clean_user) is not None
+
+
+# --- блокировка и журнал -----------------------------------------------------
+
+
+async def test_a_ban_is_stored_read_back_and_lifted(pool, clean_user) -> None:
+    """Блокировка переживает круг до базы и обратно, включая причину."""
+    users = PostgresUserRepository(pool)
+    await users.upsert(User(telegram_id=clean_user))
+    before = await users.banned_count(now=NOW)
+
+    await users.set_ban(clean_user, Ban(until=NOW + 3600, reason="обман в сделке"))
+
+    account = await users.get(clean_user)
+    assert account is not None
+    assert account.ban == Ban(until=NOW + 3600, reason="обман в сделке")
+    assert await users.banned_count(now=NOW) == before + 1
+    # Истёкший срок никто не снимает, он просто перестаёт считаться.
+    assert await users.banned_count(now=NOW + 7200) == before
+
+    await users.set_ban(clean_user, Ban())
+    lifted = await users.get(clean_user)
+    assert lifted is not None and lifted.ban == Ban()
+
+
+async def test_a_ban_without_an_end_is_counted_whenever_it_is_asked(pool, clean_user) -> None:
+    users = PostgresUserRepository(pool)
+    await users.upsert(User(telegram_id=clean_user))
+    before = await users.banned_count(now=NOW)
+
+    await users.set_ban(clean_user, Ban(until=-1, reason="повторно"))
+
+    assert await users.banned_count(now=NOW + 100 * 365 * 24 * 3600) == before + 1
+
+
+async def test_the_keeper_journal_is_written_and_read_from_the_end(pool, clean_user) -> None:
+    log = PostgresKeeperLogRepository(pool)
+    # Журнал ничем не убирается изнутри игры - в том и смысл, - поэтому свои
+    # строки тест убирает сам, и до записи тоже: прошлый прогон писал те же.
+    await pool.execute("DELETE FROM keeper_log WHERE keeper_id = $1", clean_user)
+    for step, action in enumerate((KeeperAction.GOLD, KeeperAction.BAN), start=1):
+        await log.record(
+            KeeperEntry(
+                at=NOW + step,
+                keeper_id=clean_user,
+                keeper_name="Смотритель",
+                action=action,
+                target="Мерла",
+                detail=f"шаг {step}",
+            )
+        )
+
+    latest = await log.latest(limit=50)
+
+    mine = [entry for entry in latest if entry.keeper_id == clean_user]
+    assert [entry.action for entry in mine] == [KeeperAction.BAN, KeeperAction.GOLD]
+    assert mine[0].keeper_name == "Смотритель"
+    assert mine[0].detail == "шаг 2"
+    await pool.execute("DELETE FROM keeper_log WHERE keeper_id = $1", clean_user)

@@ -18,6 +18,7 @@ from typing import Protocol, runtime_checkable
 
 from mmorpg.domain.entities.character import Character, InventoryEntry
 from mmorpg.domain.entities.location import LocationState, Presence
+from mmorpg.domain.entities.moderation import Ban, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, TradeRecord, TradeStatus
 
@@ -49,6 +50,10 @@ class User:
     username: str = ""
     settings: AccessibilitySettings = field(default_factory=AccessibilitySettings)
     keeper: bool = False
+    #: Временное отлучение от игры. Лежит на аккаунте по той же причине, что и
+    #: право смотрителя: наказание, от которого можно уйти вторым персонажем,
+    #: наказанием не было бы.
+    ban: Ban = field(default_factory=Ban)
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +77,7 @@ class Census:
     gold_in_bank: int = 0
     quests_done: int = 0
     arena_fights: int = 0
+    banned: int = 0
     leaders: tuple[tuple[str, int], ...] = ()
 
 
@@ -102,8 +108,32 @@ class UserRepository(Protocol):
 
     async def blocked_count(self) -> int: ...
 
+    async def set_ban(self, telegram_id: int, ban: Ban) -> None:
+        """Наложить блокировку или снять её.
+
+        Строку приходится заводить: блокируют и того, кто ни разу не менял
+        настройки, а аккаунта без записи в базе не существует.
+        """
+
+    async def banned_count(self, *, now: int) -> int:
+        """Сколько аккаунтов заблокировано прямо сейчас. Истёкшие не считаются."""
+
     async def purge_blocked(self) -> int:
         """Убрать тех, кто заблокировал бота, вместе со всем, что им принадлежит."""
+
+
+@runtime_checkable
+class KeeperLogRepository(Protocol):
+    """Журнал того, что смотрители сделали.
+
+    Только дописывается и только читается: строку журнала нельзя ни исправить,
+    ни стереть из игры, иначе он перестал бы быть тем, ради чего заведён.
+    """
+
+    async def record(self, entry: KeeperEntry) -> None: ...
+
+    async def latest(self, *, limit: int = 20) -> tuple[KeeperEntry, ...]:
+        """Последние записи, свежие сначала."""
 
 
 @runtime_checkable

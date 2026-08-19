@@ -17,6 +17,7 @@ from dataclasses import dataclass, field, replace
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import Item
+from mmorpg.domain.entities.moderation import KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayRecord
 from mmorpg.domain.ports.repositories import AccessibilitySettings
 from mmorpg.presentation.telegram.routing import Command, Intent
@@ -32,6 +33,8 @@ PLAYER_MODE = "player"
 #: Что означает набранный текст на текущем экране. Пусто - ничего не означает.
 TYPING_NAME = "name"
 TYPING_VALUE = "value"
+#: Набирается причина блокировки: её прочитает заблокированный, а не смотритель.
+TYPING_REASON = "reason"
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +61,12 @@ class PendingWrite:
     remove_character: int = 0
     #: Кому дать или у кого отобрать право смотрителя: аккаунт и что с ним делать.
     keeper_grant: tuple[int, bool] | None = None
+    #: Кого заблокировать: аккаунт, срок из ``domain/rules/moderation.SENTENCES``
+    #: и причина. Пустой срок — снять блокировку. Сам момент конца считает
+    #: хендлер: у автомата часов нет.
+    ban: tuple[int, str, str] | None = None
+    #: Что записать в журнал смотрителя. Момент и имя проставляет хендлер.
+    note: KeeperEntry | None = None
     #: Какую уборку выполнить (``application/services/keeper_panel.py``).
     service: str = ""
     #: Перечитать правки из хранилища.
@@ -77,6 +86,8 @@ class PendingWrite:
             and self.other is None
             and not self.remove_character
             and self.keeper_grant is None
+            and self.ban is None
+            and self.note is None
             and not self.service
             and not self.reload
         )
@@ -194,6 +205,9 @@ class PlayState:
     keeper_target: int = 0
     keeper_typing: str = ""
     keeper_page: PageState = field(default_factory=PageState)
+    #: Причина блокировки, набранная до выбора срока. Живёт в состоянии, потому
+    #: что набирают её одним сообщением, а срок нажимают следующим.
+    keeper_reason: str = ""
     # Transient: cleared at the start of every step, read by the handler.
     pending: PendingWrite = field(default_factory=PendingWrite)
     fight: str = ""
@@ -242,6 +256,7 @@ class PlayState:
                     self.keeper_target,
                     self.keeper_typing,
                     self.keeper_page.page,
+                    self.keeper_reason,
                 ],
             },
             ensure_ascii=False,
@@ -255,7 +270,9 @@ class PlayState:
         pick_kind, pick_slot = data.get("pick", ["", 0])
         list_page, skill_page, board_page = data.get("pages", [1, 1, 1])
         craft_id, craft_moment = data.get("craft", ["", 0])
-        keeper = data.get("keeper", ["", "", "", 0, "", 1])
+        # Хвост списка читается с запасом: состояние переживает выкатку, а
+        # сохранённому состоянию не верят (``Claude.md``, правило 8).
+        keeper = [*data.get("keeper", []), "", "", "", 0, "", 1, ""][:7]
         return cls(
             screen=ScreenId(data["screen"]),
             stack=NavigationStack.deserialise(data.get("stack", "")),
@@ -292,6 +309,7 @@ class PlayState:
             keeper_target=int(keeper[3]),
             keeper_typing=str(keeper[4]),
             keeper_page=PageState(page=int(keeper[5])),
+            keeper_reason=str(keeper[6]),
         )
 
 

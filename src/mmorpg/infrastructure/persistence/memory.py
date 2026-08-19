@@ -14,6 +14,7 @@ from dataclasses import replace
 from types import MappingProxyType
 
 from mmorpg.domain.entities.character import Character, InventoryEntry
+from mmorpg.domain.entities.moderation import Ban, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, TradeRecord, TradeStatus
 from mmorpg.domain.ports.repositories import AccessibilitySettings, Census, User
@@ -63,6 +64,13 @@ class InMemoryUserRepository:
     async def blocked_count(self) -> int:
         return len(self._blocked)
 
+    async def set_ban(self, telegram_id: int, ban: Ban) -> None:
+        user = self._users.get(telegram_id) or User(telegram_id=telegram_id)
+        self._users[telegram_id] = replace(user, ban=ban)
+
+    async def banned_count(self, *, now: int) -> int:
+        return sum(1 for user in self._users.values() if user.ban.forever or user.ban.until > now)
+
     async def purge_blocked(self) -> int:
         gone = tuple(self._blocked)
         for telegram_id in gone:
@@ -70,6 +78,19 @@ class InMemoryUserRepository:
             self._checked.pop(telegram_id, None)
         self._blocked.clear()
         return len(gone)
+
+
+class InMemoryKeeperLogRepository:
+    """Журнал смотрителя в списке. Свежие записи в конце, читаются с конца."""
+
+    def __init__(self) -> None:
+        self._entries: list[KeeperEntry] = []
+
+    async def record(self, entry: KeeperEntry) -> None:
+        self._entries.append(entry)
+
+    async def latest(self, *, limit: int = 20) -> tuple[KeeperEntry, ...]:
+        return tuple(reversed(self._entries[-limit:]))
 
 
 class InMemoryPrivacyRepository:

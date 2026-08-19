@@ -28,24 +28,28 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from mmorpg import economy_log
-from mmorpg.application.services import keeper_panel
+from mmorpg.application.services import keeper_panel, moderation
 from mmorpg.application.services.content import ContentRegistry
 from mmorpg.application.services.keeper import set_keeper, sync_keeper
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.location import NodeKind, Presence
+from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.ports.repositories import (
     CharacterRepository,
     ContentOverlayRepository,
     InventoryRepository,
+    KeeperLogRepository,
     LocationStateCache,
+    User,
     UserRepository,
 )
 from mmorpg.domain.procgen.location import is_cleared
 from mmorpg.domain.procgen.seeds import rotation_index
+from mmorpg.domain.rules import moderation as moderation_rules
 from mmorpg.domain.rules.economy import buy_price, roll_assortment
 from mmorpg.domain.rules.stats import primary_stats
 from mmorpg.presentation.telegram.flows import keeper as keeper_flow
@@ -66,6 +70,7 @@ from mmorpg.presentation.telegram.flows.state import (
 from mmorpg.presentation.telegram.handlers.combat import open_fight
 from mmorpg.presentation.telegram.handlers.creation import welcome_screen
 from mmorpg.presentation.telegram.messaging import send_screen
+from mmorpg.presentation.telegram.screens import keeper as keeper_screens
 from mmorpg.presentation.telegram.screens.base import ScreenId
 from mmorpg.presentation.telegram.screens.keeper import KeeperView
 from mmorpg.presentation.telegram.screens.shop import OwnedItem
@@ -106,9 +111,11 @@ async def play(
     characters: CharacterRepository,
     inventory: InventoryRepository,
     users: UserRepository,
+    keeper_log: KeeperLogRepository,
     locations: LocationStateCache,
     overlays: ContentOverlayRepository,
     registry: ContentRegistry,
+    user: User | None = None,
 ) -> None:
     if message.from_user is None or message.text is None:
         return
@@ -118,7 +125,11 @@ async def play(
         await state.clear()
         await send_screen(message, welcome_screen())
         return
-    user = await users.get(message.from_user.id)
+    # Аккаунт обычно уже прочитан на входе (``middlewares/moderation.py``), и
+    # тогда второй раз его читать незачем. Читается он здесь только там, где
+    # хендлер вызывают без той двери, — то есть в тестах.
+    if user is None:
+        user = await users.get(message.from_user.id)
     character = await sync_keeper(
         character,
         message.from_user.id,
@@ -141,7 +152,7 @@ async def play(
     goods = await _goods(content, character, flow, inventory, settings, clock.shop_rotation)
     company = await _company(flow, character, locations, now)
     view = await _keeper_view(
-        flow, character, message.text, characters, users, registry, now, settings
+        flow, character, message.text, characters, users, keeper_log, registry, now, settings
     )
 
     updated = advance(
@@ -165,10 +176,12 @@ async def play(
         characters=characters,
         users=users,
         overlays=overlays,
+        keeper_log=keeper_log,
         registry=registry,
         bot=message.bot,
         now=now,
         settings=settings,
+        acting=character,
         granting=settings.is_admin(message.from_user.id),
     )
     if served:
@@ -195,7 +208,9 @@ async def play(
     shelf = await _goods(content, character, updated, inventory, settings, clock.shop_rotation)
     company = await _company(updated, character, locations, now)
     counted = await _tally(content, updated, characters)
-    shown = await _keeper_view(updated, character, "", characters, users, registry, now, settings)
+    shown = await _keeper_view(
+        updated, character, "", characters, users, keeper_log, registry, now, settings
+    )
     await state.set_state(STATE_FOR_SCREEN[updated.screen])
     await state.update_data({STATE_KEY: updated.serialise()})
     await render_play(
@@ -319,6 +334,7 @@ async def _keeper_view(
     text: str | None,
     characters: CharacterRepository,
     users: UserRepository,
+    keeper_log: KeeperLogRepository,
     registry: ContentRegistry,
     now: int,
     settings: Settings,
@@ -336,13 +352,20 @@ async def _keeper_view(
     census = None
     granting = settings.is_admin(character.user_id)
 
+    log: tuple[KeeperEntry, ...] = ()
+
+    if flow.screen is ScreenId.KEEPER_LOG:
+        log = await keeper_log.latest(limit=keeper_screens.LOG_SHOWN)
     if flow.screen is ScreenId.KEEPER_PLAYERS:
         players = await characters.newest(limit=PLAYERS_SHOWN)
         # Имя набирают сообщением, и ищет его тот, у кого есть хранилище: автомат
         # получает уже найденного персонажа или пустоту.
         if flow.keeper_typing == TYPING_NAME and text and not text.startswith("/"):
             target = await characters.find_by_name(text)
-    elif flow.screen in {ScreenId.KEEPER_PLAYER, ScreenId.KEEPER_FIELD} and flow.keeper_target:
+    elif (
+        flow.screen in {ScreenId.KEEPER_PLAYER, ScreenId.KEEPER_FIELD, ScreenId.KEEPER_BAN}
+        and flow.keeper_target
+    ):
         target = await characters.get(flow.keeper_target)
     elif flow.screen in {ScreenId.KEEPER_STATS, ScreenId.KEEPER_SERVICE}:
         counted = await characters.census(
@@ -350,17 +373,27 @@ async def _keeper_view(
         )
         # Заблокировавшие - счёт по аккаунтам, а не по персонажам, поэтому он
         # приходит из другого хранилища и подставляется здесь.
-        census = replace(counted, blocked=await users.blocked_count())
+        census = replace(
+            counted,
+            blocked=await users.blocked_count(),
+            banned=await users.banned_count(now=now),
+        )
 
     # Право открытого игрока читается по аккаунту, а не по флагу персонажа:
     # персонажей у него может быть несколько, а право одно. Спрашивается только
     # тогда, когда его есть кому увидеть.
     target_keeper = False
     target_locked = False
-    if granting and target is not None:
-        target_locked = settings.is_admin(target.user_id)
+    target_ban = Ban()
+    if target is not None:
         account = await users.get(target.user_id)
-        target_keeper = target_locked or (account is not None and account.keeper)
+        # Блокировку читают всегда, когда открыт чужой персонаж: она стоит на
+        # карточке строкой, а раздача права - только у того, кто его раздаёт.
+        if account is not None and moderation_rules.is_banned(account.ban, now=now):
+            target_ban = account.ban
+        if granting:
+            target_locked = settings.is_admin(target.user_id)
+            target_keeper = target_locked or (account is not None and account.keeper)
 
     return KeeperView(
         records=registry.records,
@@ -370,6 +403,9 @@ async def _keeper_view(
         granting=granting,
         target_keeper=target_keeper,
         target_locked=target_locked,
+        target_ban=target_ban,
+        log=log,
+        now=now,
     )
 
 
@@ -379,14 +415,22 @@ async def _serve(
     characters: CharacterRepository,
     users: UserRepository,
     overlays: ContentOverlayRepository,
+    keeper_log: KeeperLogRepository,
     registry: ContentRegistry,
     bot: Bot | None,
     now: int,
     settings: Settings,
+    acting: Character,
     granting: bool = False,
 ) -> str:
-    """Сделать то, о чём попросила панель, и сказать числом, что получилось."""
+    """Сделать то, о чём попросила панель, и сказать числом, что получилось.
+
+    Здесь же пишется журнал: строку журнала складывает панель, а имя того, кто
+    нажал, и момент проставляются тут — часов у автомата нет, а имени того, кто
+    смотрит, у него быть и не должно.
+    """
     said: list[str] = []
+    stamp = KeeperEntry(at=now, keeper_id=acting.user_id, keeper_name=acting.name)
 
     if write.edit is not None:
         why = await keeper_panel.save_edit(overlays, registry, write.edit)
@@ -406,9 +450,48 @@ async def _serve(
         # что раздача права - единственное, что раздаёт саму панель.
         account, keeper = write.keeper_grant
         await set_keeper(users, characters, account, keeper=keeper, settings=settings)
+    if write.ban is not None:
+        said.append(await _ban(write.ban, users, keeper_log, characters, stamp, now))
     if write.service:
-        said.append(await _sweep(write.service, characters, users, bot, now))
+        swept = await _sweep(write.service, characters, users, bot, now)
+        said.append(swept)
+        await moderation.note(keeper_log, replace(stamp, action=KeeperAction.SWEEP, detail=swept))
+    if write.note is not None:
+        await moderation.note(
+            keeper_log,
+            replace(
+                write.note, at=stamp.at, keeper_id=stamp.keeper_id, keeper_name=stamp.keeper_name
+            ),
+        )
     return " ".join(said)
+
+
+async def _ban(
+    order: tuple[int, str, str],
+    users: UserRepository,
+    keeper_log: KeeperLogRepository,
+    characters: CharacterRepository,
+    stamp: KeeperEntry,
+    now: int,
+) -> str:
+    """Наложить блокировку или снять её. Срок считается здесь: домен без часов."""
+    account, key, reason = order
+    sentence = moderation_rules.sentence_of(key) if key else None
+    if key and sentence is None:
+        return "Такого срока нет, блокировка не наложена."
+    ban = (
+        moderation_rules.imposed(sentence, reason, now=now)
+        if sentence is not None
+        else moderation_rules.lifted()
+    )
+    # Имя для журнала берётся у персонажа, а не у аккаунта: в журнале читают
+    # имена, а не числа.
+    played = await characters.list_for_user(account)
+    named = played[0].name if played else str(account)
+    await moderation.set_ban(users, keeper_log, account, ban, by=stamp, target=named)
+    if not key:
+        return f"{named}: блокировка снята."
+    return f"{named}: блокировка наложена."
 
 
 async def _sweep(

@@ -32,6 +32,7 @@ from mmorpg.infrastructure.persistence.memory import (
     InMemoryCharacterRepository,
     InMemoryContentOverlayRepository,
     InMemoryInventoryRepository,
+    InMemoryKeeperLogRepository,
     InMemoryUserRepository,
 )
 from mmorpg.presentation.telegram.flows.play import (
@@ -174,6 +175,7 @@ class Player:
                 self.deps["characters"],
                 self.deps["inventory"],
                 self.deps["users"],
+                self.deps["keeper_log"],
                 self.deps["deltas"],
                 self.deps["overlays"],
                 self.deps["registry"],
@@ -206,6 +208,7 @@ async def player(
         characters=characters,
         inventory=inventory,
         users=users,
+        keeper_log=InMemoryKeeperLogRepository(),
         deltas=deltas,
         overlays=overlays,
         registry=registry,
@@ -517,6 +520,7 @@ async def test_a_cleared_node_is_cleared_for_everybody(
             characters,
             inventory,
             users,
+            InMemoryKeeperLogRepository(),
             deltas,
             overlays,
             registry,

@@ -26,6 +26,7 @@ from mmorpg.domain.entities.combat import ActionTag, CombatState, Trace
 from mmorpg.domain.entities.content import Item, SkillKind
 from mmorpg.domain.entities.craft import CraftLog, CraftProgress
 from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
+from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.ports.repositories import Census
 from mmorpg.domain.procgen import generate_location
@@ -225,6 +226,11 @@ def edits() -> tuple[OverlayRecord, ...]:
     )
 
 
+#: Момент, которым меряются сроки на снимках экранов. Число, а не часы: экран
+#: должен рисоваться одинаково в любой день.
+NOW = 1_700_000_000
+
+
 @pytest.fixture(scope="session")
 def edited(content: GameContent, edits: tuple[OverlayRecord, ...]) -> GameContent:
     """Мир, в котором правки смотрителя уже стоят."""
@@ -250,7 +256,35 @@ def keeper_view(edits: tuple[OverlayRecord, ...], fighter: Character) -> keeper_
             gold_in_bank=310_000,
             quests_done=402,
             arena_fights=88,
+            banned=2,
             leaders=(("Мерла", 41), ("Аргус", 22)),
+        ),
+        now=NOW,
+    )
+
+
+@pytest.fixture(scope="session")
+def banned_view(keeper_view: keeper_screens.KeeperView) -> keeper_screens.KeeperView:
+    """Та же панель, но открытый игрок заблокирован, и журнал не пуст."""
+    return replace(
+        keeper_view,
+        target_ban=Ban(until=NOW + 2 * 24 * 60 * 60, reason="ругался в группе"),
+        log=(
+            KeeperEntry(
+                at=NOW - 600,
+                keeper_id=1,
+                keeper_name="Смотритель",
+                action=KeeperAction.BAN,
+                target="Мерла",
+                detail="ругался в группе",
+            ),
+            KeeperEntry(
+                at=NOW - 7200,
+                keeper_id=1,
+                keeper_name="Смотритель",
+                action=KeeperAction.GOLD,
+                target="Аргус",
+            ),
         ),
     )
 
@@ -289,6 +323,7 @@ def all_screens(
     keeper: Character,
     edited: GameContent,
     keeper_view: keeper_screens.KeeperView,
+    banned_view: keeper_screens.KeeperView,
 ) -> list[Screen]:
     """Every screen in the game, rendered with sample data.
 
@@ -411,6 +446,13 @@ def all_screens(
             edited, keeper_screens.KeeperView(), PageState(), notice="Никого не нашли."
         ),
         keeper_screens.player_screen(edited, fighter, derived_stats(content, fighter)),
+        keeper_screens.player_screen(
+            edited, fighter, derived_stats(content, fighter), view=banned_view
+        ),
+        keeper_screens.ban_screen(fighter, keeper_view),
+        keeper_screens.ban_screen(fighter, banned_view, "ругался в группе"),
+        keeper_screens.log_screen(banned_view),
+        keeper_screens.log_screen(keeper_view),
         keeper_screens.stats_screen(keeper_view.census),
         keeper_screens.stats_screen(Census()),
         keeper_screens.service_screen(keeper_view),

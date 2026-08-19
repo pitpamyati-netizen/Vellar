@@ -20,6 +20,7 @@ from mmorpg.domain.ports.repositories import (
     CharacterRepository,
     ContentOverlayRepository,
     InventoryRepository,
+    KeeperLogRepository,
     LocationStateCache,
     PrivacyRepository,
     StateCache,
@@ -40,6 +41,7 @@ class Dependencies:
     inventory: InventoryRepository
     trades: TradeRepository
     privacy: PrivacyRepository
+    keeper_log: KeeperLogRepository
     state_cache: StateCache
     locations: LocationStateCache
     overlays: ContentOverlayRepository
@@ -58,6 +60,7 @@ class Dependencies:
             "inventory": self.inventory,
             "trades": self.trades,
             "privacy": self.privacy,
+            "keeper_log": self.keeper_log,
             "state_cache": self.state_cache,
             "locations": self.locations,
             "overlays": self.overlays,
