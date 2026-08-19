@@ -11,7 +11,7 @@ from dataclasses import replace
 import pytest
 
 from mmorpg.domain.entities import Character, StatBlock
-from mmorpg.domain.entities.location import LocationState, Presence
+from mmorpg.domain.entities.location import LocationState, NodeState, Presence
 from mmorpg.domain.ports import (
     AccessibilitySettings,
     CharacterRepository,
@@ -22,6 +22,7 @@ from mmorpg.domain.ports import (
     User,
     UserRepository,
 )
+from mmorpg.domain.rules.nodes import RESPAWN_SECONDS
 from mmorpg.infrastructure.cache import (
     InMemoryIdempotencyStore,
     InMemoryLocationStateCache,
@@ -190,42 +191,46 @@ async def test_state_cache_delete() -> None:
     assert await cache.get("screen:1") is None
 
 
-async def test_cleared_nodes_are_shared_by_everybody_in_the_location() -> None:
-    """A node one player emptied is empty for the next one who walks in."""
+async def test_what_one_player_took_is_gone_for_the_next_one() -> None:
+    """A node holds a wave, and the wave is shared by everybody in the place."""
     cache = InMemoryLocationStateCache()
-    assert await cache.state("farhold", 1) == LocationState()
+    assert await cache.state("farhold", 1, now=100) == LocationState()
 
-    await cache.mark_cleared("farhold", 1, generation=0, node=2, ttl=600)
-    state = await cache.mark_cleared("farhold", 1, generation=0, node=5, ttl=600)
-    assert state.cleared == (1 << 2) | (1 << 5)
-    assert await cache.state("farhold", 1) == state
+    await cache.take("farhold", 1, 2, wave=0, size=3, now=100, ttl=600)
+    state = await cache.take("farhold", 1, 2, wave=0, size=3, now=100, ttl=600)
+    assert state.node(2).taken == 2
+    assert not state.node(2).empty
+    assert (await cache.state("farhold", 1, now=100)).node(2).taken == 2
 
 
-async def test_a_location_rolls_over_once_however_many_ask() -> None:
-    """Two players finishing the last node together get one new map, not two."""
+async def test_the_last_thing_out_empties_the_node_and_three_minutes_refill_it() -> None:
     cache = InMemoryLocationStateCache()
-    await cache.mark_cleared("farhold", 1, generation=0, node=1, ttl=600)
+    for _ in range(2):
+        state = await cache.take("farhold", 1, 4, wave=0, size=2, now=1_000, ttl=600)
+    assert state.node(4).empty
 
-    rolled = await cache.rotate("farhold", 1, generation=0, ttl=600)
-    assert rolled == LocationState(generation=1, cleared=0)
+    waiting = await cache.state("farhold", 1, now=1_000 + RESPAWN_SECONDS - 1)
+    assert waiting.node(4).empty
 
-    late = await cache.rotate("farhold", 1, generation=0, ttl=600)
-    assert late == rolled
+    filled = await cache.state("farhold", 1, now=1_000 + RESPAWN_SECONDS)
+    assert not filled.node(4).empty
+    assert filled.node(4).wave == 1
 
 
-async def test_a_mark_from_the_previous_map_is_ignored() -> None:
+async def test_a_press_that_names_an_older_wave_takes_nothing() -> None:
+    """Two players emptying the last pack together empty it once, not twice."""
     cache = InMemoryLocationStateCache()
-    await cache.rotate("farhold", 1, generation=0, ttl=600)
-    state = await cache.mark_cleared("farhold", 1, generation=0, node=3, ttl=600)
-    assert state == LocationState(generation=1, cleared=0)
+    await cache.take("farhold", 1, 3, wave=0, size=1, now=1_000, ttl=600)
+    late = await cache.take("farhold", 1, 3, wave=0, size=1, now=1_000 + RESPAWN_SECONDS, ttl=600)
+    assert late.node(3) == NodeState(wave=1, taken=0, emptied_at=0)
 
 
-async def test_an_untouched_location_is_re_rolled_eventually() -> None:
+async def test_an_untouched_location_fills_back_up_eventually() -> None:
     clock = FakeClock()
     cache = InMemoryLocationStateCache(clock=clock)
-    await cache.mark_cleared("farhold", 1, generation=0, node=1, ttl=600)
+    await cache.take("farhold", 1, 1, wave=0, size=3, now=1_000, ttl=600)
     clock.advance(601)
-    assert await cache.state("farhold", 1) == LocationState()
+    assert await cache.state("farhold", 1, now=1_000) == LocationState()
 
 
 async def test_people_are_seen_on_their_own_node_only() -> None:

@@ -11,6 +11,7 @@ Redis storage and disappears with the state when it ends.
 
 from __future__ import annotations
 
+import time
 from dataclasses import replace
 
 from aiogram import F, Router
@@ -25,12 +26,16 @@ from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import ActionKind, CombatAction, CombatOutcome
 from mmorpg.domain.entities.content import GameContent, ItemKind
-from mmorpg.domain.entities.location import EnemyRank
-from mmorpg.domain.ports.repositories import CharacterRepository, InventoryRepository
-from mmorpg.domain.procgen.location import cleared_mask
+from mmorpg.domain.entities.location import EnemyRank, LocationState
+from mmorpg.domain.ports.repositories import (
+    CharacterRepository,
+    InventoryRepository,
+    LocationStateCache,
+)
 from mmorpg.domain.procgen.seeds import derive
 from mmorpg.domain.rules import adventure
 from mmorpg.domain.rules import arena as arena_rules
+from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import turning as turning_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
@@ -42,7 +47,9 @@ from mmorpg.presentation.telegram.flows.play import (
     build_location,
     descent_fight_seed,
     level_up_line,
+    location_known,
     node_fight_seed,
+    visit_seed,
 )
 from mmorpg.presentation.telegram.flows.state import Descent, LocationSession, PlayState
 from mmorpg.presentation.telegram.keyboards import labels
@@ -81,6 +88,8 @@ async def open_fight(
     flow: PlayState,
     emoji: bool = False,
     characters: CharacterRepository | None = None,
+    location_state: LocationState | None = None,
+    now: int = 0,
 ) -> None:
     """Build the fight the play flow asked for and show its first screen."""
     session = await _spawn_duel(content, character, flow, characters)
@@ -96,7 +105,14 @@ async def open_fight(
             )
             return
     if session is None:
-        session = _spawn(content, character, flow, world_seed=settings.world_seed)
+        session = _spawn(
+            content,
+            character,
+            flow,
+            world_seed=settings.world_seed,
+            location_state=location_state or LocationState(),
+            now=now,
+        )
     landing = replace(flow, screen=ScreenId.COMBAT, fight="")
     await state.set_state(Play.combat)
     await state.update_data(
@@ -168,7 +184,13 @@ async def _spawn_arena(
 
 
 def _spawn(
-    content: GameContent, character: Character, flow: PlayState, *, world_seed: str
+    content: GameContent,
+    character: Character,
+    flow: PlayState,
+    *,
+    world_seed: str,
+    location_state: LocationState,
+    now: int,
 ) -> fight_flow.CombatSession:
     """Who is waiting. Both kinds of fight draw from the same generator."""
     if flow.fight == "dungeon" or flow.descent.active:
@@ -197,7 +219,12 @@ def _spawn(
 
     location = build_location(content, world_seed, flow.session)
     node = location.node(flow.session.node)
-    seed = node_fight_seed(world_seed, flow.session)
+    left = node_rules.standing_at(
+        visit_seed(world_seed, flow.session), location, location_state, node.index, now
+    )
+    # The wave and how much of it is already gone are both in the seed: the second
+    # pack in a node is not the first one over again (``domain/rules/nodes.py``).
+    seed = derive(node_fight_seed(world_seed, flow.session, left.wave), left.taken)
     enemies = fight_flow.spawn_for_node(
         content,
         seed=seed,
@@ -205,7 +232,7 @@ def _spawn(
         level=max(1, node.level),
         rank=node.kind.rank,
     )
-    return fight_flow.begin(content, character, enemies, seed=seed, node=node.index)
+    return fight_flow.begin(content, character, enemies, seed=seed, node=node.index, wave=left.wave)
 
 
 # --- one turn ---------------------------------------------------------
@@ -218,6 +245,7 @@ async def fight(
     settings: Settings,
     characters: CharacterRepository,
     inventory: InventoryRepository,
+    locations: LocationStateCache,
 ) -> None:
     """One message, one turn. Never silence, never two messages."""
     if message.from_user is None or message.text is None:
@@ -243,7 +271,16 @@ async def fight(
 
     if await state.get_state() == Play.combat_bag.state:
         await _use_from_bag(
-            message, state, content, character, session, flow, inventory, characters
+            message,
+            state,
+            content,
+            character,
+            session,
+            flow,
+            inventory,
+            characters,
+            locations,
+            settings,
         )
         return
 
@@ -253,7 +290,17 @@ async def fight(
 
     updated, notice = fight_flow.advance(content, character, session, message.text)
     await _store_and_show(
-        message, state, content, character, updated, flow, notice, characters, inventory
+        message,
+        state,
+        content,
+        character,
+        updated,
+        flow,
+        notice,
+        characters,
+        inventory,
+        locations,
+        settings,
     )
 
 
@@ -267,6 +314,8 @@ async def _store_and_show(
     notice: str,
     characters: CharacterRepository,
     inventory: InventoryRepository,
+    locations: LocationStateCache,
+    settings: Settings,
 ) -> None:
     """Persist what the turn changed and answer with exactly one screen."""
     if not session.state.is_over:
@@ -301,6 +350,10 @@ async def _store_and_show(
                 updated_flow, rows = _after_victory(session, flow, extra, character)
                 if session.in_descent and session.depth >= turning_rules.descent_depth(character):
                     character = await _pay_the_bottom(content, character, flow, extra, inventory)
+                elif not session.in_descent and flow.session.active:
+                    # The pack that fell is one thing out of the node; what is left
+                    # of the wave is what the location screen will say next.
+                    extra.append(await _take_node(content, flow, session, locations, settings))
             # Winning a fight is one of the introduction tasks, and it is ticked
             # off by the win itself - wherever it happened.
             marked = tutorial_rules.complete(character, TutorialTask.FIGHT)
@@ -444,10 +497,9 @@ def _after_victory(
     extra: list[str],
     character: Character,
 ) -> tuple[PlayState, list[tuple[Label, ...]]]:
-    """Mark the node as done, or offer the next step of a descent."""
+    """Offer the next step of a descent. A node keeps its own count elsewhere."""
     if not session.in_descent:
-        cleared = flow.session.cleared | cleared_mask([session.node])
-        return replace(flow, session=replace(flow.session, cleared=cleared)), []
+        return flow, []
 
     depth = turning_rules.descent_depth(character)
     if session.depth >= depth:
@@ -570,6 +622,8 @@ async def _use_from_bag(
     flow: PlayState,
     inventory: InventoryRepository,
     characters: CharacterRepository,
+    locations: LocationStateCache,
+    settings: Settings,
 ) -> None:
     """Using a consumable costs the turn, like every other action."""
     entries = await _consumables(content, character, inventory)
@@ -607,4 +661,31 @@ async def _use_from_bag(
         "",
         characters,
         inventory,
+        locations,
+        settings,
     )
+
+
+async def _take_node(
+    content: GameContent,
+    flow: PlayState,
+    session: fight_flow.CombatSession,
+    locations: LocationStateCache,
+    settings: Settings,
+) -> str:
+    """Забрать из узла побеждённую стаю и сказать, что там ещё осталось."""
+    from mmorpg.presentation.telegram.handlers.play import take_from_node
+
+    if not location_known(content, flow.session):
+        return ""
+    now = int(time.time())
+    state = await take_from_node(
+        content, flow.session, session.node, locations, now, settings, wave=session.wave
+    )
+    location = build_location(content, settings.world_seed, flow.session)
+    left = node_rules.standing_at(
+        visit_seed(settings.world_seed, flow.session), location, state, session.node, now
+    )
+    if left.empty:
+        return "Узел вычищен: новые противники придут сюда через несколько минут."
+    return f"В узле осталось противников: {left.left} из {left.size}."

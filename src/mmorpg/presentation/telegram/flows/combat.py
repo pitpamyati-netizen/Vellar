@@ -56,6 +56,10 @@ class CombatSession:
     state: CombatState
     seed: bytes
     node: int = 0
+    #: Волна узла, из которой вышел этот противник. Победа забирает единицу
+    #: именно из неё: если узел успел смениться, забирать уже нечего
+    #: (``domain/rules/nodes.py``).
+    wave: int = 0
     depth: int = 0
     opponent: int = 0
     # A round of the Debt Circle. The stake is already paid when the fight opens,
@@ -81,6 +85,7 @@ def begin(
     *,
     seed: bytes,
     node: int,
+    wave: int = 0,
     depth: int = 0,
     opponent: int = 0,
     arena: bool = False,
@@ -89,6 +94,7 @@ def begin(
         state=start_combat(content, character, enemies),
         seed=seed,
         node=node,
+        wave=wave,
         depth=depth,
         opponent=opponent,
         arena=arena,
@@ -234,6 +240,7 @@ def serialise(session: CombatSession) -> str:
         {
             "seed": session.seed.hex(),
             "node": session.node,
+            "wave": session.wave,
             "depth": session.depth,
             "opponent": session.opponent,
             "arena": session.arena,
@@ -337,6 +344,7 @@ def deserialise(raw: str) -> CombatSession:
         state=state,
         seed=bytes.fromhex(data["seed"]),
         node=data["node"],
+        wave=int(data.get("wave", 0)),
         depth=int(data.get("depth", 0)),
         opponent=int(data.get("opponent", 0)),
         arena=bool(data.get("arena", False)),

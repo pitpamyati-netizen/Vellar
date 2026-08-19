@@ -4,10 +4,8 @@ from mmorpg.domain.procgen.enemies import generate_enemy, generate_group
 from mmorpg.domain.procgen.location import (
     MAX_NODES,
     MIN_NODES,
-    cleared_mask,
     combat_nodes,
     generate_location,
-    is_cleared,
 )
 from mmorpg.domain.procgen.seeds import (
     DEFAULT_SHOP_ROTATION_SECONDS,
@@ -20,19 +18,18 @@ from mmorpg.domain.procgen.seeds import (
     rotation_started_at,
     seconds_left_in_rotation,
     shop_seed,
+    wave_seed,
 )
 
 __all__ = [
     "DEFAULT_SHOP_ROTATION_SECONDS",
     "MAX_NODES",
     "MIN_NODES",
-    "cleared_mask",
     "combat_nodes",
     "enemy_seed",
     "generate_enemy",
     "generate_group",
     "generate_location",
-    "is_cleared",
     "location_seed",
     "node_seed",
     "rng",
@@ -41,4 +38,5 @@ __all__ = [
     "rotation_started_at",
     "seconds_left_in_rotation",
     "shop_seed",
+    "wave_seed",
 ]

@@ -9,34 +9,33 @@ from __future__ import annotations
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from mmorpg.domain.entities import GameContent, NodeKind
+from mmorpg.domain.entities import GameContent, NodeKind, NodeState
 from mmorpg.domain.entities.location import EnemyRank
 from mmorpg.domain.procgen import (
     DEFAULT_SHOP_ROTATION_SECONDS,
     MAX_NODES,
     MIN_NODES,
-    cleared_mask,
     combat_nodes,
     generate_enemy,
     generate_group,
     generate_location,
-    is_cleared,
     location_seed,
     rotation_ends_at,
     rotation_index,
     seconds_left_in_rotation,
+    wave_seed,
 )
 from mmorpg.domain.procgen.seeds import enemy_seed, node_seed
+from mmorpg.domain.rules import nodes as node_rules
 
 WORLD_SEED = "vellar-test"
 
 
-def build(city_id: str = "farhold", slot: int = 1, generation: int = 100, seed: str = WORLD_SEED):
+def build(city_id: str = "farhold", slot: int = 1, seed: str = WORLD_SEED):
     return generate_location(
         world_seed=seed,
         city_id=city_id,
         slot=slot,
-        generation=generation,
         name="Луга у Заставы",
         biome="луга",
         level_min=1,
@@ -66,19 +65,15 @@ def test_seconds_left_in_rotation_is_a_valid_ttl() -> None:
 # --- determinism -----------------------------------------------------
 
 
-def test_same_seed_gives_an_identical_location() -> None:
-    assert build() == build()
-
-
 def test_ten_thousand_runs_are_byte_identical() -> None:
     """Determinism is the whole contract: no global random, ever."""
-    reference = location_seed(WORLD_SEED, "farhold", 1, 100)
-    assert all(location_seed(WORLD_SEED, "farhold", 1, 100) == reference for _ in range(10_000))
+    reference = location_seed(WORLD_SEED, "farhold", 1)
+    assert all(location_seed(WORLD_SEED, "farhold", 1) == reference for _ in range(10_000))
 
 
-def test_a_new_generation_regenerates_the_location() -> None:
-    """The map changes when the place is cleared out, and not before."""
-    assert build(generation=100) != build(generation=101)
+def test_the_map_is_permanent() -> None:
+    """A location is a place, and a place does not roll over: same map, always."""
+    assert build() == build()
 
 
 def test_different_slots_and_cities_differ() -> None:
@@ -93,13 +88,10 @@ def test_a_different_world_seed_changes_everything() -> None:
 # --- structure -------------------------------------------------------
 
 
-@given(
-    generation=st.integers(min_value=0, max_value=200_000),
-    slot=st.integers(min_value=1, max_value=5),
-)
+@given(slot=st.integers(min_value=1, max_value=5))
 @settings(max_examples=400, suppress_health_check=[HealthCheck.function_scoped_fixture])
-def test_structure_invariants(generation: int, slot: int) -> None:
-    location = build(slot=slot, generation=generation)
+def test_structure_invariants(slot: int) -> None:
+    location = build(slot=slot)
 
     assert MIN_NODES <= len(location.nodes) <= MAX_NODES
     assert location.entrance.kind is NodeKind.ENTRANCE
@@ -116,17 +108,13 @@ def test_structure_invariants(generation: int, slot: int) -> None:
         assert location.level_min <= node.level <= location.level_max
 
 
-@given(
-    city=st.sampled_from(["farhold", "dusk_harbor", "bone_marches", "last_beacon"]),
-    generation=st.integers(min_value=0, max_value=50_000),
-)
+@given(city=st.sampled_from(["farhold", "dusk_harbor", "bone_marches", "last_beacon"]))
 @settings(max_examples=200)
-def test_exit_is_always_reachable_across_cities(city: str, generation: int) -> None:
+def test_exit_is_always_reachable_across_cities(city: str) -> None:
     location = generate_location(
         world_seed=WORLD_SEED,
         city_id=city,
         slot=3,
-        generation=generation,
         name="Локация",
         biome="лес",
         level_min=10,
@@ -140,7 +128,6 @@ def test_node_levels_increase_with_depth() -> None:
         world_seed=WORLD_SEED,
         city_id="farhold",
         slot=5,
-        generation=7,
         name="Выработки",
         biome="подземелье",
         level_min=22,
@@ -152,41 +139,70 @@ def test_node_levels_increase_with_depth() -> None:
     assert levels == sorted(levels)
 
 
-# --- cleared node bitmask -------------------------------------------
+# --- what stands in a node, and when it comes back -------------------
 
 
-def test_cleared_mask_round_trip() -> None:
-    mask = cleared_mask([0, 3, 13])
-    assert is_cleared(mask, 0)
-    assert is_cleared(mask, 3)
-    assert is_cleared(mask, 13)
-    assert not is_cleared(mask, 1)
+def test_every_node_holds_a_wave_of_its_own_size() -> None:
+    """The old model was a switch: one press and the node was done for ever."""
+    seed = location_seed(WORLD_SEED, "farhold", 1)
+    location = build()
+    for node in location.nodes:
+        low, high = node_rules.WAVE_SIZE[node.kind]
+        assert low <= node_rules.wave_size(seed, node.index, node.kind, 0) <= high
 
 
-def test_cleared_mask_fits_a_small_integer() -> None:
-    """The whole delta log for one location is a single integer in Redis."""
-    assert cleared_mask(range(MAX_NODES)) < 2**MAX_NODES
+def test_a_battle_node_holds_more_than_one_pack() -> None:
+    seed = location_seed(WORLD_SEED, "farhold", 1)
+    assert node_rules.WAVE_SIZE[NodeKind.BATTLE][0] >= 2
+    assert node_rules.wave_size(seed, 1, NodeKind.BATTLE, 0) >= 2
+
+
+def test_taking_the_last_thing_empties_the_node_and_it_refills() -> None:
+    state = NodeState()
+    for _ in range(3):
+        state = node_rules.taken_one(state, 3, now=1_000)
+    assert node_rules.remaining(state, 3) == 0
+    assert node_rules.seconds_until_refill(state, 1_000) == node_rules.RESPAWN_SECONDS
+
+    waiting = node_rules.refreshed(state, 1_000 + node_rules.RESPAWN_SECONDS - 1)
+    assert waiting == state
+
+    filled = node_rules.refreshed(state, 1_000 + node_rules.RESPAWN_SECONDS)
+    assert filled.wave == 1
+    assert filled.taken == 0
+    assert not filled.empty
+
+
+def test_the_refill_waits_three_minutes() -> None:
+    assert node_rules.RESPAWN_SECONDS == 180
+
+
+def test_a_new_wave_is_seeded_differently() -> None:
+    """The same node, refilled, is not the same three wolves over again."""
+    seed = location_seed(WORLD_SEED, "farhold", 1)
+    assert wave_seed(seed, 3, 0) != wave_seed(seed, 3, 1)
+    assert wave_seed(seed, 3, 0) != wave_seed(seed, 4, 0)
 
 
 # --- enemies ---------------------------------------------------------
 
 
 def test_enemy_generation_is_deterministic(content: GameContent) -> None:
-    seed = enemy_seed(node_seed(location_seed(WORLD_SEED, "farhold", 1, 3), 4), 0)
+    seed = enemy_seed(node_seed(location_seed(WORLD_SEED, "farhold", 1), 4), 0)
     first = generate_enemy(seed, archetypes=content.enemy_archetypes, biome="луга", level=5)
     second = generate_enemy(seed, archetypes=content.enemy_archetypes, biome="луга", level=5)
     assert first == second
 
 
 def test_enemy_fits_the_biome(content: GameContent) -> None:
-    seed = enemy_seed(location_seed(WORLD_SEED, "winter_march", 2, 9), 0)
+    seed = enemy_seed(location_seed(WORLD_SEED, "winter_march", 2), 0)
     enemy = generate_enemy(seed, archetypes=content.enemy_archetypes, biome="снега", level=180)
     archetype = next(a for a in content.enemy_archetypes if a.id == enemy.archetype_id)
     assert archetype.fits("снега")
 
 
 def test_enemies_scale_with_level(content: GameContent) -> None:
-    seed = enemy_seed(location_seed(WORLD_SEED, "farhold", 1, 3), 1)
+    seed = enemy_seed(location_seed(WORLD_SEED, "farhold", 1), 1)
     low = generate_enemy(seed, archetypes=content.enemy_archetypes, biome="луга", level=2)
     high = generate_enemy(seed, archetypes=content.enemy_archetypes, biome="луга", level=200)
     assert high.max_health > low.max_health * 10
@@ -195,7 +211,7 @@ def test_enemies_scale_with_level(content: GameContent) -> None:
 
 
 def test_elites_are_stronger_and_alone(content: GameContent) -> None:
-    seed = enemy_seed(location_seed(WORLD_SEED, "farhold", 1, 3), 2)
+    seed = enemy_seed(location_seed(WORLD_SEED, "farhold", 1), 2)
     normal = generate_enemy(seed, archetypes=content.enemy_archetypes, biome="лес", level=30)
     elite = generate_enemy(
         seed,
@@ -222,7 +238,7 @@ def test_elites_are_stronger_and_alone(content: GameContent) -> None:
 def test_groups_hold_between_one_and_three_enemies(content: GameContent) -> None:
     sizes = set()
     for attempt in range(200):
-        seed = enemy_seed(location_seed(WORLD_SEED, "farhold", 1, attempt), 0)
+        seed = enemy_seed(location_seed(WORLD_SEED, f"farhold-{attempt}", 1), 0)
         group = generate_group(seed, archetypes=content.enemy_archetypes, biome="лес", level=12)
         assert 1 <= len(group) <= 3
         sizes.add(len(group))
@@ -237,5 +253,5 @@ def test_generation_never_touches_the_global_random(content: GameContent) -> Non
     build()
     first = random.random()
     random.seed(1)
-    build(generation=999)
+    build(slot=4)
     assert random.random() == first

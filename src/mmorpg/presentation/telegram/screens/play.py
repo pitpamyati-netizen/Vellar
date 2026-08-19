@@ -7,7 +7,7 @@ to stop listening as soon as they know enough (accessibility rule 4).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, GameContent, Location
@@ -17,12 +17,13 @@ from mmorpg.domain.entities.location import (
     NodeKind,
     Presence,
 )
+from mmorpg.domain.rules.nodes import Standing
 from mmorpg.domain.rules.progression import experience_into_level
 from mmorpg.domain.rules.stats import DerivedStats
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
-from mmorpg.presentation.telegram.screens.format import amount, gold
+from mmorpg.presentation.telegram.screens.format import amount, gold, plural
 from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
     PageState,
@@ -55,6 +56,18 @@ NODE_DESCRIPTIONS: dict[NodeKind, str] = {
     NodeKind.CACHE: "здесь спрятан тайник",
     NodeKind.SHRINE: "здесь можно перевести дух",
     NodeKind.EXIT: "отсюда можно уйти",
+}
+
+# What a node counts, said in the words of the thing itself: "Противников: 2 из 3"
+# reads as a place with something in it, "осталось 2" reads as a leftover.
+NODE_COUNT_WORDS: dict[NodeKind, str] = {
+    NodeKind.BATTLE: "Противников",
+    NodeKind.ELITE_BATTLE: "Эпических противников",
+    NodeKind.BOSS_BATTLE: "Хозяев логова",
+    NodeKind.GATHER: "Осталось собрать",
+    NodeKind.EVENT: "Событий",
+    NodeKind.CACHE: "Тайников",
+    NodeKind.SHRINE: "Святилищ",
 }
 
 LEAVE_LOCATION = label("Покинуть локацию")
@@ -282,25 +295,44 @@ def attack_label(name: str) -> Label:
     return label(f"Напасть: {name}")
 
 
+def node_left_line(standing: Standing, kind: NodeKind) -> str:
+    """Сколько тут ещё есть — словами, без псевдографики.
+
+    Узел больше не «пройден кем-то»: он держит волну, из неё берут по одному, и
+    пустой узел через несколько минут снова полон (``domain/rules/nodes.py``).
+    """
+    if kind in {NodeKind.ENTRANCE, NodeKind.EXIT}:
+        return ""
+    if standing.empty:
+        minutes = max(1, (standing.refill_in + 59) // 60)
+        return (
+            f"Здесь пусто. Новое появится примерно через {minutes} "
+            f"{plural(minutes, 'минуту', 'минуты', 'минут')}."
+        )
+    word = NODE_COUNT_WORDS[kind]
+    return f"{word}: {standing.left} из {standing.size}."
+
+
 def location_screen(
     location: GeneratedLocation,
     node: LocationNode,
     *,
-    cleared: int,
+    standing: Mapping[int, Standing],
     character_level: int = 1,
     others: Sequence[Presence] = (),
     pvp: bool = False,
     notice: str = "",
 ) -> Screen:
-    from mmorpg.domain.procgen.location import is_cleared
-
     neighbours = tuple(location.node(index) for index in node.links)
-    # The doors are not spoils: they are never counted as things to do here, so
-    # "пройдено 0 из 12" cannot mean a location that is already half walked.
+    here = standing.get(
+        node.index, Standing(index=node.index, size=0, left=0, taken=0, wave=0, refill_in=0)
+    )
+    # The doors are never counted: they hold nothing, and counting them would make
+    # a location look half empty the moment you walked in.
     worth_doing = tuple(
         item for item in location.nodes if item.kind not in {NodeKind.ENTRANCE, NodeKind.EXIT}
     )
-    done_count = sum(1 for item in worth_doing if is_cleared(cleared, item.index))
+    busy = sum(1 for item in worth_doing if not standing[item.index].empty)
     boss = next((item for item in location.nodes if item.kind is NodeKind.BOSS_BATTLE), None)
 
     lines = [
@@ -312,24 +344,29 @@ def location_screen(
         lines.append(risk)
     if node.kind in {NodeKind.ENTRANCE, NodeKind.EXIT}:
         lines.append("Это дверь, а не дело: здесь ничего не найти.")
-    elif is_cleared(cleared, node.index):
-        lines.append("Этот узел вы уже прошли, второй раз он ничего не даст.")
+    else:
+        lines.append(node_left_line(here, node.kind))
 
-    lines.append(f"Пройдено узлов: {done_count} из {len(worth_doing)}.")
-    if done_count == 0:
+    lines.append(f"Узлов с делом: {busy} из {len(worth_doing)}.")
+    if busy == len(worth_doing):
         # Said once, at the start of a visit: what this place is and how it works.
         lines.append(
             "Узлы связаны тропами: чем дальше от входа, тем выше уровень и тем "
             "больше платят. Обходить можно что угодно, идти до конца не обязательно."
         )
-    if boss is not None and not is_cleared(cleared, boss.index):
+        lines.append(
+            "Локация никуда не денется: карта у неё одна и та же всегда, а вот "
+            "кто и что в узлах — заводится заново через несколько минут после того, "
+            "как узел вычистили."
+        )
+    if boss is not None and not standing[boss.index].empty:
         lines.append(
             f"Хозяин логова стоит в узле {boss.index}, уровень {boss.level}. Мимо есть путь."
         )
 
     lines.append("Отсюда ведут тропы:")
     for neighbour in neighbours:
-        mark = ", пройден" if is_cleared(cleared, neighbour.index) else ""
+        mark = "" if not standing[neighbour.index].empty else ", сейчас пусто"
         lines.append(
             f"Узел {neighbour.index}: {neighbour.name}, {NODE_DESCRIPTIONS[neighbour.kind]}{mark}."
         )
@@ -349,7 +386,9 @@ def location_screen(
     rows.extend((node_button(neighbour),) for neighbour in neighbours)
     rows.append((LEAVE_LOCATION,))
 
-    return Screen(id=ScreenId.LOCATION, lines=tuple(lines), rows=tuple(rows))
+    return Screen(
+        id=ScreenId.LOCATION, lines=tuple(line for line in lines if line), rows=tuple(rows)
+    )
 
 
 def character_screen(

@@ -5,15 +5,15 @@ index 0 and the exit at the last index. Connectivity and exit reachability are
 guaranteed by construction: every node is linked to an earlier node before any
 extra shortcuts are added, so the graph is a spanning tree plus edges.
 
-The generator knows nothing about time or storage: the generation arrives as an
-argument and the result is thrown away after rendering. A generation goes up when
-the place is cleared out, so the same map stands until somebody finishes it.
+The generator knows nothing about time or storage: it is a pure function of the
+place, and the result is thrown away after rendering. The map never rolls over -
+a location is a location, not a roll of the dice that lasts until somebody
+finishes it. What refills is the contents of its nodes (``domain/rules/nodes.py``).
 """
 
 from __future__ import annotations
 
 import random
-from collections.abc import Sequence
 
 from mmorpg.domain.entities.location import GeneratedLocation, LocationNode, NodeKind
 from mmorpg.domain.procgen.seeds import location_seed, node_seed, rng
@@ -51,14 +51,13 @@ def generate_location(
     world_seed: str,
     city_id: str,
     slot: int,
-    generation: int,
     name: str,
     biome: str,
     level_min: int,
     level_max: int,
 ) -> GeneratedLocation:
-    """Build the location standing in one city slot right now."""
-    seed = location_seed(world_seed, city_id, slot, generation)
+    """Build the location standing in one city slot. Always the same one."""
+    seed = location_seed(world_seed, city_id, slot)
     source = rng(seed)
 
     count = source.randint(MIN_NODES, MAX_NODES)
@@ -83,7 +82,6 @@ def generate_location(
         biome=biome,
         level_min=level_min,
         level_max=level_max,
-        generation=generation,
         nodes=nodes,
     )
 
@@ -146,15 +144,3 @@ def node_level_span(location: GeneratedLocation) -> tuple[int, int]:
 
 def combat_nodes(location: GeneratedLocation) -> tuple[LocationNode, ...]:
     return tuple(node for node in location.nodes if node.kind.is_combat)
-
-
-def cleared_mask(cleared: Sequence[int]) -> int:
-    """Pack cleared node indexes into a bitmask for the Redis delta log."""
-    mask = 0
-    for index in cleared:
-        mask |= 1 << index
-    return mask
-
-
-def is_cleared(mask: int, index: int) -> bool:
-    return bool(mask & (1 << index))

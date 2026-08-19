@@ -2,15 +2,19 @@
 
 Every generated thing in the game descends from one world seed through blake2b:
 
-    location_seed  = blake2b(world_seed, city_id, slot, generation)
+    location_seed  = blake2b(world_seed, city_id, slot)
     node_seed(i)   = blake2b(location_seed, i)
+    wave_seed(i,w) = blake2b(location_seed, "wave", i, w)
     enemy_seed     = blake2b(node_seed, attempt)
     shop_seed      = blake2b(world_seed, "shop", city_id, rotation)
 
-A location's ``generation`` is not a clock: it goes up when the place is cleared
-out, and until then the map stays exactly where the players left it. The only
-thing still counted in wall time is the shop, which turns over every half hour
-(``rotation``) - a shelf that never changed would make coming back pointless.
+A location is a place, not a roll: its map has no generation counter at all, so
+the Meadows are the same Meadows tomorrow and the paths a player learned by ear
+stay where they were. What does change is what stands *in* the nodes - each node
+counts its own waves, and a wave that was worked through is replaced by the next
+one a few minutes later (``domain/rules/nodes.py``). The other thing counted in
+wall time is the shop, which turns over every half hour (``rotation``) - a shelf
+that never changed would make coming back pointless.
 
 No global ``random`` anywhere: callers get an explicit ``random.Random`` instance
 built from a seed. This module knows nothing about the clock - the rotation index
@@ -62,13 +66,22 @@ def derive(*parts: str | int | bytes) -> bytes:
     return digest.digest()
 
 
-def location_seed(world_seed: str, city_id: str, slot: int, generation: int) -> bytes:
-    """The map of one location in one generation of it."""
-    return derive(world_seed, city_id, slot, generation)
+def location_seed(world_seed: str, city_id: str, slot: int) -> bytes:
+    """The map of one location. It has no generation: the place is permanent."""
+    return derive(world_seed, city_id, slot)
 
 
 def node_seed(parent: bytes, index: int) -> bytes:
     return derive(parent, index)
+
+
+def wave_seed(parent: bytes, index: int, wave: int) -> bytes:
+    """What stands in one node during one of its waves.
+
+    The map does not move, so this is the only seed that changes with time: a new
+    wave is a new pack of opponents and a new handful of finds in the same place.
+    """
+    return derive(parent, "wave", index, wave)
 
 
 def enemy_seed(parent: bytes, attempt: int) -> bytes:

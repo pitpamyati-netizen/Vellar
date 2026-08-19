@@ -7,6 +7,7 @@ from dataclasses import replace
 import pytest
 
 from mmorpg.domain.entities import Character, GameContent
+from mmorpg.domain.entities.location import LocationState, NodeState
 from mmorpg.presentation.telegram.flows.play import (
     Clock,
     PlayState,
@@ -207,7 +208,6 @@ def test_entering_a_location_starts_at_the_entrance(
     assert in_location.screen is ScreenId.LOCATION
     assert in_location.session.active
     assert in_location.session.node == 0
-    assert in_location.session.generation == 0
     text = render(content, hero, in_location, world_seed=WORLD_SEED).text()
     assert text.startswith("Локация Луга у Заставы, узел 0: Вход.")
 
@@ -247,7 +247,22 @@ def test_every_node_is_reachable_from_the_entrance(
     assert location.exit_node.index in seen
 
 
-def test_clearing_a_node_is_remembered_for_the_visit(
+def test_working_a_node_takes_one_thing_out_of_it(
+    content: GameContent, hero: Character, in_location: PlayState
+) -> None:
+    """Собранное списывает хендлер: узел общий, и автомат только просит об этом."""
+    location = build_location(content, WORLD_SEED, in_location.session)
+    gather = next((node for node in location.nodes if node.kind.value == "gather"), None)
+    if gather is None:
+        pytest.skip("this seed produced no gathering node")
+
+    at_node = replace(in_location, session=replace(in_location.session, node=gather.index))
+    done = step(content, hero, at_node, "Собрать ресурсы")
+    assert done.pending.node_take == gather.index
+    assert "сделано" in done.notice
+
+
+def test_an_emptied_node_says_when_it_fills_up_again(
     content: GameContent, hero: Character, in_location: PlayState
 ) -> None:
     location = build_location(content, WORLD_SEED, in_location.session)
@@ -256,10 +271,19 @@ def test_clearing_a_node_is_remembered_for_the_visit(
         pytest.skip("this seed produced no gathering node")
 
     at_node = replace(in_location, session=replace(in_location.session, node=gather.index))
-    done = step(content, hero, at_node, "Собрать ресурсы")
-    assert done.session.cleared != 0
-    again = step(content, hero, done, "Собрать ресурсы")
-    assert "уже пройден" in again.notice
+    emptied = LocationState(nodes={gather.index: NodeState(taken=99, emptied_at=100)})
+    refused = advance(
+        content,
+        hero,
+        at_node,
+        "Собрать ресурсы",
+        world_seed=WORLD_SEED,
+        clock=Clock(now=160),
+        location_state=emptied,
+    )
+    assert refused.pending.node_take < 0
+    assert "пусто" in refused.notice
+    assert "минут" in refused.notice
 
 
 def test_leaving_a_location_clears_the_session(

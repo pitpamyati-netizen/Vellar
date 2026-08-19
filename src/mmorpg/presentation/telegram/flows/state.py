@@ -76,6 +76,10 @@ class PendingWrite:
     #: Почему изменился кошелёк: метка для денежного журнала
     #: (``mmorpg.economy_log``). Сама по себе ничего не записывает.
     gold_flow: str = ""
+    #: Узел, из которого шаг забрал одну единицу волны: обыскал тайник, собрал
+    #: горсть руды. Минус один - ничего не забрал. Записывает это хендлер: узел
+    #: общий, и считает его не автомат (``domain/rules/nodes.py``).
+    node_take: int = -1
 
     @property
     def empty(self) -> bool:
@@ -93,6 +97,7 @@ class PendingWrite:
             and not self.service
             and not self.rollback
             and not self.reload
+            and self.node_take < 0
         )
 
     def with_items(self, *changes: tuple[str, int]) -> PendingWrite:
@@ -137,19 +142,16 @@ class Goods:
 
 @dataclass(frozen=True, slots=True)
 class LocationSession:
-    """A visit to one location.
+    """A visit to one location: where the player is standing, and nothing else.
 
-    ``generation`` is which map of this place is standing: it is captured on
-    entry and kept until the player leaves, so the ground never changes under
-    their feet mid-visit. It goes up only when the location is cleared out, and
-    it is shared by everybody in it (docs/adr/0003).
+    The map is permanent, so a visit has nothing to capture about it. What is
+    left in the nodes is shared by everybody in the place and is read fresh on
+    every step (``domain/rules/nodes.py``, docs/adr/0003).
     """
 
     city_id: str = ""
     slot: int = 0
-    generation: int = 0
     node: int = 0
-    cleared: int = 0
 
     @property
     def active(self) -> bool:
@@ -235,9 +237,7 @@ class PlayState:
                 "session": [
                     self.session.city_id,
                     self.session.slot,
-                    self.session.generation,
                     self.session.node,
-                    self.session.cleared,
                 ],
                 "descent": [
                     self.descent.city_id,
@@ -268,7 +268,10 @@ class PlayState:
     @classmethod
     def deserialise(cls, raw: str) -> PlayState:
         data = json.loads(raw)
-        city_id, slot, generation, node, cleared = data.get("session", ["", 0, 0, 0, 0])
+        # Хвост читается с запасом: состояние переживает выкатку, и запись
+        # старого образца называла ещё поколение и маску пройденного.
+        session_parts = [*data.get("session", []), "", 0, 0][:3]
+        city_id, slot, node = session_parts
         descent_city, descent_level, depth, descent_started = data.get("descent", ["", 0, 0, 0])
         pick_kind, pick_slot = data.get("pick", ["", 0])
         list_page, skill_page, board_page = data.get("pages", [1, 1, 1])
@@ -282,13 +285,7 @@ class PlayState:
             world_page=PageState(page=int(data.get("world_page", 1))),
             location_page=PageState(page=int(data.get("location_page", 1))),
             city_id=data.get("city", ""),
-            session=LocationSession(
-                city_id=city_id,
-                slot=int(slot),
-                generation=int(generation),
-                node=int(node),
-                cleared=int(cleared),
-            ),
+            session=LocationSession(city_id=str(city_id), slot=int(slot), node=int(node)),
             descent=Descent(
                 city_id=descent_city,
                 level=int(descent_level),

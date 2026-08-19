@@ -45,7 +45,9 @@ from mmorpg.domain.entities.location import (
     EnemyKind,
     GeneratedLocation,
     LocationNode,
+    LocationState,
     NodeKind,
+    NodeState,
 )
 from mmorpg.domain.entities.overlay import KEEPER_PREFIX, OverlayKind, OverlayRecord
 from mmorpg.domain.entities.quest import ObjectiveKind, Quest, QuestLog
@@ -85,7 +87,9 @@ __all__ = [
     "ItemKind",
     "Location",
     "LocationNode",
+    "LocationState",
     "NodeKind",
+    "NodeState",
     "Npc",
     "ObjectiveKind",
     "Offer",

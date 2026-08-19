@@ -25,12 +25,19 @@ from mmorpg.domain.entities import (
 from mmorpg.domain.entities.combat import ActionTag, CombatState, Trace
 from mmorpg.domain.entities.content import Item, SkillKind
 from mmorpg.domain.entities.craft import CraftLog, CraftProgress
-from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
+from mmorpg.domain.entities.location import (
+    Enemy,
+    EnemyKind,
+    EnemyRank,
+    LocationState,
+    NodeState,
+)
 from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeRecord, TradeStatus
 from mmorpg.domain.ports.repositories import Census
-from mmorpg.domain.procgen import generate_location
+from mmorpg.domain.procgen import generate_location, location_seed
+from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules.combat import start_combat
 from mmorpg.domain.rules.economy import buy_price, roll_assortment
@@ -67,11 +74,33 @@ def sample_location() -> GeneratedLocation:
         world_seed="vellar-test",
         city_id="farhold",
         slot=1,
-        generation=100,
         name="Луга у Заставы",
         biome="луга",
         level_min=1,
         level_max=4,
+    )
+
+
+def full_location(location: GeneratedLocation) -> dict[int, node_rules.Standing]:
+    """Локация, в которой ещё никто не был: в каждом узле стоит полная волна."""
+    return node_rules.standing(
+        location_seed("vellar-test", location.city_id, location.slot),
+        location,
+        LocationState(),
+        now=0,
+    )
+
+
+def emptied_location(location: GeneratedLocation) -> dict[int, node_rules.Standing]:
+    """Локация, из которой всё вынесли минуту назад: узлы ждут новой волны."""
+    emptied = LocationState(
+        nodes={node.index: NodeState(taken=99, emptied_at=1) for node in location.nodes}
+    )
+    return node_rules.standing(
+        location_seed("vellar-test", location.city_id, location.slot),
+        location,
+        emptied,
+        now=60,
     )
 
 
@@ -504,9 +533,16 @@ def all_screens(
         play.world_screen(content, keeper, PageState()),
         play.city_screen(content, content.city("farhold"), hero),
         play.location_list_screen(content, content.city("farhold"), hero, PageState()),
-        play.location_screen(sample_location, sample_location.entrance, cleared=0),
         play.location_screen(
-            sample_location, sample_location.exit_node, cleared=0b101, notice="Узел пройден."
+            sample_location,
+            sample_location.entrance,
+            standing=full_location(sample_location),
+        ),
+        play.location_screen(
+            sample_location,
+            sample_location.exit_node,
+            standing=emptied_location(sample_location),
+            notice="Узел вычищен.",
         ),
         play.character_screen(content, hero, derived_stats(content, hero)),
         play.character_screen(content, fighter, derived_stats(content, fighter)),

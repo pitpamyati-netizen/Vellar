@@ -2,12 +2,12 @@
 
 Thin by design: load state, call the pure flow, store what the flow decided,
 render, send one message. The clock lives here - the flow receives the moment,
-the shop rotation and the standing generation of a location as values, which is
-what keeps generation reproducible (``docs/procgen.md``).
+the shop rotation and what is left in the nodes as values, which is what keeps
+generation reproducible (``docs/procgen.md``).
 
 The shared state of a location lives here too: this is the only place that reads
-who is standing where, writes back what a step cleared, and rolls a location over
-into its next generation once it is emptied.
+who is standing where and takes out of a node what a step took - the map itself
+is permanent and is never stored (``domain/rules/nodes.py``).
 
 The flow never writes. Everything it decided to change arrives in
 ``PlayState.pending`` and is applied here, in one place, so there is exactly one
@@ -34,7 +34,7 @@ from mmorpg.application.services.keeper import set_keeper, sync_keeper
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
-from mmorpg.domain.entities.location import NodeKind, Presence
+from mmorpg.domain.entities.location import LocationState, Presence
 from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind
 from mmorpg.domain.entities.stats import StatCode
@@ -49,9 +49,9 @@ from mmorpg.domain.ports.repositories import (
     User,
     UserRepository,
 )
-from mmorpg.domain.procgen.location import is_cleared
 from mmorpg.domain.procgen.seeds import rotation_index
 from mmorpg.domain.rules import moderation as moderation_rules
+from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules.economy import buy_price, roll_assortment
 from mmorpg.domain.rules.stats import primary_stats
 from mmorpg.presentation.telegram.flows import keeper as keeper_flow
@@ -59,7 +59,9 @@ from mmorpg.presentation.telegram.flows.play import (
     advance,
     begin,
     build_location,
+    location_known,
     render,
+    visit_seed,
 )
 from mmorpg.presentation.telegram.flows.state import (
     TYPING_NAME,
@@ -87,10 +89,10 @@ PLAYERS_SHOWN = 24
 DAY = 24 * 60 * 60
 WEEK = 7 * DAY
 
-# A location holds its map for a week of being ignored; after that it is re-rolled,
-# which is the same thing as nobody having been there. Presence is much shorter:
-# a player who has not pressed anything for ten minutes has walked off, whatever
-# their last screen says.
+# What a location remembers about its nodes lives a week; forgetting that is the
+# same thing as everything in it having refilled long ago. Presence is much
+# shorter: a player who has not pressed anything for ten minutes has walked off,
+# whatever their last screen says.
 LOCATION_TTL = 7 * 24 * 60 * 60
 PRESENCE_TTL = 10 * 60
 
@@ -154,6 +156,7 @@ async def play(
     )
     goods = await _goods(content, character, flow, inventory, settings, clock.shop_rotation)
     company = await _company(flow, character, locations, now)
+    here = await _location_state(content, flow, locations, now)
     view = await _keeper_view(
         flow,
         character,
@@ -178,6 +181,7 @@ async def play(
         settings=accessibility,
         neighbours=company,
         keeper=view,
+        location_state=here,
     )
 
     character = await _apply(
@@ -202,7 +206,7 @@ async def play(
         updated = updated.with_notice(f"{updated.notice} {served}".strip())
     # Правка могла только что изменить мир, а рисовать надо уже изменённый.
     content = registry.current
-    updated = await sync_location(content, updated, flow, character, locations, now, settings)
+    updated, here = await sync_location(content, updated, flow, character, locations, now, settings)
 
     if updated.fight:
         await open_fight(
@@ -214,6 +218,8 @@ async def play(
             flow=updated,
             emoji=emoji,
             characters=characters,
+            location_state=here,
+            now=now,
         )
         return
 
@@ -239,6 +245,7 @@ async def play(
         neighbours=company,
         tally=counted,
         keeper=shown,
+        location_state=here,
     )
 
 
@@ -255,6 +262,7 @@ async def render_play(
     neighbours: Sequence[Presence] = (),
     tally: Mapping[str, int] | None = None,
     keeper: KeeperView | None = None,
+    location_state: LocationState | None = None,
 ) -> None:
     """Draw one play screen. Used by this handler and by the fight handler."""
     shelf = goods if goods is not None else Goods(gold=character.gold)
@@ -270,6 +278,7 @@ async def render_play(
             neighbours=neighbours,
             tally=tally,
             keeper=keeper,
+            location_state=location_state,
         ),
         emoji=emoji,
     )
@@ -627,6 +636,18 @@ async def _apply(
     return character
 
 
+async def _location_state(
+    content: GameContent,
+    flow: PlayState,
+    locations: LocationStateCache,
+    now: int,
+) -> LocationState:
+    """Что стоит в узлах локации, где игрок находится. Пусто вне локации."""
+    if not flow.session.active or not location_known(content, flow.session):
+        return LocationState()
+    return await locations.state(flow.session.city_id, flow.session.slot, now=now)
+
+
 async def sync_location(
     content: GameContent,
     updated: PlayState,
@@ -635,36 +656,29 @@ async def sync_location(
     locations: LocationStateCache,
     now: int,
     settings: Settings,
-) -> PlayState:
+) -> tuple[PlayState, LocationState]:
     """Put the visit and the shared location back in step with each other.
 
-    A location belongs to everybody standing in it: the map that is up, the nodes
-    already emptied and the people walking around. This is where a visit reads
-    that state on the way in, writes back what this step cleared, rolls the place
-    over when the last node falls, and says where this player is standing so the
-    others can see them. Nothing here ever reaches PostgreSQL.
+    A location belongs to everybody standing in it: the map is the same map for
+    everyone and needs no storage at all, but what is *left* in its nodes is
+    shared and does. This is where a step takes its one thing out of a node, and
+    where this player is put on the map so the others can see them. Nothing here
+    ever reaches PostgreSQL.
     """
     session = updated.session
     if not session.active:
         if before.session.active:
             await locations.leave(before.session.city_id, before.session.slot, character.id)
-        return updated
+        return updated, LocationState()
 
-    entered = not before.session.active or before.session.slot != session.slot
-    if entered:
-        state = await locations.state(session.city_id, session.slot)
-        session = replace(session, generation=state.generation, cleared=state.cleared)
-    else:
-        fresh = session.cleared & ~before.session.cleared
-        state = await locations.state(session.city_id, session.slot)
-        for index in range(64):
-            if fresh & (1 << index):
-                state = await locations.mark_cleared(
-                    session.city_id, session.slot, session.generation, index, LOCATION_TTL
-                )
-        session = replace(session, generation=state.generation, cleared=state.cleared | fresh)
+    if not location_known(content, session):
+        return updated, LocationState()
 
-    session = await _roll_over_if_cleared(content, session, locations, settings)
+    state = await locations.state(session.city_id, session.slot, now=now)
+    index = updated.pending.node_take
+    if index >= 0:
+        state = await take_from_node(content, session, index, locations, now, settings, state=state)
+
     await locations.arrive(
         session.city_id,
         session.slot,
@@ -677,27 +691,39 @@ async def sync_location(
         now=now,
         ttl=PRESENCE_TTL,
     )
-    return replace(updated, session=session)
+    return updated, state
 
 
-async def _roll_over_if_cleared(
+async def take_from_node(
     content: GameContent,
     session: LocationSession,
+    index: int,
     locations: LocationStateCache,
+    now: int,
     settings: Settings,
-) -> LocationSession:
-    """A location emptied of everything worth doing gets a new map, once.
+    *,
+    state: LocationState | None = None,
+    wave: int | None = None,
+) -> LocationState:
+    """Забрать из узла одну единицу: убитую стаю, горсть руды, свёрток из тайника.
 
-    The doors do not count: they are never cleared, and waiting for them would
-    mean the place never rolled over at all. Whoever finishes the last node walks
-    out into a location that has already changed - which is what "the map lives
-    until it is cleared" means.
+    Волна, которую видел игрок, передаётся вниз: нажатие, опоздавшее к смене
+    волны, ничего не забирает (``domain/rules/nodes.py``).
     """
     location = build_location(content, settings.world_seed, session)
-    worth_doing = [
-        node.index for node in location.nodes if node.kind not in {NodeKind.ENTRANCE, NodeKind.EXIT}
-    ]
-    if any(not is_cleared(session.cleared, index) for index in worth_doing):
-        return session
-    rolled = await locations.rotate(session.city_id, session.slot, session.generation, LOCATION_TTL)
-    return replace(session, generation=rolled.generation, cleared=rolled.cleared, node=0)
+    seed = visit_seed(settings.world_seed, session)
+    known = state
+    if known is None:
+        known = await locations.state(session.city_id, session.slot, now=now)
+    left = node_rules.standing_at(seed, location, known, index, now)
+    if left.empty:
+        return known
+    return await locations.take(
+        session.city_id,
+        session.slot,
+        index,
+        wave=left.wave if wave is None else wave,
+        size=left.size,
+        now=now,
+        ttl=LOCATION_TTL,
+    )

@@ -11,7 +11,8 @@ from __future__ import annotations
 import pytest
 import pytest_asyncio
 
-from mmorpg.domain.entities.location import LocationState, Presence
+from mmorpg.domain.entities.location import LocationState, NodeState, Presence
+from mmorpg.domain.rules.nodes import RESPAWN_SECONDS
 from mmorpg.infrastructure.cache.redis_cache import (
     RedisIdempotencyStore,
     RedisLocationStateCache,
@@ -75,33 +76,41 @@ async def test_deleting_removes_the_key(redis) -> None:
 # --- the shared state of a location -----------------------------------------
 
 
-async def test_cleared_nodes_accumulate_in_the_mask(redis) -> None:
+async def test_what_is_taken_out_of_a_node_is_counted(redis) -> None:
     locations = RedisLocationStateCache(redis)
-    assert await locations.state(TEST_CITY, 1) == LocationState()
+    assert await locations.state(TEST_CITY, 1, now=1_000) == LocationState()
 
-    await locations.mark_cleared(TEST_CITY, 1, generation=0, node=0, ttl=60)
-    state = await locations.mark_cleared(TEST_CITY, 1, generation=0, node=3, ttl=60)
+    await locations.take(TEST_CITY, 1, 0, wave=0, size=3, now=1_000, ttl=60)
+    state = await locations.take(TEST_CITY, 1, 3, wave=0, size=3, now=1_000, ttl=60)
 
-    assert state.cleared == 0b1001
-    # Written as integers, read back as integers, through a text protocol.
-    assert await locations.state(TEST_CITY, 1) == state
+    assert state.node(0).taken == 1
+    assert state.node(3).taken == 1
+    # Written as text, read back as numbers, through a text protocol.
+    assert await locations.state(TEST_CITY, 1, now=1_000) == state
 
 
-async def test_marking_the_same_node_twice_changes_nothing(redis) -> None:
+async def test_an_emptied_node_fills_up_again_three_minutes_later(redis) -> None:
     locations = RedisLocationStateCache(redis)
-    await locations.mark_cleared(TEST_CITY, 1, generation=0, node=2, ttl=60)
-    state = await locations.mark_cleared(TEST_CITY, 1, generation=0, node=2, ttl=60)
-    assert state.cleared == 0b100
+    for _ in range(2):
+        state = await locations.take(TEST_CITY, 1, 2, wave=0, size=2, now=1_000, ttl=60)
+    assert state.node(2).empty
+
+    waiting = await locations.state(TEST_CITY, 1, now=1_000 + RESPAWN_SECONDS - 1)
+    assert waiting.node(2).empty
+
+    filled = await locations.state(TEST_CITY, 1, now=1_000 + RESPAWN_SECONDS)
+    assert not filled.node(2).empty
+    assert filled.node(2).wave == 1
 
 
-async def test_a_cleared_location_rolls_over_exactly_once(redis) -> None:
-    """Two players finishing the last node together must not roll it twice."""
+async def test_a_press_from_an_older_wave_takes_nothing(redis) -> None:
+    """Two players emptying the last pack together must not empty it twice."""
     locations = RedisLocationStateCache(redis)
-    await locations.mark_cleared(TEST_CITY, 1, generation=0, node=1, ttl=60)
-
-    rolled = await locations.rotate(TEST_CITY, 1, generation=0, ttl=60)
-    assert rolled == LocationState(generation=1, cleared=0)
-    assert await locations.rotate(TEST_CITY, 1, generation=0, ttl=60) == rolled
+    await locations.take(TEST_CITY, 1, 1, wave=0, size=1, now=1_000, ttl=60)
+    late = await locations.take(
+        TEST_CITY, 1, 1, wave=0, size=1, now=1_000 + RESPAWN_SECONDS, ttl=60
+    )
+    assert late.node(1) == NodeState(wave=1, taken=0, emptied_at=0)
 
 
 async def test_people_in_a_location_are_seen_by_node(redis) -> None:

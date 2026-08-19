@@ -11,6 +11,7 @@ is captured.
 
 from __future__ import annotations
 
+import time
 from collections import deque
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -27,6 +28,8 @@ from mmorpg.config import Settings
 from mmorpg.domain.entities import Character, GameContent, QuestLog, SkillLoadout
 from mmorpg.domain.entities.location import NodeKind
 from mmorpg.domain.entities.stats import StatBlock
+from mmorpg.domain.procgen import location_seed
+from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules.stats import derived_stats, stat_allowance
 from mmorpg.infrastructure.persistence.memory import (
     InMemoryCharacterRepository,
@@ -166,6 +169,7 @@ class Player:
                 SETTINGS,
                 self.deps["characters"],
                 self.deps["inventory"],
+                self.deps["deltas"],
             )
         else:
             await play_handler.play(
@@ -297,25 +301,43 @@ async def test_a_fight_ends_and_the_result_is_stored(
     assert 0 < stored.health <= derived_stats(content, stored).max_health
 
 
-async def test_victory_marks_the_node_and_refuses_a_second_helping(
-    player: Player, content: GameContent
+async def test_a_won_fight_takes_one_pack_out_of_the_node(
+    player: Player, content: GameContent, deltas: Any
 ) -> None:
-    await walk_to(player, content, NodeKind.BATTLE)
+    """A node is not a switch: it holds several packs and counts them down."""
+    node = await walk_to(player, content, NodeKind.BATTLE)
     await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
     for _ in range(40):
-        if (await player.press("Атака")).text().startswith(("Победа.", "Поражение.")):
+        outcome = (await player.press("Атака")).text()
+        if outcome.startswith(("Победа.", "Поражение.")):
             break
 
-    back = await player.press("Назад")
     flow = await player.flow()
-    if flow.session.active:
-        assert back.id is ScreenId.LOCATION
-        assert flow.session.cleared, "a won fight leaves the node empty"
-        again = await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
-        assert "уже пусто" in again.text()
-    else:
+    if not flow.session.active:
         # A lost fight sends the player back to the city instead.
         assert flow.session == LocationSession()
+        return
+
+    stored = await deltas.state("farhold", 1, now=0)
+    assert stored.node(node).taken == 1, "a won fight takes one thing out of the node"
+    back = await player.press("Назад")
+    assert back.id is ScreenId.LOCATION
+
+
+async def test_an_emptied_node_says_when_it_fills_up_again(
+    player: Player, content: GameContent, deltas: Any
+) -> None:
+    node = await walk_to(player, content, NodeKind.BATTLE)
+    location = build_location(content, SETTINGS.world_seed, (await player.flow()).session)
+    size = node_rules.wave_size(
+        location_seed(SETTINGS.world_seed, "farhold", 1), node, location.node(node).kind, 0
+    )
+    for _ in range(size):
+        await deltas.take("farhold", 1, node, wave=0, size=size, now=int(time.time()), ttl=600)
+
+    refused = await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
+    assert "пусто" in refused.text()
+    assert "минут" in refused.text()
 
 
 async def test_the_service_row_still_works_on_an_outcome_screen(
@@ -454,7 +476,7 @@ async def test_a_skill_point_buys_a_skill_and_a_slot_holds_it(
 # --- the location is common ground ------------------------------------
 
 
-async def test_a_cleared_node_is_cleared_for_everybody(
+async def test_what_one_player_took_is_gone_for_everybody(
     player: Player,
     content: GameContent,
     characters: InMemoryCharacterRepository,
@@ -474,7 +496,7 @@ async def test_a_cleared_node_is_cleared_for_everybody(
             build_location(
                 content,
                 SETTINGS.world_seed,
-                LocationSession(city_id="farhold", slot=1, generation=0),
+                LocationSession(city_id="farhold", slot=1),
             ),
             kind,
         )
@@ -483,8 +505,8 @@ async def test_a_cleared_node_is_cleared_for_everybody(
     node = await walk_to(player, content, quiet)
     await player.press(play_screens.NODE_ACTIONS[quiet])
 
-    stored = await deltas.state("farhold", 1)
-    assert stored.cleared & (1 << node), "the cache was emptied and nobody was told"
+    stored = await deltas.state("farhold", 1, now=int(time.time()))
+    assert stored.node(node).taken == 1, "the node was worked and nobody was told"
 
     # A second player walks the same road and finds the cache already searched.
     other_account = ACCOUNT + 1
@@ -531,13 +553,15 @@ async def test_a_cleared_node_is_cleared_for_everybody(
         )
     data = await second_state.get_data()
     theirs = PlayState.deserialise(data["play"])
-    assert theirs.session.cleared & (1 << node), "the second player got a fresh copy of the place"
+    assert theirs.session.active, "the second player is standing in the same place"
+    shared = await deltas.state("farhold", 1, now=int(time.time()))
+    assert shared.node(node).taken == 1, "the second player got a fresh copy of the place"
 
 
-async def test_clearing_the_place_out_rolls_it_over(
+async def test_the_map_is_the_same_map_after_the_place_is_emptied(
     player: Player, content: GameContent, deltas: Any
 ) -> None:
-    """The map lives until it is cleared - and then it is a different map."""
+    """A location is permanent: emptying it changes what is in it, not where it is."""
     await player.press("Мир")
     await player.press("Дубно")
     await player.press("Локации")
@@ -545,21 +569,27 @@ async def test_clearing_the_place_out_rolls_it_over(
 
     flow = await player.flow()
     location = build_location(content, SETTINGS.world_seed, flow.session)
-    worth_doing = [
-        node.index for node in location.nodes if node.kind not in {NodeKind.ENTRANCE, NodeKind.EXIT}
-    ]
-    # Everything but the doors is already done by the time the last one falls.
-    await deltas.mark_cleared("farhold", 1, generation=0, node=worth_doing[0], ttl=600)
-    for index in worth_doing[1:]:
-        await deltas.mark_cleared("farhold", 1, generation=0, node=index, ttl=600)
+    seed = location_seed(SETTINGS.world_seed, "farhold", 1)
+    now = int(time.time())
+    for node in location.nodes:
+        size = node_rules.wave_size(seed, node.index, node.kind, 0)
+        for _ in range(size):
+            await deltas.take("farhold", 1, node.index, wave=0, size=size, now=now, ttl=600)
 
     await player.press("Назад")
     await player.press("1. Луга у Заставы")
 
-    rolled = await deltas.state("farhold", 1)
-    assert rolled.generation == 1
-    assert rolled.cleared == 0
-    assert (await player.flow()).session.generation == 1
+    again = build_location(content, SETTINGS.world_seed, (await player.flow()).session)
+    assert again == location, "the map does not roll over, ever"
+    inside = [
+        node.index for node in location.nodes if node.kind not in {NodeKind.ENTRANCE, NodeKind.EXIT}
+    ]
+    emptied = await deltas.state("farhold", 1, now=now)
+    assert all(emptied.node(index).empty for index in inside)
+
+    # Three minutes later everything is standing again, and it is new.
+    filled = await deltas.state("farhold", 1, now=now + node_rules.RESPAWN_SECONDS)
+    assert all(filled.node(index).wave == 1 for index in inside)
 
 
 # --- the Debt Circle --------------------------------------------------

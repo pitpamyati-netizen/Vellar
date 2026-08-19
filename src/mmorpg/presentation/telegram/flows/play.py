@@ -19,14 +19,20 @@ from dataclasses import replace
 from mmorpg import economy_log
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, GameContent, Item, SkillKind
-from mmorpg.domain.entities.location import GeneratedLocation, NodeKind, Presence
+from mmorpg.domain.entities.location import (
+    GeneratedLocation,
+    LocationState,
+    NodeKind,
+    Presence,
+)
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.ports.repositories import AccessibilitySettings
-from mmorpg.domain.procgen.location import cleared_mask, generate_location, is_cleared
+from mmorpg.domain.procgen.location import generate_location
 from mmorpg.domain.procgen.seeds import derive, location_seed
 from mmorpg.domain.rules import adventure, economy
 from mmorpg.domain.rules import arena as arena_rules
 from mmorpg.domain.rules import crafts as craft_rules
+from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import skills as skill_rules
@@ -132,7 +138,6 @@ def build_location(
         world_seed=world_seed,
         city_id=city.id,
         slot=location.slot,
-        generation=session.generation,
         name=location.name,
         biome=location.biome,
         level_min=location.level_min,
@@ -140,10 +145,31 @@ def build_location(
     )
 
 
-def node_fight_seed(world_seed: str, session: LocationSession) -> bytes:
-    """The seed of the fight standing at the current node."""
-    parent = location_seed(world_seed, session.city_id, session.slot, session.generation)
-    return derive(parent, "fight", session.node)
+def visit_seed(world_seed: str, session: LocationSession) -> bytes:
+    """The seed of the place itself. The map never changes, so neither does it."""
+    return location_seed(world_seed, session.city_id, session.slot)
+
+
+def node_standing(
+    content: GameContent,
+    world_seed: str,
+    session: LocationSession,
+    state: LocationState,
+    now: int,
+) -> dict[int, node_rules.Standing]:
+    """What is left in every node of the location being visited."""
+    location = build_location(content, world_seed, session)
+    return node_rules.standing(visit_seed(world_seed, session), location, state, now)
+
+
+def node_fight_seed(world_seed: str, session: LocationSession, wave: int) -> bytes:
+    """The seed of the fight standing at the current node in its current wave.
+
+    The wave is part of it on purpose: the pack that walks in after the last one
+    fell is a different pack, or the node would hand out the same three wolves for
+    ever (``domain/rules/nodes.py``).
+    """
+    return derive(visit_seed(world_seed, session), "fight", session.node, wave)
 
 
 def descent_fight_seed(world_seed: str, descent: Descent) -> bytes:
@@ -172,9 +198,11 @@ def render(
     arena_table: Sequence[Character] = (),
     tally: Mapping[str, int] | None = None,
     keeper: KeeperView | None = None,
+    location_state: LocationState | None = None,
 ) -> Screen:
     shelf = goods or Goods(gold=character.gold)
     clock = clock or Clock()
+    here_now = location_state or LocationState()
     city = known_city(content, state.city_id, character.city_id)
     # Панель смотрителя и разговор с жителем рисуются своим модулем: это не
     # исключение из правил экрана, а просто другая половина того же автомата.
@@ -220,7 +248,7 @@ def render(
             return screens.location_screen(
                 location,
                 location.node(state.session.node),
-                cleared=state.session.cleared,
+                standing=node_standing(content, world_seed, state.session, here_now, clock.now),
                 character_level=character.level,
                 others=neighbours,
                 pvp=_location_allows_pvp(content, state.session),
@@ -344,6 +372,7 @@ def advance(
     settings: AccessibilitySettings | None = None,
     neighbours: Sequence[Presence] = (),
     keeper: KeeperView | None = None,
+    location_state: LocationState | None = None,
 ) -> PlayState:
     """Apply one message. Always answers; never raises on unexpected input."""
     # A visit that can no longer be rebuilt is dropped before anything reads it,
@@ -397,6 +426,7 @@ def advance(
         clock=clock,
         neighbours=neighbours,
         keeper=view,
+        location_state=location_state,
     )
     command = resolve(text, screen)
 
@@ -485,7 +515,14 @@ def advance(
             return _handle_location_list(content, character, state, command)
         case ScreenId.LOCATION:
             return _handle_location(
-                content, character, state, command, world_seed=world_seed, neighbours=neighbours
+                content,
+                character,
+                state,
+                command,
+                world_seed=world_seed,
+                neighbours=neighbours,
+                location_state=location_state or LocationState(),
+                now=ticking.now,
             )
         case _:
             return state.with_notice("Нажмите «Назад» или «Главное меню».")
@@ -1280,10 +1317,10 @@ def _handle_location_list(
                     f"Локация {location.name} рассчитана на уровни с {location.level_min} "
                     f"по {location.level_max}. Ваш уровень: {character.level}."
                 )
-            # The generation and the cleared mask are shared by everybody in the
-            # place, so the handler fills them in from the cache before the
-            # screen is drawn; the flow only says which location was entered.
-            session = LocationSession(city_id=city.id, slot=location.slot, node=0, cleared=0)
+            # What is left in the nodes is shared by everybody in the place, so
+            # the handler reads it from the cache before the screen is drawn; the
+            # flow only says which location was entered and where the player is.
+            session = LocationSession(city_id=city.id, slot=location.slot, node=0)
             return replace(state, session=session).at(ScreenId.LOCATION)
     return state.with_notice("Не узнал эту локацию. Нажмите локацию из списка.")
 
@@ -1296,6 +1333,8 @@ def _handle_location(
     *,
     world_seed: str,
     neighbours: Sequence[Presence] = (),
+    location_state: LocationState,
+    now: int,
 ) -> PlayState:
     if not location_known(content, state.session):
         return (
@@ -1338,9 +1377,20 @@ def _handle_location(
             return replace(state, session=replace(state.session, node=neighbour.index))
 
     if command.argument == screens.NODE_ACTIONS[node.kind]:
-        return _resolve_node_action(content, character, state, location, world_seed)
+        return _resolve_node_action(
+            content, character, state, location, world_seed, location_state, now
+        )
 
     return state.with_notice("Не узнал это действие. Нажмите кнопку узла.")
+
+
+def _empty_node_line(left: node_rules.Standing) -> str:
+    """Сказать, что узел вычищен и когда он снова будет полон."""
+    minutes = max(1, (left.refill_in + 59) // 60)
+    return (
+        f"Здесь сейчас пусто: всё уже разобрали. Новое появится примерно через "
+        f"{minutes} {format_screens.plural(minutes, 'минуту', 'минуты', 'минут')}."
+    )
 
 
 def _resolve_node_action(
@@ -1349,16 +1399,12 @@ def _resolve_node_action(
     state: PlayState,
     location: GeneratedLocation,
     world_seed: str,
+    location_state: LocationState,
+    now: int,
 ) -> PlayState:
     """Non-combat nodes resolve immediately; combat is handed to the fight screen."""
     index = state.session.node
     node = location.node(index)
-    if node.kind.is_combat:
-        if is_cleared(state.session.cleared, index):
-            return state.with_notice("Здесь уже пусто: этот бой прошёл.")
-        # The handler builds the fight itself: it owns the enemy generation and
-        # the cache the fight lives in.
-        return replace(state, fight="node").at(ScreenId.COMBAT)
 
     if node.kind in {NodeKind.ENTRANCE, NodeKind.EXIT}:
         # A door pays nobody: looking at it is an answer, not a reward.
@@ -1366,28 +1412,32 @@ def _resolve_node_action(
             f"{node.name}: смотреть здесь не на что, кроме дороги в обе стороны."
         )
 
-    if is_cleared(state.session.cleared, index):
-        return state.with_notice(f"Узел {index} уже пройден, здесь больше ничего нет.")
-
-    seed = derive(
-        location_seed(
-            world_seed, state.session.city_id, state.session.slot, state.session.generation
-        ),
-        "search",
-        index,
+    left = node_rules.standing_at(
+        visit_seed(world_seed, state.session), location, location_state, index, now
     )
+    if left.empty:
+        return state.with_notice(_empty_node_line(left))
+
+    if node.kind.is_combat:
+        # The handler builds the fight itself: it owns the enemy generation and
+        # the cache the fight lives in.
+        return replace(state, fight="node").at(ScreenId.COMBAT)
+
+    # The wave is part of the seed, so the second handful out of the same vein is
+    # not the first one all over again.
+    seed = derive(visit_seed(world_seed, state.session), "search", index, left.wave, left.taken)
     result = adventure.resolve_search(content, character, node, seed)
-    write = PendingWrite(character=result.character)
+    write = PendingWrite(character=result.character, node_take=index)
     if result.item_id:
         write = write.with_items((result.item_id, 1))
 
-    cleared = state.session.cleared | cleared_mask([index])
-    session = replace(state.session, cleared=cleared)
-    return (
-        replace(state, session=session)
-        .storing(write)
-        .with_notice(search_line(content, node.name, result))
-    )
+    said = search_line(content, node.name, result)
+    if left.left > 1:
+        word = screens.NODE_COUNT_WORDS.get(node.kind, "Осталось")
+        said = f"{said} {word}: {left.left - 1} из {left.size}."
+    else:
+        said = f"{said} Узел вычищен: новое появится через несколько минут."
+    return state.storing(write).with_notice(said)
 
 
 def search_line(content: GameContent, node_name: str, result: adventure.SearchResult) -> str:

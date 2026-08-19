@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from dataclasses import replace
+from types import MappingProxyType
 
-from mmorpg.domain.entities.location import LocationState, Presence
+from mmorpg.domain.entities.location import LocationState, NodeState, Presence
+from mmorpg.domain.rules.nodes import refreshed, taken_one
 
 
 class InMemoryStateCache:
@@ -41,39 +42,37 @@ class InMemoryLocationStateCache:
 
     def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
         self._clock = clock
-        self._states: dict[str, tuple[LocationState, float]] = {}
+        self._states: dict[str, tuple[dict[int, NodeState], float]] = {}
         self._people: dict[str, dict[int, tuple[Presence, int]]] = {}
 
     @staticmethod
     def _key(city_id: str, slot: int) -> str:
         return f"loc:{city_id}:{slot}"
 
-    async def state(self, city_id: str, slot: int) -> LocationState:
+    def _live_nodes(self, city_id: str, slot: int) -> dict[int, NodeState]:
         entry = self._states.get(self._key(city_id, slot))
         if entry is None:
-            return LocationState()
-        state, expires_at = entry
-        # An untouched location goes back to its first generation eventually,
-        # which is the same thing as being generated fresh.
-        return state if expires_at > self._clock() else LocationState()
+            return {}
+        nodes, expires_at = entry
+        # A location nobody has walked into for days is better refilled than kept.
+        return nodes if expires_at > self._clock() else {}
 
-    async def mark_cleared(
-        self, city_id: str, slot: int, generation: int, node: int, ttl: int
+    async def state(self, city_id: str, slot: int, *, now: int) -> LocationState:
+        nodes = {
+            index: refreshed(node, now) for index, node in self._live_nodes(city_id, slot).items()
+        }
+        return LocationState(nodes=MappingProxyType(nodes))
+
+    async def take(
+        self, city_id: str, slot: int, node: int, *, wave: int, size: int, now: int, ttl: int
     ) -> LocationState:
-        current = await self.state(city_id, slot)
-        if current.generation != generation:
-            return current
-        updated = replace(current, cleared=current.cleared | (1 << node))
-        self._states[self._key(city_id, slot)] = (updated, self._clock() + ttl)
-        return updated
-
-    async def rotate(self, city_id: str, slot: int, generation: int, ttl: int) -> LocationState:
-        current = await self.state(city_id, slot)
-        if current.generation != generation:
-            return current
-        rolled = LocationState(generation=generation + 1, cleared=0)
-        self._states[self._key(city_id, slot)] = (rolled, self._clock() + ttl)
-        return rolled
+        nodes = dict(self._live_nodes(city_id, slot))
+        current = refreshed(nodes.get(node, NodeState()), now)
+        # A press that names an older wave belongs to a node that has already
+        # rolled over: it is not an error, it just changes nothing.
+        nodes[node] = taken_one(current, size, now) if current.wave == wave else current
+        self._states[self._key(city_id, slot)] = (nodes, self._clock() + ttl)
+        return LocationState(nodes=MappingProxyType(dict(nodes)))
 
     async def arrive(
         self, city_id: str, slot: int, presence: Presence, *, now: int, ttl: int

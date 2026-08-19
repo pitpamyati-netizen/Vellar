@@ -1,18 +1,17 @@
 # Procedural generation
 
-Locations are **not stored anywhere**. A location is a pure function of a seed and
-a generation, so the server rebuilds it on demand and throws it away after
-rendering. The only thing kept is what the players *changed* - which nodes are
-cleared and which generation is standing - and that is two integers in Redis with
-a time to live.
+Locations are **not stored anywhere**. A map is a pure function of its seed, so
+the server rebuilds it on demand and throws it away after rendering. The only
+thing kept is what the players *took out of it* - how much of each node's wave is
+gone - and that is a small hash in Redis with a time to live.
 
 ## The seed chain
 
 ```
 world_seed              constant, from configuration (WORLD_SEED)
-generation              goes up when a location is cleared out; never on a clock
-location_seed           = blake2b(world_seed, city_id, slot, generation)
+location_seed           = blake2b(world_seed, city_id, slot)      # permanent
 node_seed(i)            = blake2b(location_seed, i)
+wave_seed(i, wave)      = blake2b(location_seed, "wave", i, wave)
 enemy_seed(node, try)   = blake2b(node_seed, "enemy", try)
 rotation                = unix_time // SHOP_ROTATION_SECONDS  # 1800, half an hour
 shop_seed               = blake2b(world_seed, "shop", city_id, rotation)
@@ -27,30 +26,42 @@ Every part is separated by a `\x00` byte before hashing, so `("ab", "c")` and
    forbidden. Every generator receives an explicit `random.Random` built from its
    seed by `procgen.seeds.rng`. A test seeds the global generator, runs generation,
    and asserts the global stream is untouched.
-2. **The domain does not know the time.** The generation and the rotation are
-   always arguments. `mmorpg.domain.procgen` never calls `time.time()`.
+2. **The domain does not know the time.** The moment and the rotation are always
+   arguments. `mmorpg.domain.procgen` never calls `time.time()`.
 3. **Same seed, same bytes.** A test compares 10 000 derivations of the same seed.
 
-## Generations
+## The map is permanent, the contents come in waves
 
-A location keeps its map until it is **cleared out**: every node except the two
-doors worked through. Then, and only then, its generation goes up and the place
-is generated anew - different nodes, different paths, different enemies. See
-`docs/adr/0003-location-generations.md` for why this replaced the six-hour world
-cycle.
+A location never rolls over. Its nodes, their names, their levels and the paths
+between them are the same for ever, so a player can learn a place by ear and keep
+knowing it (`docs/adr/0013-permanent-locations-and-waves.md`).
 
-The state is shared by everybody standing in the location, so a node one player
-emptied is empty for the next one who walks in, and the last node any of them
-finishes changes the place for all of them.
+What changes is what stands **in** the nodes. Every node holds a wave of several
+things, sized by kind (`WAVE_SIZE` in `domain/rules/nodes.py`):
 
-A player already inside keeps the generation captured in their session until they
-leave, so the map never shifts under their feet mid-visit. No teleports, no "you
-have been moved".
+| node | wave |
+| --- | --- |
+| стычка | 2-4 packs |
+| сильный противник | 1-2 |
+| хозяин логова | 1 |
+| заросли, жила руды | 3-5 handfuls |
+| тайник | 1-3 |
+| событие, святилище | 1-2 |
 
-The shop is the one thing left on a clock: `SHOP_ROTATION_SECONDS = 1800`, so the
-shelf turns over every half hour and there is a reason to come back to a city.
-Gathering has a personal cooldown, `GATHER_COOLDOWN_SECONDS = 900`, which belongs
-to a character rather than to the world.
+One action takes **one** thing out of the wave, not the node. When the last one
+goes the node is empty, and `RESPAWN_SECONDS = 180` later the next wave stands
+there - seeded by `wave_seed`, so it is different opponents and different finds
+in the same place. There is no "этот узел кто-то прошёл" flag anywhere in the
+game any more; what a screen says is a count.
+
+The state is shared by everybody standing in the location, so a pack one player
+killed is gone for the next one who walks in, and what neither of them touched
+is still waiting.
+
+The shop is the one thing left on a wall clock: `SHOP_ROTATION_SECONDS = 1800`,
+so the shelf turns over every half hour and there is a reason to come back to a
+city. Gathering has a personal cooldown, `GATHER_COOLDOWN_SECONDS = 900`, which
+belongs to a character rather than to the world.
 
 ## Location structure
 
@@ -123,12 +134,17 @@ fights in a row wearing one name.
 
 ## The shared state of a location
 
-Which generation is standing and what has been cleared in it:
+What is left in each of its nodes - the wave standing there, how much of it is
+gone, and the moment it was emptied:
 
 ```
-key    loc:{city}:{slot}          hash {generation, cleared}
+key    loc:{city}:{slot}          hash {node: "wave:taken:emptied_at"}
 ttl    a week, refreshed on every write
 ```
+
+A write names the wave the player saw: a press that arrives after the node has
+already refilled belongs to a wave that is gone and changes nothing, which is
+what makes two players killing the last pack together kill it once.
 
 Who is standing in it, and where:
 
@@ -137,15 +153,14 @@ key    loc:{city}:{slot}:who      hash {character_id: {node, name, level, seen}}
 ttl    ten minutes of silence and a player is no longer there
 ```
 
-14 nodes fit in 14 bits, so the whole state of a location is two small integers.
-PostgreSQL never sees any of it: losing Redis re-rolls a map and forgets who was
-where, which costs a visit and never a character.
+PostgreSQL never sees any of it: losing Redis refills every node and forgets who
+was where, which costs a walk and never a character.
 
 ## What is generated versus stored
 
 | Generated on demand | Stored |
 | --- | --- |
-| location layout, node kinds, node names, node levels | which nodes the player cleared (Redis, TTL) |
+| location layout, node kinds, node names, node levels | how much of each node's wave is gone (Redis, TTL) |
 | enemies, their stats, their loot | items actually taken (PostgreSQL) |
 | shop assortment | gold and purchases (PostgreSQL) |
 | total character stats | raw stats, level, experience (PostgreSQL) |

@@ -1,7 +1,8 @@
 # ADR 0003 - A location lives until it is cleared
 
-Supersedes the six-hour world cycle, which shipped in 0.1 and did not survive
-its first play test.
+**Superseded by ADR 0013**, which keeps the map permanent and refills the nodes
+in waves instead. What stands below is why the six-hour world cycle went away;
+that part still holds.
 
 ## Context
 

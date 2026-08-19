@@ -326,25 +326,31 @@ class ContentOverlayRepository(Protocol):
 
 @runtime_checkable
 class LocationStateCache(Protocol):
-    """The shared state of a location: its generation, its cleared nodes, its people.
+    """The shared state of a location: what is left in its nodes and who is in it.
 
-    A location is common ground. Everyone standing in one sees the same map and
-    the same emptied nodes, and can see each other. None of it is a source of
-    truth - losing Redis re-rolls the map and forgets who was where, which costs
-    a visit and never a character (``docs/procgen.md``).
+    A location is common ground. The map itself is permanent and needs no storage
+    at all; what is shared is how much of each node's wave is still standing, and
+    who is walking around. None of it is a source of truth - losing Redis refills
+    every node and forgets who was where, which costs a walk and never a
+    character (``docs/procgen.md``).
     """
 
-    async def state(self, city_id: str, slot: int) -> LocationState: ...
+    async def state(self, city_id: str, slot: int, *, now: int) -> LocationState:
+        """Every node of this location as it stands at ``now``.
 
-    async def mark_cleared(
-        self, city_id: str, slot: int, generation: int, node: int, ttl: int
-    ) -> LocationState: ...
+        Nodes whose refill time has come are rolled into their next wave on the
+        way out, so a caller never has to ask twice.
+        """
 
-    async def rotate(self, city_id: str, slot: int, generation: int, ttl: int) -> LocationState:
-        """Roll the location into its next generation, once, when it is cleared out.
+    async def take(
+        self, city_id: str, slot: int, node: int, *, wave: int, size: int, now: int, ttl: int
+    ) -> LocationState:
+        """Take one thing out of a node: a pack killed, a handful gathered.
 
-        Passing the generation the caller saw is what makes two players finishing
-        the last node at the same time roll it over once, not twice.
+        ``wave`` is the wave the caller saw. A press that arrives after the node
+        has already rolled over belongs to a wave that is gone and changes
+        nothing - which is what keeps two players emptying the last pack at the
+        same time from emptying it twice.
         """
 
     async def arrive(

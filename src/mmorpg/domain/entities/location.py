@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
+from types import MappingProxyType
 
 
 class EnemyRank(StrEnum):
@@ -108,17 +109,42 @@ class Enemy:
 
 
 @dataclass(frozen=True, slots=True)
+class NodeState:
+    """What everybody standing at one node shares: the wave and what is left of it.
+
+    A node is not a switch that flips to "пройден" for ever. It holds a wave of
+    things - a few packs of opponents, a few handfuls of ore - and ``taken`` says
+    how many of them are already gone. When the last one goes, ``emptied_at``
+    stamps the moment, and a few minutes later the node fills up with the next
+    wave (``domain/rules/nodes.py``).
+    """
+
+    wave: int = 0
+    taken: int = 0
+    emptied_at: int = 0
+
+    @property
+    def empty(self) -> bool:
+        return bool(self.emptied_at)
+
+
+@dataclass(frozen=True, slots=True)
 class LocationState:
     """What everybody standing in one location shares.
 
-    ``generation`` says which map is up; ``cleared`` is the bitmask of nodes
-    already worked through, by anyone. The place is common ground: a node another
-    player emptied is empty for you too, and when the last one falls the location
-    rolls over into its next generation.
+    The map itself is permanent and is not here: it is a pure function of the
+    place. What is shared is the state of every node - which wave stands there and
+    how much of it is left. A pack another player killed is gone for you too, and
+    what neither of you touched is still waiting.
     """
 
-    generation: int = 0
-    cleared: int = 0
+    nodes: Mapping[int, NodeState] = field(default_factory=dict)
+
+    def node(self, index: int) -> NodeState:
+        return self.nodes.get(index, NodeState())
+
+    def with_node(self, index: int, node: NodeState) -> LocationState:
+        return LocationState(nodes=MappingProxyType({**self.nodes, index: node}))
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,10 +174,12 @@ class LocationNode:
 
 @dataclass(frozen=True, slots=True)
 class GeneratedLocation:
-    """A location as it stands in one generation of itself.
+    """A location as it always is.
 
-    The generation changes only when the place is cleared out; until then every
-    player who walks in sees the same map, the same nodes and the same enemies.
+    The map has no generation and never rolls over: the Meadows keep their nodes,
+    their names and their paths for good, and a player who learned the way there
+    by ear keeps knowing it. What changes is what stands in the nodes
+    (``domain/rules/nodes.py``).
     """
 
     city_id: str
@@ -160,7 +188,6 @@ class GeneratedLocation:
     biome: str
     level_min: int
     level_max: int
-    generation: int
     nodes: tuple[LocationNode, ...]
 
     @property

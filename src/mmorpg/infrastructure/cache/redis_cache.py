@@ -8,9 +8,12 @@ of truth, so losing Redis costs a player their current screen, not their charact
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from collections.abc import Mapping
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any
 
-from mmorpg.domain.entities.location import LocationState, Presence
+from mmorpg.domain.entities.location import LocationState, NodeState, Presence
+from mmorpg.domain.rules.nodes import refreshed, taken_one
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from redis.asyncio import Redis
@@ -19,6 +22,21 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 def _text(value: object) -> str:
     """Redis hands back bytes unless told otherwise; both are read the same way."""
     return value.decode("utf-8") if isinstance(value, bytes) else str(value)
+
+
+def _encode(node: NodeState) -> str:
+    return f"{node.wave}:{node.taken}:{node.emptied_at}"
+
+
+def _decode(raw: Mapping[Any, Any], now: int) -> dict[int, NodeState]:
+    """The stored nodes, each already carried forward to ``now``."""
+    nodes: dict[int, NodeState] = {}
+    for field, value in raw.items():
+        wave, taken, emptied_at = (int(part) for part in _text(value).split(":"))
+        nodes[int(_text(field))] = refreshed(
+            NodeState(wave=wave, taken=taken, emptied_at=emptied_at), now
+        )
+    return nodes
 
 
 class RedisStateCache:
@@ -39,11 +57,12 @@ class RedisStateCache:
 
 
 class RedisLocationStateCache:
-    """One location, shared: which map is standing, what is cleared, who is there.
+    """One location, shared: what is left in its nodes and who is walking in it.
 
-    Two hashes per location - the state and the people in it - both with a time to
-    live, because a location nobody has visited for days is better re-rolled than
-    kept for ever (``Claude.md``, rule 8: every key expires).
+    Two hashes per location - the nodes and the people in them - both with a time
+    to live, because a location nobody has visited for days is better refilled
+    than kept for ever (``Claude.md``, rule 8: every key expires). The map itself
+    is never stored: it is the same map every time.
     """
 
     def __init__(self, client: Redis) -> None:
@@ -57,42 +76,22 @@ class RedisLocationStateCache:
     def _people_key(city_id: str, slot: int) -> str:
         return f"loc:{city_id}:{slot}:who"
 
-    async def state(self, city_id: str, slot: int) -> LocationState:
+    async def state(self, city_id: str, slot: int, *, now: int) -> LocationState:
         raw = await self._client.hgetall(self._state_key(city_id, slot))
-        if not raw:
-            return LocationState()
-        values = {_text(key): _text(value) for key, value in raw.items()}
-        return LocationState(
-            generation=int(values.get("generation", 0)),
-            cleared=int(values.get("cleared", 0)),
-        )
+        return LocationState(nodes=MappingProxyType(_decode(raw, now)))
 
-    async def mark_cleared(
-        self, city_id: str, slot: int, generation: int, node: int, ttl: int
+    async def take(
+        self, city_id: str, slot: int, node: int, *, wave: int, size: int, now: int, ttl: int
     ) -> LocationState:
-        current = await self.state(city_id, slot)
-        if current.generation != generation:
-            # The map rolled over while this fight was going on: the node that was
-            # just emptied belongs to a location that no longer exists.
-            return current
-        updated = LocationState(generation=generation, cleared=current.cleared | (1 << node))
-        await self._write(city_id, slot, updated, ttl)
-        return updated
-
-    async def rotate(self, city_id: str, slot: int, generation: int, ttl: int) -> LocationState:
-        current = await self.state(city_id, slot)
-        if current.generation != generation:
-            return current
-        rolled = LocationState(generation=generation + 1, cleared=0)
-        await self._write(city_id, slot, rolled, ttl)
-        return rolled
-
-    async def _write(self, city_id: str, slot: int, state: LocationState, ttl: int) -> None:
         key = self._state_key(city_id, slot)
-        await self._client.hset(
-            key, mapping={"generation": state.generation, "cleared": state.cleared}
-        )
+        nodes = _decode(await self._client.hgetall(key), now)
+        current = nodes.get(node, NodeState())
+        # A press that names an older wave belongs to a node that has already
+        # rolled over: it is not an error, it just changes nothing.
+        nodes[node] = taken_one(current, size, now) if current.wave == wave else current
+        await self._client.hset(key, str(node), _encode(nodes[node]))
         await self._client.expire(key, max(1, ttl))
+        return LocationState(nodes=MappingProxyType(nodes))
 
     async def arrive(
         self, city_id: str, slot: int, presence: Presence, *, now: int, ttl: int
