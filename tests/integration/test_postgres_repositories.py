@@ -638,6 +638,20 @@ async def test_expiry_hands_back_each_stale_offer_exactly_once(pool, two_parties
     assert await trades.pending(fresh.number, scope=TEST_SCOPE) is not None
 
 
+async def test_a_sweep_without_a_scope_reaches_every_group(pool, two_parties) -> None:
+    """A stake left in a group that went quiet is freed by whoever speaks next."""
+    author, target = two_parties
+    trades = PostgresTradeRepository(pool)
+    here = await trades.open(an_offer(author, target, created_at=NOW), scope=TEST_SCOPE)
+    quiet = await trades.open(an_offer(author, target, created_at=NOW), scope="quiet-group")
+    assert here is not None and quiet is not None
+
+    swept = await trades.expire(before=NOW + 500)
+
+    assert {record.scope for record in swept} == {TEST_SCOPE, "quiet-group"}
+    assert await trades.pending(quiet.number, scope="quiet-group") is None
+
+
 async def test_another_group_never_sees_these_offers(pool, two_parties) -> None:
     author, target = two_parties
     trades = PostgresTradeRepository(pool)

@@ -827,15 +827,16 @@ class PostgresTradeRepository:
         )
         return _trade_from_row(row) if row else None
 
-    async def expire(self, *, scope: str, before: int) -> tuple[TradeRecord, ...]:
+    async def expire(self, *, before: int, scope: str | None = None) -> tuple[TradeRecord, ...]:
         rows = await self._pool.fetch(
             f"""
-            UPDATE trades SET status = 'expired', settled_at = $2
-            WHERE scope = $1 AND status = 'pending' AND created_at <= $2
+            UPDATE trades SET status = 'expired', settled_at = $1
+            WHERE status = 'pending' AND created_at <= $1
+              AND ($2::text IS NULL OR scope = $2)
             RETURNING {TRADE_COLUMNS}
             """,
-            scope,
             before,
+            scope,
         )
         return tuple(_trade_from_row(row) for row in rows)
 

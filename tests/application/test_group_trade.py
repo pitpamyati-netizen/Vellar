@@ -9,7 +9,11 @@ from __future__ import annotations
 
 import pytest
 
-from mmorpg.application.services.group_trade import GroupResult, GroupTrade
+from mmorpg.application.services.group_trade import (
+    GroupResult,
+    GroupTrade,
+    release_expired_offers,
+)
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.trade import OfferKind, TradeStatus
@@ -655,6 +659,103 @@ async def test_a_stake_comes_back_exactly_once(
     await run(trade, f"отказ {made.offer.number}", author=ARGUS_ACCOUNT, target=None, now=late)
 
     assert await purse(characters, argus) == 500
+
+
+async def test_a_quiet_group_does_not_hold_a_stake_hostage(
+    trade: GroupTrade,
+    content: GameContent,
+    characters: InMemoryCharacterRepository,
+    inventory: InMemoryInventoryRepository,
+    trades: InMemoryTradeRepository,
+    privacy: InMemoryPrivacyRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    """An offer made in one group is swept by a command in another.
+
+    The number of an offer belongs to its group; the five minutes it lives do
+    not. A group that fell silent must not keep the item of somebody who is
+    playing elsewhere.
+    """
+    await inventory.add(argus.id, SWORD, 1)
+    made = await run(trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    assert made.offer is not None
+    assert await inventory.count(argus.id, SWORD) == 0
+
+    elsewhere = GroupTrade(
+        content=content,
+        characters=characters,
+        inventory=inventory,
+        trades=trades,
+        privacy=privacy,
+        scope="another-group",
+    )
+    await run(
+        elsewhere,
+        "профиль",
+        author=MERLA_ACCOUNT,
+        target=ARGUS_ACCOUNT,
+        now=NOW + OFFER_TTL_SECONDS + SWEEP_GRACE_SECONDS,
+    )
+
+    assert await inventory.count(argus.id, SWORD) == 1
+    assert [record.status for record in await trades.journal(argus.id)] == [TradeStatus.EXPIRED]
+
+
+async def test_a_restart_rolls_back_what_nobody_ever_answered(
+    trade: GroupTrade,
+    characters: InMemoryCharacterRepository,
+    inventory: InMemoryInventoryRepository,
+    trades: InMemoryTradeRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    """The last resort: a group nobody ever speaks in again still lets go."""
+    await inventory.add(merla.id, SWORD, 1)
+    made = await run(trade, f"купить 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    assert made.offer is not None
+    assert await purse(characters, argus) == 400
+
+    late = NOW + OFFER_TTL_SECONDS + SWEEP_GRACE_SECONDS
+    released = await release_expired_offers(
+        trades=trades, characters=characters, inventory=inventory, now=late
+    )
+
+    assert released == 1
+    assert await purse(characters, argus) == 500
+    # Starting twice is not a way to print gold.
+    assert (
+        await release_expired_offers(
+            trades=trades, characters=characters, inventory=inventory, now=late
+        )
+        == 0
+    )
+    assert await purse(characters, argus) == 500
+
+
+async def test_a_restart_leaves_an_offer_that_is_still_standing(
+    trade: GroupTrade,
+    characters: InMemoryCharacterRepository,
+    inventory: InMemoryInventoryRepository,
+    trades: InMemoryTradeRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    """An offer published a moment before the restart is still answerable after it."""
+    await inventory.add(merla.id, SWORD, 1)
+    made = await run(trade, f"купить 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    assert made.offer is not None
+
+    released = await release_expired_offers(
+        trades=trades, characters=characters, inventory=inventory, now=NOW + 1
+    )
+
+    assert released == 0
+    assert await purse(characters, argus) == 400
+    outcome = await run(
+        trade, f"принять {made.offer.number}", author=MERLA_ACCOUNT, target=None, now=NOW + 1
+    )
+    assert outcome.result is GroupResult.OFFER_ACCEPTED
 
 
 # --- the journal ------------------------------------------------------

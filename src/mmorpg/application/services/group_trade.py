@@ -59,8 +59,6 @@ from mmorpg.domain.rules.economy import payout, trade_tax
 from mmorpg.domain.rules.group_commands import GroupCommand, GroupIntent
 from mmorpg.domain.rules.group_offers import (
     OFFER_KIND_FOR_INTENT,
-    OFFER_TTL_SECONDS,
-    SWEEP_GRACE_SECONDS,
     ItemOption,
     Refusal,
     answerable_by,
@@ -73,8 +71,49 @@ from mmorpg.domain.rules.group_offers import (
     match_items,
     stakes_gold,
     stakes_item,
+    sweep_before,
 )
 from mmorpg.domain.rules.stats import DerivedStats, derived_stats
+
+
+async def return_stake(
+    offer: Offer, *, characters: CharacterRepository, inventory: InventoryRepository
+) -> None:
+    """Give the author back what publishing the offer took from them.
+
+    A free function rather than a method, because a stake is returned in two very
+    different situations: by the group service while the game runs, and by
+    :func:`release_expired_offers` when it starts. Both move the same two things.
+    """
+    if stakes_item(offer):
+        await inventory.add(offer.author.character_id, offer.item_id, offer.quantity)
+        return
+    await characters.grant_gold(offer.author.character_id, offer.price)
+
+
+async def release_expired_offers(
+    *,
+    trades: TradeRepository,
+    characters: CharacterRepository,
+    inventory: InventoryRepository,
+    now: int,
+) -> int:
+    """Roll back every offer that ran out and was never answered. Returns how many.
+
+    The sweep before each group command (``GroupTrade._sweep``) is the usual way
+    this happens, and it is enough while somebody is talking. It is not enough on
+    its own: an offer published into a group that then went quiet - or into a
+    group the bot was removed from - would hold its author's item until that group
+    spoke again, which it may never do. So the game also sweeps once at startup,
+    and the group sweep no longer looks at one scope only.
+
+    This is not a timer (``Claude.md``, rule 3): nothing is scheduled and nothing
+    wakes up. It runs once, where the game already stops to build itself.
+    """
+    stale = await trades.expire(before=sweep_before(now))
+    for record in stale:
+        await return_stake(record.offer, characters=characters, inventory=inventory)
+    return len(stale)
 
 
 class GroupResult(StrEnum):
@@ -479,10 +518,7 @@ class GroupTrade:
 
     async def _return_stake(self, offer: Offer) -> None:
         """Give the author back what publishing the offer took from them."""
-        if stakes_item(offer):
-            await self.inventory.add(offer.author.character_id, offer.item_id, offer.quantity)
-            return
-        await self.characters.grant_gold(offer.author.character_id, offer.price)
+        await return_stake(offer, characters=self.characters, inventory=self.inventory)
 
     async def _close(
         self, number: int, status: TradeStatus, *, now: int, tax: int = 0
@@ -500,17 +536,21 @@ class GroupTrade:
         return closed
 
     async def _sweep(self, now: int) -> None:
-        """Return the stakes of every offer nobody answered in time.
+        """Return the stakes of every offer nobody answered in time, anywhere.
 
         Run before each command rather than on a timer: the group is the only
         place offers are made, so anything that expired is discovered the next
         time somebody speaks, and an idle group needs no background work at all.
 
+        Deliberately not limited to ``self.scope``. Whoever speaks next sweeps for
+        everyone, so one busy group frees the stakes left behind in a quiet one;
+        what a scope that never speaks again would otherwise hold is picked up by
+        :func:`release_expired_offers` the next time the game starts.
+
         The grace period is what keeps "просрочено" a real answer instead of
         "не найдено" - see ``SWEEP_GRACE_SECONDS``.
         """
-        stale = now - OFFER_TTL_SECONDS - SWEEP_GRACE_SECONDS
-        for record in await self.trades.expire(scope=self.scope, before=stale):
+        for record in await self.trades.expire(before=sweep_before(now)):
             await self._return_stake(record.offer)
 
     # --- shared steps -------------------------------------------------

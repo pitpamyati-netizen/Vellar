@@ -128,8 +128,11 @@ a store that expires by itself would swallow it. `trades` is closed by a single
 `UPDATE ... WHERE status = 'pending' RETURNING`, which is what makes two taps on
 "Принять" settle exactly once, and a partial unique index on `(scope, number)`
 keeps two live offers from sharing a number. Stakes of offers nobody answered are
-returned by a sweep that runs at the start of the next group command - there is
-no background timer.
+returned by a sweep that runs at the start of the next group command and once
+when the game starts - there is no background timer. The sweep is not limited to
+the group it was triggered from: the number of an offer belongs to a group, the
+five minutes it lives do not, and a group that fell silent must not hold the item
+of somebody who is playing elsewhere.
 
 Gold moves the same way, and for the same reason. `save` writes back a character
 that was read several `await`s ago, so a purse checked in one step and written in

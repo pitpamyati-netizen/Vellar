@@ -71,6 +71,17 @@ def is_expired(offer: Offer, now: int, *, ttl: int = OFFER_TTL_SECONDS) -> bool:
     return now - offer.created_at >= ttl
 
 
+def sweep_before(now: int) -> int:
+    """The moment an offer stops being answerable *and* stops being remembered.
+
+    Everything published at or before this instant has both run out and served
+    out its grace period, so its stake goes back to the author. One expression,
+    because the sweep now happens in more than one place: before a group command,
+    and once when the game starts (``application.services.group_trade``).
+    """
+    return now - OFFER_TTL_SECONDS - SWEEP_GRACE_SECONDS
+
+
 def answerable_by(offer: Offer, user_id: int) -> bool:
     """Only the target answers. Both sides may walk away, but only one may agree."""
     return user_id == offer.target.user_id

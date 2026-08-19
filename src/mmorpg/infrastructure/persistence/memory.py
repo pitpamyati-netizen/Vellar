@@ -369,11 +369,13 @@ class InMemoryTradeRepository:
         self._records[self._records.index(found)] = closed
         return closed
 
-    async def expire(self, *, scope: str, before: int) -> tuple[TradeRecord, ...]:
+    async def expire(self, *, before: int, scope: str | None = None) -> tuple[TradeRecord, ...]:
         stale = [
             record
             for record in self._records
-            if record.scope == scope and record.is_pending and record.offer.created_at <= before
+            if (scope is None or record.scope == scope)
+            and record.is_pending
+            and record.offer.created_at <= before
         ]
         for record in stale:
             self._records[self._records.index(record)] = replace(

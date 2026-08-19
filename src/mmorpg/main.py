@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import signal
+import time
 from contextlib import AsyncExitStack, suppress
 from dataclasses import dataclass
 
@@ -31,6 +32,7 @@ from aiogram.fsm.storage.base import BaseStorage
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from mmorpg.application.services.content import ContentRegistry
+from mmorpg.application.services.group_trade import release_expired_offers
 from mmorpg.config import AppEnv, Settings, load_settings
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.ports.repositories import (
@@ -105,6 +107,18 @@ async def build_application(settings: Settings) -> Application:
     storage, dependencies, idempotency = await _build_adapters(settings, registry, stack)
     edits = await dependencies.registry.reload(dependencies.overlays)
     logger.info("overlay_loaded", edits=edits, broken=len(registry.problems()))
+
+    # Ставка по предложению, которое никто не принял, возвращается автору здесь и
+    # сейчас, а не тогда, когда группа снова заговорит: группа может и замолчать
+    # навсегда (``application.services.group_trade.release_expired_offers``).
+    released = await release_expired_offers(
+        trades=dependencies.trades,
+        characters=dependencies.characters,
+        inventory=dependencies.inventory,
+        now=int(time.time()),
+    )
+    if released:
+        logger.info("offers_released", offers=released)
 
     bot = Bot(
         token=settings.bot_token.get_secret_value(),

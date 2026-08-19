@@ -274,12 +274,17 @@ class TradeRepository(Protocol):
         tax: int = 0,
     ) -> TradeRecord | None: ...
 
-    async def expire(self, *, scope: str, before: int) -> tuple[TradeRecord, ...]:
+    async def expire(self, *, before: int, scope: str | None = None) -> tuple[TradeRecord, ...]:
         """Close every offer made before ``before`` and return them, once each.
 
         The caller returns each stake to its author; returning a record twice
         would hand out the same item twice, which is why this both reads and
         writes in one step.
+
+        ``scope`` narrows the sweep to one group, and ``None`` - the usual case -
+        sweeps all of them. An offer number belongs to a group; the five minutes
+        it lives do not, and a stake held by a group that has gone quiet must not
+        wait for that group to speak again to come home.
         """
 
     async def journal(self, character_id: int, *, limit: int = 20) -> tuple[TradeRecord, ...]:
