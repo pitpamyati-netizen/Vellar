@@ -160,7 +160,8 @@ def edge_screen(content: GameContent, character: Character, skill: Skill) -> Scr
     return Screen(
         id=ScreenId.SKILL_EDGE,
         lines=(
-            f"Грань умения {skill.name}. Выбирается один раз, на ранге {content.rules.edge_rank}.",
+            f"Грань умения {skill.name}. Выбирается один раз, на ранге "
+            f"{skill_rules.edge_rank_for(content, character)}.",
             f"{first.name}: {first.text} Бьёт сильнее на "
             f"{round(skill_rules.EDGE_POWER_BONUS * 100)} процентов.",
             f"{second.name}: {second.text} Стоит дешевле на "

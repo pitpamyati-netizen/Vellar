@@ -48,6 +48,12 @@ modifications that change how it behaves, without adding a button.
 144 skills x 2 edges = 288 behaviours behind 7 buttons. Edges are re-picked at a
 city Mentor for gold, so a build is a decision, not a life sentence.
 
+Rank 3 is the default, not a constant: a **Seal of the Chamber** opens the edge
+one rank earlier for each Turning its owner has made, down to rank 1
+(`edge_rank_for`, `docs/endgame.md`). An edge pledged into a Turning is gone for
+good and cannot be picked again - that is what keeps a free choice from minting
+Seals.
+
 **What an edge does mechanically** is uniform, and deliberately so: the first
 edge listed **hits 20% harder** (`power_factor`), the second one **costs 35%
 less** (`cost_factor`). Content writes what the edge *is* in the world; the rule

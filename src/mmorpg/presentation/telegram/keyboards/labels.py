@@ -60,6 +60,7 @@ CITY = label("Город", "🏰")
 LOCATIONS = label("Локации", "🌲")
 DUNGEONS = label("Данжи", "⛓")
 ARENA = label("Долговой круг", "🥊")
+CHAMBER = label("Палата", "🏛")
 TAVERN = label("Таверна", "🍺")
 MENTOR = label("Наставник", "📖")
 BANK = label("Банк", "💰")
@@ -90,6 +91,11 @@ FORGET_SKILL = label("Забыть умение", "🧠")
 DUNGEON_ENTER = label("Спуститься", "🕳")
 DUNGEON_DEEPER = label("Идти глубже", "⬇️")
 DUNGEON_LEAVE = label("Выйти на воздух", "🚪")
+
+# --- Оборот (эндгейм, ``domain/rules/turning.py``) ---
+
+TURNING = label("Совершить Оборот", "🏵")
+TURNING_QUESTION = label("Счётный вопрос", "🧮")
 
 # --- keeper (ADMIN_IDS only; ordinary players never see this row) ---
 

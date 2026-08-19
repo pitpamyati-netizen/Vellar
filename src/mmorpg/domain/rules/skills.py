@@ -58,13 +58,23 @@ def cost_to_learn(content: GameContent, character: Character, skill: Skill) -> i
     return 1
 
 
+def edge_rank_for(content: GameContent, character: Character) -> int:
+    """Ранг, на котором этому персонажу открывается грань.
+
+    Обычно третий. Печать Палаты открывает её на ранг раньше за каждый Оборот -
+    это и есть «Печать открывает грани умений» (``domain/rules/turning.py``).
+    Ниже первого не опускается: грань у неизученного умения выбирать не на чем.
+    """
+    return max(1, content.rules.edge_rank - max(0, character.seals))
+
+
 def needs_edge(content: GameContent, character: Character, skill: Skill) -> bool:
     """Whether this skill is sitting at the rank where an edge must be picked."""
     if not is_known(character, skill.code):
         return False
     if character.loadout.edge_of(skill.code) is not None:
         return False
-    return character.loadout.rank_of(skill.code) >= content.rules.edge_rank
+    return character.loadout.rank_of(skill.code) >= edge_rank_for(content, character)
 
 
 def learn(content: GameContent, character: Character, skill: Skill) -> Character | None:

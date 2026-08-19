@@ -34,6 +34,8 @@ from mmorpg.domain.entities.content import (
     SkillEdge,
     SkillKind,
     Trait,
+    Turning,
+    TurningOption,
 )
 from mmorpg.domain.entities.craft import (
     Craft,
@@ -58,6 +60,7 @@ CONTENT_FILES = (
     "enemies.toml",
     "quests.toml",
     "crafts.toml",
+    "turnings.toml",
 )
 
 # Node kinds a "search" contract may ask for. Kept as strings rather than as an
@@ -126,6 +129,7 @@ def load_content(content_dir: Path) -> GameContent:
     quests = _parse_quests(raw["quests.toml"], item_ids, cities, problems)
     craft_rules = _build_craft_rules(raw["crafts.toml"], problems)
     crafts, recipes = _parse_crafts(raw["crafts.toml"], item_ids, craft_rules, problems)
+    turnings, open_turning_id = _parse_turnings(raw["turnings.toml"], problems)
 
     rules = _build_rules(raw, problems)
 
@@ -155,6 +159,8 @@ def load_content(content_dir: Path) -> GameContent:
         trait_categories=categories,
         inverted_modifiers=inverted_modifiers,
         rules=rules,
+        turnings=turnings,
+        open_turning_id=open_turning_id,
     )
 
 
@@ -618,6 +624,53 @@ def _parse_enemies(
         )
     _check_unique((enemy.id for enemy in parsed), "enemies.toml", problems)
     return tuple(parsed), elite_titles
+
+
+def _parse_turnings(raw: Mapping[str, Any], problems: list[str]) -> tuple[tuple[Turning, ...], str]:
+    """Счётные вопросы Палаты и тот из них, что открыт сейчас.
+
+    Вопрос без ответов - это тупик на экране, поэтому их требуется не меньше
+    двух. Открытым может быть только вопрос, который в файле есть: имя, за
+    которым ничего нет, ловится здесь, а не на экране у игрока.
+    """
+    parsed: list[Turning] = []
+    for entry in raw.get("turning", ()):
+        turning_id = str(entry.get("id", ""))
+        if not turning_id:
+            problems.append("turnings.toml: an entry has no id")
+            continue
+        options = tuple(
+            TurningOption(
+                id=str(option.get("id", "")),
+                name=str(option.get("name", "")),
+                text=str(option.get("text", "")),
+            )
+            for option in entry.get("options", ())
+        )
+        if len(options) < 2:
+            problems.append(f"turnings.toml: {turning_id} must offer at least 2 options")
+        if any(not option.id or not option.name for option in options):
+            problems.append(f"turnings.toml: {turning_id} has an option without an id or a name")
+        _check_unique((option.id for option in options), f"turnings.toml: {turning_id}", problems)
+        question = str(entry.get("question", ""))
+        if not question:
+            problems.append(f"turnings.toml: {turning_id} asks nothing")
+        parsed.append(
+            Turning(
+                id=turning_id,
+                name=str(entry.get("name", turning_id)),
+                question=question,
+                text=str(entry.get("text", "")),
+                options=options,
+            )
+        )
+    _check_unique((turning.id for turning in parsed), "turnings.toml", problems)
+
+    open_id = str(raw.get("meta", {}).get("open", ""))
+    if open_id and all(turning.id != open_id for turning in parsed):
+        problems.append(f"turnings.toml: [meta].open names unknown turning {open_id!r}")
+        open_id = ""
+    return tuple(parsed), open_id
 
 
 def _parse_quests(

@@ -29,7 +29,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 - `domain/` — чистая логика, только stdlib, без async и I/O.
   `entities/`: `character`, `stats`, `combat`, `effects`, `location`, `content`
   (в том числе `Npc` — житель города), `quest` (подряд и журнал подрядов),
-  `craft` (ремёсла, рецепты, качество), `overlay` (правка смотрителя).
+  `craft` (ремёсла, рецепты, качество), `overlay` (правка смотрителя),
+  `content.Turning` (счётный вопрос Палаты и ответы на него).
   `rules/`: `combat` (движок боя), `tempo` (намерение, след, брешь), `stats`,
   `progression`, `economy`, `modifiers`, `skill_effects` (эффект →
   спецификация), `skills` (изучение, ранги, грани, слоты), `quests` (счёт и
@@ -37,7 +38,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   изготовление и качество), `adventure` (последствия боя и узла, ночлег, зелья
   вне боя), `tutorial` (шесть заданий обучения, маска на персонаже), `pvp`
   (поединок со слепком, защита новичков, ставка), `arena` (долговой круг:
-  ставка, выплата, счёт сезона), `keeper`
+  ставка, выплата, счёт сезона),
+  `turning` (Оборот на 300 уровне: заклад, Печать, голос и счёт), `keeper`
   (выдачи смотрителя себе и чужому персонажу), `overlay` (поля правки, проверка,
   наложение правок на содержимое), `group_commands` (грамматика группы),
   `group_offers` (предложения).
@@ -58,7 +60,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   `creation`, `play`, `combat`, `keeper` — чистые автоматы), `screens/` (`base`,
   `format`, `paginated`, `creation`, `play`, `combat`, `shop`, `skills`,
   `quests`, `crafts`, `city` (в том числе жители), `settings`, `tutorial`,
-  `arena`, `keeper` (панель), `group`),
+  `arena`, `chamber` (Палата, заклад, счётный вопрос), `keeper` (панель),
+  `group`),
   `keyboards/` (`labels`, `reply`), `middlewares/` (`dependencies`, `errors`,
   `idempotency`, `retry` — на сессии бота, а не на апдейтах),
   `states/screens.py`, `routing.py`, `messaging.py`,
@@ -67,17 +70,20 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 **`content/`** — `world.toml` (15 городов × 5 локаций, 1–300), `races.toml`
 (16 рас), `classes.toml` (8 классов), `traits.toml`, `skills.toml`, `items.toml`,
 `enemies.toml`, `quests.toml` (подряды акта I), `crafts.toml` (ремёсла и
-рецепты).
+рецепты), `turnings.toml` (счётные вопросы Палаты; открыт тот, что назван в
+`[meta].open`).
 Правится без кода, валидируется на старте. Отдельно — `changelog.toml`: что
 изменилось, словами игрока; читается только при посте в канал.
 
 **`docs/`** — `architecture.md`, `accessibility.md` (спецификация, не пожелания),
 `procgen.md`, `content-guide.md`, `skills.md`, `crafts.md`, `keeper.md`,
-`deployment.md`, `release-checklist.md`, `adr/0001..0010`
+`endgame.md` (Оборот и Печать), `deployment.md`, `release-checklist.md`,
+`adr/0001..0011`
 (`0003` — поколения локаций вместо шестичасовой стражи; `0008` — право
 смотрителя раздаётся из панели, корень остаётся в окружении; `0009` — что
 повторяется после разрыва связи, а что нет; `0010` — машина без контейнеров:
-PostgreSQL держит мир, Redis не нужен).
+PostgreSQL держит мир, Redis не нужен; `0011` — Печать открывает доступы, а не
+силу, и голос весит совершённые Обороты).
 
 **`tests/`** — `domain/` (слои держит `test_layering.py`, длину боя —
 `test_combat_balance.py`), `content/`, `presentation/` (доступность, канал,
@@ -95,7 +101,8 @@ PostgreSQL держит мир, Redis не нужен).
 `0003_privacy`, `0004_wounds_bank_quests`, `0005_crafts`, `0006_admin`,
 `0007_tutorial`, `0008_arena`, `0009_keeper_panel` (правки поверх содержимого,
 учёт заблокировавших бота), `0010_arena_credit` (что круг держит с игрока),
-`0011_keeper_grants` (право смотрителя, выданное изнутри игры).
+`0011_keeper_grants` (право смотрителя, выданное изнутри игры),
+`0012_turning` (Печати, заклады и голос в счётном вопросе).
 **`backups/`** — дампы от `stop.bat`; не в репозитории.
 **`.githooks/pre-commit`** — гейт на коммите.
 **`.claude/`** — `settings.json` (хук `Stop`) и `autocommit.sh`: если после

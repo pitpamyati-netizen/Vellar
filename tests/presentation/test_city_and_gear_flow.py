@@ -309,7 +309,7 @@ def test_the_descent_asks_for_a_fight(
 ) -> None:
     dungeon = step(content, hero, in_city, "Данжи")
     assert dungeon.screen is ScreenId.DUNGEON
-    assert "Три схватки подряд" in render(content, hero, dungeon, world_seed=WORLD_SEED).text()
+    assert "3 схватки подряд" in render(content, hero, dungeon, world_seed=WORLD_SEED).text()
 
     down = step(content, hero, dungeon, "Спуститься")
     assert down.fight == "dungeon"

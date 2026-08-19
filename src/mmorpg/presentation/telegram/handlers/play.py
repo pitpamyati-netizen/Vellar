@@ -17,7 +17,7 @@ answer to "where does the game store things".
 from __future__ import annotations
 
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
 from aiogram import Bot, F, Router
@@ -194,6 +194,7 @@ async def play(
     # bag may have changed on the way, so what it shows is read again.
     shelf = await _goods(content, character, updated, inventory, settings, clock.shop_rotation)
     company = await _company(updated, character, locations, now)
+    counted = await _tally(content, updated, characters)
     shown = await _keeper_view(updated, character, "", characters, users, registry, now, settings)
     await state.set_state(STATE_FOR_SCREEN[updated.screen])
     await state.update_data({STATE_KEY: updated.serialise()})
@@ -207,6 +208,7 @@ async def play(
         goods=shelf,
         clock=clock,
         neighbours=company,
+        tally=counted,
         keeper=shown,
     )
 
@@ -222,6 +224,7 @@ async def render_play(
     goods: Goods | None = None,
     clock: Clock | None = None,
     neighbours: Sequence[Presence] = (),
+    tally: Mapping[str, int] | None = None,
     keeper: KeeperView | None = None,
 ) -> None:
     """Draw one play screen. Used by this handler and by the fight handler."""
@@ -236,10 +239,25 @@ async def render_play(
             goods=shelf,
             clock=clock,
             neighbours=neighbours,
+            tally=tally,
             keeper=keeper,
         ),
         emoji=emoji,
     )
+
+
+async def _tally(
+    content: GameContent,
+    flow: PlayState,
+    characters: CharacterRepository,
+) -> Mapping[str, int]:
+    """Голоса за открытый вопрос. Считаются только там, где их показывают."""
+    if flow.screen is not ScreenId.TURNING:
+        return {}
+    turning = content.open_turning()
+    if turning is None:
+        return {}
+    return await characters.turning_tally(turning.id)
 
 
 async def _company(

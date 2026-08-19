@@ -15,6 +15,7 @@ import pytest
 from mmorpg.application.dto.creation import CharacterDraft
 from mmorpg.domain.entities import (
     Character,
+    Equipment,
     GameContent,
     GeneratedLocation,
     QuestLog,
@@ -35,6 +36,7 @@ from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.handlers import creation as handlers_creation
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.screens import arena as arena_screens
+from mmorpg.presentation.telegram.screens import chamber as chamber_screens
 from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import combat as combat_screens
 from mmorpg.presentation.telegram.screens import crafts as craft_screens
@@ -153,6 +155,29 @@ def boss_fight(content: GameContent, fighter: Character) -> CombatState:
 
 
 @pytest.fixture(scope="session")
+def sealbearer(fighter: Character) -> Character:
+    """Тот, кто дошёл до конца: триста уровней, одна Печать и есть что заложить.
+
+    На нём надета вещь выше запроса Палаты и доведено до полного ранга умение с
+    выбранной гранью, поэтому экран заклада показывает оба вида заклада разом.
+    """
+    return replace(
+        fighter,
+        level=300,
+        seals=1,
+        pledges=("item:seers_circlet",),
+        turning_cycle="toll",
+        turning_answer="toll_keep",
+        equipment=Equipment(MappingProxyType({"trinket": "ashen_signet", "body": "runed_plate"})),
+        loadout=replace(
+            fighter.loadout,
+            ranks=MappingProxyType({"warrior_cleave": 5, "warrior_taunt": 5}),
+            edges=MappingProxyType({"warrior_cleave": "warrior_cleave_a"}),
+        ),
+    )
+
+
+@pytest.fixture(scope="session")
 def craftsman(fighter: Character) -> Character:
     """Somebody who has already put a watch or two into two crafts."""
     return replace(
@@ -260,6 +285,7 @@ def all_screens(
     boss_fight: CombatState,
     sample_stock: tuple[Item, ...],
     craftsman: Character,
+    sealbearer: Character,
     keeper: Character,
     edited: GameContent,
     keeper_view: keeper_screens.KeeperView,
@@ -416,6 +442,13 @@ def all_screens(
         tutorial_screens.tutorial_screen(hero),
         tutorial_screens.tutorial_screen(replace(hero, tutorial=0b000111)),
         tutorial_screens.tutorial_screen(replace(hero, tutorial=0b111111)),
+        chamber_screens.chamber_screen(content, fighter),
+        chamber_screens.chamber_screen(content, sealbearer, notice="Оборот совершён."),
+        chamber_screens.turning_screen(content, fighter),
+        chamber_screens.turning_screen(content, sealbearer),
+        chamber_screens.turning_screen(content, sealbearer, tally={"toll_low": 3, "toll_keep": 3}),
+        chamber_screens.pledge_screen(content, sealbearer, PageState()),
+        chamber_screens.pledge_screen(content, fighter, PageState()),
         arena_screens.arena_screen(fighter),
         arena_screens.arena_screen(
             replace(fighter, arena_wins=4, arena_losses=2),

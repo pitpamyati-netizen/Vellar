@@ -149,6 +149,15 @@ class Character:
     arena_wins: int = 0
     arena_losses: int = 0
     arena_credit: int = 0
+    # The endgame, and the only thing in the game that is paid for with what a
+    # character already has (``domain/rules/turning.py``). ``seals`` is how many
+    # Turnings they have made; ``pledges`` is what went into them, so nothing is
+    # ever pledged twice; ``turning_cycle``/``turning_answer`` is the answer they
+    # gave to the question the Chamber has open, and which question it was.
+    seals: int = 0
+    pledges: tuple[str, ...] = ()
+    turning_cycle: str = ""
+    turning_answer: str = ""
     # Which introduction tasks are behind them, as a bitmask
     # (``mmorpg.domain.rules.tutorial``). Zero is a player who has just arrived.
     tutorial: int = 0
@@ -197,6 +206,22 @@ class Character:
     def with_arena_credit(self, held: int) -> Character:
         """Set what the Circle holds of yours. Never below nothing."""
         return replace(self, arena_credit=max(0, held))
+
+    def with_seal(self, pledge: str) -> Character:
+        """Что делает совершённый Оборот: Печать прибавляется, заклад записан.
+
+        Уровень, опыт и характеристики не трогаются вовсе - Печать открывает
+        доступы, а не силу (``Narrative.md``, раздел 6).
+        """
+        return replace(self, seals=self.seals + 1, pledges=(*self.pledges, pledge))
+
+    def has_pledged(self, pledge: str) -> bool:
+        return pledge in self.pledges
+
+    def with_turning_answer(self, cycle: str, option: str) -> Character:
+        """Ответить на счётный вопрос. Ответ всегда назван вместе с вопросом:
+        голос, поданный за прошлый цикл, в этом не считается."""
+        return replace(self, turning_cycle=cycle, turning_answer=option)
 
     def as_admin(self, is_admin: bool) -> Character:
         return replace(self, is_admin=is_admin)

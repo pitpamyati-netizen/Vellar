@@ -18,7 +18,7 @@ from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
-from mmorpg.presentation.telegram.screens.format import amount, gold
+from mmorpg.presentation.telegram.screens.format import amount, gold, plural
 from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
     PageState,
@@ -168,15 +168,21 @@ def dungeon_screen(
     total: int,
     notice: str = "",
 ) -> Screen:
-    """The descent: three fights in a row, no exit in the middle without loss."""
+    """The descent: fights in a row, no exit in the middle without loss.
+
+    How many is not a constant: each Seal of the Chamber opens another layer
+    below the old bottom, so the number is said rather than assumed
+    (``domain/rules/turning.py``).
+    """
     stats = derived_stats(content, character)
     health = character.health_or(stats.max_health)
     lines = [
         notice or f"Подземелья города {city.name}. Ход вниз, сквозняк, вода по щиколотку.",
         f"Спуск рассчитан на уровень {level}. Ваш уровень: {character.level}.",
-        "Три схватки подряд, без передышки. Здоровье не восстанавливается между ними.",
+        f"{total} {plural(total, 'схватка', 'схватки', 'схваток')} подряд, без "
+        "передышки. Здоровье не восстанавливается между ними.",
         f"Здоровье: {amount(health, stats.max_health)}.",
-        "Третий внизу — сильный противник, и за ним дно: "
+        "Последний внизу — сильный противник, и за ним дно: "
         f"{adventure.descent_gold(level)} золота, опыт и находка сверх того, "
         "что возьмёте в схватках.",
         "Дно платит только тем, кто до него дошёл: уйти на середине — уйти со "

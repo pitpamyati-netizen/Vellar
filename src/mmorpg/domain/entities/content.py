@@ -214,6 +214,41 @@ class Npc:
 
 
 @dataclass(frozen=True, slots=True)
+class TurningOption:
+    """Один ответ на счётный вопрос Оборота."""
+
+    id: str
+    name: str
+    text: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class Turning:
+    """Оборот: вопрос, который Палата задаёт игре, и ответы, между которыми
+    считают голоса.
+
+    Сам вопрос ничего не решает в правилах: он собирает счёт. Что записано в
+    книгу Палаты, видно на экране и уходит в канал, а числа правит тот, кто
+    считает итог цикла (``docs/endgame.md``).
+    """
+
+    id: str
+    name: str
+    question: str
+    text: str = ""
+    options: tuple[TurningOption, ...] = ()
+
+    def has_option(self, option_id: str) -> bool:
+        return any(option.id == option_id for option in self.options)
+
+    def option(self, option_id: str) -> TurningOption:
+        for option in self.options:
+            if option.id == option_id:
+                return option
+        raise KeyError(option_id)
+
+
+@dataclass(frozen=True, slots=True)
 class Location:
     id: str
     slot: int
@@ -304,6 +339,9 @@ class GameContent:
     inverted_modifiers: frozenset[str]
     rules: ProgressionRules
     npcs: tuple[Npc, ...]
+    turnings: tuple[Turning, ...]
+    #: Какой Оборот открыт сейчас. Пусто - Палата ничего не спрашивает.
+    open_turning_id: str
 
     _races_by_id: Mapping[str, Race]
     _classes_by_id: Mapping[str, CharacterClass]
@@ -317,6 +355,7 @@ class GameContent:
     _crafts_by_id: Mapping[str, Craft]
     _recipes_by_id: Mapping[str, Recipe]
     _npcs_by_id: Mapping[str, Npc]
+    _turnings_by_id: Mapping[str, Turning]
 
     @classmethod
     def build(
@@ -339,6 +378,8 @@ class GameContent:
         crafts: Sequence[Craft] = (),
         recipes: Sequence[Recipe] = (),
         npcs: Sequence[Npc] = (),
+        turnings: Sequence[Turning] = (),
+        open_turning_id: str = "",
     ) -> GameContent:
         """Build the registry and its indexes."""
         by_owner: dict[str, list[Skill]] = {}
@@ -363,6 +404,8 @@ class GameContent:
             inverted_modifiers=inverted_modifiers,
             rules=rules,
             npcs=tuple(npcs),
+            turnings=tuple(turnings),
+            open_turning_id=open_turning_id,
             _races_by_id=MappingProxyType({race.id: race for race in races}),
             _classes_by_id=MappingProxyType({klass.id: klass for klass in classes}),
             _traits_by_id=MappingProxyType({trait.id: trait for trait in traits}),
@@ -377,6 +420,7 @@ class GameContent:
             _crafts_by_id=MappingProxyType({craft.id: craft for craft in crafts}),
             _recipes_by_id=MappingProxyType({recipe.id: recipe for recipe in recipes}),
             _npcs_by_id=MappingProxyType({npc.id: npc for npc in npcs}),
+            _turnings_by_id=MappingProxyType({turning.id: turning for turning in turnings}),
         )
 
     # --- lookups -----------------------------------------------------
@@ -443,6 +487,24 @@ class GameContent:
                 key=lambda quest: (quest.level, quest.id),
             )
         )
+
+    # --- Обороты ------------------------------------------------------
+
+    def turning(self, turning_id: str) -> Turning:
+        return self._turnings_by_id[turning_id]
+
+    def has_turning(self, turning_id: str) -> bool:
+        return turning_id in self._turnings_by_id
+
+    def open_turning(self) -> Turning | None:
+        """Вопрос, на который сейчас отвечают, или ``None``.
+
+        Содержимое переживает сохранённое состояние: вопрос, которого больше нет
+        в файлах, не открыт (``Claude.md``, правило 8).
+        """
+        if not self.open_turning_id or not self.has_turning(self.open_turning_id):
+            return None
+        return self.turning(self.open_turning_id)
 
     def craft(self, craft_id: str) -> Craft:
         return self._crafts_by_id[craft_id]

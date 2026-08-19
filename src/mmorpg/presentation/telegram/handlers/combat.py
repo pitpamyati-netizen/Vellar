@@ -32,13 +32,13 @@ from mmorpg.domain.procgen.seeds import derive
 from mmorpg.domain.rules import adventure
 from mmorpg.domain.rules import arena as arena_rules
 from mmorpg.domain.rules import pvp as pvp_rules
+from mmorpg.domain.rules import turning as turning_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
 from mmorpg.domain.rules.combat import resolve_turn
 from mmorpg.domain.rules.tutorial import TutorialTask
 from mmorpg.logging import get_logger
 from mmorpg.presentation.telegram.flows import combat as fight_flow
 from mmorpg.presentation.telegram.flows.play import (
-    DUNGEON_DEPTH,
     build_location,
     descent_fight_seed,
     level_up_line,
@@ -185,7 +185,13 @@ def _spawn(
             level=descent.level,
             # The last floor of a descent is what the whole run is for: an epic
             # opponent, and therefore a fight about twice as long as the two above.
-            rank=EnemyRank.ELITE if descent.depth >= DUNGEON_DEPTH else EnemyRank.NORMAL,
+            # Where that floor is depends on the Seals: each one opens another
+            # layer below the old bottom (``domain/rules/turning.py``).
+            rank=(
+                EnemyRank.ELITE
+                if descent.depth >= turning_rules.descent_depth(character)
+                else EnemyRank.NORMAL
+            ),
         )
         return fight_flow.begin(content, character, enemies, seed=seed, node=0, depth=descent.depth)
 
@@ -292,8 +298,8 @@ async def _store_and_show(
                 character, rows = character, []
                 updated_flow = flow
             else:
-                updated_flow, rows = _after_victory(session, flow, extra)
-                if session.in_descent and session.depth >= DUNGEON_DEPTH:
+                updated_flow, rows = _after_victory(session, flow, extra, character)
+                if session.in_descent and session.depth >= turning_rules.descent_depth(character):
                     character = await _pay_the_bottom(content, character, flow, extra, inventory)
             # Winning a fight is one of the introduction tasks, and it is ticked
             # off by the win itself - wherever it happened.
@@ -433,18 +439,22 @@ async def _pay_the_bottom(
 
 
 def _after_victory(
-    session: fight_flow.CombatSession, flow: PlayState, extra: list[str]
+    session: fight_flow.CombatSession,
+    flow: PlayState,
+    extra: list[str],
+    character: Character,
 ) -> tuple[PlayState, list[tuple[Label, ...]]]:
     """Mark the node as done, or offer the next step of a descent."""
     if not session.in_descent:
         cleared = flow.session.cleared | cleared_mask([session.node])
         return replace(flow, session=replace(flow.session, cleared=cleared)), []
 
-    if session.depth >= DUNGEON_DEPTH:
+    depth = turning_rules.descent_depth(character)
+    if session.depth >= depth:
         extra.append("Спуск пройден до дна. Дальше только камень.")
         return replace(flow, descent=Descent()), []
 
-    extra.append(f"Пройдено схваток: {session.depth} из {DUNGEON_DEPTH}.")
+    extra.append(f"Пройдено схваток: {session.depth} из {depth}.")
     deeper = replace(flow, descent=replace(flow.descent, depth=session.depth + 1))
     return deeper, [(labels.DUNGEON_DEEPER, labels.DUNGEON_LEAVE)]
 

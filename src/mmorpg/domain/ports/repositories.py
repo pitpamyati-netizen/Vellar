@@ -12,6 +12,7 @@ asynchronous. The rules and entities themselves stay synchronous and pure.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
@@ -172,6 +173,14 @@ class CharacterRepository(Protocol):
 
     async def arena_table(self, *, limit: int = 10) -> tuple[Character, ...]:
         """The season table: most wins first."""
+
+    async def turning_tally(self, cycle_id: str) -> Mapping[str, int]:
+        """Голоса за счётный вопрос этого цикла: ответ и сколько Печатей за ним.
+
+        Голос весит столько, сколько Оборотов совершил подавший
+        (``domain/rules/turning.py``). Ответ на прошлый вопрос в этом счёте не
+        участвует: цикл назван прямо в запросе.
+        """
 
     async def find_by_name(self, name: str) -> Character | None:
         """Персонаж по имени, без учёта регистра. Имена в игре уникальны."""

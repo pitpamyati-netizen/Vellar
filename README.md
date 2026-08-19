@@ -6,9 +6,11 @@ its own. See [docs/accessibility.md](docs/accessibility.md) - those rules are a
 specification, not a preference.
 
 - 15 cities x 5 locations, character levels 1-300
-- Procedurally generated locations, regenerated every 6-hour world cycle
+- Procedurally generated locations, regenerated when they are cleared out, not on a clock
 - 16 races, 8 classes, 5 crafts, 60+ traits, all defined in TOML under [`content/`](content/)
 - Fixed skill panel: 6 active + 3 passive + 1 racial slot, at every level
+- Endgame at level 300: pledge a thing or a skill edge for a Seal of the Chamber,
+  which opens access - never stats - and weighs your voice in the cycle's question
 
 ## Run it
 
@@ -115,6 +117,7 @@ tests/
 | [docs/content-guide.md](docs/content-guide.md) | Adding a race, class, craft, trait or city without touching code |
 | [docs/skills.md](docs/skills.md) | Skill panel, ranks, edges, anti-bloat rules |
 | [docs/crafts.md](docs/crafts.md) | Crafts: ranks, gathering, recipes and batch quality |
+| [docs/endgame.md](docs/endgame.md) | The Turning at 300, the Seal, and the cycle's counted question (Russian) |
 | [docs/release-checklist.md](docs/release-checklist.md) | What to verify before shipping |
 | [docs/adr/](docs/adr/) | One architecture decision per file |
 
@@ -122,6 +125,6 @@ tests/
 
 16 races · 8 classes · 64 traits · 128 skills (112 class + 16 racial, each with two
 rank-3 edges) · 5 crafts with 9 recipes · 24 enemy archetypes · 15 cities × 5
-locations covering levels 1-300.
+locations covering levels 1-300 · 3 endgame questions the Chamber counts.
 All of it lives in [`content/`](content/) as TOML and is validated at startup - the
 bot refuses to boot on broken content and reports every problem at once.

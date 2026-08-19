@@ -56,6 +56,9 @@ class Play(StatesGroup):
     bank = State()
     dungeon = State()
     arena = State()
+    chamber = State()
+    chamber_pledge = State()
+    turning = State()
     npcs = State()
     npc = State()
     settings = State()
@@ -109,6 +112,9 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.BANK: Play.bank,
     ScreenId.DUNGEON: Play.dungeon,
     ScreenId.ARENA: Play.arena,
+    ScreenId.CHAMBER: Play.chamber,
+    ScreenId.CHAMBER_PLEDGE: Play.chamber_pledge,
+    ScreenId.TURNING: Play.turning,
     ScreenId.NPCS: Play.npcs,
     ScreenId.NPC: Play.npc,
     ScreenId.SETTINGS: Play.settings,
@@ -162,6 +168,9 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.BANK: ScreenId.CITY,
     ScreenId.DUNGEON: ScreenId.CITY,
     ScreenId.ARENA: ScreenId.CITY,
+    ScreenId.CHAMBER: ScreenId.CITY,
+    ScreenId.CHAMBER_PLEDGE: ScreenId.CHAMBER,
+    ScreenId.TURNING: ScreenId.CHAMBER,
     ScreenId.NPCS: ScreenId.CITY,
     ScreenId.NPC: ScreenId.NPCS,
     ScreenId.SETTINGS: ScreenId.MAIN_MENU,

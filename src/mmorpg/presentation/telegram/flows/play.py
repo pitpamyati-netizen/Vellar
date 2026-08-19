@@ -13,7 +13,7 @@ database (``docs/architecture.md``).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
 from mmorpg import economy_log
@@ -30,6 +30,7 @@ from mmorpg.domain.rules import crafts as craft_rules
 from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules import turning as turning_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
 from mmorpg.domain.rules.progression import LevelUp
 from mmorpg.domain.rules.stats import derived_stats
@@ -48,8 +49,10 @@ from mmorpg.presentation.telegram.flows.state import (
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.routing import Command, Intent, resolve
 from mmorpg.presentation.telegram.screens import arena as arena_screens
+from mmorpg.presentation.telegram.screens import chamber as chamber_screens
 from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import crafts as craft_screens
+from mmorpg.presentation.telegram.screens import format as format_screens
 from mmorpg.presentation.telegram.screens import play as screens
 from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import settings as settings_screens
@@ -75,14 +78,11 @@ SERVICES: dict[str, tuple[str, ScreenId]] = {
     labels.SHOP.text: ("shop", ScreenId.SHOP),
     labels.DUNGEONS.text: ("dungeons", ScreenId.DUNGEON),
     labels.ARENA.text: ("arena", ScreenId.ARENA),
+    labels.CHAMBER.text: ("chamber", ScreenId.CHAMBER),
     labels.TAVERN.text: ("tavern", ScreenId.TAVERN),
     labels.MENTOR.text: ("mentor", ScreenId.MENTOR),
     labels.BANK.text: ("bank", ScreenId.BANK),
 }
-
-# A descent is three fights deep. Short enough to hold in the head, long enough
-# that walking in wounded is a decision (Roadmap 1.5).
-DUNGEON_DEPTH = 3
 
 # Said when the screen claims a location the game can no longer rebuild.
 LOST_VISIT = "Та вылазка уже закончилась. Выберите локацию заново."
@@ -170,6 +170,7 @@ def render(
     clock: Clock | None = None,
     neighbours: Sequence[Presence] = (),
     arena_table: Sequence[Character] = (),
+    tally: Mapping[str, int] | None = None,
     keeper: KeeperView | None = None,
 ) -> Screen:
     shelf = goods or Goods(gold=character.gold)
@@ -244,6 +245,14 @@ def render(
             return tutorial_screens.tutorial_screen(character, state.notice)
         case ScreenId.ARENA:
             return arena_screens.arena_screen(character, arena_table, state.notice)
+        case ScreenId.CHAMBER:
+            return chamber_screens.chamber_screen(content, character, state.notice)
+        case ScreenId.TURNING:
+            return chamber_screens.turning_screen(
+                content, character, tally=tally or {}, notice=state.notice
+            )
+        case ScreenId.CHAMBER_PLEDGE:
+            return chamber_screens.pledge_screen(content, character, state.list_page, state.notice)
         case ScreenId.SKILLS:
             return skill_screens.skills_screen(content, character, state.skill_page, state.notice)
         case ScreenId.SKILL_SLOTS:
@@ -301,7 +310,7 @@ def render(
                 city,
                 level=dungeon_level(content, character, city.id),
                 depth=state.descent.depth,
-                total=DUNGEON_DEPTH,
+                total=turning_rules.descent_depth(character),
                 notice=state.notice,
             )
         case ScreenId.STUB:
@@ -424,6 +433,12 @@ def advance(
             return _handle_tutorial(content, character, state, command)
         case ScreenId.ARENA:
             return _handle_arena(character, state, command)
+        case ScreenId.CHAMBER:
+            return _handle_chamber(content, character, state, command)
+        case ScreenId.TURNING:
+            return _handle_turning(content, character, state, command)
+        case ScreenId.CHAMBER_PLEDGE:
+            return _handle_pledge(content, character, state, command)
         case ScreenId.INVENTORY:
             return _handle_inventory(content, character, state, command, shelf)
         case ScreenId.SHOP:
@@ -507,6 +522,75 @@ def _handle_arena(character: Character, state: PlayState, command: Command) -> P
     # The handler picks the opponent and takes the stake: it is the one that can
     # read another character out of storage.
     return replace(state, fight="arena").at(ScreenId.COMBAT)
+
+
+def _handle_chamber(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    """Палата: две двери — заклад и счётный вопрос."""
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите кнопку из списка или «Назад».")
+    if labels.TURNING.matches(command.argument):
+        refused = turning_rules.refusal(character)
+        if refused:
+            return state.with_notice(refused)
+        return replace(state, list_page=PageState()).at(ScreenId.CHAMBER_PLEDGE)
+    if labels.TURNING_QUESTION.matches(command.argument):
+        return state.at(ScreenId.TURNING)
+    return state.with_notice("Нажмите кнопку из списка или «Назад».")
+
+
+def _handle_turning(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    """Счётный вопрос: по кнопке на ответ, и голос весит столько, сколько Печатей."""
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите ответ или «Назад».")
+    turning = content.open_turning()
+    if turning is None:
+        return state.with_notice("Палата сейчас ни о чём не спрашивает.")
+    for option in turning.options:
+        if not chamber_screens.answer_label(option.name).matches(command.argument):
+            continue
+        voted = turning_rules.answer(character, turning, option.id)
+        if voted is None:
+            if not turning_rules.may_answer(character):
+                return state.with_notice("Голос дают за Оборот: сперва Печать, потом ответ.")
+            return state.with_notice(f"Ваш голос уже отдан за: {option.name}.")
+        weight = turning_rules.voice(voted)
+        return state.storing(PendingWrite(character=voted)).with_notice(
+            f"Голос отдан за: {option.name}. Он весит {weight} "
+            f"{format_screens.plural(weight, 'Печать', 'Печати', 'Печатей')}."
+        )
+    return state.with_notice("Нажмите ответ или «Назад».")
+
+
+def _handle_pledge(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    """Заклад. Нажатие здесь совершает Оборот: экран предупреждал об этом."""
+    entries = chamber_screens.pledge_entries(content, character)
+    moved = page_move(command, state.list_page, total_pages(len(entries)))
+    if moved is not None:
+        return replace(state, list_page=moved)
+    if command.intent is not Intent.SELECT or not entries:
+        return state.with_notice("Нажмите, что отдать, или «Назад».")
+
+    key = chamber_screens.entry_for(content, character, command.argument)
+    if not key:
+        return state.with_notice("Нажмите, что отдать, или «Назад».")
+    kind, _, entity_id = key.partition(":")
+    if kind == turning_rules.ITEM_PLEDGE:
+        sealed = turning_rules.pledge_item(content, character, entity_id)
+    else:
+        sealed = turning_rules.pledge_edge(content, character, entity_id)
+    if sealed is None:
+        return state.with_notice("Палата это уже не примет. Выберите другое.")
+    return (
+        state.storing(PendingWrite(character=sealed.character))
+        .at(ScreenId.CHAMBER)
+        .with_notice(chamber_screens.sealed_line(sealed))
+    )
 
 
 def _handle_tutorial(
