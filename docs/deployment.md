@@ -44,7 +44,12 @@ this window. Ctrl+C stops it. `POSTGRES_DSN` in `.env` is what both of them
 connect to, so pointing it at a database you made yourself works as well.
 
 What a restart costs is the session, not the world: everyone is put back in the
-main menu unhurt, and a fight in progress ends. Characters, gold, bags, contracts
+main menu unhurt, and a fight in progress ends. That is done rather than hoped
+for: the keyboard in a player's chat outlives the process, so the first press
+after a restart arrives with no screen behind it and is answered by the main menu
+plus one sentence saying the previous screen is gone (`handlers/creation.resume`).
+Before that catch-all existed such a press reached no handler at all, and the
+player got silence. Characters, gold, bags, contracts
 and keeper edits are in PostgreSQL and are untouched. Updating is the same few
 seconds of silence as an update to the stack - Ctrl+C, then `Start.bat solo`.
 

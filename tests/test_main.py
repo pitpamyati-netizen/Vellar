@@ -138,3 +138,84 @@ def test_prod_requires_a_webhook_secret() -> None:
 
     with pytest.raises(ValidationError, match="webhook_secret"):
         Settings(_env_file=None, app_env=AppEnv.PROD, bot_token=FAKE_TOKEN)  # type: ignore[call-arg]
+
+
+# --- ни одно нажатие не остаётся без ответа ----------------------------
+
+
+async def _feed(app, text: str, monkeypatch, *, account: int, update_id: int) -> list:
+    """Прогнать сообщение через настоящий диспетчер и вернуть отправленные экраны."""
+    from aiogram.types import Chat, Message, Update, User
+
+    from mmorpg.presentation.telegram.handlers import creation as creation_handler
+    from mmorpg.presentation.telegram.handlers import play as play_handler
+
+    sent: list = []
+
+    async def record(message, screen, *, emoji: bool = False) -> None:
+        sent.append(screen)
+
+    monkeypatch.setattr(creation_handler, "send_screen", record)
+    monkeypatch.setattr(play_handler, "send_screen", record)
+
+    update = Update(
+        update_id=update_id,
+        message=Message(
+            message_id=update_id,
+            date=datetime.now(UTC),
+            chat=Chat(id=account, type="private"),
+            from_user=User(id=account, is_bot=False, first_name="Игрок"),
+            text=text,
+        ),
+    )
+    await app.dispatcher.feed_update(app.bot, update)
+    return sent
+
+
+def _dependencies(app):
+    """Хранилища, которыми собран этот бот."""
+    for middleware in app.dispatcher.update.outer_middleware:
+        if isinstance(middleware, DependencyMiddleware):
+            return middleware._dependencies
+    raise AssertionError("dependency middleware is not installed")
+
+
+async def test_the_first_word_of_a_new_player_starts_creation(app, monkeypatch) -> None:
+    from mmorpg.presentation.telegram.screens.base import ScreenId
+
+    sent = await _feed(app, "/start", monkeypatch, account=77, update_id=1)
+
+    assert [screen.id for screen in sent] == [ScreenId.START, ScreenId.CREATE_NAME]
+
+
+async def test_a_button_pressed_with_no_screen_behind_it_is_still_answered(
+    app, monkeypatch
+) -> None:
+    """Экран живёт в процессе и кончается вместе с ним (ADR 0010).
+
+    Клавиатура у игрока переживает перезапуск, поэтому первое нажатие после него
+    приходит без всякого состояния. Отвечать на такое было нечем: ни один роутер
+    сообщение не брал, и игрок получал молчание - тот единственный ответ,
+    которого игра дать не может (``docs/accessibility.md``, правило 12).
+    """
+    from mmorpg.domain.entities.character import Character
+    from mmorpg.presentation.telegram.screens.base import ScreenId
+
+    await _dependencies(app).characters.create(
+        Character(id=0, user_id=88, name="Аргус", race_id="human", class_id="warrior")
+    )
+
+    sent = await _feed(app, "Главное меню", monkeypatch, account=88, update_id=2)
+
+    assert sent, "нажатие без состояния осталось без ответа"
+    assert sent[-1].id is ScreenId.MAIN_MENU
+    assert "Прежний экран не сохранился" in sent[-1].text()
+
+
+async def test_a_stranger_without_a_character_is_led_into_creation(app, monkeypatch) -> None:
+    """Первое слово вместо ``/start`` - это тоже начало разговора, а не ошибка."""
+    from mmorpg.presentation.telegram.screens.base import ScreenId
+
+    sent = await _feed(app, "привет", monkeypatch, account=99, update_id=3)
+
+    assert [screen.id for screen in sent] == [ScreenId.START, ScreenId.CREATE_NAME]

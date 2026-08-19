@@ -17,6 +17,7 @@ from mmorpg.application.services.keeper import sync_keeper
 from mmorpg.config import Settings
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.ports.repositories import CharacterRepository, User, UserRepository
+from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.flows.creation import (
     CreationState,
     advance,
@@ -24,6 +25,7 @@ from mmorpg.presentation.telegram.flows.creation import (
     render,
 )
 from mmorpg.presentation.telegram.messaging import send_screen
+from mmorpg.presentation.telegram.screens import play as play_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.states.screens import STATE_FOR_SCREEN, Creation, Play
 
@@ -43,6 +45,11 @@ def build_router() -> Router:
     router.message.filter(F.chat.type == ChatType.PRIVATE)
     router.message.register(start, CommandStart())
     router.message.register(step, StateFilter(Creation))
+    # Last, and it catches everything left: a private message that belongs to no
+    # screen at all. Without it such a message reaches no handler and the player
+    # gets silence, which is the one answer the game may never give
+    # (``docs/accessibility.md``, правило 12).
+    router.message.register(resume, StateFilter(None))
     return router
 
 
@@ -101,6 +108,56 @@ async def start(
     await state.update_data({STATE_KEY: flow.serialise()})
     await send_screen(message, welcome_screen())
     await send_screen(message, render(content, flow))
+
+
+async def resume(
+    message: Message,
+    state: FSMContext,
+    content: GameContent,
+    settings: Settings,
+    users: UserRepository,
+    characters: CharacterRepository,
+) -> None:
+    """Нажатие, которому не соответствует ни один экран.
+
+    Так бывает чаще, чем кажется. Клавиатура живёт в переписке и переживает всё:
+    перезапуск игры, у которого экран лежит в процессе и кончается вместе с ним
+    (``docs/adr/0010-a-machine-without-containers.md``), обрыв, обновление. Игрок
+    после этого нажимает кнопку, которая была верной минуту назад.
+
+    Ответ тот же, что и на любую устаревшую кнопку: сказать первой строкой, что
+    случилось, и вернуть на живой экран (``Claude.md``, правило 8). Молчания
+    здесь быть не может: для того, кто слушает экран, оно неотличимо от сломанной
+    игры.
+    """
+    if message.from_user is None:  # pragma: no cover - Telegram always sets it
+        return
+    character = await characters.get_active(message.from_user.id)
+    if character is None:
+        # Персонажа нет вовсе - значит, это первый разговор, а не потерянный
+        # экран, и вести его надо тем же путём, что и ``/start``.
+        await start(message, state, content, settings, users, characters)
+        return
+
+    account = await users.get(message.from_user.id)
+    character = await sync_keeper(
+        character,
+        message.from_user.id,
+        settings,
+        characters,
+        granted=account is not None and account.keeper,
+    )
+    await state.set_state(Play.main_menu)
+    await send_screen(
+        message,
+        play_screens.main_menu_screen(
+            content,
+            character,
+            derived_stats(content, character),
+            "Прежний экран не сохранился — вы в главном меню.",
+        ),
+        emoji=account.settings.emoji if account is not None else False,
+    )
 
 
 async def step(

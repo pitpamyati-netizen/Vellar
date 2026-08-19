@@ -47,7 +47,10 @@ seed and the clock.
   idempotent; the schema is then the same `alembic upgrade head` the stack runs.
 - A restart costs more than in the stack, and it is stated plainly rather than
   discovered: a fight in progress ends and everyone is put back in the main menu,
-  unhurt. Nothing they own is touched.
+  unhurt. Nothing they own is touched. Putting them there is a handler and not a
+  hope - the first press after a restart carries no state, and
+  `handlers/creation.resume` answers it with the main menu instead of leaving it
+  to fall through every router into silence.
 - Deduplication of updates is per process, so a restart could let a repeated
   update through. One update, in the second either side of a restart that also
   dropped the fight - a small cost next to the service it removes.
