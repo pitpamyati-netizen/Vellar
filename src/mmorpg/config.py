@@ -101,6 +101,19 @@ class Settings(BaseSettings):
 
     redis_dsn: str = "redis://localhost:6379/0"
 
+    # --- A link that broke while the game was running (docs/architecture.md) ---
+    # A dropped connection is replaced by the pool itself; what these govern is
+    # the call that was in the air when it dropped. How many times it is repeated,
+    # and how long the waits between repeats are - the wait doubles up to the
+    # ceiling. Nothing that may have already changed the world is repeated, see
+    # docs/adr/0009-repeating-a-lost-query.md.
+    reconnect_attempts: int = Field(default=5, ge=1)
+    reconnect_delay_seconds: float = Field(default=0.2, gt=0.0)
+    reconnect_max_delay_seconds: float = Field(default=5.0, gt=0.0)
+    # How long startup waits for PostgreSQL, Redis and Telegram to answer before
+    # giving up. A stack that comes up together does not come up in order.
+    startup_wait_seconds: float = Field(default=60.0, ge=0.0)
+
     content_dir: Path = DEFAULT_CONTENT_DIR
 
     # Updates slower than this many seconds are reported by the slow callback
@@ -126,6 +139,13 @@ class Settings(BaseSettings):
     def _check_pool_bounds(self) -> Settings:
         if self.postgres_pool_max < self.postgres_pool_min:
             msg = "postgres_pool_max must be greater than or equal to postgres_pool_min"
+            raise ValueError(msg)
+        return self
+
+    @model_validator(mode="after")
+    def _check_retry_bounds(self) -> Settings:
+        if self.reconnect_max_delay_seconds < self.reconnect_delay_seconds:
+            msg = "reconnect_max_delay_seconds must be greater than or equal to the first delay"
             raise ValueError(msg)
         return self
 

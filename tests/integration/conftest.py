@@ -35,8 +35,15 @@ def _settings() -> Settings:
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def pool() -> AsyncIterator[object]:
-    """An asyncpg pool against the migrated database, or a skip."""
+    """An asyncpg pool against the migrated database, or a skip.
+
+    Wrapped exactly as the running game wraps it (``ReconnectingPool``), so the
+    SQL here goes through the same proxy the players' queries go through.
+    """
     import asyncpg
+
+    from mmorpg.infrastructure.persistence.reconnect import ReconnectingPool
+    from mmorpg.retry import RetryPolicy
 
     settings = _settings()
     try:
@@ -50,18 +57,20 @@ async def pool() -> AsyncIterator[object]:
         exists = await created.fetchval("SELECT to_regclass('public.users')")
         if exists is None:
             pytest.skip("the database has no schema: run 'alembic upgrade head' first")
-        yield created
+        yield ReconnectingPool(created, RetryPolicy.from_settings(settings))
     finally:
         await created.close()
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def redis() -> AsyncIterator[object]:
-    """A Redis client on a database of its own."""
+    """A Redis client on a database of its own, built the way the game builds it."""
     from redis.asyncio import Redis
 
+    from mmorpg.infrastructure.persistence.pool import create_redis_client
+
     settings = _settings()
-    client: Redis = Redis.from_url(settings.redis_dsn, decode_responses=False)
+    client: Redis = create_redis_client(settings)
     try:
         await client.ping()
     # redis-py raises several unrelated types for "the server is not there".

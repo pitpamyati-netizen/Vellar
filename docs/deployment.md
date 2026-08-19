@@ -125,7 +125,7 @@ The next things to change, in order:
 
 ## Staying up
 
-Two different failures, two different mechanisms.
+Three different failures, three different mechanisms.
 
 **The process dies.** `restart: unless-stopped` brings it back. State is in
 PostgreSQL and Redis, so players lose nothing but the seconds it takes to restart.
@@ -136,6 +136,16 @@ the port is open, and every player waits in silence. So the loop proves it is al
 by touching a file every ten seconds (`src/mmorpg/health.py`), the image's
 `HEALTHCHECK` reads the file's age (`scripts/healthcheck.py`), and three missed
 beats mark the container unhealthy.
+
+**A link breaks and the process lives.** PostgreSQL restarts, Redis is restarted
+by an update, the network hiccups. The connection is replaced by the pool, and the
+call that was in the air is made again: reads and Redis commands always, Telegram
+requests that never left, and writes only while it is certain nothing was sent
+(`docs/adr/0009-repeating-a-lost-query.md`). Nothing has to be restarted by hand.
+In the log it reads `postgres_repeating` / `postgres_recovered` and
+`telegram_repeating` / `telegram_recovered`; `postgres_call_lost` is the line that
+means a player did lose an action. Startup is patient in the same way -
+`waiting_for_service` is the bot waiting for a database that Docker started second.
 
 Shutdown is graceful in both transports: `docker stop` sends `SIGTERM`, aiogram
 drains the updates in flight during polling, the webhook runner stops on the same

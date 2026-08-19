@@ -174,6 +174,30 @@ Telegram's own rate limit - roughly 30 messages a second per bot - binds before
 this stack does. `docs/deployment.md` has the full sizing argument and what to
 change first when the player count grows.
 
+## A link that breaks while the game is running
+
+PostgreSQL, Redis and Telegram all break the same way: the connection is replaced
+in a moment, and the call that was in the air when it dropped is lost. The pools
+do the first half by themselves; the second half is `mmorpg/retry.py` plus one
+wrapper per link.
+
+| Link | Reconnects | Repeats the call |
+| --- | --- | --- |
+| PostgreSQL | asyncpg pool | `ReconnectingPool` - reads always, writes only while nothing was sent |
+| Redis | redis-py | redis-py, configured in `create_redis_client` |
+| Telegram | aiohttp session | `RetryRequestMiddleware` on the bot session |
+
+A write that may already have landed is **never** repeated: PostgreSQL can commit
+a statement and lose only the answer on the way back, and running
+`UPDATE ... WHERE gold >= $2` again would take the gold twice. The full argument
+is `docs/adr/0009-repeating-a-lost-query.md`.
+
+Startup is patient for the same reason: `STARTUP_WAIT_SECONDS` is how long the
+bot waits for PostgreSQL, Redis and Telegram to answer before giving up, because
+a stack that comes up together does not come up in order. `RECONNECT_ATTEMPTS`
+and the two delays govern the repeats under a running game, where a player is
+waiting on the other end and a minute of silence is not an answer.
+
 ## Runtime
 
 | Mode | Transport | Storage |

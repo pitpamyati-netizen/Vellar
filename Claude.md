@@ -20,7 +20,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 - Корень пакета: `main.py` (композиция, polling/webhook), `config.py` (Settings,
   единственный доступ к env), `logging.py`, `economy_log.py` (журнал движений
   золота: `gold_flow`), `monitoring.py` (детектор медленных колбэков),
-  `health.py` (heartbeat).
+  `health.py` (heartbeat), `retry.py` (паузы между повторами и ожидание службы
+  на старте — общие для всех трёх связей).
 - `domain/` — чистая логика, только stdlib, без async и I/O.
   `entities/`: `character`, `stats`, `combat`, `effects`, `location`, `content`
   (в том числе `Npc` — житель города), `quest` (подряд и журнал подрядов),
@@ -43,7 +44,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   смотрителя с `ADMIN_IDS` и с правом, выданным из панели; выдача такого права),
   `content.py` (реестр: содержимое плюс правки, живое),
   `keeper_panel.py` (запись правок и уборка).
-- `infrastructure/` — `persistence/`: `postgres`, `memory`, `pool`; `cache/`:
+- `infrastructure/` — `persistence/`: `postgres`, `memory`, `pool`,
+  `reconnect` (повтор запроса, потерявшего соединение); `cache/`:
   `redis_cache`, `memory`; `content/loader.py` (TOML → dataclass),
   `content/changelog.py` (обновления для канала).
 - `presentation/telegram/` — `handlers/` (`creation`, `play`, `combat`, `group`;
@@ -54,7 +56,8 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
   `quests`, `crafts`, `city` (в том числе жители), `settings`, `tutorial`,
   `arena`, `keeper` (панель), `group`),
   `keyboards/` (`labels`, `reply`), `middlewares/` (`dependencies`, `errors`,
-  `idempotency`), `states/screens.py`, `routing.py`, `messaging.py`,
+  `idempotency`, `retry` — на сессии бота, а не на апдейтах),
+  `states/screens.py`, `routing.py`, `messaging.py`,
   `broadcast.py` (канал), `throttle.py` (лимит), `cleanup.py` (уборка в группе).
 
 **`content/`** — `world.toml` (15 городов × 5 локаций, 1–300), `races.toml`
@@ -66,15 +69,17 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
 
 **`docs/`** — `architecture.md`, `accessibility.md` (спецификация, не пожелания),
 `procgen.md`, `content-guide.md`, `skills.md`, `crafts.md`, `keeper.md`,
-`deployment.md`, `release-checklist.md`, `adr/0001..0008`
+`deployment.md`, `release-checklist.md`, `adr/0001..0009`
 (`0003` — поколения локаций вместо шестичасовой стражи; `0008` — право
-смотрителя раздаётся из панели, корень остаётся в окружении).
+смотрителя раздаётся из панели, корень остаётся в окружении; `0009` — что
+повторяется после разрыва связи, а что нет).
 
 **`tests/`** — `domain/` (слои держит `test_layering.py`, длину боя —
 `test_combat_balance.py`), `content/`, `presentation/` (доступность, канал,
 группа, сквозной проход по циклу в `test_adventure_flow.py`), `application/`,
+`infrastructure/` (что повторяется после разрыва связи),
 `integration/` (маркер `integration`), `test_config.py`, `test_health.py`,
-`test_main.py`, `conftest.py`.
+`test_main.py`, `test_retry.py`, `conftest.py`.
 
 **`scripts/`** — `ci.ps1`/`ci.sh` (гейт), `healthcheck.py`, `broadcast.py` (пост
 в канал: `--headline` или `--changelog latest`), `install-hooks.ps1`/`.sh`,
@@ -134,6 +139,11 @@ PostgreSQL, Redis, гексагональная архитектура. Весь
    а не записью персонажа, прочитанного несколькими `await` назад. Каждое
    движение золота, кроме передачи из рук в руки, пишет `gold_flow`
    (`economy_log.py`): без счёта экономику нечем править по живой игре.
+   **Разрыв связи не повторяет запись.** Запрос, потерявший соединение,
+   выполняется заново (`persistence/reconnect.py`), но только пока ясно, что до
+   базы он не дошёл: `SELECT` повторяется всегда, `UPDATE` — никогда после
+   отправки, иначе золото спишется дважды (ADR 0009). Оператор, который и читает,
+   и пишет (`UPDATE ... RETURNING`), — это запись.
 9. **Новый экран** добавляется в `tests/presentation/conftest.py::all_screens` —
    иначе он не проверен. **Группа — не экран**: там нет служебного ряда и нет
    «Назад», бот отвечает только на reply и молчит на всё остальное.

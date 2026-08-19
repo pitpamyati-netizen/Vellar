@@ -57,6 +57,8 @@ from mmorpg.presentation.telegram.middlewares.dependencies import (
 )
 from mmorpg.presentation.telegram.middlewares.errors import ErrorMiddleware
 from mmorpg.presentation.telegram.middlewares.idempotency import IdempotencyMiddleware
+from mmorpg.presentation.telegram.middlewares.retry import RetryRequestMiddleware
+from mmorpg.retry import RetryPolicy, keep_trying
 
 logger = get_logger(__name__)
 
@@ -100,6 +102,9 @@ async def build_application(settings: Settings) -> Application:
         # parse_mode stays None: Markdown is read aloud by screen readers.
         default=DefaultBotProperties(parse_mode=None),
     )
+    # A screen that died on a broken socket is sent again rather than becoming
+    # silence: the player has no other way to tell the two apart.
+    bot.session.middleware(RetryRequestMiddleware(RetryPolicy.from_settings(settings)))
     dispatcher = Dispatcher(storage=storage)
 
     # Order matters: drop duplicates first, then inject, then catch failures
@@ -166,7 +171,11 @@ async def _build_adapters(
         RedisLocationStateCache,
         RedisStateCache,
     )
-    from mmorpg.infrastructure.persistence.pool import create_postgres_pool, create_redis_client
+    from mmorpg.infrastructure.persistence.pool import (
+        create_postgres_pool,
+        create_redis_client,
+        wait_for_redis,
+    )
     from mmorpg.infrastructure.persistence.postgres import (
         PostgresCharacterRepository,
         PostgresContentOverlayRepository,
@@ -176,12 +185,20 @@ async def _build_adapters(
         PostgresUserRepository,
     )
 
+    # Both waits are patient: a stack that comes up together does not come up in
+    # order, and a database that needs five more seconds is not a reason to exit.
     pool = await create_postgres_pool(settings)
     stack.push_async_callback(pool.close)
     redis = create_redis_client(settings)
     stack.push_async_callback(redis.aclose)
+    await wait_for_redis(redis, settings)
 
-    logger.info("pools_ready", postgres_max=settings.postgres_pool_max)
+    logger.info(
+        "pools_ready",
+        postgres_max=settings.postgres_pool_max,
+        repeats=settings.reconnect_attempts,
+        max_wait=settings.reconnect_max_delay_seconds,
+    )
 
     dependencies = Dependencies(
         settings=settings,
@@ -230,11 +247,21 @@ async def _greet_telegram(app: Application) -> None:
 
     Without this the first API call raises deep inside aiogram and the operator
     gets a stack trace instead of "your token is wrong".
+
+    A wrong token is the only thing that stops the bot here. Telegram being
+    unreachable is not: the start waits it out, the same way it waits for the
+    database, because a network that is down at boot is usually up a moment later.
     """
-    from aiogram.exceptions import TelegramUnauthorizedError
+    from aiogram.exceptions import TelegramNetworkError, TelegramUnauthorizedError
 
     try:
-        me = await app.bot.get_me()
+        me = await keep_trying(
+            app.bot.get_me,
+            policy=RetryPolicy.from_settings(app.settings),
+            seconds=app.settings.startup_wait_seconds,
+            what="telegram",
+            recoverable=lambda error: isinstance(error, TelegramNetworkError | OSError),
+        )
     except TelegramUnauthorizedError as error:
         msg = (
             "Telegram rejected BOT_TOKEN. Check the value in .env - "
