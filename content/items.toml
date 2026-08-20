@@ -72,7 +72,7 @@ slots = [
 # род не должен быть выбором «за неимением лучшего».
 #
 # Класс носит своё (classes.toml), но чужое не запрещено: за чужое оружие платят
-# точностью и прытью, а не отказом (ADR 0015).
+# точностью и инициативой, а не отказом (ADR 0015).
 weapon_types = [
     { id = "dagger", name = "Кинжал", gender = "m", dice = "1d11", modifiers = { crit_chance_percent = 4, initiative_percent = 8 } },
     { id = "short_sword", name = "Короткий меч", gender = "m", dice = "1d13", modifiers = { initiative_percent = 4, accuracy_percent = 3 } },
@@ -89,7 +89,7 @@ weapon_types = [
 
 # Рода доспеха. armor - доля брони относительно лёгкого доспеха той же ступени.
 # modifiers берутся с каждой надетой вещи этого рода, поэтому полный тяжёлый
-# доспех отнимает прыть вчетверо: это и есть его цена.
+# доспех отнимает инициативу вчетверо: это и есть его цена.
 armor_types = [
     { id = "cloth", name = "Тканый доспех", armor = 0.5, modifiers = { resource_percent = 3 } },
     { id = "light", name = "Лёгкий доспех", armor = 1.0, modifiers = { dodge_percent = 1 } },

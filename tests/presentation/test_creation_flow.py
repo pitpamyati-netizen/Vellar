@@ -378,8 +378,14 @@ def test_a_new_character_is_not_sent_out_bare_handed(content: GameContent) -> No
         assert klass.can_wear(content.item(body_id).armor_type), klass.id
 
 
-def test_the_tutorial_says_what_the_wrong_gear_costs() -> None:
-    """Запрета нет — значит, о цене надо сказать словами, и до того, как её платят."""
+def test_the_tutorial_says_what_the_wrong_gear_costs(content: GameContent) -> None:
+    """Запрета нет — значит, о цене надо сказать словами, и до того, как её платят.
+
+    И назвать её теми же словами, что экран характеристик: «Прыть» — это запас
+    разбойника, а не инициатива, и путать их нельзя.
+    """
     card = tutorial_screens.card_for(TutorialTask.TRADE)
     assert "не для вашего класса" in card.text
-    assert "точностью и прытью" in card.text
+    assert "точностью и инициативой" in card.text
+    for klass in content.classes:
+        assert klass.resource.name.lower() not in card.text.lower(), klass.resource.name

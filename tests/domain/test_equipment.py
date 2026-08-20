@@ -113,7 +113,7 @@ def test_a_weapon_that_left_the_game_leaves_bare_hands(content: GameContent) -> 
 
 
 def test_a_kind_gives_what_the_kind_promises(content: GameContent) -> None:
-    """Прыть кинжала — свойство кинжалов вообще, а не этого клинка."""
+    """Инициатива кинжала — свойство кинжалов вообще, а не этого клинка."""
     bundle = mods.equipment_modifiers(content, ("dagger@14#common",))
     assert (
         bundle["initiative_percent"]
@@ -228,7 +228,7 @@ def test_a_relic_never_falls_off_a_shelf(content: GameContent) -> None:
 
 
 def test_a_class_may_wear_anything_at_a_price(content: GameContent) -> None:
-    """Запрета нет. Есть цена, и она в точности и прыти."""
+    """Запрета нет. Есть цена, и она в точности и инициативе."""
     rogue = hero("rogue", body="heavy_body@45#common")
     penalty = gear.proficiency_penalty(content, rogue)
     assert penalty["accuracy_percent"] < 0
@@ -251,6 +251,22 @@ def test_a_warning_says_what_and_how_much(content: GameContent) -> None:
     assert content.armor_type("heavy").name.lower() in said
     assert content.character_class("mage").name.lower() in said
     assert str(abs(int(gear.FOREIGN_ARMOR_ACCURACY))) in said
+
+
+def test_a_warning_names_numbers_the_way_the_character_sheet_does(
+    content: GameContent,
+) -> None:
+    """Инициативу зовут инициативой — так её называет экран характеристик.
+
+    «Прыть» — это запас разбойника (``classes.toml``), и назвать ею инициативу
+    значит сказать разбойнику, что у него тает ресурс. Ни одно имя ресурса класса
+    не должно попасть в текст про штраф — ни сейчас, ни когда классов станет
+    больше.
+    """
+    said = gear.equip_warning(content, hero("mage"), content.item("heavy_body@45#common")).lower()
+    assert "инициатива" in said
+    for klass in content.classes:
+        assert klass.resource.name.lower() not in said, klass.resource.name
 
 
 def test_a_trinket_belongs_to_everyone(content: GameContent) -> None:

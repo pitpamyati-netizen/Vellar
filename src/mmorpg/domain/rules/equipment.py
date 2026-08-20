@@ -16,7 +16,7 @@
    (``Item.stat_bonuses``), а не выводятся из процентов.
 4. **Чужая вещь не запрещена — она дорога.** Класс носит своё (``classes.toml``),
    но надеть можно что угодно: за не своё оружие и не свой доспех платят
-   точностью и прытью. Запрет молчит, а штраф говорит, и говорит числом.
+   точностью и инициативой. Запрет молчит, а штраф говорит, и говорит числом.
 
 Умение — отдельный разговор: оно может просить род оружия (``skills.toml``), и без
 него не срабатывает вовсе. Выстрел без лука — это не «хуже», это «нечем».
@@ -47,7 +47,9 @@ UNARMED_DICE = Dice(count=1, faces=4)
 WEAPON_SLOT = "weapon"
 
 #: Чего стоит чужое оружие. Не запрет: игрок волен взять что угодно, но держит
-#: он его хуже, и это видно в двух числах, которые он и так читает на экране.
+#: он его хуже, и это видно в двух числах, которые он и так читает на экране
+#: характеристик: точность и инициатива. Прытью инициативу здесь не называют —
+#: Прыть это запас разбойника (``classes.toml``), и путать их нельзя.
 FOREIGN_WEAPON_ACCURACY = -20.0
 FOREIGN_WEAPON_INITIATIVE = -15.0
 #: И чего стоит каждая часть чужого доспеха. Полный чужой доспех — это четыре
@@ -125,7 +127,7 @@ def weapon_dice(content: GameContent, character: Character) -> Dice:
 def type_modifiers(content: GameContent, item_ids: Iterable[str]) -> dict[str, float]:
     """Прибавки, которые надетое даёт не собой, а своим родом.
 
-    Кинжал прибавляет прыть, латы её отнимают — и это не свойство конкретного
+    Кинжал прибавляет инициативу, латы её отнимают — и это не свойство конкретного
     клинка, а свойство кинжалов вообще, поэтому написано оно один раз в
     ``items.toml [meta]``, а не в каждой из тысячи вещей.
     """
@@ -160,7 +162,7 @@ def is_foreign(content: GameContent, character: Character, item: Item) -> bool:
 
 
 def proficiency_penalty(content: GameContent, character: Character) -> dict[str, float]:
-    """Чего стоит всё чужое, что сейчас надето, — точностью и прытью.
+    """Чего стоит всё чужое, что сейчас надето, — точностью и инициативой.
 
     Запрета нет: латы на маге застёгиваются. Просто он в них медленнее и чаще
     мажет, и обе цифры он видит на своём же экране характеристик.
@@ -198,13 +200,13 @@ def equip_warning(content: GameContent, character: Character, item: Item) -> str
         return (
             f"{item.name} — это {kind}, а {klass.name.lower()} таким драться не учился: "
             f"с ним точность ниже на {abs(int(FOREIGN_WEAPON_ACCURACY))} процентов, "
-            f"прыть — на {abs(int(FOREIGN_WEAPON_INITIATIVE))}."
+            f"инициатива — на {abs(int(FOREIGN_WEAPON_INITIATIVE))}."
         )
     kind = _armor_name(content, item.armor_type)
     return (
         f"{item.name} — {kind}, а {klass.name.lower()} в таком не обучен: "
         f"в нём точность ниже на {abs(int(FOREIGN_ARMOR_ACCURACY))} процентов, "
-        f"прыть — на {abs(int(FOREIGN_ARMOR_INITIATIVE))}."
+        f"инициатива — на {abs(int(FOREIGN_ARMOR_INITIATIVE))}."
     )
 
 

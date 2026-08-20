@@ -166,7 +166,7 @@ FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
         FieldSpec("health", "Здоровье, доля", FieldKind.RATE, hint="1 — обычное, 1,5 — крепкий"),
         FieldSpec("damage", "Урон, доля", FieldKind.RATE),
         FieldSpec("armor", "Броня, доля", FieldKind.RATE),
-        FieldSpec("initiative", "Прыть, доля", FieldKind.RATE),
+        FieldSpec("initiative", "Инициатива, доля", FieldKind.RATE),
         FieldSpec("loot", "Что падает", FieldKind.LIST, source=Source.ITEM),
     ),
     OverlayKind.CITY: (

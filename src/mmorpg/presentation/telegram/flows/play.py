@@ -1198,7 +1198,7 @@ def _equip(content: GameContent, character: Character, state: PlayState, item: I
     """Put a thing on. What it replaces goes back into the bag, never nowhere.
 
     Надеть можно что угодно: чужая вещь не запрещена, она дорога. Чего она стоит
-    точностью и прытью, сказано на карточке до нажатия — и повторяется вслед за
+    точностью и инициативой, сказано на карточке до нажатия — и повторяется вслед
     «надет», потому что решение уже принято, а числа поменялись.
     """
     previous = character.equipment.item_in(item.slot)
