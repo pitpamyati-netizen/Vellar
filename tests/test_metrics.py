@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from mmorpg.metrics import BUCKETS, Metrics, Stopwatch, reporting
+from mmorpg.metrics import BUCKETS, Metrics, Stopwatch, report, reporting
 
 
 def test_an_untouched_window_says_nothing_rather_than_guessing() -> None:
@@ -106,3 +106,21 @@ async def test_reporting_writes_a_window_while_the_game_runs() -> None:
 def test_a_stopwatch_measures_forward() -> None:
     watch = Stopwatch()
     assert watch.seconds >= 0.0
+
+
+def test_a_minute_in_which_nothing_happened_is_not_written(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Тихая минута не строка.
+
+    Живость подтверждает сердцебиение (``mmorpg.health``), его и читает
+    ``scripts/watchdog.py``; строка о пустом окне только уносила из окна
+    оператора то, ради чего он его и открыл.
+    """
+    metrics = Metrics()
+    report(metrics)
+    assert "metrics" not in capsys.readouterr().out
+
+    metrics.observe(0.01)
+    report(metrics)
+    assert "metrics" in capsys.readouterr().out

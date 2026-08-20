@@ -7,6 +7,9 @@ served or being kept waiting:
 
     metrics updates=412 failures=0 p50=0.014 p95=0.061 slowest=0.22
 
+A minute in which nobody pressed anything says nothing and is not written: that
+a quiet game is still alive is answered by the heartbeat (``mmorpg.health``).
+
 Latency is kept in fixed buckets rather than as a list of samples: a hundred
 players pressing buttons for a day is millions of numbers, and the answer wanted
 from them is always "which bucket does the 95th fall into". So the cost is a
@@ -111,10 +114,15 @@ def _bucket_of(seconds: float) -> int:
 def report(metrics: Metrics) -> None:
     """Write one window down and start the next.
 
-    An empty window is written too: "nobody pressed anything for a minute" is
-    news about a live game, and a line that stops appearing is how the watchdog
-    tells a wedged loop from a quiet one.
+    A window in which nothing was served is not written. It used to be, on the
+    grounds that "nobody pressed anything for a minute" is news about a live game
+    - but liveness is the heartbeat's job and always was: ``scripts/watchdog.py``
+    reads the age of the heartbeat file and never looks at this line. What the
+    empty line actually did was scroll a quiet game's window past everything an
+    operator had it open to read.
     """
+    if not metrics.updates:
+        return
     logger.info("metrics", **metrics.snapshot())
     metrics.reset()
 
