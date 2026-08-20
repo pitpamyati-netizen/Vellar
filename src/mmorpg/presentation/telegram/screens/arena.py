@@ -13,6 +13,7 @@ from mmorpg.domain.entities.character import Character
 from mmorpg.domain.rules import arena as arena_rules
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
+from mmorpg.presentation.telegram.screens.format import head
 
 ARENA_FIGHT = label("Выйти в круг", "🥊")
 
@@ -28,7 +29,8 @@ def arena_screen(
     refused = arena_rules.refusal(character)
 
     lines = [
-        notice or "Долговой круг. Спор решают боем, Палата в него не вникает.",
+        *head("Долговой круг.", notice),
+        "Здесь спор решают боем: Палате дешевле принять исход круга, чем считать чужие долги.",
         f"Ставка круга: {stake} золота. Выигрыш: {payout} золота, проигрыш — ставка.",
         # The whole rule in one sentence, on the screen where the gold is
         # committed: the Circle hands back debts and never invents money.

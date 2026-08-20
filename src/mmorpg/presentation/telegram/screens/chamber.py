@@ -22,7 +22,7 @@ from mmorpg.domain.rules import turning as turning_rules
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
-from mmorpg.presentation.telegram.screens.format import plural
+from mmorpg.presentation.telegram.screens.format import head, plural
 from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
     PageState,
@@ -66,9 +66,10 @@ def chamber_screen(
     wanted = turning_rules.asking(character.seals)
 
     lines = [
-        notice or "Дорожная палата. Весы, книга и печать, которую признают все пятнадцать городов.",
-        "Оборот — это заклад: вы отдаёте надетую вещь или грань умения и получаете Печать. "
-        "Уровень и опыт остаются при вас.",
+        *head("Дорожная палата.", notice),
+        "Весы, книга и печать, которую признают все пятнадцать городов.",
+        "Оборот — это заклад: вы отдаёте надетую вещь или грань умения и получаете "
+        "Печать. Уровень и опыт остаются при вас.",
         seals_line(character),
         *opened_lines(content, character),
         f"Сейчас Палата примет вещь не ниже уровня {wanted} или грань умения "
@@ -112,7 +113,7 @@ def turning_screen(
 
     total = sum(counted.values())
     lines = [
-        notice or f"Счётный вопрос: {turning.name}.",
+        *head(f"Счётный вопрос: {turning.name}.", notice),
         turning.question,
         turning.text,
         f"Подано голосов: {total}. Голос весит столько, сколько Оборотов за ним.",

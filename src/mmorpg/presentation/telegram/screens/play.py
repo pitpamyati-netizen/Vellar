@@ -23,7 +23,14 @@ from mmorpg.domain.rules.stats import DerivedStats
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
-from mmorpg.presentation.telegram.screens.format import amount, gold, plural
+from mmorpg.presentation.telegram.screens.format import (
+    amount,
+    gold,
+    head,
+    number,
+    percent,
+    plural,
+)
 from mmorpg.presentation.telegram.screens.items import SLOT_NAMES
 from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
@@ -38,24 +45,28 @@ NODE_ACTIONS: dict[NodeKind, str] = {
     NodeKind.BATTLE: "Вступить в бой",
     NodeKind.ELITE_BATTLE: "Вызвать эпического противника",
     NodeKind.BOSS_BATTLE: "Вызвать хозяина логова",
-    NodeKind.GATHER: "Собрать ресурсы",
+    # «Сырьё», а не «ресурсы»: узел для сбора отдаёт только материалы
+    # (``rules/adventure.GATHER_SOURCES``), и ремесло зовёт их тем же словом.
+    NodeKind.GATHER: "Собрать сырьё",
     NodeKind.EVENT: "Разобраться с событием",
     NodeKind.CACHE: "Обыскать тайник",
-    NodeKind.SHRINE: "Помолиться у святилища",
+    NodeKind.SHRINE: "Передохнуть у святилища",
     # Distinct from the always-present "Покинуть локацию" button below it: two
     # buttons on one screen may never share a label, since routing is by text.
     NodeKind.EXIT: "Выйти через узел",
 }
 
+# Одна строка на узел, и она же читается в списке соседних узлов - поэтому
+# короткая. Длинное описание места здесь стоило бы игроку целого экрана.
 NODE_DESCRIPTIONS: dict[NodeKind, str] = {
     NodeKind.ENTRANCE: "Отсюда вы вошли",
     NodeKind.BATTLE: "здесь ждёт противник",
     NodeKind.ELITE_BATTLE: "здесь ждёт эпический противник, бой будет долгим",
     NodeKind.BOSS_BATTLE: "здесь ждёт хозяин логова, бой будет самым долгим",
-    NodeKind.GATHER: "здесь есть что собрать",
-    NodeKind.EVENT: "здесь что-то происходит",
-    NodeKind.CACHE: "здесь спрятан тайник",
-    NodeKind.SHRINE: "здесь можно перевести дух",
+    NodeKind.GATHER: "здесь берут сырьё",
+    NodeKind.EVENT: "здесь что-то стряслось до вас",
+    NodeKind.CACHE: "здесь что-то припрятано",
+    NodeKind.SHRINE: "здесь переводят дух",
     NodeKind.EXIT: "отсюда можно уйти",
 }
 
@@ -110,7 +121,7 @@ def main_menu_screen(
         else "Достигнут максимальный уровень."
     )
     lines = [
-        notice or f"Главное меню. Вы в городе {city.name}.",
+        *head(f"Главное меню. Вы в городе {city.name}.", notice),
         f"{character.name}, уровень {character.level}, "
         f"{content.race(character.race_id).name}, "
         f"{content.character_class(character.class_id).name}.",
@@ -221,7 +232,7 @@ def city_screen(content: GameContent, city: City, character: Character, notice: 
     return Screen(
         id=ScreenId.CITY,
         lines=(
-            notice or f"Город {city.name}.",
+            *head(f"Город {city.name}.", notice),
             city.description,
             f"Уровни города: с {city.level_min} по {city.level_max}. "
             f"Ваш уровень: {character.level}.",
@@ -344,7 +355,7 @@ def location_screen(
     busy = sum(1 for item in worth_doing if not left_at(item.index).empty)
     boss = next((item for item in location.nodes if item.kind is NodeKind.BOSS_BATTLE), None)
 
-    lines = [notice or f"Локация {location.name}, узел {node.index}: {node.name}."]
+    lines = list(head(f"Локация {location.name}, узел {node.index}: {node.name}.", notice))
     if node.kind in {NodeKind.ENTRANCE, NodeKind.EXIT}:
         lines.append(f"{NODE_DESCRIPTIONS[node.kind].capitalize()}.")
         lines.append("Это дверь, а не дело: здесь ничего не найти.")
@@ -414,13 +425,14 @@ def character_screen(
 
     primary = primary_stats(content, character)
     lines = [
-        notice or f"Персонаж {character.name}, уровень {character.level}.",
+        *head(f"Персонаж {character.name}, уровень {character.level}.", notice),
         f"{content.race(character.race_id).name}, "
         f"{content.character_class(character.class_id).name}.",
         f"Здоровье: {character.health_or(stats.max_health)} из {stats.max_health}. "
         f"{stats.resource_name}: {stats.max_resource}.",
-        f"Броня: {stats.armor}. Точность: {stats.accuracy}. Уклонение: {stats.dodge} процентов.",
-        f"Шанс крита: {stats.crit_chance} процентов. Инициатива: {stats.initiative}.",
+        f"Броня: {stats.armor}. Точность: {number(stats.accuracy)}. "
+        f"Уклонение: {percent(stats.dodge)}.",
+        f"Шанс крита: {percent(stats.crit_chance)}. Инициатива: {number(stats.initiative)}.",
     ]
     lines.extend(f"{name}: {primary[code]}." for code, name in STAT_NAMES.items())
     if character.trait_ids:
@@ -455,77 +467,106 @@ def spend_label(stat_name: str) -> Label:
     return label(f"Вложить: {stat_name}")
 
 
-def _number(value: float) -> str:
-    """A number as it is read aloud: no trailing zero, comma for the fraction."""
-    text = f"{value:.2f}".rstrip("0").rstrip(".")
-    return text.replace(".", ",")
-
-
 def stat_effect_lines(content: GameContent, character: Character) -> tuple[str, ...]:
     """What one point in each stat actually does, in this character's numbers.
 
     Every number here is read from the rule constants rather than typed out, so a
-    balance change cannot leave the explanation lying.
+    balance change cannot leave the explanation lying. What has no constant behind
+    it is not written at all: the old list promised carried weight, resistances,
+    loot rarity and stronger healing, and the engine counted none of the four.
+
+    Two lines carry the whole answer to "куда вкладывать": what this class strikes
+    from, and what its reserve is filled from. Both are read off the class, so a
+    warrior and a mage get different sentences and neither gets the circular one
+    that stood here before - "Сила: урон в бою, когда класс дерётся силой."
     """
     from mmorpg.domain.entities.stats import StatCode
     from mmorpg.domain.rules import economy
     from mmorpg.domain.rules import stats as stat_rules
-    from mmorpg.presentation.telegram.screens.creation import STAT_NAMES
+    from mmorpg.presentation.telegram.screens.creation import STAT_GENITIVE, STAT_NAMES
 
     klass = content.character_class(character.class_id)
     key_codes = tuple(klass.key_stats)
     key_names = ", ".join(STAT_NAMES[StatCode(code)].lower() for code in key_codes)
-    damage_stat = STAT_NAMES[StatCode(key_codes[0])].lower() if key_codes else "ключевая"
+    blow = StatCode(key_codes[0]) if key_codes else None
+    pool = StatCode(klass.resource.stat)
 
     effects: dict[StatCode, str] = {
-        StatCode.STR: "Сила: урон в бою, когда класс дерётся силой.",
+        StatCode.STR: "Сила: тяжесть удара в ближнем бою.",
         StatCode.AGI: (
-            f"Ловкость: за очко плюс {_number(stat_rules.ACCURACY_PER_AGILITY)} к точности, "
-            f"{_number(stat_rules.DODGE_PER_AGILITY)} процента уклонения и "
-            f"{_number(stat_rules.INITIATIVE_PER_AGILITY)} инициативы."
+            f"Ловкость: за очко плюс {number(stat_rules.ACCURACY_PER_AGILITY)} к точности, "
+            f"{percent(stat_rules.DODGE_PER_AGILITY)} уклонения и "
+            f"{number(stat_rules.INITIATIVE_PER_AGILITY)} инициативы — это ещё и очередь удара."
         ),
         StatCode.END: (
-            f"Выносливость: за очко плюс {_number(stat_rules.ARMOR_PER_ENDURANCE)} брони и "
-            f"{_number(klass.health.per_endurance)} здоровья."
+            f"Выносливость: за очко плюс {number(stat_rules.ARMOR_PER_ENDURANCE)} брони и "
+            f"{number(klass.health.per_endurance)} здоровья."
         ),
-        StatCode.INT: "Интеллект: урон заклинаний и запас маны у магических классов.",
+        StatCode.INT: "Интеллект: сила чар.",
         StatCode.WIS: (
-            f"Мудрость: за очко плюс {_number(stat_rules.RESOURCE_REGEN_PER_WISDOM)} ресурса "
-            "за ход, и сильнее лечение."
+            f"Мудрость: за очко плюс {number(stat_rules.RESOURCE_REGEN_PER_WISDOM)} ресурса в ход."
         ),
         StatCode.CHA: (
-            f"Харизма: за очко скидка {_number(economy.CHARISMA_DISCOUNT_PER_POINT)} процента "
-            f"в лавке, до {_number(economy.MAX_CHARISMA_DISCOUNT)} процентов."
+            f"Харизма: за очко в лавке уступают "
+            f"{percent(economy.CHARISMA_DISCOUNT_PER_POINT)}, "
+            f"процента, и так до {percent(economy.MAX_CHARISMA_DISCOUNT)}."
         ),
         StatCode.LCK: (
-            f"Удача: за очко плюс {_number(stat_rules.CRIT_CHANCE_PER_LUCK)} процента к шансу "
-            f"крита и к его силе, потолок шанса {_number(stat_rules.MAX_CRIT_CHANCE)} процентов."
+            f"Удача: за очко плюс {number(stat_rules.CRIT_CHANCE_PER_LUCK)} процента к шансу "
+            f"крита и столько же к его силе; выше {percent(stat_rules.MAX_CRIT_CHANCE)} "
+            "шанс не поднимется."
         ),
     }
-    lead = (
-        f"Класс {klass.name} дерётся характеристикой {damage_stat}. Ключевые: {key_names}."
-        if key_codes
-        else f"Класс {klass.name} не объявил ключевых характеристик."
-    )
-    return (lead, *(effects[code] for code in STAT_NAMES))
+    lead = [klass.power] if klass.power else []
+    if blow is not None:
+        lead.append(
+            f"Ваш удар растёт от {STAT_GENITIVE[blow]}, "
+            f"а {klass.resource.name.lower()} — от {STAT_GENITIVE[pool]}."
+            if pool is not blow
+            else f"От {STAT_GENITIVE[blow]} у вас и удар, и {klass.resource.name.lower()}."
+        )
+    if key_names:
+        lead.append(f"Ключевые: {key_names}.")
+    return (*lead, *(effects[code] for code in STAT_NAMES))
 
 
 def stats_screen(
-    content: GameContent, character: Character, stats: DerivedStats, notice: str = ""
+    content: GameContent,
+    character: Character,
+    stats: DerivedStats,
+    notice: str = "",
+    *,
+    verbose: bool = True,
 ) -> Screen:
-    """Every primary stat: what it is now, what it does, and where a point goes."""
+    """Every primary stat: what it is now, what it does, and where a point goes.
+
+    ``verbose`` is the «Подробные описания» switch from the settings screen. It
+    was stored, toggled and read back aloud for months while no screen in the game
+    ever looked at it - a switch that answers nothing is the same bug as a button
+    that does nothing (``Claude.md``, правило 9). Here it decides whether the seven
+    explanations come with the seven numbers.
+    """
     from mmorpg.domain.rules.stats import primary_stats
     from mmorpg.presentation.telegram.screens.creation import STAT_NAMES
 
     primary = primary_stats(content, character)
     lines = [
-        notice or f"Характеристики. Свободных очков: {character.unspent_stat_points}.",
-        "Очко вкладывается навсегда, обратно оно не берётся.",
+        *head(
+            f"Характеристики. Свободных очков: {character.unspent_stat_points}.",
+            notice,
+        ),
+        "Вложенное очко назад не берут.",
         f"Здоровье {stats.max_health}, броня {stats.armor}, "
-        f"точность {_number(stats.accuracy)}, уклонение {_number(stats.dodge)} процентов.",
+        f"точность {number(stats.accuracy)}, уклонение {percent(stats.dodge)}.",
         *(f"{name}: {primary[code]}." for code, name in STAT_NAMES.items()),
-        "На что они влияют.",
-        *stat_effect_lines(content, character),
+        *(
+            stat_effect_lines(content, character)
+            if verbose
+            else (
+                content.character_class(character.class_id).power,
+                "Подробные описания выключены в настройках: что даёт очко, там же и включается.",
+            )
+        ),
     ]
     rows: list[tuple[Label, ...]] = []
     if character.unspent_stat_points:

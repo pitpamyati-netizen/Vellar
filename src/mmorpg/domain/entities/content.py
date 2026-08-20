@@ -188,6 +188,10 @@ class CharacterClass:
     name: str
     role: str
     description: str
+    #: Одна строка о том, чем этот класс бьёт и что за этим ударом стоит. Её
+    #: пишут в ``classes.toml``: экран умеет назвать ключевую характеристику, но
+    #: не умеет объяснить, почему она ключевая.
+    power: str
     key_stats: tuple[StatCode, ...]
     bonuses: StatBlock
     resource: ClassResource

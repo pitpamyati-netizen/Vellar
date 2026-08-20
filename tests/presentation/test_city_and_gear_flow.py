@@ -395,7 +395,7 @@ def test_the_strongbox_refuses_what_is_not_there(
 def test_the_descent_asks_for_a_fight(
     content: GameContent, hero: Character, in_city: PlayState
 ) -> None:
-    dungeon = step(content, hero, in_city, "Данжи")
+    dungeon = step(content, hero, in_city, "Подземелья")
     assert dungeon.screen is ScreenId.DUNGEON
     assert "3 схватки подряд" in render(content, hero, dungeon, world_seed=WORLD_SEED).text()
 

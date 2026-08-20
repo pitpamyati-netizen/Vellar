@@ -4,6 +4,10 @@
 # things for pay is a craft, and crafts live in crafts.toml (Narrative.md,
 # section 2). Ids are frozen - characters in the database point at them.
 #
+# ``power`` is the one line the game says about how this class does damage: it
+# names the stat the standard blow scales on (key_stats[0]), because a screen
+# that only prints "ключевые характеристики" never answers *why* they are key.
+#
 # Each class contributes 8 active and 6 passive skills across the whole
 # progression (skills.toml, owner = "class:<id>"), unlocked at the levels in
 # [meta].active_unlock_levels / passive_unlock_levels. The player equips 6 of the
@@ -24,6 +28,7 @@ id = "warrior"
 name = "Воин"
 role = "Стойкий боец ближнего боя"
 description = "Держит строй и принимает удар на себя."
+power = "Сила ведёт удар, выносливость держит Отвагу и место в строю."
 key_stats = ["STR", "END"]
 bonuses = { STR = 2, END = 1 }
 resource = { id = "valor", name = "Отвага", base = 40, per_level = 1.0, stat = "END", per_stat = 1.0, regen_per_turn = 6 }
@@ -34,6 +39,7 @@ id = "barbarian"
 name = "Варвар"
 role = "Урон в обмен на защиту"
 description = "Дерётся почти без брони и берёт напором в первые ходы."
+power = "Сила ведёт удар, а Ярость набирается по ходу боя."
 key_stats = ["STR"]
 bonuses = { STR = 2, END = 1 }
 resource = { id = "rage", name = "Ярость", base = 0, per_level = 0.5, stat = "STR", per_stat = 0.5, regen_per_turn = 0 }
@@ -44,6 +50,7 @@ id = "paladin"
 name = "Паладин"
 role = "Защита и поддержка"
 description = "Стоит за чужую спину: прикрывает и держится дольше остальных."
+power = "Сила ведёт удар, а Благодать приходит по харизме: за паладином идут."
 key_stats = ["STR", "CHA"]
 bonuses = { STR = 1, CHA = 1, END = 1 }
 resource = { id = "grace", name = "Благодать", base = 45, per_level = 1.2, stat = "CHA", per_stat = 1.5, regen_per_turn = 5 }
@@ -54,6 +61,7 @@ id = "ranger"
 name = "Следопыт"
 role = "Дальний бой и выслеживание"
 description = "Бьёт издали и читает следы там, где их никто не видит."
+power = "Ловкость ведёт выстрел, а Выдержку держит мудрость."
 key_stats = ["AGI", "WIS"]
 bonuses = { AGI = 2, WIS = 1 }
 resource = { id = "focus", name = "Выдержка", base = 50, per_level = 1.2, stat = "WIS", per_stat = 1.5, regen_per_turn = 8 }
@@ -64,6 +72,7 @@ id = "rogue"
 name = "Разбойник"
 role = "Максимальный урон и скрытность"
 description = "Ждёт удобного момента и вкладывает всё в один удар."
+power = "Ловкость ведёт удар, она же копит Прыть."
 key_stats = ["AGI", "LCK"]
 bonuses = { AGI = 2, LCK = 1 }
 resource = { id = "energy", name = "Прыть", base = 60, per_level = 1.0, stat = "AGI", per_stat = 1.0, regen_per_turn = 10 }
@@ -74,6 +83,7 @@ id = "mage"
 name = "Маг"
 role = "Стихийный урон по площади"
 description = "Бьёт стихией по площади, пока хватает чар."
+power = "Интеллект ведёт чары: их считают, как на заставе считают вес, и от счёта зависит удар."
 key_stats = ["INT"]
 bonuses = { INT = 3 }
 resource = { id = "mana", name = "Чары", base = 70, per_level = 2.0, stat = "INT", per_stat = 2.5, regen_per_turn = 7 }
@@ -84,6 +94,7 @@ id = "cleric"
 name = "Жрец"
 role = "Лечение и снятие эффектов"
 description = "Лечит и снимает с человека дурные последствия."
+power = "Мудрость ведёт и слово, и удар, и Вера растёт из неё же."
 key_stats = ["WIS"]
 bonuses = { WIS = 2, CHA = 1 }
 resource = { id = "faith", name = "Вера", base = 65, per_level = 1.8, stat = "WIS", per_stat = 2.2, regen_per_turn = 7 }
@@ -94,6 +105,7 @@ id = "druid"
 name = "Друид"
 role = "Контроль, превращения, регенерация"
 description = "Меняет облик, держит врага на месте и лечит понемногу, но долго."
+power = "Мудрость ведёт удар и держит Единение с тем, что вокруг."
 key_stats = ["WIS", "END"]
 bonuses = { WIS = 2, END = 1 }
 resource = { id = "communion", name = "Единение", base = 60, per_level = 1.6, stat = "WIS", per_stat = 2.0, regen_per_turn = 7 }

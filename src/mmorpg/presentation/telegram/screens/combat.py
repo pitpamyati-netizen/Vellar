@@ -37,7 +37,7 @@ from mmorpg.domain.rules.skill_effects import EffectCategory, EffectSpec, spec_f
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
-from mmorpg.presentation.telegram.screens.format import amount, percent, plural, turns
+from mmorpg.presentation.telegram.screens.format import amount, head, percent, plural, turns
 
 EMPTY_SLOT = "Пустой слот"
 READY = "готово"
@@ -53,7 +53,9 @@ TAG_NAMES: dict[ActionTag, str] = {
 RANK_NAMES: dict[EnemyRank, str] = {
     EnemyRank.NORMAL: "",
     EnemyRank.ELITE: "эпический",
-    EnemyRank.BOSS: "босс",
+    # Не «босс»: слово из мастерской, а не из Веллара, и карта локации всюду
+    # зовёт его хозяином логова (``screens/play.py``).
+    EnemyRank.BOSS: "хозяин логова",
 }
 
 #: What a modifier is called when a skill label has to name it. Only the keys
@@ -326,8 +328,7 @@ def combat_screen(
     content: GameContent, character: Character, state: CombatState, notice: str = ""
 ) -> Screen:
     enemies = state.living_enemies
-    lead = notice or f"Бой. Ход {state.turn}."
-    lines = [lead]
+    lines = list(head(f"Бой. Ход {state.turn}.", notice))
     lines.extend(enemy_line(enemy, state.turn) for enemy in enemies)
     lines.append(
         f"Вы: здоровье {amount(state.player.health, state.player.max_health)}, "
@@ -360,8 +361,8 @@ def bag_screen(
 ) -> Screen:
     """Consumables during a fight. They live here, never in a skill slot."""
     lines = [
-        notice or "Сумка. Расходники доступны только отсюда.",
-        f"Позиций в сумке: {len(entries)}. Приём из сумки оставляет след: оборона.",
+        *head("Сумка. Расходники берут только отсюда.", notice),
+        f"Позиций в сумке: {len(entries)}. Всё, что выпито в бою, оставляет след обороны.",
     ]
     rows: list[tuple[Label, ...]] = []
     for _item_id, name, quantity in entries:
@@ -401,7 +402,9 @@ def victory_screen(
 def defeat_screen(gold_lost: int = 0) -> Screen:
     lines = [
         "Поражение.",
-        "Вы приходите в себя в городе, перевязанный и злой.",
+        # Без причастия: у персонажа может быть любой род, а русское прошедшее
+        # время заставляет игру угадывать (``screens/group.py``).
+        "Вы приходите в себя в городе. Раны перевязаны, дальше идти можно.",
     ]
     if gold_lost:
         lines.append(f"Потеряно золота: {gold_lost}. Ячейку в банке не трогает.")

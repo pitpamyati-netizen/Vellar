@@ -19,6 +19,7 @@ from mmorpg.domain.rules import crafts as craft_rules
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
+from mmorpg.presentation.telegram.screens.format import head
 
 # What the player owns, as the flow hands it in: item id to count in the bag.
 Owned = dict[str, int]
@@ -43,8 +44,9 @@ def craft_button(content: GameContent, character: Character, craft: Craft) -> La
 def crafts_screen(content: GameContent, character: Character, notice: str = "") -> Screen:
     """The list of crafts. Everything on it is learnable by anybody."""
     lines = [
-        notice or "Ремёсла. Сырьё собирают, из сырья делают вещи.",
-        "Ремесло не выбирают раз и навсегда: работайте любым, ранг растёт от работы.",
+        *head("Ремёсла.", notice),
+        "Сырьё собирают руками, из сырья делают вещи, вещи идут в дело или в лавку.",
+        "Ремесло не выбирают раз и навсегда: беритесь за любое, ранг растёт от работы.",
         "Собирать можно раз в четверть часа: сырьё родится заново само.",
     ]
     rows = [(craft_button(content, character, craft),) for craft in content.crafts]
@@ -77,7 +79,7 @@ def craft_screen(
     """
     rank = craft_rules.character_rank(content, character, craft.id)
     lines = [
-        notice or f"{craft.name}: {rank_line(content, character, craft)}.",
+        *head(f"{craft.name}: {rank_line(content, character, craft)}.", notice),
         craft.description,
     ]
     rows: list[tuple[Label, ...]] = []

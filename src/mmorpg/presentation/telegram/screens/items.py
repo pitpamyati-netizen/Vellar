@@ -126,11 +126,11 @@ def effect_line(item: Item) -> str:
         case "heal_flat":
             return f"Восстанавливает {round(item.effect.power)} здоровья."
         case "heal_percent":
-            return f"Восстанавливает {round(item.effect.power)} процентов здоровья."
+            return f"Восстанавливает {percent(item.effect.power)} здоровья."
         case _:
             turns = item.effect.turns
             span = f" на {turns} хода" if turns else ""
-            return f"Даёт усиление{span}: {round(item.effect.power)} процентов."
+            return f"Даёт усиление{span}: {percent(item.effect.power)}."
 
 
 def gives_lines(content: GameContent, item: Item) -> tuple[str, ...]:

@@ -506,6 +506,7 @@ def _parse_classes(raw: Mapping[str, Any], problems: list[str]) -> tuple[Charact
                 name=str(entry["name"]),
                 role=str(entry.get("role", "")),
                 description=str(entry.get("description", "")),
+                power=str(entry.get("power", "")),
                 key_stats=key_stats,
                 bonuses=bonuses,
                 resource=resource,
@@ -526,6 +527,10 @@ def _validate_classes(
     _check_unique((klass.id for klass in classes), "classes.toml", problems)
 
     for klass in classes:
+        # Без этой строки экран характеристик способен сказать только «ключевая
+        # характеристика: интеллект» - и игрок вправе спросить, при чём тут она.
+        if not klass.power:
+            problems.append(f"classes.toml: {klass.id} has no power line")
         owner = f"{OwnerKind.CLASS.value}:{klass.id}"
         owned = [skill for skill in skills if skill.owner == owner]
         actives = sorted(

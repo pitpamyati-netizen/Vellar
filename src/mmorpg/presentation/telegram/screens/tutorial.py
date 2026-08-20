@@ -20,6 +20,7 @@ from mmorpg.domain.rules.tutorial import TutorialTask
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
+from mmorpg.presentation.telegram.screens.format import head
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,12 +101,10 @@ def tutorial_screen(character: Character, notice: str = "") -> Screen:
     done = rules.done_count(character)
     total = len(rules.ORDER)
 
-    lines = [
-        notice or f"Обучение. Сделано заданий: {done} из {total}.",
-    ]
+    lines = list(head(f"Обучение. Сделано заданий: {done} из {total}.", notice))
     if current is None:
         lines.append("Все задания сделаны, обучение больше не понадобится.")
-        lines.append("Дальше игра идёт как идёт: подряды, локации, ремёсла, лавка.")
+        lines.append("Дальше игра идёт своим ходом: подряды, локации, ремёсла, лавка.")
         return Screen(id=ScreenId.TUTORIAL, lines=tuple(lines), rows=())
 
     card = CARDS[current]

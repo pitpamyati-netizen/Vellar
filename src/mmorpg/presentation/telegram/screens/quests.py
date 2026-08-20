@@ -22,7 +22,7 @@ from mmorpg.domain.rules.quests import QuestStep
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
-from mmorpg.presentation.telegram.screens.format import plural
+from mmorpg.presentation.telegram.screens.format import head, plural
 from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
     PageState,
@@ -45,7 +45,8 @@ HOW: dict[ObjectiveKind, str] = {
         "Считается каждая выигранная схватка в узле локации: «Вступить в бой» и до победы."
     ),
     ObjectiveKind.ELITE: (
-        "Считается победа в узле «Сильный противник» — на карте локации он назван так."
+        "Считается победа над эпическим противником. Узел с ним карта локации "
+        "называет по-своему, но перед боем прямо говорит, кто там стоит."
     ),
     ObjectiveKind.SEARCH: (
         "Считается узел, разобранный без боя: заросли, тайник, святилище, событие. "
@@ -193,7 +194,7 @@ def offer_screen(
     progress = character.quests.progress(quest.id) if character is not None else 0
     is_taken = character is not None and character.quests.is_taken(quest.id)
 
-    lines = [notice or f"{quest.giver}. {quest.intro}", f"— {quest.terms}"]
+    lines = [*head(f"{quest.giver}. {quest.intro}", notice), f"— {quest.terms}"]
     lines.extend(instructions(content, quest))
     lines.append(reward_line(content, quest))
     if is_taken:
@@ -223,7 +224,7 @@ def journal_screen(
 ) -> Screen:
     """The ledger: what is taken, how far it has got, and where to hand it in."""
     steps = quest_rules.taken(content, character)
-    lines = [notice or f"Подряды. Взято: {len(steps)}."]
+    lines = list(head(f"Подряды. Взято: {len(steps)}.", notice))
     if not steps:
         lines.append("Ничего не взято. Подряды дают в таверне города, «Доска подрядов».")
     for step in steps:

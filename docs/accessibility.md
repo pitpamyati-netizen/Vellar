@@ -1,13 +1,20 @@
 # Accessibility specification
 
-Vellar is played by blind and low-vision players with screen readers. The rules
-below are **requirements**, not preferences. Violating any of them is a
-blocker-priority bug, and most of them are enforced by tests in
+Vellar is played **entirely by ear**: everything the game knows how to say, it says
+in text, and the whole of it has to work through a screen reader. The rules below
+are **requirements**, not preferences. Violating any of them is a blocker-priority
+bug, and most of them are enforced by tests in
 `tests/presentation/test_accessibility.py`.
 
-The audience assumption: a player listens to the last message only, with no ability
-to glance at what came before, and navigates the keyboard by position and by memory
-of the button label.
+The design assumption is about the medium, not about the audience. Vellar is played
+by sighted and blind players alike, and the game never says which it is talking to:
+a screen that is clear by ear is clear on a screen too, so there is exactly one
+version of every message and no "accessible mode" to switch on. What the player
+hears about is Vellar; what the player never hears about is their own eyesight.
+
+Worst-case reader, and the one every rule is written for: a player who has only the
+last message, cannot glance back at what came before, and navigates the keyboard by
+position and by memory of the button label.
 
 ## 1. Reply keyboards only
 

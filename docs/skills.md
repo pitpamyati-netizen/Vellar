@@ -1,8 +1,8 @@
 # Skills: depth without buttons
 
-The problem this design solves: more skills means more buttons, and more buttons
-means a game a blind player cannot navigate and a sighted player cannot enjoy. The
-answer is to **grow the content and freeze the interface**.
+The problem this design solves: more skills means more buttons, and past a certain
+count a keyboard stops being navigable by anyone - by ear it is unreadable, by eye
+it is a wall. The answer is to **grow the content and freeze the interface**.
 
 ## The panel is fixed forever
 

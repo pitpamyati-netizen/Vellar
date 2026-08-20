@@ -32,6 +32,38 @@ def test_every_race_has_one_passive_and_one_active(content: GameContent) -> None
         assert len(content.skills_of(f"race:{race.id}", SkillKind.ACTIVE)) == 1
 
 
+#: Корень русского названия каждой характеристики - по нему проверяют, что строка
+#: ``power`` говорит именно о той характеристике, от которой движок считает удар.
+STAT_ROOTS = {
+    "STR": "сил",
+    "AGI": "ловкост",
+    "END": "выносливост",
+    "INT": "интеллект",
+    "WIS": "мудрост",
+    "CHA": "харизм",
+    "LCK": "удач",
+}
+
+
+def test_every_class_says_what_its_blow_grows_from(content: GameContent) -> None:
+    """``power`` обязан называть ту характеристику, от которой считается удар.
+
+    Экран характеристик показывает эту строку прямо над списком очков, и она
+    единственная отвечает на вопрос «почему ключевая — именно эта». Строка,
+    разошедшаяся с ``key_stats[0]``, врёт ровно там, где игрок решает, куда
+    вкладывать: до этой проверки экран объяснял силу словами «урон в бою, когда
+    класс дерётся силой».
+    """
+    for klass in content.classes:
+        assert klass.power, klass.id
+        assert klass.key_stats, klass.id
+        root = STAT_ROOTS[klass.key_stats[0].value]
+        assert root in klass.power.casefold(), (
+            f"{klass.id}: удар растёт от {klass.key_stats[0].value}, "
+            f"а строка power об этом молчит: {klass.power!r}"
+        )
+
+
 def test_eight_classes(content: GameContent) -> None:
     assert len(content.classes) == 8
 

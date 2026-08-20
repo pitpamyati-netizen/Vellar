@@ -1,9 +1,9 @@
-"""Accessibility settings.
+"""Настройки игры.
 
-Three switches, each stated as a full sentence with its current value, because a
-toggle whose state is only visible as a checkmark is invisible to a screen reader.
+Три переключателя, и каждый называет своё нынешнее положение целой фразой:
+галочка сама по себе ничего не говорит тому, кто читает экран не глядя.
 
-Emoji are **off by default** (accessibility rule 6).
+Эмодзи выключены по умолчанию (правило доступности 6).
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from __future__ import annotations
 from mmorpg.domain.ports.repositories import AccessibilitySettings
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
+from mmorpg.presentation.telegram.screens.format import head
 
 TOGGLE_EMOJI = label("Переключить эмодзи")
 TOGGLE_VERBOSE = label("Переключить подробные описания")
@@ -24,11 +25,11 @@ def settings_screen(settings: AccessibilitySettings, notice: str = "") -> Screen
     return Screen(
         id=ScreenId.SETTINGS,
         lines=(
-            notice or "Настройки доступности.",
+            *head("Настройки.", notice),
             f"Эмодзи: {ON if settings.emoji else OFF}. "
-            "Смысл кнопки всегда есть в тексте, эмодзи только украшают.",
+            "Смысл кнопки всегда написан словами, эмодзи её только украшают.",
             f"Подробные описания: {ON if settings.verbose else OFF}. "
-            "Подробные описания добавляют пояснения к эффектам и характеристикам.",
+            "Когда включены, характеристики говорят, что даёт вложенное в них очко.",
             f"Позиций на странице списка: {settings.page_size}.",
             "Команда /осмотреться присылает текущий экран заново, если он потерялся в переписке.",
         ),

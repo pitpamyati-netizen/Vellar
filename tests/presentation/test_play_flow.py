@@ -175,7 +175,7 @@ def test_buying_defers_the_write_to_the_handler(
 @pytest.mark.parametrize(
     ("section", "screen"),
     [
-        ("Данжи", ScreenId.DUNGEON),
+        ("Подземелья", ScreenId.DUNGEON),
         ("Таверна", ScreenId.TAVERN),
         ("Наставник", ScreenId.MENTOR),
         ("Банк", ScreenId.BANK),
@@ -264,7 +264,7 @@ def test_working_a_node_takes_one_thing_out_of_it(
         pytest.skip("this seed produced no gathering node")
 
     at_node = replace(in_location, session=replace(in_location.session, node=gather.index))
-    done = step(content, hero, at_node, "Собрать ресурсы")
+    done = step(content, hero, at_node, "Собрать сырьё")
     assert done.pending.node_take == gather.index
     assert "сделано" in done.notice
 
@@ -283,7 +283,7 @@ def test_an_emptied_node_says_when_it_fills_up_again(
         content,
         hero,
         at_node,
-        "Собрать ресурсы",
+        "Собрать сырьё",
         world_seed=WORLD_SEED,
         clock=Clock(now=160),
         location_state=emptied,

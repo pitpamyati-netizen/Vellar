@@ -308,7 +308,11 @@ def render(
             )
         case ScreenId.STATS:
             return screens.stats_screen(
-                content, character, derived_stats(content, character), state.notice
+                content,
+                character,
+                derived_stats(content, character),
+                state.notice,
+                verbose=(settings or DEFAULT_SETTINGS).verbose,
             )
         case ScreenId.TUTORIAL:
             return tutorial_screens.tutorial_screen(character, state.notice)

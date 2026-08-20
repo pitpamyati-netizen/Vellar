@@ -18,6 +18,7 @@ from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
+from mmorpg.presentation.telegram.screens.format import head
 from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
     PageState,
@@ -131,9 +132,10 @@ def slots_screen(content: GameContent, character: Character, notice: str = "") -
         else EMPTY_SLOT
     )
     lines = [
-        notice or "Слоты умений. Нажмите слот, чтобы положить в него умение.",
+        *head("Слоты умений.", notice),
+        "Нажмите слот, чтобы положить в него умение.",
         f"Боевых слотов {rules.active_slots}, постоянных {rules.passive_slots}, "
-        "расовый один и меняться не может.",
+        "расовый один, и он не меняется.",
         f"Расовое умение: {racial}.",
     ]
     rows: list[tuple[Label, ...]] = [

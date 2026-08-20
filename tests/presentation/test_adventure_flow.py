@@ -621,7 +621,7 @@ async def test_a_descent_pays_at_the_bottom_and_not_before(
 
     await player.press("Мир")
     await player.press("Дубно")
-    screen = await player.press("Данжи")
+    screen = await player.press("Подземелья")
     assert screen.id is ScreenId.DUNGEON
     assert "дно" in screen.text().casefold()
 

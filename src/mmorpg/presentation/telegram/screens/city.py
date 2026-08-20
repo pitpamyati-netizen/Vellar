@@ -18,7 +18,7 @@ from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
-from mmorpg.presentation.telegram.screens.format import amount, gold, plural
+from mmorpg.presentation.telegram.screens.format import amount, gold, head, plural
 from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
     PageState,
@@ -40,10 +40,11 @@ def tavern_screen(
     price = inn_price(character.level)
 
     lines = [
-        notice or f"Таверна города {city.name}. Пахнет варевом и мокрой шерстью.",
+        *head(f"Таверна города {city.name}.", notice),
+        "Пахнет варевом и мокрой шерстью, у стойки считают чужие деньги вслух.",
         f"Здоровье: {amount(health, stats.max_health)}.",
         f"Комната на ночь: {gold(price)}. У вас {gold(character.gold)}.",
-        "Солома во дворе бесплатна и лечит не всё.",
+        "Солома во дворе даётся даром и лечит не всё.",
     ]
     if due:
         lines.append(f"Готовы к сдаче подряды: {len(due)}.")
@@ -102,10 +103,11 @@ def withdraw_label(sum_: int) -> Label:
 def bank_screen(content: GameContent, character: Character, city: City, notice: str = "") -> Screen:
     """Gold in the strongbox is not on you, and a lost fight takes only what is."""
     lines = [
-        notice or f"Банк Палаты, {city.name}. Стойка, весы, книга.",
+        *head(f"Банк Палаты, {city.name}.", notice),
+        "Стойка, весы и книга, в которую записывают всё до монеты.",
         f"На руках: {gold(character.gold)}. В ячейке: {gold(character.bank_gold)}.",
-        "За ячейку не берут: Палате важнее знать, у кого сколько.",
-        "Проигранный бой забирает десятую часть того, что на руках. Ячейку не трогает.",
+        "За саму ячейку не берут: Палате важнее знать, у кого сколько.",
+        "Проигранный бой забирает десятую часть того, что на руках. Ячейку он не трогает.",
     ]
     rows: list[tuple[Label, ...]] = [
         tuple(deposit_label(step) for step in DEPOSIT_STEPS),
@@ -125,7 +127,7 @@ def npcs_screen(content: GameContent, city: City, notice: str = "") -> Screen:
     пусто, — это обещание, которого город не давал.
     """
     people = content.npcs_in(city.id)
-    lines = [notice or f"Жители города {city.name}.", f"Здесь стоят: {len(people)}."]
+    lines = [*head(f"Жители города {city.name}.", notice), f"Здесь стоят: {len(people)}."]
     lines.extend(f"{npc.title}." for npc in people)
     if not people:
         lines.append("Сейчас никого. Загляните позже.")
@@ -147,7 +149,7 @@ def npc_screen(content: GameContent, character: Character, npc: Npc, notice: str
     offered = tuple(
         quest for quest in content.quests_of(npc.id) if quest_rules.is_open(quest, character)
     )
-    lines = [notice or f"{npc.title}.", npc.text or "Молчит и смотрит мимо."]
+    lines = [*head(f"{npc.title}.", notice), npc.text or "Молчит и смотрит мимо."]
     if offered:
         lines.append(f"Работа есть: {len(offered)}.")
     else:
@@ -179,7 +181,8 @@ def dungeon_screen(
     stats = derived_stats(content, character)
     health = character.health_or(stats.max_health)
     lines = [
-        notice or f"Подземелья города {city.name}. Ход вниз, сквозняк, вода по щиколотку.",
+        *head(f"Подземелья города {city.name}.", notice),
+        "Ход вниз, сквозняк, вода по щиколотку.",
         f"Спуск рассчитан на уровень {level}. Ваш уровень: {character.level}.",
         f"{total} {plural(total, 'схватка', 'схватки', 'схваток')} подряд, без "
         "передышки. Здоровье не восстанавливается между ними.",

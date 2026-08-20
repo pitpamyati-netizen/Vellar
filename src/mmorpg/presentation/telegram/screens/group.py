@@ -30,7 +30,7 @@ from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.trade import Offer, OfferKind
 from mmorpg.domain.rules.group_offers import Refusal
 from mmorpg.domain.rules.stats import DerivedStats
-from mmorpg.presentation.telegram.screens.format import gold, items
+from mmorpg.presentation.telegram.screens.format import gold, items, number, percent
 
 ACCEPT_WORD = "Принять"
 DECLINE_WORD = "Отказ"
@@ -166,7 +166,8 @@ def profile_text(content: GameContent, character: Character, stats: DerivedStats
         f"{content.race(character.race_id).name}, "
         f"{content.character_class(character.class_id).name}.",
         f"Здоровье: {stats.max_health}. {stats.resource_name}: {stats.max_resource}.",
-        f"Броня: {stats.armor}. Точность: {stats.accuracy}. Уклонение: {stats.dodge} процентов.",
+        f"Броня: {stats.armor}. Точность: {number(stats.accuracy)}. "
+        f"Уклонение: {percent(stats.dodge)}.",
     ]
     if character.trait_ids:
         names = ", ".join(content.trait(trait_id).name for trait_id in character.trait_ids)

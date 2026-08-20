@@ -12,6 +12,18 @@ from __future__ import annotations
 MESSAGE_LIMIT = 900
 
 
+def head(title: str, notice: str = "") -> tuple[str, ...]:
+    """Заголовок экрана, а перед ним — весть о том, что только что случилось.
+
+    Раньше экраны писали ``notice or "Характеристики."``, и всякое действие
+    съедало собственное название экрана: игрок вкладывал очко, слышал «Сила
+    теперь 8» — и больше ничего. Куда он попал и что тут ещё есть, приходилось
+    вспоминать. Весть отвечает «что случилось», заголовок — «где я», и это два
+    разных вопроса (``docs/accessibility.md``, правило 4).
+    """
+    return (notice, title) if notice else (title,)
+
+
 def amount(current: int, maximum: int, *, with_percent: bool = True) -> str:
     """Render a bar-like value as speech: ``42 из 120, 35 процентов``."""
     if maximum <= 0:
@@ -22,13 +34,30 @@ def amount(current: int, maximum: int, *, with_percent: bool = True) -> str:
     return f"{current} из {maximum}, {percent} процентов"
 
 
+def number(value: float) -> str:
+    """Число так, как его читают вслух: без хвостового нуля, дробь через запятую.
+
+    Точка в дроби на слух — «две точка семь пять», и это не число, а диктовка.
+    """
+    text = f"{value:.2f}".rstrip("0").rstrip(".")
+    return text.replace(".", ",")
+
+
 def percent(value: float) -> str:
-    """A percentage as words, with an explicit sign for penalties."""
-    rounded = round(value, 1)
-    whole = int(rounded) if rounded == int(rounded) else rounded
-    if value < 0:
-        return f"минус {abs(whole)} процентов"
-    return f"{whole} процентов"
+    """Проценты словами, с явным «минус» у штрафа.
+
+    Слово согласуется с числом: «5 процентов», «2 процента», «2,75 процента».
+    Раньше здесь всегда стояло «процентов», и экран характеристик читал
+    «уклонение 2.8 процентов» — с точкой в дроби и с чужим окончанием.
+    """
+    rounded = round(value, 2)
+    magnitude = abs(rounded)
+    # У дробного числа слово всегда в родительном единственном: «2,75 процента».
+    word = plural(int(magnitude), "процент", "процента", "процентов")
+    if magnitude != int(magnitude):
+        word = "процента"
+    body = f"{number(magnitude)} {word}"
+    return f"минус {body}" if rounded < 0 else body
 
 
 def plural(count: int, one: str, few: str, many: str) -> str:
