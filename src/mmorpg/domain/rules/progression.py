@@ -131,6 +131,26 @@ def grant_experience(
     return grown, level_up
 
 
+def growth(content: GameContent, previous_level: int, new_level: int) -> LevelUp | None:
+    """Что дали уровни, взятые между двумя числами. ``None`` - ни одного.
+
+    Одно действие бывает не одним источником опыта: бой платит за схватку, дно
+    спуска - за спуск, задание - за задание, и всё это внутри одного нажатия.
+    Уровень объявляется один раз и по разнице уровней, а не по каждому
+    источнику: игрок взял его один, а не трижды.
+    """
+    levels = new_level - previous_level
+    if levels <= 0:
+        return None
+    rules = content.rules
+    return LevelUp(
+        previous_level=previous_level,
+        new_level=new_level,
+        stat_points=levels * rules.stat_points_per_level,
+        skill_points=levels * rules.skill_point_per_level,
+    )
+
+
 def experience_reward(*, enemy_level: int, character_level: int, base: int = 12) -> int:
     """Experience for defeating an enemy, reduced when it is far below the player.
 

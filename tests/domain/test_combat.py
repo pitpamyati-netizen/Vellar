@@ -43,8 +43,9 @@ def fighter(warrior: Character) -> Character:
         level=10,
         loadout=SkillLoadout(
             actives=("warrior_cleave", "warrior_taunt", "warrior_shield_bash", None, None, None),
-            passives=("warrior_toughness", None, None),
             racial="race_human_second_wind",
+            # Постоянное умение слота не занимает: изучено - значит работает.
+            ranks={"warrior_toughness": 1},
         ),
     )
 

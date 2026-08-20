@@ -16,19 +16,22 @@ from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatBlock
 
 ACTIVE_SLOTS = 6
-PASSIVE_SLOTS = 3
 
 
 @dataclass(frozen=True, slots=True)
 class SkillLoadout:
     """What the player put in the fixed panel.
 
-    ``actives`` always has 6 entries and ``passives`` always has 3; an empty slot is
-    ``None`` and is still rendered, so button positions never shift.
+    ``actives`` always has 6 entries; an empty slot is ``None`` and keeps its
+    number, so a skill never changes position.
+
+    Постоянных слотов здесь нет. Постоянное умение нечем нажать, у него нет ни
+    хода, ни цели, и «поместить его в слот» означало только одно: три из шести
+    изученных не работали, а игрок платил очки за надпись. Изучено - значит
+    работает (``domain/rules/modifiers.passive_modifiers``).
     """
 
     actives: tuple[str | None, ...] = (None,) * ACTIVE_SLOTS
-    passives: tuple[str | None, ...] = (None,) * PASSIVE_SLOTS
     racial: str | None = None
     ranks: Mapping[str, int] = field(default_factory=dict)
     edges: Mapping[str, str] = field(default_factory=dict)
@@ -37,14 +40,11 @@ class SkillLoadout:
         if len(self.actives) != ACTIVE_SLOTS:
             msg = f"the panel has exactly {ACTIVE_SLOTS} active slots"
             raise ValueError(msg)
-        if len(self.passives) != PASSIVE_SLOTS:
-            msg = f"the panel has exactly {PASSIVE_SLOTS} passive slots"
-            raise ValueError(msg)
         # A skill lying in the panel is a skill the character knows. Without this
         # the starting skill fought like rank one but the skills screen still
         # offered to learn it for a point - the same skill, known and unknown at
         # once. Normalising here fixes characters saved by older releases too.
-        in_panel = (*self.equipped_actives(), *self.equipped_passives())
+        in_panel = self.equipped_actives()
         if self.racial is not None:
             in_panel = (*in_panel, self.racial)
         missing = [code for code in in_panel if code not in self.ranks]
@@ -64,18 +64,10 @@ class SkillLoadout:
     def equipped_actives(self) -> tuple[str, ...]:
         return tuple(code for code in self.actives if code is not None)
 
-    def equipped_passives(self) -> tuple[str, ...]:
-        return tuple(code for code in self.passives if code is not None)
-
     def with_active(self, slot: int, skill_code: str | None) -> SkillLoadout:
         actives = list(self.actives)
         actives[slot] = skill_code
         return replace(self, actives=tuple(actives))
-
-    def with_passive(self, slot: int, skill_code: str | None) -> SkillLoadout:
-        passives = list(self.passives)
-        passives[slot] = skill_code
-        return replace(self, passives=tuple(passives))
 
     def with_rank(self, skill_code: str, rank: int) -> SkillLoadout:
         ranks = dict(self.ranks)

@@ -1,9 +1,9 @@
 """Learning skills, raising their ranks, choosing an edge, filling the panel.
 
-The panel never grows: six active slots, three passive, one racial, forever. All
-depth comes from ranks one to five and from the single edge chosen at rank three
-(``docs/skills.md``). This module is the only place that decides what a skill
-point may be spent on.
+The panel never grows: six active slots and one racial, forever. Постоянные
+умения слотов не занимают вовсе - изученное работает (``docs/skills.md``). All
+depth comes from ranks one to five and from the single edge chosen at rank three.
+This module is the only place that decides what a skill point may be spent on.
 
 Everything is pure: each function returns a new character or ``None`` when the
 move is not allowed, and the caller explains the refusal in words.
@@ -124,20 +124,39 @@ def forget(content: GameContent, character: Character, skill: Skill) -> Characte
 
     Used by the mentor. The skill leaves the panel with it, because a slot
     holding a skill nobody knows would be a button that does nothing.
+
+    Расовое умение не разбирается: его не выбирали и очков за него не платили.
+    Наставник брал за него деньги, возвращал очко - и умение оставалось на месте,
+    потому что расовый слот заводит ранг заново (``SkillLoadout.__post_init__``).
+    Отказ здесь и есть то, чем эта сделка кончается.
     """
     if not is_known(character, skill.code):
+        return None
+    if skill.owner_kind is not OwnerKind.CLASS or skill.code == character.loadout.racial:
         return None
     rank = character.loadout.rank_of(skill.code)
     ranks = {key: value for key, value in character.loadout.ranks.items() if key != skill.code}
     edges = {key: value for key, value in character.loadout.edges.items() if key != skill.code}
     actives = tuple(None if code == skill.code else code for code in character.loadout.actives)
-    passives = tuple(None if code == skill.code else code for code in character.loadout.passives)
     return replace(
         character,
-        loadout=replace(
-            character.loadout, ranks=ranks, edges=edges, actives=actives, passives=passives
-        ),
+        loadout=replace(character.loadout, ranks=ranks, edges=edges, actives=actives),
         unspent_skill_points=character.unspent_skill_points + rank,
+    )
+
+
+def forgettable(content: GameContent, character: Character) -> tuple[Skill, ...]:
+    """Что наставник действительно может разобрать - и вернуть за это очки.
+
+    Только умения класса: расовое не выбирали, очков за него не платили, и
+    забрать его не выйдет (см. ``forget``).
+    """
+    return tuple(
+        content.skill(code)
+        for code in sorted(known_codes(character))
+        if content.has_skill(code)
+        and content.skill(code).owner_kind is OwnerKind.CLASS
+        and code != character.loadout.racial
     )
 
 
@@ -162,7 +181,6 @@ def reclaim_lost(content: GameContent, character: Character) -> Character | None
     ranks = {key: value for key, value in loadout.ranks.items() if key not in gone}
     edges = {key: value for key, value in loadout.edges.items() if key not in gone}
     actives = tuple(None if code in gone else code for code in loadout.actives)
-    passives = tuple(None if code in gone else code for code in loadout.passives)
     # Расовое умение не выбирают, поэтому его не забывают, а заменяют на то,
     # которое у этой расы есть сейчас.
     racial = loadout.racial
@@ -176,56 +194,58 @@ def reclaim_lost(content: GameContent, character: Character) -> Character | None
             ranks=ranks,
             edges=edges,
             actives=actives,
-            passives=passives,
             racial=racial,
         ),
         unspent_skill_points=character.unspent_skill_points + points,
     )
 
 
-def equippable(content: GameContent, character: Character, kind: SkillKind) -> tuple[Skill, ...]:
-    """Known skills of one kind that are not already in a slot."""
-    loadout = character.loadout
-    in_panel = set(loadout.equipped_actives() + loadout.equipped_passives())
+def equippable(content: GameContent, character: Character) -> tuple[Skill, ...]:
+    """Known battle skills that are not already in a slot.
+
+    Только боевые: постоянному умению слот не нужен, и предлагать его к укладке
+    значило бы обещать, что без укладки оно не работает.
+    """
+    in_panel = set(character.loadout.equipped_actives())
     return tuple(
         content.skill(code)
         for code in sorted(known_codes(character))
         if content.has_skill(code)
-        and content.skill(code).kind is kind
+        and content.skill(code).kind is SkillKind.ACTIVE
         and content.skill(code).owner_kind is OwnerKind.CLASS
         and code not in in_panel
     )
 
 
+def known_passives(content: GameContent, character: Character) -> tuple[Skill, ...]:
+    """Постоянные умения, которые персонаж изучил. Все они и работают."""
+    return tuple(
+        content.skill(code)
+        for code in sorted(known_codes(character))
+        if content.has_skill(code) and content.skill(code).kind is SkillKind.PASSIVE
+    )
+
+
 def put_in_slot(
-    content: GameContent, character: Character, kind: SkillKind, slot: int, code: str | None
+    content: GameContent, character: Character, slot: int, code: str | None
 ) -> Character | None:
-    """Place a known skill into a panel slot, or empty the slot with ``None``."""
-    rules = content.rules
-    limit = rules.active_slots if kind is SkillKind.ACTIVE else rules.passive_slots
-    if not 0 <= slot < limit:
+    """Place a known battle skill into a panel slot, or empty it with ``None``."""
+    if not 0 <= slot < content.rules.active_slots:
         return None
     if code is not None and not is_known(character, code):
         return None
     if code is not None and not content.has_skill(code):
         return None
-    if code is not None and content.skill(code).kind is not kind:
+    if code is not None and content.skill(code).kind is not SkillKind.ACTIVE:
         return None
     loadout = character.loadout
     if code is not None:
         # A skill sits in one slot at a time: putting it in a second one would
-        # double a passive's modifiers and give an active two buttons.
+        # give it two buttons.
         loadout = replace(
-            loadout,
-            actives=tuple(None if item == code else item for item in loadout.actives),
-            passives=tuple(None if item == code else item for item in loadout.passives),
+            loadout, actives=tuple(None if item == code else item for item in loadout.actives)
         )
-    updated = (
-        loadout.with_active(slot, code)
-        if kind is SkillKind.ACTIVE
-        else loadout.with_passive(slot, code)
-    )
-    return replace(character, loadout=updated)
+    return replace(character, loadout=loadout.with_active(slot, code))
 
 
 def chosen_edge(character: Character, skill: Skill) -> EdgeEffect | None:

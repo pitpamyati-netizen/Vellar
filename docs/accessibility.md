@@ -40,6 +40,19 @@ A player must be able to act after hearing only the newest message. Never rely o
 "as mentioned above". Repeat the current health, the current location and the
 available actions in every screen that needs them.
 
+### The one exception: a new level
+
+One action answers with one message, everywhere but here. A level taken is
+announced in **its own second message**, sent right after the screen and carrying
+the same keyboard, so the player has not moved anywhere
+(`screens/play.level_up_report`).
+
+It earns the exception by weight: a level brings stat points, skill points, more
+health, sometimes a new skill and sometimes a whole city, and as one line inside a
+victory report it sat between the loot and the health and was regularly missed
+entirely. The screen it follows says nothing about the level - the game does not
+say the same thing twice.
+
 ## 4. The key fact comes first
 
 ```
@@ -75,10 +88,16 @@ stays in place and says so in its text:
 
 ```
 2. Blade whirl - cooldown 2 turns
-5. Empty slot
 ```
 
-Never remove the button, never reorder the rows, never collapse empty slots.
+Never reorder the rows. What keeps a panel learnable is the **number**, not the
+row count: skill three is button "3." whether or not one and two are filled.
+
+An action that does not exist is not a button. "5. Пустой слот" was drawn for
+months and answered every press with "there is nothing here" - and in a fight it
+answered by spending the player's whole turn on nothing while every enemy struck
+back. A button that cannot do anything is removed; a button that can do something
+later stays and says what it is waiting for.
 
 The rule is about the actions of a screen, not about its machinery. A paginated
 list drops its paging row when there is only one page and its filter row when
@@ -134,7 +153,8 @@ If the keyboard fails to render, the game must stay playable:
 ## 11. Message length up to about 900 characters
 
 Longer content is paginated with an explicit page indicator, never split into
-several consecutive messages. One action produces exactly one message.
+several consecutive messages. One action produces exactly one message - the single
+exception is a level taken, which gets a second one of its own (rule 3).
 
 ## 12. Stale keyboards are answered, never ignored
 

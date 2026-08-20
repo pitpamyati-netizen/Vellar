@@ -86,12 +86,15 @@ def test_class_unlock_levels_match_the_rules(content: GameContent) -> None:
 
 
 def test_panel_size_is_fixed(content: GameContent) -> None:
-    """The panel never grows: 6 active, 3 passive, 1 racial. See docs/skills.md."""
+    """The panel never grows: 6 active and 1 racial. See docs/skills.md.
+
+    Постоянных слотов нет вовсе: изученное постоянное умение работает, и выбор
+    делается только из боевых.
+    """
     rules = content.rules
-    assert (rules.active_slots, rules.passive_slots, rules.racial_slots) == (6, 3, 1)
-    # There is always a real choice to make: 6 of 8 actives, 3 of 6 passives.
+    assert (rules.active_slots, rules.racial_slots) == (6, 1)
+    # There is always a real choice to make: 6 of 8 actives.
     assert rules.active_slots < 8
-    assert rules.passive_slots < 6
 
 
 def test_every_skill_has_exactly_two_edges(content: GameContent) -> None:

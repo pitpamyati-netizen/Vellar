@@ -92,9 +92,8 @@ def a_character(user_id: int, name: str = "Тестовый") -> Character:
         trait_ids=("stoic", "keen_eye"),
         loadout=SkillLoadout(
             actives=("cleave", None, None, None, None, None),
-            passives=("toughness", None, None),
             racial="stonesense",
-            ranks=MappingProxyType({"cleave": 3}),
+            ranks=MappingProxyType({"cleave": 3, "toughness": 1}),
             edges=MappingProxyType({"cleave": "wide"}),
         ),
         equipment=Equipment(MappingProxyType({"weapon": "iron_axe"})),

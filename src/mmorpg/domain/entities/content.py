@@ -530,7 +530,6 @@ class ProgressionRules:
     active_unlock_levels: tuple[int, ...]
     passive_unlock_levels: tuple[int, ...]
     active_slots: int
-    passive_slots: int
     racial_slots: int
     traits_at_creation: int
     max_rank: int

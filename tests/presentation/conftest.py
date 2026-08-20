@@ -23,7 +23,7 @@ from mmorpg.domain.entities import (
     StatBlock,
 )
 from mmorpg.domain.entities.combat import ActionTag, CombatState, Trace
-from mmorpg.domain.entities.content import Item, SkillKind
+from mmorpg.domain.entities.content import Item
 from mmorpg.domain.entities.craft import CraftLog, CraftProgress
 from mmorpg.domain.entities.location import (
     Enemy,
@@ -119,9 +119,11 @@ def fighter(content: GameContent) -> Character:
         health=90,
         loadout=SkillLoadout(
             actives=("warrior_cleave", "warrior_taunt", None, None, None, None),
-            passives=("warrior_toughness", None, None),
             racial="race_human_second_wind",
-            ranks=MappingProxyType({"warrior_cleave": 3, "warrior_taunt": 1}),
+            # Постоянное умение слота не занимает: изучено - значит работает.
+            ranks=MappingProxyType(
+                {"warrior_cleave": 3, "warrior_taunt": 1, "warrior_toughness": 1}
+            ),
         ),
         quests=QuestLog(taken=MappingProxyType({"farhold_tallies": 2})),
     )
@@ -591,8 +593,8 @@ def all_screens(
         skill_screens.skills_screen(content, fighter, PageState()),
         skill_screens.skills_screen(content, hero, PageState(page=2)),
         skill_screens.slots_screen(content, fighter),
-        skill_screens.pick_screen(content, fighter, SkillKind.ACTIVE, 2, PageState()),
-        skill_screens.pick_screen(content, hero, SkillKind.PASSIVE, 0, PageState()),
+        skill_screens.pick_screen(content, fighter, 2, PageState()),
+        skill_screens.pick_screen(content, hero, 0, PageState()),
         skill_screens.edge_screen(content, fighter, content.skill("warrior_cleave")),
         craft_screens.crafts_screen(content, hero),
         craft_screens.crafts_screen(content, craftsman),
@@ -644,8 +646,10 @@ def all_screens(
             extra=("Уровень 11. Очков характеристик: 3, очков умений: 1.",),
             rows=((labels.DUNGEON_DEEPER, labels.DUNGEON_LEAVE),),
         ),
-        combat_screens.defeat_screen(42),
+        combat_screens.defeat_screen(gold_lost=42),
+        combat_screens.defeat_screen(sample_fight, gold_lost=42),
         combat_screens.escaped_screen(fled=True),
+        combat_screens.escaped_screen(fled=False, state=sample_fight),
         shop.inventory_screen(
             content,
             (shop.OwnedItem("small_healing_potion", 3), shop.OwnedItem("sword@1#common", 1)),

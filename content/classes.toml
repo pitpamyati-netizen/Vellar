@@ -16,7 +16,8 @@
 # Each class contributes 8 active and 6 passive skills across the whole
 # progression (skills.toml, owner = "class:<id>"), unlocked at the levels in
 # [meta].active_unlock_levels / passive_unlock_levels. The player equips 6 of the
-# 8 actives and 3 of the 6 passives - that choice is the build. See docs/skills.md.
+# 8 actives - that choice is the build. Постоянные умения слотов не занимают:
+# изученное работает. See docs/skills.md.
 
 [meta]
 base_stat_value = 5
@@ -25,7 +26,6 @@ stat_points_per_level = 2
 active_unlock_levels = [1, 4, 8, 14, 22, 35, 60, 100]
 passive_unlock_levels = [2, 6, 12, 20, 30, 50]
 active_slots = 6
-passive_slots = 3
 racial_slots = 1
 
 [[class]]

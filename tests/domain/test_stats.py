@@ -95,28 +95,35 @@ def test_equipment_modifiers_apply(content: GameContent, warrior: Character) -> 
     assert armored.armor > plain.armor
 
 
-def test_equipped_passives_apply_at_their_rank(content: GameContent, warrior: Character) -> None:
+def test_known_passives_apply_at_their_rank(content: GameContent, warrior: Character) -> None:
     veteran = replace(warrior, level=50, allocated=StatBlock(END=40))
     plain = derived_stats(content, veteran)
     with_passive = replace(
         veteran,
-        loadout=SkillLoadout(passives=("warrior_toughness", None, None)),
+        loadout=SkillLoadout(ranks={"warrior_toughness": 1}),
     )
     ranked = replace(
         veteran,
-        loadout=SkillLoadout(
-            passives=("warrior_toughness", None, None), ranks={"warrior_toughness": 5}
-        ),
+        loadout=SkillLoadout(ranks={"warrior_toughness": 5}),
     )
     assert derived_stats(content, with_passive).armor > plain.armor
     assert derived_stats(content, ranked).armor > derived_stats(content, with_passive).armor
 
 
-def test_unequipped_passives_do_nothing(content: GameContent, warrior: Character) -> None:
-    """Knowing a passive is not the same as slotting it - only 3 of 6 count."""
+def test_every_known_passive_counts(content: GameContent, warrior: Character) -> None:
+    """Изучено - значит работает: слотов у постоянных умений больше нет.
+
+    Три слота на шесть изученных означали, что половина потраченных очков не
+    считалась ни в одном бою, и узнать об этом было неоткуда.
+    """
     plain = derived_stats(content, warrior)
-    known_but_unslotted = replace(warrior, loadout=SkillLoadout(ranks={"warrior_toughness": 5}))
-    assert derived_stats(content, known_but_unslotted).armor == plain.armor
+    every = replace(
+        warrior,
+        loadout=SkillLoadout(ranks={"warrior_toughness": 5, "warrior_veteran": 5}),
+    )
+    one = replace(warrior, loadout=SkillLoadout(ranks={"warrior_toughness": 5}))
+    assert derived_stats(content, one).armor > plain.armor
+    assert derived_stats(content, every).max_health > derived_stats(content, one).max_health
 
 
 def test_level_raises_health_and_resource(content: GameContent, warrior: Character) -> None:

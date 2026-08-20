@@ -33,20 +33,20 @@ from mmorpg.domain.ports.repositories import (
     LocationStateCache,
 )
 from mmorpg.domain.procgen.seeds import derive
-from mmorpg.domain.rules import adventure
+from mmorpg.domain.rules import adventure, progression
 from mmorpg.domain.rules import arena as arena_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import turning as turning_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
 from mmorpg.domain.rules.combat import resolve_turn
+from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.domain.rules.tutorial import TutorialTask
 from mmorpg.logging import get_logger
 from mmorpg.presentation.telegram.flows import combat as fight_flow
 from mmorpg.presentation.telegram.flows.play import (
     build_location,
     descent_fight_seed,
-    level_up_line,
     location_known,
     node_fight_seed,
     visit_seed,
@@ -54,11 +54,12 @@ from mmorpg.presentation.telegram.flows.play import (
 from mmorpg.presentation.telegram.flows.state import Descent, LocationSession, PlayState
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
-from mmorpg.presentation.telegram.messaging import send_screen
+from mmorpg.presentation.telegram.messaging import send_screen, send_text
 from mmorpg.presentation.telegram.screens import arena as arena_screens
 from mmorpg.presentation.telegram.screens import combat as combat_screens
 from mmorpg.presentation.telegram.screens import tutorial as tutorial_screens
-from mmorpg.presentation.telegram.screens.base import ScreenId
+from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
+from mmorpg.presentation.telegram.screens.play import level_up_report
 from mmorpg.presentation.telegram.states.screens import STATE_FOR_SCREEN, NavigationStack, Play
 
 logger = get_logger(__name__)
@@ -317,7 +318,12 @@ async def _store_and_show(
     locations: LocationStateCache,
     settings: Settings,
 ) -> None:
-    """Persist what the turn changed and answer with exactly one screen."""
+    """Persist what the turn changed and answer with exactly one screen.
+
+    Плюс, если уровень вырос, второе сообщение - только про уровень
+    (``screens/play.level_up_report``).
+    """
+    before_level = character.level
     if not session.state.is_over:
         await state.set_state(Play.combat)
         await state.update_data({STATE_KEY: fight_flow.serialise(session)})
@@ -337,8 +343,6 @@ async def _store_and_show(
             for item_id in session.state.loot:
                 if content.has_item(item_id):
                     await inventory.add(character.id, item_id, 1)
-            if won.level_up is not None and won.level_up.levels_gained:
-                extra.append(level_up_line(won.level_up))
             extra.extend(
                 f"Задание «{step.quest.name}»: {step.progress} из {step.quest.target_count}."
                 for step in won.quest_steps
@@ -393,9 +397,33 @@ async def _store_and_show(
     await state.update_data(
         {STATE_KEY: fight_flow.serialise(session), PLAY_KEY: updated_flow.serialise()}
     )
-    await send_screen(
+    screen = fight_flow.render(
+        content, character, session, extra=extra, rows=rows, gold_lost=gold_lost
+    )
+    await send_screen(message, screen)
+    await _announce_level(message, content, character, before_level, screen)
+
+
+async def _announce_level(
+    message: Message,
+    content: GameContent,
+    character: Character,
+    before_level: int,
+    screen: Screen,
+) -> None:
+    """Второе сообщение за одно действие, и единственное такое в игре.
+
+    Уровень стоил строки посреди отчёта о бое и терялся между добычей и
+    здоровьем. Он приходит своим сообщением и с той же клавиатурой, что и экран
+    перед ним, - игрок остаётся там же, где стоял.
+    """
+    grown = progression.growth(content, before_level, character.level)
+    if grown is None:
+        return
+    await send_text(
         message,
-        fight_flow.render(content, character, session, extra=extra, rows=rows, gold_lost=gold_lost),
+        level_up_report(content, character, derived_stats(content, character), grown),
+        screen,
     )
 
 
@@ -486,8 +514,8 @@ async def _pay_the_bottom(
     else:  # pragma: no cover - content always has something at this level
         found = ""
     extra.append(f"Дно спуска: {prize.gold} золота и {prize.experience} опыта.{found}")
-    if prize.level_up is not None and prize.level_up.levels_gained:
-        extra.append(level_up_line(prize.level_up))
+    # Об уровне здесь не говорят: его объявляет отдельное сообщение, одно на всё
+    # нажатие, сколько бы источников опыта в нём ни сошлось.
     return prize.character
 
 

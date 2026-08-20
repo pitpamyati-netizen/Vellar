@@ -46,7 +46,7 @@ def fighter(content: GameContent) -> Character:
         gold=500,
         loadout=SkillLoadout(
             actives=("warrior_cleave", "warrior_taunt", "warrior_shield_bash", None, None, None),
-            passives=("warrior_toughness", None, None),
+            ranks={"warrior_toughness": 1},
             racial="race_human_second_wind",
         ),
     )
@@ -72,25 +72,45 @@ def test_screen_leads_with_the_situation(
     assert "[" not in text, "no pseudo-graphics"
 
 
-def test_panel_has_exactly_six_numbered_slots_plus_racial(
+def test_the_panel_holds_the_filled_slots_by_their_own_numbers(
     content: GameContent, fighter: Character, session: flow.CombatSession
 ) -> None:
+    """Умение помнит свой номер, а пустое место кнопки не получает."""
     screen = flow.render(content, fighter, session)
     texts = [row[0].text for row in screen.rows]
     assert texts[0] == "Атака — натиск"
-    assert [text.split(".")[0] for text in texts[1:7]] == ["1", "2", "3", "4", "5", "6"]
-    assert "расовое" in texts[7]
+    # У бойца заняты три слота из шести, и это ровно три кнопки, с 1 по 3.
+    assert [text.split(".")[0] for text in texts[1:4]] == ["1", "2", "3"]
+    assert "расовое" in texts[4]
     assert screen.rows[-1][0].text == "Сумка"
 
 
-def test_empty_slots_are_rendered_in_place(
+def test_an_empty_slot_gets_no_button(
     content: GameContent, fighter: Character, session: flow.CombatSession
 ) -> None:
-    """Positions must not shift, so empty slots keep their buttons (rule 7)."""
+    """Кнопка, отвечающая «слот пуст», - это баг (``Claude.md``, правило 9).
+
+    Нажатие на неё стоило игроку целого хода: он не делал ничего, а враги
+    отвечали.
+    """
     screen = flow.render(content, fighter, session)
-    texts = [row[0].text for row in screen.rows]
-    assert texts[4] == "4. Пустой слот"
-    assert texts[6] == "6. Пустой слот"
+    assert not any("Пустой слот" in row[0].text for row in screen.rows)
+
+
+def test_a_slot_keeps_its_number_when_an_earlier_one_is_empty(
+    content: GameContent, fighter: Character
+) -> None:
+    """Номер закреплён за умением: третье остаётся третьим и без первого."""
+    gapped = replace(
+        fighter,
+        loadout=replace(
+            fighter.loadout,
+            actives=(None, None, "warrior_shield_bash", None, None, None),
+        ),
+    )
+    session = flow.begin(content, gapped, (make_enemy(),), seed=FIGHT_SEED, node=1)
+    texts = [row[0].text for row in flow.render(content, gapped, session).rows]
+    assert texts[1].startswith("3. Удар щитом")
 
 
 def test_cooldown_is_written_into_the_button(
@@ -141,7 +161,7 @@ def test_a_skill_states_a_number_that_grows_with_the_character(
     assert damage_on_the_button(300) > damage_on_the_button(10) > damage_on_the_button(1)
 
 
-def test_panel_size_never_changes_with_level(
+def test_panel_size_follows_the_loadout_not_the_level(
     content: GameContent, fighter: Character, session: flow.CombatSession
 ) -> None:
     veteran = replace(fighter, level=300)
@@ -184,11 +204,29 @@ def test_racial_slot_is_addressable_separately(
     assert action.kind is ActionKind.RACIAL
 
 
-def test_pressing_an_empty_slot_answers(
+def test_an_empty_slot_answers_without_burning_a_turn(
     content: GameContent, fighter: Character, session: flow.CombatSession
 ) -> None:
-    after, _ = flow.advance(content, fighter, session, "5. Пустой слот")
+    """Слот пуст - значит хода не было: счётчик стоит, враги не отвечают.
+
+    Кнопки такой в панели больше нет, но набранная команда до слота дотянется,
+    и старая клавиатура тоже.
+    """
+    after, _ = flow.advance(content, fighter, session, "/умение 5")
     assert any(event.kind.value == "empty_slot" for event in after.state.events)
+    assert after.state.turn == session.state.turn
+    assert after.state.player.health == session.state.player.health
+
+
+def test_a_skill_on_cooldown_costs_no_turn_either(
+    content: GameContent, fighter: Character, session: flow.CombatSession
+) -> None:
+    """Тот же отказ, та же цена: никакой."""
+    ready = flow.render(content, fighter, session).rows[3][0].text
+    used, _ = flow.advance(content, fighter, session, ready)
+    again, _ = flow.advance(content, fighter, used, "/умение 3")
+    assert any(event.kind.value == "on_cooldown" for event in again.state.events)
+    assert again.state.turn == used.state.turn
 
 
 def test_unknown_input_is_refused_without_burning_a_turn(
@@ -238,7 +276,7 @@ def test_every_action_button_names_its_tag(
     assert texts[0] == "Атака — натиск"
     assert "натиск" in texts[1], "Рассечение is a plain blow"
     assert "оборона" in texts[2], "Провокация pulls the blow onto you"
-    assert "оборона" in texts[7], "the racial slot names its tag too"
+    assert "оборона" in texts[4], "the racial slot names its tag too"
 
 
 def test_the_plain_attack_word_still_works(

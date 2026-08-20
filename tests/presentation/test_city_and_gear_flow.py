@@ -8,16 +8,15 @@ taken off goes back into the bag, an item bought is paid for exactly once.
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import fields, replace
 
 import pytest
 
 from mmorpg.domain.entities import Character, GameContent, SkillLoadout
-from mmorpg.domain.entities.content import SkillKind
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.combat import blow_range
 from mmorpg.domain.rules.economy import mentor_price, sell_price
-from mmorpg.domain.rules.stats import derived_stats
+from mmorpg.domain.rules.stats import DerivedStats, derived_stats
 from mmorpg.presentation.telegram.flows.play import (
     Clock,
     Goods,
@@ -31,6 +30,9 @@ from mmorpg.presentation.telegram.screens import play as play_screens
 from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import skills as skill_screens
 from mmorpg.presentation.telegram.screens.base import ScreenId
+from mmorpg.presentation.telegram.screens.city import mentor_screen
+from mmorpg.presentation.telegram.screens.format import number
+from mmorpg.presentation.telegram.screens.paginated import PageState
 from mmorpg.presentation.telegram.screens.shop import OwnedItem
 
 WORLD_SEED = "vellar-test"
@@ -230,6 +232,42 @@ def test_the_character_sheet_names_the_blow_and_what_makes_it(
     assert "голыми руками" in bare
 
 
+def test_the_character_sheet_names_every_number_the_engine_counts(
+    content: GameContent, hero: Character
+) -> None:
+    """Число, которое движок считает, а экран молчит, - половина обещания.
+
+    Карточка называла шесть значений из девяти: сила крита, восстановление
+    ресурса и лечение по ходам считались в каждом бою и не были сказаны нигде.
+    Проверяется весь ``DerivedStats``, чтобы новое производное значение нельзя
+    было добавить молча.
+    """
+    regenerating = replace(hero, trait_ids=("steady_breath",))
+    stats = derived_stats(content, regenerating)
+    text = play_screens.character_screen(content, regenerating, stats).text()
+
+    spoken = {
+        "max_health": str(stats.max_health),
+        "max_resource": str(stats.max_resource),
+        "resource_name": stats.resource_name,
+        "armor": str(stats.armor),
+        "accuracy": number(stats.accuracy),
+        "dodge": number(stats.dodge),
+        "crit_chance": number(stats.crit_chance),
+        "crit_damage": number(stats.crit_damage),
+        "initiative": number(stats.initiative),
+        "resource_regen": number(stats.resource_regen),
+        "health_regen_percent": number(stats.health_regen_percent),
+    }
+    assert stats.health_regen_percent, "«Ровное дыхание» и есть лечение по ходам"
+    for name, value in spoken.items():
+        assert value in text, f"карточка молчит о {name}"
+
+    # Новое производное значение не добавится молча: список полей и список
+    # сказанного обязаны совпадать.
+    assert {field.name for field in fields(DerivedStats)} == set(spoken)
+
+
 def test_raw_stock_says_what_it_is_instead_of_doing_nothing(
     content: GameContent, hero: Character
 ) -> None:
@@ -427,7 +465,7 @@ def test_a_slot_is_filled_and_emptied_from_the_panel(content: GameContent, hero:
         content,
         known,
         slots,
-        skill_screens.slot_label(content, known, SkillKind.ACTIVE, 1).text,
+        skill_screens.slot_label(content, known, 1).text,
     )
     assert picking.screen is ScreenId.SKILL_PICK
 
@@ -454,6 +492,36 @@ def test_the_mentor_takes_gold_and_hands_the_points_back(
     assert forgotten.pending.character is not None
     assert forgotten.pending.character.unspent_skill_points == student.unspent_skill_points + 2
     assert forgotten.pending.character.gold == student.gold - mentor_price(student.level)
+
+
+def test_the_mentor_does_not_sell_what_he_cannot_take(
+    content: GameContent, hero: Character, in_city: PlayState
+) -> None:
+    """Расовое умение в разбор не идёт: за него не платили очком.
+
+    Оно стояло в списке наравне с классовыми, наставник брал деньги, объявлял
+    «забыто» - и умение оставалось на месте: расовый слот заводит ранг заново.
+    Кнопка, которая берёт плату и ничего не делает, - это баг.
+    """
+    racial = content.race(hero.race_id).active_code
+    bearer = replace(
+        hero,
+        gold=900,
+        loadout=replace(hero.loadout, racial=racial, ranks={"warrior_cleave": 2}),
+    )
+    mentor = step(content, bearer, in_city, "Наставник")
+    listed = mentor_screen(content, bearer, content.city(bearer.city_id), PageState()).text()
+    assert content.skill(racial).name not in listed
+
+    # И даже нажатая со старой клавиатуры, эта строка ничего не спишет.
+    pressed = step(
+        content,
+        bearer,
+        mentor,
+        city_screens.forget_label(content.skill(racial).name, 1).text,
+    )
+    assert pressed.pending.empty
+    assert pressed.notice
 
 
 def test_the_mentor_refuses_a_customer_who_cannot_pay(

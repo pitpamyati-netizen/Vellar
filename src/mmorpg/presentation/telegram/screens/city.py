@@ -66,16 +66,22 @@ def mentor_screen(
     state: PageState,
     notice: str = "",
 ) -> Screen:
-    """Unlearning: the only way a spent skill point comes back."""
+    """Unlearning: the only way a spent skill point comes back.
+
+    В списке только то, за что платили очком, - умения класса. Расовое стояло
+    здесь наравне с ними, наставник брал за него деньги, объявлял «забыто» - и
+    умение оставалось: расовый слот заводит ранг заново, а другого расового у
+    этой расы нет (``domain/rules/skills.forget``). Кнопка, которая берёт плату
+    и ничего не делает, - это баг (``Claude.md``, правило 9).
+    """
     price = mentor_price(character.level)
     entries = [
         ListEntry(
-            key=code,
-            text=forget_label(content.skill(code).name, character.loadout.rank_of(code)).text,
-            detail=f"ранг {character.loadout.rank_of(code)}",
+            key=skill.code,
+            text=forget_label(skill.name, character.loadout.rank_of(skill.code)).text,
+            detail=f"ранг {character.loadout.rank_of(skill.code)}",
         )
-        for code in sorted(skill_rules.known_codes(character))
-        if content.has_skill(code)
+        for skill in skill_rules.forgettable(content, character)
     ]
     return paginated_screen(
         screen_id=ScreenId.MENTOR,
@@ -85,9 +91,9 @@ def mentor_screen(
         lead_lines=(
             notice or "Наставник берёт деньгами и возвращает очками.",
             f"Разбор одного умения: {gold(price)}. У вас {gold(character.gold)}.",
-            "Вместе с умением уходит и его грань, и место в панели.",
+            "Вместе с умением уходит и его грань, и место в панели, если оно там стояло.",
         ),
-        empty_text="Вы пока ничего не изучили, разбирать нечего.",
+        empty_text="Разбирать нечего: расовое умение с вами останется в любом случае.",
         show_filters=False,
     )
 

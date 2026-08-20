@@ -11,7 +11,6 @@ from dataclasses import replace
 import pytest
 
 from mmorpg.domain.entities import Character, GameContent, QuestLog, SkillLoadout
-from mmorpg.domain.entities.content import SkillKind
 from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank, NodeKind
 from mmorpg.domain.rules import edges as edge_rules
 from mmorpg.domain.rules import quests as quest_rules
@@ -295,9 +294,9 @@ def test_an_edge_of_a_skill_that_changed_is_read_as_unchosen(
 def test_a_skill_sits_in_exactly_one_slot(content: GameContent, veteran: Character) -> None:
     skill = next(s for s in skill_rules.teachable(content, veteran) if s.is_active)
     known = replace(veteran, loadout=SkillLoadout(ranks={skill.code: 1}))
-    first = skill_rules.put_in_slot(content, known, SkillKind.ACTIVE, 0, skill.code)
+    first = skill_rules.put_in_slot(content, known, 0, skill.code)
     assert first is not None
-    second = skill_rules.put_in_slot(content, first, SkillKind.ACTIVE, 3, skill.code)
+    second = skill_rules.put_in_slot(content, first, 3, skill.code)
     assert second is not None
     assert second.loadout.actives[0] is None
     assert second.loadout.actives[3] == skill.code
@@ -305,13 +304,14 @@ def test_a_skill_sits_in_exactly_one_slot(content: GameContent, veteran: Charact
 
 def test_an_unknown_skill_never_reaches_the_panel(content: GameContent, veteran: Character) -> None:
     skill = skill_rules.teachable(content, veteran)[0]
-    assert skill_rules.put_in_slot(content, veteran, SkillKind.ACTIVE, 0, skill.code) is None
+    assert skill_rules.put_in_slot(content, veteran, 0, skill.code) is None
 
 
 def test_a_passive_does_not_fit_an_active_slot(content: GameContent, veteran: Character) -> None:
+    """Постоянное умение и работает само - в панели ему нечего делать."""
     passive = next(s for s in skill_rules.teachable(content, veteran) if not s.is_active)
     known = replace(veteran, loadout=SkillLoadout(ranks={passive.code: 1}))
-    assert skill_rules.put_in_slot(content, known, SkillKind.ACTIVE, 0, passive.code) is None
+    assert skill_rules.put_in_slot(content, known, 0, passive.code) is None
 
 
 def test_forgetting_hands_every_point_back_and_empties_the_slot(

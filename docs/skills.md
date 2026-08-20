@@ -9,11 +9,16 @@ it is a wall. The answer is to **grow the content and freeze the interface**.
 A character always has exactly:
 
 - **6 active skill slots**
-- **3 passive skill slots**
 - **1 separate racial slot** (the racial active never competes with class skills)
 
 This never grows with level. The combat screen at level 1 and at level 300 has the
-same number of buttons in the same positions - only their contents change.
+same numbers in the same order - only their contents change.
+
+**Passive skills take no slot at all.** A passive has no button, no turn and no
+target: "putting it in a slot" only ever meant that three of six learned passives
+were switched off, and the points spent on them counted in no fight. A learned
+passive works (`modifiers.passive_modifiers`). What a passive costs is the skill
+point, and that is price enough.
 
 ## Where the content comes from
 
@@ -23,13 +28,14 @@ same number of buttons in the same positions - only their contents change.
 | Race | 1 (racial slot) | 1, always on, occupies no slot |
 
 Total content: 8 classes x 14 + 16 races x 2 = **144 abilities**. On screen at any
-moment: **7 action buttons**.
+moment: **at most 7 action buttons**, and only the ones that do something.
 
-The player equips **6 of 8** actives and **3 of 6** passives. That gap is the
-build - the interest is in choosing, not in accumulating.
+The player equips **6 of 8** actives. That gap is the build - the interest is in
+choosing, not in accumulating. Passives are not part of that choice: every one
+learned is on.
 
 Race passives live in `races.toml` rather than the panel: they are inherent, always
-active, and take no slot.
+active, and take no slot - the same rule class passives now follow.
 
 ## Depth: ranks and edges
 
@@ -81,13 +87,17 @@ Three screens, and no more (`presentation/telegram/screens/skills.py`):
   press opens the edge screen instead, and nothing else happens until it is
   chosen - which is why the button says «сначала выберите грань» there rather
   than promising a rank it will not buy.
-- **Слоты умений** - the six active, three passive and one racial position, each
-  button carrying its number and its contents. A skill sits in exactly one slot:
-  putting it in a second one empties the first.
+- **Слоты умений** - the six battle positions and the racial one, each button
+  carrying its number and its contents. A skill sits in exactly one slot: putting
+  it in a second one empties the first. The screen also reads out the passives
+  that are working, so "изучено - значит работает" is visible and not just true.
 - **Грань** - the two-way fork, once per skill.
 
 A skill point is only ever handed back by the Mentor, who charges gold for it and
-takes the skill out of the panel along with its edge (`skills.forget`).
+takes the skill out of the panel along with its edge (`skills.forget`). He deals
+in class skills only: the racial one was never bought with a point and cannot be
+given up for one, and offering it was a button that took payment and changed
+nothing (`skills.forgettable`).
 
 ## Anti-bloat rules (enforced, not just intended)
 
@@ -103,8 +113,12 @@ takes the skill out of the panel along with its edge (`skills.forget`).
 5. **A new skill is never auto-equipped.** The game announces it and leaves the
    choice to the player:
    > Доступно новое умение: Вихрь клинков. Меню - Умения - Набор.
-6. **Empty slots are still rendered.** "5. Пустой слот" keeps every other button in
-   its position (accessibility rule 7).
+6. **A number belongs to a skill, an empty slot gets no button.** The third skill
+   is button "3." whether or not slots one and two are filled, so a panel learned
+   once stays learned - but "5. Пустой слот" is not drawn, because a button whose
+   whole answer is "there is nothing here" is a button that wasted a press to say
+   so. It used to waste a **turn**: the press resolved as a turn in which the
+   player did nothing and every enemy answered.
 7. **A weapon requirement narrows a skill, never widens the panel.** A skill may
    name `weapons` (ids from `items.toml [meta].weapon_types`): a shot asks for a
    bow, a backstab for a dagger. Without one the skill does not fire and costs
@@ -173,9 +187,6 @@ one table entry.
 [1. Рассечение — натиск, урон 34, стоит 10, готово]
 [2. Вихрь клинков — натиск, урон 33 по всем, ещё 2 хода]
 [3. Провокация — оборона, цели урон минус 20 процентов на 2 хода, стоит 15, откат 2 хода, готово]
-[4. Пустой слот]
-[5. Пустой слот]
-[6. Пустой слот]
 [Второе дыхание — расовое, оборона, лечит 24, откат 5 ходов, готово]
 [Сумка] [Бежать]
 [Назад] [Главное меню]
@@ -248,5 +259,15 @@ cannot pay - leaves no trace, and neither does fleeing or a skipped turn.
   regenerate).
 - Cooldowns are set to `cooldown + 1` when a skill fires, because the same turn's
   upkeep ticks them down once - so "откат 2 хода" really means two more turns.
-- Pressing an empty slot, a skill on cooldown, or a skill you cannot afford always
-  produces an event to say so. The game never stays silent and never raises.
+- Pressing an empty slot, a skill on cooldown, a skill you cannot afford, or one
+  your hands cannot use always produces an event to say so, and **costs nothing**:
+  the turn counter stays put, the trace is untouched, cooldowns do not tick and no
+  enemy answers (`combat._refusal`). A refusal is the game declining to act, not
+  the player spending a turn on nothing. The game never stays silent and never
+  raises.
+- **A miss leaves nothing behind.** Bleeding, a hindrance, a stun and a splash all
+  follow the blow landing, not the button being pressed - otherwise missing paid
+  better than hitting. Skills that carry no attack roll at all (a plain hindrance,
+  a plain buff) are unaffected: there is no miss to have.
+- The last turn of a fight is read out on the screen that ends it. "Победа." with
+  nothing before it does not say who struck last or for how much.

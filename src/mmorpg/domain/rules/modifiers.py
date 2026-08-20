@@ -1,6 +1,6 @@
 """Collecting modifiers from every source into one bundle.
 
-Traits, equipped passives, equipment and active effects all speak the same
+Traits, known passives, equipment and active effects all speak the same
 vocabulary (``traits.toml [meta].modifier_keys``). Percentages from different
 sources add up and are applied **once** at the end, so ordering never changes the
 result and applying the same source twice is impossible by construction.
@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import GameContent, SkillKind
+from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.effects import EffectStack
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.rules import edges as edge_rules
@@ -65,7 +65,11 @@ def equipment_modifiers(
 
 
 def passive_modifiers(content: GameContent, character: Character) -> dict[str, float]:
-    """Modifiers from the three equipped passive skills, scaled by their rank.
+    """Modifiers from every passive skill the character has learned.
+
+    Изучено - значит работает. Раньше их укладывали в три слота из шести, и
+    очко, вложенное в седьмое постоянное умение, не делало ровно ничего: игрок
+    платил за прибавку, которую игра не считала.
 
     Грань постоянного умения считается здесь и больше нигде: у постоянного умения
     нет ни хода, ни цели, поэтому всё, что грань может ему сделать, - поднять его
@@ -73,15 +77,10 @@ def passive_modifiers(content: GameContent, character: Character) -> dict[str, f
     выбранных граней в игре была надписью без последствий.
     """
     bundles: list[Mapping[str, float]] = []
-    for code in character.loadout.equipped_passives():
-        # Панель переживает содержимое: умение, которого больше нет, ничего не
-        # даёт и ничего не роняет (``Claude.md``, правило 8).
-        if not content.has_skill(code):
-            continue
-        skill = content.skill(code)
-        if skill.kind is not SkillKind.PASSIVE:
-            continue
-        rank = character.loadout.rank_of(code)
+    # Изученное переживает содержимое: умения, которого больше нет, здесь просто
+    # нет (``Claude.md``, правило 8) - ``known_passives`` отбирает по реестру.
+    for skill in skill_rules.known_passives(content, character):
+        rank = character.loadout.rank_of(skill.code)
         edge = skill_rules.chosen_edge(character, skill)
         bundles.append({skill.effect: skill.power_at_rank(rank) * edge_rules.power_factor(edge)})
         if edge is not None and edge.self_modifiers:

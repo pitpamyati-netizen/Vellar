@@ -20,7 +20,7 @@ from mmorpg.domain.entities.location import (
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules.combat import blow_range
 from mmorpg.domain.rules.nodes import Standing
-from mmorpg.domain.rules.progression import experience_into_level
+from mmorpg.domain.rules.progression import LevelUp, experience_into_level
 from mmorpg.domain.rules.stats import DerivedStats
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
@@ -433,9 +433,7 @@ def character_screen(
         f"Здоровье: {character.health_or(stats.max_health)} из {stats.max_health}. "
         f"{stats.resource_name}: {stats.max_resource}.",
         f"Удар: {damage_line(content, character)}.",
-        f"Броня: {stats.armor}. Точность: {number(stats.accuracy)}. "
-        f"Уклонение: {percent(stats.dodge)}.",
-        f"Шанс крита: {percent(stats.crit_chance)}. Инициатива: {number(stats.initiative)}.",
+        *derived_lines(stats),
     ]
     lines.extend(f"{name}: {primary[code]}." for code, name in STAT_NAMES.items())
     if character.trait_ids:
@@ -464,6 +462,68 @@ def character_screen(
         lines=tuple(lines),
         rows=((labels.STATS, labels.SKILLS), *worn),
     )
+
+
+def level_up_report(
+    content: GameContent, character: Character, stats: DerivedStats, level_up: LevelUp
+) -> str:
+    """Всё, что принёс новый уровень, - отдельным сообщением.
+
+    Единственное место, где одно действие отвечает двумя сообщениями
+    (``docs/accessibility.md``, правило 3). Так и задумано: уровень тонул
+    строкой между добычей и здоровьем после боя, и то, что открылось умение или
+    город, игрок узнавал случайно, через сутки. Новость такого веса стоит
+    своего сообщения; клавиатура при этом та же, что и на экране боя, так что
+    игрок никуда не уходит.
+    """
+    previous = level_up.previous_level
+    new = level_up.new_level
+    lines = [
+        f"Новый уровень: {new}."
+        if level_up.levels_gained == 1
+        else f"Взято уровней: {level_up.levels_gained}. Теперь {new}.",
+        f"Очков характеристик: плюс {level_up.stat_points}, "
+        f"нераспределено {character.unspent_stat_points}.",
+        f"Очков умений: плюс {level_up.skill_points}, "
+        f"нераспределено {character.unspent_skill_points}.",
+        f"Здоровье: {stats.max_health}. {stats.resource_name}: {stats.max_resource}.",
+    ]
+
+    opened = [
+        skill.name
+        for skill in content.skills_of(f"class:{character.class_id}")
+        if previous < skill.level <= new
+    ]
+    if opened:
+        lines.append(f"Открылись умения: {', '.join(opened)}.")
+
+    cities = [city.name for city in content.cities if previous < city.unlock_level <= new]
+    if cities:
+        lines.append(f"Открылся город: {', '.join(cities)}.")
+
+    lines.append("Очки вкладываются в разделах «Характеристики» и «Умения».")
+    return "\n".join(lines)
+
+
+def derived_lines(stats: DerivedStats) -> tuple[str, ...]:
+    """Всё, что движок считает сам, - целиком и одними и теми же словами.
+
+    Карточка называла шесть значений из девяти: сила крита, восстановление
+    ресурса и лечение по ходам считались в каждом бою и не были сказаны нигде.
+    Число, которое движок считает, а экран молчит, ничем не лучше числа, которое
+    экран обещает, а движок не считает (``Claude.md``, правило 7).
+    """
+    lines = [
+        f"Броня: {stats.armor}. Точность: {number(stats.accuracy)}. "
+        f"Уклонение: {percent(stats.dodge)}.",
+        f"Шанс крита: {percent(stats.crit_chance)}. "
+        f"Сила крита: {percent(stats.crit_damage)} от урона. "
+        f"Инициатива: {number(stats.initiative)}.",
+        f"{stats.resource_name} за ход: {number(stats.resource_regen)}.",
+    ]
+    if stats.health_regen_percent:
+        lines.append(f"Здоровья за ход в бою: {percent(stats.health_regen_percent)} от максимума.")
+    return tuple(lines)
 
 
 def damage_line(content: GameContent, character: Character) -> str:
@@ -525,7 +585,7 @@ def stat_effect_lines(content: GameContent, character: Character) -> tuple[str, 
         StatCode.CHA: (
             f"Харизма: за очко в лавке уступают "
             f"{percent(economy.CHARISMA_DISCOUNT_PER_POINT)}, "
-            f"процента, и так до {percent(economy.MAX_CHARISMA_DISCOUNT)}."
+            f"и так до {percent(economy.MAX_CHARISMA_DISCOUNT)}."
         ),
         StatCode.LCK: (
             f"Удача: за очко плюс {number(stat_rules.CRIT_CHANCE_PER_LUCK)} процента к шансу "
@@ -572,6 +632,8 @@ def stats_screen(
             notice,
         ),
         "Вложенное очко назад не берут.",
+        # Числа целиком - на карточке персонажа: здесь их место заняли бы
+        # объяснения, ради которых этот экран и открывают.
         f"Здоровье {stats.max_health}, броня {stats.armor}, "
         f"точность {number(stats.accuracy)}, уклонение {percent(stats.dodge)}.",
         *(f"{name}: {primary[code]}." for code, name in STAT_NAMES.items()),

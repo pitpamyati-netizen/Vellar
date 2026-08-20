@@ -30,6 +30,7 @@ from mmorpg.domain.entities.location import NodeKind
 from mmorpg.domain.entities.stats import StatBlock
 from mmorpg.domain.procgen import location_seed
 from mmorpg.domain.rules import nodes as node_rules
+from mmorpg.domain.rules.progression import experience_to_reach
 from mmorpg.domain.rules.stats import derived_stats, stat_allowance
 from mmorpg.infrastructure.persistence.memory import (
     InMemoryCharacterRepository,
@@ -71,12 +72,36 @@ class Recorder:
         return self.screens[-1]
 
 
+class Aside:
+    """Stands in for send_text: keeps the extra messages a step produced.
+
+    Ровно одно действие в игре отвечает двумя сообщениями - взятый уровень, - и
+    здесь ловится именно второе (``screens/play.level_up_report``).
+    """
+
+    def __init__(self) -> None:
+        self.texts: list[str] = []
+
+    async def __call__(
+        self, message: Message, text: str, screen: Screen, *, emoji: bool = False
+    ) -> None:
+        self.texts.append(text)
+
+
 @pytest.fixture
 def sent(monkeypatch: pytest.MonkeyPatch) -> Recorder:
     recorder = Recorder()
     monkeypatch.setattr(play_handler, "send_screen", recorder)
     monkeypatch.setattr(combat_handler, "send_screen", recorder)
     return recorder
+
+
+@pytest.fixture
+def aside(monkeypatch: pytest.MonkeyPatch) -> Aside:
+    extra = Aside()
+    monkeypatch.setattr(play_handler, "send_text", extra)
+    monkeypatch.setattr(combat_handler, "send_text", extra)
+    return extra
 
 
 @pytest.fixture
@@ -381,6 +406,89 @@ async def test_a_quiet_node_pays_and_is_remembered(
     pytest.fail("this seed produced no quiet node at all")  # pragma: no cover
 
 
+async def test_a_new_level_arrives_as_its_own_message(
+    player: Player,
+    aside: Aside,
+    content: GameContent,
+    characters: InMemoryCharacterRepository,
+    argus: Character,
+) -> None:
+    """Уровень стоил строки посреди отчёта и терялся между добычей и здоровьем.
+
+    Теперь это отдельное сообщение, и в нём есть всё причитающееся: очки,
+    здоровье, открывшиеся умения и город.
+    """
+    almost = replace(argus, experience=experience_to_reach(argus.level + 1) - 1)
+    await characters.save(almost)
+
+    for kind in (NodeKind.CACHE, NodeKind.GATHER, NodeKind.EVENT, NodeKind.SHRINE):
+        flow_before = await player.flow() if (await player.state.get_data()) else None
+        if flow_before is not None and flow_before.session.active:
+            await player.press("Покинуть локацию")
+        try:
+            await walk_to(player, content, kind)
+        except AssertionError:
+            continue
+        screen = await player.press(play_screens.NODE_ACTIONS[kind])
+        break
+    else:  # pragma: no cover - this seed always has a quiet node
+        pytest.fail("this seed produced no quiet node at all")
+
+    grown = await characters.get_active(ACCOUNT)
+    assert grown is not None
+    assert grown.level == argus.level + 1
+
+    assert len(aside.texts) == 1, "уровень объявляется ровно одним сообщением"
+    said = aside.texts[0]
+    assert f"Новый уровень: {grown.level}." in said
+    assert "Очков характеристик" in said
+    assert "Очков умений" in said
+    assert str(derived_stats(content, grown).max_health) in said
+    # Экран действия про уровень больше не говорит: об этом есть чему сказать
+    # отдельно, и дважды об одном игра не говорит.
+    assert "Новый уровень" not in screen.text()
+
+
+async def test_a_level_taken_in_a_fight_is_announced_too(
+    player: Player,
+    aside: Aside,
+    content: GameContent,
+    characters: InMemoryCharacterRepository,
+    argus: Character,
+) -> None:
+    """Бой - главный источник опыта, и уровень от него объявляется так же."""
+    almost = replace(argus, experience=experience_to_reach(argus.level + 1) - 1)
+    await characters.save(almost)
+
+    await walk_to(player, content, NodeKind.BATTLE)
+    await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
+    for _ in range(40):
+        text = (await player.press("Атака")).text()
+        if text.startswith(("Победа.", "Поражение.")):
+            break
+    else:  # pragma: no cover - a fight that never ends is another bug
+        pytest.fail("the fight never finished in 40 turns")
+
+    grown = await characters.get_active(ACCOUNT)
+    assert grown is not None
+    if not text.startswith("Победа."):  # pragma: no cover - this seed wins
+        pytest.skip("этот сид кончился поражением: опыта за него не платят")
+
+    assert grown.level == argus.level + 1
+    assert len(aside.texts) == 1
+    assert f"Новый уровень: {grown.level}." in aside.texts[0]
+    assert "Новый уровень" not in text
+
+
+async def test_a_step_that_takes_no_level_answers_once(
+    player: Player, aside: Aside, content: GameContent
+) -> None:
+    """Второе сообщение приходит только тогда, когда есть о чём."""
+    await walk_to(player, content, NodeKind.BATTLE)
+    await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
+    assert aside.texts == []
+
+
 # --- the city ---------------------------------------------------------
 
 
@@ -466,7 +574,7 @@ async def test_a_skill_point_buys_a_skill_and_a_slot_holds_it(
     assert learned.unspent_skill_points == 1
 
     await player.press("Слоты умений")
-    await player.press(skill_screens.slot_label(content, learned, fresh.kind, 1).text)
+    await player.press(skill_screens.slot_label(content, learned, 1).text)
     await player.press(f"{fresh.name} — ранг 1")
     equipped = await characters.get_active(ACCOUNT)
     assert equipped is not None

@@ -52,9 +52,10 @@ from mmorpg.domain.ports.repositories import (
 from mmorpg.domain.procgen.seeds import rotation_index
 from mmorpg.domain.rules import moderation as moderation_rules
 from mmorpg.domain.rules import nodes as node_rules
+from mmorpg.domain.rules import progression
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.economy import buy_price, roll_assortment
-from mmorpg.domain.rules.stats import primary_stats
+from mmorpg.domain.rules.stats import derived_stats, primary_stats
 from mmorpg.logging import get_logger
 from mmorpg.presentation.telegram.flows import keeper as keeper_flow
 from mmorpg.presentation.telegram.flows.play import (
@@ -75,10 +76,11 @@ from mmorpg.presentation.telegram.flows.state import (
 )
 from mmorpg.presentation.telegram.handlers.combat import open_fight
 from mmorpg.presentation.telegram.handlers.creation import welcome_screen
-from mmorpg.presentation.telegram.messaging import send_screen
+from mmorpg.presentation.telegram.messaging import send_screen, send_text
 from mmorpg.presentation.telegram.screens import keeper as keeper_screens
-from mmorpg.presentation.telegram.screens.base import ScreenId
+from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.keeper import KeeperView
+from mmorpg.presentation.telegram.screens.play import level_up_report
 from mmorpg.presentation.telegram.screens.shop import OwnedItem
 from mmorpg.presentation.telegram.states.screens import STATE_FOR_SCREEN, Play
 
@@ -196,6 +198,7 @@ async def play(
         location_state=here,
     )
 
+    before_level = character.level
     character = await _apply(
         updated.pending, character, message.from_user.id, characters, inventory, users
     )
@@ -245,7 +248,7 @@ async def play(
     )
     await state.set_state(STATE_FOR_SCREEN[updated.screen])
     await state.update_data({STATE_KEY: updated.serialise()})
-    await render_play(
+    screen = await render_play(
         message,
         content,
         settings,
@@ -259,6 +262,17 @@ async def play(
         keeper=shown,
         location_state=here,
     )
+    # Уровень объявляется вторым сообщением, и это единственное место в игре,
+    # где одно действие отвечает дважды: заданием, узлом или ремеслом уровень
+    # берут так же, как боем (``screens/play.level_up_report``).
+    grown = progression.growth(content, before_level, character.level)
+    if grown is not None:
+        await send_text(
+            message,
+            level_up_report(content, character, derived_stats(content, character), grown),
+            screen,
+            emoji=emoji,
+        )
 
 
 async def render_play(
@@ -275,25 +289,27 @@ async def render_play(
     tally: Mapping[str, int] | None = None,
     keeper: KeeperView | None = None,
     location_state: LocationState | None = None,
-) -> None:
-    """Draw one play screen. Used by this handler and by the fight handler."""
+) -> Screen:
+    """Draw one play screen, and return it. Used here and by the fight handler.
+
+    Возвращается тот же экран, что и отправлен: сообщение про новый уровень
+    идёт следом и несёт ту же клавиатуру, чтобы игрок остался там же, где стоял.
+    """
     shelf = goods if goods is not None else Goods(gold=character.gold)
-    await send_screen(
-        message,
-        render(
-            content,
-            character,
-            flow,
-            world_seed=settings.world_seed,
-            goods=shelf,
-            clock=clock,
-            neighbours=neighbours,
-            tally=tally,
-            keeper=keeper,
-            location_state=location_state,
-        ),
-        emoji=emoji,
+    screen = render(
+        content,
+        character,
+        flow,
+        world_seed=settings.world_seed,
+        goods=shelf,
+        clock=clock,
+        neighbours=neighbours,
+        tally=tally,
+        keeper=keeper,
+        location_state=location_state,
     )
+    await send_screen(message, screen, emoji=emoji)
+    return screen
 
 
 async def _tally(

@@ -18,7 +18,7 @@ from dataclasses import replace
 
 from mmorpg import economy_log
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import City, GameContent, Item, SkillKind
+from mmorpg.domain.entities.content import City, GameContent, Item
 from mmorpg.domain.entities.location import (
     GeneratedLocation,
     LocationState,
@@ -39,7 +39,6 @@ from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules import turning as turning_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
-from mmorpg.domain.rules.progression import LevelUp
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.domain.rules.tutorial import TutorialTask
 from mmorpg.presentation.telegram.flows import keeper as keeper_flow
@@ -335,7 +334,6 @@ def render(
             return skill_screens.pick_screen(
                 content,
                 character,
-                _pick_kind(state),
                 state.pick_slot,
                 state.list_page,
                 state.notice,
@@ -474,10 +472,6 @@ def _filtered_screen(state: PlayState) -> ScreenId:
 
 def _page_for(state: PlayState, screen: ScreenId) -> PageState:
     return list_page(replace(state, screen=screen))
-
-
-def _pick_kind(state: PlayState) -> SkillKind:
-    return SkillKind.PASSIVE if state.pick_kind == "passive" else SkillKind.ACTIVE
 
 
 def _owned_count(goods: Goods, item_id: str) -> int:
@@ -1281,27 +1275,16 @@ def _handle_slots(
 ) -> PlayState:
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите слот из списка.")
-    rules = content.rules
-    for kind, count in (
-        (SkillKind.ACTIVE, rules.active_slots),
-        (SkillKind.PASSIVE, rules.passive_slots),
-    ):
-        for slot in range(count):
-            if skill_screens.slot_label(content, character, kind, slot).matches(command.argument):
-                return replace(
-                    state,
-                    pick_kind=kind.value,
-                    pick_slot=slot,
-                    list_page=PageState(),
-                ).at(ScreenId.SKILL_PICK)
+    for slot in range(content.rules.active_slots):
+        if skill_screens.slot_label(content, character, slot).matches(command.argument):
+            return replace(state, pick_slot=slot, list_page=PageState()).at(ScreenId.SKILL_PICK)
     return state.with_notice("Нажмите слот из списка.")
 
 
 def _handle_pick(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    kind = _pick_kind(state)
-    available = skill_rules.equippable(content, character, kind)
+    available = skill_rules.equippable(content, character)
     moved = page_move(command, state.list_page, total_pages(len(available)))
     if moved is not None:
         return replace(state, list_page=moved, notice="")
@@ -1309,7 +1292,7 @@ def _handle_pick(
         return state.with_notice("Нажмите умение из списка.")
 
     if skill_screens.CLEAR_SLOT.matches(command.argument):
-        emptied = skill_rules.put_in_slot(content, character, kind, state.pick_slot, None)
+        emptied = skill_rules.put_in_slot(content, character, state.pick_slot, None)
         if emptied is None:
             return state.with_notice("Этот слот освободить нельзя.")
         return (
@@ -1321,7 +1304,7 @@ def _handle_pick(
     for skill in available:
         if not command.argument.startswith(f"{skill.name} —"):
             continue
-        filled = skill_rules.put_in_slot(content, character, kind, state.pick_slot, skill.code)
+        filled = skill_rules.put_in_slot(content, character, state.pick_slot, skill.code)
         if filled is None:
             return state.with_notice("Это умение сюда не встаёт.")
         placed = (
@@ -1405,8 +1388,8 @@ def _hand_in(content: GameContent, character: Character, state: PlayState) -> Pl
     if payout.item_id and content.has_item(payout.item_id):
         write = write.with_items((payout.item_id, 1))
         said += f" Сверху дали: {content.item(payout.item_id).name}."
-    if payout.level_up.levels_gained:
-        said += f" {level_up_line(payout.level_up)}"
+    # Об уровне здесь не говорят: он приходит своим сообщением, сразу за этим
+    # экраном (``handlers/play``, ``screens/play.level_up_report``).
     return mark_task(state.storing(write).with_notice(said), character, TutorialTask.HAND_IN)
 
 
@@ -1480,7 +1463,7 @@ def _handle_offer(
 def _handle_mentor(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    known = sorted(code for code in skill_rules.known_codes(character) if content.has_skill(code))
+    known = skill_rules.forgettable(content, character)
     moved = page_move(command, state.mentor_page, total_pages(len(known)))
     if moved is not None:
         return replace(state, mentor_page=moved, notice="")
@@ -1491,9 +1474,8 @@ def _handle_mentor(
         return state.with_notice("Нажмите умение из списка.")
 
     price = economy.mentor_price(character.level)
-    for code in known:
-        skill = content.skill(code)
-        rank = character.loadout.rank_of(code)
+    for skill in known:
+        rank = character.loadout.rank_of(skill.code)
         if not city_screens.forget_label(skill.name, rank).matches(command.argument):
             continue
         if character.gold < price:
@@ -1711,14 +1693,4 @@ def search_line(content: GameContent, node_name: str, result: adventure.SearchRe
     parts.append(f"Опыт: {result.experience}.")
     for step in result.quest_steps:
         parts.append(f"Задание «{step.quest.name}»: {step.progress} из {step.quest.target_count}.")
-    if result.level_up is not None and result.level_up.levels_gained:
-        parts.append(level_up_line(result.level_up))
     return " ".join(parts)
-
-
-def level_up_line(level_up: LevelUp) -> str:
-    """The one sentence a level is announced with, wherever it happened."""
-    return (
-        f"Уровень {level_up.new_level}. Очков характеристик: {level_up.stat_points}, "
-        f"очков умений: {level_up.skill_points}."
-    )

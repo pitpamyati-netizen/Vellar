@@ -3,17 +3,21 @@
 Three screens, and no more, because the panel itself never changes shape:
 
 - **Умения** - every skill of the class, its rank and what one point would do;
-- **Слоты умений** - the six active, three passive and one racial position;
+- **Слоты умений** - the six battle positions and the racial one;
 - **Грань** - the single rank-three choice.
 
 A slot always keeps its number and its place, empty or not, so a player can learn
 the panel by position once and never relearn it (accessibility rule 7).
+
+Постоянные умения слотов не занимают: изученное работает, и укладывать его
+некуда. Три слота из шести означали только то, что половина потраченных очков
+не считалась ни в одном бою.
 """
 
 from __future__ import annotations
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import GameContent, Skill, SkillKind
+from mmorpg.domain.entities.content import GameContent, Skill
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
@@ -116,8 +120,8 @@ def skills_screen(
     edge_due = [skill.name for skill in pool if skill_rules.needs_edge(content, character, skill)]
     lead = [
         notice or f"Умения. Очков умений: {character.unspent_skill_points}.",
-        f"В панели шесть боевых слотов и три постоянных, это не меняется. "
-        f"Ваш уровень: {character.level}.",
+        f"В панели шесть боевых слотов, это не меняется. Постоянные умения слотов "
+        f"не занимают: изученное работает. Ваш уровень: {character.level}.",
     ]
     if not character.unspent_skill_points:
         lead.append("Очко умений даёт каждый новый уровень. Первое умение выдано без очков.")
@@ -135,13 +139,11 @@ def skills_screen(
     )
 
 
-def slot_label(content: GameContent, character: Character, kind: SkillKind, slot: int) -> Label:
-    """A slot button carries its number, its kind and what is in it."""
-    prefix = "Боевой" if kind is SkillKind.ACTIVE else "Постоянный"
-    codes = character.loadout.actives if kind is SkillKind.ACTIVE else character.loadout.passives
-    code = codes[slot]
+def slot_label(content: GameContent, character: Character, slot: int) -> Label:
+    """A slot button carries its number and what is in it."""
+    code = character.loadout.actives[slot]
     name = content.skill(code).name if code and content.has_skill(code) else EMPTY_SLOT
-    return label(f"{prefix} слот {slot + 1}: {name}")
+    return label(f"Боевой слот {slot + 1}: {name}")
 
 
 def slots_screen(content: GameContent, character: Character, notice: str = "") -> Screen:
@@ -153,34 +155,37 @@ def slots_screen(content: GameContent, character: Character, notice: str = "") -
         if racial_code and content.has_skill(racial_code)
         else EMPTY_SLOT
     )
+    working = skill_rules.known_passives(content, character)
     lines = [
         *head("Слоты умений.", notice),
         "Нажмите слот, чтобы положить в него умение.",
-        f"Боевых слотов {rules.active_slots}, постоянных {rules.passive_slots}, "
-        "расовый один, и он не меняется.",
+        f"Боевых слотов {rules.active_slots}, расовый один, и он не меняется.",
         f"Расовое умение: {racial}.",
+        "Постоянные умения слотов не занимают: изученное работает всегда.",
     ]
+    if working:
+        lines.append(
+            "Работают сейчас: "
+            + ", ".join(
+                f"{skill.name}, ранг {character.loadout.rank_of(skill.code)}" for skill in working
+            )
+            + "."
+        )
     rows: list[tuple[Label, ...]] = [
-        (slot_label(content, character, SkillKind.ACTIVE, slot),)
-        for slot in range(rules.active_slots)
+        (slot_label(content, character, slot),) for slot in range(rules.active_slots)
     ]
-    rows.extend(
-        (slot_label(content, character, SkillKind.PASSIVE, slot),)
-        for slot in range(rules.passive_slots)
-    )
     return Screen(id=ScreenId.SKILL_SLOTS, lines=tuple(lines), rows=tuple(rows))
 
 
 def pick_screen(
     content: GameContent,
     character: Character,
-    kind: SkillKind,
     slot: int,
     state: PageState,
     notice: str = "",
 ) -> Screen:
-    """What may go into one slot: known skills of the right kind, and nothing else."""
-    available = skill_rules.equippable(content, character, kind)
+    """What may go into one slot: known battle skills, and nothing else."""
+    available = skill_rules.equippable(content, character)
     entries = [
         ListEntry(
             key=skill.code,
@@ -189,17 +194,16 @@ def pick_screen(
         )
         for skill in available
     ]
-    prefix = "боевой" if kind is SkillKind.ACTIVE else "постоянный"
     return paginated_screen(
         screen_id=ScreenId.SKILL_PICK,
-        title=f"Слот {slot + 1}, {prefix}",
+        title=f"Слот {slot + 1}, боевой",
         entries=entries,
         state=state,
         lead_lines=(
             notice or f"Выберите умение для слота {slot + 1}.",
             "Умение занимает один слот: из другого оно уйдёт само.",
         ),
-        empty_text="Изученных умений этого вида нет. Сначала изучите их в разделе «Умения».",
+        empty_text="Изученных боевых умений нет. Сначала изучите их в разделе «Умения».",
         show_filters=False,
         extra_rows=((CLEAR_SLOT,),),
     )

@@ -247,6 +247,15 @@ def resolve_turn(
     if state.is_over:
         return replace(state, events=())
 
+    # Ход, которого не было, ходом не считается. Пустой слот, откат, нехватка
+    # ресурса и не то оружие в руке - это отказ до начала хода: раньше он
+    # прокручивал ход целиком, и промахнувшийся мимо кнопки игрок бесплатно
+    # получал удар от каждого врага. Счётчик ходов стоит на месте, след цел,
+    # откаты не тикают - игрок просто нажимает ещё раз.
+    refusal = _refusal(content, character, state, action)
+    if refusal is not None:
+        return replace(state, events=(refusal,))
+
     source = random.Random(int.from_bytes(seed, "big"))
     working = replace(state, events=())
     tempo = _tempo(content, character, working, action)
@@ -279,6 +288,24 @@ def resolve_turn(
             return working
 
     return _end_of_turn(content, character, working)
+
+
+def _refusal(
+    content: GameContent, character: Character, state: CombatState, action: CombatAction
+) -> CombatEvent | None:
+    """Почему это действие не состоится. ``None`` - состоится.
+
+    Спрашивается до всего остального и только про то, что игра отказывается
+    делать вовсе. Промах отказом не является: он и есть результат хода.
+    """
+    if state.player.stunned > 0:
+        return None
+    match action.kind:
+        case ActionKind.SKILL | ActionKind.RACIAL:
+            attempt = _attempt_skill(content, character, state, action)
+            return attempt if isinstance(attempt, CombatEvent) else None
+        case _:
+            return None
 
 
 def _tempo(
@@ -380,7 +407,7 @@ def _basic_attack(
     stats = derived_stats(content, character, state.player.effects)
     modifiers = mods.collect_modifiers(content, character, state.player.effects)
 
-    return _strike(
+    struck, _ = _strike(
         state,
         target=target,
         power=blow_roll(content, character, source, state.player.effects)
@@ -394,6 +421,7 @@ def _basic_attack(
         tempo=tempo,
         source=source,
     )
+    return struck
 
 
 def blow_of(
@@ -580,6 +608,11 @@ def _apply_spec(
             )
         return working.with_events(CombatEvent(kind=EventKind.FLEE_FAILED, skill_name=skill.name))
 
+    # Кого удар достал. Пусто - умение промахнулось мимо всех, и вешать на них
+    # нечего. У умения, которое не бьёт вовсе, броска нет, а значит нет и
+    # промаха: его эффект ложится как и раньше.
+    landed: list[int] = []
+    blow = 0.0
     if spec.category is EffectCategory.DAMAGE:
         targets = working.living_enemies if spec.aoe else _single_target(working, target_index)
         falloff = 1.0
@@ -591,7 +624,7 @@ def _apply_spec(
                 # Каждый удар — свой бросок: два удара подряд одним и тем же
                 # оружием не обязаны совпасть, иначе кости были бы украшением.
                 blow = blow_roll(content, character, source, state.player.effects, skill.scaling)
-                working = _strike(
+                working, hit = _strike(
                     working,
                     target=current,
                     power=blow * power / 100.0 * spec.damage_scale * falloff
@@ -604,6 +637,8 @@ def _apply_spec(
                     tempo=tempo,
                     source=source,
                 )
+                if hit and target.index not in landed:
+                    landed.append(target.index)
             falloff *= 1.0 - spec.chain_falloff
 
         working = _bleeding(
@@ -612,7 +647,7 @@ def _apply_spec(
             skill=skill,
             blow=blow,
             power=power,
-            struck=tuple(one.index for one in targets),
+            struck=tuple(landed),
         )
         working = _splash(
             working,
@@ -683,7 +718,14 @@ def _apply_spec(
                 CombatEvent(kind=EventKind.CLEANSED, amount=removed, skill_name=skill.name)
             )
 
-    working = _apply_modifier_bundles(working, skill, spec, power, target_index)
+    working = _apply_modifier_bundles(
+        working,
+        skill,
+        spec,
+        power,
+        target_index,
+        landed=tuple(landed) if spec.category is EffectCategory.DAMAGE else None,
+    )
     return _apply_special(working, skill, spec, power)
 
 
@@ -747,7 +789,7 @@ def _splash(
     neighbour = next((one for one in state.living_enemies if one.index != spared), None)
     if neighbour is None:
         return state
-    return _strike(
+    struck, _ = _strike(
         state,
         target=neighbour,
         power=blow * power / 100.0 * spec.damage_scale * spec.splash,
@@ -759,6 +801,7 @@ def _splash(
         tempo=tempo,
         source=source,
     )
+    return struck
 
 
 def _single_target(state: CombatState, target_index: int) -> tuple[EnemyState, ...]:
@@ -772,7 +815,15 @@ def _apply_modifier_bundles(
     spec: EffectSpec,
     power: float,
     target_index: int,
+    *,
+    landed: tuple[int, ...] | None = None,
 ) -> CombatState:
+    """Усиления себе и помехи цели.
+
+    ``landed`` - те, кого удар этого умения достал. ``None`` значит, что удара
+    не было вовсе (чистая помеха, чистое усиление), и тогда цель одна - та, по
+    которой умение применили.
+    """
     working = state
     if spec.self_modifiers and spec.duration:
         effect = ActiveEffect(
@@ -796,7 +847,10 @@ def _apply_modifier_bundles(
         )
 
     if spec.target_modifiers and spec.duration:
-        targets = working.living_enemies if spec.aoe else _single_target(working, target_index)
+        if landed is None:
+            targets = working.living_enemies if spec.aoe else _single_target(working, target_index)
+        else:
+            targets = tuple(one for index in landed if (one := working.enemy_at(index)) is not None)
         for target in targets:
             effect = ActiveEffect(
                 id=skill.code,
@@ -860,7 +914,14 @@ def _strike(
     skill_name: str,
     tempo: TurnTempo,
     source: random.Random,
-) -> CombatState:
+) -> tuple[CombatState, bool]:
+    """Один удар. Второй член - попал ли он.
+
+    Попал или нет решает не только урон: всё, что умение вешает на цель -
+    кровотечение, помеха, оглушение, - идёт следом за попаданием. Раньше не
+    шло: игра говорила «Промах» и тут же «наложен эффект», и это был один и тот
+    же удар.
+    """
     working = state
     enemy = target.enemy
 
@@ -874,8 +935,11 @@ def _strike(
         ),
     )
     if source.uniform(0, 100) > hit_chance:
-        return working.with_events(
-            CombatEvent(kind=EventKind.MISS, target=target.name, skill_name=skill_name)
+        return (
+            working.with_events(
+                CombatEvent(kind=EventKind.MISS, target=target.name, skill_name=skill_name)
+            ),
+            False,
         )
 
     raw = power
@@ -932,14 +996,14 @@ def _strike(
         working = working.with_events(
             CombatEvent(kind=EventKind.ENEMY_DEFEATED, target=target.name)
         )
-    return working
+    return working, True
 
 
 # --- items and fleeing -----------------------------------------------
 
 
 def _use_item(content: GameContent, state: CombatState, action: CombatAction) -> CombatState:
-    if action.item_id is None:
+    if action.item_id is None or not content.has_item(action.item_id):
         return state
     item = content.item(action.item_id)
     if item.effect is None:

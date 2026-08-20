@@ -192,7 +192,6 @@ class PlayState:
     mentor_page: PageState = field(default_factory=PageState)
     board_page: PageState = field(default_factory=PageState)
     # What the player is in the middle of choosing: a slot, an edge, a contract.
-    pick_kind: str = ""
     pick_slot: int = 0
     edge_skill: str = ""
     quest_id: str = ""
@@ -250,7 +249,7 @@ class PlayState:
                     self.descent.started_at,
                 ],
                 "stub": self.stub_title,
-                "pick": [self.pick_kind, self.pick_slot],
+                "pick": self.pick_slot,
                 "edge": self.edge_skill,
                 "quest": self.quest_id,
                 "npc": self.npc_id,
@@ -283,7 +282,10 @@ class PlayState:
         session_parts = [*data.get("session", []), "", 0, 0][:3]
         city_id, slot, node = session_parts
         descent_city, descent_level, depth, descent_started = data.get("descent", ["", 0, 0, 0])
-        pick_kind, pick_slot = data.get("pick", ["", 0])
+        # Раньше здесь лежала пара [вид, слот]: постоянные умения тоже клали в
+        # слоты. Сохранённая пара читается как её второй член - номер слота.
+        pick_raw = data.get("pick", 0)
+        pick_slot = pick_raw[1] if isinstance(pick_raw, list) else pick_raw
         list_page, skill_page, board_page = data.get("pages", [1, 1, 1])
         craft_id, craft_moment = data.get("craft", ["", 0])
         list_category, list_query = [*data.get("list_filters", []), "", ""][:2]
@@ -310,7 +312,6 @@ class PlayState:
             ),
             skill_page=PageState(page=int(skill_page)),
             board_page=PageState(page=int(board_page)),
-            pick_kind=str(pick_kind),
             pick_slot=int(pick_slot),
             edge_skill=data.get("edge", ""),
             quest_id=data.get("quest", ""),

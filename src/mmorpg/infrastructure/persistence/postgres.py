@@ -66,7 +66,6 @@ def _character_from_row(row: Any) -> Character:
         trait_ids=tuple(row["trait_ids"] or ()),
         loadout=SkillLoadout(
             actives=tuple(loadout_raw.get("actives", [None] * 6)),
-            passives=tuple(loadout_raw.get("passives", [None] * 3)),
             racial=loadout_raw.get("racial"),
             ranks=MappingProxyType(dict(loadout_raw.get("ranks", {}))),
             edges=MappingProxyType(dict(loadout_raw.get("edges", {}))),
@@ -129,7 +128,6 @@ def _loadout_to_json(loadout: SkillLoadout) -> str:
     return json.dumps(
         {
             "actives": list(loadout.actives),
-            "passives": list(loadout.passives),
             "racial": loadout.racial,
             "ranks": dict(loadout.ranks),
             "edges": dict(loadout.edges),

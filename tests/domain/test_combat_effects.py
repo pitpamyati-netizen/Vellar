@@ -11,7 +11,7 @@ from dataclasses import replace
 
 import pytest
 
-from mmorpg.domain.entities import Character, GameContent, SkillLoadout
+from mmorpg.domain.entities import Character, Equipment, GameContent, SkillLoadout
 from mmorpg.domain.entities.combat import (
     ActionKind,
     CombatAction,
@@ -376,7 +376,7 @@ def test_a_passive_edge_is_not_just_a_label(content: GameContent) -> None:
     hero = caster("warrior", "human")
     hero = replace(
         hero,
-        loadout=replace(hero.loadout, passives=(skill.code, None, None), ranks={skill.code: 3}),
+        loadout=replace(hero.loadout, ranks={skill.code: 3}),
     )
 
     plain = mods.passive_modifiers(content, hero)
@@ -407,3 +407,63 @@ def test_bleeding_actually_takes_health_every_turn(content: GameContent) -> None
 
     bleeding = spend_bleeding(after)
     assert bleeding.enemies[0].health < poisoned.health
+
+
+# --- a miss leaves nothing behind ------------------------------------
+
+
+def _turns_until_a_miss(
+    content: GameContent, hero: Character, state: CombatState, tries: int = 400
+) -> tuple[CombatState, CombatState]:
+    """Крутит сиды, пока умение не промахнётся. Возвращает промах и попадание.
+
+    Промах не подстроить снаружи: бросок живёт внутри хода и приходит из сида.
+    Зато сид - это вход, и перебрать его можно.
+    """
+    missed: CombatState | None = None
+    landed: CombatState | None = None
+    for seed in range(1, tries):
+        after = use(content, hero, state, seed=seed)
+        if any(event.kind is EventKind.MISS for event in after.events):
+            missed = missed or after
+        elif any(event.kind is EventKind.DAMAGE for event in after.events):
+            landed = landed or after
+        if missed is not None and landed is not None:
+            break
+    assert missed is not None, "ни один сид не дал промаха"
+    assert landed is not None, "ни один сид не дал попадания"
+    return missed, landed
+
+
+def test_a_missed_blow_leaves_no_debuff(content: GameContent) -> None:
+    """«Промах» и «наложен эффект» в одном ходу - это один и тот же удар.
+
+    Помеха цели идёт следом за попаданием, а не за нажатием: иначе промахнуться
+    выгоднее, чем попасть, - урона нет, а помеха есть.
+    """
+    rogue = caster("rogue", "human", "rogue_feint")
+    rogue = replace(rogue, loadout=replace(rogue.loadout, ranks={"rogue_feint": 1}))
+    state = start_combat(content, rogue, (enemy(),))
+
+    missed, landed = _turns_until_a_miss(content, rogue, state)
+
+    assert missed.enemies[0].effects.penalties() == ()
+    assert not any(event.kind is EventKind.EFFECT_APPLIED for event in missed.events)
+    assert landed.enemies[0].effects.penalties() != ()
+
+
+def test_a_missed_blow_draws_no_blood(content: GameContent) -> None:
+    """Кровотечение - тоже след удара: не попал, значит нечему течь."""
+    rogue = caster("rogue", "human", "rogue_poison_blade")
+    rogue = replace(
+        rogue,
+        loadout=replace(rogue.loadout, ranks={"rogue_poison_blade": 1}),
+        equipment=Equipment().equip("weapon", "dagger@6#uncommon"),
+    )
+    state = start_combat(content, rogue, (enemy(),))
+
+    missed, landed = _turns_until_a_miss(content, rogue, state)
+
+    assert missed.enemies[0].effects.penalties() == ()
+    assert spend_bleeding(missed).enemies[0].health == missed.enemies[0].health
+    assert landed.enemies[0].effects.penalties() != ()

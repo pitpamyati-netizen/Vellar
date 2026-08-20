@@ -216,7 +216,6 @@ def _build_rules(raw: Mapping[str, Mapping[str, Any]], problems: list[str]) -> P
         active_unlock_levels=tuple(class_meta.get("active_unlock_levels", ())),
         passive_unlock_levels=tuple(class_meta.get("passive_unlock_levels", ())),
         active_slots=int(class_meta.get("active_slots", 6)),
-        passive_slots=int(class_meta.get("passive_slots", 3)),
         racial_slots=int(class_meta.get("racial_slots", 1)),
         traits_at_creation=int(trait_meta.get("picks_at_creation", 2)),
         max_rank=int(skill_meta.get("max_rank", 5)),
@@ -227,8 +226,8 @@ def _build_rules(raw: Mapping[str, Mapping[str, Any]], problems: list[str]) -> P
         problems.append("classes.toml: [meta].active_unlock_levels must list 8 levels")
     if len(rules.passive_unlock_levels) != 6:
         problems.append("classes.toml: [meta].passive_unlock_levels must list 6 levels")
-    if rules.active_slots != 6 or rules.passive_slots != 3 or rules.racial_slots != 1:
-        problems.append("classes.toml: the panel is fixed at 6 active, 3 passive and 1 racial slot")
+    if rules.active_slots != 6 or rules.racial_slots != 1:
+        problems.append("classes.toml: the panel is fixed at 6 active and 1 racial slot")
     return rules
 
 

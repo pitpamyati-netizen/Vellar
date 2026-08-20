@@ -73,7 +73,6 @@ def fighter(warrior: Character) -> Character:
         level=100,
         loadout=SkillLoadout(
             actives=("warrior_cleave", "warrior_taunt", "warrior_breach", None, None, None),
-            passives=(None, None, None),
             racial="race_human_second_wind",
         ),
     )

@@ -10,7 +10,12 @@ from __future__ import annotations
 from dataclasses import replace
 
 from mmorpg.domain.entities import Character, GameContent
-from mmorpg.domain.entities.combat import ActionKind, CombatAction, CombatState
+from mmorpg.domain.entities.combat import (
+    ActionKind,
+    CombatAction,
+    CombatOutcome,
+    CombatState,
+)
 from mmorpg.domain.rules.combat import resolve_turn
 from mmorpg.presentation.telegram.screens import combat as combat_screens
 
@@ -103,3 +108,54 @@ def test_the_refusal_is_read_out_when_the_button_is_pressed_anyway(
     )
     said = [combat_screens.describe_event(event, resolved.player.name) for event in resolved.events]
     assert any("просит другое оружие" in line for line in said)
+
+
+# --- the turn that ended the fight is a turn too ---------------------
+
+
+def _fight_to_the_end(content: GameContent, fighter: Character, state: CombatState) -> CombatState:
+    """Бьёт, пока бой не кончится. Возвращает последнее состояние."""
+    for turn in range(60):
+        state = resolve_turn(
+            content,
+            fighter,
+            state,
+            CombatAction(kind=ActionKind.ATTACK),
+            seed=turn.to_bytes(16, "big"),
+        )
+        if state.is_over:
+            return state
+    raise AssertionError("бой не кончился за шестьдесят ходов")
+
+
+def test_the_winning_turn_is_read_out(
+    content: GameContent, fighter: Character, sample_fight: CombatState
+) -> None:
+    """Победа - это тоже ход, и его надо услышать.
+
+    Экран победы начинался с «Опыт, золото» и молчал о том, чем всё кончилось:
+    последний удар, добивание, ответ врага - ничего этого игрок не слышал.
+    """
+    won = _fight_to_the_end(content, fighter, sample_fight)
+    assert won.outcome is CombatOutcome.VICTORY
+    text = combat_screens.victory_screen(won).text()
+    said = [combat_screens.describe_event(event, won.player.name) for event in won.events]
+    assert said
+    for line in said:
+        if line:
+            assert line in text, "экран победы молчит о последнем ходе"
+
+
+def test_the_losing_turn_is_read_out(
+    content: GameContent, fighter: Character, sample_fight: CombatState
+) -> None:
+    """И поражение тоже: «Поражение.» без последнего хода ничего не объясняет."""
+    doomed = replace(sample_fight, player=replace(sample_fight.player, health=1))
+    lost = _fight_to_the_end(content, fighter, doomed)
+    assert lost.outcome is CombatOutcome.DEFEAT
+    text = combat_screens.defeat_screen(lost, gold_lost=10).text()
+    said = [combat_screens.describe_event(event, lost.player.name) for event in lost.events]
+    assert said
+    for line in said:
+        if line:
+            assert line in text, "экран поражения молчит о последнем ходе"

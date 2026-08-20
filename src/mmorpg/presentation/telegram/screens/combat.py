@@ -1,12 +1,14 @@
 """The combat screen.
 
 Shape fixed by the specification (docs/skills.md): a status block first, then the
-basic attack, then six numbered skill slots in fixed positions, then the racial
+basic attack, then the filled skill slots by their own numbers, then the racial
 slot, then bag and flee.
 
-Empty slots are rendered. A skill on cooldown keeps its position and says so in
-its own label. Nothing here depends on colour or on an icon (accessibility rules
-5, 6 and 7).
+Пустой слот кнопки не получает. Номер он сохраняет - третье умение остаётся
+третьим, - но кнопки, которая на нажатие отвечает «слот пуст», в панели нет:
+кнопка, которая ничего не делает, - это баг (``Claude.md``, правило 9). A skill
+on cooldown keeps its position and says so in its own label. Nothing here depends
+on colour or on an icon (accessibility rules 5, 6 and 7).
 
 The tag rules (intent, trace, breach) add no buttons: every tag is a word inside
 a label the player already has, and the state of the trace is one spoken line.
@@ -223,17 +225,24 @@ def _slot_status(skill: Skill, state: CombatState) -> str:
     return ", ".join(parts)
 
 
-def skill_label(content: GameContent, character: Character, state: CombatState, slot: int) -> Label:
-    """One panel button. The number prefix keeps every label unique and stable.
+def slotted_skill(content: GameContent, character: Character, slot: int) -> Skill | None:
+    """Умение в этом слоте, если оно там есть и игра его знает.
 
-    A slot naming a skill the game no longer has reads as empty: a panel drawn
-    from a loadout older than the content must not raise (rule 12).
+    Слот, называющий умение, которого в игре больше нет, пуст: панель,
+    нарисованная по сохранению старше содержимого, не падает (правило 12).
     """
     code = character.loadout.actives[slot]
     if code is None or not content.has_skill(code):
+        return None
+    return content.skill(code)
+
+
+def skill_label(content: GameContent, character: Character, state: CombatState, slot: int) -> Label:
+    """One panel button. The number prefix keeps every label unique and stable."""
+    skill = slotted_skill(content, character, slot)
+    if skill is None:
         return label(f"{slot + 1}. {EMPTY_SLOT}")
 
-    skill = content.skill(code)
     status = _weapon_status(content, character, skill) or _slot_status(skill, state)
     return label(
         f"{slot + 1}. {skill.name} — {TAG_NAMES[tag_of_skill(skill)]}, "
@@ -241,11 +250,17 @@ def skill_label(content: GameContent, character: Character, state: CombatState, 
     )
 
 
-def racial_label(content: GameContent, character: Character, state: CombatState) -> Label:
+def racial_skill(content: GameContent, character: Character) -> Skill | None:
     code = character.loadout.racial
     if code is None or not content.has_skill(code):
+        return None
+    return content.skill(code)
+
+
+def racial_label(content: GameContent, character: Character, state: CombatState) -> Label:
+    skill = racial_skill(content, character)
+    if skill is None:
         return label(f"Расовое умение — {EMPTY_SLOT.lower()}")
-    skill = content.skill(code)
     return label(
         f"{skill.name} — расовое, {TAG_NAMES[tag_of_skill(skill)]}, "
         f"{skill_effect(content, character, state, skill)}, {_slot_status(skill, state)}"
@@ -373,17 +388,20 @@ def combat_screen(
     # ради чего экран читают: удар игрока стоял первым, а разгон, брешь и ответ
     # врага выталкивали его наружу - и выходило, что игрок бьёт в тишину.
     # Ход - это несколько строк, и он и должен звучать целиком.
-    lines.extend(
-        text for event in state.events if (text := describe_event(event, state.player.name))
-    )
+    lines.extend(turn_lines(state))
     lines.append("Ваш ход.")
 
     rows: list[tuple[Label, ...]] = [(attack_label(),)]
+    # Только занятые слоты: номер за умением закреплён, а пустое место кнопки не
+    # получает. Нажатие на «Пустой слот» стоило игроку целого хода - враги
+    # отвечали, а он не делал ничего.
     rows.extend(
         (skill_label(content, character, state, slot),)
         for slot in range(content.rules.active_slots)
+        if slotted_skill(content, character, slot) is not None
     )
-    rows.append((racial_label(content, character, state),))
+    if racial_skill(content, character) is not None:
+        rows.append((racial_label(content, character, state),))
     rows.append((labels.BAG, labels.FLEE))
 
     return Screen(id=ScreenId.COMBAT, lines=tuple(lines), rows=tuple(rows))
@@ -406,6 +424,19 @@ def bag_screen(
     return Screen(id=ScreenId.COMBAT_BAG, lines=tuple(lines), rows=tuple(rows))
 
 
+def turn_lines(state: CombatState) -> tuple[str, ...]:
+    """Последний ход словами - тот самый, который бой и закончил.
+
+    Без него экран победы начинался с «Опыт, золото» и молчал о том, чем всё
+    кончилось: игрок бил, слышал «Победа» и не знал ни кто добил, ни сколько
+    снял последний удар. Ход - это несколько строк, и последний ход ничем не
+    отличается от прочих.
+    """
+    return tuple(
+        text for event in state.events if (text := describe_event(event, state.player.name))
+    )
+
+
 def victory_screen(
     state: CombatState,
     level_up: str = "",
@@ -416,6 +447,7 @@ def victory_screen(
     """``loot`` is what the player hears: names, never content ids."""
     lines = [
         "Победа.",
+        *turn_lines(state),
         f"Опыт: {state.experience}. Золото: {state.gold}.",
     ]
     spoils = tuple(loot) or state.loot
@@ -432,9 +464,10 @@ def victory_screen(
     return Screen(id=ScreenId.COMBAT, lines=tuple(lines), rows=tuple(rows))
 
 
-def defeat_screen(gold_lost: int = 0) -> Screen:
+def defeat_screen(state: CombatState | None = None, gold_lost: int = 0) -> Screen:
     lines = [
         "Поражение.",
+        *(turn_lines(state) if state is not None else ()),
         # Без причастия: у персонажа может быть любой род, а русское прошедшее
         # время заставляет игру угадывать (``screens/group.py``).
         "Вы приходите в себя в городе. Раны перевязаны, дальше идти можно.",
@@ -445,11 +478,12 @@ def defeat_screen(gold_lost: int = 0) -> Screen:
     return Screen(id=ScreenId.COMBAT, lines=tuple(lines))
 
 
-def escaped_screen(fled: bool) -> Screen:
+def escaped_screen(fled: bool, state: CombatState | None = None) -> Screen:
     return Screen(
         id=ScreenId.COMBAT,
         lines=(
             "Вы сбежали из боя." if fled else "Боя удалось избежать.",
+            *(turn_lines(state) if state is not None else ()),
             "Нажмите «Назад», чтобы вернуться в локацию.",
         ),
     )

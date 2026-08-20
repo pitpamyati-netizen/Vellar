@@ -137,11 +137,11 @@ def render(
             )
             return screens.victory_screen(state, extra=extra, rows=rows, loot=loot)
         case CombatOutcome.DEFEAT:
-            return screens.defeat_screen(gold_lost)
+            return screens.defeat_screen(state, gold_lost)
         case CombatOutcome.FLED:
-            return screens.escaped_screen(fled=True)
+            return screens.escaped_screen(fled=True, state=state)
         case CombatOutcome.AVOIDED:
-            return screens.escaped_screen(fled=False)
+            return screens.escaped_screen(fled=False, state=state)
         case _:
             return screens.combat_screen(content, character, state, notice)
 
