@@ -20,6 +20,66 @@ from mmorpg.domain.rules import skills as skill_rules
 
 STAT_MODIFIER_PREFIX = "stat_"
 
+#: Ключи, которые движок действительно читает.
+#:
+#: Словарь ``traits.toml [meta].modifier_keys`` шире: он и есть словарь - в нём
+#: лежат в том числе ключи, под которые механики пока нет. Прибавка под таким
+#: ключом не прибавка, а обещание (``Claude.md``, правило 7), и умение, которое
+#: её обещает, не работает, как бы честно ни звучал его текст. Поэтому у умений
+#: и граней проверяется не словарь, а этот список (``tests/content``).
+#:
+#: Ключ попадает сюда, когда его кто-то считает, и уходит отсюда, когда перестаёт.
+EFFECTIVE_KEYS: frozenset[str] = frozenset(
+    {
+        # бой: свой удар
+        "damage_percent",
+        "physical_damage_percent",
+        "magic_damage_percent",
+        "single_target_damage_percent",
+        "aoe_damage_percent",
+        "first_turn_damage_percent",
+        "low_health_damage_percent",
+        "wounded_target_damage_percent",
+        "elite_damage_percent",
+        "beast_damage_percent",
+        "undead_damage_percent",
+        "humanoid_damage_percent",
+        "dot_damage_percent",
+        "crit_chance_percent",
+        "crit_damage_percent",
+        "lifesteal_percent",
+        # бой: чужой удар
+        "damage_taken_percent",
+        "armor_percent",
+        "dodge_percent",
+        "accuracy_percent",
+        "initiative_percent",
+        "reflect_percent",
+        "resist_magic_percent",
+        "resist_physical_percent",
+        "flee_chance_percent",
+        # запасы
+        "health_percent",
+        "resource_percent",
+        "resource_regen_percent",
+        "regen_per_turn_percent",
+        "cost_reduction_percent",
+        "cooldown_reduction_percent",
+        "healing_done_percent",
+        "healing_taken_percent",
+        # что остаётся после боя
+        "gold_percent",
+        "drop_rate_percent",
+        "rarity_percent",
+        # город и ремесло
+        "shop_price_percent",
+        "sell_price_percent",
+        "craft_quality_percent",
+        "gather_yield_percent",
+    }
+    | {f"{STAT_MODIFIER_PREFIX}{code.value}" for code in StatCode}
+)
+
 
 def merge(*bundles: Mapping[str, float]) -> dict[str, float]:
     """Sum modifier bundles key by key."""

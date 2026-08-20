@@ -125,6 +125,7 @@ class EventKind(StrEnum):
     WRONG_WEAPON = "wrong_weapon"
     EMPTY_SLOT = "empty_slot"
     TURN_SKIPPED = "turn_skipped"
+    OUTPACED = "outpaced"
     MOMENTUM = "momentum"
     BREACH = "breach"
     BREAKTHROUGH = "breakthrough"

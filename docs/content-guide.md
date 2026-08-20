@@ -225,9 +225,11 @@ player stumbles over.
 Damage, armour, stats and price are **not written either**. They come from
 `[meta]`:
 
-- `weapon_types[].dice` - the dice of the kind on the first grade (`"2d6"`).
-  They grow with the grade, in both the number of dice and their faces. Spread is
-  the character of the kind: `1d16` swings wider than `2d6` at every grade.
+- `weapon_types[].dice` - the dice of the kind on the first grade (`"2d3+3"`).
+  They grow with the grade, in the number of dice, their faces and the flat part
+  alike. Spread is the character of the kind: `1d10+3` swings wider than `2d3+3`
+  at every grade. **Write a flat part** - half the blow is not rolled, or the
+  range the player is read grows into a lottery (ADR 0017).
 - `armor_types[].armor` - the share of armour relative to light, and
   `slots[].armor_share` - how much the place covers at all.
 - `rarities[].stats` / `special` / `scaling` - what the rarity is worth: no

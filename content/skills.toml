@@ -68,6 +68,7 @@ active_effects = [
     "buff_form_bear",
     "buff_form_wolf",
     "buff_free_cast",
+    "buff_frenzy",
     "buff_lifesteal",
     "cleanse",
     "cleanse_dodge",
@@ -109,6 +110,7 @@ active_effects = [
     "heal_big",
     "heal_over_time",
     "shield",
+    "shield_undying",
     "taunt",
 ]
 
@@ -146,7 +148,7 @@ target = "enemy"
 effect = "taunt"
 power = 20
 scaling = "END"
-text = "Противник переключается на вас и бьёт слабее на 20 процентов."
+text = "Противник бьёт слабее на 20 процентов 2 хода."
 edges = [
     { name = "Оскорбление", text = "У цели точность ниже на 15 процентов.", target_modifiers = { accuracy_percent = -15 } },
     { name = "Вызов", text = "Задевает всех противников.", aoe = true },
@@ -253,8 +255,8 @@ level = 100
 cost = 40
 cooldown = 6
 target = "self"
-effect = "shield"
-power = 40
+effect = "shield_undying"
+power = 50
 scaling = "END"
 text = "Поглощает урон и не даёт вам пасть 3 хода."
 edges = [
@@ -436,7 +438,7 @@ power = 35
 scaling = "END"
 text = "Броня выше на 35 процентов 3 хода."
 edges = [
-    { name = "Толстая шкура", text = "У вас сопротивление стихиям выше на 10 процентов.", self_modifiers = { resist_fire_percent = 10 } },
+    { name = "Толстая шкура", text = "У вас сопротивление чарам выше на 10 процентов.", self_modifiers = { resist_magic_percent = 10 } },
     { name = "Кипящая кровь", text = "У вас урон выше на 10 процентов.", self_modifiers = { damage_percent = 10 } },
 ]
 
@@ -452,7 +454,7 @@ target = "all_enemies"
 effect = "damage_aoe_stun"
 power = 140
 scaling = "STR"
-text = "Урон по всем и шанс сбить их с хода."
+text = "Урон по всем противникам, и каждый пропускает ход."
 edges = [
     { name = "Разлом", text = "Цель пропускает ещё один ход.", stun_turns = 1 },
     { name = "Толчок", text = "Урон выше на 25 процентов.", power = 25 },
@@ -467,7 +469,7 @@ level = 60
 cost = 30
 cooldown = 5
 target = "self"
-effect = "buff_damage"
+effect = "buff_frenzy"
 power = 50
 scaling = "STR"
 text = "Урон выше на 50 процентов, броня ниже на 30, на 3 хода."
@@ -486,7 +488,7 @@ cost = 45
 cooldown = 7
 target = "self"
 effect = "buff_avatar"
-power = 80
+power = 100
 scaling = "STR"
 text = "4 хода вы бьёте вдвое сильнее и не можете быть оглушены."
 edges = [
@@ -519,7 +521,7 @@ power = 10
 text = "Максимальное здоровье выше."
 edges = [
     { name = "Толстокожесть", text = "Прибавка выше на 5 процентов.", power = 5 },
-    { name = "Сопротивление", text = "У вас сопротивление яду выше на 10 процентов.", self_modifiers = { resist_poison_percent = 10 } },
+    { name = "Сопротивление", text = "У вас получаемый урон ниже на 6 процентов.", self_modifiers = { damage_taken_percent = -6 } },
 ]
 
 [[skill]]
@@ -542,7 +544,7 @@ name = "Запах крови"
 owner = "class:barbarian"
 kind = "passive"
 level = 20
-effect = "low_health_damage_percent"
+effect = "wounded_target_damage_percent"
 power = 20
 text = "По раненым целям вы бьёте сильнее."
 edges = [
@@ -611,7 +613,7 @@ cost = 16
 cooldown = 3
 target = "self"
 effect = "shield"
-power = 18
+power = 24
 scaling = "CHA"
 text = "Поглощает урон 3 хода."
 edges = [
@@ -646,7 +648,7 @@ level = 14
 cost = 24
 cooldown = 3
 target = "all_enemies"
-effect = "damage_aoe"
+effect = "damage_aoe_holy"
 power = 160
 scaling = "CHA"
 text = "Светлый урон по всем противникам."
@@ -701,7 +703,7 @@ cost = 32
 cooldown = 5
 target = "self"
 effect = "cleanse_shield"
-power = 30
+power = 38
 scaling = "CHA"
 text = "Снимает все отрицательные эффекты и даёт щит."
 edges = [
@@ -721,7 +723,7 @@ target = "self"
 effect = "heal_big"
 power = 60
 scaling = "CHA"
-text = "Полностью возвращает вас в бой."
+text = "Возвращает вам 60 процентов здоровья."
 edges = [
     { name = "Второй шанс", text = "Дополнительно даёт щит в 25 процентов здоровья.", shield = 25 },
     { name = "Ответная кара", text = "Задевает всех противников.", aoe = true },
@@ -988,7 +990,7 @@ power = 12
 text = "Добыча выпадает чаще."
 edges = [
     { name = "Опытный следопыт", text = "Прибавка выше на 8 процентов.", power = 8 },
-    { name = "Знаток троп", text = "У вас шанс засады ниже на 20 процентов.", self_modifiers = { ambush_chance_percent = -20 } },
+    { name = "Знаток троп", text = "У вас добыча выпадает чаще ещё на 8 процентов.", self_modifiers = { drop_rate_percent = 8 } },
 ]
 
 [[skill]]
@@ -1179,7 +1181,7 @@ target = "enemy"
 effect = "damage_initiative"
 power = 160
 scaling = "AGI"
-text = "Урон и ваш следующий ход наступает раньше."
+text = "Урон, и 2 хода у вас инициатива выше на 40 процентов."
 edges = [
     { name = "Из ниоткуда", text = "У вас урон на первом ходу выше на 40 процентов.", self_modifiers = { first_turn_damage_percent = 40 } },
     { name = "Тень позади", text = "Действует 2 хода. У вас уклонение выше на 20 процентов.", self_modifiers = { dodge_percent = 20 }, duration = 2 },
@@ -1195,7 +1197,7 @@ cost = 40
 cooldown = 6
 target = "enemy"
 effect = "debuff_death_mark"
-power = 30
+power = 40
 scaling = "LCK"
 text = "Цель получает на 40 процентов больше урона 4 хода."
 edges = [
@@ -1334,10 +1336,10 @@ owner = "class:mage"
 kind = "active"
 level = 8
 cost = 18
-cooldown = 4
+cooldown = 3
 target = "self"
 effect = "shield"
-power = 20
+power = 27
 scaling = "INT"
 text = "Поглощает урон 3 хода."
 edges = [
@@ -1587,9 +1589,9 @@ cost = 22
 cooldown = 4
 target = "self"
 effect = "buff_all_stats"
-power = 15
+power = 2
 scaling = "WIS"
-text = "Все характеристики выше на 15 процентов 3 хода."
+text = "Каждая характеристика выше на 2 на 3 хода."
 edges = [
     { name = "Высшее благословение", text = "Прибавка выше на 10 процентов.", power = 10 },
     { name = "Долгое благословение", text = "Действует 5 ходов.", duration = 2 },
@@ -1605,7 +1607,7 @@ cost = 24
 cooldown = 4
 target = "self"
 effect = "shield"
-power = 25
+power = 33
 scaling = "WIS"
 text = "Поглощает урон 3 хода."
 edges = [
@@ -1623,9 +1625,9 @@ cost = 30
 cooldown = 4
 target = "self"
 effect = "heal_over_time"
-power = 35
+power = 18
 scaling = "WIS"
-text = "Лечит вас каждый ход в течение 4 ходов."
+text = "Лечит вас каждый ход 3 хода."
 edges = [
     { name = "Широкий круг", text = "Лечение выше на 40 процентов.", power = 40 },
     { name = "Крепкий круг", text = "У вас броня выше на 10 процентов.", self_modifiers = { armor_percent = 10 } },
@@ -1641,7 +1643,7 @@ cost = 34
 cooldown = 4
 target = "all_enemies"
 effect = "damage_aoe_holy"
-power = 240
+power = 215
 scaling = "WIS"
 text = "Светлый урон по всем противникам."
 edges = [
@@ -1661,7 +1663,7 @@ target = "self"
 effect = "heal_big"
 power = 65
 scaling = "WIS"
-text = "Возвращает вас с края и полностью лечит."
+text = "Возвращает вас с края: 65 процентов здоровья."
 edges = [
     { name = "Свет жизни", text = "Снимает с вас все отрицательные эффекты.", cleanse = 9 },
     { name = "Пламя веры", text = "Задевает всех противников.", aoe = true },
@@ -1801,7 +1803,7 @@ cost = 20
 cooldown = 3
 target = "self"
 effect = "heal_over_time"
-power = 22
+power = 12
 scaling = "WIS"
 text = "Лечит вас каждый ход 3 хода."
 edges = [
@@ -1980,7 +1982,7 @@ power = -8
 text = "Вы получаете меньше урона."
 edges = [
     { name = "Древесная кожа", text = "Прибавка выше на 25 процентов.", power = 25 },
-    { name = "Живая кора", text = "У вас сопротивление стихиям выше на 10 процентов.", self_modifiers = { resist_fire_percent = 10 } },
+    { name = "Живая кора", text = "У вас сопротивление чарам выше на 10 процентов.", self_modifiers = { resist_magic_percent = 10 } },
 ]
 
 # =====================================================================
@@ -1998,7 +2000,7 @@ cooldown = 5
 target = "self"
 effect = "heal"
 power = 20
-text = "Восстанавливает 15 процентов здоровья."
+text = "Восстанавливает 20 процентов здоровья."
 edges = [
     { name = "Глубокий вдох", text = "Лечение выше на 25 процентов.", power = 25 },
     { name = "Ровное дыхание", text = "У вас запас сил выше на 20 процентов.", self_modifiers = { resource_percent = 20 } },
@@ -2137,7 +2139,7 @@ cooldown = 5
 target = "self"
 effect = "buff_damage"
 power = 25
-text = "Ваш урон выше на 25 процентов 2 хода."
+text = "Ваш урон выше на 25 процентов 3 хода."
 edges = [
     { name = "Хриплый рёв", text = "Прибавка выше на 20 процентов.", power = 20 },
     { name = "Долгий рёв", text = "Действует 4 хода.", duration = 1 },
@@ -2155,7 +2157,7 @@ target = "enemy"
 effect = "damage_savage"
 power = 130
 scaling = "STR"
-text = "Урон выше на 50 процентов, точность ниже на 20."
+text = "Урон выше на 50 процентов, точность ниже на 15."
 edges = [
     { name = "Слепая сила", text = "Урон выше на 30 процентов.", power = 30 },
     { name = "Выверенный удар", text = "У вас точность выше на 15 процентов.", self_modifiers = { accuracy_percent = 15 } },
@@ -2173,7 +2175,7 @@ target = "enemy"
 effect = "damage_steal"
 power = 150
 scaling = "AGI"
-text = "Урон и кража золота или предмета."
+text = "Урон и кража золота."
 edges = [
     { name = "Ловкие руки", text = "Урон выше на 30 процентов.", power = 30 },
     { name = "Песок в глаза", text = "У цели точность ниже на 30 процентов.", target_modifiers = { accuracy_percent = -30 } },
@@ -2245,7 +2247,7 @@ target = "self"
 effect = "heal"
 power = 22
 scaling = "WIS"
-text = "Восстанавливает здоровье вам или союзнику."
+text = "Восстанавливает вам здоровье."
 edges = [
     { name = "Полная чаша", text = "Лечение выше на 50 процентов.", power = 50 },
     { name = "Промывание", text = "Снимает с вас 1 отрицательный эффект.", cleanse = 1 },

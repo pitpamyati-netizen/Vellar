@@ -50,7 +50,7 @@ from mmorpg.domain.entities.combat import (
 from mmorpg.domain.entities.content import GameContent, Skill
 from mmorpg.domain.entities.dice import Dice
 from mmorpg.domain.entities.effects import ActiveEffect, EffectStack
-from mmorpg.domain.entities.location import Enemy
+from mmorpg.domain.entities.location import Enemy, EnemyRank
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.procgen.enemies import RANK_FACTORS
@@ -60,6 +60,12 @@ from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.progression import experience_reward
 from mmorpg.domain.rules.skill_effects import (
+    BLEED_PER_TURN,
+    COUNTER,
+    MEND_PER_TURN,
+    SHIELD_HELD,
+    UNDYING,
+    UNSTUNNABLE,
     EffectCategory,
     EffectSpec,
     spec_for,
@@ -67,20 +73,44 @@ from mmorpg.domain.rules.skill_effects import (
 )
 from mmorpg.domain.rules.stats import DerivedStats, derived_stats, primary_stats
 
-#: Чем эффект несёт с собой урон или лечение за ход. Ключи служебные и нарочно
-#: не из словаря ``traits.toml``: их читает только конец хода, и попасть в расчёт
-#: характеристик они не должны.
-#:
-#: До этого ``dot_turns`` стоял в описании двух десятков умений, показывался
-#: игроку строкой «и ещё 3 хода» - и не делал ничего: кровотечение, горение и яд
-#: были надписью. Здесь они наконец происходят.
-BLEED_PER_TURN = "_bleed_per_turn"
-MEND_PER_TURN = "_mend_per_turn"
-
 #: Какая доля удара достаётся цели каждый ход, пока она истекает кровью. Четверть:
 #: три хода кровотечения стоят примерно трёх четвертей ещё одного удара, и это
 #: заметно, но не заменяет собой сам удар.
 BLEED_SHARE = 0.25
+
+#: Сколько ходов держится щит, которому срок не назначен, - щит от грани.
+DEFAULT_SHIELD_TURNS = 3
+
+# --- прибавки, которые смотрят по сторонам ---------------------------
+#
+# Половина словаря ``traits.toml`` полгода была надписью: «урон по зверям выше»,
+# «первый удар в бою сильнее», «на низком здоровье вы бьёте сильнее» - всё это
+# показывалось на карточке, складывалось в общий свёрток модификаторов и нигде
+# не читалось. Читается здесь, и только здесь: один проход по обстоятельствам
+# удара, один множитель на выходе (``Claude.md``, правило 7).
+
+#: Чем удар считается ударом чар, а не руки: стихия, названная у самого умения.
+#: Обычный удар и умение без стихии - физические.
+MAGIC_TAGS = frozenset({"arcane", "cold", "elemental", "fire", "holy", "nature", "poison"})
+
+#: Чей удар по герою считается магическим. Порода противника - единственное, что
+#: о его ударе вообще известно, и она же говорит об этом достаточно: стихия и
+#: тварь бьют не железом.
+MAGIC_ENEMY_KINDS = frozenset({"aberration", "elemental"})
+
+#: Прибавка к урону по породе противника - тем же ключом, каким она объявлена.
+KIND_DAMAGE_KEYS: dict[str, str] = {
+    "beast": "beast_damage_percent",
+    "undead": "undead_damage_percent",
+    "humanoid": "humanoid_damage_percent",
+}
+
+#: Кого «эпическим» считает прибавка ``elite_damage_percent``: обе длинные ступени.
+ELITE_RANKS = frozenset({EnemyRank.ELITE, EnemyRank.BOSS})
+
+#: С кем можно договориться. Умение половинчатого эльфа кончает бой миром - но
+#: только с тем, кто способен на мир: волк не торгуется.
+REASONING_KINDS = frozenset({"humanoid"})
 
 # --- one scale for every number --------------------------------------
 #
@@ -122,6 +152,94 @@ ENEMY_ACCURACY_PER_LEVEL_GAP = 1.0
 ARMOR_SOFTENER_BASE = gear.ARMOR_SOFTENER_BASE
 ARMOR_SOFTENER_PER_LEVEL = gear.ARMOR_SOFTENER_PER_LEVEL
 armor_factor = gear.armor_factor
+
+# --- темп: кто успевает раньше ---------------------------------------
+#
+# Инициатива полгода была числом на экране характеристик и больше ничем: экран
+# говорил «это ещё и очередь удара», а очереди в бою не было вовсе, и полтора
+# десятка умений, граней и вещей, обещавших её отнять или прибавить, не делали
+# ничего. Здесь у неё появляется ровно одно последствие, и оно то самое, о
+# котором говорит текст: кто быстрее, того противник не успевает достать.
+#
+# Считается по двум величинам сразу - по самой инициативе (её несёт ловкость) и
+# по процентам, которыми её двигают вещи, грани и умения. Первая нормируется,
+# иначе на трёхсотом уровне ловкач отменял бы бой целиком; вторые складываются
+# как есть, потому что «инициатива ниже на 30 процентов» - это и есть тридцать.
+
+#: Какую долю от разницы в инициативе берёт темп. Половина: инициатива - не
+#: замена уклонению, а второе его лицо, и вдвоём они не должны отменять бой.
+OUTPACE_SHARE = 0.5
+#: И сколько темп может отнять у противника, как бы велика ни была разница.
+MAX_OUTPACE = 30.0
+
+
+def outpace_chance(
+    player_initiative: float,
+    enemy_initiative: float,
+    player_percent: float,
+    enemy_percent: float,
+) -> float:
+    """Шанс, что противник не успеет ответить в этот ход, в процентах."""
+    pace = (
+        100.0
+        * (player_initiative - enemy_initiative)
+        / max(1.0, player_initiative + enemy_initiative)
+    )
+    return min(MAX_OUTPACE, max(0.0, pace * OUTPACE_SHARE + player_percent - enemy_percent))
+
+
+# --- прибавки по обстоятельствам --------------------------------------
+
+
+def _is_magic(spec: EffectSpec | None) -> bool:
+    """Чары это или рука. Обычный удар - всегда рука."""
+    return spec is not None and bool(MAGIC_TAGS & set(spec.tags))
+
+
+def situational_damage(
+    modifiers: Mapping[str, float],
+    *,
+    spec: EffectSpec | None,
+    enemy: Enemy,
+    enemy_health_ratio: float,
+    player_health_ratio: float,
+    turn: int,
+) -> float:
+    """Множитель, который дают прибавки, смотрящие по сторонам.
+
+    Всё это - обычные ключи из ``traits.toml``, и каждый из них до сих пор
+    показывался игроку и не считался никем. Складываются они в проценты и лишь
+    потом становятся множителем: порядок источников не должен ничего решать
+    (``rules/modifiers``).
+    """
+    total = 0.0
+    kind = "magic" if _is_magic(spec) else "physical"
+    total += modifiers.get(f"{kind}_damage_percent", 0.0)
+    total += modifiers.get(
+        "aoe_damage_percent" if spec is not None and spec.aoe else "single_target_damage_percent",
+        0.0,
+    )
+    if turn <= 1:
+        total += modifiers.get("first_turn_damage_percent", 0.0)
+    if player_health_ratio <= LOW_HEALTH_THRESHOLD:
+        total += modifiers.get("low_health_damage_percent", 0.0)
+    if enemy_health_ratio <= WOUNDED_RATIO:
+        total += modifiers.get("wounded_target_damage_percent", 0.0)
+    if enemy.rank in ELITE_RANKS:
+        total += modifiers.get("elite_damage_percent", 0.0)
+    if (key := KIND_DAMAGE_KEYS.get(enemy.kind)) is not None:
+        total += modifiers.get(key, 0.0)
+    return 1.0 + total / 100.0
+
+
+def incoming_damage_factor(modifiers: Mapping[str, float], enemy: Enemy) -> float:
+    """Что сопротивление оставляет от удара противника.
+
+    О чужом ударе известна только порода бьющего, и её достаточно: стихия и
+    тварь бьют чарами, всё прочее - железом.
+    """
+    key = "resist_magic_percent" if enemy.kind in MAGIC_ENEMY_KINDS else "resist_physical_percent"
+    return max(0.0, 1.0 - modifiers.get(key, 0.0) / 100.0)
 
 
 # --- tempo: intent, trace, breach ------------------------------------
@@ -260,6 +378,11 @@ def resolve_turn(
     working = replace(state, events=())
     tempo = _tempo(content, character, working, action)
 
+    unstunnable = working.player.effects.modifiers().get(UNSTUNNABLE, 0.0) > 0
+    if working.player.stunned > 0 and unstunnable:
+        # Обещание держится с той стороны, с какой его дают: пока умение стоит,
+        # пропуск хода герою не грозит, чем бы его ни пытались сбить.
+        working = replace(working, player=replace(working.player, stunned=0))
     if working.player.stunned > 0:
         working = working.with_events(
             CombatEvent(kind=EventKind.TURN_SKIPPED, actor=working.player.name)
@@ -385,7 +508,7 @@ def _player_action(
         case ActionKind.SKILL | ActionKind.RACIAL:
             return _use_skill(content, character, state, action, tempo, source)
         case ActionKind.ITEM:
-            return _use_item(content, state, action)
+            return _use_item(content, character, state, action)
         case ActionKind.FLEE:
             return _try_flee(content, character, state, source)
 
@@ -563,6 +686,14 @@ def _use_skill(
     power = skill.power_at_rank(rank) * edge_rules.power_factor(edge)
     spec = edge_rules.applied(spec_for(skill.effect), edge)
     cooldown = edge_rules.cooldown_of(skill.cooldown, edge)
+    # Откаты короче - это прибавка, которую носят вещи; до сих пор её никто не
+    # читал. Ниже одного хода откат не сокращается: умение с откатом - это
+    # умение, которое нельзя нажимать подряд.
+    reduction = mods.collect_modifiers(content, character, state.player.effects).get(
+        "cooldown_reduction_percent", 0.0
+    )
+    if cooldown and reduction:
+        cooldown = max(1, round(cooldown * max(0.0, 1.0 - reduction / 100.0)))
 
     player = replace(state.player, resource=state.player.resource - cost, free_cast=False)
     if cooldown:
@@ -602,6 +733,12 @@ def _apply_spec(
     working = state
 
     if spec.special == "avoid_combat":
+        # Договориться можно с тем, кто способен на разговор. С волком нельзя, и
+        # умение об этом говорит - в тексте, который игрок читает до нажатия.
+        if any(one.enemy.kind not in REASONING_KINDS for one in working.living_enemies):
+            return working.with_events(
+                CombatEvent(kind=EventKind.FLEE_FAILED, skill_name=skill.name)
+            )
         if source.uniform(0, 100) < power + stats.crit_chance:
             return replace(working, outcome=CombatOutcome.AVOIDED).with_events(
                 CombatEvent(kind=EventKind.AVOIDED, skill_name=skill.name)
@@ -648,6 +785,7 @@ def _apply_spec(
             blow=blow,
             power=power,
             struck=tuple(landed),
+            modifiers=modifiers,
         )
         working = _splash(
             working,
@@ -663,50 +801,33 @@ def _apply_spec(
             source=source,
         )
 
-    if spec.category is EffectCategory.HEAL or spec.special == "full_heal":
+    if spec.category is EffectCategory.HEAL:
         # Healing and shields are percentages of maximum health, not of a blow:
         # health grows five times faster than a blow does, so a heal priced in
         # blows would be worth nothing by level 40.
+        #
+        # Лечение по ходам не лечит сейчас: ``power`` у него - это то, что
+        # приходит каждый ход, и оно ложится сроком, а не разом.
         amount = round(working.player.max_health * power / 100.0)
         amount = round(amount * mods.percent(modifiers, "healing_done_percent"))
-        player, restored = working.player.healed(amount)
-        working = replace(working, player=player).with_events(
-            CombatEvent(
-                kind=EventKind.HEAL,
-                actor=player.name,
-                amount=restored,
-                skill_name=skill.name,
-            )
-        )
+        if spec.special == "heal_over_time":
+            working = _mending(working, skill=skill, spec=spec, per_turn=float(amount))
+        else:
+            working = _heal(working, amount, modifiers, skill_name=skill.name)
 
     if spec.category is EffectCategory.SHIELD:
         shield = round(working.player.max_health * power / 100.0)
-        player = replace(working.player, shield=working.player.shield + shield)
-        working = replace(working, player=player).with_events(
-            CombatEvent(
-                kind=EventKind.SHIELD, actor=player.name, amount=shield, skill_name=skill.name
-            )
-        )
+        working = _shielded(working, skill=skill, spec=spec, amount=shield)
 
     if spec.bonus_heal:
         # Лечение, которое принесла грань бьющему умению: доля максимума здоровья,
         # как и всякое лечение, и вдобавок к тому, что умение делало и раньше.
         extra = round(working.player.max_health * spec.bonus_heal / 100.0)
-        player, restored = working.player.healed(extra)
-        working = replace(working, player=player).with_events(
-            CombatEvent(
-                kind=EventKind.HEAL, actor=player.name, amount=restored, skill_name=skill.name
-            )
-        )
+        working = _heal(working, extra, modifiers, skill_name=skill.name)
 
     if spec.bonus_shield:
         extra = round(working.player.max_health * spec.bonus_shield / 100.0)
-        player = replace(working.player, shield=working.player.shield + extra)
-        working = replace(working, player=player).with_events(
-            CombatEvent(
-                kind=EventKind.SHIELD, actor=player.name, amount=extra, skill_name=skill.name
-            )
-        )
+        working = _shielded(working, skill=skill, spec=spec, amount=extra)
 
     if spec.cleanse_count:
         before = len(working.player.effects.penalties())
@@ -718,7 +839,24 @@ def _apply_spec(
                 CombatEvent(kind=EventKind.CLEANSED, amount=removed, skill_name=skill.name)
             )
 
+    if spec.self_damage_taken:
+        # Замах, который открывает бьющего: цена размашистого удара - этот же
+        # ход, прожитый без защиты. Стояла ценой в описании и не бралась ни разу.
+        opened = ActiveEffect(
+            id=f"{skill.code}_opened",
+            name=skill.name,
+            modifiers={"damage_taken_percent": spec.self_damage_taken},
+            turns_left=1,
+            source=skill.code,
+            beneficial=False,
+        )
+        working = replace(
+            working, player=replace(working.player, effects=working.player.effects.apply(opened))
+        )
+
     working = _apply_modifier_bundles(
+        content,
+        character,
         working,
         skill,
         spec,
@@ -726,7 +864,79 @@ def _apply_spec(
         target_index,
         landed=tuple(landed) if spec.category is EffectCategory.DAMAGE else None,
     )
-    return _apply_special(working, skill, spec, power)
+    return _apply_special(working, skill, spec, power, target_index)
+
+
+def _heal(
+    state: CombatState,
+    amount: int,
+    modifiers: Mapping[str, float],
+    *,
+    skill_name: str = "",
+) -> CombatState:
+    """Вернуть герою здоровье и сказать об этом.
+
+    Через одну дверь проходит всё лечение, которое герой получает, - потому и
+    ``healing_taken_percent`` считается здесь: до этого «получаемое вами лечение
+    сильнее» стояло у двух постоянных умений и не значило ничего.
+    """
+    healed = round(amount * mods.percent(modifiers, "healing_taken_percent"))
+    player, restored = state.player.healed(max(0, healed))
+    if not restored:
+        return state
+    return replace(state, player=player).with_events(
+        CombatEvent(kind=EventKind.HEAL, actor=player.name, amount=restored, skill_name=skill_name)
+    )
+
+
+def _mending(state: CombatState, *, skill: Skill, spec: EffectSpec, per_turn: float) -> CombatState:
+    """Лечение, которое приходит каждый ход, а не сейчас.
+
+    Срок стоял в описании двух умений и в тексте, который читает игрок, и не
+    делал ничего: умение лечило один раз и три хода молчало.
+    """
+    effect = ActiveEffect(
+        id=f"{skill.code}_mend",
+        name=skill.name,
+        modifiers={MEND_PER_TURN: per_turn},
+        turns_left=max(1, spec.dot_turns),
+        source=skill.code,
+        beneficial=True,
+    )
+    player = replace(state.player, effects=state.player.effects.apply(effect))
+    return replace(state, player=player).with_events(
+        CombatEvent(
+            kind=EventKind.EFFECT_APPLIED,
+            actor=player.name,
+            effect_name=skill.name,
+            turns=max(1, spec.dot_turns),
+        )
+    )
+
+
+def _shielded(state: CombatState, *, skill: Skill, spec: EffectSpec, amount: int) -> CombatState:
+    """Щит и срок, который его держит.
+
+    Щит без срока не сгорает вовсе: четыре умения обещали «3 хода», а щит стоял
+    до конца боя и складывался сам с собой. Сколько щита держит этот источник,
+    помнит сам источник, и вместе с ним щит и уходит (``_end_of_turn``).
+    """
+    if amount <= 0:
+        return state
+    player = replace(state.player, shield=state.player.shield + amount)
+    turns = spec.shield_turns or DEFAULT_SHIELD_TURNS
+    effect = ActiveEffect(
+        id=f"{skill.code}_shield",
+        name=skill.name,
+        modifiers={SHIELD_HELD: float(amount)},
+        turns_left=turns,
+        source=skill.code,
+        beneficial=True,
+    )
+    player = replace(player, effects=player.effects.apply(effect))
+    return replace(state, player=player).with_events(
+        CombatEvent(kind=EventKind.SHIELD, actor=player.name, amount=amount, skill_name=skill.name)
+    )
 
 
 def _bleeding(
@@ -737,6 +947,7 @@ def _bleeding(
     blow: float,
     power: float,
     struck: tuple[int, ...],
+    modifiers: Mapping[str, float],
 ) -> CombatState:
     """Оставить на раненых то, что будет их точить каждый ход.
 
@@ -746,7 +957,10 @@ def _bleeding(
     """
     if not spec.dot_turns or spec.category is not EffectCategory.DAMAGE:
         return state
-    per_turn = max(1.0, blow * power / 100.0 * BLEED_SHARE)
+    per_turn = max(
+        1.0,
+        blow * power / 100.0 * BLEED_SHARE * mods.percent(modifiers, "dot_damage_percent"),
+    )
     working = state
     for index in struck:
         target = working.enemy_at(index)
@@ -773,7 +987,7 @@ def _splash(
     power: float,
     character_level: int,
     stats: DerivedStats,
-    modifiers: dict[str, float],
+    modifiers: Mapping[str, float],
     skill_name: str,
     tempo: TurnTempo,
     source: random.Random,
@@ -810,6 +1024,8 @@ def _single_target(state: CombatState, target_index: int) -> tuple[EnemyState, .
 
 
 def _apply_modifier_bundles(
+    content: GameContent,
+    character: Character,
     state: CombatState,
     skill: Skill,
     spec: EffectSpec,
@@ -837,6 +1053,7 @@ def _apply_modifier_bundles(
         working = replace(
             working, player=replace(working.player, effects=working.player.effects.apply(effect))
         )
+        working = _repooled(content, character, working)
         working = working.with_events(
             CombatEvent(
                 kind=EventKind.EFFECT_APPLIED,
@@ -872,7 +1089,29 @@ def _apply_modifier_bundles(
     return working
 
 
-def _apply_special(state: CombatState, skill: Skill, spec: EffectSpec, power: float) -> CombatState:
+def _repooled(content: GameContent, character: Character, state: CombatState) -> CombatState:
+    """Пересчитать запас здоровья под теми усилениями, что сейчас на герое.
+
+    Медвежий облик обещает «здоровье выше на 40 процентов», и до сих пор это
+    было надписью: запас считался один раз, на входе в бой, и усиление, взятое
+    посреди боя, не двигало его вовсе. Здоровье при этом не дарится - растёт
+    потолок, а вместе с ним и то, что в него влезает.
+    """
+    stats = derived_stats(content, character, state.player.effects)
+    if stats.max_health == state.player.max_health:
+        return state
+    gained = max(0, stats.max_health - state.player.max_health)
+    player = replace(
+        state.player,
+        max_health=stats.max_health,
+        health=min(stats.max_health, state.player.health + gained),
+    )
+    return replace(state, player=player)
+
+
+def _apply_special(
+    state: CombatState, skill: Skill, spec: EffectSpec, power: float, target_index: int = 0
+) -> CombatState:
     working = state
     match spec.special:
         case "evade_next":
@@ -895,7 +1134,12 @@ def _apply_special(state: CombatState, skill: Skill, spec: EffectSpec, power: fl
                 )
             )
         case "steal_gold":
-            working = replace(working, gold=working.gold + round(power))
+            # Доля того, что несёт обворованный, а не написанное число: сотня
+            # золота - состояние на первом уровне и мелочь на сотом (ADR 0007).
+            target = state.enemy_at(target_index) or state.first_living()
+            if target is not None:
+                stolen = max(1, round(target.enemy.gold * power / 100.0))
+                working = replace(working, gold=working.gold + stolen)
     return working
 
 
@@ -909,7 +1153,7 @@ def _strike(
     power: float,
     character_level: int,
     stats: DerivedStats,
-    modifiers: dict[str, float],
+    modifiers: Mapping[str, float],
     spec: EffectSpec | None,
     skill_name: str,
     tempo: TurnTempo,
@@ -944,6 +1188,14 @@ def _strike(
 
     raw = power
     raw *= mods.percent(modifiers, "damage_percent")
+    raw *= situational_damage(
+        modifiers,
+        spec=spec,
+        enemy=enemy,
+        enemy_health_ratio=target.health / max(1, enemy.max_health),
+        player_health_ratio=state.player.health / max(1, state.player.max_health),
+        turn=state.turn,
+    )
     raw *= tempo.damage_scale
     if spec is not None and spec.execute_scaling:
         missing = 1.0 - target.health / max(1, enemy.max_health)
@@ -1002,22 +1254,22 @@ def _strike(
 # --- items and fleeing -----------------------------------------------
 
 
-def _use_item(content: GameContent, state: CombatState, action: CombatAction) -> CombatState:
+def _use_item(
+    content: GameContent, character: Character, state: CombatState, action: CombatAction
+) -> CombatState:
     if action.item_id is None or not content.has_item(action.item_id):
         return state
     item = content.item(action.item_id)
     if item.effect is None:
         return state
     working = state
+    modifiers = mods.collect_modifiers(content, character, state.player.effects)
     match item.effect.kind:
         # No flat magnitudes here either: a potion worth 40 health is a potion
         # worth nothing by level 20 (ADR 0007).
         case "heal_percent":
             amount = round(working.player.max_health * item.effect.power / 100.0)
-            player, restored = working.player.healed(amount)
-            working = replace(working, player=player).with_events(
-                CombatEvent(kind=EventKind.HEAL, actor=player.name, amount=restored)
-            )
+            working = _heal(working, amount, modifiers)
         case "restore_resource_percent":
             amount = round(working.player.max_resource * item.effect.power / 100.0)
             player = replace(
@@ -1099,6 +1351,20 @@ def _enemy_actions(
             )
             continue
 
+        enemy_modifiers = current.effects.modifiers()
+
+        # Темп решает до всего остального: не успевший ответить не мажет и не
+        # попадает - он просто не доходит до замаха.
+        outpace = outpace_chance(
+            stats.initiative,
+            current.enemy.initiative,
+            modifiers.get("initiative_percent", 0.0),
+            enemy_modifiers.get("initiative_percent", 0.0),
+        )
+        if outpace and source.uniform(0, 100) < outpace:
+            working = working.with_events(CombatEvent(kind=EventKind.OUTPACED, actor=current.name))
+            continue
+
         # The intent was announced before the player moved, so it is honoured here
         # even if the enemy has been wounded since.
         intent = tempo.intents.get(current.index, ActionTag.PRESS)
@@ -1107,7 +1373,7 @@ def _enemy_actions(
             MAX_HIT_CHANCE,
             max(
                 MIN_HIT_CHANCE,
-                ENEMY_ACCURACY_BASE
+                ENEMY_ACCURACY_BASE * mods.percent(enemy_modifiers, "accuracy_percent")
                 + (current.enemy.level - character.level) * ENEMY_ACCURACY_PER_LEVEL_GAP
                 - stats.dodge,
             ),
@@ -1122,14 +1388,18 @@ def _enemy_actions(
         raw = float(current.enemy.damage) * INTENT_DAMAGE[intent]
         # Caught mid-move: countering the announced tag also blunts the answer.
         raw *= tempo.answer_scale(current.index)
-        enemy_modifiers = current.effects.modifiers()
         raw *= 1.0 + enemy_modifiers.get("damage_percent", 0.0) / 100.0
         raw *= armor_factor(stats.armor, character.level)
         raw *= mods.percent(modifiers, "damage_taken_percent")
         raw *= 1.0 + working.player.effects.modifiers().get("damage_taken_percent", 0.0) / 100.0
+        raw *= incoming_damage_factor(modifiers, current.enemy)
 
         amount = max(1, round(raw))
         player, lost = working.player.damaged(amount)
+        # Пока держится «Последний рубеж», герой не падает: обещание умения
+        # стояло в тексте с самого начала и до сих пор не значило ничего.
+        if not player.alive and working.player.effects.modifiers().get(UNDYING, 0.0) > 0:
+            player = replace(player, health=1)
         working = replace(working, player=player).with_events(
             CombatEvent(
                 kind=EventKind.DAMAGE,
@@ -1142,6 +1412,78 @@ def _enemy_actions(
             working = working.with_events(
                 CombatEvent(kind=EventKind.PLAYER_DEFEATED, target=player.name)
             )
+            continue
+
+        working = _answered(
+            content,
+            character,
+            working,
+            attacker=current.index,
+            taken=amount,
+            stats=stats,
+            modifiers=modifiers,
+            tempo=tempo,
+            source=source,
+        )
+    return working
+
+
+def _answered(
+    content: GameContent,
+    character: Character,
+    state: CombatState,
+    *,
+    attacker: int,
+    taken: int,
+    stats: DerivedStats,
+    modifiers: Mapping[str, float],
+    tempo: TurnTempo,
+    source: random.Random,
+) -> CombatState:
+    """Чем герой отвечает тому, кто по нему только что попал.
+
+    Два обещания, за которыми до сих пор ничего не стояло: «вы отвечаете на
+    каждый удар по вам» у выпада воина и «часть полученного урона возвращается
+    обидчику» у постоянного умения паладина. Первое - настоящий удар, со всем,
+    что удару причитается; второе - доля того, что дошло, и брони она не знает:
+    отражается не замах, а боль.
+    """
+    working = state
+    target = working.enemy_at(attacker)
+    if target is None:
+        return working
+
+    reflect = modifiers.get("reflect_percent", 0.0)
+    if reflect > 0:
+        amount = max(1, round(taken * reflect / 100.0))
+        hurt = target.damaged(amount)
+        working = working.replace_enemy(hurt).with_events(
+            CombatEvent(kind=EventKind.DAMAGE, target=hurt.name, amount=amount)
+        )
+        if not hurt.alive:
+            return working.with_events(CombatEvent(kind=EventKind.ENEMY_DEFEATED, target=hurt.name))
+        target = hurt
+
+    counter = working.player.effects.modifiers().get(COUNTER, 0.0)
+    if counter > 0:
+        # Именем отвечает то умение, которое отвечать и научило: игрок слышит
+        # «Ответный выпад», а не безымянный урон.
+        named = next(
+            (effect.name for effect in working.player.effects if COUNTER in effect.modifiers),
+            "",
+        )
+        working, _ = _strike(
+            working,
+            target=target,
+            power=blow_roll(content, character, source, working.player.effects) * counter / 100.0,
+            character_level=character.level,
+            stats=stats,
+            modifiers=modifiers,
+            spec=None,
+            skill_name=named,
+            tempo=tempo,
+            source=source,
+        )
     return working
 
 
@@ -1153,6 +1495,9 @@ def _end_of_turn(content: GameContent, character: Character, state: CombatState)
     stats = derived_stats(content, character, state.player.effects)
 
     player = state.player.tick_cooldowns()
+    # Лечение по ходам платит до того, как срок укоротится: умение, обещавшее три
+    # хода, лечит три раза, а не два.
+    mending = round(player.effects.modifiers().get(MEND_PER_TURN, 0.0))
     player = replace(player, effects=player.effects.tick())
 
     regen_percent = modifiers.get("regen_per_turn_percent", 0.0)
@@ -1162,8 +1507,14 @@ def _end_of_turn(content: GameContent, character: Character, state: CombatState)
         player,
         resource=min(player.max_resource, player.resource + round(stats.resource_regen)),
     )
+    # Щит стоит ровно столько, сколько его держат: источник ушёл - ушёл и он.
+    held = round(player.effects.modifiers().get(SHIELD_HELD, 0.0))
+    player = replace(player, shield=min(player.shield, max(0, held)))
 
-    working = spend_bleeding(replace(state, player=player))
+    working = _repooled(content, character, replace(state, player=player))
+    if mending > 0:
+        working = _heal(working, mending, modifiers)
+    working = spend_bleeding(working)
     enemies = tuple(replace(enemy, effects=enemy.effects.tick()) for enemy in working.enemies)
     return replace(working, enemies=enemies, turn=working.turn + 1)
 
@@ -1215,6 +1566,7 @@ def _check_outcome(
         # противник платит золотом, хозяин логова — вещью, и реликтовой она
         # бывает только у него (``domain/procgen/items.py``).
         if source is not None:
+            found = mods.collect_modifiers(content, character, state.player.effects)
             loot = (
                 *loot,
                 *(
@@ -1222,7 +1574,12 @@ def _check_outcome(
                     for enemy in state.enemies
                     for dropped in (
                         item_procgen.roll_drop(
-                            content, source, level=enemy.enemy.level, rank=enemy.enemy.rank
+                            content,
+                            source,
+                            level=enemy.enemy.level,
+                            rank=enemy.enemy.rank,
+                            drop_bonus=found.get("drop_rate_percent", 0.0),
+                            rarity_bonus=found.get("rarity_percent", 0.0),
                         ),
                     )
                     if dropped is not None

@@ -360,6 +360,10 @@ def describe_event(event: CombatEvent, player: str = "") -> str:
             return "Слот пуст. Наберите умения в меню, вне боя."
         case EventKind.TURN_SKIPPED:
             return f"{event.actor} пропускает ход."
+        case EventKind.OUTPACED:
+            # Не то же самое, что пропуск хода: не сбит, а не успел. Игрок должен
+            # услышать разницу - за ней стоит его инициатива.
+            return f"{event.actor} не успевает ответить."
         case EventKind.MOMENTUM:
             marks = plural(event.amount, "след", "следа", "следов")
             gain = percent(MOMENTUM_DAMAGE_PERCENT * (event.amount - 1))

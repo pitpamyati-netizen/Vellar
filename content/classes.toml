@@ -51,7 +51,7 @@ key_stats = ["STR"]
 weapons = ["axe", "mace", "greatsword", "spear"]
 armor = ["cloth", "light", "medium"]
 bonuses = { STR = 2, END = 1 }
-resource = { id = "rage", name = "Ярость", base = 0, per_level = 0.5, stat = "STR", per_stat = 0.5, regen_per_turn = 0 }
+resource = { id = "rage", name = "Ярость", base = 0, per_level = 0.5, stat = "STR", per_stat = 0.5, regen_per_turn = 4 }
 health = { base = 120, per_level = 10.0, per_endurance = 6.0 }
 
 [[class]]

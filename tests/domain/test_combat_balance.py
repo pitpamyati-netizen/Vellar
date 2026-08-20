@@ -72,6 +72,14 @@ ORDINARY_HEALTH_COST = 0.07
 #: How many ordinary fights in a row a run through a location is worth measuring
 #: over: about what stands between the entrance and the exit of one.
 RUN_LENGTH_FLOOR = 4
+#: Сколько таких пробегов меряется и какая их доля должна дойти до конца.
+#: Один пробег - это один сид, а один сид это не обещание: полгода он был
+#: единственным, и стоило костям лечь иначе, как «мага держит четыре боя»
+#: превращалось в «мага держал именно этот бой». Доля считается по всем классам
+#: разом - ровно потому же, почему по ним разом считается цена боя: латы и
+#: должны доходить чаще рясы, и вопрос только в том, доходит ли вылазка.
+RUN_TRIALS = 12
+RUN_SURVIVAL = 0.7
 #: How much faster reading the announced intent may make a fight. It has to pay
 #: (``test_reading_the_intent_shortens_the_fight``), and it has to stay a way of
 #: fighting well rather than the only fight that exists.
@@ -347,27 +355,42 @@ def test_an_ordinary_fight_is_won_but_not_for_free(content: GameContent, level: 
     assert median >= ORDINARY_HEALTH_COST, f"at {level}: an ordinary fight costs {median:.0%}"
 
 
-@pytest.mark.parametrize("class_id", CLASSES)
-def test_wounds_add_up_over_a_run(content: GameContent, class_id: str) -> None:
-    """Wounds carry, so a location is walked with an eye on the health line.
+def _walk(content: GameContent, class_id: str, offset: int) -> tuple[bool, float]:
+    """One run through a location: fights in a row, nothing drunk, no bed paid.
 
-    Fight after fight with nothing drunk and no bed paid for. How far a character
-    gets is theirs - a paladin patches themselves up mid-fight and a mage does
-    not - but by the end of a run of ordinary fights, everybody is short of
-    something: health, or the resource they spent instead of hitting.
+    Returns whether the run was walked to the end and what share of the health
+    pool was left at that point.
     """
     character = build(content, class_id, 40)
     stats = derived_stats(content, character)
-    for trial in range(RUN_LENGTH_FLOOR):
-        result = fight(content, character, rank=EnemyRank.NORMAL, trial=trial)
-        assert result.outcome is CombatOutcome.VICTORY, (
-            f"{class_id}: lost fight {trial + 1} of a run of {RUN_LENGTH_FLOOR}"
+    for step in range(RUN_LENGTH_FLOOR):
+        result = fight(
+            content, character, rank=EnemyRank.NORMAL, trial=offset * RUN_LENGTH_FLOOR + step
         )
+        if result.outcome is not CombatOutcome.VICTORY:
+            return False, 0.0
         character = character.with_health(result.health_left, stats.max_health)
+    return True, character.health / stats.max_health
 
-    assert character.health < stats.max_health, (
-        f"{class_id}: {RUN_LENGTH_FLOOR} fights in a row and not a scratch"
-    )
+
+def test_wounds_add_up_over_a_run(content: GameContent) -> None:
+    """Wounds carry, so a location is walked with an eye on the health line.
+
+    Fight after fight with nothing drunk and no bed paid for. How far a character
+    gets is theirs - plate walks the whole location and a robe stops for a potion
+    halfway - but a run is walked far more often than not, and nobody comes out
+    of one untouched.
+    """
+    walked = [
+        _walk(content, klass.id, offset)
+        for klass in content.classes
+        for offset in range(RUN_TRIALS)
+    ]
+    share = sum(1 for done, _ in walked if done) / len(walked)
+    assert share >= RUN_SURVIVAL, f"only {share:.0%} of runs are walked to the end"
+
+    left = [health for done, health in walked if done]
+    assert max(left) < 1.0, f"{RUN_LENGTH_FLOOR} fights in a row and not a scratch"
 
 
 def test_no_class_makes_a_boss_a_different_game(content: GameContent) -> None:

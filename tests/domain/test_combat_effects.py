@@ -230,21 +230,37 @@ def test_evade_charges_absorb_the_next_hit(content: GameContent) -> None:
     assert dodged.player.health == dodged.player.max_health
 
 
-def test_avoid_combat_can_end_the_fight_peacefully(content: GameContent) -> None:
+def _charmer(content: GameContent) -> Character:
     half_elf = caster("paladin", "half_elf")
-    half_elf = replace(half_elf, loadout=replace(half_elf.loadout, racial="race_half_elf_charm"))
-    state = start_combat(content, half_elf, (enemy(),))
-    outcomes = {
+    return replace(half_elf, loadout=replace(half_elf.loadout, racial="race_half_elf_charm"))
+
+
+def _parley(content: GameContent, hero: Character, opponent: Enemy) -> set[CombatOutcome]:
+    state = start_combat(content, hero, (opponent,))
+    return {
         resolve_turn(
             content,
-            half_elf,
+            hero,
             state,
             CombatAction(kind=ActionKind.RACIAL),
             index.to_bytes(16, "big"),
         ).outcome
         for index in range(40)
     }
-    assert CombatOutcome.AVOIDED in outcomes
+
+
+def test_avoid_combat_can_end_the_fight_peacefully(content: GameContent) -> None:
+    bandit = replace(enemy(name="Разбойник"), kind=EnemyKind.HUMANOID)
+    assert CombatOutcome.AVOIDED in _parley(content, _charmer(content), bandit)
+
+
+def test_avoid_combat_needs_someone_who_can_be_reasoned_with(content: GameContent) -> None:
+    """«Шанс закончить бой с разумным противником миром» - с разумным.
+
+    С волком договориться нельзя, и умение это говорит текстом, который игрок
+    читает до нажатия. Раньше говорило, а работало на ком угодно.
+    """
+    assert _parley(content, _charmer(content), enemy()) == {CombatOutcome.ONGOING}
 
 
 def test_stuns_make_an_enemy_skip_a_turn(content: GameContent) -> None:
@@ -467,3 +483,117 @@ def test_a_missed_blow_draws_no_blood(content: GameContent) -> None:
     assert missed.enemies[0].effects.penalties() == ()
     assert spend_bleeding(missed).enemies[0].health == missed.enemies[0].health
     assert landed.enemies[0].effects.penalties() != ()
+
+
+# --- то, что раньше стояло в тексте и не происходило -------------------
+
+
+def test_healing_over_time_arrives_every_turn(content: GameContent) -> None:
+    """«Лечит вас каждый ход 3 хода» - каждый ход, а не один раз и тишина."""
+    druid = caster("druid", "human", "druid_regrowth")
+    state = start_combat(content, druid, (enemy(damage=0),))
+    hurt = replace(state, player=replace(state.player, health=state.player.max_health // 4))
+    started = hurt.player.health
+    first = use(content, druid, hurt)
+    second = resolve_turn(content, druid, first, CombatAction(kind=ActionKind.ATTACK), b"\x02" * 16)
+    # Каждый ход приносит свой кусок: первый ход уже вылечил, второй лечит ещё.
+    assert first.player.health > started
+    assert second.player.health > first.player.health
+
+
+def test_a_shield_burns_out_with_its_skill(content: GameContent) -> None:
+    """«Поглощает урон 3 хода» - и на четвёртом его нет."""
+    mage = caster("mage", "high_elf", "mage_arcane_shield")
+    state = start_combat(content, mage, (enemy(damage=0),))
+    working = use(content, mage, state)
+    assert working.player.shield > 0
+    for turn in range(3):
+        working = resolve_turn(
+            content, mage, working, CombatAction(kind=ActionKind.ATTACK), bytes([turn + 3]) * 16
+        )
+    assert working.player.shield == 0
+
+
+def test_a_riposte_answers_the_blow_it_took(content: GameContent) -> None:
+    """«3 хода вы отвечаете на каждый удар по вам» - раньше не отвечали ничем."""
+    warrior = caster("warrior", "human", "warrior_riposte")
+    state = start_combat(content, warrior, (enemy(damage=40),))
+    answered = use(content, warrior, state)
+    assert any(
+        event.kind in {EventKind.DAMAGE, EventKind.CRIT} and event.target == "Волк"
+        for event in answered.events
+    )
+
+
+def test_undying_keeps_the_last_stand_standing(content: GameContent) -> None:
+    """«Не даёт вам пасть 3 хода» - и не даёт."""
+    warrior = caster("warrior", "human", "warrior_last_stand")
+    state = start_combat(content, warrior, (enemy(damage=100_000),))
+    doomed = replace(state, player=replace(state.player, health=1))
+    stood = use(content, warrior, doomed)
+    assert stood.player.alive
+    assert stood.outcome is not CombatOutcome.DEFEAT
+
+
+def test_a_slowed_enemy_sometimes_does_not_answer(content: GameContent) -> None:
+    """Потеря инициативы - это потерянный ход, а не строка на экране."""
+    ranger = caster("ranger", "human", "ranger_snare")
+    state = start_combat(content, ranger, (enemy(damage=10),))
+    skipped = 0
+    for seed in range(40):
+        after = use(content, ranger, state, seed=seed)
+        skipped += any(
+            event.kind is EventKind.OUTPACED and event.actor == "Волк" for event in after.events
+        )
+    assert skipped > 0
+
+
+def test_a_beast_hunter_hits_beasts_harder(content: GameContent) -> None:
+    """Прибавка, которая смотрит на породу противника, наконец её видит."""
+    from mmorpg.domain.rules.combat import situational_damage
+
+    beast = enemy()
+    plain = situational_damage(
+        {},
+        spec=None,
+        enemy=beast,
+        enemy_health_ratio=1.0,
+        player_health_ratio=1.0,
+        turn=2,
+    )
+    hunter = situational_damage(
+        {"beast_damage_percent": 20.0},
+        spec=None,
+        enemy=beast,
+        enemy_health_ratio=1.0,
+        player_health_ratio=1.0,
+        turn=2,
+    )
+    assert plain == pytest.approx(1.0)
+    assert hunter == pytest.approx(1.2)
+
+
+def test_a_magic_blow_and_a_physical_one_are_told_apart(content: GameContent) -> None:
+    from mmorpg.domain.rules.combat import situational_damage
+
+    beast = enemy()
+    bundle = {"magic_damage_percent": 30.0, "physical_damage_percent": 10.0}
+    kwargs = {
+        "enemy": beast,
+        "enemy_health_ratio": 1.0,
+        "player_health_ratio": 1.0,
+        "turn": 2,
+    }
+    assert situational_damage(bundle, spec=spec_for("damage_fire"), **kwargs) == pytest.approx(1.3)
+    assert situational_damage(bundle, spec=spec_for("damage"), **kwargs) == pytest.approx(1.1)
+
+
+def test_stolen_gold_is_a_share_of_what_the_target_carries(content: GameContent) -> None:
+    """Кража - доля кошелька обворованного, а не написанное число (ADR 0007)."""
+    goblin = caster("rogue", "goblin")
+    goblin = replace(goblin, loadout=replace(goblin.loadout, racial="race_goblin_dirty_trick"))
+    rich = start_combat(content, goblin, (replace(enemy(), gold=1_000),))
+    poor = start_combat(content, goblin, (replace(enemy(), gold=10),))
+    taken = resolve_turn(content, goblin, rich, CombatAction(kind=ActionKind.RACIAL), b"\x05" * 16)
+    scraps = resolve_turn(content, goblin, poor, CombatAction(kind=ActionKind.RACIAL), b"\x05" * 16)
+    assert taken.gold > scraps.gold

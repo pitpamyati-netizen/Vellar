@@ -29,14 +29,16 @@ modifier_keys = [
     "resource_percent", "resource_regen_percent", "cost_reduction_percent",
     "cooldown_reduction_percent", "regen_per_turn_percent",
     "healing_done_percent", "healing_taken_percent",
-    "resist_fire_percent", "resist_cold_percent", "resist_poison_percent", "resist_magic_percent",
+    "resist_fire_percent", "resist_cold_percent", "resist_poison_percent",
+    "resist_magic_percent", "resist_physical_percent",
     "exp_percent", "gold_percent", "shop_price_percent", "sell_price_percent",
     "drop_rate_percent", "rarity_percent", "quest_reward_percent", "event_reward_percent",
     "craft_quality_percent", "gather_yield_percent", "salvage_yield_percent",
     "reflect_percent", "dot_damage_percent",
     "ambush_chance_percent", "flee_chance_percent", "trap_damage_percent",
     "first_turn_damage_percent", "single_target_damage_percent", "aoe_damage_percent",
-    "low_health_damage_percent", "elite_damage_percent", "beast_damage_percent",
+    "low_health_damage_percent", "wounded_target_damage_percent",
+    "elite_damage_percent", "beast_damage_percent",
     "undead_damage_percent", "humanoid_damage_percent", "reputation_percent",
 ]
 # Modifier keys where a lower value is the good outcome. The renderer needs this to

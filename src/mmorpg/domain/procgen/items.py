@@ -238,21 +238,35 @@ RELIC_CHANCE: dict[EnemyRank, float] = {
 }
 
 
+#: Насколько сильно ``rarity_percent`` тянет вес редкой вещи. Прибавка бьёт по
+#: весу, а не по шансу: «редкая добыча выпадает чаще» - это про то, какая вещь
+#: выпала, а не про то, выпала ли она. Вес обычной вещи она не трогает вовсе,
+#: иначе пятнадцать процентов удачи превращались бы в реликвии.
+RARITY_PULL = 0.02
+
+
 def roll_drop(
     content: GameContent,
     source: random.Random,
     *,
     level: int,
     rank: EnemyRank,
+    drop_bonus: float = 0.0,
+    rarity_bonus: float = 0.0,
 ) -> str | None:
     """Что падает с побеждённого: имя вещи или ``None``, если ничего.
 
     Ступень берётся по уровню противника, редкость — по весу, и только с хозяина
     логова редкость бывает реликтовой.
+
+    ``drop_bonus`` и ``rarity_bonus`` — проценты со следопыта, разбойника и
+    всего, что обещает добычу почаще и побогаче. Обещали давно, считаются здесь:
+    до этого оба ключа лежали в словаре и не читались никем.
     """
     if not content.gear_archetypes or not content.gear_tiers:
         return None
-    if source.random() >= DROP_CHANCE.get(rank, 0.0):
+    chance = DROP_CHANCE.get(rank, 0.0) * (1.0 + max(-1.0, drop_bonus / 100.0))
+    if source.random() >= chance:
         return None
 
     tier = tier_at(content, level)
@@ -267,5 +281,10 @@ def roll_drop(
     sellable = [rarity for rarity in content.rarities if rarity.weight > 0]
     if not sellable:
         return None
-    picked = source.choices(sellable, weights=[rarity.weight for rarity in sellable], k=1)[0]
+    heaviest = max(rarity.weight for rarity in sellable)
+    weights = [
+        rarity.weight * (1.0 + rarity_bonus * RARITY_PULL * (1.0 - rarity.weight / heaviest))
+        for rarity in sellable
+    ]
+    picked = source.choices(sellable, weights=weights, k=1)[0]
     return gear_id(archetype.id, tier.level, picked.id)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from mmorpg.domain.entities import GameContent, SkillKind
+from mmorpg.domain.rules.modifiers import EFFECTIVE_KEYS
 
 RACE_STAT_BUDGET = 3
 
@@ -143,3 +144,33 @@ def test_class_skills_unlock_progressively(content: GameContent) -> None:
     unlocked_at_100 = content.class_skills_up_to("warrior", 100, SkillKind.ACTIVE)
     assert len(unlocked_at_1) == 1
     assert len(unlocked_at_100) == 8
+
+
+def test_every_passive_points_at_a_modifier_the_engine_reads(content: GameContent) -> None:
+    """Постоянное умение обязано что-то делать, а не что-то обещать.
+
+    Пятнадцать из сорока восьми классовых постоянных умений полгода называли
+    ключ, которого не считал никто: «физический урон выше», «урон по зверям
+    выше», «часть полученного урона возвращается обидчику». Игрок вкладывал в них
+    очко и получал строку на экране. Словарь ``traits.toml`` шире того, что
+    движок читает, и потому сверяться нужно с ``EFFECTIVE_KEYS``, а не с ним.
+    """
+    promised = [
+        (skill.code, skill.effect)
+        for skill in content.skills
+        if skill.kind is SkillKind.PASSIVE and skill.effect not in EFFECTIVE_KEYS
+    ]
+    assert not promised, promised
+
+
+def test_every_edge_points_at_a_modifier_the_engine_reads(content: GameContent) -> None:
+    """И грань тоже: её текст читает игрок, а получает он числа."""
+    promised = [
+        (skill.code, edge.name, key)
+        for skill in content.skills
+        for edge in skill.edges
+        for bundle in (edge.effect.self_modifiers, edge.effect.target_modifiers)
+        for key in bundle
+        if key not in EFFECTIVE_KEYS
+    ]
+    assert not promised, promised

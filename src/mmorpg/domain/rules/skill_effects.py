@@ -71,6 +71,9 @@ class EffectSpec:
     bonus_shield: float = 0.0
     self_damage_taken: float = 0.0
     dot_turns: int = 0
+    #: Сколько ходов держится щит. Ноль - щит не сгорает сам, и так было у всех
+    #: четырёх щитов игры: текст обещал «3 хода», а щит стоял до конца боя.
+    shield_turns: int = 0
     stun_turns: int = 0
     execute_scaling: float = 0.0
     chain_falloff: float = 0.0
@@ -83,6 +86,27 @@ class EffectSpec:
     # The trace this effect leaves. Left out, it is read off the category by
     # `tag_of`; set it only where the category would say the wrong thing.
     tag: ActionTag | None = None
+
+
+# --- служебные пометки -----------------------------------------------
+#
+# То, что умение вешает на себя или на цель не как прибавку, а как признак:
+# «истекает кровью», «не может пасть», «отвечает на удар». Ключи нарочно не из
+# словаря ``traits.toml``: их читает только бой, и в расчёт характеристик они
+# попадать не должны. Подчёркивание в начале - тот же знак, что и в коде.
+
+#: Сколько урона цель получает каждый ход, пока истекает кровью или горит.
+BLEED_PER_TURN = "_bleed_per_turn"
+#: Сколько здоровья возвращается каждый ход, пока держится лечение по ходам.
+MEND_PER_TURN = "_mend_per_turn"
+#: Доля удара, которой герой отвечает тому, кто по нему попал.
+COUNTER = "_counter_percent"
+#: Пока держится, здоровье не опускается ниже единицы.
+UNDYING = "_undying"
+#: Пока держится, пропуск хода герою не грозит.
+UNSTUNNABLE = "_unstunnable"
+#: Сколько щита ещё держится этим источником: щит сгорает вместе с ним.
+SHIELD_HELD = "_shield_held"
 
 
 def _damage(**kwargs: object) -> EffectSpec:
@@ -118,9 +142,11 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
         damage_scale=0.85, target_modifiers=(M("accuracy_percent", -25.0),), duration=2
     ),
     "damage_execute": _damage(execute_scaling=0.6),
-    "damage_initiative": _damage(special="haste_self"),
+    # Темп - это очередь удара: тот, кто быстрее, застаёт противника на замахе
+    # (``combat._outpaced``). До этого «haste_self» не значило ничего.
+    "damage_initiative": _damage(self_modifiers=(M("initiative_percent", 40.0),), duration=2),
     "damage_steal": _damage(special="steal_gold"),
-    "damage_companion": _damage(dot_turns=3, damage_scale=0.6, special="companion"),
+    "damage_companion": _damage(dot_turns=3, damage_scale=0.6),
     "damage_and_heal": _damage(aoe=True, special="full_heal"),
     # --- area damage ---
     "damage_aoe": _damage(aoe=True),
@@ -130,20 +156,27 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
     "damage_aoe_arcane": _damage(aoe=True, tags=("arcane",)),
     "damage_aoe_elemental": _damage(aoe=True, tags=("elemental",)),
     "damage_aoe_slow": _damage(
-        aoe=True, target_modifiers=(M("initiative_percent", -25.0),), duration=2
+        aoe=True, tags=("cold",), target_modifiers=(M("initiative_percent", -25.0),), duration=2
     ),
     "damage_aoe_stun": _damage(aoe=True, stun_turns=1),
-    "damage_chain": _damage(aoe=True, chain_falloff=0.3),
+    "damage_chain": _damage(aoe=True, tags=("elemental",), chain_falloff=0.3),
     # --- healing and shields ---
     "heal": EffectSpec(category=EffectCategory.HEAL),
     "heal_big": EffectSpec(category=EffectCategory.HEAL),
+    # Лечение по ходам не лечит сразу: ``power`` - это то, что приходит каждый
+    # ход, и приходит оно ``dot_turns`` раз. Раньше срок стоял в описании и не
+    # делал ничего - умение лечило один раз и молчало три хода.
     "heal_over_time": EffectSpec(
         category=EffectCategory.HEAL, dot_turns=3, special="heal_over_time"
     ),
-    "shield": EffectSpec(category=EffectCategory.SHIELD),
-    "cleanse_shield": EffectSpec(
-        category=EffectCategory.SHIELD, cleanse_count=99, special="cleanse_and_shield"
+    "shield": EffectSpec(category=EffectCategory.SHIELD, shield_turns=3),
+    "shield_undying": EffectSpec(
+        category=EffectCategory.SHIELD,
+        shield_turns=3,
+        duration=3,
+        self_modifiers=(M(UNDYING, 1.0),),
     ),
+    "cleanse_shield": EffectSpec(category=EffectCategory.SHIELD, shield_turns=3, cleanse_count=99),
     # --- cleansing ---
     "cleanse": EffectSpec(category=EffectCategory.CLEANSE, cleanse_count=2),
     "cleanse_dodge": EffectSpec(
@@ -154,25 +187,38 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
     ),
     # --- self buffs ---
     "buff_damage": _buff(self_modifiers=(M("damage_percent"),)),
+    # Ярость за броню: то, что варвар и делает.
+    "buff_frenzy": _buff(
+        self_modifiers=(M("damage_percent"), M("armor_percent", -30.0)),
+    ),
     "buff_armor": _buff(self_modifiers=(M("armor_percent"),)),
     "buff_dodge": _buff(duration=2, self_modifiers=(M("dodge_percent"),)),
     # A power of 30 here means "30 percent less damage taken".
     "buff_damage_taken": _buff(self_modifiers=(M("damage_taken_percent", scale=-1.0),)),
-    "buff_lifesteal": _buff(lifesteal=0.3),
-    "buff_counter": _buff(special="counter"),
+    # Вампиризм на срок - это прибавка себе, а не свойство одного удара:
+    # ``lifesteal`` в описании читает только тот удар, которым умение бьёт, а
+    # это умение не бьёт вовсе. Три хода подряд оно потому и не делало ничего.
+    "buff_lifesteal": _buff(self_modifiers=(M("lifesteal_percent"),)),
+    # Ответный выпад отвечает: доля удара по тому, кто ударил
+    # (``combat._counterattack``).
+    "buff_counter": _buff(self_modifiers=(M(COUNTER),)),
+    # Прибавка к характеристикам - число, а не процент: процентов у характеристик
+    # в игре нет вовсе. Число берётся из силы умения, и потому растёт с рангом -
+    # раньше оно стояло двойкой намертво, и ранг ничего не менял.
     "buff_all_stats": _buff(
         self_modifiers=(
-            M("stat_STR", 2.0),
-            M("stat_AGI", 2.0),
-            M("stat_END", 2.0),
-            M("stat_INT", 2.0),
-            M("stat_WIS", 2.0),
-            M("stat_CHA", 2.0),
-            M("stat_LCK", 2.0),
+            M("stat_STR"),
+            M("stat_AGI"),
+            M("stat_END"),
+            M("stat_INT"),
+            M("stat_WIS"),
+            M("stat_CHA"),
+            M("stat_LCK"),
         ),
     ),
     "buff_avatar": _buff(
-        duration=4, self_modifiers=(M("damage_percent", 100.0),), special="unstunnable"
+        duration=4,
+        self_modifiers=(M("damage_percent"), M(UNSTUNNABLE, 1.0)),
     ),
     "buff_form_bear": _buff(self_modifiers=(M("health_percent"), M("armor_percent"))),
     "buff_form_wolf": _buff(self_modifiers=(M("damage_percent"), M("initiative_percent"))),
@@ -191,9 +237,10 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
         ),
     ),
     # Drawing the blow onto yourself is a guard, whatever the category says.
+    # Переключать цель не на что: противник и так бьёт по игроку, поэтому от
+    # провокации остаётся ровно то, что она делает, - удар слабее.
     "taunt": _debuff(
         target_modifiers=(M("damage_percent", scale=-1.0),),
-        special="taunt",
         tag=ActionTag.GUARD,
     ),
     # --- special ---

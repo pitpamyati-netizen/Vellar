@@ -152,7 +152,9 @@ as the band grows - what the player upgrades is the thing in their hand.
 
 That is also why a damage skill is read out as a **range** - "урон от 34 до 96" -
 and never as one number: one number would promise a precision the dice do not
-have.
+have. Half of that range is not rolled at all: every weapon kind carries a flat
+part alongside its dice (`1d10+3`), so the range stays a range a player can plan
+against instead of a lottery (ADR 0017).
 
 Before this, `power` was an absolute number while the plain attack grew with
 level; by level 30 every skill in the game was weaker than pressing "Атака", and
@@ -173,6 +175,29 @@ Two tests keep the two halves honest:
 
 Adding a skill needs **no code**. Adding a new *kind* of behaviour needs exactly
 one table entry.
+
+### A modifier the engine does not read is not a bonus
+
+A passive skill and an edge both state their bonus as a key from the shared
+vocabulary. That vocabulary (`traits.toml [meta].modifier_keys`) is deliberately
+wider than what the engine computes - it holds keys for mechanics that do not
+exist yet. **Skills may only use keys that are computed**, listed in
+`domain/rules/modifiers.py::EFFECTIVE_KEYS` and pinned by two tests in
+`tests/content`. Fifteen class passives and four edges pointed at uncomputed keys
+for half a year: the player spent a skill point and got a line of text (ADR 0018).
+
+What the engine reads that is easy to miss:
+
+- **situational damage** - by the target's kind (beast, undead, humanoid), by its
+  tier, by how wounded it is, by your own low health, by the first turn, by one
+  target or all, and by whether the blow is a spell or a hand (a skill is a spell
+  when its effect carries an element tag);
+- **tempo** - initiative decides how often an opponent fails to answer at all
+  (`combat.outpace_chance`), which is what every "инициатива ниже на N процентов"
+  in content buys;
+- **shields expire** (`EffectSpec.shield_turns`), healing over time arrives once a
+  turn rather than all at once, and a counter, an undying stand and an immunity to
+  stuns are self-modifiers under private keys the combat engine reads by name.
 
 ## Combat screen shape
 

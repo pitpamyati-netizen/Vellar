@@ -67,24 +67,31 @@ slots = [
 ]
 
 # Рода оружия. Род решает, чем игрок бьёт: dice - кости этого рода на первой
-# ступени, дальше растут грани, а не число костей. Размах это характер рода:
-# булава «1d16» бьёт вразброс, меч «2d6» ровно, и в среднем они близки - ни один
-# род не должен быть выбором «за неимением лучшего».
+# ступени, дальше кости растут вместе с ней. Размах это характер рода: булава
+# бьёт вразброс, меч ровно, и в среднем они близки - ни один род не должен быть
+# выбором «за неимением лучшего».
+#
+# У КАЖДОГО РОДА ЕСТЬ ПОЛ УДАРА, КОТОРЫЙ НЕ БРОСАЮТ. Прибавка в костях («+3»)
+# это то, что оружие даёт всегда, и она растёт со ступенью наравне с самими
+# костями. Без неё булава «1d16» на сотом уровне обещала «от 9 до 630»: одно и
+# то же нажатие приносило то девятку, то шесть сотен, и решать по такому числу
+# было нечего. Половина удара в прибавке оставляет роду его характер и убирает
+# ту часть невезения, которая была не игрой, а шумом.
 #
 # Класс носит своё (classes.toml), но чужое не запрещено: за чужое оружие платят
 # точностью и инициативой, а не отказом (ADR 0015).
 weapon_types = [
-    { id = "dagger", name = "Кинжал", gender = "m", dice = "1d11", modifiers = { crit_chance_percent = 4, initiative_percent = 8 } },
-    { id = "short_sword", name = "Короткий меч", gender = "m", dice = "1d13", modifiers = { initiative_percent = 4, accuracy_percent = 3 } },
-    { id = "sword", name = "Меч", gender = "m", dice = "2d6", modifiers = { accuracy_percent = 4 } },
-    { id = "greatsword", name = "Двуручный меч", gender = "m", dice = "2d8", modifiers = { initiative_percent = -10, dodge_percent = -3 } },
-    { id = "axe", name = "Топор", gender = "m", dice = "2d7", modifiers = { crit_damage_percent = 10, accuracy_percent = -4 } },
-    { id = "mace", name = "Булава", gender = "f", dice = "1d16", modifiers = { initiative_percent = -4, damage_percent = 4 } },
-    { id = "spear", name = "Копьё", gender = "n", dice = "1d14", modifiers = { accuracy_percent = 5, initiative_percent = -3 } },
-    { id = "bow", name = "Лук", gender = "m", dice = "1d13", modifiers = { initiative_percent = 6, accuracy_percent = 4 } },
-    { id = "staff", name = "Посох", gender = "m", dice = "2d5", modifiers = { damage_percent = 4, resource_percent = 5 } },
-    { id = "wand", name = "Жезл", gender = "m", dice = "1d12", modifiers = { damage_percent = 6, resource_regen_percent = 8 } },
-    { id = "symbol", name = "Символ веры", gender = "m", dice = "1d11", modifiers = { healing_done_percent = 10, resource_percent = 8 } },
+    { id = "dagger", name = "Кинжал", gender = "m", dice = "1d7+2", modifiers = { crit_chance_percent = 4, initiative_percent = 8 } },
+    { id = "short_sword", name = "Короткий меч", gender = "m", dice = "2d4+2", modifiers = { initiative_percent = 4, accuracy_percent = 3 } },
+    { id = "sword", name = "Меч", gender = "m", dice = "2d3+3", modifiers = { accuracy_percent = 4 } },
+    { id = "greatsword", name = "Двуручный меч", gender = "m", dice = "2d5+3", modifiers = { initiative_percent = -10, dodge_percent = -3 } },
+    { id = "axe", name = "Топор", gender = "m", dice = "2d5+2", modifiers = { crit_damage_percent = 10, accuracy_percent = -4 } },
+    { id = "mace", name = "Булава", gender = "f", dice = "1d10+3", modifiers = { initiative_percent = -4, damage_percent = 4 } },
+    { id = "spear", name = "Копьё", gender = "n", dice = "1d8+3", modifiers = { accuracy_percent = 5, initiative_percent = -3 } },
+    { id = "bow", name = "Лук", gender = "m", dice = "2d5+1", modifiers = { initiative_percent = 6, accuracy_percent = 4 } },
+    { id = "staff", name = "Посох", gender = "m", dice = "2d3+2", modifiers = { damage_percent = 4, resource_percent = 5 } },
+    { id = "wand", name = "Жезл", gender = "m", dice = "1d6+3", modifiers = { damage_percent = 6, resource_regen_percent = 8 } },
+    { id = "symbol", name = "Символ веры", gender = "m", dice = "2d4+1", modifiers = { healing_done_percent = 10, resource_percent = 8 } },
 ]
 
 # Рода доспеха. armor - доля брони относительно лёгкого доспеха той же ступени.
