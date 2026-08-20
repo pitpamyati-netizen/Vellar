@@ -201,6 +201,7 @@ def service(headline: str, *details: str) -> BroadcastEvent:
 def changelog(
     version: str,
     *,
+    headline: str = "",
     added: tuple[str, ...] = (),
     changed: tuple[str, ...] = (),
     fixed: tuple[str, ...] = (),
@@ -210,6 +211,10 @@ def changelog(
     Each entry is what a player can now do or will now see - never a module, a
     function or a commit. Empty sections are omitted rather than left as headings
     with nothing under them, because a screen reader reads the heading anyway.
+
+    The headline is written in ``content/changelog.toml`` and says what the update
+    is about, because the first line is the whole post for a reader who stops
+    after it. An update that writes none falls back to the bare version.
     """
     details: list[str] = []
     for title, entries in (("Добавлено", added), ("Изменилось", changed), ("Исправлено", fixed)):
@@ -222,6 +227,6 @@ def changelog(
         raise ValueError(msg)
     return BroadcastEvent(
         kind=BroadcastKind.CHANGELOG,
-        headline=f"Обновление {version}.",
+        headline=headline.strip() or f"Обновление {version}.",
         details=tuple(details),
     )

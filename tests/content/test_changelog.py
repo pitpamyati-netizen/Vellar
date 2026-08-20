@@ -12,7 +12,12 @@ from pathlib import Path
 import pytest
 
 from mmorpg.infrastructure.content import ContentError, load_changelog, select_release
-from mmorpg.infrastructure.content.changelog import ENTRY_LIMIT, Release, version_key
+from mmorpg.infrastructure.content.changelog import (
+    ENTRY_LIMIT,
+    HEADLINE_PREFIX,
+    Release,
+    version_key,
+)
 from mmorpg.presentation.telegram import broadcast as bc
 from tests.conftest import CONTENT_ROOT
 
@@ -37,14 +42,97 @@ def test_every_shipped_release_is_a_postable_update() -> None:
     for release in load_changelog(CONTENT_ROOT):
         event = bc.changelog(
             release.version,
+            headline=release.headline,
             added=release.added,
             changed=release.changed,
             fixed=release.fixed,
         )
         text = bc.render_broadcast(event)
 
-        assert text.splitlines()[0].endswith(f"Обновление {release.version}.")
+        assert f"{HEADLINE_PREFIX} {release.version}" in text.splitlines()[0]
         assert len(text) <= bc.limit_for(bc.BroadcastKind.CHANGELOG)
+
+
+# --- the headline ----------------------------------------------------
+
+
+def test_the_headline_written_in_the_file_is_the_first_line(tmp_path: Path) -> None:
+    """The line a player hears first is written by an author, not assembled."""
+    content_dir = write(
+        tmp_path,
+        """
+        [[release]]
+        version = "0.2"
+        headline = "Обновление 0.2: на арене снова дерутся."
+        added = ["Арена: бой на три круга."]
+        """,
+    )
+
+    release = select_release(load_changelog(content_dir))
+    text = bc.render_broadcast(
+        bc.changelog(release.version, headline=release.headline, added=release.added), emoji=False
+    )
+
+    assert text.splitlines()[0] == "Обновление 0.2: на арене снова дерутся."
+
+
+def test_a_release_without_a_headline_still_posts(tmp_path: Path) -> None:
+    content_dir = write(
+        tmp_path,
+        """
+        [[release]]
+        version = "0.2"
+        added = ["Арена: бой на три круга."]
+        """,
+    )
+
+    release = select_release(load_changelog(content_dir))
+
+    assert release.headline == ""
+    text = bc.render_broadcast(
+        bc.changelog(release.version, headline=release.headline, added=release.added), emoji=False
+    )
+    assert text.splitlines()[0] == "Обновление 0.2."
+
+
+def test_a_headline_that_hides_the_version_is_refused(tmp_path: Path) -> None:
+    """A first line read on its own has to say which update it announces."""
+    content_dir = write(
+        tmp_path,
+        """
+        [[release]]
+        version = "0.2"
+        headline = "На арене снова дерутся."
+        added = ["Арена: бой на три круга."]
+        """,
+    )
+
+    with pytest.raises(ContentError, match="must start with"):
+        load_changelog(content_dir)
+
+
+def test_an_empty_or_overlong_headline_is_refused(tmp_path: Path) -> None:
+    content_dir = write(
+        tmp_path,
+        f"""
+        [[release]]
+        version = "0.2"
+        headline = "  "
+        added = ["Арена: бой на три круга."]
+
+        [[release]]
+        version = "0.3"
+        headline = "Обновление 0.3: {"а" * ENTRY_LIMIT}"
+        added = ["Лавка снова помнит выкупленный товар."]
+        """,
+    )
+
+    with pytest.raises(ContentError) as error:
+        load_changelog(content_dir)
+
+    problems = " ".join(error.value.problems)
+    assert "empty headline" in problems
+    assert f"headline, the limit is {ENTRY_LIMIT}" in problems
 
 
 # --- ordering --------------------------------------------------------

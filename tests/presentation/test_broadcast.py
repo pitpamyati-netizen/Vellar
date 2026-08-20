@@ -68,6 +68,24 @@ def test_a_changelog_reads_as_news_for_players() -> None:
     assert "Добавлено:" in text and "Исправлено:" in text
 
 
+def test_an_update_says_what_it_is_about_when_the_file_says_so() -> None:
+    """The headline is the whole post for a player who stops after one line."""
+    event = bc.changelog(
+        "0.2",
+        headline="Обновление 0.2: на арене снова дерутся.",
+        added=("Арена: бой между игроками на три круга.",),
+    )
+    text = bc.render_broadcast(event, emoji=False)
+
+    assert text.splitlines()[0] == "Обновление 0.2: на арене снова дерутся."
+
+
+def test_an_update_without_a_headline_falls_back_to_the_version() -> None:
+    event = bc.changelog("0.2", headline="   ", added=("Арена.",))
+
+    assert event.headline == "Обновление 0.2."
+
+
 def test_an_empty_changelog_is_refused() -> None:
     with pytest.raises(ValueError, match="not an update"):
         bc.changelog("0.3")

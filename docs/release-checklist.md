@@ -132,6 +132,8 @@ Only when something that pays or charges changed.
       `tests/presentation/test_broadcast.py`
 - [ ] This version has a section in `content/changelog.toml`, written as what a
       player can now do, and `--changelog latest --dry-run` renders it
+- [ ] Its `headline` names the version and the one change worth hearing about -
+      it is the whole post for a player who stops after the first line
 - [ ] The update is posted **after** the code is live - a changelog announcing
       something nobody can do yet is a bug report from every player at once
 - [ ] Group commands answer in one message and stay silent for other bots' traffic

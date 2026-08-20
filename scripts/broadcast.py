@@ -77,6 +77,7 @@ def build_event(args: argparse.Namespace, settings: Settings) -> BroadcastEvent:
         release = select_release(load_changelog(settings.content_dir), args.changelog)
         return changelog(
             release.version,
+            headline=release.headline,
             added=release.added,
             changed=release.changed,
             fixed=release.fixed,

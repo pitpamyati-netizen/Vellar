@@ -27,6 +27,9 @@ CHANGELOG_FILE = "changelog.toml"
 # a line and becomes a paragraph nobody can hold in their head.
 ENTRY_LIMIT = 200
 LATEST = "latest"
+# A headline stands alone, so it has to say which update this is: a player who
+# stops after the first line must still know what they just heard about.
+HEADLINE_PREFIX = "Обновление"
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +37,9 @@ class Release:
     """One published version, in the three sections a player understands."""
 
     version: str
+    # The first line of the post. Empty means the file did not write one, and the
+    # post falls back to the bare "Обновление 0.2.".
+    headline: str = ""
     added: tuple[str, ...] = ()
     changed: tuple[str, ...] = ()
     fixed: tuple[str, ...] = ()
@@ -83,6 +89,7 @@ def load_changelog(content_dir: Path) -> tuple[Release, ...]:
 
         release = Release(
             version=version,
+            headline=_headline(entry, version, problems),
             added=_section(entry, "added", version, problems),
             changed=_section(entry, "changed", version, problems),
             fixed=_section(entry, "fixed", version, problems),
@@ -115,6 +122,30 @@ def select_release(releases: Sequence[Release], version: str = LATEST) -> Releas
 def _is_numeric(version: str) -> bool:
     parts = version.split(".")
     return bool(parts) and all(part.isdigit() for part in parts)
+
+
+def _headline(entry: Any, version: str, problems: list[str]) -> str:
+    """The line a player hears first, if the file writes one."""
+    raw = entry.get("headline")
+    if raw is None:
+        return ""
+    line = str(raw).strip()
+    if not line:
+        problems.append(f"{CHANGELOG_FILE}: {version} has an empty headline")
+        return ""
+    if len(line) > ENTRY_LIMIT:
+        problems.append(
+            f"{CHANGELOG_FILE}: {version} has a {len(line)}-character headline, "
+            f"the limit is {ENTRY_LIMIT}"
+        )
+        return ""
+    if not line.startswith(f"{HEADLINE_PREFIX} {version}"):
+        problems.append(
+            f"{CHANGELOG_FILE}: the headline of {version} must start with "
+            f"{HEADLINE_PREFIX!r} and the version - it is read on its own"
+        )
+        return ""
+    return line
 
 
 def _section(entry: Any, key: str, version: str, problems: list[str]) -> tuple[str, ...]:
