@@ -32,6 +32,7 @@ from mmorpg.domain.procgen.seeds import derive, location_seed
 from mmorpg.domain.rules import adventure, economy
 from mmorpg.domain.rules import arena as arena_rules
 from mmorpg.domain.rules import crafts as craft_rules
+from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import quests as quest_rules
@@ -1183,7 +1184,7 @@ def _handle_item(
     if item_screens.USE.matches(command.argument) and item.kind.value == "consumable":
         healed_character, healed = adventure.use_consumable(content, character, item.id)
         if healed <= 0:
-            return state.with_notice(f"{item.name} сейчас ничего не даст. {item.text}")
+            return state.with_notice(f"{item.name} сейчас ничего не даст.")
         write = PendingWrite(character=healed_character, items=((item.id, -1),))
         return (
             go_back(replace(state, item_id=""))
@@ -1194,7 +1195,15 @@ def _handle_item(
 
 
 def _equip(content: GameContent, character: Character, state: PlayState, item: Item) -> PlayState:
-    """Put a thing on. What it replaces goes back into the bag, never nowhere."""
+    """Put a thing on. What it replaces goes back into the bag, never nowhere.
+
+    Род оружия и род доспеха — это допуск, а не украшение карточки: разбойник не
+    берёт двуручник, маг не надевает латы. Карточка такой вещи кнопки «Надеть» не
+    рисует вовсе (``screens/items.py``), а это второй замок на той же двери: вещь
+    остаётся в сумке, и отказ приходит словами.
+    """
+    if refusal := gear.equip_refusal(content, character, item):
+        return state.with_notice(refusal)
     previous = character.equipment.item_in(item.slot)
     dressed = replace(character, equipment=character.equipment.equip(item.slot, item.id))
     write = PendingWrite(character=dressed, items=((item.id, -1),))

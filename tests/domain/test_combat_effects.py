@@ -393,7 +393,13 @@ def test_bleeding_actually_takes_health_every_turn(content: GameContent) -> None
     """
     skill = content.skill("rogue_poison_blade")
     hero = caster("rogue", "human", skill.code)
-    hero = replace(hero, loadout=replace(hero.loadout, ranks={skill.code: 1}))
+    # Отравленный клинок просит клинок: без кинжала умение не сработает вовсе, и
+    # тест мерил бы отказ, а не кровотечение.
+    hero = replace(
+        hero,
+        loadout=replace(hero.loadout, ranks={skill.code: 1}),
+        equipment=hero.equipment.equip("weapon", "poacher_daggers"),
+    )
 
     after = use(content, hero, start_combat(content, hero, (enemy(),)))
     poisoned = after.enemies[0]

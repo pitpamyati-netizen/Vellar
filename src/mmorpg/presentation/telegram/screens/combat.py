@@ -28,6 +28,7 @@ from mmorpg.domain.entities.combat import (
 )
 from mmorpg.domain.entities.content import GameContent, Skill
 from mmorpg.domain.entities.location import EnemyRank
+from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules.combat import (
     MOMENTUM_DAMAGE_PERCENT,
     blow_of,
@@ -172,6 +173,25 @@ def _modifier_phrase(spec: EffectSpec, power: float) -> str:
     return f"{phrase} на {turns(spec.duration)}" if spec.duration else phrase
 
 
+def _weapon_status(content: GameContent, character: Character, skill: Skill) -> str:
+    """Чего умению не хватает в руках. Пусто, когда хватает.
+
+    Кнопка обязана обещать ровно то, что сделает (``Claude.md``, правило 9):
+    «Прицельный выстрел» без лука не выстрелит, и сказать об этом надо до нажатия.
+    """
+    if not skill.weapon_types:
+        return ""
+    held = gear.weapon_type_of(content, character)
+    if held in skill.weapon_types:
+        return ""
+    wanted = ", ".join(
+        content.weapon_type(type_id).name.lower()
+        for type_id in skill.weapon_types
+        if content.has_weapon_type(type_id)
+    )
+    return f"нужно оружие: {wanted}"
+
+
 def _slot_status(skill: Skill, state: CombatState) -> str:
     """Readiness, the price and the price of using it - always in words.
 
@@ -206,9 +226,10 @@ def skill_label(content: GameContent, character: Character, state: CombatState, 
         return label(f"{slot + 1}. {EMPTY_SLOT}")
 
     skill = content.skill(code)
+    status = _weapon_status(content, character, skill) or _slot_status(skill, state)
     return label(
         f"{slot + 1}. {skill.name} — {TAG_NAMES[tag_of_skill(skill)]}, "
-        f"{skill_effect(content, character, state, skill)}, {_slot_status(skill, state)}"
+        f"{skill_effect(content, character, state, skill)}, {status}"
     )
 
 
@@ -308,6 +329,10 @@ def describe_event(event: CombatEvent, player: str = "") -> str:
             return f"Не хватает ресурса на умение {event.skill_name}: нужно {event.amount}."
         case EventKind.ON_COOLDOWN:
             return f"Умение {event.skill_name} на откате ещё {turns(event.turns)}."
+        case EventKind.WRONG_WEAPON:
+            # Отказ уже собран словами в домене: он знает и что умение просит, и
+            # что сейчас в руке.
+            return event.effect_name
         case EventKind.EMPTY_SLOT:
             return "Слот пуст. Наберите умения в меню, вне боя."
         case EventKind.TURN_SKIPPED:

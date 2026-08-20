@@ -72,6 +72,51 @@ def test_consumables_have_effects_and_stack(content: GameContent) -> None:
         assert item.slot == "none", item.id
 
 
+def test_items_never_describe_themselves(content: GameContent) -> None:
+    """Описания у вещи нет, и не может появиться незаметно.
+
+    Вещи выпадают, куются и лежат на прилавке сотнями: фраза у каждой была бы либо
+    выдумкой на месте, либо одной и той же фразой на сотню предметов.
+    """
+    assert not hasattr(content.items[0], "text")
+
+
+def test_every_weapon_and_armour_kind_exists_in_the_world(content: GameContent) -> None:
+    """Род, которым никто не дерётся, — это допуск, закрывающий класс насмерть."""
+    worn_weapons = {item.weapon_type for item in content.items if item.is_weapon}
+    worn_armour = {item.armor_type for item in content.items if item.is_armor}
+    for kind in content.weapon_types:
+        assert kind.id in worn_weapons, kind.id
+    for kind in content.armor_types:
+        assert kind.id in worn_armour, kind.id
+
+
+def test_every_class_can_arm_and_dress_itself_from_the_first_level(content: GameContent) -> None:
+    """Класс, которому нечего надеть на первом уровне, играет голыми руками.
+
+    Проверяется по всему списку вещей, а не по прилавку: прилавок случаен, но
+    того, что классу вообще недоступно, он не покажет никогда.
+    """
+    starting = [item for item in content.items if item.level <= 5]
+    for klass in content.classes:
+        assert any(item.is_weapon and klass.can_wield(item.weapon_type) for item in starting), (
+            f"{klass.id} has no weapon to start with"
+        )
+        assert any(
+            item.is_armor and item.slot == "body" and klass.can_wear(item.armor_type)
+            for item in starting
+        ), f"{klass.id} has nothing to wear on its back"
+
+
+def test_a_skill_never_asks_for_a_weapon_its_class_cannot_hold(content: GameContent) -> None:
+    by_id = {klass.id: klass for klass in content.classes}
+    for skill in content.skills:
+        klass = by_id.get(skill.owner_id)
+        if klass is None or not skill.weapon_types:
+            continue
+        assert set(skill.weapon_types) <= set(klass.weapon_types), skill.code
+
+
 def test_rarities_are_ordered_by_scarcity(content: GameContent) -> None:
     weights = [rarity.weight for rarity in content.rarities]
     assert weights == sorted(weights, reverse=True)
@@ -117,6 +162,63 @@ def test_unknown_modifier_is_reported(tmp_path: Path) -> None:
     with pytest.raises(ContentError) as error:
         load_content(directory)
     assert any("nonsense_percent" in problem for problem in error.value.problems)
+
+
+def test_an_item_description_is_reported(tmp_path: Path) -> None:
+    """Описание вернулось бы тихо: его отказывается принимать загрузчик."""
+    directory = _copy_content(tmp_path)
+    path = directory / "items.toml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            'id = "rusty_sword"',
+            'id = "rusty_sword"' + chr(10) + 'text = "Одна фраза, которой здесь не место."',
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ContentError) as error:
+        load_content(directory)
+    assert any("has a text field" in problem for problem in error.value.problems)
+
+
+def test_an_unknown_weapon_kind_is_reported(tmp_path: Path) -> None:
+    directory = _copy_content(tmp_path)
+    path = directory / "items.toml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            'weapon_type = "sword"', 'weapon_type = "halberd"', 1
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ContentError) as error:
+        load_content(directory)
+    assert any("halberd" in problem for problem in error.value.problems)
+
+
+def test_a_weapon_without_a_kind_is_reported(tmp_path: Path) -> None:
+    directory = _copy_content(tmp_path)
+    path = directory / "items.toml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace('weapon_type = "sword"' + chr(10), "", 1),
+        encoding="utf-8",
+    )
+    with pytest.raises(ContentError) as error:
+        load_content(directory)
+    assert any("declares no weapon_type" in problem for problem in error.value.problems)
+
+
+def test_a_skill_asking_for_a_weapon_its_class_never_holds_is_reported(tmp_path: Path) -> None:
+    """Кнопка, которая не сработает никогда, — это баг, а не содержимое."""
+    directory = _copy_content(tmp_path)
+    path = directory / "skills.toml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            'weapons = ["dagger"]', 'weapons = ["greatsword"]', 1
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ContentError) as error:
+        load_content(directory)
+    assert any("never wields" in problem for problem in error.value.problems)
 
 
 def test_world_gap_is_reported(tmp_path: Path) -> None:

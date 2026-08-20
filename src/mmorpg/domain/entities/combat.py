@@ -122,6 +122,7 @@ class EventKind(StrEnum):
     AVOIDED = "avoided"
     NOT_ENOUGH_RESOURCE = "not_enough_resource"
     ON_COOLDOWN = "on_cooldown"
+    WRONG_WEAPON = "wrong_weapon"
     EMPTY_SLOT = "empty_slot"
     TURN_SKIPPED = "turn_skipped"
     MOMENTUM = "momentum"

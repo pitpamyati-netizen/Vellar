@@ -132,6 +132,33 @@ def test_what_it_replaces_goes_back_into_the_bag(content: GameContent, hero: Cha
     assert worn.pending.items == (("chain_shirt", -1), ("leather_armor", 1))
 
 
+def test_a_card_names_the_kind_and_the_armour_it_holds(
+    content: GameContent, hero: Character
+) -> None:
+    """Броня называется числом: процент от выносливости и был тем, что ничего не менял."""
+    goods = Goods(gold=hero.gold, owned=(OwnedItem("chain_shirt", 1),))
+    inventory = step(content, hero, begin(hero), "Инвентарь", goods=goods)
+    card = step(content, hero, inventory, "Кольчужная рубаха, штук 1 — надеть", goods=goods)
+    text = render(content, hero, card, world_seed=WORLD_SEED, goods=goods).text()
+
+    assert "Род доспеха: средний доспех" in text
+    assert "Броня доспеха: " in text
+
+
+def test_a_thing_your_class_never_wears_says_so_and_offers_no_button(
+    content: GameContent, hero: Character
+) -> None:
+    """Отказ приходит до нажатия: кнопка, которая ничего не сделает, — это баг."""
+    rogue = replace(hero, class_id="rogue", loadout=SkillLoadout())
+    goods = Goods(gold=rogue.gold, owned=(OwnedItem("chain_shirt", 1),))
+    inventory = step(content, rogue, begin(rogue), "Инвентарь", goods=goods)
+    card = step(content, rogue, inventory, "Кольчужная рубаха, штук 1 — надеть", goods=goods)
+    screen = render(content, rogue, card, world_seed=WORLD_SEED, goods=goods)
+
+    assert "разбойник такого не носит" in screen.text()
+    assert not any("Надеть" in button.text for row in screen.rows for button in row)
+
+
 def test_raw_stock_says_what_it_is_instead_of_doing_nothing(
     content: GameContent, hero: Character
 ) -> None:

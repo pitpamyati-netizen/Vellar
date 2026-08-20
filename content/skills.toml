@@ -36,6 +36,11 @@
 # tag: натиск (press), оборона (guard) or точность (precision) - the trace this
 #   skill leaves. Omitted, it is read off the effect; state it where the effect
 #   would say the wrong thing.
+# weapons: рода оружия, без которых умение не сработает - ids из items.toml
+#   [meta].weapon_types. Пусто - работает с любым и без оружия вовсе; выстрел без
+#   лука и удар в спину без кинжала - нет. Список может быть только уже того, что
+#   носит класс (classes.toml, weapons), иначе это кнопка, которая не сработает
+#   никогда, и загрузчик её не принимает.
 
 [meta]
 max_rank = 5
@@ -171,6 +176,7 @@ code = "warrior_blade_whirl"
 name = "Вихрь клинков"
 owner = "class:warrior"
 kind = "active"
+weapons = ["sword", "greatsword"]
 level = 14
 cost = 25
 cooldown = 3
@@ -814,6 +820,7 @@ code = "ranger_aimed_shot"
 name = "Прицельный выстрел"
 owner = "class:ranger"
 kind = "active"
+weapons = ["bow"]
 level = 1
 cost = 10
 cooldown = 0
@@ -850,6 +857,7 @@ code = "ranger_volley"
 name = "Залп"
 owner = "class:ranger"
 kind = "active"
+weapons = ["bow"]
 level = 8
 cost = 20
 cooldown = 3
@@ -904,6 +912,7 @@ code = "ranger_piercing_arrow"
 name = "Бронебойная стрела"
 owner = "class:ranger"
 kind = "active"
+weapons = ["bow"]
 level = 35
 cost = 26
 cooldown = 3
@@ -940,6 +949,7 @@ code = "ranger_rain_of_arrows"
 name = "Дождь стрел"
 owner = "class:ranger"
 kind = "active"
+weapons = ["bow"]
 level = 100
 cost = 42
 cooldown = 6
@@ -1067,6 +1077,7 @@ code = "rogue_poison_blade"
 name = "Отравленный клинок"
 owner = "class:rogue"
 kind = "active"
+weapons = ["dagger", "short_sword"]
 level = 4
 cost = 18
 cooldown = 2
@@ -1104,6 +1115,7 @@ code = "rogue_flurry"
 name = "Шквал ударов"
 owner = "class:rogue"
 kind = "active"
+weapons = ["dagger", "short_sword"]
 level = 14
 cost = 25
 cooldown = 3
@@ -1141,6 +1153,7 @@ code = "rogue_shadowstrike"
 name = "Удар в спину"
 owner = "class:rogue"
 kind = "active"
+weapons = ["dagger"]
 level = 35
 cost = 28
 cooldown = 3

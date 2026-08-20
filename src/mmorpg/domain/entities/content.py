@@ -122,6 +122,9 @@ class Skill:
     #: ``skill_effects.tag_of``; content names it where the effect would say the
     #: wrong thing, and where a class would otherwise never see all three tags.
     tag: ActionTag | None = None
+    #: Рода оружия, с которыми умение работает. Пусто - работает с любым и без
+    #: оружия вовсе; выстрел без лука и удар в спину без кинжала - нет.
+    weapon_types: tuple[str, ...] = ()
 
     @property
     def owner(self) -> str:
@@ -196,6 +199,17 @@ class CharacterClass:
     bonuses: StatBlock
     resource: ClassResource
     health: HealthCurve
+    #: Рода оружия и доспеха, которые класс умеет носить. Пусто - умеет всё:
+    #: содержимое переживает код, и класс, заведённый до этих списков, не должен
+    #: оказаться голым.
+    weapon_types: tuple[str, ...] = ()
+    armor_types: tuple[str, ...] = ()
+
+    def can_wield(self, weapon_type: str) -> bool:
+        return not self.weapon_types or weapon_type in self.weapon_types
+
+    def can_wear(self, armor_type: str) -> bool:
+        return not self.armor_types or armor_type in self.armor_types
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,6 +233,14 @@ class ItemEffect:
 
 @dataclass(frozen=True, slots=True)
 class Item:
+    """Вещь. Описания у неё нет: имя, род и числа - это всё, что она о себе знает.
+
+    Вещи выпадают, куются и лежат на прилавке сотнями, и фраза «одна фраза о
+    вещи» у каждой из них была бы либо выдумкой на месте, либо одной и той же
+    фразой на сотню предметов. Что вещь такое, отвечают её род (``weapon_type``,
+    ``armor_type``), слот и прибавки - и отвечают числом, а не настроением.
+    """
+
     id: str
     name: str
     kind: ItemKind
@@ -226,7 +248,6 @@ class Item:
     rarity: str
     level: int
     price: int
-    text: str
     modifiers: Mapping[str, float]
     skill_modifiers: Mapping[str, float]
     stack: int = 1
@@ -234,10 +255,67 @@ class Item:
     #: Что это за сырьё - "травы", "руда", "шкуры", "обломки". Пусто у всего,
     #: что сырьём не является, и у сырья, которое годится отовсюду.
     source: str = ""
+    #: Род оружия - только у того, что надевается в руку.
+    weapon_type: str = ""
+    #: Род доспеха - только у того, что прикрывает тело, голову, руки или ноги.
+    armor_type: str = ""
 
     @property
     def is_equipment(self) -> bool:
         return self.kind is ItemKind.EQUIPMENT
+
+    @property
+    def is_weapon(self) -> bool:
+        return bool(self.weapon_type)
+
+    @property
+    def is_armor(self) -> bool:
+        return bool(self.armor_type)
+
+
+@dataclass(frozen=True, slots=True)
+class EquipSlot:
+    """Место, куда вещь надевается, и сколько брони с этого места вообще снимают.
+
+    ``armor_share`` - доля от того, что даёт нагрудник: голова, руки и ноги
+    прикрывают меньше, а оружие и украшение не прикрывают ничего. Без этой доли
+    четыре мелких предмета одевали бы игрока лучше, чем латный доспех.
+    """
+
+    id: str
+    name: str
+    armor_share: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class WeaponType:
+    """Род оружия: кинжал, меч, лук. Тем, кто чем дерётся, и решается, что ему доступно.
+
+    ``damage`` - доля от стандартного удара. Единица - это голые руки: оружие
+    бывает лучше их, но не бывает хуже, иначе кинжал оказался бы обузой. Всё
+    остальное, чем один род отличается от другого, - ``modifiers``: кинжал даёт
+    прыть, топор - вес удара, и это записано числом, а не в названии.
+    """
+
+    id: str
+    name: str
+    damage: float = 1.0
+    modifiers: Mapping[str, float] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class ArmorType:
+    """Род доспеха: ткань, лёгкий, средний, тяжёлый.
+
+    ``armor`` - доля брони относительно лёгкого доспеха того же уровня. Именно
+    она и делает броню бронёй: до неё вся защита росла из одной выносливости, а
+    надетое меняло её на проценты от почти нуля.
+    """
+
+    id: str
+    name: str
+    armor: float = 1.0
+    modifiers: Mapping[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -389,6 +467,9 @@ class GameContent:
     rarities: tuple[Rarity, ...]
     enemy_archetypes: tuple[EnemyArchetype, ...]
     elite_titles: tuple[str, ...]
+    slots: tuple[EquipSlot, ...]
+    weapon_types: tuple[WeaponType, ...]
+    armor_types: tuple[ArmorType, ...]
     quests: tuple[Quest, ...]
     crafts: tuple[Craft, ...]
     recipes: tuple[Recipe, ...]
@@ -409,6 +490,9 @@ class GameContent:
     _skills_by_owner: Mapping[str, tuple[Skill, ...]]
     _cities_by_id: Mapping[str, City]
     _rarities_by_id: Mapping[str, Rarity]
+    _slots_by_id: Mapping[str, EquipSlot]
+    _weapon_types_by_id: Mapping[str, WeaponType]
+    _armor_types_by_id: Mapping[str, ArmorType]
     _quests_by_id: Mapping[str, Quest]
     _crafts_by_id: Mapping[str, Craft]
     _recipes_by_id: Mapping[str, Recipe]
@@ -432,6 +516,9 @@ class GameContent:
         inverted_modifiers: frozenset[str],
         rules: ProgressionRules,
         craft_rules: CraftRules,
+        slots: Sequence[EquipSlot] = (),
+        weapon_types: Sequence[WeaponType] = (),
+        armor_types: Sequence[ArmorType] = (),
         quests: Sequence[Quest] = (),
         crafts: Sequence[Craft] = (),
         recipes: Sequence[Recipe] = (),
@@ -454,6 +541,9 @@ class GameContent:
             rarities=tuple(rarities),
             enemy_archetypes=tuple(enemy_archetypes),
             elite_titles=tuple(elite_titles),
+            slots=tuple(slots),
+            weapon_types=tuple(weapon_types),
+            armor_types=tuple(armor_types),
             quests=tuple(quests),
             crafts=tuple(crafts),
             recipes=tuple(recipes),
@@ -474,6 +564,9 @@ class GameContent:
             ),
             _cities_by_id=MappingProxyType({city.id: city for city in cities}),
             _rarities_by_id=MappingProxyType({rarity.id: rarity for rarity in rarities}),
+            _slots_by_id=MappingProxyType({slot.id: slot for slot in slots}),
+            _weapon_types_by_id=MappingProxyType({kind.id: kind for kind in weapon_types}),
+            _armor_types_by_id=MappingProxyType({kind.id: kind for kind in armor_types}),
             _quests_by_id=MappingProxyType({quest.id: quest for quest in quests}),
             _crafts_by_id=MappingProxyType({craft.id: craft for craft in crafts}),
             _recipes_by_id=MappingProxyType({recipe.id: recipe for recipe in recipes}),
@@ -509,6 +602,24 @@ class GameContent:
 
     def rarity(self, rarity_id: str) -> Rarity:
         return self._rarities_by_id[rarity_id]
+
+    def slot(self, slot_id: str) -> EquipSlot:
+        return self._slots_by_id[slot_id]
+
+    def has_slot(self, slot_id: str) -> bool:
+        return slot_id in self._slots_by_id
+
+    def weapon_type(self, type_id: str) -> WeaponType:
+        return self._weapon_types_by_id[type_id]
+
+    def has_weapon_type(self, type_id: str) -> bool:
+        return type_id in self._weapon_types_by_id
+
+    def armor_type(self, type_id: str) -> ArmorType:
+        return self._armor_types_by_id[type_id]
+
+    def has_armor_type(self, type_id: str) -> bool:
+        return type_id in self._armor_types_by_id
 
     def quest(self, quest_id: str) -> Quest:
         return self._quests_by_id[quest_id]

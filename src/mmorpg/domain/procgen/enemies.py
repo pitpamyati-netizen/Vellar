@@ -18,8 +18,13 @@ from mmorpg.domain.procgen.seeds import rng
 # Health is set against the standard blow of a character of the same level
 # (`domain.rules.combat.standard_blow`): an ordinary opponent is meant to fall in
 # about three turns, which is what tests/domain/test_combat_balance.py pins down.
-HEALTH_BASE = 24.0
-HEALTH_PER_LEVEL = 9.0
+# Здоровье меряется против стандартного удара, а стандартный удар с тех пор
+# считает оружие в руке (``domain/rules/equipment.py``): противник, посчитанный
+# против голых рук, ложился за два хода, стоил игроку одного процента здоровья и
+# делал вылазку формальностью. Сорок процентов сверху возвращают бою обещанные три хода
+# при том же оружии, каким его дерётся живой игрок.
+HEALTH_BASE = 34.6
+HEALTH_PER_LEVEL = 12.96
 # Damage is set against the player's health pool rather than against their blow:
 # an ordinary opponent should cost a noticeable share of it over the three turns
 # it lives, so that a run through a location is a series of decisions - press on,

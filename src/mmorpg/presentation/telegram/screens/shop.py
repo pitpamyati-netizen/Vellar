@@ -51,11 +51,21 @@ class OwnedItem:
     quantity: int
 
 
-def matches_filters(item: Item, state: PageState, content: GameContent) -> bool:
-    """Раздел, поиск и уровни. Поиск идёт и по названию, и по описанию.
+def _kind_words(content: GameContent, item: Item) -> str:
+    """Слова, которыми вещь называет свой род: «кинжал», «тяжёлый доспех»."""
+    if item.is_weapon and content.has_weapon_type(item.weapon_type):
+        return content.weapon_type(item.weapon_type).name.casefold()
+    if item.is_armor and content.has_armor_type(item.armor_type):
+        return content.armor_type(item.armor_type).name.casefold()
+    return item.source.casefold()
 
-    Игрок помнит вещь по тому, что она делает («лечение»), а не по её имени, и
-    должен находить её именно так.
+
+def matches_filters(item: Item, state: PageState, content: GameContent) -> bool:
+    """Раздел, поиск и уровни. Поиск идёт по названию и по роду вещи.
+
+    Игрок помнит вещь по тому, что она есть («кинжал», «латы»), а не только по
+    имени, и должен находить её именно так. Описания у вещи нет: вещи выпадают
+    сотнями, и фраза у каждой была бы выдумкой на месте.
     """
     filters = state.filters
     if filters.rarity and content.rarity(item.rarity).name != filters.rarity:
@@ -64,7 +74,7 @@ def matches_filters(item: Item, state: PageState, content: GameContent) -> bool:
         return False
     if filters.query:
         needle = filters.query.casefold().strip()
-        if needle not in item.name.casefold() and needle not in item.text.casefold():
+        if needle not in item.name.casefold() and needle not in _kind_words(content, item):
             return False
     if filters.level_min and item.level < filters.level_min:
         return False

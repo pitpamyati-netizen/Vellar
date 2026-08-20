@@ -11,7 +11,9 @@ from pathlib import Path
 
 import pytest
 
+from mmorpg.domain.entities import GameContent
 from mmorpg.presentation.telegram.keyboards.labels import BACK, LOOK, MAIN_MENU, SERVICE_ROW
+from mmorpg.presentation.telegram.screens import items as item_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import MESSAGE_LIMIT
 from tests.conftest import SOURCE_ROOT, iter_source_files
@@ -153,3 +155,15 @@ def test_no_markdown_parse_mode_is_configured() -> None:
         text = path.read_text(encoding="utf-8")
         assert "ParseMode.MARKDOWN" not in text, path.name
         assert 'parse_mode="Markdown"' not in text, path.name
+
+
+def test_the_slot_list_matches_the_content_it_names(content: GameContent) -> None:
+    """Слоты названы в двух местах, и разойтись им нельзя.
+
+    Экран персонажа перебирает ``SLOT_NAMES``, а броню и допуски считает
+    содержимое: слот, выпавший из одного списка, стал бы местом, куда нельзя ни
+    надеть, ни снять.
+    """
+    assert [slot.id for slot in content.slots] == list(item_screens.SLOT_NAMES)
+    for slot in content.slots:
+        assert item_screens.SLOT_NAMES[slot.id] == slot.name

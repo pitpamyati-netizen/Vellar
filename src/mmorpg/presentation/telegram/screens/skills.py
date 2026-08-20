@@ -70,6 +70,28 @@ def skill_state(content: GameContent, character: Character, skill: Skill) -> str
     return f"ранг {rank} из {content.rules.max_rank}, повысить за одно очко"
 
 
+def weapon_demand(content: GameContent, skill: Skill) -> str:
+    """Каким оружием это умение вообще работает. Пусто — любым и без оружия.
+
+    Список читается со стороны умения, а не со стороны рук: экран умений
+    открывают вне боя, и там важно, подо что умение брать, а не что надето сейчас.
+    """
+    if not skill.weapon_types:
+        return ""
+    wanted = ", ".join(
+        content.weapon_type(type_id).name.lower()
+        for type_id in skill.weapon_types
+        if content.has_weapon_type(type_id)
+    )
+    return f"Работает только с таким оружием: {wanted}." if wanted else ""
+
+
+def skill_detail(content: GameContent, skill: Skill) -> str:
+    """Строка под названием умения: что оно делает и чем его для этого держат."""
+    demand = weapon_demand(content, skill)
+    return f"{skill.text} {demand}".strip() if demand else skill.text
+
+
 def skill_entry_text(content: GameContent, character: Character, skill: Skill) -> str:
     kind = "боевое" if skill.is_active else "постоянное"
     return f"{skill.name} — {kind}, {skill_state(content, character, skill)}"
@@ -87,7 +109,7 @@ def skills_screen(
         ListEntry(
             key=skill.code,
             text=skill_entry_text(content, character, skill),
-            detail=skill.text,
+            detail=skill_detail(content, skill),
         )
         for skill in pool
     ]
@@ -163,7 +185,7 @@ def pick_screen(
         ListEntry(
             key=skill.code,
             text=f"{skill.name} — ранг {character.loadout.rank_of(skill.code)}",
-            detail=skill.text,
+            detail=skill_detail(content, skill),
         )
         for skill in available
     ]

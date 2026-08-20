@@ -15,11 +15,19 @@ is wrong.
 from __future__ import annotations
 
 import statistics
+from collections.abc import Sequence
 from typing import NamedTuple
 
 import pytest
 
-from mmorpg.domain.entities import Character, GameContent, SkillLoadout
+from mmorpg.domain.entities import (
+    Character,
+    CharacterClass,
+    Equipment,
+    GameContent,
+    Item,
+    SkillLoadout,
+)
 from mmorpg.domain.entities.combat import (
     ActionKind,
     ActionTag,
@@ -32,6 +40,7 @@ from mmorpg.domain.entities.location import EnemyRank
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.procgen.enemies import generate_group
 from mmorpg.domain.procgen.seeds import derive
+from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules.combat import blow_of, enemy_intent, resolve_turn, start_combat
 from mmorpg.domain.rules.skill_effects import EffectCategory, spec_for, tag_of_skill
 from mmorpg.domain.rules.stats import derived_stats, stat_allowance
@@ -68,9 +77,53 @@ TEMPO_CEILING = 2.0
 CLASS_SPREAD = 1.75
 
 
+def armed(
+    content: GameContent,
+    klass: CharacterClass,
+    level: int,
+    actives: Sequence[str | None] = (),
+) -> Equipment:
+    """The best weapon of its class this character could be holding by now.
+
+    Оружие здесь не украшение: род оружия множит стандартный удар, а половина
+    умений разбойника и следопыта без своего оружия просто не сработает. Голыми
+    руками мерить бой значило бы мерить не ту игру, в которую играют.
+
+    Доспех при этом остаётся снятым, и намеренно: чего стоит обычный бой,
+    меряется по здоровью, и одетый в латы боец ответил бы на этот вопрос за всех.
+    """
+    wieldable = [
+        item
+        for item in content.items
+        if item.is_weapon and klass.can_wield(item.weapon_type) and item.level <= level
+    ]
+    if not wieldable:
+        return Equipment()
+    # Игрок берёт оружие под свою панель и под свой удар, а не самое дорогое:
+    # клинок, которым работают три умения, стоит больше молота, которым не
+    # работает ни одно, а кадило с прибавкой к лечению не бьёт вовсе.
+    wanted = [
+        skill.weapon_types
+        for code in actives
+        if code is not None
+        for skill in (content.skill(code),)
+        if skill.weapon_types
+    ]
+
+    def worth(item: Item) -> tuple[int, float, int]:
+        hits = sum(
+            item.modifiers.get(key, 0.0)
+            for key in ("damage_percent", "physical_damage_percent", "magic_damage_percent")
+        )
+        blow = content.weapon_type(item.weapon_type).damage * (1.0 + hits / 100.0)
+        return sum(item.weapon_type in types for types in wanted), blow, item.level
+
+    return Equipment().equip("weapon", max(wieldable, key=worth).id)
+
+
 def build(content: GameContent, class_id: str, level: int) -> Character:
     """A character built the way a player would: points into the key stats, the
-    newest skills equipped, damage first."""
+    newest skills equipped, damage first, and a weapon in hand."""
     klass = content.character_class(class_id)
     keys = list(klass.key_stats) or [StatCode.STR]
     allocated: dict[str, int] = {}
@@ -97,6 +150,7 @@ def build(content: GameContent, class_id: str, level: int) -> Character:
         class_id=class_id,
         level=level,
         allocated=StatBlock.from_mapping(allocated),
+        equipment=armed(content, klass, level, actives),
         loadout=SkillLoadout(actives=tuple(actives), racial=content.race("human").active_code),
     )
 
@@ -107,6 +161,11 @@ def _options(content: GameContent, character: Character, state: CombatState) -> 
         if code is None:
             continue
         skill = content.skill(code)
+        # Умение, для которого в руках не то оружие, игрок видит отказом прямо на
+        # кнопке и не нажимает: считать его доступным значило бы мерить игрока,
+        # который каждый ход жмёт наугад.
+        if gear.skill_refusal(content, character, skill):
+            continue
         if state.player.cooldown_of(code) == 0 and skill.cost <= state.player.resource:
             actions.append(CombatAction(kind=ActionKind.SKILL, slot=slot))
     return actions

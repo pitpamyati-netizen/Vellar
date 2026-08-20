@@ -75,10 +75,17 @@ name = "Монах"                       # one Russian word: how the character 
 role = "Ближний бой без оружия"
 description = "Одна фраза."
 key_stats = ["AGI", "WIS"]
+weapons = ["staff", "dagger"]        # ids from items.toml [meta].weapon_types
+armor = ["cloth", "light"]           # ids from items.toml [meta].armor_types
 bonuses = { AGI = 2, WIS = 1 }
 resource = { id = "chi", name = "Ци", base = 55, per_level = 1.2, stat = "WIS", per_stat = 1.5, regen_per_turn = 8 }
 health = { base = 95, per_level = 7.5, per_endurance = 6.0 }
 ```
+
+`weapons` and `armor` are the class in the player's hands - a rogue holding a
+two-handed sword is not a rogue. Both lists are required and both must name kinds
+that at least one item in `items.toml` actually is, at a level the class can
+reach early: a class with nothing to put on plays bare-handed in a shirt.
 
 A class needs exactly **8 active** skills at levels `[1, 4, 8, 14, 22, 35, 60,
 100]` and exactly **6 passive** skills at levels `[2, 6, 12, 20, 30, 50]` (the lists
@@ -132,12 +139,18 @@ effect = "damage"              # must be listed in skills.toml [meta].active_eff
 power = 135                    # a PERCENTAGE at rank 1 - see below
 scaling = "AGI"                # which stat the standard blow is measured on
 tag = "точность"               # optional: натиск | оборона | точность
+weapons = ["staff"]            # optional: without one of these it does not fire
 text = "Одна фраза, что делает умение."
 edges = [
     { name = "Первая грань", text = "Что меняется." },
     { name = "Вторая грань", text = "Что меняется иначе." },
 ]
 ```
+
+`weapons` is what the skill needs in hand: a shot asks for a bow, a backstab for
+a dagger. Left out, the skill works with anything and bare-handed too. The list
+may only ever be *narrower* than what the class wields (`classes.toml`) - a wider
+one is a button that can never fire, and the loader refuses it.
 
 A passive declares `effect` as a **modifier key** instead, and omits
 `cost`/`cooldown`/`target`/`scaling`:
@@ -195,13 +208,23 @@ id = "sea_glass_blade"
 name = "Клинок морского стекла"
 kind = "equipment"                   # equipment | consumable | material
 slot = "weapon"                      # weapon/head/body/hands/feet/trinket, or "none"
+weapon_type = "short_sword"          # weapons only, from items.toml [meta].weapon_types
 rarity = "rare"                      # from items.toml [meta].rarities
 level = 18
 price = 760
-modifiers = { physical_damage_percent = 16 }
+modifiers = { damage_percent = 16 }
 skill_modifiers = { monk_palm_strike = 20 }   # +20% to that skill, never a new button
-text = "Одна фраза."
 ```
+
+**An item has no description.** Items drop, are forged and sit on shelves by the
+hundred; a phrase written for each of them is either invented on the spot or the
+same phrase a hundred times over. What a thing is, its kind, its slot and its
+numbers answer. A `text` field on an item is refused by the loader.
+
+**Every weapon declares `weapon_type`, every head/body/hands/feet piece declares
+`armor_type`** (`items.toml [meta]`). The kind is not decoration: it decides how
+much armour the piece holds, which classes may put it on (`classes.toml`) and
+which skills work with it (`skills.toml`). A trinket has neither. See ADR 0014.
 
 Consumables must declare `stack` and an `effect` table, and always use `slot =
 "none"` - they live in the combat Bag tab.

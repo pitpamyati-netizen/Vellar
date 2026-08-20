@@ -46,7 +46,7 @@ def spoken(content: GameContent) -> Iterator[tuple[str, str]]:
     for trait in content.traits:
         yield trait.id, f"{trait.name} {trait.text} {' '.join(trait.tags)}"
     for item in content.items:
-        yield item.id, f"{item.name} {item.text}"
+        yield item.id, item.name
     for rarity in content.rarities:
         yield rarity.id, rarity.name
     for archetype in content.enemy_archetypes:

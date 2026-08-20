@@ -699,7 +699,7 @@ def all_screens(
             screen_id=ScreenId.INVENTORY,
             title="Инвентарь",
             entries=[
-                ListEntry(key=item.id, text=item.name, detail=item.text[:40])
+                ListEntry(key=item.id, text=item.name, detail=f"уровень {item.level}")
                 for item in content.items[:20]
             ],
             state=PageState(page=1, filters=ListFilters(category="Оружие")),

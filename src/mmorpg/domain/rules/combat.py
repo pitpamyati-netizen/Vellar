@@ -53,6 +53,7 @@ from mmorpg.domain.entities.location import Enemy
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.procgen.enemies import RANK_FACTORS
 from mmorpg.domain.rules import edges as edge_rules
+from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.progression import experience_reward
@@ -111,22 +112,18 @@ LOW_HEALTH_THRESHOLD = 0.35
 ACCURACY_PER_LEVEL_GAP = 1.5
 ENEMY_ACCURACY_PER_LEVEL_GAP = 1.0
 
-# Armour is softened against the defender's own level. Both armour and damage
-# grow linearly with level, so an unnormalised softener would let armour win the
-# race outright: at level 300 an ordinary blow would land for a quarter of itself.
-ARMOR_SOFTENER_BASE = 55.0
-ARMOR_SOFTENER_PER_LEVEL = 3.2
+# Armour is softened against the defender's own level, and both the softener and
+# what a worn piece of armour is worth live in ``domain/rules/equipment.py`` - the
+# two are one curve read from both ends, and splitting them let armour and damage
+# drift apart once already (ADR 0007).
+ARMOR_SOFTENER_BASE = gear.ARMOR_SOFTENER_BASE
+ARMOR_SOFTENER_PER_LEVEL = gear.ARMOR_SOFTENER_PER_LEVEL
+armor_factor = gear.armor_factor
 
 
 def standard_blow(level: int, stat_value: int) -> float:
     """What one plain attack of this character is worth."""
     return BLOW_BASE + BLOW_PER_LEVEL * level + BLOW_PER_STAT * stat_value
-
-
-def armor_factor(armor: float, level: int) -> float:
-    """The share of a blow that survives armour, between 0 and 1."""
-    softener = ARMOR_SOFTENER_BASE + ARMOR_SOFTENER_PER_LEVEL * level
-    return softener / (softener + max(0.0, armor))
 
 
 # --- tempo: intent, trace, breach ------------------------------------
@@ -410,12 +407,17 @@ def blow_of(
     The stat is the skill's own when it names one and the class's first key stat
     otherwise, so a warrior's blow follows strength and a mage's follows intellect
     without either being written down twice.
+
+    Оружие в руке множит этот удар на долю своего рода: двуручник тяжелее
+    кинжала, а голые руки - единица отсчёта, ниже которой оружия не бывает
+    (``domain/rules/equipment.py``).
     """
     if scaling is None:
         klass = content.character_class(character.class_id)
         scaling = klass.key_stats[0] if klass.key_stats else None
     primary = primary_stats(content, character, effects)
-    return standard_blow(character.level, primary[scaling] if scaling is not None else 0)
+    blow = standard_blow(character.level, primary[scaling] if scaling is not None else 0)
+    return blow * gear.blow_factor(content, character)
 
 
 # --- skills ----------------------------------------------------------
@@ -453,6 +455,11 @@ def _attempt_skill(
     skill = _resolve_skill(content, character, action)
     if skill is None:
         return CombatEvent(kind=EventKind.EMPTY_SLOT)
+
+    # Умение просит оружие раньше, чем ресурс: платить за удар, который нечем
+    # нанести, игрок не должен.
+    if refusal := gear.skill_refusal(content, character, skill):
+        return CombatEvent(kind=EventKind.WRONG_WEAPON, skill_name=skill.name, effect_name=refusal)
 
     player = state.player
     cooldown = player.cooldown_of(skill.code)

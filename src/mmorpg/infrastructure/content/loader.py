@@ -13,14 +13,16 @@ import tomllib
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any
+from typing import Any, NamedTuple
 
 from mmorpg.domain.entities.combat import ActionTag
 from mmorpg.domain.entities.content import (
+    ArmorType,
     CharacterClass,
     City,
     ClassResource,
     EdgeEffect,
+    EquipSlot,
     GameContent,
     HealthCurve,
     Item,
@@ -38,6 +40,7 @@ from mmorpg.domain.entities.content import (
     Trait,
     Turning,
     TurningOption,
+    WeaponType,
 )
 from mmorpg.domain.entities.craft import (
     Craft,
@@ -51,6 +54,7 @@ from mmorpg.domain.entities.craft import (
 from mmorpg.domain.entities.location import EnemyArchetype, EnemyKind
 from mmorpg.domain.entities.quest import ObjectiveKind, Quest
 from mmorpg.domain.entities.stats import StatBlock, StatCode
+from mmorpg.domain.rules.equipment import UNARMED_DAMAGE, WEAPON_SLOT
 
 CONTENT_FILES = (
     "world.toml",
@@ -120,10 +124,12 @@ def load_content(content_dir: Path) -> GameContent:
     skills = _parse_skills(raw["skills.toml"], active_effects, targets, modifier_keys, problems)
     skills_by_code = {skill.code: skill for skill in skills}
 
+    gear = _parse_items(raw["items.toml"], modifier_keys, skills_by_code, problems)
+    items, rarities = gear.items, gear.rarities
     races = _parse_races(raw["races.toml"], skills_by_code, problems)
-    classes = _parse_classes(raw["classes.toml"], problems)
+    classes = _parse_classes(raw["classes.toml"], gear, problems)
     traits = _parse_traits(raw["traits.toml"], modifier_keys, set(categories), problems)
-    items, rarities = _parse_items(raw["items.toml"], modifier_keys, skills_by_code, problems)
+    _validate_skill_weapons(skills, classes, gear, problems)
     cities = _parse_world(raw["world.toml"], problems)
     item_ids = {item.id for item in items}
     enemies, elite_titles = _parse_enemies(raw["enemies.toml"], item_ids, problems)
@@ -154,6 +160,9 @@ def load_content(content_dir: Path) -> GameContent:
         skills=skills,
         cities=cities,
         rarities=rarities,
+        slots=gear.slots,
+        weapon_types=gear.weapon_types,
+        armor_types=gear.armor_types,
         enemy_archetypes=enemies,
         elite_titles=elite_titles,
         quests=quests,
@@ -309,6 +318,7 @@ def _parse_skills(
                 scaling=scaling,
                 rank_step=float(entry.get("rank_step", default_step)),
                 tag=tag,
+                weapon_types=tuple(str(value) for value in entry.get("weapons", ())),
             )
         )
     return tuple(parsed)
@@ -473,10 +483,29 @@ def _validate_races(races: Sequence[Race], problems: list[str]) -> None:
 # --- classes ---------------------------------------------------------
 
 
-def _parse_classes(raw: Mapping[str, Any], problems: list[str]) -> tuple[CharacterClass, ...]:
+def _parse_classes(
+    raw: Mapping[str, Any], gear: ItemContent, problems: list[str]
+) -> tuple[CharacterClass, ...]:
+    weapon_type_ids = {kind.id for kind in gear.weapon_types}
+    armor_type_ids = {kind.id for kind in gear.armor_types}
     parsed: list[CharacterClass] = []
     for entry in raw.get("class", ()):
         class_id = str(entry.get("id", ""))
+        weapon_types = tuple(str(value) for value in entry.get("weapons", ()))
+        armor_types = tuple(str(value) for value in entry.get("armor", ()))
+        # Класс, который не умеет носить ничего, - это класс, который дерётся
+        # голыми руками и в рубахе. Такого в игре нет, и молчаливой опечаткой он
+        # тоже быть не должен.
+        if not weapon_types:
+            problems.append(f"classes.toml: {class_id} names no weapons it can wield")
+        if not armor_types:
+            problems.append(f"classes.toml: {class_id} names no armour it can wear")
+        for type_id in weapon_types:
+            if type_id not in weapon_type_ids:
+                problems.append(f"classes.toml: {class_id} wields unknown weapon {type_id!r}")
+        for type_id in armor_types:
+            if type_id not in armor_type_ids:
+                problems.append(f"classes.toml: {class_id} wears unknown armour {type_id!r}")
         try:
             bonuses = StatBlock.from_mapping(entry.get("bonuses", {}))
             key_stats = tuple(StatCode(code) for code in entry.get("key_stats", ()))
@@ -511,9 +540,41 @@ def _parse_classes(raw: Mapping[str, Any], problems: list[str]) -> tuple[Charact
                 bonuses=bonuses,
                 resource=resource,
                 health=health,
+                weapon_types=weapon_types,
+                armor_types=armor_types,
             )
         )
     return tuple(parsed)
+
+
+def _validate_skill_weapons(
+    skills: Sequence[Skill],
+    classes: Sequence[CharacterClass],
+    gear: ItemContent,
+    problems: list[str],
+) -> None:
+    """Умение, которое просит оружие, должно просить оружие своего класса.
+
+    Иначе выходит кнопка, которая не сработает никогда: разбойник не возьмёт
+    двуручник, и удар в спину, попросивший двуручник, - это шесть слотов на
+    пятерых. Проверка дешёвая, а ошибка тихая, поэтому она здесь.
+    """
+    known = {kind.id for kind in gear.weapon_types}
+    by_id = {klass.id: klass for klass in classes}
+    for skill in skills:
+        for type_id in skill.weapon_types:
+            if type_id not in known:
+                problems.append(f"skills.toml: {skill.code} asks for unknown weapon {type_id!r}")
+        if skill.owner_kind is not OwnerKind.CLASS or not skill.weapon_types:
+            continue
+        klass = by_id.get(skill.owner_id)
+        if klass is None:
+            continue
+        stray = sorted(set(skill.weapon_types) - set(klass.weapon_types))
+        if stray and klass.weapon_types:
+            problems.append(
+                f"skills.toml: {skill.code} asks for {stray}, which {klass.id} never wields"
+            )
 
 
 def _validate_classes(
@@ -607,12 +668,36 @@ def _validate_traits(traits: Sequence[Trait], problems: list[str]) -> None:
 # --- items -----------------------------------------------------------
 
 
+class ItemContent(NamedTuple):
+    """Всё, что читается из ``items.toml``: вещи и справочники, которыми они себя называют."""
+
+    items: tuple[Item, ...]
+    rarities: tuple[Rarity, ...]
+    slots: tuple[EquipSlot, ...]
+    weapon_types: tuple[WeaponType, ...]
+    armor_types: tuple[ArmorType, ...]
+
+
+def _type_modifiers(
+    where: str,
+    entry: Mapping[str, Any],
+    modifier_keys: frozenset[str],
+    problems: list[str],
+) -> dict[str, float]:
+    """Прибавки рода оружия или доспеха - тем же словарём, что у вещи и особенности."""
+    bundle = {str(key): float(value) for key, value in entry.get("modifiers", {}).items()}
+    unknown = sorted(set(bundle) - modifier_keys)
+    if unknown:
+        problems.append(f"items.toml: {where} uses unknown modifiers {unknown}")
+    return bundle
+
+
 def _parse_items(
     raw: Mapping[str, Any],
     modifier_keys: frozenset[str],
     skills_by_code: Mapping[str, Skill],
     problems: list[str],
-) -> tuple[tuple[Item, ...], tuple[Rarity, ...]]:
+) -> ItemContent:
     meta = raw.get("meta", {})
     rarities = tuple(
         Rarity(
@@ -624,7 +709,48 @@ def _parse_items(
         for entry in meta.get("rarities", ())
     )
     rarity_ids = {rarity.id for rarity in rarities}
-    slot_ids = {str(entry["id"]) for entry in meta.get("slots", ())} | {"none"}
+    slots = tuple(
+        EquipSlot(
+            id=str(entry["id"]),
+            name=str(entry["name"]),
+            armor_share=float(entry.get("armor_share", 0.0)),
+        )
+        for entry in meta.get("slots", ())
+    )
+    slot_ids = {slot.id for slot in slots} | {"none"}
+    armor_slots = {slot.id for slot in slots if slot.armor_share > 0}
+
+    weapon_types = tuple(
+        WeaponType(
+            id=str(entry["id"]),
+            name=str(entry["name"]),
+            damage=float(entry.get("damage", 1.0)),
+            modifiers=_type_modifiers(
+                f"weapon type {entry.get('id', '')}", entry, modifier_keys, problems
+            ),
+        )
+        for entry in meta.get("weapon_types", ())
+    )
+    armor_types = tuple(
+        ArmorType(
+            id=str(entry["id"]),
+            name=str(entry["name"]),
+            armor=float(entry.get("armor", 1.0)),
+            modifiers=_type_modifiers(
+                f"armor type {entry.get('id', '')}", entry, modifier_keys, problems
+            ),
+        )
+        for entry in meta.get("armor_types", ())
+    )
+    weapon_type_ids = {kind.id for kind in weapon_types}
+    armor_type_ids = {kind.id for kind in armor_types}
+    # Оружие слабее голых рук - это не выбор, а ошибка, и стоит она игроку боя.
+    for kind in weapon_types:
+        if kind.damage < UNARMED_DAMAGE:
+            problems.append(
+                f"items.toml: weapon type {kind.id} hits for {kind.damage}, "
+                f"which is weaker than bare hands ({UNARMED_DAMAGE})"
+            )
 
     parsed: list[Item] = []
     for entry in raw.get("item", ()):
@@ -639,6 +765,30 @@ def _parse_items(
         slot = str(entry.get("slot", "none"))
         if slot not in slot_ids:
             problems.append(f"items.toml: {item_id} has unknown slot {slot!r}")
+
+        # Род оружия и род доспеха - не украшение карточки: по ним класс решает,
+        # даётся ли ему эта вещь, умение - сработает ли оно, а броня - сколько её
+        # вообще есть. Вещь без рода была бы вещью, о которой ничего из этого
+        # спросить нельзя, поэтому загрузчик её не принимает.
+        weapon_type = str(entry.get("weapon_type", ""))
+        armor_type = str(entry.get("armor_type", ""))
+        if kind_raw == ItemKind.EQUIPMENT.value and slot == WEAPON_SLOT and not weapon_type:
+            problems.append(f"items.toml: weapon {item_id} declares no weapon_type")
+        if kind_raw == ItemKind.EQUIPMENT.value and slot in armor_slots and not armor_type:
+            problems.append(f"items.toml: armour {item_id} declares no armor_type")
+        if weapon_type and weapon_type not in weapon_type_ids:
+            problems.append(f"items.toml: {item_id} has unknown weapon_type {weapon_type!r}")
+        if armor_type and armor_type not in armor_type_ids:
+            problems.append(f"items.toml: {item_id} has unknown armor_type {armor_type!r}")
+        if weapon_type and slot != WEAPON_SLOT:
+            problems.append(f"items.toml: {item_id} is not a weapon but names a weapon_type")
+        if armor_type and slot not in armor_slots:
+            problems.append(f"items.toml: {item_id} is not armour but names an armor_type")
+        if "text" in entry:
+            problems.append(
+                f"items.toml: {item_id} has a text field; items are generated in their "
+                "hundreds and describe themselves by name, kind and numbers"
+            )
 
         modifiers = {str(key): float(value) for key, value in entry.get("modifiers", {}).items()}
         unknown = sorted(set(modifiers) - modifier_keys)
@@ -674,16 +824,17 @@ def _parse_items(
                 rarity=rarity,
                 level=int(entry.get("level", 1)),
                 price=int(entry.get("price", 0)),
-                text=str(entry.get("text", "")),
                 modifiers=modifiers,
                 skill_modifiers=skill_modifiers,
                 stack=int(entry.get("stack", 1)),
                 source=str(entry.get("source", "")),
+                weapon_type=weapon_type,
+                armor_type=armor_type,
                 effect=effect,
             )
         )
     _check_unique((item.id for item in parsed), "items.toml", problems)
-    return tuple(parsed), rarities
+    return ItemContent(tuple(parsed), rarities, slots, weapon_types, armor_types)
 
 
 # --- enemies ---------------------------------------------------------

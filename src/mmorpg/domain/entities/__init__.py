@@ -7,9 +7,11 @@ from mmorpg.domain.entities.character import (
     SkillLoadout,
 )
 from mmorpg.domain.entities.content import (
+    ArmorType,
     CharacterClass,
     City,
     ClassResource,
+    EquipSlot,
     GameContent,
     HealthCurve,
     Item,
@@ -26,6 +28,7 @@ from mmorpg.domain.entities.content import (
     SkillEdge,
     SkillKind,
     Trait,
+    WeaponType,
 )
 from mmorpg.domain.entities.craft import (
     Craft,
@@ -63,6 +66,7 @@ from mmorpg.domain.entities.trade import (
 __all__ = [
     "KEEPER_PREFIX",
     "ActiveEffect",
+    "ArmorType",
     "Character",
     "CharacterClass",
     "City",
@@ -77,6 +81,7 @@ __all__ = [
     "Enemy",
     "EnemyArchetype",
     "EnemyKind",
+    "EquipSlot",
     "Equipment",
     "GameContent",
     "GeneratedLocation",
@@ -116,4 +121,5 @@ __all__ = [
     "TradeRecord",
     "TradeStatus",
     "Trait",
+    "WeaponType",
 ]

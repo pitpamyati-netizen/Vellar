@@ -15,6 +15,7 @@ from mmorpg.domain.entities.content import GameContent, SkillKind
 from mmorpg.domain.entities.effects import EffectStack
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.rules import edges as edge_rules
+from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import skills as skill_rules
 
 STAT_MODIFIER_PREFIX = "stat_"
@@ -34,10 +35,15 @@ def trait_modifiers(content: GameContent, trait_ids: Iterable[str]) -> dict[str,
 
 
 def equipment_modifiers(content: GameContent, item_ids: Iterable[str]) -> dict[str, float]:
-    """Надетое переживает содержимое так же, как панель: вещь, которой больше нет,
-    ничего не даёт и ничего не роняет."""
+    """Что даёт надетое: своими прибавками и прибавками своего рода.
+
+    Надетое переживает содержимое так же, как панель: вещь, которой больше нет,
+    ничего не даёт и ничего не роняет.
+    """
+    worn = tuple(item_ids)
     return merge(
-        *(content.item(item_id).modifiers for item_id in item_ids if content.has_item(item_id))
+        *(content.item(item_id).modifiers for item_id in worn if content.has_item(item_id)),
+        gear.type_modifiers(content, worn),
     )
 
 

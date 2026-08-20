@@ -105,6 +105,13 @@ takes the skill out of the panel along with its edge (`skills.forget`).
    > Доступно новое умение: Вихрь клинков. Меню - Умения - Набор.
 6. **Empty slots are still rendered.** "5. Пустой слот" keeps every other button in
    its position (accessibility rule 7).
+7. **A weapon requirement narrows a skill, never widens the panel.** A skill may
+   name `weapons` (ids from `items.toml [meta].weapon_types`): a shot asks for a
+   bow, a backstab for a dagger. Without one the skill does not fire and costs
+   nothing - and the button says so *before* it is pressed, because a button that
+   promises what it will not do is a bug. The list may only be narrower than what
+   the class wields; the loader refuses a wider one (ADR 0014).
+   *Test: every `weapons` entry is a kind its owning class actually holds.*
 
 ## One scale for every number
 

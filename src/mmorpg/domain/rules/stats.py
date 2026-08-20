@@ -18,10 +18,16 @@ from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.effects import EffectStack
 from mmorpg.domain.entities.stats import StatBlock, StatCode
+from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import modifiers as mods
 
 # Derived value coefficients. Kept here rather than in content: they are formula
 # constants, not balance knobs a content author edits per race.
+#
+# Выносливость держит броню, которая есть у всякого, - но только её. Всё
+# остальное приносит доспех, и приносит числом (``domain/rules/equipment.py``):
+# до этого надетое умело менять броню лишь процентами от полутора десятков, и
+# латы ощущались как стёганка.
 ARMOR_PER_ENDURANCE = 1.6
 ACCURACY_BASE = 75.0
 ACCURACY_PER_AGILITY = 1.2
@@ -101,7 +107,10 @@ def derived_stats(
     )
     max_resource = raw_resource * mods.percent(modifiers, "resource_percent")
 
-    armor = stats[StatCode.END] * ARMOR_PER_ENDURANCE * mods.percent(modifiers, "armor_percent")
+    worn = gear.worn_armor(content, character.equipment.item_ids())
+    armor = (stats[StatCode.END] * ARMOR_PER_ENDURANCE + worn) * mods.percent(
+        modifiers, "armor_percent"
+    )
 
     accuracy = (ACCURACY_BASE + stats[StatCode.AGI] * ACCURACY_PER_AGILITY) * mods.percent(
         modifiers, "accuracy_percent"

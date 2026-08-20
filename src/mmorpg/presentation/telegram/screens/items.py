@@ -8,6 +8,9 @@
 Теперь нажатие на вещь открывает её карточку — один экран, на котором:
 
 - что это, какого уровня и какой редкости;
+- какого рода: меч это или кинжал, кожа это или латы, — и сколько на нём брони;
+- **даётся ли оно вашему классу**: род оружия и род доспеха это допуск, и
+  услышать отказ нужно до нажатия, а не после;
 - что она меняет, каждая строка словами: «урон плюс 5 процентов»;
 - **чем она отличается от того, что уже надето** в тот же слот, — вот ради
   этой строки экран и заведён;
@@ -18,10 +21,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, Item
+from mmorpg.domain.rules import equipment as gear
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import gold as gold_words
@@ -141,6 +145,36 @@ def gives_lines(content: GameContent, item: Item) -> tuple[str, ...]:
     return (f"Даёт: {'; '.join(lines)}.",)
 
 
+def kind_lines(content: GameContent, item: Item) -> tuple[str, ...]:
+    """Какого рода эта вещь и что род сам по себе значит.
+
+    Броня называется числом, а не процентом: процент от выносливости — это и был
+    тот самый доспех, который ничего не менял.
+    """
+    lines: list[str] = []
+    if item.is_weapon and content.has_weapon_type(item.weapon_type):
+        weapon = content.weapon_type(item.weapon_type)
+        lines.append(f"Род оружия: {weapon.name.lower()}.")
+        if weapon.damage > gear.UNARMED_DAMAGE:
+            heavier = (weapon.damage - gear.UNARMED_DAMAGE) * 100
+            lines.append(f"Удар этим родом тяжелее обычного на {percent(heavier)}.")
+        lines.extend(_type_gives("Всякое такое оружие", content, weapon.modifiers))
+    if item.is_armor and content.has_armor_type(item.armor_type):
+        armor = content.armor_type(item.armor_type)
+        held = gear.armor_of(content, item)
+        lines.append(f"Род доспеха: {armor.name.lower()}. Броня доспеха: {held}.")
+        lines.extend(_type_gives("Всякий такой доспех", content, armor.modifiers))
+    return tuple(lines)
+
+
+def _type_gives(
+    whose: str, content: GameContent, modifiers: Mapping[str, float]
+) -> tuple[str, ...]:
+    """Что даёт род сам по себе — одной строкой или ни одной."""
+    changes = [modifier_line(content, key, value) for key, value in modifiers.items() if value]
+    return (f"{whose} даёт: {'; '.join(changes)}.",) if changes else ()
+
+
 def comparison_lines(content: GameContent, character: Character, item: Item) -> tuple[str, ...]:
     """Чем эта вещь отличается от надетой в тот же слот.
 
@@ -163,6 +197,12 @@ def comparison_lines(content: GameContent, character: Character, item: Item) -> 
         for key in keys
         if item.modifiers.get(key, 0.0) != worn.modifiers.get(key, 0.0)
     ]
+    # Броня — единственное, что вещь даёт не прибавкой, а собой, поэтому в
+    # разницу она попадает отдельной строкой и числом.
+    armor_change = gear.armor_of(content, item) - gear.armor_of(content, worn)
+    if armor_change:
+        sign = "плюс" if armor_change > 0 else "минус"
+        changes.insert(0, f"броня доспеха {sign} {abs(armor_change)}")
     lines = [f"Сейчас надето: {worn.name}, уровень {worn.level}."]
     if changes:
         lines.append(f"Если надеть эту, разница: {'; '.join(changes)}.")
@@ -189,7 +229,11 @@ def card_lines(
         lines.append(head)
     if item.is_equipment and where:
         lines.append(f"Слот: {where}.")
-    lines.append(item.text)
+    # Отказ идёт сразу за слотом, а не в конце карточки: услышать «вам такое не
+    # даётся» нужно прежде, чем дослушивать, что оно даёт.
+    if refusal := gear.equip_refusal(content, character, item):
+        lines.append(refusal)
+    lines.extend(kind_lines(content, item))
     lines.extend(gives_lines(content, item))
     if effect := effect_line(item):
         lines.append(effect)
@@ -216,7 +260,10 @@ def item_screen(
     lines = list(card_lines(content, character, item, quantity=quantity, sale=sale, notice=notice))
     rows: list[tuple[Label, ...]] = []
     if item.is_equipment:
-        rows.append((EQUIP,))
+        # Кнопка, которая ничего не сделает, — это баг (``Claude.md``, правило 9):
+        # отказ уже напечатан выше, и предлагать «Надеть» после него нельзя.
+        if not gear.equip_refusal(content, character, item):
+            rows.append((EQUIP,))
     elif item.kind.value == "consumable":
         rows.append((USE,))
     else:
