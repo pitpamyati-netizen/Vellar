@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field, replace
 
-from mmorpg.domain.entities.character import Character
+from mmorpg.domain.entities.character import Character, Equipment
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 
@@ -119,9 +119,45 @@ class CharacterDraft:
             class_id=self.class_id,
             allocated=self.allocated,
             trait_ids=self.trait_ids,
+            equipment=self._starting_gear(content),
             loadout=SkillLoadout(
                 actives=tuple(actives),
                 racial=content.race(self.race_id).active_code,
             ),
             city_id=content.city_by_order(1).id,
         )
+
+    def _starting_gear(self, content: GameContent) -> Equipment:
+        """Оружие в руку и доспех на плечи — самой первой ступени.
+
+        Весь урон в игре растёт из костей оружия (ADR 0015), и первый бой голыми
+        руками был бы не «скромным началом», а наказанием за то, что персонаж
+        новый: кулак бьёт втрое слабее самого простого меча. Даётся своё для
+        класса: первое оружие из его списка и самый крепкий доспех, какой он
+        носит, — обе вещи первой ступени и обычной редкости, то есть без единой
+        прибавки. Это начало дороги, а не подарок.
+        """
+        from mmorpg.domain.procgen.items import gear_id
+
+        klass = content.character_class(self.class_id)
+        if not content.gear_tiers:
+            return Equipment()
+        first = content.gear_tiers[0].level
+
+        by_kind = {
+            (archetype.slot, archetype.weapon_type or archetype.armor_type): archetype
+            for archetype in content.gear_archetypes
+        }
+        equipment = Equipment()
+        wanted = (
+            ("weapon", klass.weapon_types[0] if klass.weapon_types else ""),
+            ("body", klass.armor_types[-1] if klass.armor_types else ""),
+        )
+        for slot, kind in wanted:
+            archetype = by_kind.get((slot, kind))
+            if archetype is None:
+                continue
+            item_id = gear_id(archetype.id, first, "common")
+            if content.has_item(item_id):
+                equipment = equipment.equip(slot, item_id)
+        return equipment

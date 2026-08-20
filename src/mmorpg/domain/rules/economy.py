@@ -40,17 +40,35 @@ def roll_assortment(
     """What this city sells in this rotation of its shelf.
 
     Higher reputation widens the shelf, so a regular customer sees more.
+
+    Редкость решает, что вообще может лечь на прилавок. Снаряжение собирается во
+    всех редкостях сразу (``domain/procgen/items.py``), и без веса лавка
+    выкладывала бы легендарное так же часто, как обычное, а реликтовое — которое
+    вообще не продаётся — заодно с ними.
     """
     source = rng(shop_seed(world_seed, city_id, rotation))
     low = max(1, character_level - LEVEL_WINDOW_BELOW)
     high = character_level + LEVEL_WINDOW_ABOVE + reputation // 100
 
-    candidates = [item for item in content.items if low <= item.level <= high]
+    candidates = [
+        item
+        for item in content.items
+        if low <= item.level <= high and content.rarity(item.rarity).weight > 0
+    ]
     if not candidates:
-        candidates = sorted(content.items, key=lambda item: abs(item.level - character_level))[:8]
+        candidates = sorted(
+            (item for item in content.items if content.rarity(item.rarity).weight > 0),
+            key=lambda item: abs(item.level - character_level),
+        )[:8]
 
     size = min(len(candidates), source.randint(STOCK_MIN, STOCK_MAX) + reputation // 200)
-    chosen = source.sample(candidates, k=size)
+    chosen: list[Item] = []
+    pool = list(candidates)
+    weights = [content.rarity(item.rarity).weight for item in pool]
+    for _ in range(size):
+        picked = source.choices(range(len(pool)), weights=weights, k=1)[0]
+        chosen.append(pool.pop(picked))
+        weights.pop(picked)
     return tuple(sorted(chosen, key=lambda item: (item.level, item.name)))
 
 

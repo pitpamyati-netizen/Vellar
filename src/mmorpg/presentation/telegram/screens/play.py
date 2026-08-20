@@ -17,6 +17,8 @@ from mmorpg.domain.entities.location import (
     NodeKind,
     Presence,
 )
+from mmorpg.domain.rules import equipment as gear
+from mmorpg.domain.rules.combat import blow_range
 from mmorpg.domain.rules.nodes import Standing
 from mmorpg.domain.rules.progression import experience_into_level
 from mmorpg.domain.rules.stats import DerivedStats
@@ -430,6 +432,7 @@ def character_screen(
         f"{content.character_class(character.class_id).name}.",
         f"Здоровье: {character.health_or(stats.max_health)} из {stats.max_health}. "
         f"{stats.resource_name}: {stats.max_resource}.",
+        f"Удар: {damage_line(content, character)}.",
         f"Броня: {stats.armor}. Точность: {number(stats.accuracy)}. "
         f"Уклонение: {percent(stats.dodge)}.",
         f"Шанс крита: {percent(stats.crit_chance)}. Инициатива: {number(stats.initiative)}.",
@@ -461,6 +464,19 @@ def character_screen(
         lines=tuple(lines),
         rows=((labels.STATS, labels.SKILLS), *worn),
     )
+
+
+def damage_line(content: GameContent, character: Character) -> str:
+    """Что герой бьёт этим оружием — границами, и чем именно он бьёт.
+
+    Границы, а не среднее: урон бросается по костям, и одно число обещало бы
+    точность, которой нет. Голые руки называются голыми руками — по-другому
+    игрок не поймёт, почему удар вдруг втрое меньше.
+    """
+    low, high = blow_range(content, character)
+    weapon = gear.weapon_of(content, character)
+    held = weapon.name.lower() if weapon is not None else "голыми руками"
+    return f"от {low} до {high}, {held}"
 
 
 def spend_label(stat_name: str) -> Label:

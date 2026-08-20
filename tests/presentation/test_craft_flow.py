@@ -197,8 +197,8 @@ def test_recipes_above_the_rank_are_not_offered(
     listed = step(content, hero, begin(hero), "Ремёсла", goods=bag)
     state = step(content, hero, listed, button(content, hero, listed, "Кузнечное дело"), goods=bag)
     offered = pressable(content, hero, state, bag)
-    assert "Железный шлем" in offered, "rank two is open"
-    assert "Кольчужная рубаха" not in offered, "rank three is not"
+    assert "Простой шишак" in offered, "rank two is open"
+    assert "Простая кольчуга доброй ковки" not in offered, "rank three is not"
     assert "откроется с рангом" in screen(content, hero, state, bag).text()
 
 

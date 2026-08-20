@@ -23,8 +23,8 @@ from mmorpg.domain.procgen.seeds import rng
 # против голых рук, ложился за два хода, стоил игроку одного процента здоровья и
 # делал вылазку формальностью. Сорок процентов сверху возвращают бою обещанные три хода
 # при том же оружии, каким его дерётся живой игрок.
-HEALTH_BASE = 34.6
-HEALTH_PER_LEVEL = 12.96
+HEALTH_BASE = 32.8
+HEALTH_PER_LEVEL = 12.30
 # Damage is set against the player's health pool rather than against their blow:
 # an ordinary opponent should cost a noticeable share of it over the three turns
 # it lives, so that a run through a location is a series of decisions - press on,

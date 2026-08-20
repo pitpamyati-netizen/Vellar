@@ -759,8 +759,8 @@ async def a_settled_sale(
             kind=OfferKind.SELL,
             author=Party(user_id=seller.user_id, character_id=seller.id, name=seller.name),
             target=Party(user_id=buyer.user_id, character_id=buyer.id, name=buyer.name),
-            item_id="rusty_sword",
-            item_name="Ржавый меч",
+            item_id="sword@1#common",
+            item_name="Ветхий меч",
             price=100,
         ),
         scope="group",
@@ -770,7 +770,7 @@ async def a_settled_sale(
         record.number, scope="group", status=TradeStatus.ACCEPTED, settled_at=1, tax=5
     )
     assert closed is not None
-    await inventory.add(buyer.id, "rusty_sword", 1)
+    await inventory.add(buyer.id, "sword@1#common", 1)
     return record.id
 
 
@@ -790,17 +790,17 @@ async def test_a_keeper_rolls_a_trade_back_and_it_is_written_down(
 
     await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
     await keeper.press(keeper.button_with("Мерла"), labels.KEEPER_TRADES.text)
-    row = keeper.button_with("Ржавый меч")
+    row = keeper.button_with("Ветхий меч")
     armed = await keeper.press(row)
     assert "ещё раз" in armed.text()
     # Пока не подтвердили - ничего не двинулось.
-    assert await inventory.count(merla.id, "rusty_sword") == 1
+    assert await inventory.count(merla.id, "sword@1#common") == 1
 
     screen = await keeper.press(row)
 
     assert "Вещь вернулась" in screen.text()
-    assert await inventory.count(seller.id, "rusty_sword") == 1
-    assert await inventory.count(merla.id, "rusty_sword") == 0
+    assert await inventory.count(seller.id, "sword@1#common") == 1
+    assert await inventory.count(merla.id, "sword@1#common") == 0
     paid = await characters.get(merla.id)
     assert paid is not None and paid.gold == merla.gold + 95
     written = await keeper_log.latest()
@@ -824,8 +824,8 @@ async def test_a_trade_nobody_settled_is_not_rolled_back(
             kind=OfferKind.SELL,
             author=Party(user_id=seller.user_id, character_id=seller.id, name=seller.name),
             target=Party(user_id=merla.user_id, character_id=merla.id, name=merla.name),
-            item_id="rusty_sword",
-            item_name="Ржавый меч",
+            item_id="sword@1#common",
+            item_name="Ветхий меч",
             price=100,
         ),
         scope="group",
@@ -834,6 +834,6 @@ async def test_a_trade_nobody_settled_is_not_rolled_back(
 
     await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
     await keeper.press(keeper.button_with("Мерла"), labels.KEEPER_TRADES.text)
-    screen = await keeper.press(keeper.button_with("Ржавый меч"))
+    screen = await keeper.press(keeper.button_with("Ветхий меч"))
 
     assert "расчёт не проходил" in screen.text()

@@ -40,8 +40,8 @@ OTHER_CHAT = -1009999999999
 ARGUS_ACCOUNT = 11
 MERLA_ACCOUNT = 22
 NOW = 10_000
-SWORD = "rusty_sword"
-SWORD_NAME = "Ржавый меч"
+SWORD = "sword@1#common"
+SWORD_NAME = "Ветхий меч"
 
 ARGUS = Party(user_id=ARGUS_ACCOUNT, character_id=1, name="Аргус")
 MERLA = Party(user_id=MERLA_ACCOUNT, character_id=2, name="Мерла")
@@ -562,11 +562,11 @@ def test_an_ambiguous_name_lists_what_it_could_have_been(content: GameContent) -
         GroupOutcome(
             result=GroupResult.REFUSED,
             refusal=Refusal.AMBIGUOUS_ITEM,
-            options=("Железный шлем", "Железный лом"),
+            options=("Простой шишак", "Железный лом"),
         ),
     )
 
-    assert "Железный шлем" in reply.text and "Железный лом" in reply.text
+    assert "Простой шишак" in reply.text and "Железный лом" in reply.text
 
 
 def test_a_profile_names_the_character_traits(content: GameContent) -> None:

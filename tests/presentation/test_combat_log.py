@@ -79,7 +79,7 @@ def test_a_button_says_what_weapon_it_needs(
     assert "нужно оружие" in text
     assert content.weapon_type("sword").name.lower() in text
 
-    armed = replace(barehanded, equipment=barehanded.equipment.equip("weapon", "rusty_sword"))
+    armed = replace(barehanded, equipment=barehanded.equipment.equip("weapon", "sword@1#common"))
     assert "нужно оружие" not in combat_screens.skill_label(content, armed, sample_fight, 0).text
 
 

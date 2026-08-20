@@ -146,7 +146,7 @@ def test_a_made_thing_counts_for_the_contract_that_asked_for_it(
     assert steps and steps[0].progress == 2
 
     # Something else out of the same workshop is still something else.
-    other, _ = quest_rules.record_craft(content, took, "iron_helm")
+    other, _ = quest_rules.record_craft(content, took, "medium_head@6#common")
     assert other.progress("farhold_whetstones") == 0
 
 

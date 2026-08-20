@@ -48,9 +48,11 @@ from mmorpg.domain.entities.combat import (
     counter_to,
 )
 from mmorpg.domain.entities.content import GameContent, Skill
+from mmorpg.domain.entities.dice import Dice
 from mmorpg.domain.entities.effects import ActiveEffect, EffectStack
 from mmorpg.domain.entities.location import Enemy
 from mmorpg.domain.entities.stats import StatCode
+from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.procgen.enemies import RANK_FACTORS
 from mmorpg.domain.rules import edges as edge_rules
 from mmorpg.domain.rules import equipment as gear
@@ -93,8 +95,9 @@ BLEED_SHARE = 0.25
 # stat carried it alone, a class with one key stat would pour every point into it
 # and hit twice as hard as a class with two - the difference would not be a build,
 # it would be a bug.
-BLOW_BASE = 6.0
-BLOW_PER_LEVEL = 2.2
+# Сколько к удару прибавляет ведущая характеристика. Кривую уровня несут кости
+# оружия (ADR 0015), а характеристика — разброс между теми, кто на одном уровне:
+# если бы её не было, два героя одного уровня с одним мечом били бы одинаково.
 BLOW_PER_STAT = 0.6
 BASIC_ATTACK_PERCENT = 100.0
 
@@ -119,11 +122,6 @@ ENEMY_ACCURACY_PER_LEVEL_GAP = 1.0
 ARMOR_SOFTENER_BASE = gear.ARMOR_SOFTENER_BASE
 ARMOR_SOFTENER_PER_LEVEL = gear.ARMOR_SOFTENER_PER_LEVEL
 armor_factor = gear.armor_factor
-
-
-def standard_blow(level: int, stat_value: int) -> float:
-    """What one plain attack of this character is worth."""
-    return BLOW_BASE + BLOW_PER_LEVEL * level + BLOW_PER_STAT * stat_value
 
 
 # --- tempo: intent, trace, breach ------------------------------------
@@ -265,7 +263,7 @@ def resolve_turn(
         working = _player_action(content, character, working, action, tempo, source)
         working = replace(working, trace=_advanced_trace(state.trace, tempo))
 
-    working = _check_outcome(content, character, working)
+    working = _check_outcome(content, character, working, source)
     if working.is_over:
         return working
 
@@ -276,7 +274,7 @@ def resolve_turn(
         )
     else:
         working = _enemy_actions(content, character, working, tempo, source)
-        working = _check_outcome(content, character, working)
+        working = _check_outcome(content, character, working, source)
         if working.is_over:
             return working
 
@@ -385,7 +383,9 @@ def _basic_attack(
     return _strike(
         state,
         target=target,
-        power=blow_of(content, character, state.player.effects) * BASIC_ATTACK_PERCENT / 100.0,
+        power=blow_roll(content, character, source, state.player.effects)
+        * BASIC_ATTACK_PERCENT
+        / 100.0,
         character_level=character.level,
         stats=stats,
         modifiers=modifiers,
@@ -412,12 +412,50 @@ def blow_of(
     кинжала, а голые руки - единица отсчёта, ниже которой оружия не бывает
     (``domain/rules/equipment.py``).
     """
+    dice, bonus = _blow_parts(content, character, effects, scaling)
+    return dice.average + bonus
+
+
+def _blow_parts(
+    content: GameContent,
+    character: Character,
+    effects: EffectStack | None,
+    scaling: StatCode | None,
+) -> tuple[Dice, float]:
+    """Кости оружия и прибавка от ведущей характеристики, порознь."""
     if scaling is None:
         klass = content.character_class(character.class_id)
         scaling = klass.key_stats[0] if klass.key_stats else None
     primary = primary_stats(content, character, effects)
-    blow = standard_blow(character.level, primary[scaling] if scaling is not None else 0)
-    return blow * gear.blow_factor(content, character)
+    stat_value = primary[scaling] if scaling is not None else 0
+    return gear.weapon_dice(content, character), BLOW_PER_STAT * stat_value
+
+
+def blow_range(
+    content: GameContent,
+    character: Character,
+    effects: EffectStack | None = None,
+    scaling: StatCode | None = None,
+) -> tuple[int, int]:
+    """Границы одного удара — то, что игрок слышит вместо среднего.
+
+    Экран называет «от 34 до 96», а не «65»: среднее ничего не говорит о том,
+    чем булава отличается от меча, а границы говорят.
+    """
+    dice, bonus = _blow_parts(content, character, effects, scaling)
+    return round(dice.low + bonus), round(dice.high + bonus)
+
+
+def blow_roll(
+    content: GameContent,
+    character: Character,
+    source: random.Random,
+    effects: EffectStack | None = None,
+    scaling: StatCode | None = None,
+) -> float:
+    """Один настоящий удар: бросок костей оружия плюс характеристика."""
+    dice, bonus = _blow_parts(content, character, effects, scaling)
+    return dice.roll(source) + bonus
 
 
 # --- skills ----------------------------------------------------------
@@ -529,7 +567,10 @@ def _apply_spec(
 ) -> CombatState:
     stats = derived_stats(content, character, state.player.effects)
     modifiers = mods.collect_modifiers(content, character, state.player.effects)
-    blow = blow_of(content, character, state.player.effects, skill.scaling)
+    # Свои кости умения — то, что оно добавляет сверх оружия. Растут они рангом,
+    # как и всё остальное в умении.
+    rank_scale = 1.0 + skill.rank_step * (character.loadout.rank_of(skill.code) - 1)
+    own_dice = skill.dice
     working = state
 
     if spec.special == "avoid_combat":
@@ -547,10 +588,14 @@ def _apply_spec(
                 current = working.enemy_at(target.index)
                 if current is None:
                     break
+                # Каждый удар — свой бросок: два удара подряд одним и тем же
+                # оружием не обязаны совпасть, иначе кости были бы украшением.
+                blow = blow_roll(content, character, source, state.player.effects, skill.scaling)
                 working = _strike(
                     working,
                     target=current,
-                    power=blow * power / 100.0 * spec.damage_scale * falloff,
+                    power=blow * power / 100.0 * spec.damage_scale * falloff
+                    + (own_dice.roll(source) * rank_scale if own_dice is not None else 0.0),
                     character_level=character.level,
                     stats=stats,
                     modifiers=modifiers,
@@ -1077,7 +1122,12 @@ def spend_bleeding(state: CombatState) -> CombatState:
     return working
 
 
-def _check_outcome(content: GameContent, character: Character, state: CombatState) -> CombatState:
+def _check_outcome(
+    content: GameContent,
+    character: Character,
+    state: CombatState,
+    source: random.Random | None = None,
+) -> CombatState:
     if state.is_over:
         return state
     if not state.player.alive:
@@ -1097,6 +1147,23 @@ def _check_outcome(content: GameContent, character: Character, state: CombatStat
             sum(enemy.enemy.gold for enemy in state.enemies) * (1.0 + gold_modifier / 100.0)
         )
         loot = tuple(item for enemy in state.enemies for item in enemy.enemy.loot)
+        # Снаряжение падает сверх сырья и только с побеждённого: обычный
+        # противник платит золотом, хозяин логова — вещью, и реликтовой она
+        # бывает только у него (``domain/procgen/items.py``).
+        if source is not None:
+            loot = (
+                *loot,
+                *(
+                    dropped
+                    for enemy in state.enemies
+                    for dropped in (
+                        item_procgen.roll_drop(
+                            content, source, level=enemy.enemy.level, rank=enemy.enemy.rank
+                        ),
+                    )
+                    if dropped is not None
+                ),
+            )
         return replace(
             state,
             outcome=CombatOutcome.VICTORY,

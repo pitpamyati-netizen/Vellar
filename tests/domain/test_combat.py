@@ -268,7 +268,7 @@ def test_area_skills_hit_every_enemy(content: GameContent, fighter: Character) -
         level=20,
         # Вихрь клинков просит клинок: умение с требованием к оружию без оружия
         # не срабатывает, и это проверяет отдельный тест.
-        equipment=fighter.equipment.equip("weapon", "rusty_sword"),
+        equipment=fighter.equipment.equip("weapon", "sword@1#common"),
         loadout=replace(
             fighter.loadout, actives=("warrior_blade_whirl", None, None, None, None, None)
         ),

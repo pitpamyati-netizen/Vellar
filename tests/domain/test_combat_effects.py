@@ -398,7 +398,7 @@ def test_bleeding_actually_takes_health_every_turn(content: GameContent) -> None
     hero = replace(
         hero,
         loadout=replace(hero.loadout, ranks={skill.code: 1}),
-        equipment=hero.equipment.equip("weapon", "poacher_daggers"),
+        equipment=hero.equipment.equip("weapon", "dagger@6#uncommon"),
     )
 
     after = use(content, hero, start_combat(content, hero, (enemy(),)))

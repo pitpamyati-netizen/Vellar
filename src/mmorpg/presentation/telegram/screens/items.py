@@ -8,9 +8,10 @@
 Теперь нажатие на вещь открывает её карточку — один экран, на котором:
 
 - что это, какого уровня и какой редкости;
-- какого рода: меч это или кинжал, кожа это или латы, — и сколько на нём брони;
-- **даётся ли оно вашему классу**: род оружия и род доспеха это допуск, и
-  услышать отказ нужно до нажатия, а не после;
+- какого рода: меч это или кинжал, кожа это или латы, чем он бьёт и сколько на
+  нём брони — числами, а не долями;
+- **чего вещь будет стоить вашему классу**: чужое не запрещено, но за него платят
+  точностью и прытью, и услышать цену нужно до нажатия, а не после;
 - что она меняет, каждая строка словами: «урон плюс 5 процентов»;
 - **чем она отличается от того, что уже надето** в тот же слот, — вот ради
   этой строки экран и заведён;
@@ -94,6 +95,17 @@ MODIFIER_NAMES: dict[str, str] = {
 #: Ключи, которые называют число, а не проценты: прибавка к характеристике.
 FLAT_PREFIX = "stat_"
 
+#: Характеристики по кодам — так их называет вещь, когда прибавляет числом.
+STAT_NAMES: dict[str, str] = {
+    "STR": "сила",
+    "AGI": "ловкость",
+    "END": "выносливость",
+    "INT": "интеллект",
+    "WIS": "мудрость",
+    "CHA": "харизма",
+    "LCK": "удача",
+}
+
 # Слоты снаряжения в порядке, в котором их зачитывают. Идентификаторы - ключи
 # содержимого, названия - то, что слышит игрок.
 SLOT_NAMES: dict[str, str] = {
@@ -145,25 +157,34 @@ def gives_lines(content: GameContent, item: Item) -> tuple[str, ...]:
     return (f"Даёт: {'; '.join(lines)}.",)
 
 
-def kind_lines(content: GameContent, item: Item) -> tuple[str, ...]:
-    """Какого рода эта вещь и что род сам по себе значит.
+def kind_lines(content: GameContent, character: Character, item: Item) -> tuple[str, ...]:
+    """Какого рода эта вещь, что она бьёт и сколько на ней брони.
 
-    Броня называется числом, а не процентом: процент от выносливости — это и был
-    тот самый доспех, который ничего не менял.
+    Урон называется границами, а не средним: «от 2 до 124» — это то, что
+    случится, а «63» — то, чего не случится никогда. Броня называется числом, а
+    не процентом: процент от выносливости и был тем доспехом, который ничего не
+    менял.
     """
+    worn = gear.worn_item(content, item.id, character.level) or item
     lines: list[str] = []
-    if item.is_weapon and content.has_weapon_type(item.weapon_type):
-        weapon = content.weapon_type(item.weapon_type)
+    if worn.is_weapon and content.has_weapon_type(worn.weapon_type):
+        weapon = content.weapon_type(worn.weapon_type)
         lines.append(f"Род оружия: {weapon.name.lower()}.")
-        if weapon.damage > gear.UNARMED_DAMAGE:
-            heavier = (weapon.damage - gear.UNARMED_DAMAGE) * 100
-            lines.append(f"Удар этим родом тяжелее обычного на {percent(heavier)}.")
+        if worn.damage is not None:
+            lines.append(f"Урон: {worn.damage.spoken()}.")
         lines.extend(_type_gives("Всякое такое оружие", content, weapon.modifiers))
-    if item.is_armor and content.has_armor_type(item.armor_type):
-        armor = content.armor_type(item.armor_type)
-        held = gear.armor_of(content, item)
-        lines.append(f"Род доспеха: {armor.name.lower()}. Броня доспеха: {held}.")
+    if worn.is_armor and content.has_armor_type(worn.armor_type):
+        armor = content.armor_type(worn.armor_type)
+        lines.append(f"Род доспеха: {armor.name.lower()}. Броня: {worn.armor}.")
         lines.extend(_type_gives("Всякий такой доспех", content, armor.modifiers))
+    if worn.stat_bonuses:
+        given = "; ".join(
+            f"{STAT_NAMES.get(code, code)} плюс {value}"
+            for code, value in sorted(worn.stat_bonuses.items())
+        )
+        lines.append(f"Прибавка от редкости: {given}.")
+    if content.has_rarity(worn.rarity) and content.rarity(worn.rarity).scaling:
+        lines.append("Реликтовая вещь: её числа растут вместе с вашим уровнем.")
     return tuple(lines)
 
 
@@ -190,19 +211,30 @@ def comparison_lines(content: GameContent, character: Character, item: Item) -> 
     if worn_id == item.id:
         return ("Эта вещь на вас и надета.",)
 
-    worn = content.item(worn_id)
+    worn = gear.worn_item(content, worn_id, character.level) or content.item(worn_id)
+    item = gear.worn_item(content, item.id, character.level) or item
     keys = sorted(set(item.modifiers) | set(worn.modifiers))
     changes = [
         modifier_line(content, key, item.modifiers.get(key, 0.0) - worn.modifiers.get(key, 0.0))
         for key in keys
         if item.modifiers.get(key, 0.0) != worn.modifiers.get(key, 0.0)
     ]
-    # Броня — единственное, что вещь даёт не прибавкой, а собой, поэтому в
-    # разницу она попадает отдельной строкой и числом.
-    armor_change = gear.armor_of(content, item) - gear.armor_of(content, worn)
+    # Урон, броня и характеристики вещь даёт не прибавкой, а собой, поэтому в
+    # разницу они попадают отдельными строками и числами.
+    for code in sorted(set(item.stat_bonuses) | set(worn.stat_bonuses)):
+        shift = item.stat_bonuses.get(code, 0) - worn.stat_bonuses.get(code, 0)
+        if shift:
+            sign = "плюс" if shift > 0 else "минус"
+            changes.insert(0, f"{STAT_NAMES.get(code, code)} {sign} {abs(shift)}")
+    armor_change = item.armor - worn.armor
     if armor_change:
         sign = "плюс" if armor_change > 0 else "минус"
         changes.insert(0, f"броня доспеха {sign} {abs(armor_change)}")
+    if item.damage is not None or worn.damage is not None:
+        was = worn.damage.spoken() if worn.damage else "ничего"
+        now = item.damage.spoken() if item.damage else "ничего"
+        if was != now:
+            changes.insert(0, f"урон был {was}, станет {now}")
     lines = [f"Сейчас надето: {worn.name}, уровень {worn.level}."]
     if changes:
         lines.append(f"Если надеть эту, разница: {'; '.join(changes)}.")
@@ -229,11 +261,11 @@ def card_lines(
         lines.append(head)
     if item.is_equipment and where:
         lines.append(f"Слот: {where}.")
-    # Отказ идёт сразу за слотом, а не в конце карточки: услышать «вам такое не
-    # даётся» нужно прежде, чем дослушивать, что оно даёт.
-    if refusal := gear.equip_refusal(content, character, item):
-        lines.append(refusal)
-    lines.extend(kind_lines(content, item))
+    # Предупреждение идёт сразу за слотом, а не в конце карточки: услышать, чего
+    # эта вещь будет стоить, нужно прежде, чем дослушивать, что она даёт.
+    if warning := gear.equip_warning(content, character, item):
+        lines.append(warning)
+    lines.extend(kind_lines(content, character, item))
     lines.extend(gives_lines(content, item))
     if effect := effect_line(item):
         lines.append(effect)
@@ -260,10 +292,10 @@ def item_screen(
     lines = list(card_lines(content, character, item, quantity=quantity, sale=sale, notice=notice))
     rows: list[tuple[Label, ...]] = []
     if item.is_equipment:
-        # Кнопка, которая ничего не сделает, — это баг (``Claude.md``, правило 9):
-        # отказ уже напечатан выше, и предлагать «Надеть» после него нельзя.
-        if not gear.equip_refusal(content, character, item):
-            rows.append((EQUIP,))
+        # Кнопка есть всегда: чужую вещь надеть можно, и запрещать это игре не
+        # положено. Что она будет стоить, сказано строкой выше — предупреждением,
+        # а не отказом.
+        rows.append((EQUIP,))
     elif item.kind.value == "consumable":
         rows.append((USE,))
     else:

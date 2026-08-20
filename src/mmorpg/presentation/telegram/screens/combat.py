@@ -31,7 +31,7 @@ from mmorpg.domain.entities.location import EnemyRank
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules.combat import (
     MOMENTUM_DAMAGE_PERCENT,
-    blow_of,
+    blow_range,
     enemy_intent,
 )
 from mmorpg.domain.rules.skill_effects import EffectCategory, EffectSpec, spec_for, tag_of_skill
@@ -110,14 +110,22 @@ def skill_effect(
     about the skill, not a prediction about the turn. Without it a panel of six
     buttons says only "натиск, готово" six times over, which is exactly the
     complaint this screen exists to answer.
+
+    Урон называется границами, а не одним числом: он бросается по костям оружия,
+    и «урон 65» обещало бы точность, которой нет. «Урон от 34 до 96» - это ровно
+    то, что случится.
     """
     spec = spec_for(skill.effect)
     power = skill.power_at_rank(character.loadout.rank_of(skill.code))
 
     if spec.category is EffectCategory.DAMAGE:
-        blow = blow_of(content, character, state.player.effects, skill.scaling)
-        hit = max(1, round(blow * power / 100.0 * spec.damage_scale))
-        line = f"урон {hit}"
+        low, high = blow_range(content, character, state.player.effects, skill.scaling)
+        share = power / 100.0 * spec.damage_scale
+        rank_scale = 1.0 + skill.rank_step * (character.loadout.rank_of(skill.code) - 1)
+        extra = skill.dice
+        least = max(1, round(low * share + (extra.low * rank_scale if extra else 0)))
+        most = max(least, round(high * share + (extra.high * rank_scale if extra else 0)))
+        line = f"урон от {least} до {most}"
         if spec.hits > 1:
             line = f"{line}, {spec.hits} раза"
         if spec.aoe:

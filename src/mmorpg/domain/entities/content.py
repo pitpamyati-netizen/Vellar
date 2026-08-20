@@ -17,6 +17,7 @@ from types import MappingProxyType
 
 from mmorpg.domain.entities.combat import ActionTag
 from mmorpg.domain.entities.craft import Craft, CraftKind, CraftRules, Recipe
+from mmorpg.domain.entities.dice import Dice
 from mmorpg.domain.entities.location import EnemyArchetype
 from mmorpg.domain.entities.quest import Quest
 from mmorpg.domain.entities.stats import StatBlock, StatCode
@@ -125,6 +126,9 @@ class Skill:
     #: Рода оружия, с которыми умение работает. Пусто - работает с любым и без
     #: оружия вовсе; выстрел без лука и удар в спину без кинжала - нет.
     weapon_types: tuple[str, ...] = ()
+    #: Свои кости умения - то, что оно добавляет сверх броска оружия. Пусто -
+    #: умение целиком стоит на оружии, и его ``power`` это доля от его броска.
+    dice: Dice | None = None
 
     @property
     def owner(self) -> str:
@@ -252,6 +256,15 @@ class Item:
     skill_modifiers: Mapping[str, float]
     stack: int = 1
     effect: ItemEffect | None = None
+    #: Урон оружия — числом в границах, а не долей чего-то. Пусто у всего, что не
+    #: оружие.
+    damage: Dice | None = None
+    #: Броня — тоже число, и тоже своё. До этого доспех умел лишь множить броню,
+    #: которая росла из выносливости, и не значил ничего.
+    armor: int = 0
+    #: Прибавки к характеристикам — числом. Их даёт редкость, а не вид вещи:
+    #: обычная не даёт ни одной, необычная одну, остальные две.
+    stat_bonuses: Mapping[str, int] = field(default_factory=dict)
     #: Что это за сырьё - "травы", "руда", "шкуры", "обломки". Пусто у всего,
     #: что сырьём не является, и у сырья, которое годится отовсюду.
     source: str = ""
@@ -299,7 +312,13 @@ class WeaponType:
 
     id: str
     name: str
-    damage: float = 1.0
+    #: Кости этого рода на первом уровне. Дальше растут грани, а не число костей:
+    #: размах — это характер рода, и он не меняется от того, что вещь нашлась
+    #: уровнем выше (``entities/dice.py``).
+    dice: Dice
+    #: Род оружия — ещё и существительное, от которого строится имя вещи:
+    #: «Крепкий меч», но «Крепкая булава». m, f, n или p (множественное).
+    gender: str = "m"
     modifiers: Mapping[str, float] = field(default_factory=dict)
 
 
@@ -319,11 +338,76 @@ class ArmorType:
 
 
 @dataclass(frozen=True, slots=True)
+class GearTier:
+    """Ступень снаряжения: с какого уровня и каким словом её называют.
+
+    Ступеней двенадцать на все триста уровней, и вещь бывает только на ступени —
+    промежуточных уровней у снаряжения нет. Это не упрощение, а то, что делает
+    имя вещи именем: «Крепкий меч» — один и тот же меч у всех, кто его носит, а
+    не одно название на двадцать разных мечей.
+    """
+
+    level: int
+    #: Прилагательное в четырёх родах: m, f, n, p.
+    names: Mapping[str, str]
+
+    def named(self, gender: str) -> str:
+        return self.names.get(gender, self.names.get("m", ""))
+
+
+@dataclass(frozen=True, slots=True)
+class SpecialProperty:
+    """Особое свойство легендарной и реликтовой вещи: один ключ и его величина."""
+
+    key: str
+    value: float
+
+
+@dataclass(frozen=True, slots=True)
+class GearArchetype:
+    """Вид снаряжения, из которого делается вещь: «меч», «кираса», «оберег».
+
+    Сами вещи в ``content/`` не пишут. Их триста шестьдесят на двенадцати
+    ступенях и пять редкостей у каждой — почти две тысячи; написанные руками, они
+    были бы файлом, который никто не правит. Пишется вид, а вещь собирается из
+    вида, ступени и редкости, как противник собирается из породы и уровня
+    (``domain/procgen/items.py``).
+    """
+
+    id: str
+    #: Существительное, с которого начинается имя: «меч», «кольчуга», «поножи».
+    noun: str
+    #: Род существительного: m, f, n, p. От него зависит прилагательное ступени.
+    gender: str
+    slot: str
+    weapon_type: str = ""
+    armor_type: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class Rarity:
+    """Насколько вещь редка — и что редкость за собой несёт.
+
+    Редкость это не цвет строчки: обычная вещь не даёт характеристик вовсе,
+    необычная даёт одну, редкая две, легендарная две и особое свойство сверх них.
+    Реликтовая даёт то же, что легендарная, но её числа считаются не от уровня
+    вещи, а от уровня героя, — она растёт вместе с ним и потому не устаревает.
+    """
+
     id: str
     name: str
     weight: int
     price_factor: float
+    #: Сколько характеристик прибавляет вещь этой редкости.
+    stats: int = 0
+    #: Есть ли у вещи особое свойство сверх характеристик.
+    special: bool = False
+    #: Считать ли числа вещи от уровня героя, а не от уровня самой вещи.
+    scaling: bool = False
+    #: Чем имя вещи этой редкости отличается от обычной: «редкой работы».
+    #: Без этого две вещи одного вида читались бы одной и той же строкой, а
+    #: кнопки в списке различаются только текстом.
+    mark: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -470,6 +554,9 @@ class GameContent:
     slots: tuple[EquipSlot, ...]
     weapon_types: tuple[WeaponType, ...]
     armor_types: tuple[ArmorType, ...]
+    gear_tiers: tuple[GearTier, ...]
+    gear_archetypes: tuple[GearArchetype, ...]
+    special_properties: tuple[SpecialProperty, ...]
     quests: tuple[Quest, ...]
     crafts: tuple[Craft, ...]
     recipes: tuple[Recipe, ...]
@@ -491,6 +578,7 @@ class GameContent:
     _cities_by_id: Mapping[str, City]
     _rarities_by_id: Mapping[str, Rarity]
     _slots_by_id: Mapping[str, EquipSlot]
+    _gear_by_id: Mapping[str, GearArchetype]
     _weapon_types_by_id: Mapping[str, WeaponType]
     _armor_types_by_id: Mapping[str, ArmorType]
     _quests_by_id: Mapping[str, Quest]
@@ -519,6 +607,9 @@ class GameContent:
         slots: Sequence[EquipSlot] = (),
         weapon_types: Sequence[WeaponType] = (),
         armor_types: Sequence[ArmorType] = (),
+        gear_tiers: Sequence[GearTier] = (),
+        gear_archetypes: Sequence[GearArchetype] = (),
+        special_properties: Sequence[SpecialProperty] = (),
         quests: Sequence[Quest] = (),
         crafts: Sequence[Craft] = (),
         recipes: Sequence[Recipe] = (),
@@ -544,6 +635,9 @@ class GameContent:
             slots=tuple(slots),
             weapon_types=tuple(weapon_types),
             armor_types=tuple(armor_types),
+            gear_tiers=tuple(gear_tiers),
+            gear_archetypes=tuple(gear_archetypes),
+            special_properties=tuple(special_properties),
             quests=tuple(quests),
             crafts=tuple(crafts),
             recipes=tuple(recipes),
@@ -565,6 +659,7 @@ class GameContent:
             _cities_by_id=MappingProxyType({city.id: city for city in cities}),
             _rarities_by_id=MappingProxyType({rarity.id: rarity for rarity in rarities}),
             _slots_by_id=MappingProxyType({slot.id: slot for slot in slots}),
+            _gear_by_id=MappingProxyType({gear.id: gear for gear in gear_archetypes}),
             _weapon_types_by_id=MappingProxyType({kind.id: kind for kind in weapon_types}),
             _armor_types_by_id=MappingProxyType({kind.id: kind for kind in armor_types}),
             _quests_by_id=MappingProxyType({quest.id: quest for quest in quests}),
@@ -602,6 +697,15 @@ class GameContent:
 
     def rarity(self, rarity_id: str) -> Rarity:
         return self._rarities_by_id[rarity_id]
+
+    def has_rarity(self, rarity_id: str) -> bool:
+        return rarity_id in self._rarities_by_id
+
+    def gear_archetype(self, archetype_id: str) -> GearArchetype:
+        return self._gear_by_id[archetype_id]
+
+    def has_gear_archetype(self, archetype_id: str) -> bool:
+        return archetype_id in self._gear_by_id
 
     def slot(self, slot_id: str) -> EquipSlot:
         return self._slots_by_id[slot_id]

@@ -97,7 +97,7 @@ biome (with a wildcard pool as fallback so an unknown biome degrades instead of
 crashing), then scaled to the node level:
 
 ```
-health = (24 + 9.0 * level) * archetype.health * spread * rank.health * share
+health = (34.6 + 12.83 * level) * archetype.health * spread * rank.health * share
 damage = (3.5 + 0.7 * level) * archetype.damage * spread * rank.damage * share
 armor  = 1.15 * level        * archetype.armor          * rank.armor
 ```
@@ -105,8 +105,8 @@ armor  = 1.15 * level        * archetype.armor          * rank.armor
 `spread` is a deterministic +-12% wobble derived from the same seed, so two fights
 against "серый волк" at level 12 are not carbon copies while staying reproducible.
 
-Health is set against the player's *standard blow* and damage against their health
-pool, both of which grow with level on their own - so the shape of a fight is the
+Health is set against one roll of the player's *weapon* (ADR 0015) and damage
+against their health pool, both of which grow with level on their own - so the shape of a fight is the
 same at level 3 and at level 300. What that shape is, `tests/domain/test_combat_balance.py`
 pins down: an ordinary fight is about three turns.
 
@@ -131,6 +131,31 @@ words, so the name stays a name.
 (weighted 6:3:1) and they divide one fight's budget, `1 / (1 + 0.45 * (size - 1))`.
 Three full-strength opponents made an "ordinary" fight nine turns long - three
 fights in a row wearing one name.
+
+## Gear
+
+Gear is generated the same way an enemy is, and for the same reason: a sword
+exists on twelve grades in five rarities, and so does every other kind - about two
+thousand things nobody would ever write out by hand. `content/items.toml` declares
+thirty **kinds** (`[[gear]]`), twelve **grades** and five **rarities**; a thing is
+assembled from the three (`domain/procgen/items.py`).
+
+```
+damage = kind.dice grown by (1 + 0.37 * (level - 1))   # both dice and faces
+armor  = (5.5 + 0.32 * level) * armor_type.armor * slot.armor_share
+stats  = rarity.stats keys, each round(0.06 * level)
+price  = (30 + 7.0 * level) * rarity.price_factor
+```
+
+Everything "random" in a thing - which stats, which special property - is derived
+from the thing's own name, so «Крепкий меч редкой работы» is the same sword for
+everyone and after any restart. A **relic** is the exception that proves the rule:
+its numbers are counted from the *hero's* level rather than its own, so it grows
+with them and never goes stale. That is why it only ever comes off a boss or a
+contract chain walked to its end, and never off a shelf.
+
+What falls off a defeated enemy is rolled the same way: the grade comes from the
+enemy's level, the rarity from its weight, and only a boss can roll a relic.
 
 ## The shared state of a location
 
@@ -162,5 +187,6 @@ was where, which costs a walk and never a character.
 | --- | --- |
 | location layout, node kinds, node names, node levels | how much of each node's wave is gone (Redis, TTL) |
 | enemies, their stats, their loot | items actually taken (PostgreSQL) |
+| every piece of gear: damage, armour, stats, price, name | which gear a character holds and wears, by name (PostgreSQL) |
 | shop assortment | gold and purchases (PostgreSQL) |
 | total character stats | raw stats, level, experience (PostgreSQL) |

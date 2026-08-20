@@ -119,14 +119,26 @@ A skill's `power` in content is a **percentage**, never an absolute:
 
 | category | percentage of | 100 means |
 | --- | --- | --- |
-| damage | the character's standard blow | one plain "Атака" |
+| damage | one roll of the weapon in hand | one plain "Атака" |
 | healing, shields | maximum health | a full bar |
 | buffs, debuffs | the modifier itself | +100% to that stat |
 
-The standard blow is `6 + 2.2 x level + 0.6 x scaling stat` - level carries the
-curve, the stat carries the spread. So a level-1 skill written as 135 is worth a
-third again as much as an attack at level 1 *and* at level 300, and content never
-has to be re-tuned as the band grows.
+A damage skill may add dice of its own on top of the weapon roll:
+
+```toml
+weapons = ["dagger"]
+dice = "2d8"                   # rolled and added, and grows with rank
+```
+
+The blow is `weapon dice + 0.6 x scaling stat` - the **weapon** carries the curve
+of the whole 1-300 band, the stat carries the spread between characters of the
+same level (ADR 0015). So a skill written as 135 is worth a third again as much
+as an attack at level 1 *and* at level 300, and content never has to be re-tuned
+as the band grows - what the player upgrades is the thing in their hand.
+
+That is also why a damage skill is read out as a **range** - "урон от 34 до 96" -
+and never as one number: one number would promise a precision the dice do not
+have.
 
 Before this, `power` was an absolute number while the plain attack grew with
 level; by level 30 every skill in the game was weaker than pressing "Атака", and

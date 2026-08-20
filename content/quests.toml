@@ -55,7 +55,7 @@ target_kind = "beast"
 target_count = 6
 reward_gold = 70
 reward_experience = 140
-reward_item = "travel_boots"
+reward_item = "light_feet@1#common"
 
 [[quest]]
 id = "farhold_whetstones"
@@ -87,7 +87,7 @@ location = 2
 target_count = 8
 reward_gold = 120
 reward_experience = 260
-reward_item = "leather_armor"
+reward_item = "light_body@6#common"
 
 [[quest]]
 id = "farhold_ravine_leader"
@@ -103,7 +103,7 @@ location = 3
 target_count = 1
 reward_gold = 200
 reward_experience = 420
-reward_item = "wolf_fang"
+reward_item = "charm@6#uncommon"
 
 [[quest]]
 id = "farhold_road_count"
@@ -119,7 +119,7 @@ location = 4
 target_count = 5
 reward_gold = 260
 reward_experience = 700
-reward_item = "chain_shirt"
+reward_item = "medium_body@6#uncommon"
 
 [[quest]]
 id = "farhold_mine_ledger"
@@ -135,7 +135,10 @@ location = 5
 target_count = 10
 reward_gold = 400
 reward_experience = 1200
-reward_item = "silent_steps"
+# Конец цепочки из шести заданий — единственная реликтовая вещь, которую можно
+# получить не с хозяина логова. Реликтовое растёт вместе с героем и потому не
+# устаревает: за него платят либо логовом, либо всей цепочкой до конца.
+reward_item = "light_feet@14#relic"
 
 # --- Сурож: обозы мимо пошлины ---
 
@@ -184,4 +187,4 @@ location = 2
 target_count = 2
 reward_gold = 600
 reward_experience = 1900
-reward_item = "tide_pearl"
+reward_item = "pendant@14#rare"

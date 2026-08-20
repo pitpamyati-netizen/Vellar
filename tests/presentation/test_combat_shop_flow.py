@@ -135,7 +135,8 @@ def test_a_skill_states_a_number_that_grows_with_the_character(
         hero = replace(fighter, level=level)
         session = flow.begin(content, hero, (make_enemy(),), seed=FIGHT_SEED, node=1)
         label = flow.render(content, hero, session).rows[1][0].text
-        return int(label.split("урон ")[1].split(",")[0])
+        # Урон на кнопке — границы, а не одно число: сравнивается верхняя.
+        return int(label.split("до ")[1].split(",")[0])
 
     assert damage_on_the_button(300) > damage_on_the_button(10) > damage_on_the_button(1)
 
@@ -348,7 +349,7 @@ def test_reputation_widens_the_shelf(content: GameContent) -> None:
 
 
 def test_charisma_and_traits_lower_the_price(content: GameContent) -> None:
-    item = content.item("leather_armor")
+    item = content.item("light_body@6#common")
     plain = buy_price(content, item)
     charming = buy_price(content, item, charisma=20)
     haggler = buy_price(content, item, modifiers={"shop_price_percent": -12.0})
@@ -357,13 +358,13 @@ def test_charisma_and_traits_lower_the_price(content: GameContent) -> None:
 
 
 def test_selling_pays_less_than_buying(content: GameContent) -> None:
-    item = content.item("leather_armor")
+    item = content.item("light_body@6#common")
     assert sell_price(content, item) < buy_price(content, item)
 
 
 def test_rarity_raises_the_price(content: GameContent) -> None:
-    common = buy_price(content, content.item("rusty_sword"))
-    epic = buy_price(content, content.item("stormcaller_rod"))
+    common = buy_price(content, content.item("sword@1#common"))
+    epic = buy_price(content, content.item("wand@26#legendary"))
     assert epic > common
 
 

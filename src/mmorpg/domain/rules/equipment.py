@@ -1,25 +1,25 @@
-"""Что именно даёт надетое: род оружия, род доспеха и броня, которая считается.
+"""Что именно даёт надетое: кости оружия, броня доспеха и цена чужой вещи.
 
-До этого модуля броня росла из одной выносливости, а доспех менял её на
-проценты: `armor_percent = 8` на кожаном доспехе — это восемь процентов от
-полутора десятков, то есть ничего. Игрок надевал латы и не замечал разницы, и был
-прав — разницы не было.
+До этого модуля броня росла из одной выносливости, а доспех менял её на проценты:
+`armor_percent = 8` на кожаном доспехе — это восемь процентов от полутора
+десятков, то есть ничего. Игрок надевал латы и не замечал разницы, и был прав.
 
-Здесь её заводят тремя правилами.
+Здесь её заводят четырьмя правилами.
 
-1. **У доспеха есть своё число брони.** Оно считается не из выносливости, а из
-   уровня самой вещи, её рода (``ArmorType.armor``) и того, сколько это место
-   вообще прикрывает (``EquipSlot.armor_share``). Абсолютных чисел в содержимом
-   при этом не появляется (ADR 0007): вещь объявляет доли, а кривую держит тот же
-   смягчитель, против которого броня и работает, — поэтому доспех своего уровня
-   стоит одинаково и на первом уровне, и на трёхсотом.
-2. **У оружия есть род**, и род решает две вещи: насколько тяжёл удар
-   (``WeaponType.damage``) и что оружие даёт само по себе (``modifiers``).
-   Единица — это голые руки. Оружие бывает лучше их и не бывает хуже: кинжал,
-   который слабее кулака, — не выбор, а ошибка.
-3. **Род — это допуск.** Класс носит не всё (``classes.toml``), и умение работает
-   не с любым оружием (``skills.toml``): выстрел просит лук, удар в спину —
-   кинжал. Отказ здесь всегда со словами, потому что игрок слышит только их.
+1. **У оружия есть кости.** Урон — не доля чего-то, а число в границах: «от 2 до
+   124». Кости берутся у рода (``WeaponType.dice``) и растут гранями со ступенью
+   вещи (``domain/procgen/items.py``). Голыми руками бьют тоже костями, только
+   маленькими, — и это единственная разница между кулаком и мечом первой ступени.
+2. **У доспеха есть своё число брони**, посчитанное из ступени вещи, её рода и
+   того, сколько это место вообще прикрывает.
+3. **Редкость даёт характеристики, и только она.** Числа лежат на самой вещи
+   (``Item.stat_bonuses``), а не выводятся из процентов.
+4. **Чужая вещь не запрещена — она дорога.** Класс носит своё (``classes.toml``),
+   но надеть можно что угодно: за не своё оружие и не свой доспех платят
+   точностью и прытью. Запрет молчит, а штраф говорит, и говорит числом.
+
+Умение — отдельный разговор: оно может просить род оружия (``skills.toml``), и без
+него не срабатывает вовсе. Выстрел без лука — это не «хуже», это «нечем».
 
 Модуль чистый: ни времени, ни случая, ни ввода-вывода.
 """
@@ -30,6 +30,8 @@ from collections.abc import Iterable
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, Item, Skill
+from mmorpg.domain.entities.dice import Dice
+from mmorpg.domain.procgen import items as gear_procgen
 
 # Броня смягчается против уровня того, кого бьют. Обе величины растут с уровнем
 # линейно, поэтому несмягчённая броня выиграла бы гонку: на трёхсотом уровне
@@ -37,15 +39,21 @@ from mmorpg.domain.entities.content import GameContent, Item, Skill
 ARMOR_SOFTENER_BASE = 55.0
 ARMOR_SOFTENER_PER_LEVEL = 3.2
 
-#: Сколько брони даёт нагрудник своего уровня — долей от смягчителя этого же
-#: уровня. Полный тяжёлый доспех выходит примерно вполовину смягчителя, то есть
-#: съедает около трети удара сверх того, что держит выносливость.
-EQUIPMENT_ARMOR_SHARE = 0.10
-
-#: Удар голыми руками. Отсчёт ведётся от него, и ниже него оружия нет.
-UNARMED_DAMAGE = 1.0
+#: Чем бьют, когда в руках ничего. Кости растут с уровнем героя так же, как у
+#: оружия со ступенью, — иначе на сотом уровне безоружный не бил бы вовсе. Но и
+#: близко не оружие: на первом уровне это в среднем 2,5 против 7 у меча.
+UNARMED_DICE = Dice(count=1, faces=4)
 
 WEAPON_SLOT = "weapon"
+
+#: Чего стоит чужое оружие. Не запрет: игрок волен взять что угодно, но держит
+#: он его хуже, и это видно в двух числах, которые он и так читает на экране.
+FOREIGN_WEAPON_ACCURACY = -20.0
+FOREIGN_WEAPON_INITIATIVE = -15.0
+#: И чего стоит каждая часть чужого доспеха. Полный чужой доспех — это четыре
+#: части, то есть вчетверо.
+FOREIGN_ARMOR_ACCURACY = -5.0
+FOREIGN_ARMOR_INITIATIVE = -8.0
 
 
 def armor_softener(level: int) -> float:
@@ -59,31 +67,33 @@ def armor_factor(armor: float, level: int) -> float:
     return softener / (softener + max(0.0, armor))
 
 
+def worn_item(content: GameContent, item_id: str, hero_level: int = 0) -> Item | None:
+    """Вещь такой, какая она на этом герое, или ``None``, если её больше нет.
+
+    Реликтовая вещь пересобирается по уровню героя: в этом вся её суть. Всё
+    остальное отдаётся как есть.
+    """
+    if not content.has_item(item_id):
+        return None
+    return gear_procgen.worn(content, content.item(item_id), hero_level)
+
+
 # --- доспех ----------------------------------------------------------
 
 
-def armor_of(content: GameContent, item: Item) -> int:
-    """Сколько брони держит одна надетая вещь.
-
-    Ноль у всего, что бронёй не является: у оружия, у украшения, у расходника — и
-    у вещи, чей род доспеха содержимое больше не знает.
-    """
-    if not item.is_armor or not content.has_armor_type(item.armor_type):
-        return 0
-    share = content.slot(item.slot).armor_share if content.has_slot(item.slot) else 0.0
-    if share <= 0:
-        return 0
-    kind = content.armor_type(item.armor_type)
-    return round(armor_softener(item.level) * EQUIPMENT_ARMOR_SHARE * kind.armor * share)
+def armor_of(content: GameContent, item: Item, hero_level: int = 0) -> int:
+    """Сколько брони держит одна надетая вещь."""
+    return gear_procgen.worn(content, item, hero_level).armor
 
 
-def worn_armor(content: GameContent, item_ids: Iterable[str]) -> int:
+def worn_armor(content: GameContent, item_ids: Iterable[str], hero_level: int = 0) -> int:
     """Броня всего надетого разом. Вещь, которой больше нет, не даёт ничего."""
-    return sum(
-        armor_of(content, content.item(item_id))
-        for item_id in item_ids
-        if content.has_item(item_id)
-    )
+    total = 0
+    for item_id in item_ids:
+        item = worn_item(content, item_id, hero_level)
+        if item is not None:
+            total += item.armor
+    return total
 
 
 # --- оружие ----------------------------------------------------------
@@ -92,10 +102,10 @@ def worn_armor(content: GameContent, item_ids: Iterable[str]) -> int:
 def weapon_of(content: GameContent, character: Character) -> Item | None:
     """Что у персонажа в руке, или ``None``, если ничего."""
     item_id = character.equipment.item_in(WEAPON_SLOT)
-    if item_id is None or not content.has_item(item_id):
+    if item_id is None:
         return None
-    item = content.item(item_id)
-    return item if item.is_weapon else None
+    item = worn_item(content, item_id, character.level)
+    return item if item is not None and item.is_weapon else None
 
 
 def weapon_type_of(content: GameContent, character: Character) -> str:
@@ -104,12 +114,12 @@ def weapon_type_of(content: GameContent, character: Character) -> str:
     return weapon.weapon_type if weapon is not None else ""
 
 
-def blow_factor(content: GameContent, character: Character) -> float:
-    """Во сколько раз тяжелее обычного стандартный удар этим оружием."""
-    type_id = weapon_type_of(content, character)
-    if not type_id or not content.has_weapon_type(type_id):
-        return UNARMED_DAMAGE
-    return content.weapon_type(type_id).damage
+def weapon_dice(content: GameContent, character: Character) -> Dice:
+    """Чем этот герой бьёт: кости оружия, а без оружия — кости кулака."""
+    weapon = weapon_of(content, character)
+    if weapon is not None and weapon.damage is not None:
+        return weapon.damage
+    return UNARMED_DICE.scaled(1.0 + gear_procgen.FACES_PER_LEVEL * (character.level - 1))
 
 
 def type_modifiers(content: GameContent, item_ids: Iterable[str]) -> dict[str, float]:
@@ -117,7 +127,7 @@ def type_modifiers(content: GameContent, item_ids: Iterable[str]) -> dict[str, f
 
     Кинжал прибавляет прыть, латы её отнимают — и это не свойство конкретного
     клинка, а свойство кинжалов вообще, поэтому написано оно один раз в
-    ``items.toml [meta]``, а не в каждой из сотни вещей.
+    ``items.toml [meta]``, а не в каждой из тысячи вещей.
     """
     total: dict[str, float] = {}
     for item_id in item_ids:
@@ -134,29 +144,76 @@ def type_modifiers(content: GameContent, item_ids: Iterable[str]) -> dict[str, f
     return total
 
 
-# --- допуски ---------------------------------------------------------
+# --- чужая вещь ------------------------------------------------------
 
 
-def equip_refusal(content: GameContent, character: Character, item: Item) -> str:
-    """Почему эту вещь надеть нельзя — словами. Пусто, если можно.
-
-    Класс, у которого списки пусты, носит всё: содержимое переживает код, и
-    класс, заведённый до этих списков, не должен оказаться голым.
-    """
+def is_foreign(content: GameContent, character: Character, item: Item) -> bool:
+    """Не своё ли это для его класса. Украшение — ничьё, оно подходит всем."""
     if not item.is_equipment:
+        return False
+    klass = content.character_class(character.class_id)
+    if item.is_weapon:
+        return not klass.can_wield(item.weapon_type)
+    if item.is_armor:
+        return not klass.can_wear(item.armor_type)
+    return False
+
+
+def proficiency_penalty(content: GameContent, character: Character) -> dict[str, float]:
+    """Чего стоит всё чужое, что сейчас надето, — точностью и прытью.
+
+    Запрета нет: латы на маге застёгиваются. Просто он в них медленнее и чаще
+    мажет, и обе цифры он видит на своём же экране характеристик.
+    """
+    accuracy = 0.0
+    initiative = 0.0
+    for item_id in character.equipment.item_ids():
+        if not content.has_item(item_id):
+            continue
+        item = content.item(item_id)
+        if not is_foreign(content, character, item):
+            continue
+        if item.is_weapon:
+            accuracy += FOREIGN_WEAPON_ACCURACY
+            initiative += FOREIGN_WEAPON_INITIATIVE
+        else:
+            accuracy += FOREIGN_ARMOR_ACCURACY
+            initiative += FOREIGN_ARMOR_INITIATIVE
+    if not accuracy and not initiative:
+        return {}
+    return {"accuracy_percent": accuracy, "initiative_percent": initiative}
+
+
+def equip_warning(content: GameContent, character: Character, item: Item) -> str:
+    """Чем обернётся эта вещь на этом классе. Пусто, если ничем.
+
+    Предупреждение, а не отказ: игрок вправе надеть что угодно и вправе знать
+    цену заранее — на карточке, а не потом на экране характеристик.
+    """
+    if not is_foreign(content, character, item):
         return ""
     klass = content.character_class(character.class_id)
-    if item.is_weapon and not klass.can_wield(item.weapon_type):
+    if item.is_weapon:
         kind = _weapon_name(content, item.weapon_type)
-        return f"{item.name} — это {kind}, а {klass.name.lower()} таким не дерётся."
-    if item.is_armor and not klass.can_wear(item.armor_type):
-        kind = _armor_name(content, item.armor_type)
-        return f"{item.name} — {kind}, а {klass.name.lower()} такого не носит."
-    return ""
+        return (
+            f"{item.name} — это {kind}, а {klass.name.lower()} таким драться не учился: "
+            f"с ним точность ниже на {abs(int(FOREIGN_WEAPON_ACCURACY))} процентов, "
+            f"прыть — на {abs(int(FOREIGN_WEAPON_INITIATIVE))}."
+        )
+    kind = _armor_name(content, item.armor_type)
+    return (
+        f"{item.name} — {kind}, а {klass.name.lower()} в таком не обучен: "
+        f"в нём точность ниже на {abs(int(FOREIGN_ARMOR_ACCURACY))} процентов, "
+        f"прыть — на {abs(int(FOREIGN_ARMOR_INITIATIVE))}."
+    )
 
 
 def skill_refusal(content: GameContent, character: Character, skill: Skill) -> str:
-    """Почему это умение сейчас не сработает — словами. Пусто, если сработает."""
+    """Почему это умение сейчас не сработает — словами. Пусто, если сработает.
+
+    Здесь отказ, а не штраф, и разница по смыслу: чужим мечом можно махать плохо,
+    а выстрелить без лука нечем.
+    """
     if not skill.weapon_types:
         return ""
     held = weapon_type_of(content, character)

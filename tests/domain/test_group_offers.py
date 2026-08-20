@@ -40,7 +40,7 @@ def offer(kind: OfferKind = OfferKind.SELL, *, price: int = 100, created_at: int
         kind=kind,
         author=ARGUS,
         target=MERLA,
-        item_id="leather_armor",
+        item_id="light_body@6#common",
         item_name="Кожаная броня",
         price=price,
         created_at=created_at,
@@ -213,7 +213,7 @@ def test_offer_numbers_stay_short_enough_to_type() -> None:
 
 
 CATALOGUE = (
-    ItemOption(item_id="leather_armor", name="Кожаная броня"),
+    ItemOption(item_id="light_body@6#common", name="Кожаная броня"),
     ItemOption(item_id="leather_boots", name="Кожаные сапоги"),
     ItemOption(item_id="bronze_blade", name="Бронзовый клинок, щербатый"),
 )
@@ -221,12 +221,12 @@ CATALOGUE = (
 
 @pytest.mark.parametrize(
     "query",
-    ["Кожаная броня", "кожаная броня", "  КОЖАНАЯ   БРОНЯ ", "leather_armor"],
+    ["Кожаная броня", "кожаная броня", "  КОЖАНАЯ   БРОНЯ ", "light_body@6#common"],
 )
 def test_an_exact_name_wins_however_it_is_typed(query: str) -> None:
     found = match_items(query, CATALOGUE)
 
-    assert [option.item_id for option in found] == ["leather_armor"]
+    assert [option.item_id for option in found] == ["light_body@6#common"]
 
 
 def test_a_prefix_is_enough_when_it_is_unambiguous() -> None:

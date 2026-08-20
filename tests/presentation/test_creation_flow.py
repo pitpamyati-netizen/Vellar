@@ -10,12 +10,14 @@ import pytest
 
 from mmorpg.application.dto.creation import CharacterDraft, validate_name
 from mmorpg.domain.entities import GameContent, StatBlock, StatCode
+from mmorpg.domain.rules.tutorial import TutorialTask
 from mmorpg.presentation.telegram.flows.creation import (
     CreationState,
     advance,
     begin,
     render,
 )
+from mmorpg.presentation.telegram.screens import tutorial as tutorial_screens
 from mmorpg.presentation.telegram.screens.base import ScreenId
 from mmorpg.presentation.telegram.states.screens import CREATION_ORDER
 
@@ -346,3 +348,38 @@ def test_a_search_that_finds_nothing_says_so_and_can_be_undone(
     back = walk(content, "Сбросить фильтры", state=empty)
     assert back.trait_page.filters.active is False
     assert "Найдено 0" not in render(content, back).text()
+
+
+def test_a_new_character_is_not_sent_out_bare_handed(content: GameContent) -> None:
+    """Весь урон растёт из костей оружия: кулак бьёт втрое слабее простого меча.
+
+    Дают своё для класса и самое простое, какое есть, — без единой прибавки:
+    это начало дороги, а не подарок.
+    """
+    for klass in content.classes:
+        draft = CharacterDraft(
+            name="Проба",
+            race_id="human",
+            class_id=klass.id,
+            trait_ids=("berserker", "duelist"),
+            allocated=StatBlock.from_mapping({"STR": 5}),
+        )
+        hero = draft.to_character(content, user_id=1)
+
+        weapon_id = hero.equipment.item_in("weapon")
+        assert weapon_id is not None, klass.id
+        weapon = content.item(weapon_id)
+        assert weapon.damage is not None
+        assert klass.can_wield(weapon.weapon_type), klass.id
+        assert weapon.rarity == "common" and not weapon.stat_bonuses
+
+        body_id = hero.equipment.item_in("body")
+        assert body_id is not None, klass.id
+        assert klass.can_wear(content.item(body_id).armor_type), klass.id
+
+
+def test_the_tutorial_says_what_the_wrong_gear_costs() -> None:
+    """Запрета нет — значит, о цене надо сказать словами, и до того, как её платят."""
+    card = tutorial_screens.card_for(TutorialTask.TRADE)
+    assert "не для вашего класса" in card.text
+    assert "точностью и прытью" in card.text

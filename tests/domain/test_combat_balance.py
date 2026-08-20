@@ -56,7 +56,11 @@ TRIALS = 20
 #: opposite regression - a fight that is over before it is a fight.
 ORDINARY_TURNS = 4
 ORDINARY_FLOOR = 2
-ORDINARY_CEILING = 8
+#: Потолок стал выше на два хода вместе с костями: урон теперь бросается, и один
+#: неудачный бой действительно бывает вдвое длиннее обычного. Медиана — вот
+#: договор; потолок только отделяет невезение от поломки, и хвост у распределения
+#: с костями честно длиннее, чем был у одного числа (ADR 0015).
+ORDINARY_CEILING = 10
 ELITE_FLOOR = 1.5
 BOSS_FLOOR = 2.5
 
@@ -85,13 +89,17 @@ def armed(
 ) -> Equipment:
     """The best weapon of its class this character could be holding by now.
 
-    Оружие здесь не украшение: род оружия множит стандартный удар, а половина
-    умений разбойника и следопыта без своего оружия просто не сработает. Голыми
-    руками мерить бой значило бы мерить не ту игру, в которую играют.
+    Оружие здесь не украшение: весь урон в игре растёт из костей оружия, а
+    половина умений разбойника и следопыта без своего оружия просто не сработает.
+    Голыми руками мерить бой значило бы мерить не ту игру, в которую играют.
 
-    Доспех при этом остаётся снятым, и намеренно: чего стоит обычный бой,
-    меряется по здоровью, и одетый в латы боец ответил бы на этот вопрос за всех.
+    Доспех берётся тем же способом. Раньше его снимали намеренно — чтобы «чего
+    стоит бой» мерилось по голому здоровью, — но с тех пор броня стала числом, и
+    голый герой это уже не «худший случай», а другая игра: латы срезают треть
+    удара, и меряя без них, мы меряли бы того, кого в игре нет.
     """
+    # Игрок носит своё: чужое не запрещено, но стоит точности и прыти, и брать
+    # его нарочно незачем.
     wieldable = [
         item
         for item in content.items
@@ -111,14 +119,24 @@ def armed(
     ]
 
     def worth(item: Item) -> tuple[int, float, int]:
-        hits = sum(
-            item.modifiers.get(key, 0.0)
-            for key in ("damage_percent", "physical_damage_percent", "magic_damage_percent")
-        )
-        blow = content.weapon_type(item.weapon_type).damage * (1.0 + hits / 100.0)
-        return sum(item.weapon_type in types for types in wanted), blow, item.level
+        average = item.damage.average if item.damage is not None else 0.0
+        share = 1.0 + item.modifiers.get("damage_percent", 0.0) / 100.0
+        return sum(item.weapon_type in types for types in wanted), average * share, item.level
 
-    return Equipment().equip("weapon", max(wieldable, key=worth).id)
+    equipment = Equipment().equip("weapon", max(wieldable, key=worth).id)
+    for slot in ("head", "body", "hands", "feet"):
+        fitting = [
+            item
+            for item in content.items
+            if item.slot == slot
+            and item.is_armor
+            and klass.can_wear(item.armor_type)
+            and item.level <= level
+            and item.rarity == "common"
+        ]
+        if fitting:
+            equipment = equipment.equip(slot, max(fitting, key=lambda item: item.armor).id)
+    return equipment
 
 
 def build(content: GameContent, class_id: str, level: int) -> Character:

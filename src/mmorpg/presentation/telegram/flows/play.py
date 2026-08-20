@@ -1197,13 +1197,10 @@ def _handle_item(
 def _equip(content: GameContent, character: Character, state: PlayState, item: Item) -> PlayState:
     """Put a thing on. What it replaces goes back into the bag, never nowhere.
 
-    Род оружия и род доспеха — это допуск, а не украшение карточки: разбойник не
-    берёт двуручник, маг не надевает латы. Карточка такой вещи кнопки «Надеть» не
-    рисует вовсе (``screens/items.py``), а это второй замок на той же двери: вещь
-    остаётся в сумке, и отказ приходит словами.
+    Надеть можно что угодно: чужая вещь не запрещена, она дорога. Чего она стоит
+    точностью и прытью, сказано на карточке до нажатия — и повторяется вслед за
+    «надет», потому что решение уже принято, а числа поменялись.
     """
-    if refusal := gear.equip_refusal(content, character, item):
-        return state.with_notice(refusal)
     previous = character.equipment.item_in(item.slot)
     dressed = replace(character, equipment=character.equipment.equip(item.slot, item.id))
     write = PendingWrite(character=dressed, items=((item.id, -1),))
@@ -1212,6 +1209,8 @@ def _equip(content: GameContent, character: Character, state: PlayState, item: I
         said = f"{item.name} надет, {content.item(previous).name} убран в сумку."
     else:
         said = f"{item.name} надет."
+    if warning := gear.equip_warning(content, character, item):
+        said = f"{said} {warning}"
     return state.storing(write).with_notice(said)
 
 

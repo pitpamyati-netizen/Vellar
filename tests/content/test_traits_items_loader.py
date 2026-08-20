@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from mmorpg.domain.entities import GameContent, ItemKind
+from mmorpg.domain.procgen.items import parse_gear_id
 from mmorpg.infrastructure.content import ContentError, load_content
 from tests.conftest import CONTENT_ROOT
 
@@ -117,6 +118,41 @@ def test_a_skill_never_asks_for_a_weapon_its_class_cannot_hold(content: GameCont
         assert set(skill.weapon_types) <= set(klass.weapon_types), skill.code
 
 
+def test_rarity_is_what_gives_stats_and_only_the_top_two_scale(content: GameContent) -> None:
+    """Договор редкостей, как он назван игроку: 0, 1, 2, 2 плюс свойство, и растущая."""
+    by_id = {rarity.id: rarity for rarity in content.rarities}
+    assert [rarity.stats for rarity in content.rarities] == [0, 1, 2, 2, 2]
+    assert not by_id["common"].special
+    assert by_id["legendary"].special
+    assert by_id["relic"].special
+    assert by_id["relic"].scaling
+    assert sum(rarity.scaling for rarity in content.rarities) == 1
+
+
+def test_only_a_relic_is_kept_off_the_shelves(content: GameContent) -> None:
+    for rarity in content.rarities:
+        assert (rarity.weight == 0) is rarity.scaling, rarity.id
+
+
+def test_a_relic_is_paid_only_for_a_whole_chain(content: GameContent) -> None:
+    """Второй путь к реликтовой вещи — цепочка заданий, пройденная до конца."""
+    relics = {rarity.id for rarity in content.rarities if rarity.scaling}
+    by_id = {quest.id: quest for quest in content.quests}
+    paid = [
+        quest
+        for quest in content.quests
+        if (parsed := parse_gear_id(quest.reward_item)) and parsed[2] in relics
+    ]
+    assert paid, "реликтовое должно быть достижимо не только с логова"
+    for quest in paid:
+        assert not any(other.follows == quest.id for other in content.quests), quest.id
+        length, walked = 1, quest
+        while walked.follows and walked.follows in by_id:
+            walked = by_id[walked.follows]
+            length += 1
+        assert length >= 4, quest.id
+
+
 def test_rarities_are_ordered_by_scarcity(content: GameContent) -> None:
     weights = [rarity.weight for rarity in content.rarities]
     assert weights == sorted(weights, reverse=True)
@@ -170,14 +206,43 @@ def test_an_item_description_is_reported(tmp_path: Path) -> None:
     path = directory / "items.toml"
     path.write_text(
         path.read_text(encoding="utf-8").replace(
-            'id = "rusty_sword"',
-            'id = "rusty_sword"' + chr(10) + 'text = "Одна фраза, которой здесь не место."',
+            'id = "small_healing_potion"',
+            'id = "small_healing_potion"'
+            + chr(10)
+            + 'text = "Одна фраза, которой здесь не место."',
         ),
         encoding="utf-8",
     )
     with pytest.raises(ContentError) as error:
         load_content(directory)
     assert any("has a text field" in problem for problem in error.value.problems)
+
+
+def test_gear_written_by_hand_is_reported(tmp_path: Path) -> None:
+    """Снаряжение собирается из видов: написанное руками молча не имело бы чисел."""
+    directory = _copy_content(tmp_path)
+    path = directory / "items.toml"
+    path.write_text(
+        path.read_text(encoding="utf-8")
+        + chr(10).join(
+            (
+                "",
+                "[[item]]",
+                'id = "hand_written_sword"',
+                'name = "Написанный меч"',
+                'kind = "equipment"',
+                'slot = "weapon"',
+                'rarity = "common"',
+                "level = 1",
+                "price = 30",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ContentError) as error:
+        load_content(directory)
+    assert any("equipment written by hand" in problem for problem in error.value.problems)
 
 
 def test_an_unknown_weapon_kind_is_reported(tmp_path: Path) -> None:
@@ -198,12 +263,30 @@ def test_a_weapon_without_a_kind_is_reported(tmp_path: Path) -> None:
     directory = _copy_content(tmp_path)
     path = directory / "items.toml"
     path.write_text(
-        path.read_text(encoding="utf-8").replace('weapon_type = "sword"' + chr(10), "", 1),
+        path.read_text(encoding="utf-8").replace(
+            'id = "sword"'
+            + chr(10)
+            + 'noun = "меч"'
+            + chr(10)
+            + 'gender = "m"'
+            + chr(10)
+            + 'slot = "weapon"'
+            + chr(10)
+            + 'weapon_type = "sword"',
+            'id = "sword"'
+            + chr(10)
+            + 'noun = "меч"'
+            + chr(10)
+            + 'gender = "m"'
+            + chr(10)
+            + 'slot = "weapon"',
+            1,
+        ),
         encoding="utf-8",
     )
     with pytest.raises(ContentError) as error:
         load_content(directory)
-    assert any("declares no weapon_type" in problem for problem in error.value.problems)
+    assert any("unknown weapon_type" in problem for problem in error.value.problems)
 
 
 def test_a_skill_asking_for_a_weapon_its_class_never_holds_is_reported(tmp_path: Path) -> None:

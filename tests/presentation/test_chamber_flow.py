@@ -26,7 +26,7 @@ def elder(content: GameContent) -> Character:
         race_id="human",
         class_id="warrior",
         level=turning_rules.MIN_LEVEL,
-        equipment=Equipment(MappingProxyType({"trinket": "ashen_signet"})),
+        equipment=Equipment(MappingProxyType({"trinket": "ring@26#legendary"})),
         loadout=SkillLoadout(
             actives=("warrior_cleave", None, None, None, None, None),
             ranks=MappingProxyType({"warrior_cleave": 5}),

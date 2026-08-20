@@ -34,17 +34,34 @@ def trait_modifiers(content: GameContent, trait_ids: Iterable[str]) -> dict[str,
     return merge(*(content.trait(trait_id).modifiers for trait_id in trait_ids))
 
 
-def equipment_modifiers(content: GameContent, item_ids: Iterable[str]) -> dict[str, float]:
-    """Что даёт надетое: своими прибавками и прибавками своего рода.
+def equipment_modifiers(
+    content: GameContent, item_ids: Iterable[str], hero_level: int = 0
+) -> dict[str, float]:
+    """Что даёт надетое: своими числами, своим родом и тем, чего стоит чужое.
+
+    Прибавки к характеристикам лежат на вещи числом (``Item.stat_bonuses``) — их
+    даёт редкость, — и попадают сюда теми же ключами ``stat_STR``, которыми
+    говорят особенности: словарь один на всех, и складывать его умеет один и тот
+    же ``merge``.
 
     Надетое переживает содержимое так же, как панель: вещь, которой больше нет,
     ничего не даёт и ничего не роняет.
     """
     worn = tuple(item_ids)
-    return merge(
-        *(content.item(item_id).modifiers for item_id in worn if content.has_item(item_id)),
-        gear.type_modifiers(content, worn),
-    )
+    bundles: list[Mapping[str, float]] = []
+    for item_id in worn:
+        item = gear.worn_item(content, item_id, hero_level)
+        if item is None:
+            continue
+        bundles.append(item.modifiers)
+        bundles.append(
+            {
+                f"{STAT_MODIFIER_PREFIX}{code}": float(value)
+                for code, value in item.stat_bonuses.items()
+            }
+        )
+    bundles.append(gear.type_modifiers(content, worn))
+    return merge(*bundles)
 
 
 def passive_modifiers(content: GameContent, character: Character) -> dict[str, float]:
@@ -81,7 +98,10 @@ def collect_modifiers(
     return merge(
         trait_modifiers(content, character.trait_ids),
         passive_modifiers(content, character),
-        equipment_modifiers(content, character.equipment.item_ids()),
+        equipment_modifiers(content, character.equipment.item_ids(), character.level),
+        # Чужая вещь не запрещена — она дорога, и цена берётся здесь же, вместе
+        # со всем остальным, что на персонаже сейчас висит.
+        gear.proficiency_penalty(content, character),
         effects.modifiers() if effects is not None else {},
     )
 

@@ -130,7 +130,7 @@ id = "smith_iron_helm"
 craft = "smithing"
 rank = 2
 inputs = [{ item = "mountain_ore", count = 2 }, { item = "iron_scrap", count = 1 }]
-output = { item = "iron_helm", count = 1 }
+output = { item = "medium_head@6#common", count = 1 }
 experience = 25
 
 [[recipe]]
@@ -138,7 +138,7 @@ id = "smith_chain_shirt"
 craft = "smithing"
 rank = 3
 inputs = [{ item = "mountain_ore", count = 5 }, { item = "iron_scrap", count = 3 }]
-output = { item = "chain_shirt", count = 1 }
+output = { item = "medium_body@6#uncommon", count = 1 }
 experience = 40
 
 [[recipe]]
@@ -170,15 +170,15 @@ id = "leather_jacket"
 craft = "leatherwork"
 rank = 1
 inputs = [{ item = "wolf_pelt", count = 1 }]
-output = { item = "padded_jacket", count = 1 }
+output = { item = "cloth_body@1#common", count = 1 }
 experience = 14
 
 [[recipe]]
-id = "leather_armor"
+id = "light_body@6#common"
 craft = "leatherwork"
 rank = 2
 inputs = [{ item = "wolf_pelt", count = 3 }, { item = "grove_resin", count = 1 }]
-output = { item = "leather_armor", count = 1 }
+output = { item = "light_body@6#common", count = 1 }
 experience = 26
 
 [[recipe]]
@@ -190,7 +190,7 @@ inputs = [
     { item = "iron_scrap", count = 2 },
     { item = "grove_resin", count = 1 },
 ]
-output = { item = "bracers_of_grip", count = 1 }
+output = { item = "medium_hands@6#uncommon", count = 1 }
 experience = 42
 
 # Рецепты четвёртого ранга: работа для тех, кто дошёл до дальних краёв. Сырьё для
@@ -202,7 +202,7 @@ id = "smith_stone_maul"
 craft = "smithing"
 rank = 4
 inputs = [{ item = "mountain_ore", count = 6 }, { item = "bog_iron", count = 3 }]
-output = { item = "dwarven_maul", count = 1 }
+output = { item = "mace@14#rare", count = 1 }
 experience = 60
 
 [[recipe]]
@@ -218,5 +218,5 @@ id = "leather_silent_steps"
 craft = "leatherwork"
 rank = 4
 inputs = [{ item = "wolf_pelt", count = 6 }, { item = "cave_crystal", count = 2 }]
-output = { item = "silent_steps", count = 1 }
+output = { item = "light_feet@14#rare", count = 1 }
 experience = 64

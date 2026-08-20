@@ -201,7 +201,9 @@ def sealbearer(fighter: Character) -> Character:
         pledges=("item:seers_circlet",),
         turning_cycle="toll",
         turning_answer="toll_keep",
-        equipment=Equipment(MappingProxyType({"trinket": "ashen_signet", "body": "runed_plate"})),
+        equipment=Equipment(
+            MappingProxyType({"trinket": "ring@26#legendary", "body": "heavy_body@26#legendary"})
+        ),
         loadout=replace(
             fighter.loadout,
             ranks=MappingProxyType({"warrior_cleave": 5, "warrior_taunt": 5}),
@@ -300,7 +302,7 @@ def _trade(
 #: проверялся на всех трёх, а не только на том, что можно нажать.
 SAMPLE_TRADES: tuple[TradeRecord, ...] = (
     _trade(3, OfferKind.SELL, TradeStatus.ACCEPTED, item="Короткий меч", price=120),
-    _trade(2, OfferKind.BUY, TradeStatus.DECLINED, item="Кожаный доспех", price=80),
+    _trade(2, OfferKind.BUY, TradeStatus.DECLINED, item="Простая куртка", price=80),
     _trade(1, OfferKind.SELL, TradeStatus.REVERTED, item="Кольцо", price=400),
 )
 
@@ -646,16 +648,18 @@ def all_screens(
         combat_screens.escaped_screen(fled=True),
         shop.inventory_screen(
             content,
-            (shop.OwnedItem("small_healing_potion", 3), shop.OwnedItem("rusty_sword", 1)),
+            (shop.OwnedItem("small_healing_potion", 3), shop.OwnedItem("sword@1#common", 1)),
             PageState(),
             gold=120,
         ),
         shop.inventory_screen(content, (), PageState(), gold=0),
-        item_screens.item_screen(content, hero, content.item("rusty_sword"), quantity=1, sale=12),
+        item_screens.item_screen(
+            content, hero, content.item("sword@1#common"), quantity=1, sale=12
+        ),
         item_screens.item_screen(
             content,
-            replace(hero, equipment=hero.equipment.equip("body", "leather_armor")),
-            content.item("chain_shirt"),
+            replace(hero, equipment=hero.equipment.equip("body", "light_body@6#common")),
+            content.item("medium_body@6#uncommon"),
             quantity=1,
             sale=12,
         ),
@@ -664,9 +668,11 @@ def all_screens(
         ),
         item_screens.item_screen(content, hero, content.item("wolf_pelt"), quantity=7, sale=6),
         item_screens.shop_item_screen(
-            content, hero, content.item("rusty_sword"), price=30, gold=250
+            content, hero, content.item("sword@1#common"), price=30, gold=250
         ),
-        item_screens.shop_item_screen(content, hero, content.item("rusty_sword"), price=30, gold=2),
+        item_screens.shop_item_screen(
+            content, hero, content.item("sword@1#common"), price=30, gold=2
+        ),
         filters_screen(
             screen_id=ScreenId.LIST_FILTERS,
             title="Разделы списка",

@@ -358,8 +358,8 @@ def test_an_announced_precision_is_not_dodged(content: GameContent, fighter: Cha
         pressing, player=replace(pressing.player, effects=pressing.player.effects.apply(nimble))
     )
 
-    hit = resolve_turn(content, fighter, precise, ATTACK, seed_for(1))
-    dodged = resolve_turn(content, fighter, pressing, ATTACK, seed_for(1))
+    hit = resolve_turn(content, fighter, precise, ATTACK, seed_for(3))
+    dodged = resolve_turn(content, fighter, pressing, ATTACK, seed_for(3))
     assert hit.player.health < hit.player.max_health
     assert any(event.kind is EventKind.DODGE for event in dodged.events)
 

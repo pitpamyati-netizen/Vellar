@@ -90,7 +90,7 @@ def test_equipment_modifiers_apply(content: GameContent, warrior: Character) -> 
     veteran = replace(warrior, level=50, allocated=StatBlock(END=40))
     plain = derived_stats(content, veteran)
     armored = derived_stats(
-        content, replace(veteran, equipment=Equipment({"body": "padded_jacket"}))
+        content, replace(veteran, equipment=Equipment({"body": "cloth_body@1#common"}))
     )
     assert armored.armor > plain.armor
 

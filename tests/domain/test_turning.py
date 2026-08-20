@@ -23,7 +23,7 @@ def elder() -> Character:
         race_id="human",
         class_id="warrior",
         level=turning.MIN_LEVEL,
-        equipment=Equipment(MappingProxyType({"trinket": "ashen_signet"})),
+        equipment=Equipment(MappingProxyType({"trinket": "ring@26#legendary"})),
         loadout=SkillLoadout(
             actives=("warrior_cleave", None, None, None, None, None),
             ranks=MappingProxyType({"warrior_cleave": 5}),
@@ -51,11 +51,11 @@ def test_the_turning_is_the_last_level_and_not_before(elder: Character) -> None:
 def test_a_seal_costs_something_worn(content: GameContent, elder: Character) -> None:
     """Заклад — это вещь с плеча: она уходит из слота и не падает в сумку."""
     offered = turning.pledgeable_items(content, elder)
-    assert [item.id for item in offered] == ["ashen_signet"]
+    assert [item.id for item in offered] == ["ring@26#legendary"]
 
-    sealed = turning.pledge_item(content, elder, "ashen_signet")
+    sealed = turning.pledge_item(content, elder, "ring@26#legendary")
     assert sealed is not None
-    assert sealed.item_id == "ashen_signet"
+    assert sealed.item_id == "ring@26#legendary"
     assert sealed.character.equipment.item_in("trinket") is None
     assert sealed.character.seals == 1
     # Уровень и опыт перерождение не трогает - в этом и весь смысл.
@@ -66,11 +66,11 @@ def test_a_seal_costs_something_worn(content: GameContent, elder: Character) -> 
 def test_the_chamber_asks_more_after_every_turning(content: GameContent, elder: Character) -> None:
     assert turning.asking(0) < turning.asking(1) < turning.asking(2)
     # Той же вещью второй раз не откупишься, и не только потому, что её нет.
-    once = turning.pledge_item(content, elder, "ashen_signet")
+    once = turning.pledge_item(content, elder, "ring@26#legendary")
     assert once is not None
     again = replace(once.character, equipment=elder.equipment)
     assert turning.pledgeable_items(content, again) == ()
-    assert turning.pledge_item(content, again, "ashen_signet") is None
+    assert turning.pledge_item(content, again, "ring@26#legendary") is None
 
 
 def test_a_pledged_edge_is_gone_and_stays_gone(content: GameContent, elder: Character) -> None:
@@ -142,5 +142,5 @@ def test_the_lead_needs_a_lead() -> None:
 
 def test_nothing_is_pledged_below_the_last_level(content: GameContent, elder: Character) -> None:
     young = replace(elder, level=10)
-    assert turning.pledge_item(content, young, "ashen_signet") is None
+    assert turning.pledge_item(content, young, "ring@26#legendary") is None
     assert turning.pledge_edge(content, young, "warrior_cleave") is None

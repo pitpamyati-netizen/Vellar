@@ -36,8 +36,8 @@ ARGUS_ACCOUNT = 1
 MERLA_ACCOUNT = 2
 STRANGER_ACCOUNT = 3
 NOW = 10_000
-SWORD = "rusty_sword"
-SWORD_NAME = "Ржавый меч"
+SWORD = "sword@1#common"
+SWORD_NAME = "Ветхий меч"
 
 
 @pytest.fixture
@@ -165,7 +165,7 @@ async def test_closing_a_profile_hides_nothing_else(
     await run(trade, "скрыть профиль", author=MERLA_ACCOUNT, target=None)
     await inventory.add(argus.id, SWORD, 1)
 
-    outcome = await run(trade, "передать ржавый меч", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    outcome = await run(trade, "передать ветхий меч", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
 
     assert outcome.result is GroupResult.ITEM_GIVEN
 
@@ -299,14 +299,15 @@ async def test_an_ambiguous_name_asks_instead_of_guessing(
     argus: Character,
     merla: Character,
 ) -> None:
-    await inventory.add(argus.id, "iron_helm", 1)
-    await inventory.add(argus.id, "iron_scrap", 1)
+    await inventory.add(argus.id, "medium_head@6#common", 1)
+    await inventory.add(argus.id, "sword@6#common", 1)
 
-    outcome = await run(trade, "передать железный", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    # «Простой шишак» и «Простой меч» — одна ступень, два разных предмета.
+    outcome = await run(trade, "передать простой", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
 
     assert outcome.refusal is Refusal.AMBIGUOUS_ITEM
     assert len(outcome.options) == 2
-    assert await inventory.count(argus.id, "iron_helm") == 1
+    assert await inventory.count(argus.id, "medium_head@6#common") == 1
 
 
 async def test_giving_to_yourself_is_refused(
@@ -435,12 +436,10 @@ async def test_offers_get_distinct_numbers(
     merla: Character,
 ) -> None:
     await inventory.add(argus.id, SWORD, 1)
-    await inventory.add(argus.id, "militia_spear", 1)
+    await inventory.add(argus.id, "spear@1#common", 1)
 
     first = await run(trade, f"продать 10 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
-    second = await run(
-        trade, "продать 20 Ополченское копьё", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT
-    )
+    second = await run(trade, "продать 20 Ветхое копьё", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
 
     assert first.offer is not None and second.offer is not None
     assert first.offer.number != second.offer.number

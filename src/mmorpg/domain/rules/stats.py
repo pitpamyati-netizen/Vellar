@@ -107,7 +107,7 @@ def derived_stats(
     )
     max_resource = raw_resource * mods.percent(modifiers, "resource_percent")
 
-    worn = gear.worn_armor(content, character.equipment.item_ids())
+    worn = gear.worn_armor(content, character.equipment.item_ids(), character.level)
     armor = (stats[StatCode.END] * ARMOR_PER_ENDURANCE + worn) * mods.percent(
         modifiers, "armor_percent"
     )

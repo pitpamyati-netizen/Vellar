@@ -113,7 +113,7 @@ async def test_save_round_trips_every_field() -> None:
         loadout=created.loadout.with_rank("warrior_cleave", 3).with_edge(
             "warrior_cleave", "warrior_cleave_a"
         ),
-        equipment=created.equipment.equip("weapon", "rusty_sword"),
+        equipment=created.equipment.equip("weapon", "sword@1#common"),
     )
     await characters.save(updated)
 
@@ -122,7 +122,7 @@ async def test_save_round_trips_every_field() -> None:
     assert reloaded is not None
     assert reloaded.loadout.rank_of("warrior_cleave") == 3
     assert reloaded.loadout.edge_of("warrior_cleave") == "warrior_cleave_a"
-    assert reloaded.equipment.item_in("weapon") == "rusty_sword"
+    assert reloaded.equipment.item_in("weapon") == "sword@1#common"
 
 
 async def test_get_active_and_list_for_user() -> None:

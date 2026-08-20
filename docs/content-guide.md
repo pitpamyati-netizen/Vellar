@@ -13,7 +13,7 @@ wrong - the bot refuses to start on broken content.
 | `classes.toml` | 8 classes: key stats, resource curve, health curve, progression meta |
 | `traits.toml` | 60+ traits, the modifier vocabulary, categories |
 | `skills.toml` | 8 active + 6 passive per class, 1 active per race, both edges of each |
-| `items.toml` | equipment, consumables, materials, rarities, slots |
+| `items.toml` | kinds of gear, grades, rarities, consumables, materials |
 | `crafts.toml` | gathering and making crafts, recipes, rank and quality rules |
 
 ## Ground rules
@@ -200,40 +200,69 @@ Traits in the `dark` category must contain both an upside and a real penalty; th
 test uses `[meta].lower_is_better` to decide which direction is which (for
 `shop_price_percent` a negative value is the bonus).
 
-## Add an item
+## Add a kind of gear
+
+Gear is **not written by hand**. A sword exists on twelve grades in five
+rarities, and so does every other kind - about two thousand things. What is
+written is the *kind*; the thing is assembled from kind, grade and rarity the way
+an opponent is assembled from an archetype and a level (ADR 0015).
+
+```toml
+[[gear]]
+id = "halberd"                       # snake_case, unique, never changes
+noun = "алебарда"                    # the noun the name is built from
+gender = "f"                         # m | f | n | p - "Крепкая алебарда"
+slot = "weapon"                      # weapon/head/body/hands/feet/trinket
+weapon_type = "spear"                # weapons only, from [meta].weapon_types
+```
+
+Armour declares `armor_type` instead; a trinket declares neither. The name is
+built as **grade adjective + noun + rarity mark**: «Крепкая алебарда редкой
+работы». All three come from `[meta]`, and the loader refuses a grade that has no
+adjective for one of the four genders - a name that does not agree is a name the
+player stumbles over.
+
+Damage, armour, stats and price are **not written either**. They come from
+`[meta]`:
+
+- `weapon_types[].dice` - the dice of the kind on the first grade (`"2d6"`).
+  They grow with the grade, in both the number of dice and their faces. Spread is
+  the character of the kind: `1d16` swings wider than `2d6` at every grade.
+- `armor_types[].armor` - the share of armour relative to light, and
+  `slots[].armor_share` - how much the place covers at all.
+- `rarities[].stats` / `special` / `scaling` - what the rarity is worth: no
+  stats at all, one, two, two and a property, and finally a **relic**, whose
+  numbers count from the *hero's* level and grow with them.
+
+## Add a consumable or a material
 
 ```toml
 [[item]]
-id = "sea_glass_blade"
-name = "Клинок морского стекла"
-kind = "equipment"                   # equipment | consumable | material
-slot = "weapon"                      # weapon/head/body/hands/feet/trinket, or "none"
-weapon_type = "short_sword"          # weapons only, from items.toml [meta].weapon_types
+id = "sea_glass_vial"
+name = "Склянка морского стекла"
+kind = "consumable"                  # consumable | material - never equipment
+slot = "none"
 rarity = "rare"                      # from items.toml [meta].rarities
 level = 18
 price = 760
-modifiers = { damage_percent = 16 }
-skill_modifiers = { monk_palm_strike = 20 }   # +20% to that skill, never a new button
+stack = 10
+effect = { kind = "heal_percent", power = 30 }
 ```
 
-**An item has no description.** Items drop, are forged and sit on shelves by the
-hundred; a phrase written for each of them is either invented on the spot or the
-same phrase a hundred times over. What a thing is, its kind, its slot and its
-numbers answer. A `text` field on an item is refused by the loader.
-
-**Every weapon declares `weapon_type`, every head/body/hands/feet piece declares
-`armor_type`** (`items.toml [meta]`). The kind is not decoration: it decides how
-much armour the piece holds, which classes may put it on (`classes.toml`) and
-which skills work with it (`skills.toml`). A trinket has neither. See ADR 0014.
-
-Consumables must declare `stack` and an `effect` table, and always use `slot =
-"none"` - they live in the combat Bag tab.
+**An item has no description.** Items are generated in their thousands; a phrase
+written for each is either invented on the spot or the same phrase a thousand
+times over. What a thing is, its kind, its grade and its numbers answer. A `text`
+field is refused by the loader, and so is a hand-written `kind = "equipment"`.
 
 Materials declare `source` - what kind of stock they are: `травы`, `руда`,
 `шкуры` or `обломки`. A gathering node hands over only its own kind, so a herb
 patch pays in herbs and an ore vein in ore (`domain/rules/adventure.GATHER_SOURCES`).
 A material without a `source` would be handed out by every node alike, which is
 how "Полезные травы" once paid in iron scrap; `tests/content` refuses one.
+
+Anything that names a thing by name - a contract reward, a recipe output, a loot
+table - uses the assembled name: `reward_item = "light_feet@14#rare"`. A **relic**
+may only ever be the reward of a contract that ends a chain of four or more.
 
 ## Add or rebalance a city
 

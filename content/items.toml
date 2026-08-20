@@ -1,28 +1,57 @@
-# Items: equipment, consumables and materials.
+# Items: gear, consumables and materials.
 #
-# HARD RULE: equipment never grants an active skill. It grants modifiers and skill
-# variations (skill_modifiers), which change the numbers of a skill the player
-# already has. See docs/skills.md, "Anti-bloat rules".
+# HARD RULE: equipment never grants an active skill. It grants numbers - damage,
+# armour, stats - and nothing that adds a button. See docs/skills.md.
 #
-# HARD RULE: an item has no description. Items drop, are forged and sit on shelves
-# by the hundred; a phrase written for each of them is either invented on the spot
-# or the same phrase a hundred times over. What a thing is, its kind, its slot and
-# its numbers answer - and they answer with numbers.
+# HARD RULE: an item has no description. Items are generated in their thousands;
+# what a thing is, its kind, its grade and its numbers answer.
 #
-# Consumables live in the combat Bag tab, never in a skill slot.
-# Modifier keys share the vocabulary declared in traits.toml [meta].modifier_keys -
-# and only keys the engine actually reads. ``physical_damage_percent`` and
-# ``magic_damage_percent`` are not among them: fourteen items promised damage
-# through keys nothing counts, which is the same bug as a wrong number (Claude.md,
-# rule 7). Damage is ``damage_percent``, here and everywhere.
+# GEAR IS NOT WRITTEN HERE, ONLY ITS KINDS. A sword exists on twelve grades in
+# five rarities, and so does every other kind: writing them out would be about two
+# thousand entries nobody would ever edit. What is written is the *kind*, and the
+# thing is assembled from kind, grade and rarity the same way an opponent is
+# assembled from an archetype and a level (domain/procgen/items.py, ADR 0015).
+#
+# Consumables and materials are still written by hand: there are few of them and
+# each is its own thing.
+# Modifier keys share the vocabulary declared in traits.toml [meta].modifier_keys,
+# and only keys the engine actually reads.
 
 [meta]
+
+# Редкость решает, что вещь даёт сверх урона и брони.
+#   stats    сколько характеристик прибавляет
+#   special  есть ли особое свойство сверх них
+#   scaling  считать числа от уровня героя, а не от уровня вещи
+#   weight   как часто попадается; ноль - не попадается вовсе
+#   mark     чем имя отличается от обычного: две вещи одного вида должны
+#            называться по-разному, иначе в списке будут две одинаковые кнопки
 rarities = [
-    { id = "common", name = "Обычный", weight = 100, price_factor = 1.0 },
-    { id = "uncommon", name = "Необычный", weight = 45, price_factor = 2.2 },
-    { id = "rare", name = "Редкий", weight = 18, price_factor = 5.0 },
-    { id = "epic", name = "Эпический", weight = 5, price_factor = 12.0 },
-    { id = "legendary", name = "Именной", weight = 1, price_factor = 30.0 },
+    { id = "common", name = "Обычный", weight = 100, price_factor = 1.0, stats = 0, mark = "" },
+    { id = "uncommon", name = "Необычный", weight = 42, price_factor = 2.4, stats = 1, mark = "доброй ковки" },
+    { id = "rare", name = "Редкий", weight = 14, price_factor = 6.0, stats = 2, mark = "редкой работы" },
+    { id = "legendary", name = "Легендарный", weight = 3, price_factor = 16.0, stats = 2, special = true, mark = "именной славы" },
+    { id = "relic", name = "Реликтовый", weight = 0, price_factor = 45.0, stats = 2, special = true, scaling = true, mark = "давних времён" },
+]
+
+# Ступени снаряжения: с какого уровня и каким словом её называют. Вещь бывает
+# только на ступени - промежуточных уровней у снаряжения нет, и потому «Крепкий
+# меч» это один и тот же меч у всех, а не одно имя на двадцать разных мечей.
+# Прилагательное нужно в четырёх родах: меч (m), кольчуга (f), копьё (n),
+# поножи (p).
+tiers = [
+    { level = 1, m = "Ветхий", f = "Ветхая", n = "Ветхое", p = "Ветхие" },
+    { level = 6, m = "Простой", f = "Простая", n = "Простое", p = "Простые" },
+    { level = 14, m = "Крепкий", f = "Крепкая", n = "Крепкое", p = "Крепкие" },
+    { level = 26, m = "Добрый", f = "Добрая", n = "Доброе", p = "Добрые" },
+    { level = 45, m = "Отменный", f = "Отменная", n = "Отменное", p = "Отменные" },
+    { level = 70, m = "Ладный", f = "Ладная", n = "Ладное", p = "Ладные" },
+    { level = 100, m = "Дивный", f = "Дивная", n = "Дивное", p = "Дивные" },
+    { level = 135, m = "Славный", f = "Славная", n = "Славное", p = "Славные" },
+    { level = 175, m = "Гордый", f = "Гордая", n = "Гордое", p = "Гордые" },
+    { level = 215, m = "Царский", f = "Царская", n = "Царское", p = "Царские" },
+    { level = 255, m = "Звёздный", f = "Звёздная", n = "Звёздное", p = "Звёздные" },
+    { level = 290, m = "Немеркнущий", f = "Немеркнущая", n = "Немеркнущее", p = "Немеркнущие" },
 ]
 
 # armor_share: сколько брони держит это место - долей от нагрудника. Без неё
@@ -37,34 +66,30 @@ slots = [
     { id = "trinket", name = "Украшение", armor_share = 0.0 },
 ]
 
-# Рода оружия. Род решает три вещи: кому оружие даётся (classes.toml, weapons),
-# какие умения с ним работают (skills.toml, weapons) и насколько тяжёл удар.
+# Рода оружия. Род решает, чем игрок бьёт: dice - кости этого рода на первой
+# ступени, дальше растут грани, а не число костей. Размах это характер рода:
+# булава «1d16» бьёт вразброс, меч «2d6» ровно, и в среднем они близки - ни один
+# род не должен быть выбором «за неимением лучшего».
 #
-# damage - доля от стандартного удара. Единица это голые руки: оружие бывает
-# лучше кулака и не бывает хуже, иначе кинжал был бы обузой. Загрузчик отказывает
-# роду, который бьёт слабее единицы. Всё остальное, чем один род отличается от
-# другого, - modifiers: кинжал даёт прыть, топор вес удара, латы отнимают и то и
-# другое. Это свойство рода, а не конкретного клинка, поэтому написано один раз.
+# Класс носит своё (classes.toml), но чужое не запрещено: за чужое оружие платят
+# точностью и прытью, а не отказом (ADR 0015).
 weapon_types = [
-    { id = "dagger", name = "Кинжал", damage = 1.0, modifiers = { crit_chance_percent = 4, initiative_percent = 8 } },
-    { id = "short_sword", name = "Короткий меч", damage = 1.05, modifiers = { initiative_percent = 4, accuracy_percent = 3 } },
-    { id = "sword", name = "Меч", damage = 1.12, modifiers = { accuracy_percent = 4 } },
-    { id = "greatsword", name = "Двуручный меч", damage = 1.3, modifiers = { initiative_percent = -10, dodge_percent = -3 } },
-    { id = "axe", name = "Топор", damage = 1.22, modifiers = { crit_damage_percent = 10, accuracy_percent = -4 } },
-    { id = "mace", name = "Булава", damage = 1.18, modifiers = { initiative_percent = -4, damage_percent = 4 } },
-    { id = "spear", name = "Копьё", damage = 1.15, modifiers = { accuracy_percent = 5, initiative_percent = -3 } },
-    { id = "bow", name = "Лук", damage = 1.1, modifiers = { initiative_percent = 6, accuracy_percent = 4 } },
-    { id = "staff", name = "Посох", damage = 1.08, modifiers = { damage_percent = 6, resource_percent = 5 } },
-    { id = "wand", name = "Жезл", damage = 1.0, modifiers = { damage_percent = 10, resource_regen_percent = 8 } },
-    { id = "symbol", name = "Символ веры", damage = 1.0, modifiers = { healing_done_percent = 10, resource_percent = 8 } },
+    { id = "dagger", name = "Кинжал", gender = "m", dice = "1d11", modifiers = { crit_chance_percent = 4, initiative_percent = 8 } },
+    { id = "short_sword", name = "Короткий меч", gender = "m", dice = "1d13", modifiers = { initiative_percent = 4, accuracy_percent = 3 } },
+    { id = "sword", name = "Меч", gender = "m", dice = "2d6", modifiers = { accuracy_percent = 4 } },
+    { id = "greatsword", name = "Двуручный меч", gender = "m", dice = "2d8", modifiers = { initiative_percent = -10, dodge_percent = -3 } },
+    { id = "axe", name = "Топор", gender = "m", dice = "2d7", modifiers = { crit_damage_percent = 10, accuracy_percent = -4 } },
+    { id = "mace", name = "Булава", gender = "f", dice = "1d16", modifiers = { initiative_percent = -4, damage_percent = 4 } },
+    { id = "spear", name = "Копьё", gender = "n", dice = "1d14", modifiers = { accuracy_percent = 5, initiative_percent = -3 } },
+    { id = "bow", name = "Лук", gender = "m", dice = "1d13", modifiers = { initiative_percent = 6, accuracy_percent = 4 } },
+    { id = "staff", name = "Посох", gender = "m", dice = "2d5", modifiers = { damage_percent = 4, resource_percent = 5 } },
+    { id = "wand", name = "Жезл", gender = "m", dice = "1d12", modifiers = { damage_percent = 6, resource_regen_percent = 8 } },
+    { id = "symbol", name = "Символ веры", gender = "m", dice = "1d11", modifiers = { healing_done_percent = 10, resource_percent = 8 } },
 ]
 
-# Рода доспеха. armor - доля брони относительно лёгкого доспеха того же уровня.
-# Именно она и делает броню бронёй: до неё вся защита росла из одной выносливости,
-# а надетое меняло её на проценты от почти нуля - латы ощущались как стёганка.
-#
-# modifiers здесь берутся с каждой надетой вещи этого рода, поэтому полный
-# тяжёлый доспех отнимает прыть вчетверо: это и есть его цена.
+# Рода доспеха. armor - доля брони относительно лёгкого доспеха той же ступени.
+# modifiers берутся с каждой надетой вещи этого рода, поэтому полный тяжёлый
+# доспех отнимает прыть вчетверо: это и есть его цена.
 armor_types = [
     { id = "cloth", name = "Тканый доспех", armor = 0.5, modifiers = { resource_percent = 3 } },
     { id = "light", name = "Лёгкий доспех", armor = 1.0, modifiers = { dodge_percent = 1 } },
@@ -72,456 +97,236 @@ armor_types = [
     { id = "heavy", name = "Тяжёлый доспех", armor = 2.6, modifiers = { initiative_percent = -3, dodge_percent = -1 } },
 ]
 
-# --- Weapons ---
+# Особое свойство легендарной и реликтовой вещи. Одно на вещь, выбирается по её
+# же имени - и потому всегда одно и то же. Каждый ключ здесь движок читает:
+# прибавка, которой никто не считает, это не свойство, а обещание.
+special_properties = [
+    { key = "damage_percent", value = 8 },
+    { key = "crit_chance_percent", value = 6 },
+    { key = "crit_damage_percent", value = 20 },
+    { key = "health_percent", value = 8 },
+    { key = "armor_percent", value = 12 },
+    { key = "dodge_percent", value = 5 },
+    { key = "accuracy_percent", value = 8 },
+    { key = "initiative_percent", value = 12 },
+    { key = "resource_percent", value = 15 },
+    { key = "resource_regen_percent", value = 20 },
+    { key = "cost_reduction_percent", value = 12 },
+    { key = "healing_done_percent", value = 12 },
+    { key = "regen_per_turn_percent", value = 2 },
+    { key = "damage_taken_percent", value = -6 },
+]
 
-[[item]]
-id = "rusty_sword"
-name = "Ржавый меч"
-kind = "equipment"
-slot = "weapon"
-weapon_type = "sword"
-rarity = "common"
-level = 1
-price = 30
-modifiers = { damage_percent = 5 }
+# Виды снаряжения. Из каждого собирается вещь на каждой ступени в каждой
+# редкости; имя строится из прилагательного ступени, этого существительного и
+# следа редкости: «Крепкий меч редкой работы».
 
-[[item]]
-id = "militia_spear"
-name = "Ополченское копьё"
-kind = "equipment"
-slot = "weapon"
-weapon_type = "spear"
-rarity = "common"
-level = 3
-price = 55
-modifiers = { damage_percent = 7, accuracy_percent = 3 }
-
-[[item]]
-id = "hunting_bow"
-name = "Охотничий лук"
-kind = "equipment"
-slot = "weapon"
-weapon_type = "bow"
-rarity = "common"
-level = 4
-price = 70
-modifiers = { damage_percent = 6, initiative_percent = 5 }
-
-[[item]]
-id = "apprentice_staff"
-name = "Посох ученика"
-kind = "equipment"
-slot = "weapon"
-weapon_type = "staff"
-rarity = "common"
-level = 4
-price = 75
-modifiers = { damage_percent = 8, resource_percent = 5 }
-
-[[item]]
-id = "guard_saber"
-name = "Сабля стражника"
-kind = "equipment"
-slot = "weapon"
-weapon_type = "sword"
-rarity = "uncommon"
-level = 8
-price = 210
-modifiers = { damage_percent = 12, crit_chance_percent = 2 }
-skill_modifiers = { warrior_cleave = 15 }
-
-[[item]]
-id = "poacher_daggers"
-name = "Ножи браконьера"
-kind = "equipment"
+[[gear]]
+id = "dagger"
+noun = "кинжал"
+gender = "m"
 slot = "weapon"
 weapon_type = "dagger"
-rarity = "uncommon"
-level = 9
-price = 230
-modifiers = { crit_chance_percent = 5, crit_damage_percent = 8 }
-skill_modifiers = { rogue_feint = 20 }
 
-[[item]]
-id = "grove_branch"
-name = "Ветвь рощи"
-kind = "equipment"
-slot = "weapon"
-weapon_type = "staff"
-rarity = "uncommon"
-level = 10
-price = 240
-modifiers = { damage_percent = 12, healing_done_percent = 6 }
-
-[[item]]
-id = "dwarven_maul"
-name = "Молот каменотёса"
-kind = "equipment"
-slot = "weapon"
-weapon_type = "mace"
-rarity = "rare"
-level = 16
-price = 720
-modifiers = { damage_percent = 20, initiative_percent = -6 }
-skill_modifiers = { barbarian_reckless_swing = 20 }
-
-[[item]]
-id = "silver_censer"
-name = "Серебряное кадило"
-kind = "equipment"
-slot = "weapon"
-weapon_type = "symbol"
-rarity = "rare"
-level = 18
-price = 780
-modifiers = { healing_done_percent = 18, resource_regen_percent = 8 }
-skill_modifiers = { cleric_mend = 20 }
-
-[[item]]
-id = "stormcaller_rod"
-name = "Жезл грозы"
-kind = "equipment"
-slot = "weapon"
-weapon_type = "wand"
-rarity = "epic"
-level = 26
-price = 2400
-modifiers = { damage_percent = 26, aoe_damage_percent = 12 }
-skill_modifiers = { mage_firebolt = 25 }
-
-[[item]]
-id = "bone_dagger"
-name = "Костяной нож"
-kind = "equipment"
-slot = "weapon"
-weapon_type = "dagger"
-rarity = "common"
-level = 1
-price = 28
-modifiers = { crit_chance_percent = 3 }
-
-[[item]]
-id = "sailors_shortsword"
-name = "Матросский тесак"
-kind = "equipment"
+[[gear]]
+id = "short_sword"
+noun = "короткий меч"
+gender = "m"
 slot = "weapon"
 weapon_type = "short_sword"
-rarity = "common"
-level = 2
-price = 45
-modifiers = { damage_percent = 5 }
 
-[[item]]
-id = "woodcutters_axe"
-name = "Колун дровосека"
-kind = "equipment"
+[[gear]]
+id = "sword"
+noun = "меч"
+gender = "m"
 slot = "weapon"
-weapon_type = "axe"
-rarity = "common"
-level = 2
-price = 48
-modifiers = { damage_percent = 6 }
+weapon_type = "sword"
 
-[[item]]
-id = "willow_wand"
-name = "Ивовый жезл"
-kind = "equipment"
-slot = "weapon"
-weapon_type = "wand"
-rarity = "common"
-level = 2
-price = 40
-modifiers = { damage_percent = 6 }
-
-[[item]]
-id = "pilgrims_symbol"
-name = "Знак паломника"
-kind = "equipment"
-slot = "weapon"
-weapon_type = "symbol"
-rarity = "common"
-level = 1
-price = 42
-modifiers = { healing_done_percent = 6 }
-
-[[item]]
-id = "field_mace"
-name = "Ополченская булава"
-kind = "equipment"
-slot = "weapon"
-weapon_type = "mace"
-rarity = "common"
-level = 3
-price = 52
-modifiers = { damage_percent = 6 }
-
-[[item]]
-id = "heavy_blade"
-name = "Тяжёлый клинок"
-kind = "equipment"
+[[gear]]
+id = "greatsword"
+noun = "двуручный меч"
+gender = "m"
 slot = "weapon"
 weapon_type = "greatsword"
-rarity = "common"
-level = 5
-price = 95
-modifiers = { damage_percent = 9, dodge_percent = -2 }
 
-# --- Body ---
+[[gear]]
+id = "axe"
+noun = "топор"
+gender = "m"
+slot = "weapon"
+weapon_type = "axe"
 
-[[item]]
-id = "padded_jacket"
-name = "Стёганая куртка"
-kind = "equipment"
-slot = "body"
-armor_type = "cloth"
-rarity = "common"
-level = 1
-price = 25
-modifiers = { armor_percent = 5 }
+[[gear]]
+id = "mace"
+noun = "булава"
+gender = "f"
+slot = "weapon"
+weapon_type = "mace"
 
-[[item]]
-id = "leather_armor"
-name = "Кожаный доспех"
-kind = "equipment"
-slot = "body"
-armor_type = "light"
-rarity = "common"
-level = 5
-price = 90
-modifiers = { armor_percent = 8, dodge_percent = 2 }
+[[gear]]
+id = "spear"
+noun = "копьё"
+gender = "n"
+slot = "weapon"
+weapon_type = "spear"
 
-[[item]]
-id = "chain_shirt"
-name = "Кольчужная рубаха"
-kind = "equipment"
-slot = "body"
-armor_type = "medium"
-rarity = "uncommon"
-level = 11
-price = 260
-modifiers = { armor_percent = 14, initiative_percent = -3 }
+[[gear]]
+id = "bow"
+noun = "лук"
+gender = "m"
+slot = "weapon"
+weapon_type = "bow"
 
-[[item]]
-id = "grove_wardens_mail"
-name = "Доспех хранителя рощи"
-kind = "equipment"
-slot = "body"
-armor_type = "medium"
-rarity = "rare"
-level = 19
-price = 850
-modifiers = { armor_percent = 18, regen_per_turn_percent = 1 }
+[[gear]]
+id = "staff"
+noun = "посох"
+gender = "m"
+slot = "weapon"
+weapon_type = "staff"
 
-[[item]]
-id = "runed_plate"
-name = "Рунная броня"
-kind = "equipment"
-slot = "body"
-armor_type = "heavy"
-rarity = "epic"
-level = 28
-price = 2900
-modifiers = { armor_percent = 26, resist_magic_percent = 12, initiative_percent = -5 }
+[[gear]]
+id = "wand"
+noun = "жезл"
+gender = "m"
+slot = "weapon"
+weapon_type = "wand"
 
-[[item]]
-id = "runed_robe"
-name = "Рунная мантия"
-kind = "equipment"
-slot = "body"
-armor_type = "cloth"
-rarity = "uncommon"
-level = 12
-price = 280
-modifiers = { damage_percent = 8, resource_percent = 8 }
+[[gear]]
+id = "symbol"
+noun = "символ веры"
+gender = "m"
+slot = "weapon"
+weapon_type = "symbol"
 
-[[item]]
-id = "iron_cuirass"
-name = "Железная кираса"
-kind = "equipment"
-slot = "body"
-armor_type = "heavy"
-rarity = "uncommon"
-level = 9
-price = 300
-modifiers = { health_percent = 4 }
-
-# --- Head ---
-
-[[item]]
-id = "worn_hood"
-name = "Потёртый капюшон"
-kind = "equipment"
+[[gear]]
+id = "cloth_head"
+noun = "капюшон"
+gender = "m"
 slot = "head"
 armor_type = "cloth"
-rarity = "common"
-level = 2
-price = 20
-modifiers = { dodge_percent = 3 }
 
-[[item]]
-id = "iron_helm"
-name = "Железный шлем"
-kind = "equipment"
+[[gear]]
+id = "cloth_body"
+noun = "мантия"
+gender = "f"
+slot = "body"
+armor_type = "cloth"
+
+[[gear]]
+id = "cloth_hands"
+noun = "обмотки"
+gender = "p"
+slot = "hands"
+armor_type = "cloth"
+
+[[gear]]
+id = "cloth_feet"
+noun = "поршни"
+gender = "p"
+slot = "feet"
+armor_type = "cloth"
+
+[[gear]]
+id = "light_head"
+noun = "колпак"
+gender = "m"
+slot = "head"
+armor_type = "light"
+
+[[gear]]
+id = "light_body"
+noun = "куртка"
+gender = "f"
+slot = "body"
+armor_type = "light"
+
+[[gear]]
+id = "light_hands"
+noun = "перчатки"
+gender = "p"
+slot = "hands"
+armor_type = "light"
+
+[[gear]]
+id = "light_feet"
+noun = "башмаки"
+gender = "p"
+slot = "feet"
+armor_type = "light"
+
+[[gear]]
+id = "medium_head"
+noun = "шишак"
+gender = "m"
 slot = "head"
 armor_type = "medium"
-rarity = "common"
-level = 6
-price = 85
-modifiers = { armor_percent = 6, health_percent = 3 }
 
-[[item]]
-id = "seers_circlet"
-name = "Венец провидца"
-kind = "equipment"
-slot = "head"
-armor_type = "cloth"
-rarity = "rare"
-level = 20
-price = 900
-modifiers = { resource_percent = 15, damage_percent = 8 }
+[[gear]]
+id = "medium_body"
+noun = "кольчуга"
+gender = "f"
+slot = "body"
+armor_type = "medium"
 
-[[item]]
-id = "leather_cap"
-name = "Кожаный колпак"
-kind = "equipment"
-slot = "head"
-armor_type = "light"
-rarity = "common"
-level = 3
-price = 35
-modifiers = { dodge_percent = 2 }
-
-# --- Hands and feet ---
-
-[[item]]
-id = "work_gloves"
-name = "Рабочие перчатки"
-kind = "equipment"
-slot = "hands"
-armor_type = "light"
-rarity = "common"
-level = 1
-price = 15
-modifiers = { accuracy_percent = 3 }
-
-[[item]]
-id = "bracers_of_grip"
-name = "Наручи хватки"
-kind = "equipment"
+[[gear]]
+id = "medium_hands"
+noun = "наручи"
+gender = "p"
 slot = "hands"
 armor_type = "medium"
-rarity = "uncommon"
-level = 12
-price = 280
-modifiers = { damage_percent = 8, accuracy_percent = 4 }
 
-[[item]]
-id = "travel_boots"
-name = "Дорожные сапоги"
-kind = "equipment"
+[[gear]]
+id = "medium_feet"
+noun = "сапоги"
+gender = "p"
 slot = "feet"
-armor_type = "light"
-rarity = "common"
-level = 2
-price = 30
-modifiers = { initiative_percent = 5 }
+armor_type = "medium"
 
-[[item]]
-id = "silent_steps"
-name = "Тихие шаги"
-kind = "equipment"
-slot = "feet"
-armor_type = "light"
-rarity = "rare"
-level = 17
-price = 700
-modifiers = { dodge_percent = 9, initiative_percent = 8 }
+[[gear]]
+id = "heavy_head"
+noun = "шлем"
+gender = "m"
+slot = "head"
+armor_type = "heavy"
 
-[[item]]
-id = "linen_wraps"
-name = "Холщовые обмотки"
-kind = "equipment"
-slot = "hands"
-armor_type = "cloth"
-rarity = "common"
-level = 1
-price = 14
-modifiers = { resource_regen_percent = 4 }
+[[gear]]
+id = "heavy_body"
+noun = "кираса"
+gender = "f"
+slot = "body"
+armor_type = "heavy"
 
-[[item]]
-id = "iron_gauntlets"
-name = "Железные рукавицы"
-kind = "equipment"
+[[gear]]
+id = "heavy_hands"
+noun = "рукавицы"
+gender = "p"
 slot = "hands"
 armor_type = "heavy"
-rarity = "uncommon"
-level = 10
-price = 250
-modifiers = { damage_percent = 5 }
 
-[[item]]
-id = "soft_slippers"
-name = "Мягкие поршни"
-kind = "equipment"
-slot = "feet"
-armor_type = "cloth"
-rarity = "common"
-level = 2
-price = 22
-modifiers = { initiative_percent = 4 }
-
-[[item]]
-id = "plate_greaves"
-name = "Латные поножи"
-kind = "equipment"
+[[gear]]
+id = "heavy_feet"
+noun = "поножи"
+gender = "p"
 slot = "feet"
 armor_type = "heavy"
-rarity = "rare"
-level = 14
-price = 380
-modifiers = { health_percent = 3 }
 
-# --- Trinkets ---
-
-[[item]]
-id = "copper_charm"
-name = "Медный оберег"
-kind = "equipment"
+[[gear]]
+id = "charm"
+noun = "оберег"
+gender = "m"
 slot = "trinket"
-rarity = "common"
-level = 3
-price = 40
-modifiers = { stat_LCK = 1 }
 
-[[item]]
-id = "wolf_fang"
-name = "Волчий клык"
-kind = "equipment"
+[[gear]]
+id = "ring"
+noun = "кольцо"
+gender = "n"
 slot = "trinket"
-rarity = "uncommon"
-level = 7
-price = 180
-modifiers = { beast_damage_percent = 12, crit_chance_percent = 2 }
 
-[[item]]
-id = "tide_pearl"
-name = "Жемчужина прилива"
-kind = "equipment"
+[[gear]]
+id = "pendant"
+noun = "подвеска"
+gender = "f"
 slot = "trinket"
-rarity = "rare"
-level = 21
-price = 950
-modifiers = { resource_regen_percent = 15, resist_cold_percent = 10 }
-
-[[item]]
-id = "ashen_signet"
-name = "Пепельная печатка"
-kind = "equipment"
-slot = "trinket"
-rarity = "epic"
-level = 30
-price = 3200
-modifiers = { damage_percent = 12, resist_fire_percent = 20 }
 
 # --- Consumables ---
 

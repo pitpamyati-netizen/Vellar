@@ -24,6 +24,8 @@ from mmorpg.domain.entities.content import (
     EdgeEffect,
     EquipSlot,
     GameContent,
+    GearArchetype,
+    GearTier,
     HealthCurve,
     Item,
     ItemEffect,
@@ -37,6 +39,7 @@ from mmorpg.domain.entities.content import (
     Skill,
     SkillEdge,
     SkillKind,
+    SpecialProperty,
     Trait,
     Turning,
     TurningOption,
@@ -51,10 +54,12 @@ from mmorpg.domain.entities.craft import (
     Recipe,
     RecipeInput,
 )
+from mmorpg.domain.entities.dice import Dice
 from mmorpg.domain.entities.location import EnemyArchetype, EnemyKind
 from mmorpg.domain.entities.quest import ObjectiveKind, Quest
 from mmorpg.domain.entities.stats import StatBlock, StatCode
-from mmorpg.domain.rules.equipment import UNARMED_DAMAGE, WEAPON_SLOT
+from mmorpg.domain.procgen import items as item_procgen
+from mmorpg.domain.rules.equipment import WEAPON_SLOT
 
 CONTENT_FILES = (
     "world.toml",
@@ -125,13 +130,19 @@ def load_content(content_dir: Path) -> GameContent:
     skills_by_code = {skill.code: skill for skill in skills}
 
     gear = _parse_items(raw["items.toml"], modifier_keys, skills_by_code, problems)
-    items, rarities = gear.items, gear.rarities
+    written, rarities = gear.items, gear.rarities
     races = _parse_races(raw["races.toml"], skills_by_code, problems)
     classes = _parse_classes(raw["classes.toml"], gear, problems)
     traits = _parse_traits(raw["traits.toml"], modifier_keys, set(categories), problems)
     _validate_skill_weapons(skills, classes, gear, problems)
     cities = _parse_world(raw["world.toml"], problems)
-    item_ids = {item.id for item in items}
+    # Снаряжение собирается из видов, ступеней и редкостей. Имена собранных вещей
+    # известны сразу, а сами вещи - только когда реестр готов: справочники родов
+    # лежат в нём. Проверкам ссылок хватает имён, поэтому они идут как раньше, а
+    # сборка ждёт конца.
+    item_ids = {item.id for item in written} | item_procgen.catalogue_ids(
+        gear.gear_archetypes, gear.gear_tiers, gear.rarities
+    )
     enemies, elite_titles = _parse_enemies(raw["enemies.toml"], item_ids, problems)
     _validate_enemies(enemies, cities, problems)
     quests = _parse_quests(
@@ -148,33 +159,39 @@ def load_content(content_dir: Path) -> GameContent:
     _validate_traits(traits, problems)
     _validate_world(cities, rules, problems)
     _validate_crafts(crafts, recipes, problems)
+    _validate_quest_rewards(quests, gear, problems)
+
+    parts: dict[str, Any] = {
+        "races": races,
+        "classes": classes,
+        "traits": traits,
+        "skills": skills,
+        "cities": cities,
+        "rarities": rarities,
+        "slots": gear.slots,
+        "weapon_types": gear.weapon_types,
+        "armor_types": gear.armor_types,
+        "gear_tiers": gear.gear_tiers,
+        "gear_archetypes": gear.gear_archetypes,
+        "special_properties": gear.special_properties,
+        "enemy_archetypes": enemies,
+        "elite_titles": elite_titles,
+        "quests": quests,
+        "crafts": crafts,
+        "recipes": recipes,
+        "craft_rules": craft_rules,
+        "trait_categories": categories,
+        "inverted_modifiers": inverted_modifiers,
+        "rules": rules,
+        "turnings": turnings,
+        "open_turning_id": open_turning_id,
+    }
 
     if problems:
         raise ContentError(problems)
 
-    return GameContent.build(
-        races=races,
-        classes=classes,
-        traits=traits,
-        items=items,
-        skills=skills,
-        cities=cities,
-        rarities=rarities,
-        slots=gear.slots,
-        weapon_types=gear.weapon_types,
-        armor_types=gear.armor_types,
-        enemy_archetypes=enemies,
-        elite_titles=elite_titles,
-        quests=quests,
-        crafts=crafts,
-        recipes=recipes,
-        craft_rules=craft_rules,
-        trait_categories=categories,
-        inverted_modifiers=inverted_modifiers,
-        rules=rules,
-        turnings=turnings,
-        open_turning_id=open_turning_id,
-    )
+    bare = GameContent.build(items=written, **parts)
+    return GameContent.build(items=(*written, *item_procgen.catalogue(bare)), **parts)
 
 
 def _read_toml(path: Path) -> dict[str, Any]:
@@ -319,9 +336,22 @@ def _parse_skills(
                 rank_step=float(entry.get("rank_step", default_step)),
                 tag=tag,
                 weapon_types=tuple(str(value) for value in entry.get("weapons", ())),
+                dice=_skill_dice(code, entry, problems),
             )
         )
     return tuple(parsed)
+
+
+def _skill_dice(code: str, entry: Mapping[str, Any], problems: list[str]) -> Dice | None:
+    """Свои кости умения. Пусто - умение целиком стоит на броске оружия."""
+    raw = entry.get("dice")
+    if raw is None:
+        return None
+    try:
+        return Dice.parse(str(raw))
+    except ValueError as error:
+        problems.append(f"skills.toml: {code}: {error}")
+        return None
 
 
 # --- races -----------------------------------------------------------
@@ -577,6 +607,45 @@ def _validate_skill_weapons(
             )
 
 
+#: Сколько заданий подряд должна вести цепочка, чтобы за её конец давали
+#: реликтовую вещь. Реликтовое растёт вместе с героем и не устаревает никогда:
+#: платить за него надо либо логовом, либо длинной дорогой, и никак иначе.
+RELIC_CHAIN_LENGTH = 4
+
+
+def _validate_quest_rewards(
+    quests: Sequence[Quest],
+    gear: ItemContent,
+    problems: list[str],
+) -> None:
+    """Реликтовое даётся только за конец длинной цепочки — или не даётся вовсе."""
+    relics = {rarity.id for rarity in gear.rarities if rarity.scaling}
+    if not relics:
+        return
+    by_id = {quest.id: quest for quest in quests}
+    followed = {quest.follows for quest in quests if quest.follows}
+
+    for quest in quests:
+        parsed = item_procgen.parse_gear_id(quest.reward_item)
+        if parsed is None or parsed[2] not in relics:
+            continue
+        if quest.id in followed:
+            problems.append(
+                f"quests.toml: {quest.id} pays with a relic but is not the end of its chain"
+            )
+        length, walked = 1, quest
+        seen = {quest.id}
+        while walked.follows and walked.follows in by_id and walked.follows not in seen:
+            seen.add(walked.follows)
+            walked = by_id[walked.follows]
+            length += 1
+        if length < RELIC_CHAIN_LENGTH:
+            problems.append(
+                f"quests.toml: {quest.id} pays with a relic after {length} contracts; "
+                f"a relic is worth {RELIC_CHAIN_LENGTH}"
+            )
+
+
 def _validate_classes(
     classes: Sequence[CharacterClass],
     skills: Sequence[Skill],
@@ -676,6 +745,13 @@ class ItemContent(NamedTuple):
     slots: tuple[EquipSlot, ...]
     weapon_types: tuple[WeaponType, ...]
     armor_types: tuple[ArmorType, ...]
+    gear_tiers: tuple[GearTier, ...]
+    gear_archetypes: tuple[GearArchetype, ...]
+    special_properties: tuple[SpecialProperty, ...]
+
+
+#: Рода существительных, в которых объявляются прилагательные ступеней.
+GENDERS = ("m", "f", "n", "p")
 
 
 def _type_modifiers(
@@ -692,6 +768,90 @@ def _type_modifiers(
     return bundle
 
 
+def _parse_rarities(meta: Mapping[str, Any], problems: list[str]) -> tuple[Rarity, ...]:
+    parsed: list[Rarity] = []
+    for entry in meta.get("rarities", ()):
+        rarity = Rarity(
+            id=str(entry["id"]),
+            name=str(entry["name"]),
+            weight=int(entry["weight"]),
+            price_factor=float(entry["price_factor"]),
+            stats=int(entry.get("stats", 0)),
+            special=bool(entry.get("special", False)),
+            scaling=bool(entry.get("scaling", False)),
+            mark=str(entry.get("mark", "")),
+        )
+        # Две вещи одного вида и разной редкости должны называться по-разному:
+        # кнопка в списке - это её текст, и две одинаковые кнопки на экране
+        # неразличимы на слух (правила доступности 6).
+        if not rarity.mark and rarity.id != "common":
+            problems.append(f"items.toml: rarity {rarity.id} has no mark to tell its things apart")
+        parsed.append(rarity)
+    return tuple(parsed)
+
+
+def _parse_tiers(meta: Mapping[str, Any], problems: list[str]) -> tuple[GearTier, ...]:
+    parsed: list[GearTier] = []
+    for entry in meta.get("tiers", ()):
+        level = int(entry.get("level", 0))
+        names = {gender: str(entry[gender]) for gender in GENDERS if gender in entry}
+        missing = sorted(set(GENDERS) - set(names))
+        if missing:
+            problems.append(f"items.toml: tier {level} has no adjective for {missing}")
+        parsed.append(GearTier(level=level, names=names))
+    if not parsed:
+        problems.append("items.toml: no gear tiers declared")
+    elif parsed[0].level != 1:
+        problems.append("items.toml: the first gear tier must start at level 1")
+    levels = [tier.level for tier in parsed]
+    if levels != sorted(set(levels)):
+        problems.append("items.toml: gear tiers must climb, and no two may share a level")
+    return tuple(parsed)
+
+
+def _parse_gear(
+    raw: Mapping[str, Any],
+    slot_ids: set[str],
+    armor_slots: set[str],
+    weapon_type_ids: set[str],
+    armor_type_ids: set[str],
+    problems: list[str],
+) -> tuple[GearArchetype, ...]:
+    parsed: list[GearArchetype] = []
+    for entry in raw.get("gear", ()):
+        gear_id = str(entry.get("id", ""))
+        slot = str(entry.get("slot", ""))
+        weapon_type = str(entry.get("weapon_type", ""))
+        armor_type = str(entry.get("armor_type", ""))
+        gender = str(entry.get("gender", ""))
+
+        if slot not in slot_ids or slot == "none":
+            problems.append(f"items.toml: gear {gear_id} has unknown slot {slot!r}")
+        if gender not in GENDERS:
+            problems.append(f"items.toml: gear {gear_id} has unknown gender {gender!r}")
+        if slot == WEAPON_SLOT and weapon_type not in weapon_type_ids:
+            problems.append(f"items.toml: weapon {gear_id} has unknown weapon_type {weapon_type!r}")
+        if slot in armor_slots and armor_type not in armor_type_ids:
+            problems.append(f"items.toml: armour {gear_id} has unknown armor_type {armor_type!r}")
+        if weapon_type and slot != WEAPON_SLOT:
+            problems.append(f"items.toml: gear {gear_id} is not a weapon but names a weapon_type")
+        if armor_type and slot not in armor_slots:
+            problems.append(f"items.toml: gear {gear_id} is not armour but names an armor_type")
+
+        parsed.append(
+            GearArchetype(
+                id=gear_id,
+                noun=str(entry.get("noun", "")),
+                gender=gender if gender in GENDERS else "m",
+                slot=slot,
+                weapon_type=weapon_type,
+                armor_type=armor_type,
+            )
+        )
+    _check_unique((gear.id for gear in parsed), "items.toml (gear)", problems)
+    return tuple(parsed)
+
+
 def _parse_items(
     raw: Mapping[str, Any],
     modifier_keys: frozenset[str],
@@ -699,16 +859,10 @@ def _parse_items(
     problems: list[str],
 ) -> ItemContent:
     meta = raw.get("meta", {})
-    rarities = tuple(
-        Rarity(
-            id=str(entry["id"]),
-            name=str(entry["name"]),
-            weight=int(entry["weight"]),
-            price_factor=float(entry["price_factor"]),
-        )
-        for entry in meta.get("rarities", ())
-    )
+    rarities = _parse_rarities(meta, problems)
     rarity_ids = {rarity.id for rarity in rarities}
+    tiers = _parse_tiers(meta, problems)
+
     slots = tuple(
         EquipSlot(
             id=str(entry["id"]),
@@ -720,17 +874,26 @@ def _parse_items(
     slot_ids = {slot.id for slot in slots} | {"none"}
     armor_slots = {slot.id for slot in slots if slot.armor_share > 0}
 
-    weapon_types = tuple(
-        WeaponType(
-            id=str(entry["id"]),
-            name=str(entry["name"]),
-            damage=float(entry.get("damage", 1.0)),
-            modifiers=_type_modifiers(
-                f"weapon type {entry.get('id', '')}", entry, modifier_keys, problems
-            ),
+    weapon_types: list[WeaponType] = []
+    for entry in meta.get("weapon_types", ()):
+        type_id = str(entry.get("id", ""))
+        try:
+            dice = Dice.parse(str(entry.get("dice", "")))
+        except ValueError as error:
+            problems.append(f"items.toml: weapon type {type_id}: {error}")
+            continue
+        gender = str(entry.get("gender", "m"))
+        if gender not in GENDERS:
+            problems.append(f"items.toml: weapon type {type_id} has unknown gender {gender!r}")
+        weapon_types.append(
+            WeaponType(
+                id=type_id,
+                name=str(entry["name"]),
+                dice=dice,
+                gender=gender if gender in GENDERS else "m",
+                modifiers=_type_modifiers(f"weapon type {type_id}", entry, modifier_keys, problems),
+            )
         )
-        for entry in meta.get("weapon_types", ())
-    )
     armor_types = tuple(
         ArmorType(
             id=str(entry["id"]),
@@ -744,13 +907,17 @@ def _parse_items(
     )
     weapon_type_ids = {kind.id for kind in weapon_types}
     armor_type_ids = {kind.id for kind in armor_types}
-    # Оружие слабее голых рук - это не выбор, а ошибка, и стоит она игроку боя.
-    for kind in weapon_types:
-        if kind.damage < UNARMED_DAMAGE:
-            problems.append(
-                f"items.toml: weapon type {kind.id} hits for {kind.damage}, "
-                f"which is weaker than bare hands ({UNARMED_DAMAGE})"
-            )
+
+    special_properties: list[SpecialProperty] = []
+    for entry in meta.get("special_properties", ()):
+        key = str(entry.get("key", ""))
+        if key not in modifier_keys:
+            problems.append(f"items.toml: special property {key!r} is not a known modifier")
+        special_properties.append(SpecialProperty(key=key, value=float(entry.get("value", 0))))
+
+    gear_archetypes = _parse_gear(
+        raw, slot_ids, armor_slots, weapon_type_ids, armor_type_ids, problems
+    )
 
     parsed: list[Item] = []
     for entry in raw.get("item", ()):
@@ -759,35 +926,24 @@ def _parse_items(
         if kind_raw not in {kind.value for kind in ItemKind}:
             problems.append(f"items.toml: {item_id} has unknown kind {kind_raw!r}")
             continue
+        # Снаряжение руками больше не пишут: оно собирается из вида, ступени и
+        # редкости, иначе одна написанная вещь молча не имела бы ни урона, ни
+        # брони, ни характеристик.
+        if kind_raw == ItemKind.EQUIPMENT.value:
+            problems.append(
+                f"items.toml: {item_id} is equipment written by hand; "
+                "declare a [[gear]] kind instead"
+            )
         rarity = str(entry.get("rarity", ""))
         if rarity not in rarity_ids:
             problems.append(f"items.toml: {item_id} has unknown rarity {rarity!r}")
         slot = str(entry.get("slot", "none"))
         if slot not in slot_ids:
             problems.append(f"items.toml: {item_id} has unknown slot {slot!r}")
-
-        # Род оружия и род доспеха - не украшение карточки: по ним класс решает,
-        # даётся ли ему эта вещь, умение - сработает ли оно, а броня - сколько её
-        # вообще есть. Вещь без рода была бы вещью, о которой ничего из этого
-        # спросить нельзя, поэтому загрузчик её не принимает.
-        weapon_type = str(entry.get("weapon_type", ""))
-        armor_type = str(entry.get("armor_type", ""))
-        if kind_raw == ItemKind.EQUIPMENT.value and slot == WEAPON_SLOT and not weapon_type:
-            problems.append(f"items.toml: weapon {item_id} declares no weapon_type")
-        if kind_raw == ItemKind.EQUIPMENT.value and slot in armor_slots and not armor_type:
-            problems.append(f"items.toml: armour {item_id} declares no armor_type")
-        if weapon_type and weapon_type not in weapon_type_ids:
-            problems.append(f"items.toml: {item_id} has unknown weapon_type {weapon_type!r}")
-        if armor_type and armor_type not in armor_type_ids:
-            problems.append(f"items.toml: {item_id} has unknown armor_type {armor_type!r}")
-        if weapon_type and slot != WEAPON_SLOT:
-            problems.append(f"items.toml: {item_id} is not a weapon but names a weapon_type")
-        if armor_type and slot not in armor_slots:
-            problems.append(f"items.toml: {item_id} is not armour but names an armor_type")
         if "text" in entry:
             problems.append(
                 f"items.toml: {item_id} has a text field; items are generated in their "
-                "hundreds and describe themselves by name, kind and numbers"
+                "thousands and describe themselves by name, kind and numbers"
             )
 
         modifiers = {str(key): float(value) for key, value in entry.get("modifiers", {}).items()}
@@ -828,13 +984,20 @@ def _parse_items(
                 skill_modifiers=skill_modifiers,
                 stack=int(entry.get("stack", 1)),
                 source=str(entry.get("source", "")),
-                weapon_type=weapon_type,
-                armor_type=armor_type,
                 effect=effect,
             )
         )
     _check_unique((item.id for item in parsed), "items.toml", problems)
-    return ItemContent(tuple(parsed), rarities, slots, weapon_types, armor_types)
+    return ItemContent(
+        tuple(parsed),
+        rarities,
+        slots,
+        tuple(weapon_types),
+        armor_types,
+        tiers,
+        gear_archetypes,
+        tuple(special_properties),
+    )
 
 
 # --- enemies ---------------------------------------------------------
