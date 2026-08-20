@@ -337,7 +337,7 @@ def test_forgetting_hands_every_point_back_and_empties_the_slot(
 def test_a_contract_belongs_to_the_city_the_player_is_standing_in(
     content: GameContent,
 ) -> None:
-    """Доска в чужом городе показывала подряды родного и ноль своих."""
+    """Доска в чужом городе показывала задания родного и ноль своих."""
     from mmorpg.domain.rules import quests as quest_rules
 
     traveller = Character(

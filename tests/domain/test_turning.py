@@ -1,4 +1,4 @@
-"""Оборот: чем платят за Печать, что она открывает и как считают голоса."""
+"""Перерождение: чем платят за Печать, что она открывает и как считают голоса."""
 
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ def test_a_seal_costs_something_worn(content: GameContent, elder: Character) -> 
     assert sealed.item_id == "ashen_signet"
     assert sealed.character.equipment.item_in("trinket") is None
     assert sealed.character.seals == 1
-    # Уровень и опыт Оборот не трогает - в этом и весь смысл.
+    # Уровень и опыт перерождение не трогает - в этом и весь смысл.
     assert sealed.character.level == elder.level
     assert sealed.character.experience == elder.experience
 
@@ -76,7 +76,7 @@ def test_the_chamber_asks_more_after_every_turning(content: GameContent, elder: 
 def test_a_pledged_edge_is_gone_and_stays_gone(content: GameContent, elder: Character) -> None:
     """Грань выбирают бесплатно, поэтому заложенную нельзя выбрать заново.
 
-    Иначе Оборот стал бы кнопкой «дай Печать»: заложил грань, выбрал её снова,
+    Иначе перерождение стало бы кнопкой «дай Печать»: заложил грань, выбрал её снова,
     заложил опять.
     """
     offered = turning.pledgeable_edges(content, elder)

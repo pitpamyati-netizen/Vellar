@@ -118,7 +118,7 @@ def test_a_contract_for_made_goods_asks_for_something_makeable(content: GameCont
 
 
 def test_a_contract_sends_the_player_to_a_place_that_exists(content: GameContent) -> None:
-    """Куда идти — часть подряда. Подряд в несуществующее место хуже, чем никакой."""
+    """Куда идти — часть задания. Задание в несуществующее место хуже, чем никакое."""
     for quest in content.quests:
         if not quest.location_slot:
             continue
@@ -128,8 +128,8 @@ def test_a_contract_sends_the_player_to_a_place_that_exists(content: GameContent
 
 
 def test_the_first_contract_of_the_act_says_where_to_go(content: GameContent) -> None:
-    """Первый подряд игроки не понимали — им не говорили ни куда, ни что нажимать."""
+    """Первое задание игроки не понимали — им не говорили ни куда, ни что нажимать."""
     first = content.quests_in("farhold")[0]
-    assert first.location_slot, "первый подряд обязан называть локацию"
+    assert first.location_slot, "первое задание обязано называть локацию"
     location = content.city("farhold").location(first.location_slot)
     assert location.name in first.terms, "наниматель называет место своими словами"

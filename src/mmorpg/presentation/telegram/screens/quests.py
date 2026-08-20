@@ -34,7 +34,7 @@ OBJECTIVES: dict[ObjectiveKind, str] = {
     ObjectiveKind.KILL: "победить противников в бою",
     ObjectiveKind.ELITE: "победить сильных противников",
     ObjectiveKind.SEARCH: "обыскать места, где нет боя",
-    # Раньше этой строки не было вовсе, и любой подряд на изготовление ронял
+    # Раньше этой строки не было вовсе, и любое задание на изготовление роняло
     # разговор с нанимателем на KeyError.
     ObjectiveKind.CRAFT: "изготовить своими руками",
 }
@@ -72,7 +72,7 @@ TARGET_KINDS: dict[str, str] = {
 
 
 def where_line(content: GameContent, quest: Quest) -> str:
-    """Куда идти. Пусто, если подряд не привязан к месту."""
+    """Куда идти. Пусто, если задание не привязано к месту."""
     if quest.objective is ObjectiveKind.CRAFT:
         return "Где: за верстаком, в разделе «Ремёсла». Идти никуда не нужно."
     if not content.has_city(quest.city_id):
@@ -104,7 +104,7 @@ def objective_line(content: GameContent, quest: Quest) -> str:
 
 
 def instructions(content: GameContent, quest: Quest) -> tuple[str, ...]:
-    """Три строки, которых на экране подряда не хватало: что, где и как."""
+    """Три строки, которых на экране задания не хватало: что, где и как."""
     return tuple(
         line
         for line in (
@@ -128,7 +128,7 @@ def quest_button(quest: Quest) -> Label:
 
 
 def taken_button(quest: Quest, progress: int) -> Label:
-    """Взятый подряд остаётся на доске и называет свой счёт прямо на кнопке."""
+    """Взятое задание остаётся на доске и называет свой счёт прямо на кнопке."""
     mark = "готово" if progress >= quest.target_count else "в работе"
     return label(f"{quest.name} — взято, {progress} из {quest.target_count}, {mark}")
 
@@ -142,8 +142,8 @@ def board_screen(
 ) -> Screen:
     """Что этот город даёт этому персонажу — и что тот уже взял.
 
-    Взятое остаётся на доске нарочно: игрок соглашался на подряд и через минуту
-    не находил его там, где брал, и решал, что подряд пропал.
+    Взятое остаётся на доске нарочно: игрок соглашался на задание и через минуту
+    не находил его там, где брал, и решал, что задание пропало.
     """
     city = city_id or character.city_id
     offered = quest_rules.available(content, character, city)
@@ -164,20 +164,20 @@ def board_screen(
     )
     ready = sum(1 for step in working if step.done)
     lead = [
-        notice or "Доска подрядов. Берут не всех и не всё.",
+        notice or "Доска заданий. Берут не всех и не всё.",
         f"Ваш уровень: {character.level}. Взято отсюда: {len(working)}.",
-        "Нажмите подряд, чтобы прочитать, что делать и куда идти.",
+        "Нажмите задание, чтобы прочитать, что делать и куда идти.",
     ]
     if ready:
-        lead.append(f"Готовы к сдаче: {ready}. Сдают у стойки таверны, кнопка «Сдать подряд».")
+        lead.append(f"Готовы к сдаче: {ready}. Сдают у стойки таверны, кнопка «Сдать задание».")
     return paginated_screen(
         screen_id=ScreenId.QUEST_BOARD,
-        title=f"Доска подрядов, {content.city(city).name if content.has_city(city) else city}",
+        title=f"Доска заданий, {content.city(city).name if content.has_city(city) else city}",
         entries=entries,
         state=state,
         lead_lines=tuple(lead),
         empty_text=(
-            "Свободных подрядов нет. Следующий откроется с уровнем или после того, "
+            "Свободных заданий нет. Следующее откроется с уровнем или после того, "
             "как закроете начатое."
         ),
         show_filters=False,
@@ -199,7 +199,7 @@ def offer_screen(
     lines.append(reward_line(content, quest))
     if is_taken:
         mark = "готово, можно сдавать" if progress >= quest.target_count else "в работе"
-        lines.append(f"Подряд уже взят: {progress} из {quest.target_count}, {mark}.")
+        lines.append(f"Задание уже взято: {progress} из {quest.target_count}, {mark}.")
 
     rows: list[tuple[Label, ...]] = []
     if not is_taken:
@@ -224,13 +224,13 @@ def journal_screen(
 ) -> Screen:
     """The ledger: what is taken, how far it has got, and where to hand it in."""
     steps = quest_rules.taken(content, character)
-    lines = list(head(f"Подряды. Взято: {len(steps)}.", notice))
+    lines = list(head(f"Задания. Взято: {len(steps)}.", notice))
     if not steps:
-        lines.append("Ничего не взято. Подряды дают в таверне города, «Доска подрядов».")
+        lines.append("Ничего не взято. Задания дают в таверне города, «Доска заданий».")
     for step in steps:
         lines.append(step_line(content, step))
         lines.append(objective_line(content, step.quest))
         lines.append(where_line(content, step.quest))
     lines.append("Сдают там же, где брали: в таверне того города.")
-    lines.append(f"Закрыто подрядов за всё время: {len(character.quests.done)}.")
+    lines.append(f"Закрыто заданий за всё время: {len(character.quests.done)}.")
     return Screen(id=ScreenId.QUESTS, lines=tuple(line for line in lines if line))

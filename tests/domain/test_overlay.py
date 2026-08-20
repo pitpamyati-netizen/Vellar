@@ -93,7 +93,7 @@ def test_taking_the_edit_back_gives_back_the_very_same_world(content: GameConten
     ]
 
 
-# --- подряды -----------------------------------------------------------
+# --- задания -----------------------------------------------------------
 
 
 def test_a_contract_can_be_handed_to_a_person_added_by_the_same_panel(
@@ -482,11 +482,11 @@ def test_a_field_can_be_cleared_without_touching_its_neighbours() -> None:
     assert DOVEN.value("role") == "писарь заставы"
 
 
-# --- подряд называет, кого именно и куда идти ---------------------------
+# --- задание называет, кого именно и куда идти ---------------------------
 
 
 def _hunt(**extra: str) -> OverlayRecord:
-    """Подряд на охоту: то, что смотритель заводит чаще всего."""
+    """Задание на охоту: то, что смотритель заводит чаще всего."""
     fields = {
         "name": "Охота на кабанов",
         "city": "farhold",
@@ -512,7 +512,7 @@ def test_a_contract_can_name_one_opponent_and_not_only_a_breed(content: GameCont
 
 
 def _slain(content: GameContent, archetype_id: str) -> Enemy:
-    """Побеждённый противник этой породы - ровно то, что кладут в счёт подряда."""
+    """Побеждённый противник этой породы - ровно то, что кладут в счёт задания."""
     archetype = next(one for one in content.enemy_archetypes if one.id == archetype_id)
     return Enemy(
         archetype_id=archetype.id,
@@ -547,9 +547,9 @@ def test_a_named_opponent_is_counted_and_its_neighbours_are_not(content: GameCon
 def test_a_contract_made_by_the_panel_can_hunt_an_opponent_it_also_made(
     content: GameContent,
 ) -> None:
-    """Две правки подряд: сначала противник, потом подряд на него.
+    """Две правки подряд: сначала противник, потом задание на него.
 
-    Раньше подряд проверялся против мира без свежего противника и отклонялся
+    Раньше задание проверялось против мира без свежего противника и отклонялось
     целиком - то есть противника завести было можно, а заказать его нельзя.
     """
     beast = OverlayRecord(

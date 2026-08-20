@@ -57,7 +57,7 @@ def test_a_turning_takes_the_thing_and_gives_a_seal(
 ) -> None:
     assert in_chamber.screen is ScreenId.CHAMBER
 
-    listed = step(content, elder, in_chamber, "Совершить Оборот")
+    listed = step(content, elder, in_chamber, "Совершить перерождение")
     assert listed.screen is ScreenId.CHAMBER_PLEDGE
     shown = render(content, elder, listed, world_seed=WORLD_SEED)
     pressed = next(
@@ -71,7 +71,7 @@ def test_a_turning_takes_the_thing_and_gives_a_seal(
     assert stored.seals == 1
     assert stored.equipment.item_in("trinket") is None
     assert stored.level == elder.level
-    assert "Оборот совершён" in sealed.notice
+    assert "Перерождение совершено" in sealed.notice
 
 
 def test_nobody_short_of_the_last_level_is_let_in(content: GameContent, elder: Character) -> None:
@@ -79,11 +79,11 @@ def test_nobody_short_of_the_last_level_is_let_in(content: GameContent, elder: C
     in_chamber = step(content, young, begin(young), "Мир", "Дубно", "Палата")
     shown = render(content, young, in_chamber, world_seed=WORLD_SEED)
     assert f"с {turning_rules.MIN_LEVEL} уровня" in shown.text()
-    assert all("Оборот" not in item.text for row in shown.rows for item in row)
+    assert all("перерождение" not in item.text for row in shown.rows for item in row)
 
     # Кнопки заклада на экране нет вовсе, и нажатая мимо неё уводит не дальше
     # самой Палаты (доступность, правило 12).
-    refused = step(content, young, in_chamber, "Совершить Оборот")
+    refused = step(content, young, in_chamber, "Совершить перерождение")
     assert refused.screen is ScreenId.CHAMBER
 
 
@@ -94,16 +94,16 @@ def test_the_question_is_answered_by_those_who_paid_for_a_voice(
     assert turning is not None
     option = turning.options[0]
 
-    asked = step(content, elder, in_chamber, "Счётный вопрос")
+    asked = step(content, elder, in_chamber, "Голосование")
     assert asked.screen is ScreenId.TURNING
     # Без Печати кнопок с ответами на экране нет, а нажатая мимо клавиатуры
     # объясняет, чего не хватает.
     silent = render(content, elder, asked, world_seed=WORLD_SEED)
     assert all("Ответить" not in item.text for row in silent.rows for item in row)
-    assert "Голос дают за Оборот" in silent.text()
+    assert "Голос дают за перерождение" in silent.text()
 
     sealed = replace(elder, seals=2)
-    voting = step(content, sealed, begin(sealed), "Мир", "Дубно", "Палата", "Счётный вопрос")
+    voting = step(content, sealed, begin(sealed), "Мир", "Дубно", "Палата", "Голосование")
     voted = step(content, sealed, voting, f"Ответить: {option.name}")
     stored = voted.pending.character
     assert stored is not None
@@ -115,7 +115,7 @@ def test_the_tally_is_shown_where_the_vote_is_cast(content: GameContent, elder: 
     turning = content.open_turning()
     assert turning is not None
     sealed = replace(elder, seals=1, turning_cycle=turning.id, turning_answer=turning.options[0].id)
-    asked = step(content, sealed, begin(sealed), "Мир", "Дубно", "Палата", "Счётный вопрос")
+    asked = step(content, sealed, begin(sealed), "Мир", "Дубно", "Палата", "Голосование")
 
     shown = render(
         content,

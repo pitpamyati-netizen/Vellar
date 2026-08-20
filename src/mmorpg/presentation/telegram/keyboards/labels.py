@@ -60,7 +60,7 @@ CITY = label("Город", "🏰")
 LOCATIONS = label("Локации", "🌲")
 # Не «данжи»: в Велларе это подземелья, и экран за кнопкой зовёт их так же.
 DUNGEONS = label("Подземелья", "⛓")
-ARENA = label("Долговой круг", "🥊")
+ARENA = label("Арена", "🥊")
 CHAMBER = label("Палата", "🏛")
 TAVERN = label("Таверна", "🍺")
 MENTOR = label("Наставник", "📖")
@@ -70,22 +70,22 @@ CHARACTER = label("Персонаж", "🧝")
 STATS = label("Характеристики", "📊")
 INVENTORY = label("Инвентарь", "🎒")
 SKILLS = label("Умения", "✨")
-QUESTS = label("Подряды", "📜")
+QUESTS = label("Задания", "📜")
 SETTINGS = label("Настройки", "⚙️")
 TUTORIAL = label("Обучение", "🧭")
 
-# --- skills, contracts and city services ---
+# --- skills, quests and city services ---
 
 SKILL_SLOTS = label("Слоты умений", "🧩")
 SKILL_LEARN = label("Изучить и улучшить", "📚")
-QUEST_BOARD = label("Доска подрядов", "📌")
+QUEST_BOARD = label("Доска заданий", "📌")
 QUEST_ACCEPT = label("Согласиться", "🤝")
 QUEST_ASK = label("Спросить, кто платит", "❔")
 QUEST_LEAVE = label("Уйти", "🚪")
-QUEST_ABANDON = label("Отказаться от подряда", "🙅")
+QUEST_ABANDON = label("Отказаться от задания", "🙅")
 REST_PAID = label("Снять комнату", "🛏")
 REST_FREE = label("Ночь на соломе", "🌾")
-HAND_IN = label("Сдать подряд", "🧾")
+HAND_IN = label("Сдать задание", "🧾")
 SELL = label("Продать вещи", "💱")
 DEPOSIT = label("Положить в банк", "📥")
 WITHDRAW = label("Забрать из банка", "📤")
@@ -94,10 +94,10 @@ DUNGEON_ENTER = label("Спуститься", "🕳")
 DUNGEON_DEEPER = label("Идти глубже", "⬇️")
 DUNGEON_LEAVE = label("Выйти на воздух", "🚪")
 
-# --- Оборот (эндгейм, ``domain/rules/turning.py``) ---
+# --- Перерождение (эндгейм, ``domain/rules/turning.py``) ---
 
-TURNING = label("Совершить Оборот", "🏵")
-TURNING_QUESTION = label("Счётный вопрос", "🧮")
+TURNING = label("Совершить перерождение", "🏵")
+TURNING_QUESTION = label("Голосование", "🧮")
 
 # --- keeper (ADMIN_IDS only; ordinary players never see this row) ---
 

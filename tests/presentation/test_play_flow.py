@@ -466,7 +466,7 @@ def test_a_task_button_walks_the_player_to_the_screen(
     opened = step(content, hero, menu, "Обучение")
     assert opened.screen is ScreenId.TUTORIAL
 
-    walked = step(content, hero, opened, "Выполнить задание")
+    walked = step(content, hero, opened, "Перейти к шагу")
     assert walked.screen is ScreenId.STATS
     # Reading them is the task, so it is already ticked off.
     assert walked.pending.character is not None
@@ -483,7 +483,7 @@ def test_a_task_done_by_playing_counts_too(
     stats = step(content, hero, menu, "Персонаж", "Характеристики")
     assert stats.pending.character is not None
     assert tutorial_rules.is_done(stats.pending.character, TutorialTask.STATS)
-    assert "Задание обучения сделано" in stats.notice
+    assert "Шаг обучения сделан" in stats.notice
 
 
 def test_a_finished_introduction_says_so_and_offers_nothing(
@@ -494,9 +494,9 @@ def test_a_finished_introduction_says_so_and_offers_nothing(
     # arrives on it from an older keyboard (accessibility rule 12).
     standing = begin(taught).at(ScreenId.TUTORIAL)
     text = render(content, taught, standing, world_seed=WORLD_SEED).text()
-    assert "Все задания сделаны" in text
+    assert "Все шаги сделаны" in text
 
-    pressed = step(content, taught, standing, "Выполнить задание")
+    pressed = step(content, taught, standing, "Перейти к шагу")
     assert pressed.pending.empty
 
 

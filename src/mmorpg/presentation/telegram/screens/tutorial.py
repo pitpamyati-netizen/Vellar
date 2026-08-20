@@ -1,9 +1,9 @@
 """The introduction screen: what to do next, and one button that goes there.
 
-Six tasks, each one sentence long, each ending where the game already is - there
+Six steps, each one sentence long, each ending where the game already is - there
 is no separate tutorial mode, no scripted corridor and nothing that has to be
-finished before the game will let go. The button «Выполнить задание» opens the
-screen the task lives on, because "go to Персонаж, then Характеристики" is a
+finished before the game will let go. The button «Перейти к шагу» opens the
+screen the step lives on, because "go to Персонаж, then Характеристики" is a
 route the player should not have to hold in their head.
 
 Which task is which screen is decided here; the domain only counts them
@@ -25,7 +25,7 @@ from mmorpg.presentation.telegram.screens.format import head
 
 @dataclass(frozen=True, slots=True)
 class TaskCard:
-    """One task as the player hears it."""
+    """One step as the player hears it."""
 
     task: TutorialTask
     title: str
@@ -57,10 +57,10 @@ CARDS: dict[TutorialTask, TaskCard] = {
     ),
     TutorialTask.QUEST: TaskCard(
         task=TutorialTask.QUEST,
-        title="Взять подряд",
-        text="Подряды берут в таверне. За работу платят золотом и опытом.",
+        title="Взять задание",
+        text="Задания берут в таверне. За работу платят золотом и опытом.",
         screen=ScreenId.QUEST_BOARD,
-        done_line="Подряд взят.",
+        done_line="Задание взято.",
     ),
     TutorialTask.FIGHT: TaskCard(
         task=TutorialTask.FIGHT,
@@ -81,14 +81,14 @@ CARDS: dict[TutorialTask, TaskCard] = {
     ),
     TutorialTask.HAND_IN: TaskCard(
         task=TutorialTask.HAND_IN,
-        title="Сдать подряд",
-        text="Сделанный подряд сдают там же, где брали, — в таверне.",
+        title="Сдать задание",
+        text="Сделанное задание сдают там же, где брали, — в таверне.",
         screen=ScreenId.TAVERN,
-        done_line="Подряд сдан.",
+        done_line="Задание сдано.",
     ),
 }
 
-DO_TASK = labels.label("Выполнить задание", "▶️")
+DO_TASK = labels.label("Перейти к шагу", "▶️")
 
 
 def card_for(task: TutorialTask) -> TaskCard:
@@ -101,17 +101,17 @@ def tutorial_screen(character: Character, notice: str = "") -> Screen:
     done = rules.done_count(character)
     total = len(rules.ORDER)
 
-    lines = list(head(f"Обучение. Сделано заданий: {done} из {total}.", notice))
+    lines = list(head(f"Обучение. Сделано шагов: {done} из {total}.", notice))
     if current is None:
-        lines.append("Все задания сделаны, обучение больше не понадобится.")
-        lines.append("Дальше игра идёт своим ходом: подряды, локации, ремёсла, лавка.")
+        lines.append("Все шаги сделаны, обучение больше не понадобится.")
+        lines.append("Дальше игра идёт своим ходом: задания, локации, ремёсла, лавка.")
         return Screen(id=ScreenId.TUTORIAL, lines=tuple(lines), rows=())
 
     card = CARDS[current]
-    lines.append(f"Задание: {card.title}.")
+    lines.append(f"Шаг: {card.title}.")
     lines.append(card.text)
-    lines.append("Кнопка «Выполнить задание» откроет нужный экран.")
-    lines.append("Задания можно не делать: обучение ничего не запирает.")
+    lines.append("Кнопка «Перейти к шагу» откроет нужный экран.")
+    lines.append("Шаги можно не делать: обучение ничего не запирает.")
     for task in rules.ORDER:
         if rules.is_done(character, task):
             lines.append(CARDS[task].done_line)
@@ -125,8 +125,8 @@ def completion_line(task: TutorialTask, character: Character) -> str:
     done = rules.done_count(character)
     total = len(rules.ORDER)
     if done >= total:
-        return f"Задание обучения сделано: {CARDS[task].title.lower()}. Обучение пройдено."
+        return f"Шаг обучения сделан: {CARDS[task].title.lower()}. Обучение пройдено."
     return (
-        f"Задание обучения сделано: {CARDS[task].title.lower()}. "
+        f"Шаг обучения сделан: {CARDS[task].title.lower()}. "
         f"Сделано {done} из {total}, следующее — в разделе «Обучение»."
     )

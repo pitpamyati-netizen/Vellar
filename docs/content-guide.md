@@ -251,9 +251,9 @@ Location level ranges drive enemy level, loot quality and rarity, experience and
 event difficulty. Location layout itself is generated, never stored - see
 `docs/procgen.md`.
 
-## Add a contract
+## Add a quest
 
-`content/quests.toml`. A contract is a paid job: the giver names the price in the
+`content/quests.toml`. A quest is a paid job: the giver names the price in the
 first two sentences, and refusing is always a button (`Narrative.md`, section 4).
 
 ```toml
@@ -261,7 +261,7 @@ first two sentences, and refusing is always a button (`Narrative.md`, section 4)
 id = "farhold_tallies"     # frozen key: it lives in the character's ledger
 city = "farhold"           # who hands it out, and where it is handed in
 level = 1                  # not offered below this level
-follows = ""               # stays off the board until that contract is paid out
+follows = ""               # stays off the board until that quest is paid out
 name = "Столбы на Тракте"
 giver = "Довен, писарь заставы"
 intro = "Стоит у столба со сводкой."          # up to 140 characters
@@ -280,17 +280,17 @@ What each objective counts (`domain/rules/quests.py`): `kill` counts defeated
 opponents, narrowed by enemy kind; `elite` counts only the strong ones; `search`
 counts nodes worked through without a fight; `craft` counts what came out of the
 work, never what was bought. A counter never runs past its target, and only moves
-for a contract the character has actually taken.
+for a quest the character has actually taken.
 
 **Say where.** `location` is what turns "обойдите три места" into "город Дубно,
-«Локации», «1. Луга у Заставы»" on the contract screen. Without it the screen can
+«Локации», «1. Луга у Заставы»" on the quest screen. Without it the screen can
 only point at the whole city, and the first act shipped without it - players took
-the first contract and had no idea where to go. Set it on everything that happens
+the first quest and had no idea where to go. Set it on everything that happens
 on the road; never on a `craft`, which happens at the workbench.
 
 Checked by `tests/content/test_quests.py`: the city exists, the location exists in
 that city, the reward item exists, the chain never loops, the level sits inside
-the city's band, a contract never pays less than the one it follows, and none of
+the city's band, a quest never pays less than the one it follows, and none of
 it speaks the black-listed vocabulary from `Narrative.md`.
 
 ## Checking your changes

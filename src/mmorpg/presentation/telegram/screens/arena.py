@@ -15,7 +15,7 @@ from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import head
 
-ARENA_FIGHT = label("Выйти в круг", "🥊")
+ARENA_FIGHT = label("Выйти на арену", "🥊")
 
 
 def arena_screen(
@@ -29,13 +29,13 @@ def arena_screen(
     refused = arena_rules.refusal(character)
 
     lines = [
-        *head("Долговой круг.", notice),
-        "Здесь спор решают боем: Палате дешевле принять исход круга, чем считать чужие долги.",
-        f"Ставка круга: {stake} золота. Выигрыш: {payout} золота, проигрыш — ставка.",
+        *head("Арена.", notice),
+        "Здесь спор решают боем: Палате дешевле принять исход боя, чем считать чужие долги.",
+        f"Ставка: {stake} золота. Выигрыш: {payout} золота, проигрыш — ставка.",
         # The whole rule in one sentence, on the screen where the gold is
-        # committed: the Circle hands back debts and never invents money.
-        f"Круг держит ваших {held} золота: сверху ставки он отдаёт только их, "
-        "и отыграться в нём можно ровно на то, что в нём оставлено.",
+        # committed: the arena hands back debts and never invents money.
+        f"Арена держит ваших {held} золота: сверху ставки она отдаёт только их, "
+        "и отыграться на ней можно ровно на то, что на ней оставлено.",
         "Соперника ждать не нужно: против вас выставят снимок другого приключенца "
         "вашего уровня. Он об этом не узнает и ничего не потеряет.",
         f"Ваш счёт: побед {character.arena_wins}, поражений {character.arena_losses}.",
@@ -58,13 +58,13 @@ def round_line(result: arena_rules.Round) -> str:
     """What one settled round is worth saying, in one sentence."""
     if result.won:
         over = result.payout - result.stake
-        top_up = f"сверху {over}" if over else "сверху ничего: круг ваших денег не держит"
+        top_up = f"сверху {over}" if over else "сверху ничего: арена ваших денег не держит"
         return (
-            f"Круг выигран. Ставка {result.stake} возвращена, {top_up}. "
-            f"Побед: {result.character.arena_wins}. Круг держит ваших {result.held}."
+            f"Бой выигран. Ставка {result.stake} возвращена, {top_up}. "
+            f"Побед: {result.character.arena_wins}. Арена держит ваших {result.held}."
         )
     return (
-        f"Круг проигран. Ставка {result.stake} осталась в круге, и следующая победа "
+        f"Бой проигран. Ставка {result.stake} осталась на арене, и следующая победа "
         f"вернёт её. Поражений: {result.character.arena_losses}. "
-        f"Круг держит ваших {result.held}."
+        f"Арена держит ваших {result.held}."
     )

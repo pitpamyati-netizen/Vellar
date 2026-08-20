@@ -99,7 +99,7 @@ async def open_fight(
             await send_screen(
                 message,
                 arena_screens.arena_screen(
-                    character, notice="В круге сейчас не с кем драться. Зайдите позже."
+                    character, notice="На арене сейчас не с кем драться. Зайдите позже."
                 ),
                 emoji=emoji,
             )
@@ -340,7 +340,7 @@ async def _store_and_show(
             if won.level_up is not None and won.level_up.levels_gained:
                 extra.append(level_up_line(won.level_up))
             extra.extend(
-                f"Подряд «{step.quest.name}»: {step.progress} из {step.quest.target_count}."
+                f"Задание «{step.quest.name}»: {step.progress} из {step.quest.target_count}."
                 for step in won.quest_steps
             )
             if session.is_duel:

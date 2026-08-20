@@ -294,7 +294,7 @@ async def test_a_character_survives_a_round_trip(pool, clean_user) -> None:
     # nothing to be paid out of after a restart (``domain/rules/arena.py``).
     assert (read.arena_wins, read.arena_losses, read.arena_credit) == (3, 1, 120)
     # Печати и заклады тоже хранятся: без списка закладов грань, отданную в
-    # Оборот, можно было бы выбрать заново (``domain/rules/turning.py``).
+    # перерождение, можно было бы выбрать заново (``domain/rules/turning.py``).
     assert read.seals == 2
     assert read.pledges == ("item:ashen_signet", "edge:cleave")
     assert (read.turning_cycle, read.turning_answer) == ("toll", "toll_keep")

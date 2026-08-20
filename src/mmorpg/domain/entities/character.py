@@ -142,9 +142,9 @@ class Character:
     # Craft work already done. A rank is never stored - it is counted back from
     # the experience here by ``mmorpg.domain.rules.crafts``.
     crafts: CraftLog = field(default_factory=CraftLog)
-    # What the Debt Circle remembers: two counters for the season table, and the
+    # What the arena remembers: two counters for the season table, and the
     # gold it is holding of yours. A win is paid out of that hold and never out
-    # of nowhere, which is what keeps the Circle from minting gold
+    # of nowhere, which is what keeps the arena from minting gold
     # (``domain/rules/arena.py``).
     arena_wins: int = 0
     arena_losses: int = 0
@@ -204,11 +204,11 @@ class Character:
         return replace(self, arena_losses=self.arena_losses + 1)
 
     def with_arena_credit(self, held: int) -> Character:
-        """Set what the Circle holds of yours. Never below nothing."""
+        """Set what the arena holds of yours. Never below nothing."""
         return replace(self, arena_credit=max(0, held))
 
     def with_seal(self, pledge: str) -> Character:
-        """Что делает совершённый Оборот: Печать прибавляется, заклад записан.
+        """Что делает совершённое перерождение: Печать прибавляется, заклад записан.
 
         Уровень, опыт и характеристики не трогаются вовсе - Печать открывает
         доступы, а не силу (``Narrative.md``, раздел 6).
@@ -219,7 +219,7 @@ class Character:
         return pledge in self.pledges
 
     def with_turning_answer(self, cycle: str, option: str) -> Character:
-        """Ответить на счётный вопрос. Ответ всегда назван вместе с вопросом:
+        """Ответить на голосование. Ответ всегда назван вместе с вопросом:
         голос, поданный за прошлый цикл, в этом не считается."""
         return replace(self, turning_cycle=cycle, turning_answer=option)
 

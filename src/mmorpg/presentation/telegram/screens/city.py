@@ -35,7 +35,7 @@ def tavern_screen(
     stats = derived_stats(content, character)
     health = character.health_or(stats.max_health)
     # Города считает тот, в котором игрок стоит, а не тот, где он завёлся: иначе
-    # доска в чужом городе показывала чужие подряды и ноль своих.
+    # доска в чужом городе показывала чужие задания и ноль своих.
     due = ready_to_hand_in(content, character, city.id)
     price = inn_price(character.level)
 
@@ -47,7 +47,7 @@ def tavern_screen(
         "Солома во дворе даётся даром и лечит не всё.",
     ]
     if due:
-        lines.append(f"Готовы к сдаче подряды: {len(due)}.")
+        lines.append(f"Готовы к сдаче задания: {len(due)}.")
 
     rows: list[tuple[Label, ...]] = [(labels.REST_PAID, labels.REST_FREE), (labels.QUEST_BOARD,)]
     if due:
@@ -141,7 +141,7 @@ def npcs_screen(content: GameContent, city: City, notice: str = "") -> Screen:
 def npc_screen(content: GameContent, character: Character, npc: Npc, notice: str = "") -> Screen:
     """Один человек: что говорит и что предлагает.
 
-    Подряды у него те же, что на доске, и берутся тем же разговором: житель — не
+    Задания у него те же, что на доске, и берутся тем же разговором: житель — не
     вторая доска, а лицо у той же работы (``Narrative.md``, раздел 4).
     """
     from mmorpg.presentation.telegram.screens.quests import quest_button

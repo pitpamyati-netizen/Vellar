@@ -409,7 +409,7 @@ def test_the_journal_lists_what_is_taken(content: GameContent, hero: Character) 
     from mmorpg.domain.rules import quests as quest_rules
 
     took = quest_rules.take(content, hero, content.quest("farhold_tallies"))
-    journal = step(content, took, begin(took), "Подряды")
+    journal = step(content, took, begin(took), "Задания")
     assert journal.screen is ScreenId.QUESTS
     text = render(content, took, journal, world_seed=WORLD_SEED).text()
     assert "Столбы на Тракте: 0 из 3" in text
@@ -419,7 +419,7 @@ def test_walking_away_from_a_contract_keeps_it_on_the_board(
     content: GameContent, hero: Character, in_city: PlayState
 ) -> None:
     quest = content.quest("farhold_tallies")
-    board = step(content, hero, in_city, "Таверна", "Доска подрядов")
+    board = step(content, hero, in_city, "Таверна", "Доска заданий")
     offer = step(
         content, hero, board, f"{quest.name} — уровень {quest.level}, плата {quest.reward_gold}"
     )
@@ -438,9 +438,9 @@ def test_walking_away_from_a_contract_keeps_it_on_the_board(
 def test_a_contract_says_what_to_do_and_where_to_go(
     content: GameContent, hero: Character, in_city: PlayState
 ) -> None:
-    """Первый подряд читался как «разобраться с местами без боя» и больше ничего."""
+    """Первое задание читалось как «разобраться с местами без боя» и больше ничего."""
     quest = content.quest("farhold_tallies")
-    board = step(content, hero, in_city, "Таверна", "Доска подрядов")
+    board = step(content, hero, in_city, "Таверна", "Доска заданий")
     offer = step(
         content, hero, board, f"{quest.name} — уровень {quest.level}, плата {quest.reward_gold}"
     )
@@ -448,14 +448,14 @@ def test_a_contract_says_what_to_do_and_where_to_go(
 
     assert "Что делать:" in text
     assert "Нужно 3 раза" in text
-    assert "Луга у Заставы" in text, "подряд обязан назвать место, куда идти"
+    assert "Луга у Заставы" in text, "задание обязано назвать место, куда идти"
     assert "нажмите его действие" in text, "и то, что там нажимать"
 
 
 def test_a_contract_for_made_goods_opens_instead_of_crashing(
     content: GameContent, hero: Character
 ) -> None:
-    """Разговор о подряде на изготовление падал: строки про «изготовить» не было."""
+    """Разговор о задании на изготовление падал: строки про «изготовить» не было."""
     quest = content.quest("farhold_whetstones")
     screen = quest_screens.offer_screen(content, quest, hero)
     text = screen.text()
@@ -467,9 +467,9 @@ def test_a_contract_for_made_goods_opens_instead_of_crashing(
 def test_a_taken_contract_stays_on_the_board_with_its_count(
     content: GameContent, hero: Character, in_city: PlayState
 ) -> None:
-    """Игрок соглашался на подряд и не находил его там, где брал."""
+    """Игрок соглашался на задание и не находил его там, где брал."""
     quest = content.quest("farhold_tallies")
-    board = step(content, hero, in_city, "Таверна", "Доска подрядов")
+    board = step(content, hero, in_city, "Таверна", "Доска заданий")
     offer = step(
         content, hero, board, f"{quest.name} — уровень {quest.level}, плата {quest.reward_gold}"
     )
@@ -478,7 +478,7 @@ def test_a_taken_contract_stays_on_the_board_with_its_count(
     holder = took.pending.character
     assert holder.quests.is_taken(quest.id)
 
-    again = step(content, holder, begin(holder), "Мир", "Дубно", "Таверна", "Доска подрядов")
+    again = step(content, holder, begin(holder), "Мир", "Дубно", "Таверна", "Доска заданий")
     text = render(content, holder, again, world_seed=WORLD_SEED).text()
     assert "Столбы на Тракте — взято, 0 из 3" in text
     assert "Взято отсюда: 1" in text
@@ -489,16 +489,16 @@ def test_a_taken_contract_can_be_given_back(content: GameContent, hero: Characte
 
     quest = content.quest("farhold_tallies")
     holder = quest_rules.take(content, hero, quest)
-    board = step(content, holder, begin(holder), "Мир", "Дубно", "Таверна", "Доска подрядов")
+    board = step(content, holder, begin(holder), "Мир", "Дубно", "Таверна", "Доска заданий")
     offer = step(content, holder, board, f"{quest.name} — взято, 0 из 3, в работе")
     assert offer.screen is ScreenId.QUEST_OFFER
     text = render(content, holder, offer, world_seed=WORLD_SEED).text()
-    assert "Подряд уже взят: 0 из 3" in text
+    assert "Задание уже взято: 0 из 3" in text
 
-    given = step(content, holder, offer, "Отказаться от подряда")
+    given = step(content, holder, offer, "Отказаться от задания")
     assert given.pending.character is not None
     assert not given.pending.character.quests.is_taken(quest.id)
-    assert "возвращён" in given.notice
+    assert "возвращено" in given.notice
 
 
 def quest_still_offered(content: GameContent, hero: Character) -> bool:

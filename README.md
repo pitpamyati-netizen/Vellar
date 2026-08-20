@@ -29,7 +29,7 @@ no Docker and no Redis - brings the schema up to date first, and stamps the buil
 with the commit it came from so "am I on my latest change" is answered rather
 than assumed. Ctrl+C stops it.
 
-The world is kept: characters, gold, bags and contracts are in the database. The
+The world is kept: characters, gold, bags and quests are in the database. The
 session is not: a restart puts everyone back in the main menu and ends a fight in
 progress (`docs/adr/0010-a-machine-without-containers.md`).
 
@@ -101,7 +101,7 @@ tests/
 | Main menu, world list, city hub, five locations, node-by-node movement | Cities 2-15 (they unlock by level; content is generated for all of them) |
 | Turn-based combat with the fixed 6+3+1 panel, one to three enemies | Skill loadout editing, PvP, guilds |
 | Inventory and city shop on the shared paginated list | |
-| Crafts: gathering by biome, recipes, batch quality, contracts for made goods | |
+| Crafts: gathering by biome, recipes, batch quality, quests for made goods | |
 | Accessibility settings: emoji, verbose descriptions, repeat | |
 
 ## Documentation
@@ -117,7 +117,7 @@ tests/
 | [docs/content-guide.md](docs/content-guide.md) | Adding a race, class, craft, trait or city without touching code |
 | [docs/skills.md](docs/skills.md) | Skill panel, ranks, edges, anti-bloat rules |
 | [docs/crafts.md](docs/crafts.md) | Crafts: ranks, gathering, recipes and batch quality |
-| [docs/endgame.md](docs/endgame.md) | The Turning at 300, the Seal, and the cycle's counted question (Russian) |
+| [docs/endgame.md](docs/endgame.md) | Rebirth at 300, the Seal, and the cycle's vote (Russian) |
 | [docs/release-checklist.md](docs/release-checklist.md) | What to verify before shipping |
 | [docs/adr/](docs/adr/) | One architecture decision per file |
 

@@ -3,7 +3,7 @@
 Модуль отвечает на три вопроса и ни на один больше.
 
 *Что у сущности за поля.* :data:`FIELDS` — единственное описание: по нему рисуется
-карточка, по нему же разбирается набранное значение. Экран не знает, что у подряда
+карточка, по нему же разбирается набранное значение. Экран не знает, что у задания
 есть плата: он спрашивает здесь.
 
 *Годится ли запись.* :func:`problems` возвращает отказы словами. Записи с отказами
@@ -32,15 +32,15 @@ from mmorpg.domain.entities.quest import ObjectiveKind, Quest
 MAX_LOCATION_SLOT = 12
 
 #: Потолок длины набранного значения. Экран читают вслух, поэтому потолок есть;
-#: но условие подряда — это несколько фраз, а не подпись, и на 240 знаках
+#: но условие задания — это несколько фраз, а не подпись, и на 240 знаках
 #: смотритель упирался в отказ посреди обычного текста (``docs/accessibility.md``).
 MAX_TEXT = 600
 
-#: Потолок для того, что попадёт на кнопку: имя жителя, название подряда,
+#: Потолок для того, что попадёт на кнопку: имя жителя, название задания,
 #: локации, противника. Кнопка — это одна строка, и она должна оставаться одной.
 NAME_LIMIT = 48
 
-#: Узлы, которые подряд может считать без боя. Те же слова, что в ``quests.toml``.
+#: Узлы, которые задание может считать без боя. Те же слова, что в ``quests.toml``.
 SEARCHABLE_NODES: tuple[str, ...] = ("gather", "cache", "shrine", "event")
 
 
@@ -91,7 +91,7 @@ class FieldSpec:
 #: заголовок карточки, второе — кнопка и заголовок списка.
 TITLES: Mapping[OverlayKind, tuple[str, str]] = {
     OverlayKind.NPC: ("Житель", "Жители"),
-    OverlayKind.QUEST: ("Подряд", "Подряды"),
+    OverlayKind.QUEST: ("Задание", "Задания"),
     OverlayKind.LOCATION: ("Локация", "Локации"),
     OverlayKind.ENEMY: ("Противник", "Противники"),
     OverlayKind.CITY: ("Город", "Города"),
@@ -119,7 +119,7 @@ FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
         # стояло на карточке всегда, сразу под «Кто даёт», и панель выглядела так,
         # будто спрашивает нанимателя дважды; имя всё равно берётся у жителя, если
         # он назван (``_quest_from``).
-        FieldSpec("giver", "Имя нанимателя", hint="когда подряд не от жителя"),
+        FieldSpec("giver", "Имя нанимателя", hint="когда задание не от жителя"),
         FieldSpec("intro", "Как встречает"),
         FieldSpec("terms", "Условие словами", required=True),
         FieldSpec(
@@ -136,13 +136,13 @@ FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
             "Где делают",
             FieldKind.CHOICE,
             source=Source.LOCATION,
-            hint="локация того же города; без неё подряд не говорит, куда идти",
+            hint="локация того же города; без неё задание не говорит, куда идти",
         ),
         FieldSpec("level", "С какого уровня", FieldKind.NUMBER),
         FieldSpec("reward_gold", "Плата золотом", FieldKind.NUMBER),
         FieldSpec("reward_experience", "Плата опытом", FieldKind.NUMBER),
         FieldSpec("reward_item", "Что дают сверху", FieldKind.CHOICE, source=Source.ITEM),
-        FieldSpec("follows", "После какого подряда", FieldKind.CHOICE, source=Source.QUEST),
+        FieldSpec("follows", "После какого задания", FieldKind.CHOICE, source=Source.QUEST),
     ),
     OverlayKind.LOCATION: (
         FieldSpec("name", "Название", required=True, limit=NAME_LIMIT),
@@ -176,9 +176,9 @@ FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
 }
 
 #: Порода противника и узлы поиска — разные списки, и какой из них нужен, зависит
-#: от того, что подряд считает. Единственное поле, чьи варианты зависят от соседа.
+#: от того, что задание считает. Единственное поле, чьи варианты зависят от соседа.
 #:
-#: Для боевых подрядов список не кончается породами. «Убей пятерых кабанов» — это
+#: Для боевых заданий список не кончается породами. «Убей пятерых кабанов» — это
 #: не «убей пятерых зверей», и пока в выборе стояли одни породы, смотритель писал
 #: кабанов в условие словами, а счёт шёл по любому зверью. Поэтому следом за
 #: породами идут поимённо все противники мира, включая заведённых этой же панелью
@@ -198,7 +198,7 @@ def fields_for(record: OverlayRecord) -> tuple[FieldSpec, ...]:
     """Поля этой карточки — без тех, которые сейчас ничего не значат.
 
     Список полей у разновидности один, но вопрос, у которого уже есть ответ,
-    задавать не надо: у подряда, выданного жителю, имя нанимателя берётся у
+    задавать не надо: у задания, выданного жителю, имя нанимателя берётся у
     жителя, и отдельная строка «Имя нанимателя» под строкой «Кто даёт» читается
     как второй такой же вопрос.
     """
@@ -255,7 +255,7 @@ def options(content: GameContent, spec: FieldSpec, record: OverlayRecord) -> tup
 
 
 def _target_options(content: GameContent, record: OverlayRecord) -> tuple[str, ...]:
-    """Что подряд может считать поимённо: породы, потом сами противники.
+    """Что задание может считать поимённо: породы, потом сами противники.
 
     Породы идут первыми, потому что «любое зверьё» — это по-прежнему нормальное
     условие; за ними именами идут все противники, чтобы можно было заказать
@@ -580,9 +580,9 @@ def _shape_problems(content: GameContent, record: OverlayRecord) -> list[str]:
     match record.kind:
         case OverlayKind.QUEST:
             if record.number("target_count") < 1:
-                return ["Считать меньше одного нельзя: подряд закроется сам собой."]
+                return ["Считать меньше одного нельзя: задание закроется само собой."]
             if record.value("follows") == record.entity_id:
-                return ["Подряд не может идти после себя самого."]
+                return ["Задание не может идти после себя самого."]
             if not record.value("npc") and not record.value("giver"):
                 return ["Некому платить: выберите жителя или впишите имя нанимателя."]
             return _quest_place_problems(content, record)
@@ -595,7 +595,7 @@ def _shape_problems(content: GameContent, record: OverlayRecord) -> list[str]:
 
 
 def _quest_place_problems(content: GameContent, record: OverlayRecord) -> list[str]:
-    """Место, куда подряд посылает, должно быть в том же городе."""
+    """Место, куда задание посылает, должно быть в том же городе."""
     slot = record.number("location_slot")
     if not slot:
         return []
@@ -661,7 +661,7 @@ def apply(content: GameContent, records: Sequence[OverlayRecord]) -> GameContent
     либо работает вся, либо не работает вовсе.
 
     Порядок здесь есть, и он не декоративный. Сначала встаёт мир — города,
-    локации и люди, — и только потом то, что на них ссылается: подряд может быть
+    локации и люди, — и только потом то, что на них ссылается: задание может быть
     выдан жителю, которого завели той же панелью час назад, а противник —
     поселён в локацию, которой в ``world.toml`` нет.
     """
@@ -674,9 +674,9 @@ def apply(content: GameContent, records: Sequence[OverlayRecord]) -> GameContent
     staged = _rebuilt(content, cities=cities, npcs=npcs)
 
     enemies = _apply_enemies(content, _good(staged, records, OverlayKind.ENEMY))
-    # Противники встают до подрядов, а не рядом с ними: подряд может заказывать
+    # Противники встают до заданий, а не рядом с ними: задание может заказывать
     # именно того противника, которого смотритель завёл этой же панелью, и
-    # проверять такой подряд надо против мира, в котором тот уже есть.
+    # проверять такое задание надо против мира, в котором тот уже есть.
     staged = _rebuilt(content, cities=cities, npcs=npcs, enemies=enemies)
     quests = _apply_quests(staged, npcs, _good(staged, records, OverlayKind.QUEST))
     return _rebuilt(content, cities=cities, npcs=npcs, quests=quests, enemies=enemies)
@@ -812,7 +812,7 @@ def _apply_quests(
 
 
 def _quest_from(record: OverlayRecord, npcs: Mapping[str, Npc]) -> Quest:
-    """Подряд из записи. Имя нанимателя берётся у жителя, если он назван.
+    """Задание из записи. Имя нанимателя берётся у жителя, если он назван.
 
     Иначе оно осталось бы в двух местах сразу и однажды разошлось бы: житель
     переименован, а на доске всё ещё старое имя.

@@ -416,7 +416,7 @@ async def test_a_contract_is_taken_counted_and_paid(
     await player.press("Мир")
     await player.press("Дубно")
     await player.press("Таверна")
-    board = await player.press("Доска подрядов")
+    board = await player.press("Доска заданий")
     assert "Столбы на Тракте" in board.text()
 
     quest = content.quest("farhold_tallies")
@@ -435,7 +435,7 @@ async def test_a_contract_is_taken_counted_and_paid(
     assert counted is not None
     await characters.save(replace(counted, quests=QuestLog(taken={quest.id: quest.target_count})))
     await player.press("Назад")
-    paid = await player.press("Сдать подряд")
+    paid = await player.press("Сдать задание")
     assert "закрыт" in paid.text()
     settled = await characters.get_active(ACCOUNT)
     assert settled is not None
@@ -669,12 +669,12 @@ async def test_a_round_of_the_circle_is_fought_and_paid_out(
 
     await player.press("Мир")
     await player.press("Дубно")
-    screen = await player.press("Долговой круг")
+    screen = await player.press("Арена")
     assert screen.id is ScreenId.ARENA
     stake = arena_rules.stake_for(rich.level)
-    assert f"Ставка круга: {stake}" in screen.text()
+    assert f"Ставка: {stake}" in screen.text()
 
-    opened = await player.press("Выйти в круг")
+    opened = await player.press("Выйти на арену")
     assert opened.id is ScreenId.COMBAT
     # The stake is taken the moment the fight exists, not when it ends.
     charged = await characters.get(rich.id)
@@ -692,10 +692,10 @@ async def test_a_round_of_the_circle_is_fought_and_paid_out(
     assert settled is not None
     assert settled.arena_wins + settled.arena_losses == 1
     if settled.arena_wins:
-        assert "Круг выигран" in screen.text()
+        assert "Бой выигран" in screen.text()
         assert settled.gold == rich.gold + stake
     else:
-        assert "Круг проигран" in screen.text()
+        assert "Бой проигран" in screen.text()
         assert settled.gold == rich.gold - stake
 
 
@@ -710,8 +710,8 @@ async def test_an_empty_circle_says_so_and_charges_nothing(
 
     await player.press("Мир")
     await player.press("Дубно")
-    await player.press("Долговой круг")
-    screen = await player.press("Выйти в круг")
+    await player.press("Арена")
+    screen = await player.press("Выйти на арену")
 
     assert "не с кем драться" in screen.text()
     unchanged = await characters.get(rich.id)

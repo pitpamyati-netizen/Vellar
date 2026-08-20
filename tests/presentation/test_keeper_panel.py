@@ -105,7 +105,7 @@ class Panel:
     def button_with(self, needle: str) -> str:
         """Кнопка с этим словом, хоть бы и на следующей странице.
 
-        Смотритель ищет поле листая, а не считая: карточка подряда занимает две
+        Смотритель ищет поле листая, а не считая: карточка задания занимает две
         страницы, и какое поле на какой - это верстка, а не поведение.
         """
         seen: list[str] = []
@@ -253,11 +253,11 @@ def test_dropping_the_edit_leaves_the_world_as_content_wrote_it(panel: Panel) ->
     assert panel.state.screen is ScreenId.KEEPER_LIST
 
 
-# --- подряд у жителя ---------------------------------------------------
+# --- задание у жителя ---------------------------------------------------
 
 
 def _add_quest(panel: Panel) -> Panel:
-    panel.press("Назад", "Назад", "Подряды", labels.KEEPER_ADD.text)
+    panel.press("Назад", "Назад", "Задания", labels.KEEPER_ADD.text)
     panel.press(panel.button_with("Название"), "Столбы у брода")
     panel.press(panel.button_with("Условие словами"), "Обойдите три места и скажите, что там.")
     who = panel.button_with("Кто даёт")
@@ -280,7 +280,7 @@ def test_a_contract_is_handed_to_a_person_the_panel_created(panel: Panel) -> Non
 def test_a_player_meets_that_person_in_the_city_and_takes_the_work(
     panel: Panel, player: Character
 ) -> None:
-    """То, ради чего всё это: житель и его подряд доходят до игрока."""
+    """То, ради чего всё это: житель и его задание доходят до игрока."""
     _add_npc(panel)
     _add_quest(panel)
 

@@ -95,8 +95,8 @@ Only when something that pays or charges changed.
 
 - [ ] Every new movement of gold writes a `gold_flow` line
       (`mmorpg.economy_log`), or the next tuning pass is a guess again
-- [ ] Nothing new hands out gold that does not come from somewhere: the Circle
-      pays out of what it holds, the duty removes, fights and contracts create
+- [ ] Nothing new hands out gold that does not come from somewhere: the arena
+      pays out of what it holds, the duty removes, fights and quests create
 - [ ] Combat numbers still meet their promises -
       `tests/domain/test_combat_balance.py` covers length, the cost of an
       ordinary fight, and the spread between classes

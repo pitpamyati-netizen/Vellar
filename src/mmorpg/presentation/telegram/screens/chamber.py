@@ -1,7 +1,7 @@
-"""Палата: Оборот, Печать и счётный вопрос.
+"""Палата: перерождение, Печать и голосование.
 
 Три экрана, по делу на каждый. Палата говорит, что берёт и что за это открывает;
-заклад — список того, что можно отдать; счётный вопрос — сам вопрос, счёт голосов
+заклад — список того, что можно отдать; голосование — сам вопрос, счёт голосов
 по нему и кнопка на каждый ответ. Вопрос вынесен отдельно не для порядка: у него
 столько строк, сколько ответов, и в одном сообщении с Палатой он бы туда не влез
 (``docs/accessibility.md``, правило 11).
@@ -45,7 +45,7 @@ def seals_line(character: Character) -> str:
 
 
 def opened_lines(content: GameContent, character: Character) -> tuple[str, ...]:
-    """Что Печати уже открыли. Пусто у того, кто ни одного Оборота не совершил."""
+    """Что Печати уже открыли. Пусто у того, кто ни одного перерождения не совершил."""
     if character.seals <= 0:
         return ()
     return (
@@ -68,7 +68,7 @@ def chamber_screen(
     lines = [
         *head("Дорожная палата.", notice),
         "Весы, книга и печать, которую признают все пятнадцать городов.",
-        "Оборот — это заклад: вы отдаёте надетую вещь или грань умения и получаете "
+        "Перерождение — это заклад: вы отдаёте надетую вещь или грань умения и получаете "
         "Печать. Уровень и опыт остаются при вас.",
         seals_line(character),
         *opened_lines(content, character),
@@ -77,9 +77,9 @@ def chamber_screen(
         "Заложенное не возвращают и второй раз не принимают.",
     ]
     if turning is None:
-        lines.append("Счётного вопроса сейчас нет: Палата считает прошлый цикл.")
+        lines.append("Голосования сейчас нет: Палата считает прошлый цикл.")
     else:
-        lines.append(f"Открыт счётный вопрос: {turning.name}. {turning.question}")
+        lines.append(f"Открыто голосование: {turning.name}. {turning.question}")
     if refused:
         lines.append(refused)
 
@@ -98,25 +98,25 @@ def turning_screen(
     tally: Mapping[str, int] | None = None,
     notice: str = "",
 ) -> Screen:
-    """Счётный вопрос: сам вопрос, счёт по нему и кнопка на каждый ответ."""
+    """Голосование: сам вопрос, счёт по нему и кнопка на каждый ответ."""
     turning = content.open_turning()
     counted = tally or {}
     if turning is None:
         return Screen(
             id=ScreenId.TURNING,
             lines=(
-                notice or "Счётного вопроса сейчас нет.",
-                "Палата считает прошлый цикл. Обороты совершают и без вопроса: "
+                notice or "Голосования сейчас нет.",
+                "Палата считает прошлый цикл. Перерождения совершают и без вопроса: "
                 "Печати остаются при вас и голос свой не теряют.",
             ),
         )
 
     total = sum(counted.values())
     lines = [
-        *head(f"Счётный вопрос: {turning.name}.", notice),
+        *head(f"Голосование: {turning.name}.", notice),
         turning.question,
         turning.text,
-        f"Подано голосов: {total}. Голос весит столько, сколько Оборотов за ним.",
+        f"Подано голосов: {total}. Голос весит столько, сколько перерождений за ним.",
     ]
     lines.extend(
         f"{option.name}: голосов {counted.get(option.id, 0)}. {option.text}"
@@ -135,7 +135,7 @@ def turning_screen(
     elif turning_rules.may_answer(character):
         lines.append("Ваш голос ещё не подан.")
     else:
-        lines.append("Голос дают за Оборот: пока Печати нет, Палата слушает, но не считает.")
+        lines.append("Голос дают за перерождение: пока Печати нет, Палата слушает, но не считает.")
 
     rows: tuple[tuple[Label, ...], ...] = ()
     if turning_rules.may_answer(character):
@@ -177,7 +177,7 @@ def pledge_screen(
     state: PageState,
     notice: str = "",
 ) -> Screen:
-    """Что отдать. Нажатие здесь — это уже Оборот, и экран говорит об этом до него."""
+    """Что отдать. Нажатие здесь — это уже перерождение, и экран говорит об этом до него."""
     entries = pledge_entries(content, character)
     return paginated_screen(
         screen_id=ScreenId.CHAMBER_PLEDGE,
@@ -206,8 +206,8 @@ def entry_for(content: GameContent, character: Character, pressed: str) -> str:
 
 
 def sealed_line(result: turning_rules.Sealed) -> str:
-    """Что сказать про совершённый Оборот, в одну строку."""
+    """Что сказать про совершённое перерождение, в одну строку."""
     return (
-        f"Оборот совершён. Палата приняла: {result.given}. "
+        f"Перерождение совершено. Палата приняла: {result.given}. "
         f"{seals_line(result.character)} Уровень остался прежним."
     )

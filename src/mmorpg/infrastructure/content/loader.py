@@ -728,7 +728,7 @@ def _parse_enemies(
 
 
 def _parse_turnings(raw: Mapping[str, Any], problems: list[str]) -> tuple[tuple[Turning, ...], str]:
-    """Счётные вопросы Палаты и тот из них, что открыт сейчас.
+    """Голосования Палаты и то из них, что открыто сейчас.
 
     Вопрос без ответов - это тупик на экране, поэтому их требуется не меньше
     двух. Открытым может быть только вопрос, который в файле есть: имя, за
@@ -829,8 +829,8 @@ def _parse_quests(
         if int(entry.get("target_count", 0)) < 1:
             problems.append(f"quests.toml: {quest_id} counts to less than one")
 
-        # Куда идти - часть подряда, а не догадка игрока. Локация проверяется
-        # здесь: подряд, посылающий в несуществующее место, хуже, чем никакой.
+        # Куда идти - часть задания, а не догадка игрока. Локация проверяется
+        # здесь: задание, посылающее в несуществующее место, хуже, чем никакое.
         location_slot = int(entry.get("location", 0))
         if location_slot and location_slot not in slots_by_city.get(city_id, set()):
             problems.append(

@@ -310,7 +310,7 @@ def _step_residents(
         if not quest_rules.is_open(quest, character):
             return state.with_notice("Эта работа сейчас не для вас.")
         return replace(state, quest_id=quest.id).at(ScreenId.QUEST_OFFER)
-    return state.with_notice("Не узнал подряд. Нажмите работу из списка.")
+    return state.with_notice("Не узнал задание. Нажмите работу из списка.")
 
 
 def _step_panel(
@@ -484,7 +484,7 @@ def _step_entity(
     content: GameContent, state: PlayState, command: Command, view: KeeperView
 ) -> PlayState:
     record = _record(content, state, view)
-    # Поля карточки листаются своей страницей: у подряда их четырнадцать, и в
+    # Поля карточки листаются своей страницей: у задания их четырнадцать, и в
     # одно сообщение они не помещаются.
     fields = total_pages(len(overlay_rules.fields_for(record)), keeper_screens.CARD_FIELDS)
     moved = page_move(command, state.list_page, fields)

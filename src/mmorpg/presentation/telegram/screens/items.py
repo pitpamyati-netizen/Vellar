@@ -66,7 +66,7 @@ MODIFIER_NAMES: dict[str, str] = {
     "sell_price_percent": "цена скупки",
     "drop_rate_percent": "шанс добычи",
     "rarity_percent": "редкость добычи",
-    "quest_reward_percent": "плата за подряды",
+    "quest_reward_percent": "плата за задания",
     "event_reward_percent": "находки на событиях",
     "craft_quality_percent": "качество изделий",
     "gather_yield_percent": "сбор сырья",

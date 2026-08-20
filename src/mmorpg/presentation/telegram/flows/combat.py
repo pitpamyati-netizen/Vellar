@@ -62,8 +62,8 @@ class CombatSession:
     wave: int = 0
     depth: int = 0
     opponent: int = 0
-    # A round of the Debt Circle. The stake is already paid when the fight opens,
-    # and the outcome settles against the Circle rather than against a player.
+    # A round of the arena. The stake is already paid when the fight opens,
+    # and the outcome settles against the arena rather than against a player.
     arena: bool = False
 
     @property

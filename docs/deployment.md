@@ -49,7 +49,7 @@ for: the keyboard in a player's chat outlives the process, so the first press
 after a restart arrives with no screen behind it and is answered by the main menu
 plus one sentence saying the previous screen is gone (`handlers/creation.resume`).
 Before that catch-all existed such a press reached no handler at all, and the
-player got silence. Characters, gold, bags, contracts
+player got silence. Characters, gold, bags, quests
 and keeper edits are in PostgreSQL and are untouched. Updating is the same few
 seconds of silence as an update to the stack - Ctrl+C, then `Start.bat solo`.
 
@@ -89,7 +89,7 @@ docker compose down           # or stop.bat
 
 In solo mode: Ctrl+C in the bot's window, then `Start.bat` again. It brings the
 schema up to date before it starts, and PostgreSQL is never stopped, so
-characters, bags and contracts carry straight over. The session does not - the
+characters, bags and quests carry straight over. The session does not - the
 same restart everyone else pays for. Take a dump first if the change touches the
 schema: `stop.bat` writes one into `backups\` without stopping anything of yours.
 

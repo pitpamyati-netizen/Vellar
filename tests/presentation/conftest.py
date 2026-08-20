@@ -234,7 +234,7 @@ def keeper(fighter: Character) -> Character:
 
 @pytest.fixture(scope="session")
 def edits() -> tuple[OverlayRecord, ...]:
-    """Две правки: заведённый житель и его подряд, один из них недописанный."""
+    """Две правки: заведённый житель и его задание, одно из них недописанное."""
     return (
         OverlayRecord(
             kind=OverlayKind.NPC,
@@ -468,7 +468,7 @@ def all_screens(
             PageState(),
             keeper_view,
         ),
-        # Самая длинная карточка, какую смотритель может набрать: у подряда
+        # Самая длинная карточка, какую смотритель может набрать: у задания
         # четырнадцать полей, и каждое заполнено до предела.
         *(
             keeper_screens.entity_screen(
@@ -570,7 +570,7 @@ def all_screens(
         tutorial_screens.tutorial_screen(replace(hero, tutorial=0b000111)),
         tutorial_screens.tutorial_screen(replace(hero, tutorial=0b111111)),
         chamber_screens.chamber_screen(content, fighter),
-        chamber_screens.chamber_screen(content, sealbearer, notice="Оборот совершён."),
+        chamber_screens.chamber_screen(content, sealbearer, notice="Перерождение совершено."),
         chamber_screens.turning_screen(content, fighter),
         chamber_screens.turning_screen(content, sealbearer),
         chamber_screens.turning_screen(content, sealbearer, tally={"toll_low": 3, "toll_keep": 3}),

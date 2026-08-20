@@ -1,7 +1,7 @@
 """Where gold comes into the game and where it goes out of it.
 
 Three of the numbers this game is balanced on cannot be decided at a desk: the
-duty on a trade between players, the stake and the payout of the Debt Circle, and
+duty on a trade between players, the stake and the payout of the arena, and
 what a fight is worth (Roadmap, "Риски"). All three were written down as guesses
 to be corrected "по первым суткам ОБТ" - and there was nothing in the game that
 would make those first twenty-four hours legible. A number nobody can measure is
@@ -15,7 +15,7 @@ writes one line:
 ``flow`` is what happened, ``amount`` is signed - positive is gold entering this
 character's purse, negative is gold leaving it. Summed over a day by flow, that
 is the whole economy: what the world pays out, what the cities take back, what
-the duty removes, and whether the Circle is a hole or a fountain.
+the duty removes, and whether the arena is a hole or a fountain.
 
 This is a log and nothing else. Nothing reads it back, no screen shows it, and no
 rule depends on it - it exists so that the first correction to those constants is
@@ -36,7 +36,7 @@ DESCENT = "descent"  # the bottom of a dungeon run
 QUEST = "quest"  # a contract paid out
 DEFEAT = "defeat"  # a tenth of the purse, left where the fight was lost
 DUEL = "duel"  # taken from another player, or lost to one
-ARENA_STAKE = "arena_stake"  # into the Circle
+ARENA_STAKE = "arena_stake"  # into the arena
 ARENA_PAYOUT = "arena_payout"  # back out of it
 TRADE_PRICE = "trade_price"  # what one player paid another
 TRADE_DUTY = "trade_duty"  # what the duty took out of the game

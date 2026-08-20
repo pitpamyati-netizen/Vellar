@@ -39,7 +39,7 @@ def test_nobody_fights_before_they_have_a_panel(fighter: Character) -> None:
 
 def test_a_round_nobody_can_pay_for_is_refused(fighter: Character) -> None:
     broke = replace(fighter, gold=arena.stake_for(fighter.level) - 1)
-    assert "Ставка круга" in arena.refusal(broke)
+    assert "Ставка арены" in arena.refusal(broke)
 
 
 def test_the_stake_leaves_the_purse_before_the_bell(fighter: Character) -> None:

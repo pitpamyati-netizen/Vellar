@@ -694,7 +694,7 @@ def _handle_arena(character: Character, state: PlayState, command: Command) -> P
     if command.intent is not Intent.SELECT or not arena_screens.ARENA_FIGHT.matches(
         command.argument
     ):
-        return state.with_notice("Нажмите «Выйти в круг» или «Назад».")
+        return state.with_notice("Нажмите «Выйти на арену» или «Назад».")
     refused = arena_rules.refusal(character)
     if refused:
         return state.with_notice(refused)
@@ -706,7 +706,7 @@ def _handle_arena(character: Character, state: PlayState, command: Command) -> P
 def _handle_chamber(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    """Палата: две двери — заклад и счётный вопрос."""
+    """Палата: две двери — заклад и голосование."""
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите кнопку из списка или «Назад».")
     if labels.TURNING.matches(command.argument):
@@ -722,7 +722,7 @@ def _handle_chamber(
 def _handle_turning(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    """Счётный вопрос: по кнопке на ответ, и голос весит столько, сколько Печатей."""
+    """Голосование: по кнопке на ответ, и голос весит столько, сколько Печатей."""
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите ответ или «Назад».")
     turning = content.open_turning()
@@ -734,7 +734,7 @@ def _handle_turning(
         voted = turning_rules.answer(character, turning, option.id)
         if voted is None:
             if not turning_rules.may_answer(character):
-                return state.with_notice("Голос дают за Оборот: сперва Печать, потом ответ.")
+                return state.with_notice("Голос дают за перерождение: сперва Печать, потом ответ.")
             return state.with_notice(f"Ваш голос уже отдан за: {option.name}.")
         weight = turning_rules.voice(voted)
         return state.storing(PendingWrite(character=voted)).with_notice(
@@ -747,7 +747,7 @@ def _handle_turning(
 def _handle_pledge(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    """Заклад. Нажатие здесь совершает Оборот: экран предупреждал об этом."""
+    """Заклад. Нажатие здесь совершает перерождение: экран предупреждал об этом."""
     entries = chamber_screens.pledge_entries(content, character)
     moved = page_move(command, state.list_page, total_pages(len(entries)))
     if moved is not None:
@@ -779,10 +779,10 @@ def _handle_tutorial(
     if command.intent is not Intent.SELECT or not tutorial_screens.DO_TASK.matches(
         command.argument
     ):
-        return state.with_notice("Нажмите «Выполнить задание» или «Назад».")
+        return state.with_notice("Нажмите «Перейти к шагу» или «Назад».")
     task = tutorial_rules.next_task(character)
     if task is None:
-        return state.with_notice("Все задания сделаны.")
+        return state.with_notice("Все шаги сделаны.")
 
     card = tutorial_screens.card_for(task)
     city = known_city(content, state.city_id, character.city_id)
@@ -924,7 +924,7 @@ def _handle_craft(
         log, steps = quest_rules.record_craft(content, worked, made.item_id, made.count)
         worked = replace(worked, quests=log)
         for step in steps:
-            line += f" Подряд «{step.quest.name}»: {step.progress} из {step.quest.target_count}."
+            line += f" Задание «{step.quest.name}»: {step.progress} из {step.quest.target_count}."
         write = PendingWrite(character=worked).with_items(*made.spent, (made.item_id, made.count))
         return state.storing(write).with_notice(line)
 
@@ -1384,14 +1384,14 @@ def _hand_in(content: GameContent, character: Character, state: PlayState) -> Pl
     city = known_city(content, state.city_id, character.city_id)
     due = quest_rules.ready_to_hand_in(content, character, city.id)
     if not due:
-        return state.with_notice("Сдавать нечего: ни один подряд не досчитан.")
+        return state.with_notice("Сдавать нечего: ни одно задание не досчитано.")
     payout = quest_rules.hand_in(content, character, due[0].quest)
     if payout is None:  # pragma: no cover - ready_to_hand_in already checked it
         return state.with_notice("Сдавать нечего.")
 
     write = PendingWrite(character=payout.character).because(economy_log.QUEST)
     said = (
-        f"Подряд «{payout.quest.name}» закрыт. "
+        f"Задание «{payout.quest.name}» закрыто. "
         f"Плата: {payout.gold} золота и {payout.experience} опыта."
     )
     if payout.item_id and content.has_item(payout.item_id):
@@ -1414,16 +1414,16 @@ def _handle_board(
     if moved is not None:
         return replace(state, board_page=moved, notice="")
     if command.intent is not Intent.SELECT:
-        return state.with_notice("Нажмите подряд из списка.")
+        return state.with_notice("Нажмите задание из списка.")
     for quest in offered:
         if quest_screens.quest_button(quest).matches(command.argument):
             return replace(state, quest_id=quest.id).at(ScreenId.QUEST_OFFER)
-    # Взятый подряд с доски не пропадает, и нажатие на него открывает тот же
+    # Взятое задание с доски не пропадает, и нажатие на него открывает тот же
     # разговор - только уже со счётом и с правом отказаться.
     for step in working:
         if quest_screens.taken_button(step.quest, step.progress).matches(command.argument):
             return replace(state, quest_id=step.quest.id).at(ScreenId.QUEST_OFFER)
-    return state.with_notice("Нажмите подряд из списка.")
+    return state.with_notice("Нажмите задание из списка.")
 
 
 def _handle_offer(
@@ -1431,7 +1431,7 @@ def _handle_offer(
 ) -> PlayState:
     if not content.has_quest(state.quest_id):
         return go_back(replace(state, quest_id="")).with_notice(
-            "Этого подряда больше нет. Посмотрите доску заново."
+            "Этого задания больше нет. Посмотрите доску заново."
         )
     if command.intent is not Intent.SELECT:
         return state.with_notice("Согласитесь, спросите или уйдите.")
@@ -1439,20 +1439,20 @@ def _handle_offer(
     if labels.QUEST_ASK.matches(command.argument):
         return state.with_notice(
             f"Платит {quest.giver}, из своего кармана, после счёта. "
-            f"Палата берёт своё с торговли, а не с подряда."
+            f"Палата берёт своё с торговли, а не с задания."
         )
     if labels.QUEST_LEAVE.matches(command.argument):
         # Refusing never closes a contract for good (Narrative.md, section 4).
-        return go_back(state).with_notice("Вы ушли. Подряд останется на доске.")
+        return go_back(state).with_notice("Вы ушли. Задание останется на доске.")
     if labels.QUEST_ABANDON.matches(command.argument):
         if not character.quests.is_taken(quest.id):
-            return state.with_notice("Этот подряд у вас не взят.")
+            return state.with_notice("Это задание у вас не взято.")
         given_back = quest_rules.abandon(character, quest)
         return (
             go_back(replace(state, quest_id=""))
             .storing(PendingWrite(character=given_back))
             .with_notice(
-                f"Подряд «{quest.name}» возвращён. Счёт потерян, сам подряд остался на доске."
+                f"Задание «{quest.name}» возвращено. Счёт потерян, само задание осталось на доске."
             )
         )
     if not labels.QUEST_ACCEPT.matches(command.argument):
@@ -1460,11 +1460,11 @@ def _handle_offer(
 
     accepted = quest_rules.take(content, character, quest)
     if accepted == character:
-        return state.with_notice("Этот подряд уже у вас или уже закрыт.")
+        return state.with_notice("Это задание уже у вас или уже закрыто.")
     taken = (
         go_back(replace(state, quest_id=""))
         .storing(PendingWrite(character=accepted))
-        .with_notice(f"Подряд «{quest.name}» взят. Счёт идёт с этой минуты.")
+        .with_notice(f"Задание «{quest.name}» взято. Счёт идёт с этой минуты.")
     )
     return mark_task(taken, character, TutorialTask.QUEST)
 
@@ -1702,7 +1702,7 @@ def search_line(content: GameContent, node_name: str, result: adventure.SearchRe
         parts.append(f"Восстановлено здоровья: {result.healed}.")
     parts.append(f"Опыт: {result.experience}.")
     for step in result.quest_steps:
-        parts.append(f"Подряд «{step.quest.name}»: {step.progress} из {step.quest.target_count}.")
+        parts.append(f"Задание «{step.quest.name}»: {step.progress} из {step.quest.target_count}.")
     if result.level_up is not None and result.level_up.levels_gained:
         parts.append(level_up_line(result.level_up))
     return " ".join(parts)

@@ -101,7 +101,7 @@ because the play router filters on the whole `Play` state group.
 
 | Where | What |
 | --- | --- |
-| PostgreSQL | users, characters (raw stats, level, experience, gold, vault gold, what the Debt Circle holds), inventory, equipment, skill loadout with ranks and edges, chosen traits, city, quest and craft progress, accessibility settings, world seed, trades (pending escrow and the settled journal), privacy (profile visibility on the user row, black lists in `blocks`) |
+| PostgreSQL | users, characters (raw stats, level, experience, gold, vault gold, what the arena holds), inventory, equipment, skill loadout with ranks and edges, chosen traits, city, quest and craft progress, accessibility settings, world seed, trades (pending escrow and the settled journal), privacy (profile visibility on the user row, black lists in `blocks`) |
 | Redis (with TTL) | FSM state, current screen, active combat, the shared state of every location and who is standing in it, update deduplication, shop assortment cache |
 | Nowhere - recomputed | location layout, nodes, enemies, loot, total character stats, shop assortment (all pure functions of seed, wave and rotation) |
 
@@ -142,7 +142,7 @@ that exact moment. Every purse the group touches moves by `spend_gold` (one
 conditional `UPDATE ... WHERE gold >= $2 RETURNING`) or `grant_gold` (one
 increment). Every movement of gold that is not one player handing another a coin
 also writes a `gold_flow` line (`mmorpg.economy_log`): the duty, the stake of the
-Circle and what a fight pays are all numbers to be corrected against a day of
+arena and what a fight pays are all numbers to be corrected against a day of
 real play, and a number nobody can measure is only ever re-guessed.
 
 ## Latency budget
