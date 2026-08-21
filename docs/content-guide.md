@@ -11,7 +11,7 @@ wrong - the bot refuses to start on broken content.
 | `world.toml` | 15 cities, 5 locations each, level bands, unlock conditions |
 | `races.toml` | 16 races: stat bonuses, passive ability, racial active reference |
 | `classes.toml` | 8 classes: key stats, resource curve, health curve, progression meta |
-| `traits.toml` | 60+ traits, the modifier vocabulary, categories |
+| `traits.toml` | 64 traits, the modifier vocabulary, categories |
 | `skills.toml` | 8 active + 6 passive per class, 1 active per race, both edges of each |
 | `items.toml` | kinds of gear, grades, rarities, consumables, materials |
 | `crafts.toml` | gathering and making crafts, recipes, rank and quality rules |
@@ -25,8 +25,9 @@ wrong - the bot refuses to start on broken content.
 2. **One modifier vocabulary.** Traits, passives and equipment all draw from
    `traits.toml [meta].modifier_keys`. A key that is not listed there is rejected.
    Add the key to that list first, then implement it in the rules layer.
-3. **Panel size is fixed.** 6 active, 3 passive, 1 racial. New content changes what
-   fills the slots, never how many there are.
+3. **Panel size is fixed.** 6 active slots and 1 racial. New content changes what
+   fills them, never how many there are. A passive occupies no slot at all: what is
+   learned works (`docs/skills.md`, ADR 0016).
 4. **Player-visible text is Russian, everything else English.** Names, descriptions
    and `text` fields are what the player hears; ids, codes and comments are English.
 5. **No pseudo-graphics in any text field** - screen readers read them character by
@@ -278,7 +279,7 @@ level_min = 290
 level_max = 320
 unlock_level = 290
 unlock_requires = ["city:last_beacon"]
-services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank"]
+services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "chamber"]
 
 [[city.location]]
 id = "shell_shore"

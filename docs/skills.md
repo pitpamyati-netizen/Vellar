@@ -51,7 +51,8 @@ modifications that change how it behaves, without adding a button.
 — Размах: удар задевает вторую цель на 60 процентов урона.
 ```
 
-144 skills x 2 edges = 288 behaviours behind 7 buttons. Edges are re-picked at a
+128 skills x 2 edges = 256 behaviours behind 7 buttons (a race passive has none:
+it is not in the panel and never bought with a point). Edges are re-picked at a
 city Mentor for gold, so a build is a decision, not a life sentence.
 
 Rank 3 is the default, not a constant: a **Seal of the Chamber** opens the edge

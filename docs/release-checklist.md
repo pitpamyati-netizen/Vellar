@@ -40,7 +40,9 @@ uv run pytest tests/content
 - [ ] Content loads: the bot refuses to start on invalid content, so a green run
       here is a green start
 - [ ] New skills declare an `effect` that exists in `EFFECT_SPECS`
-- [ ] New modifier keys added to `traits.toml [meta].modifier_keys` first
+- [ ] New modifier keys added to `traits.toml [meta].modifier_keys` first, and a
+      key a skill or an edge names is in `modifiers.EFFECTIVE_KEYS` - the engine
+      reads that list and nothing else (ADR 0018)
 - [ ] World table still covers levels 1-300 with no gaps
 
 ## 3a. The keeper panel
@@ -85,7 +87,9 @@ uv run pytest -m integration
       column PostgreSQL refuses, or a name it reserves - `verbose` was one
 - [ ] Every new query is covered there, or it ships unverified
 - [ ] Nothing derived was added to a table: totals are recomputed, not stored
-- [ ] Redis keys carry a TTL
+- [ ] Every Redis key the game writes carries a TTL. The FSM keys are the one
+      exception and stay without one: `volatile-lru` may only evict what expires,
+      and a player's position must survive memory pressure
 - [ ] A purse two players can reach at once moves by `spend_gold`/`grant_gold`,
       never by writing back a character read earlier in the step
 
@@ -106,7 +110,7 @@ Only when something that pays or charges changed.
 - [ ] `Start.bat local` starts and plays
 - [ ] `Start.bat solo` migrates and plays, and a restart puts a player back in
       the main menu rather than into a screen that no longer exists
-- [ ] `Start.bat` (or `docker compose up -d --wait`) reaches healthy on its own
+- [ ] `Start.bat docker` (or `docker compose up -d --wait`) reaches healthy on its own
 - [ ] Startup logs show `content_loaded` with the expected counts, then `connected`
 - [ ] `docker compose stop bot` logs `Polling stopped` and exits 0 - a shutdown
       that has to be killed is dropping players' updates

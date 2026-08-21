@@ -3,7 +3,9 @@
 Locations are **not stored anywhere**. A map is a pure function of its seed, so
 the server rebuilds it on demand and throws it away after rendering. The only
 thing kept is what the players *took out of it* - how much of each node's wave is
-gone - and that is a small hash in Redis with a time to live.
+gone - and that is a small hash in Redis with a time to live. In `solo` there is
+no Redis at all: the same hash lives in the process and goes when it does
+(`docs/adr/0010-a-machine-without-containers.md`).
 
 ## The seed chain
 
@@ -148,8 +150,8 @@ price  = (30 + 7.0 * level) * rarity.price_factor
 ```
 
 Everything "random" in a thing - which stats, which special property - is derived
-from the thing's own name, so «Крепкий меч редкой работы» is the same sword for
-everyone and after any restart. A **relic** is the exception that proves the rule:
+from the thing's own id (`sword@14#rare`), so «Крепкий меч редкой работы» is the
+same sword for everyone and after any restart. A **relic** is the exception that proves the rule:
 its numbers are counted from the *hero's* level rather than its own, so it grows
 with them and never goes stale. That is why it only ever comes off a boss or a
 contract chain walked to its end, and never off a shelf.
@@ -187,6 +189,6 @@ was where, which costs a walk and never a character.
 | --- | --- |
 | location layout, node kinds, node names, node levels | how much of each node's wave is gone (Redis, TTL) |
 | enemies, their stats, their loot | items actually taken (PostgreSQL) |
-| every piece of gear: damage, armour, stats, price, name | which gear a character holds and wears, by name (PostgreSQL) |
+| every piece of gear: damage, armour, stats, price, name | which gear a character holds and wears, by id - `sword@14#rare` (PostgreSQL) |
 | shop assortment | gold and purchases (PostgreSQL) |
 | total character stats | raw stats, level, experience (PostgreSQL) |

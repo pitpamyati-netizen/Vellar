@@ -84,6 +84,8 @@ count = (gather_base + gather_per_rank * (ранг - 1)) * gather_yield_percent
 - Работу можно заказать: задание с `objective = "craft"` и `target_kind` —
   идентификатором вещи — считает сделанное (`quests.record_craft`), поэтому у
   ремесла есть заказчик, а не только скупщик.
-- Модификаторы `gather_yield_percent`, `craft_quality_percent` и
-  `salvage_yield_percent` уже объявлены в `traits.toml`, черты и вещи говорят
-  ими же.
+- Модификаторы `gather_yield_percent` и `craft_quality_percent` объявлены в
+  `traits.toml` и считаются на самом деле (`modifiers.EFFECTIVE_KEYS`): черты и
+  вещи говорят ими же. Ключ `salvage_yield_percent` в словаре тоже есть, но
+  разбора вещей в игре пока нет, и потому его никто не считает — обещание без
+  механики (`Roadmap.md`, день 4; ADR 0018).

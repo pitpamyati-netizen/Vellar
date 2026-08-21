@@ -3,7 +3,8 @@
 # Race passives are inherent and live in races.toml - they are always on and never
 # occupy a slot. The racial active listed here occupies the separate racial slot.
 #
-# The panel is fixed forever: 6 active slots, 3 passive slots, 1 racial slot.
+# The panel is fixed forever: 6 active slots and 1 racial. A passive takes no slot
+# at all - what is learned works (ADR 0016).
 # Depth comes from ranks 1-5 and from the edge chosen at rank 3, never from extra
 # buttons. Both edges of every skill are declared here; their codes are derived as
 # "<code>_a" and "<code>_b" in the order they appear. See docs/skills.md.

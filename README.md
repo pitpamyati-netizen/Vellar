@@ -6,9 +6,11 @@ its own. See [docs/accessibility.md](docs/accessibility.md) - those rules are a
 specification, not a preference.
 
 - 15 cities x 5 locations, character levels 1-300
-- Procedurally generated locations, regenerated when they are cleared out, not on a clock
+- Permanent maps; what stands in their nodes arrives in waves, shared by everyone
+  in the location and back three minutes after the node is cleared
 - 16 races, 8 classes, 5 crafts, 60+ traits, all defined in TOML under [`content/`](content/)
-- Fixed skill panel: 6 active + 3 passive + 1 racial slot, at every level
+- Fixed skill panel: 6 active slots and 1 racial, at every level; a learned passive
+  takes no slot and is always on
 - Endgame at level 300: pledge a thing or a skill edge for a Seal of the Chamber,
   which opens access - never stats - and weighs your voice in the cycle's question
 
@@ -95,14 +97,29 @@ tests/
 
 ## What is playable
 
-| Working | Stubbed (a real screen with a working "Назад", never silence) |
+What a player can do right now, rather than what is planned:
+
+| | |
 | --- | --- |
-| Character creation: name, race, class, two traits, free points, confirmation | Dungeons, tavern, mentor, bank |
-| Main menu, world list, city hub, five locations, node-by-node movement | Cities 2-15 (they unlock by level; content is generated for all of them) |
-| Turn-based combat with the fixed 6+3+1 panel, one to three enemies | Skill loadout editing, PvP, guilds |
-| Inventory and city shop on the shared paginated list | |
-| Crafts: gathering by biome, recipes, batch quality, quests for made goods | |
-| Accessibility settings: emoji, verbose descriptions, repeat | |
+| Creation | name, race, class, two traits, free points, confirmation, and six tutorial steps |
+| The road | main menu, world, the cities as they unlock, five locations each, node-by-node movement, waves of enemies and finds shared with everyone standing there |
+| Combat | turn-based, six skill slots and a racial one, one to three enemies, intent / trace / breach, no timers anywhere |
+| A city | shop, tavern with a quest board, mentor, bank, descent, arena, the Chamber, and whoever lives there |
+| Things | inventory, an item card that compares against what is worn, gear assembled from kind, grade and rarity |
+| Crafts | gathering by biome, recipes, batch quality, contracts for made goods |
+| Other players | a duel against a snapshot on a free location, the arena, trades in the game group |
+| Endgame | rebirth at 300, the Seal of the Chamber, the cycle's vote |
+| The keeper | a panel that edits the world from Telegram, plus players, statistics, bans and a rolled-back trade |
+| Settings | emoji, verbose descriptions, repeat the current screen |
+
+What is **not** there: guilds, and any party larger than a trade between two
+players. One descent per city - a Seal adds a fight below its floor, but the way
+down is the same one. Race passives are still only text: `races.toml` declares
+them and nothing counts them, along with ten trait keys (`Roadmap.md`, day 4).
+
+One stub screen is left, for a service the city standing in `world.toml` does not
+offer - the button can still arrive from an older keyboard. It is a real screen
+that says so, with a working "Назад", never silence.
 
 ## Documentation
 
@@ -113,7 +130,7 @@ tests/
 | [Narrative.md](Narrative.md) | World, naming, dialogue and broadcast tone (Russian) |
 | [docs/architecture.md](docs/architecture.md) | Layers, dependency rule, flows, data schema, latency budget |
 | [docs/accessibility.md](docs/accessibility.md) | Screen-reader rules and the review checklist |
-| [docs/procgen.md](docs/procgen.md) | Seeds, cycles, generation invariants |
+| [docs/procgen.md](docs/procgen.md) | Seeds, waves, generation invariants |
 | [docs/content-guide.md](docs/content-guide.md) | Adding a race, class, craft, trait or city without touching code |
 | [docs/skills.md](docs/skills.md) | Skill panel, ranks, edges, anti-bloat rules |
 | [docs/crafts.md](docs/crafts.md) | Crafts: ranks, gathering, recipes and batch quality |
@@ -124,7 +141,8 @@ tests/
 ## Content at a glance
 
 16 races · 8 classes · 64 traits · 128 skills (112 class + 16 racial, each with two
-rank-3 edges) · 5 crafts with 9 recipes · 24 enemy archetypes · 15 cities × 5
+rank-3 edges, 256 edges in all) · 5 crafts with 12 recipes · 26 enemy archetypes ·
+10 contracts of act I · 30 kinds of gear on 12 grades in 5 rarities · 15 cities × 5
 locations covering levels 1-300 · 3 endgame questions the Chamber counts.
 All of it lives in [`content/`](content/) as TOML and is validated at startup - the
 bot refuses to boot on broken content and reports every problem at once.

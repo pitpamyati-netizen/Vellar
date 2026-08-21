@@ -102,7 +102,7 @@ because the play router filters on the whole `Play` state group.
 | Where | What |
 | --- | --- |
 | PostgreSQL | users, characters (raw stats, level, experience, gold, vault gold, what the arena holds), inventory, equipment, skill loadout with ranks and edges, chosen traits, city, quest and craft progress, accessibility settings, world seed, trades (pending escrow and the settled journal), privacy (profile visibility on the user row, black lists in `blocks`) |
-| Redis (with TTL) | FSM state, current screen, active combat, the shared state of every location and who is standing in it, update deduplication, shop assortment cache |
+| Redis | FSM state (no TTL, deliberately), and with a TTL: current screen, active combat, the shared state of every location and who is standing in it, update deduplication, shop assortment cache |
 | Nowhere - recomputed | location layout, nodes, enemies, loot, total character stats, shop assortment (all pure functions of seed, wave and rotation) |
 
 Redis keys:
@@ -113,7 +113,12 @@ Redis keys:
 | `loc:{city}:{slot}:who` | who stands on which node | ten minutes |
 | `upd:{update_id}` | idempotency marker | 300 s |
 | `shop:{city}:{rotation}` | rolled assortment | until the shelf turns over |
-| `fsm:*` | aiogram `RedisStorage` | 7 days |
+| `fsm:*` | aiogram `RedisStorage` | none - see below |
+
+The FSM keys are the exception to "every key expires", and the eviction policy is
+why: Redis runs `volatile-lru`, which may only evict keys that carry a TTL. A
+player's position is what must never be forgotten under memory pressure, so it is
+stored without one and `RedisStorage` is left at its defaults.
 
 `APP_ENV=local` substitutes in-memory implementations of every port, so the bot
 runs with no external services at all. See `docs/adr/0005-in-memory-adapters.md`.
@@ -269,7 +274,7 @@ allocated stat points, level, experience, chosen traits, the skill loadout and
 equipment - and `mmorpg.domain.rules.stats` rebuilds the rest on demand:
 
 ```
-total = base + race + class + allocated + traits + equipped passives + equipment + active effects
+total = base + race + class + allocated + traits + learned passives + equipment + active effects
 ```
 
 Percentages from every source are summed first and applied once, so ordering
@@ -278,9 +283,10 @@ re-applying an effect refreshes its duration and never adds its modifiers twice
 (`tests/domain/test_effects.py`).
 
 Derived values: max health, max resource, armour, accuracy, dodge, crit chance,
-crit damage, initiative, resource regeneration and health regeneration. Dodge and
-crit chance are capped at 75 percent so no build turns combat into a coin that
-never lands.
+crit damage, initiative, resource regeneration and health regeneration. Dodge is
+capped at 75 percent, crit chance at 50 and crit damage at 250, so no build turns
+combat into a coin that never lands - uncapped, luck multiplied chance by damage
+and hit three times as hard as anything else.
 
 The experience curve is precomputed once at import for levels 1-300, so finding a
 level from an experience total is a binary search, not a loop.

@@ -5,7 +5,7 @@ hundred players can be left on.
 
 ## Three ways to run
 
-| | `Start.bat local` | `Start.bat solo` | `Start.bat` |
+| | `Start.bat local` | `Start.bat` (or `solo`) | `Start.bat docker` |
 | --- | --- | --- | --- |
 | Processes | one, on the host | one, on the host | PostgreSQL, Redis, migrations, bot |
 | Storage | in memory | PostgreSQL on this machine | PostgreSQL + Redis, on disk |
@@ -80,7 +80,7 @@ with Windows in `services.msc`.
 ## The Docker stack
 
 ```
-docker compose up -d          # or Start.bat
+docker compose up -d          # or Start.bat docker
 docker compose logs -f bot
 docker compose down           # or stop.bat
 ```
@@ -308,7 +308,7 @@ the file it is allowed to, which is the point of the split: a week of chatter is
 worth deleting, a failure is worth reading a year later.
 
 ```bash
-Get-Content logsellar.log -Tail 50 -Wait     # follow the game
+Get-Content logs\vellar.log -Tail 50 -Wait     # follow the game
 Select-String result=failed logs\important.log  # what broke, ever
 ```
 
