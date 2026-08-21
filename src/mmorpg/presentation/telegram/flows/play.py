@@ -1598,6 +1598,12 @@ def _handle_location(
         )
 
     for person in neighbours:
+        if screens.invite_label(person.name).matches(command.argument):
+            # Звать умеет только хендлер: отряд лежит в общем хранилище, а
+            # автомат ничего не читает и не пишет (``domain/rules/party.py``).
+            return replace(state, invite=person.character_id).with_notice(
+                f"Зов отправлен: {person.name}."
+            )
         if not screens.attack_label(person.name).matches(command.argument):
             continue
         refused = pvp_rules.refusal(

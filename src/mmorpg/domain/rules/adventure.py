@@ -15,7 +15,7 @@ import random
 from dataclasses import dataclass, replace
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.combat import CombatState
+from mmorpg.domain.entities.combat import BattleState
 from mmorpg.domain.entities.content import GameContent, ItemKind
 from mmorpg.domain.entities.location import LocationNode, NodeKind
 from mmorpg.domain.procgen.seeds import rng
@@ -102,24 +102,53 @@ class SearchResult:
         return self.level_up is not None and self.level_up.levels_gained > 0
 
 
-def carry_wounds(content: GameContent, character: Character, state: CombatState) -> Character:
-    """Write the health the fight ended with back onto the character."""
+def carry_wounds(
+    content: GameContent, character: Character, state: BattleState, combatant_id: int
+) -> Character:
+    """Записать на персонажа то здоровье, с которым он вышел из боя.
+
+    Ниже единицы оно не опускается. Павший в отряде, который бой всё-таки
+    выиграл, встаёт на ноги: персонаж с нулём здоровья не может ни драться, ни
+    дойти до лекаря, и это была бы не цена поражения, а тупик.
+    """
     stats = derived_stats(content, character)
-    return character.with_health(state.player.health, stats.max_health)
+    one = state.by_id(combatant_id)
+    health = one.health if one is not None else character.health_or(stats.max_health)
+    return character.with_health(max(1, health), stats.max_health)
 
 
-def resolve_victory(content: GameContent, character: Character, state: CombatState) -> Aftermath:
-    """Pay for a won fight: experience, gold, loot and contract counters."""
-    enemies = tuple(enemy.enemy for enemy in state.enemies)
-    log, steps = quest_rules.record_kills(content, character, enemies)
+def resolve_victory(
+    content: GameContent,
+    character: Character,
+    state: BattleState,
+    combatant_id: int,
+    *,
+    experience: int | None = None,
+    gold: int | None = None,
+    loot: tuple[str, ...] | None = None,
+) -> Aftermath:
+    """Заплатить за выигранный бой: опыт, золото, добыча и счёт по заданиям.
 
-    paid = replace(carry_wounds(content, character, state).with_gold(state.gold), quests=log)
-    grown, level_up = grant_experience(content, paid, state.experience)
+    Доли приходят снаружи: сколько именно досталось этому герою, решает отряд, а
+    не бой (``domain/rules/party.split``). Не переданы - значит герой дрался
+    один и забирает всё.
+    """
+    fallen = tuple(one.enemy for one in state.combatants if one.enemy is not None and not one.alive)
+    log, steps = quest_rules.record_kills(content, character, fallen)
+
+    share_gold = state.gold if gold is None else gold
+    share_experience = state.experience if experience is None else experience
+    share_loot = state.loot if loot is None else loot
+
+    paid = replace(
+        carry_wounds(content, character, state, combatant_id).with_gold(share_gold), quests=log
+    )
+    grown, level_up = grant_experience(content, paid, share_experience)
     return Aftermath(
         character=grown,
-        experience=earned(content, paid, state.experience),
-        gold=state.gold,
-        loot=state.loot,
+        experience=earned(content, paid, share_experience),
+        gold=share_gold,
+        loot=share_loot,
         level_up=level_up,
         quest_steps=steps,
     )

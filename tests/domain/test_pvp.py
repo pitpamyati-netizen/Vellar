@@ -1,4 +1,4 @@
-"""Fighting another player: who may, what it costs, and what a snapshot is."""
+"""Поединок с живым игроком: кому можно, чего стоит и как делится на отряды."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ from dataclasses import replace
 import pytest
 
 from mmorpg.domain.entities import Character, GameContent
-from mmorpg.domain.entities.location import EnemyKind, EnemyRank
+from mmorpg.domain.entities.combat import CombatantKind
 from mmorpg.domain.rules import pvp
-from mmorpg.domain.rules.stats import derived_stats
+from mmorpg.domain.rules.combat import hero_combatant
 
 
 @pytest.fixture
@@ -84,20 +84,62 @@ def test_the_bank_is_not_part_of_the_stake(veteran: Character) -> None:
     assert beaten.bank_gold == 5000
 
 
-def test_a_snapshot_is_exactly_as_strong_as_the_player(
+def test_a_live_opponent_is_a_fighter_and_not_a_copy(
     content: GameContent, veteran: Character
 ) -> None:
-    """No scaling, no handicap: the opponent is the character, as they stand."""
-    stats = derived_stats(content, veteran)
-    enemy = pvp.as_enemy(content, veteran)
+    """Никакого пересчёта и никакой форы: напротив стоит сам персонаж.
 
-    assert enemy.level == veteran.level
-    assert enemy.max_health == stats.max_health
-    assert enemy.armor == stats.armor
-    assert enemy.kind is EnemyKind.HUMANOID
-    # Another adventurer is not a boss: the fight lasts as long as any other.
-    assert enemy.rank is EnemyRank.NORMAL
-    # Nothing drops off a player: the stake is gold, and it is settled separately.
-    assert enemy.loot == ()
-    assert enemy.gold == 0
-    assert veteran.name in enemy.name
+    Слепка с выдуманным уроном больше нет вовсе - в бою стоит боец, за которым
+    либо живой игрок, либо движок, и дерётся он своим оружием (ADR 0021).
+    """
+    fighter = hero_combatant(content, veteran, combatant_id=2, side=1, live=True)
+
+    assert fighter.kind is CombatantKind.HERO
+    assert fighter.level == veteran.level
+    assert fighter.character_id == veteran.id
+    assert fighter.user_id == veteran.user_id, "живому игроку приходит его ход"
+    assert fighter.enemy is None, "у героя нет породы: у него персонаж"
+    assert fighter.race_kind == "humanoid"
+
+
+def test_a_fighter_the_engine_plays_gets_no_messages(
+    content: GameContent, veteran: Character
+) -> None:
+    """Слепок арены ходит сам, и писать ему некому."""
+    fighter = hero_combatant(content, veteran, combatant_id=2, side=1, live=False)
+    assert fighter.live is False
+    assert fighter.user_id == 0
+
+
+def test_a_busy_defender_is_refused(veteran: Character) -> None:
+    """В два боя сразу не зовут: ходы пришли бы на два экрана разом."""
+    refused = pvp.refusal(
+        veteran,
+        defender_name="Мерла",
+        defender_level=20,
+        location_allows=True,
+        defender_busy=True,
+    )
+    assert "уже в бою" in refused
+
+
+def test_sides_settle_as_sides(veteran: Character) -> None:
+    """Отряд против отряда платит как отряд, а не как четыре поединка."""
+    ally = replace(veteran, id=2, name="Тьен", gold=0)
+    first = replace(veteran, id=3, name="Мерла", gold=200)
+    second = replace(veteran, id=4, name="Корин", gold=100)
+
+    winners, losers, spoils = pvp.settle_sides((veteran, ally), (first, second))
+
+    assert spoils.gold == 30, "десятая доля с каждого проигравшего"
+    assert sum(one.gold for one in winners) == veteran.gold + 30
+    assert [one.gold for one in losers] == [180, 90]
+    # Делится поровну: пятнадцать и пятнадцать.
+    assert winners[1].gold == 15
+
+
+def test_settling_one_side_alone_moves_nothing(veteran: Character) -> None:
+    winners, losers, spoils = pvp.settle_sides((veteran,), ())
+    assert spoils.gold == 0
+    assert winners[0].gold == veteran.gold
+    assert losers == ()

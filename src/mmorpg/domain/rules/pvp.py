@@ -1,19 +1,22 @@
-"""Fighting another player on the road.
+"""Поединок: игрок против игрока, и оба ходят сами.
 
-Two decisions shape this module, and both come from ``docs/accessibility.md``:
+Здесь дерутся живые. Раньше на этом месте стоял слепок: бой шёл против копии
+чужих чисел, а сам противник узнавал о нападении из сообщения постфактум - так
+было потому, что второго игрока боевому движку было некуда положить. Теперь
+есть куда, и поединок стал тем, чем назывался: у обоих открывается панель боя,
+и ход ждёт того, чья очередь (ADR 0021).
 
-- **No timers.** A fight between two live players, turn by turn, needs both of
-  them at their phone and a clock to punish whoever is not. So an attack is
-  fought against a **snapshot** of the other character - their stats, their
-  health, their gear - driven by the ordinary combat engine. The attacker plays;
-  the defender is told what happened when they next open the game.
-- **Consent is not asked, but it is bounded.** In a location marked ``pvp`` any
-  player standing on your node may attack you. What keeps that from being a tax
-  on newcomers is the fence below: a level floor, a narrow level window, and a
-  price that is paid out of what you are carrying, never out of the bank.
+Что осталось прежним - границы. В локации, помеченной ``pvp``, напасть может
+всякий, кто стоит на вашем узле, и защищает от этого не согласие, а забор:
+нижний уровень, узкое окно уровней и ставка, которая берётся из кармана, а не
+из банка.
 
-The stake is deliberately small. Losing costs a tenth of the gold on hand and the
-wounds of the fight; it never costs a level, an item or a contract.
+Ставка нарочно мала. Проигрыш стоит десятой доли золота на руках и ран этого
+боя; он никогда не стоит уровня, вещи или задания.
+
+Ждать никого не нужно, и это не оговорка: очередь стоит столько, сколько
+стоит, а тот, кто ждать больше не хочет, отдаёт бой кнопкой «Сдаться».
+Таймера, наказывающего того, кто отошёл, в игре по-прежнему нет.
 """
 
 from __future__ import annotations
@@ -21,25 +24,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import GameContent
-from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
-from mmorpg.domain.rules.stats import derived_stats
+from mmorpg.domain.rules.party import split
 
-# Below this level nobody attacks and nobody is attacked. A character who has not
-# yet filled their panel has nothing to defend themselves with, and losing their
-# first hundred gold to somebody twice their size is how a player leaves for good.
+# Ниже этого уровня никто не нападает и никого не трогают. Персонаж, у которого
+# ещё не собрана панель, защищаться нечем, а потерянная первая сотня золота -
+# это то, после чего игрок уходит насовсем.
 SAFE_LEVEL = 10
-# How far apart two levels may be. Wide enough that friends of different levels
-# can spar, narrow enough that nobody farms the bottom of their own band.
+# Насколько далеко могут разойтись уровни. Достаточно широко, чтобы приятели
+# разных уровней могли размяться, достаточно узко, чтобы никто не пас низ своей
+# же полосы.
 LEVEL_WINDOW = 5
-# What the winner takes: a tenth of the gold the loser is carrying. The bank is
-# untouchable, which is the whole reason the bank exists.
+# Что забирает победивший: десятую долю золота на руках проигравшего. Банк
+# неприкосновенен, и ради этого банк и заведён.
 SPOILS_PERCENT = 10
 
 
 @dataclass(frozen=True, slots=True)
 class Spoils:
-    """What one settled attack moved between two characters."""
+    """Что один законченный поединок передвинул между кошельками."""
 
     gold: int = 0
     experience: int = 0
@@ -51,11 +53,13 @@ def refusal(
     defender_name: str,
     defender_level: int,
     location_allows: bool,
+    defender_busy: bool = False,
+    defender_away: bool = False,
 ) -> str:
-    """Empty when the attack may happen, otherwise the reason it may not.
+    """Пусто, когда нападать можно, иначе - причина, по которой нельзя.
 
-    The reason is a full sentence: a refusal a player cannot read is a bug that
-    looks like a rule.
+    Причина - целая фраза: отказ, которого игрок не может прочитать, - это баг,
+    выглядящий как правило.
     """
     if not location_allows:
         return "Здесь не дерутся друг с другом. Поединки разрешены не везде."
@@ -68,48 +72,27 @@ def refusal(
             f"Разница уровней больше {LEVEL_WINDOW}: "
             f"ваш {attacker.level}, у {defender_name} {defender_level}."
         )
+    if defender_busy:
+        # Драться сразу в двух боях нельзя: ходы пришли бы на два экрана сразу,
+        # и оба слышались бы как один.
+        return f"{defender_name} уже в бою. Дождитесь, чем это кончится."
+    if defender_away:
+        return f"{defender_name} только что ушёл отсюда."
     return ""
 
 
 def spoils_from(loser_gold: int) -> int:
-    """A tenth of what is on hand, and nothing at all from an empty purse."""
+    """Десятая доля того, что на руках, и ничего вовсе из пустого кармана."""
     return max(0, loser_gold) * SPOILS_PERCENT // 100
-
-
-def as_enemy(content: GameContent, character: Character) -> Enemy:
-    """A character as the combat engine sees an opponent.
-
-    Everything is read from the same totals the character fights with, so the
-    snapshot is exactly as strong as the player it copies - no scaling, no
-    handicap. The rank is ordinary: another adventurer is not a boss, and a fight
-    against one should last about as long as a fight against anything else.
-    """
-    stats = derived_stats(content, character)
-    klass = content.character_class(character.class_id)
-    # The damage of one standard blow, the same number the skill screen quotes.
-    damage = 6.0 + 2.2 * character.level
-    return Enemy(
-        archetype_id=f"player:{character.id}",
-        name=f"{character.name}, {klass.name.lower()}",
-        kind=EnemyKind.HUMANOID,
-        level=character.level,
-        max_health=stats.max_health,
-        damage=max(1, round(damage)),
-        armor=stats.armor,
-        initiative=stats.initiative,
-        loot=(),
-        gold=0,
-        rank=EnemyRank.NORMAL,
-    )
 
 
 def settle(
     winner: Character, loser: Character, *, experience: int = 0
 ) -> tuple[Character, Character, Spoils]:
-    """Move the stake. Returns both characters and what changed hands.
+    """Передвинуть ставку. Возвращает обоих и то, что перешло из рук в руки.
 
-    Nothing here touches health: the fight already wrote the wounds, and the
-    loser keeps everything except the coins in their pocket.
+    Здоровья это не касается: раны уже записал бой, а проигравший теряет всё,
+    кроме монет в кармане.
     """
     gold = spoils_from(loser.gold)
     return (
@@ -117,3 +100,27 @@ def settle(
         loser.with_gold(-gold),
         Spoils(gold=gold, experience=experience),
     )
+
+
+def settle_sides(
+    winners: tuple[Character, ...], losers: tuple[Character, ...]
+) -> tuple[tuple[Character, ...], tuple[Character, ...], Spoils]:
+    """То же самое, когда сторон больше одной с каждой стороны.
+
+    С каждого проигравшего берётся его десятая доля, и всё вместе делится между
+    победившими поровну: отряд, пошедший на отряд, платит и получает как отряд, а
+    не как четыре отдельных поединка (``domain/rules/party.split``).
+    """
+    if not winners or not losers:
+        return winners, losers, Spoils()
+
+    taken = 0
+    lightened: list[Character] = []
+    for one in losers:
+        gold = spoils_from(one.gold)
+        taken += gold
+        lightened.append(one.with_gold(-gold))
+
+    shares = split(taken, len(winners))
+    paid = tuple(one.with_gold(share) for one, share in zip(winners, shares, strict=True))
+    return paid, tuple(lightened), Spoils(gold=taken)

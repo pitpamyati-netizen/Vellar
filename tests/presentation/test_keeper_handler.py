@@ -35,7 +35,10 @@ from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeStatus
 from mmorpg.domain.ports.repositories import User as Account
 from mmorpg.domain.rules.keeper import GOLD_STEP
-from mmorpg.infrastructure.cache.memory import InMemoryLocationStateCache
+from mmorpg.infrastructure.cache.memory import (
+    InMemoryLocationStateCache,
+    InMemoryStateCache,
+)
 from mmorpg.infrastructure.persistence.memory import (
     InMemoryCharacterRepository,
     InMemoryContentOverlayRepository,
@@ -128,6 +131,7 @@ class Keeper:
                 self.deps["overlays"],
                 self.deps["registry"],
                 self.deps["trades"],
+                self.deps["cache"],
             )
         return self.sent.last
 
@@ -222,6 +226,7 @@ async def keeper(
         overlays=overlays,
         registry=registry,
         trades=trades,
+        cache=InMemoryStateCache(),
     )
 
 
@@ -640,6 +645,7 @@ async def test_a_player_who_is_not_a_keeper_gets_nothing_from_the_panel(
         overlays,
         registry,
         InMemoryTradeRepository(),
+        InMemoryStateCache(),
     )
 
     assert sent.last.id is ScreenId.MAIN_MENU

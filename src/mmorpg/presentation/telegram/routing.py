@@ -30,6 +30,12 @@ class Intent(StrEnum):
     RACIAL = "racial"
     BAG = "bag"
     FLEE = "flee"
+    YIELD = "yield"
+    REFRESH = "refresh"
+    PARTY = "party"
+    PARTY_ACCEPT = "party_accept"
+    PARTY_DECLINE = "party_decline"
+    PARTY_LEAVE = "party_leave"
     PAGE = "page"
     NEXT_PAGE = "next_page"
     PREVIOUS_PAGE = "previous_page"
@@ -61,6 +67,14 @@ SIMPLE_COMMANDS: dict[str, Intent] = {
     "/bag": Intent.BAG,
     "/бежать": Intent.FLEE,
     "/flee": Intent.FLEE,
+    # Выход из боя, который бросили с той стороны, и способ услышать его заново.
+    "/сдаться": Intent.YIELD,
+    "/yield": Intent.YIELD,
+    "/обновить": Intent.REFRESH,
+    "/refresh": Intent.REFRESH,
+    # Отряд: одна команда на всё, что с ним делают.
+    "/отряд": Intent.PARTY,
+    "/party": Intent.PARTY,
     # Списки: то же, что три кнопки под страницами, но набором.
     "/поиск": Intent.SEARCH,
     "/search": Intent.SEARCH,
@@ -86,6 +100,21 @@ _COMBAT_WORDS: dict[str, Intent] = {
     "bag": Intent.BAG,
     "бежать": Intent.FLEE,
     "flee": Intent.FLEE,
+    "сдаться": Intent.YIELD,
+    "yield": Intent.YIELD,
+    "обновить": Intent.REFRESH,
+    "refresh": Intent.REFRESH,
+}
+
+#: Слова после ``/отряд``: принять зов, уйти, посмотреть.
+_PARTY_COMMAND = re.compile(r"^/(?:отряд|party)\s+(\S+)$", re.IGNORECASE)
+_PARTY_WORDS: dict[str, Intent] = {
+    "принять": Intent.PARTY_ACCEPT,
+    "accept": Intent.PARTY_ACCEPT,
+    "отказать": Intent.PARTY_DECLINE,
+    "decline": Intent.PARTY_DECLINE,
+    "уйти": Intent.PARTY_LEAVE,
+    "leave": Intent.PARTY_LEAVE,
 }
 
 
@@ -105,6 +134,12 @@ def parse_command(text: str) -> Command | None:
     if (match := _PAGE_COMMAND.match(stripped)) is not None:
         return Command(intent=Intent.PAGE, number=int(match.group(1)))
 
+    if (match := _PARTY_COMMAND.match(stripped)) is not None:
+        word = match.group(1).casefold()
+        if word in _PARTY_WORDS:
+            return Command(intent=_PARTY_WORDS[word])
+        return Command(intent=Intent.PARTY, argument=word)
+
     if (match := _COMBAT_COMMAND.match(stripped)) is not None:
         word = match.group(1).casefold()
         if word in _COMBAT_WORDS:
@@ -121,6 +156,11 @@ _BUTTON_INTENTS: tuple[tuple[object, Intent], ...] = (
     (labels.ATTACK, Intent.ATTACK),
     (labels.BAG, Intent.BAG),
     (labels.FLEE, Intent.FLEE),
+    (labels.BATTLE_YIELD, Intent.YIELD),
+    (labels.BATTLE_REFRESH, Intent.REFRESH),
+    (labels.PARTY_ACCEPT, Intent.PARTY_ACCEPT),
+    (labels.PARTY_DECLINE, Intent.PARTY_DECLINE),
+    (labels.PARTY_LEAVE, Intent.PARTY_LEAVE),
     (labels.NEXT_PAGE, Intent.NEXT_PAGE),
     (labels.PREVIOUS_PAGE, Intent.PREVIOUS_PAGE),
     (labels.SEARCH, Intent.SEARCH),

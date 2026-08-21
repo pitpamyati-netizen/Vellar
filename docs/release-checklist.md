@@ -29,6 +29,9 @@ still has to check:
       actions stay in place and explain themselves in the body
 - [ ] Pressing a button from a *different* screen produces the "action unavailable"
       answer, not silence and not a crash
+- [ ] **A duel is heard from both sides**: attack a second account, and check that
+      the panel opens there too, that each turn arrives as its own message, and
+      that «Сдаться» ends a fight the other side never answers (ADR 0021)
 - [ ] Listen to one full session with a screen reader before shipping
 
 ## 3. Content

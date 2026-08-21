@@ -219,6 +219,9 @@ class PlayState:
     # Transient: cleared at the start of every step, read by the handler.
     pending: PendingWrite = field(default_factory=PendingWrite)
     fight: str = ""
+    #: Кого шаг попросил позвать в отряд. Переходное, как и ``fight``: хендлер
+    #: читает и обнуляет, потому что звать умеет только он (``rules/party.py``).
+    invite: int = 0
 
     def at(self, screen: ScreenId) -> PlayState:
         return replace(self, screen=screen, stack=self.stack.push(screen), notice="")

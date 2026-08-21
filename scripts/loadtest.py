@@ -34,12 +34,12 @@ from contextlib import AsyncExitStack
 
 from mmorpg.config import AppEnv, Settings, load_settings
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.combat import ActionKind, CombatAction
+from mmorpg.domain.entities.combat import ActionKind, BattleAction
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.ports.repositories import CharacterRepository, UserRepository
 from mmorpg.domain.ports.repositories import User as Account
 from mmorpg.domain.procgen.seeds import derive
-from mmorpg.domain.rules.combat import resolve_turn, start_combat
+from mmorpg.domain.rules.combat import act, hero_combatant, monster_combatant, open_battle
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.infrastructure.content import load_content
 from mmorpg.metrics import Metrics, Stopwatch
@@ -108,14 +108,22 @@ async def one_player(
                 biome=content.cities[index % len(content.cities)].locations[0].biome,
                 level=read.level,
             )
-            fight = start_combat(content, read, enemies)
-            while not fight.is_over and fight.turn <= TURN_CEILING:
-                fight = resolve_turn(
+            roster = {1: read}
+            fighters = [
+                hero_combatant(content, read, combatant_id=1, side=0, live=True),
+                *(
+                    monster_combatant(enemy, combatant_id=number + 2, side=1)
+                    for number, enemy in enumerate(enemies)
+                ),
+            ]
+            fight = open_battle(content, roster, fighters, spot)
+            while not fight.is_over and fight.round <= TURN_CEILING:
+                fight = act(
                     content,
-                    read,
+                    roster,
                     fight,
-                    CombatAction(kind=ActionKind.ATTACK),
-                    derive(spot, "turn", fight.turn),
+                    BattleAction(kind=ActionKind.ATTACK),
+                    derive(spot, "turn", fight.round),
                 )
         except Exception:
             failures += 1

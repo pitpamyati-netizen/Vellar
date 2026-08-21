@@ -12,7 +12,12 @@ from dataclasses import replace
 import pytest
 
 from mmorpg.domain.entities import Character, GameContent, QuestLog
-from mmorpg.domain.entities.combat import CombatOutcome, CombatState, EnemyState, PlayerState
+from mmorpg.domain.entities.combat import (
+    BattleOutcome,
+    BattleState,
+    Combatant,
+    CombatantKind,
+)
 from mmorpg.domain.entities.content import ItemKind
 from mmorpg.domain.entities.location import (
     Enemy,
@@ -55,19 +60,40 @@ def a_wolf(*, elite: bool = False) -> Enemy:
     )
 
 
-def a_won_fight(content: GameContent, hero: Character, *, health: int = 30) -> CombatState:
+def a_won_fight(content: GameContent, hero: Character, *, health: int = 30) -> BattleState:
+    """Бой, который уже кончился победой: герой ранен, волк повержен."""
     stats = derived_stats(content, hero)
-    return CombatState(
-        player=PlayerState(
-            name=hero.name,
-            health=health,
-            max_health=stats.max_health,
-            resource=10,
-            max_resource=stats.max_resource,
-            resource_name=stats.resource_name,
+    wolf = a_wolf()
+    return BattleState(
+        combatants=(
+            Combatant(
+                id=1,
+                side=0,
+                kind=CombatantKind.HERO,
+                name=hero.name,
+                level=hero.level,
+                max_health=stats.max_health,
+                health=health,
+                max_resource=stats.max_resource,
+                resource=10,
+                resource_name=stats.resource_name,
+                live=True,
+                character_id=hero.id,
+            ),
+            Combatant(
+                id=2,
+                side=1,
+                kind=CombatantKind.MONSTER,
+                name=wolf.name,
+                level=wolf.level,
+                max_health=wolf.max_health,
+                health=0,
+                enemy=wolf,
+            ),
         ),
-        enemies=(replace(EnemyState.spawn(a_wolf(), 0), health=0),),
-        outcome=CombatOutcome.VICTORY,
+        order=(1,),
+        outcome=BattleOutcome.DECIDED,
+        winner=0,
         experience=400,
         gold=25,
         loot=("wolf_pelt",),
@@ -82,7 +108,7 @@ def a_node(kind: NodeKind, level: int = 5) -> LocationNode:
 
 
 def test_a_won_fight_pays_and_can_raise_a_level(content: GameContent, hero: Character) -> None:
-    result = adventure.resolve_victory(content, hero, a_won_fight(content, hero))
+    result = adventure.resolve_victory(content, hero, a_won_fight(content, hero), 1)
     assert result.gold == 25
     assert result.character.gold == hero.gold + 25
     # Названо то, что записано: у человека расовая прибавка к опыту, и отчёт о
@@ -103,19 +129,19 @@ def test_a_won_fight_reports_the_experience_it_actually_gave(
     экране и 420 в базе - это та же ложь, что и прибавка, которой никто не
     считает (``Claude.md``, правило 7)."""
     plain = replace(hero, race_id="dwarf")
-    result = adventure.resolve_victory(content, plain, a_won_fight(content, plain))
+    result = adventure.resolve_victory(content, plain, a_won_fight(content, plain), 1)
     assert result.experience == 400
     assert result.character.experience == plain.experience + 400
 
 
 def test_wounds_are_carried_out_of_the_fight(content: GameContent, hero: Character) -> None:
-    result = adventure.resolve_victory(content, hero, a_won_fight(content, hero, health=17))
+    result = adventure.resolve_victory(content, hero, a_won_fight(content, hero, health=17), 1)
     assert result.character.health == 17
 
 
 def test_a_won_fight_moves_the_contract_counter(content: GameContent, hero: Character) -> None:
     hunting = replace(hero, quests=QuestLog(taken={"farhold_meadow_teeth": 0}))
-    result = adventure.resolve_victory(content, hunting, a_won_fight(content, hunting))
+    result = adventure.resolve_victory(content, hunting, a_won_fight(content, hunting), 1)
     assert result.character.quests.progress("farhold_meadow_teeth") == 1
     assert result.quest_steps and result.quest_steps[0].progress == 1
 

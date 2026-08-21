@@ -137,6 +137,14 @@ def deltas() -> Any:
 
 
 @pytest.fixture
+def cache() -> Any:
+    """Общее хранилище: в нём лежат бой и отряд (ADR 0021)."""
+    from mmorpg.infrastructure.cache.memory import InMemoryStateCache
+
+    return InMemoryStateCache()
+
+
+@pytest.fixture
 async def argus(characters: InMemoryCharacterRepository) -> Character:
     return await characters.create(
         Character(
@@ -195,6 +203,7 @@ class Player:
                 self.deps["characters"],
                 self.deps["inventory"],
                 self.deps["deltas"],
+                self.deps["cache"],
             )
         else:
             await play_handler.play(
@@ -210,6 +219,7 @@ class Player:
                 self.deps["overlays"],
                 self.deps["registry"],
                 self.deps["trades"],
+                self.deps["cache"],
             )
         return self.sent.last
 
@@ -227,6 +237,7 @@ async def player(
     inventory: InMemoryInventoryRepository,
     users: InMemoryUserRepository,
     deltas: Any,
+    cache: Any,
     overlays: InMemoryContentOverlayRepository,
     registry: ContentRegistry,
     argus: Character,
@@ -244,6 +255,7 @@ async def player(
         overlays=overlays,
         registry=registry,
         trades=InMemoryTradeRepository(),
+        cache=cache,
     )
 
 
@@ -292,7 +304,7 @@ async def test_a_battle_node_actually_starts_a_fight(player: Player, content: Ga
     await walk_to(player, content, NodeKind.BATTLE)
     screen = await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
     assert screen.id is ScreenId.COMBAT
-    assert screen.text().startswith("Бой. Ход 1.")
+    assert screen.text().startswith("Бой. Круг 1.")
     # The first button is the plain attack; its label now names the tag it leaves.
     assert next(row[0].text for row in screen.rows).startswith("Атака")
 
@@ -658,6 +670,7 @@ async def test_what_one_player_took_is_gone_for_everybody(
             overlays,
             registry,
             InMemoryTradeRepository(),
+            cache,
         )
     data = await second_state.get_data()
     theirs = PlayState.deserialise(data["play"])

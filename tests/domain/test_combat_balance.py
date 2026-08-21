@@ -32,9 +32,10 @@ from mmorpg.domain.entities import (
 from mmorpg.domain.entities.combat import (
     ActionKind,
     ActionTag,
-    CombatAction,
-    CombatOutcome,
-    CombatState,
+    BattleAction,
+    BattleState,
+    Combatant,
+    Verdict,
     counter_to,
 )
 from mmorpg.domain.entities.location import EnemyRank
@@ -44,10 +45,12 @@ from mmorpg.domain.procgen.seeds import derive
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules.combat import (
     _check_outcome,
+    act,
     blow_of,
-    enemy_intent,
-    resolve_turn,
-    start_combat,
+    hero_combatant,
+    intent_of,
+    monster_combatant,
+    open_battle,
 )
 from mmorpg.domain.rules.skill_effects import EffectCategory, spec_for, tag_of_skill
 from mmorpg.domain.rules.stats import derived_stats, stat_allowance
@@ -85,8 +88,15 @@ RUN_LENGTH_FLOOR = 4
 #: превращалось в «мага держал именно этот бой». Доля считается по всем классам
 #: разом - ровно потому же, почему по ним разом считается цена боя: латы и
 #: должны доходить чаще рясы, и вопрос только в том, доходит ли вылазка.
-RUN_TRIALS = 12
+RUN_TRIALS = 16
 RUN_SURVIVAL = 0.7
+#: Сколько боёв из двадцати обычный герой обязан выиграть. Не все двадцать: с
+#: тех пор как урон бросается костями (ADR 0015), а очередь решается инициативой
+#: (ADR 0021), у боя есть хвост - двое быстрых противников на хрупком классе
+#: складываются в проигрыш примерно раз в двадцать боёв. Обещание игры - «бой,
+#: который мир кладёт перед тобой, выигрывается», а не «выигрывается, что бы ни
+#: выпало»: второе значило бы, что бросок ничего не решает.
+ORDINARY_WINS = 0.95
 #: How much faster reading the announced intent may make a fight. It has to pay
 #: (``test_reading_the_intent_shortens_the_fight``), and it has to stay a way of
 #: fighting well rather than the only fight that exists.
@@ -188,8 +198,28 @@ def build(content: GameContent, class_id: str, level: int) -> Character:
     )
 
 
-def _options(content: GameContent, character: Character, state: CombatState) -> list[CombatAction]:
-    actions = [CombatAction(kind=ActionKind.ATTACK)]
+def open_fight(
+    content: GameContent, character: Character, enemies: tuple[object, ...]
+) -> BattleState:
+    """Один герой против стаи: номер героя 1, противники со второго."""
+    fighters = [
+        hero_combatant(content, character, combatant_id=1, side=0, live=True),
+        *(
+            monster_combatant(one, combatant_id=index + 2, side=1)  # type: ignore[arg-type]
+            for index, one in enumerate(enemies)
+        ),
+    ]
+    return open_battle(content, {1: character}, fighters, b"balance-seed")
+
+
+def hero(state: BattleState) -> Combatant:
+    one = state.by_id(1)
+    assert one is not None
+    return one
+
+
+def _options(content: GameContent, character: Character, state: BattleState) -> list[BattleAction]:
+    actions = [BattleAction(kind=ActionKind.ATTACK)]
     for slot, code in enumerate(character.loadout.actives):
         if code is None:
             continue
@@ -199,19 +229,19 @@ def _options(content: GameContent, character: Character, state: CombatState) -> 
         # который каждый ход жмёт наугад.
         if gear.skill_refusal(content, character, skill):
             continue
-        if state.player.cooldown_of(code) == 0 and skill.cost <= state.player.resource:
-            actions.append(CombatAction(kind=ActionKind.SKILL, slot=slot))
+        if hero(state).cooldown_of(code) == 0 and skill.cost <= hero(state).resource:
+            actions.append(BattleAction(kind=ActionKind.SKILL, slot=slot))
     return actions
 
 
 def _value(
-    content: GameContent, character: Character, state: CombatState, action: CombatAction
+    content: GameContent, character: Character, state: BattleState, action: BattleAction
 ) -> float:
     """Roughly what this action is worth this turn, in damage and in tempo."""
-    enemies = state.living_enemies
+    enemies = state.foes_of(1)
     if not enemies:
         return 0.0
-    blow = blow_of(content, character, state.player.effects)
+    blow = blow_of(content, character, hero(state).effects)
 
     if action.kind is ActionKind.ATTACK:
         tag, worth = ActionTag.PRESS, blow
@@ -226,14 +256,15 @@ def _value(
         else:
             # Support is worth what it saves: nothing at full health, a blow and
             # a half when the fight is nearly lost.
-            missing = 1.0 - state.player.health / state.player.max_health
+            missing = 1.0 - hero(state).health / hero(state).max_health
             worth = blow * 1.5 * missing
 
-    if tag is counter_to(enemy_intent(enemies[0], state.turn)):
+    announced = intent_of(state, enemies[0])
+    if announced is not None and tag is counter_to(announced):
         worth *= 1.5
-    if state.trace.last is tag:
+    if hero(state).trace.last is tag:
         worth *= 1.3
-    if state.trace.breaks_with(tag):
+    if hero(state).trace.breaks_with(tag):
         worth *= 1.4
     return worth
 
@@ -242,7 +273,7 @@ class FightResult(NamedTuple):
     """One simulated fight, in the three numbers the promises are about."""
 
     turns: int
-    outcome: CombatOutcome
+    outcome: Verdict
     health_left: int
     health_start: int
 
@@ -270,8 +301,8 @@ def fight(
         rank=rank,
         elite_titles=content.elite_titles,
     )
-    state = start_combat(content, character, enemies)
-    started_with = state.player.health
+    state = open_fight(content, character, enemies)
+    started_with = hero(state).health
     turn = 0
     while not state.is_over and turn < 60:
         turn += 1
@@ -281,10 +312,10 @@ def fight(
                 key=lambda a: _value(content, character, state, a),
             )
             if clever
-            else CombatAction(kind=ActionKind.ATTACK)
+            else BattleAction(kind=ActionKind.ATTACK)
         )
-        state = resolve_turn(content, character, state, action, derive(seed, "turn", turn))
-    return FightResult(turn, state.outcome, state.player.health, started_with)
+        state = act(content, {1: character}, state, action, derive(seed, "turn", turn))
+    return FightResult(turn, state.verdict_for(1), hero(state).health, started_with)
 
 
 def trials(
@@ -324,7 +355,8 @@ def test_an_ordinary_fight_at_your_own_level_is_won(
     """A fight the world hands you is not a coin flip. Losing is for the tiers
     that announce themselves as long."""
     results = trials(content, class_id, level, rank=EnemyRank.NORMAL)
-    assert all(result.outcome is CombatOutcome.VICTORY for result in results)
+    won = sum(1 for result in results if result.outcome is Verdict.VICTORY)
+    assert won >= ORDINARY_WINS * len(results), f"{class_id} at {level}: won {won}/{len(results)}"
 
 
 def test_the_long_tiers_are_the_only_long_fights(content: GameContent) -> None:
@@ -374,7 +406,7 @@ def _walk(content: GameContent, class_id: str, offset: int) -> tuple[bool, float
         result = fight(
             content, character, rank=EnemyRank.NORMAL, trial=offset * RUN_LENGTH_FLOOR + step
         )
-        if result.outcome is not CombatOutcome.VICTORY:
+        if result.outcome is not Verdict.VICTORY:
             return False, 0.0
         character = character.with_health(result.health_left, stats.max_health)
     return True, character.health / stats.max_health
@@ -478,9 +510,11 @@ def test_a_pack_pays_like_one_fight_because_it_is_one_fight(content: GameContent
             )
             for index in range(members)
         )
-        state = start_combat(content, character, pack)
-        state = replace(state, enemies=tuple(replace(one, health=0) for one in state.enemies))
-        done = _check_outcome(content, character, state)
+        state = open_fight(content, character, pack)
+        for one in state.combatants:
+            if not one.is_hero:
+                state = state.replace_combatant(replace(one, health=0))
+        done = _check_outcome(content, {1: character}, state)
         return done.experience, done.gold
 
     alone_xp, alone_gold = paid(1)

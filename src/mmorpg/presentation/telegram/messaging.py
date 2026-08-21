@@ -11,6 +11,7 @@ aloud by screen readers (rule 14).
 from __future__ import annotations
 
 from aiogram import Bot
+from aiogram.exceptions import TelegramAPIError
 from aiogram.types import Message, ReplyKeyboardMarkup, ReplyKeyboardRemove, ReplyParameters
 
 from mmorpg.presentation.telegram.keyboards.reply import (
@@ -29,6 +30,28 @@ async def send_screen(message: Message, screen: Screen, *, emoji: bool = False) 
         reply_markup=keyboard_for(screen, emoji=emoji),
         parse_mode=None,
     )
+
+
+async def push_screen(bot: Bot, chat_id: int, screen: Screen, *, emoji: bool = False) -> bool:
+    """Отправить экран тому, кто сейчас не нажимал ничего.
+
+    Так приходит чужой ход в поединке: игрок не спрашивал, но узнать обязан, а
+    другого способа сказать ему об этом нет - редактировать сообщения игра не
+    умеет и не будет (``docs/accessibility.md``, правило 2).
+
+    Ложь в ответе значит «не дошло»: заблокировал бота, удалил чат, не начинал
+    его. Бой из-за этого не падает - у оставшегося есть «Сдаться».
+    """
+    try:
+        await bot.send_message(
+            chat_id=chat_id,
+            text=screen.body(),
+            reply_markup=keyboard_for(screen, emoji=emoji),
+            parse_mode=None,
+        )
+    except TelegramAPIError:
+        return False
+    return True
 
 
 async def send_text(message: Message, text: str, screen: Screen, *, emoji: bool = False) -> None:

@@ -92,17 +92,33 @@ without a restart, and dropping it rebuilds the world from the untouched origina
 rather than undoing anything. See `docs/keeper.md`.
 
 A fight is the one thing the play flow hands over rather than resolves: pressing
-"Вступить в бой" sets `PlayState.fight`, and the fight handler generates the
-opponents from the node seed, keeps the fight in FSM data, and pays out the
-result (`handlers/combat.py`). It is registered **before** the play router,
-because the play router filters on the whole `Play` state group.
+"Вступить в бой" sets `PlayState.fight`, and the fight handler builds the sides,
+generates the opponents from the node seed and pays out the result
+(`handlers/combat.py`). It is registered **before** the play router, because the
+play router filters on the whole `Play` state group.
+
+The fight itself is **one record shared by everybody in it**
+(`application/services/battle.py`), not a copy in each player's FSM data: a duel
+between two people cannot have two truths about whose health is whose
+(ADR 0021). FSM data holds only the battle's id; the record holds the sides, the
+queue and every fighter. The same record carries "this character is busy", which
+is what keeps anyone from being pulled into a second fight.
+
+One engine runs all of it (`domain/rules/combat.py`): a fight is two sides and a
+queue ordered by initiative, and the difference between a wolf, a live player and
+a character the engine plays for (the arena's opponent) is two flags on
+`Combatant`. One call to `act` resolves the turn of whoever is next and then
+plays out everyone the engine speaks for, stopping when the queue reaches a live
+player. That player is waited on indefinitely - there are no timers anywhere -
+and the way out of a fight nobody answers is the «Сдаться» button, which hands
+the fight over.
 
 ## Storage split
 
 | Where | What |
 | --- | --- |
 | PostgreSQL | users, characters (raw stats, level, experience, gold, vault gold, what the arena holds), inventory, equipment, skill loadout with ranks and edges, chosen traits, city, quest and craft progress, accessibility settings, world seed, trades (pending escrow and the settled journal), privacy (profile visibility on the user row, black lists in `blocks`) |
-| Redis | FSM state (no TTL, deliberately), and with a TTL: current screen, active combat, the shared state of every location and who is standing in it, update deduplication, shop assortment cache |
+| Redis | FSM state (no TTL, deliberately), and with a TTL: current screen, the active fight and who is in it, parties and their calls, the shared state of every location and who is standing in it, update deduplication, shop assortment cache |
 | Nowhere - recomputed | location layout, nodes, enemies, loot, total character stats, shop assortment (all pure functions of seed, wave and rotation) |
 
 Redis keys:
@@ -113,6 +129,10 @@ Redis keys:
 | `loc:{city}:{slot}:who` | who stands on which node | ten minutes |
 | `upd:{update_id}` | idempotency marker | 300 s |
 | `shop:{city}:{rotation}` | rolled assortment | until the shelf turns over |
+| `battle:{id}` | one fight, shared by every participant | an hour |
+| `battle-of:{character}` | which fight this character stands in | an hour |
+| `party:{leader}` / `party-of:{character}` | who walks together | two hours |
+| `party-call:{character}` | an unanswered call into a party | five minutes |
 | `fsm:*` | aiogram `RedisStorage` | none - see below |
 
 The FSM keys are the exception to "every key expires", and the eviction policy is

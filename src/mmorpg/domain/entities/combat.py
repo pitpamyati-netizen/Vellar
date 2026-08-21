@@ -1,11 +1,19 @@
-"""Combat state.
+"""Бой: стороны, бойцы, очередь.
 
-Combat is strictly turn-based and has **no real-time component**: the state simply
-waits for the player's action for as long as it takes (accessibility rule 13).
+Бой в Велларе один на все случаи: узел локации, спуск, арена, поединок на
+вольной земле, отряд против стаи и отряд против отряда - это одна и та же
+сущность с разным составом сторон. Раньше их было две - «игрок» и «враги», - и
+всё, что не укладывалось в одного игрока, укладывалось в подделку: чужой
+персонаж приходил в бой слепком, потому что второго игрока движку было некуда
+положить (ADR 0021).
 
-Every state object is immutable; resolving a turn returns a new state plus the
-events that happened. Events are structured, not prose - the presentation layer
-turns them into Russian sentences, so the domain stays free of interface text.
+Здесь второго игрока есть куда положить. :class:`Combatant` - это боец, и
+разница между героем и волком в нём одна: за героем стоит персонаж, а за волком
+- порода. Разница между живым игроком и слепком тоже одна: у живого ход ждёт
+нажатия, за слепком ходит движок.
+
+Всё неизменяемо: ход возвращает новое состояние и список того, что случилось.
+События машинные, не словесные, - русские фразы пишет слой представления.
 """
 
 from __future__ import annotations
@@ -16,10 +24,37 @@ from enum import StrEnum
 from types import MappingProxyType
 
 from mmorpg.domain.entities.effects import EffectStack
-from mmorpg.domain.entities.location import Enemy
+from mmorpg.domain.entities.location import DamageElement, Enemy, EnemyKind, EnemyRank
+
+#: Сколько бойцов помещается на одной стороне. Четверо: столько строк экрана
+#: слушается за раз, и столько имён игрок держит в голове (``docs/accessibility``).
+MAX_SIDE = 4
+
+#: Две стороны, и больше их не бывает: «все против всех» - это не бой, а
+#: сообщение об ошибке, прочитанное вслух.
+ATTACKERS = 0
+DEFENDERS = 1
 
 
-class CombatOutcome(StrEnum):
+class BattleOutcome(StrEnum):
+    """Чем кончился бой - для боя целиком, а не для одной его стороны."""
+
+    ONGOING = "ongoing"
+    #: Одна сторона повержена. Кто именно - в ``BattleState.winner``.
+    DECIDED = "decided"
+    #: Сторона вышла из боя: сбежала, сдалась или ушла со связи.
+    FLED = "fled"
+    #: Разошлись миром - умением, которое кончает бой разговором.
+    AVOIDED = "avoided"
+
+    @property
+    def is_over(self) -> bool:
+        return self is not BattleOutcome.ONGOING
+
+
+class Verdict(StrEnum):
+    """Чем бой кончился для одного участника. Это и читает его экран."""
+
     ONGOING = "ongoing"
     VICTORY = "victory"
     DEFEAT = "defeat"
@@ -28,7 +63,14 @@ class CombatOutcome(StrEnum):
 
     @property
     def is_over(self) -> bool:
-        return self is not CombatOutcome.ONGOING
+        return self is not Verdict.ONGOING
+
+
+class CombatantKind(StrEnum):
+    """Кто это. За героем стоит персонаж, за противником - порода."""
+
+    HERO = "hero"
+    MONSTER = "monster"
 
 
 class ActionKind(StrEnum):
@@ -37,13 +79,20 @@ class ActionKind(StrEnum):
     RACIAL = "racial"
     ITEM = "item"
     FLEE = "flee"
+    #: Сменить цель. Ходом не считается: ничего не произошло
+    #: (``Claude.md``, правило 3).
+    FOCUS = "focus"
+    #: Выйти из боя, признав поражение. Единственный способ кончить поединок,
+    #: который бросили с той стороны: таймеров в игре нет, и ждать чужого
+    #: нажатия можно бесконечно (ADR 0021).
+    YIELD = "yield"
 
 
 class ActionTag(StrEnum):
-    """The trace a move leaves behind: press, guard or precision.
+    """След, который оставляет ход: натиск, оборона или точность.
 
-    Three tags in a closed circle, so no move is safe and none is useless. The
-    Russian words for them are written by the presentation layer.
+    Три тега в замкнутом круге, поэтому безопасного хода нет и бесполезного тоже.
+    Русские слова для них пишет слой представления.
     """
 
     PRESS = "press"
@@ -59,10 +108,10 @@ _COUNTERS: dict[ActionTag, ActionTag] = {
 
 
 def counter_to(tag: ActionTag) -> ActionTag:
-    """The tag that opens a breach in ``tag``.
+    """Тег, который открывает брешь в ``tag``.
 
-    A guard stops a press, precision finds the gap in a guard, and a press is
-    inside the reach before precision picks its spot.
+    Оборона держит натиск, точность находит щель в обороне, а натиск входит
+    внутрь раньше, чем точность выберет место.
     """
     return _COUNTERS[tag]
 
@@ -72,10 +121,10 @@ TRACE_LENGTH = 3
 
 @dataclass(frozen=True, slots=True)
 class Trace:
-    """The last few tags the player left, newest last.
+    """Последние теги бойца, свежий - последним.
 
-    Only ``TRACE_LENGTH`` are kept, because that is all the rules ever ask about:
-    a repeat builds momentum, three different tags in a row break the exchange.
+    Хранятся ``TRACE_LENGTH``: больше правила и не спрашивают. Повтор даёт
+    разгон, три разных подряд ломают размен.
     """
 
     tags: tuple[ActionTag, ...] = ()
@@ -86,7 +135,7 @@ class Trace:
 
     @property
     def streak(self) -> int:
-        """How many identical tags close the trace."""
+        """Сколько одинаковых тегов закрывают след."""
         count = 0
         for tag in reversed(self.tags):
             if tag is not self.last:
@@ -98,7 +147,7 @@ class Trace:
         return Trace(tags=(*self.tags, tag)[-TRACE_LENGTH:])
 
     def breaks_with(self, tag: ActionTag) -> bool:
-        """Whether adding ``tag`` makes the last three tags all different."""
+        """Станут ли последние три тега все разными, если добавить ``tag``."""
         recent = (*self.tags[-(TRACE_LENGTH - 1) :], tag)
         return len(recent) == TRACE_LENGTH and len(set(recent)) == TRACE_LENGTH
 
@@ -111,31 +160,37 @@ class EventKind(StrEnum):
     HEAL = "heal"
     SHIELD = "shield"
     EFFECT_APPLIED = "effect_applied"
-    EFFECT_EXPIRED = "effect_expired"
     CLEANSED = "cleansed"
     STUNNED = "stunned"
     RESOURCE = "resource"
-    ENEMY_DEFEATED = "enemy_defeated"
-    PLAYER_DEFEATED = "player_defeated"
+    DEFEATED = "defeated"
     FLED = "fled"
     FLEE_FAILED = "flee_failed"
+    YIELDED = "yielded"
     AVOIDED = "avoided"
     NOT_ENOUGH_RESOURCE = "not_enough_resource"
     ON_COOLDOWN = "on_cooldown"
     WRONG_WEAPON = "wrong_weapon"
     EMPTY_SLOT = "empty_slot"
+    NO_TARGET = "no_target"
     TURN_SKIPPED = "turn_skipped"
-    OUTPACED = "outpaced"
     MOMENTUM = "momentum"
     BREACH = "breach"
     BREAKTHROUGH = "breakthrough"
+    ROUND = "round"
 
 
 @dataclass(frozen=True, slots=True)
-class CombatEvent:
-    """One thing that happened, in machine-readable form."""
+class BattleEvent:
+    """Одно случившееся, в машинном виде.
+
+    Имена лежат рядом с номерами нарочно: экран читает имя, а «вы» вместо имени
+    ставит по номеру - в бою четверых иначе не разобрать, кого ударили.
+    """
 
     kind: EventKind
+    actor_id: int = 0
+    target_id: int = 0
     actor: str = ""
     target: str = ""
     amount: int = 0
@@ -145,49 +200,97 @@ class CombatEvent:
 
 
 @dataclass(frozen=True, slots=True)
-class CombatAction:
-    """What the player chose to do this turn."""
+class BattleAction:
+    """Что боец решил сделать в свой ход."""
 
     kind: ActionKind
     slot: int | None = None
     item_id: str | None = None
+    #: Кого бьём - номер бойца в этом бою. Ноль значит «того, на кого смотрю».
     target: int = 0
 
 
 @dataclass(frozen=True, slots=True)
-class PlayerState:
+class Combatant:
+    """Один боец: и герой, и волк, и чужой персонаж под управлением движка.
+
+    ``live`` - ждёт ли ход нажатия. Живой игрок ждёт; слепок, стоящий за
+    противником арены, - нет, за него ходит движок теми же правилами. Разница
+    между ними только эта: слепок дерётся своим оружием и своими умениями, а не
+    выдуманным числом урона, как было до ADR 0021.
+    """
+
+    id: int
+    side: int
+    kind: CombatantKind
     name: str
-    health: int
+    level: int
     max_health: int
-    resource: int
-    max_resource: int
-    resource_name: str
+    health: int
+    max_resource: int = 0
+    resource: int = 0
+    resource_name: str = ""
+    initiative: float = 0.0
+    live: bool = False
+    #: Персонаж за героем: по нему движок читает умения, оружие и прибавки.
+    character_id: int = 0
+    #: Кому писать, когда наступит его ход. Ноль - писать некому.
+    user_id: int = 0
+    #: Порода за противником. У героя пусто.
+    enemy: Enemy | None = None
     effects: EffectStack = field(default_factory=EffectStack)
     cooldowns: Mapping[str, int] = field(default_factory=dict)
     shield: int = 0
     stunned: int = 0
     free_cast: bool = False
     evade_charges: int = 0
+    trace: Trace = field(default_factory=Trace)
+    #: На кого этот боец смотрит. Ноль - ни на кого пока.
+    focus: int = 0
+    #: Ушёл из боя сам: сбежал или сдался. Не то же, что пал.
+    left: bool = False
+    #: В нём пробили брешь: его ближайший удар доходит вполсилы. Снимается в
+    #: конце его же хода - брешь живёт ровно до ответа (ADR 0021).
+    breached: bool = False
 
     @property
     def alive(self) -> bool:
-        return self.health > 0
+        return self.health > 0 and not self.left
+
+    @property
+    def is_hero(self) -> bool:
+        return self.kind is CombatantKind.HERO
+
+    @property
+    def rank(self) -> EnemyRank:
+        """Ступень противника. Герой - обычная: приключенец не хозяин логова."""
+        return self.enemy.rank if self.enemy is not None else EnemyRank.NORMAL
+
+    @property
+    def race_kind(self) -> str:
+        """Порода для прибавок вроде «урон по нежити». Герой - гуманоид."""
+        return self.enemy.kind.value if self.enemy is not None else EnemyKind.HUMANOID.value
+
+    @property
+    def element(self) -> DamageElement:
+        """Чем бьёт этот боец, когда бьёт без умения."""
+        return self.enemy.element if self.enemy is not None else DamageElement.PHYSICAL
 
     def cooldown_of(self, skill_code: str) -> int:
         return self.cooldowns.get(skill_code, 0)
 
-    def with_cooldown(self, skill_code: str, turns: int) -> PlayerState:
+    def with_cooldown(self, skill_code: str, turns: int) -> Combatant:
         cooldowns = {key: value for key, value in self.cooldowns.items() if value > 0}
         if turns > 0:
             cooldowns[skill_code] = turns
         return replace(self, cooldowns=MappingProxyType(cooldowns))
 
-    def tick_cooldowns(self) -> PlayerState:
+    def tick_cooldowns(self) -> Combatant:
         cooldowns = {key: value - 1 for key, value in self.cooldowns.items() if value - 1 > 0}
         return replace(self, cooldowns=MappingProxyType(cooldowns))
 
-    def damaged(self, amount: int) -> tuple[PlayerState, int]:
-        """Apply damage through the shield first. Returns the state and the health lost."""
+    def damaged(self, amount: int) -> tuple[Combatant, int]:
+        """Урон идёт сперва в щит. Второй член - сколько дошло до здоровья."""
         absorbed = min(self.shield, amount)
         to_health = amount - absorbed
         return (
@@ -199,72 +302,119 @@ class PlayerState:
             to_health,
         )
 
-    def healed(self, amount: int) -> tuple[PlayerState, int]:
-        restored = min(amount, self.max_health - self.health)
+    def healed(self, amount: int) -> tuple[Combatant, int]:
+        restored = min(max(0, amount), self.max_health - self.health)
         return replace(self, health=self.health + restored), restored
 
 
 @dataclass(frozen=True, slots=True)
-class EnemyState:
-    enemy: Enemy
-    health: int
-    effects: EffectStack = field(default_factory=EffectStack)
-    stunned: int = 0
-    index: int = 0
+class BattleState:
+    """Бой целиком. Неизменяем: ход возвращает новый.
 
-    @property
-    def alive(self) -> bool:
-        return self.health > 0
+    ``order`` - очередь на этот круг, собранная по инициативе, ``cursor`` -
+    место в ней. Очередь и есть то единственное, что инициатива делает: кто
+    быстрее, тот бьёт раньше, и в бою четверых это решает больше, чем любая
+    прибавка к урону (ADR 0021).
+    """
 
-    @property
-    def name(self) -> str:
-        return self.enemy.name
-
-    def damaged(self, amount: int) -> EnemyState:
-        return replace(self, health=max(0, self.health - amount))
-
-    @classmethod
-    def spawn(cls, enemy: Enemy, index: int) -> EnemyState:
-        return cls(enemy=enemy, health=enemy.max_health, index=index)
-
-
-@dataclass(frozen=True, slots=True)
-class CombatState:
-    """A whole fight. Immutable; each turn produces a new one."""
-
-    player: PlayerState
-    enemies: tuple[EnemyState, ...]
-    turn: int = 1
-    trace: Trace = field(default_factory=Trace)
-    outcome: CombatOutcome = CombatOutcome.ONGOING
-    events: tuple[CombatEvent, ...] = ()
+    combatants: tuple[Combatant, ...]
+    order: tuple[int, ...]
+    cursor: int = 0
+    round: int = 1
+    outcome: BattleOutcome = BattleOutcome.ONGOING
+    #: Сторона, за которой поле. ``-1`` - бой не кончен или кончен вничью.
+    winner: int = -1
+    events: tuple[BattleEvent, ...] = ()
+    #: Что забирает победившая сторона у побеждённой стаи. У поединка платы нет:
+    #: её считает ``domain/rules/pvp.py`` по кошелькам, а не по телам.
     experience: int = 0
     gold: int = 0
     loot: tuple[str, ...] = ()
 
     @property
-    def living_enemies(self) -> tuple[EnemyState, ...]:
-        return tuple(enemy for enemy in self.enemies if enemy.alive)
-
-    @property
     def is_over(self) -> bool:
         return self.outcome.is_over
 
-    def enemy_at(self, index: int) -> EnemyState | None:
-        for enemy in self.enemies:
-            if enemy.index == index and enemy.alive:
-                return enemy
+    def by_id(self, combatant_id: int) -> Combatant | None:
+        for one in self.combatants:
+            if one.id == combatant_id:
+                return one
         return None
 
-    def first_living(self) -> EnemyState | None:
-        living = self.living_enemies
-        return living[0] if living else None
+    def side_of(self, combatant_id: int) -> int:
+        one = self.by_id(combatant_id)
+        return one.side if one is not None else -1
 
-    def with_events(self, *events: CombatEvent) -> CombatState:
+    @property
+    def active(self) -> Combatant | None:
+        """Чей сейчас ход. ``None`` - бой кончен или ходить некому."""
+        if self.is_over or not self.order:
+            return None
+        return self.by_id(self.order[self.cursor % len(self.order)])
+
+    @property
+    def awaiting(self) -> Combatant | None:
+        """Живой игрок, чьего нажатия ждёт бой. ``None`` - ждать некого."""
+        current = self.active
+        return current if current is not None and current.live else None
+
+    def living(self, side: int | None = None) -> tuple[Combatant, ...]:
+        return tuple(
+            one for one in self.combatants if one.alive and (side is None or one.side == side)
+        )
+
+    def foes_of(self, combatant_id: int) -> tuple[Combatant, ...]:
+        one = self.by_id(combatant_id)
+        if one is None:
+            return ()
+        return tuple(other for other in self.living() if other.side != one.side)
+
+    def allies_of(self, combatant_id: int, *, include_self: bool = True) -> tuple[Combatant, ...]:
+        one = self.by_id(combatant_id)
+        if one is None:
+            return ()
+        return tuple(
+            other
+            for other in self.living()
+            if other.side == one.side and (include_self or other.id != one.id)
+        )
+
+    def heroes(self, side: int | None = None) -> tuple[Combatant, ...]:
+        return tuple(
+            one for one in self.combatants if one.is_hero and (side is None or one.side == side)
+        )
+
+    def target_for(self, combatant_id: int) -> Combatant | None:
+        """На кого смотрит боец: выбранная цель, а если её нет - первый живой."""
+        one = self.by_id(combatant_id)
+        if one is None:
+            return None
+        chosen = self.by_id(one.focus)
+        if chosen is not None and chosen.alive and chosen.side != one.side:
+            return chosen
+        foes = self.foes_of(combatant_id)
+        return foes[0] if foes else None
+
+    def verdict_for(self, combatant_id: int) -> Verdict:
+        """Чем бой кончился для этого бойца."""
+        one = self.by_id(combatant_id)
+        if one is None or not self.is_over:
+            return Verdict.ONGOING
+        match self.outcome:
+            case BattleOutcome.AVOIDED:
+                return Verdict.AVOIDED
+            case BattleOutcome.FLED if one.left:
+                return Verdict.FLED
+            case _:
+                if self.winner < 0:
+                    return Verdict.FLED
+                return Verdict.VICTORY if one.side == self.winner else Verdict.DEFEAT
+
+    def with_events(self, *events: BattleEvent) -> BattleState:
         return replace(self, events=(*self.events, *events))
 
-    def replace_enemy(self, updated: EnemyState) -> CombatState:
-        enemies = tuple(
-            updated if enemy.index == updated.index else enemy for enemy in self.enemies
+    def replace_combatant(self, updated: Combatant) -> BattleState:
+        return replace(
+            self,
+            combatants=tuple(updated if one.id == updated.id else one for one in self.combatants),
         )
-        return replace(self, enemies=enemies)

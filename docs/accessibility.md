@@ -191,15 +191,34 @@ current FSM state and, on a mismatch, answers:
 
 together with the current keyboard. Never stay silent, never raise.
 
-## 13. No real-time timers in PvE
+## 13. No real-time timers anywhere
 
-Combat against the world is turn-based and waits for the player indefinitely.
-Nothing in a location, a dungeon or a quest expires while the player is reading.
+Combat is turn-based and waits for the player indefinitely. Nothing in a
+location, a dungeon or a quest expires while the player is reading.
 
-This holds for fighting other players too. An attack on a free location is fought
-against a **snapshot** of the other character, driven by the ordinary engine: the
-attacker plays at their own pace, the defender is told by message what happened.
-Neither side ever waits on a clock, and neither side has to be online.
+This holds for fighting other players too, and there it is a stronger promise
+than it used to be. A duel is fought by both people: each of them gets the battle
+panel, and the queue simply stands until whoever is next presses something
+(ADR 0021). Nobody is punished for taking an hour, and nobody loses by being
+slower. What ends a fight the other side has walked away from is a button, not a
+clock: **«Сдаться»** hands the fight over, and it is available to a player whose
+turn has not even come.
+
+Waiting is a screen, not silence. The player who is not on turn hears who is,
+what happened on the last turn, and the two things they can do:
+
+```
+Бой. Круг 3. Ход: Мирна.
+Против вас:
+2. Мирна: здоровье 210 из 340, 61 процент. След: натиск, брешь — оборона.
+Вы: здоровье 180 из 300, 60 процентов, отвага 12 из 40.
+Мирна наносит вам 34 урона.
+Ждём его хода. Таймера нет: сколько нужно, столько и ждём.
+«Что там в бою» — перечитать, «Сдаться» — отдать бой и выйти.
+```
+
+The other player's turn arrives as a new message, like everything else: the game
+never edits what it has already said (rule 2).
 
 ## 14. `parse_mode=None`
 

@@ -103,17 +103,17 @@ What a player can do right now, rather than what is planned:
 | --- | --- |
 | Creation | name, race, class, two traits, free points, confirmation, and six tutorial steps |
 | The road | main menu, world, the cities as they unlock, five locations each, node-by-node movement, waves of enemies and finds shared with everyone standing there |
-| Combat | turn-based, six skill slots and a racial one, one to three enemies, intent / trace / breach, no timers anywhere |
+| Combat | turn-based, six skill slots and a racial one, two sides in one queue - alone or in a party, against the world or against other players - intent / trace / breach, no timers anywhere |
 | A city | shop, tavern with a quest board, mentor, bank, descent, arena, the Chamber, and whoever lives there |
 | Things | inventory, an item card that compares against what is worn, gear assembled from kind, grade and rarity |
 | Crafts | gathering by biome, recipes, batch quality, contracts for made goods |
-| Other players | a duel against a snapshot on a free location, the arena, trades in the game group |
+| Other players | a live duel on a free location (both sides get the panel and take turns), a party of up to four, the arena, trades in the game group |
 | Endgame | rebirth at 300, the Seal of the Chamber, the cycle's vote |
 | The keeper | a panel that edits the world from Telegram, plus players, statistics, bans and a rolled-back trade |
 | Settings | emoji, verbose descriptions, repeat the current screen |
 
-What is **not** there: guilds, and any party larger than a trade between two
-players. One descent per city - a Seal adds a fight below its floor, but the way
+What is **not** there: guilds, and a party that outlives the trip it was
+gathered for. One descent per city - a Seal adds a fight below its floor, but the way
 down is the same one. Race passives are still only text: `races.toml` declares
 them and nothing counts them, along with ten trait keys (`Roadmap.md`, day 4).
 

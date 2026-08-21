@@ -1,17 +1,21 @@
-"""The combat screen.
+"""Экран боя.
 
-Shape fixed by the specification (docs/skills.md): a status block first, then the
-basic attack, then the filled skill slots by their own numbers, then the racial
-slot, then bag and flee.
+Форма задана спецификацией (``docs/skills.md``): сперва положение дел, потом
+обычный удар, потом занятые слоты своими номерами, потом расовое умение, потом
+сумка и бегство.
+
+Экран рисуется **для того, кто смотрит**: в бою четверых «вы» и «он» решаются
+номером бойца, а не порядком в списке. Один и тот же бой звучит по-разному для
+двух его участников, и это не украшение - иначе игрок не разберёт, кого ударили
+(ADR 0021).
 
 Пустой слот кнопки не получает. Номер он сохраняет - третье умение остаётся
-третьим, - но кнопки, которая на нажатие отвечает «слот пуст», в панели нет:
-кнопка, которая ничего не делает, - это баг (``Claude.md``, правило 9). A skill
-on cooldown keeps its position and says so in its own label. Nothing here depends
-on colour or on an icon (accessibility rules 5, 6 and 7).
+третьим, - но кнопки, отвечающей «слот пуст», в панели нет: кнопка, которая
+ничего не делает, - это баг (``Claude.md``, правило 9). Умение на откате
+остаётся на месте и говорит об этом само.
 
-The tag rules (intent, trace, breach) add no buttons: every tag is a word inside
-a label the player already has, and the state of the trace is one spoken line.
+Правила тегов не добавляют кнопок: тег - это слово внутри метки, которая у
+игрока и так есть, а состояние следа - одна произносимая строка.
 """
 
 from __future__ import annotations
@@ -21,9 +25,9 @@ from collections.abc import Sequence
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import (
     ActionTag,
-    CombatEvent,
-    CombatState,
-    EnemyState,
+    BattleEvent,
+    BattleState,
+    Combatant,
     EventKind,
     Trace,
     counter_to,
@@ -34,7 +38,7 @@ from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules.combat import (
     MOMENTUM_DAMAGE_PERCENT,
     blow_range,
-    enemy_intent,
+    intent_of,
 )
 from mmorpg.domain.rules.skill_effects import (
     EffectCategory,
@@ -52,25 +56,22 @@ from mmorpg.presentation.telegram.screens.format import amount, head, percent, p
 EMPTY_SLOT = "Пустой слот"
 READY = "готово"
 
-#: The domain keeps tags machine-readable; the Russian for them lives here.
+#: Домен держит теги машинными; русские слова для них живут здесь.
 TAG_NAMES: dict[ActionTag, str] = {
     ActionTag.PRESS: "натиск",
     ActionTag.GUARD: "оборона",
     ActionTag.PRECISION: "точность",
 }
 
-#: Enough of a tier to tell the player how long this will take.
+#: Столько о ступени, сколько нужно, чтобы понять, сколько это займёт.
 RANK_NAMES: dict[EnemyRank, str] = {
     EnemyRank.NORMAL: "",
     EnemyRank.ELITE: "эпический",
-    # Не «босс»: слово из мастерской, а не из Веллара, и карта локации всюду
-    # зовёт его хозяином логова (``screens/play.py``).
+    # Не «босс»: слово из мастерской, а не из Веллара.
     EnemyRank.BOSS: "хозяин логова",
 }
 
-#: What a modifier is called when a skill label has to name it. Only the keys
-#: active skills actually apply are here; anything else falls back to a word for
-#: the whole category.
+#: Как называется прибавка, когда метке умения приходится её назвать.
 MODIFIER_NAMES: dict[str, str] = {
     "damage_percent": "урон",
     "damage_taken_percent": "получаемый урон",
@@ -84,7 +85,7 @@ MODIFIER_NAMES: dict[str, str] = {
     "lifesteal_percent": "вампиризм",
 }
 
-#: Skills whose whole point is a rule, not a number.
+#: Умения, весь смысл которых - правило, а не число.
 SPECIAL_NAMES: dict[str, str] = {
     "evade_next": "уклонение от следующего удара",
     "free_cast": "следующее умение бесплатно",
@@ -103,32 +104,32 @@ SPECIAL_NAMES: dict[str, str] = {
 
 
 def attack_label() -> Label:
-    """The basic attack carries a tag too, so its label says which."""
+    """Обычный удар тоже несёт тег, и метка говорит какой."""
     return label(
         f"{labels.ATTACK.text} — {TAG_NAMES[ActionTag.PRESS]}",
         labels.ATTACK.emoji,
     )
 
 
+def target_label(one: Combatant) -> Label:
+    """Кнопка выбора цели. Номер бойца делает метку неповторимой."""
+    return label(f"Цель {one.id}. {one.name}", "🎯")
+
+
 def skill_effect(
-    content: GameContent, character: Character, state: CombatState, skill: Skill
+    content: GameContent, character: Character, viewer: Combatant, skill: Skill
 ) -> str:
-    """What this skill will do, in numbers the player can compare.
+    """Что это умение сделает, числами, которые можно сравнить.
 
-    The figure is the blow before armour, dodge and criticals - it is a promise
-    about the skill, not a prediction about the turn. Without it a panel of six
-    buttons says only "натиск, готово" six times over, which is exactly the
-    complaint this screen exists to answer.
-
-    Урон называется границами, а не одним числом: он бросается по костям оружия,
-    и «урон 65» обещало бы точность, которой нет. «Урон от 34 до 96» - это ровно
-    то, что случится.
+    Это обещание об умении, а не предсказание хода: броня, уклонение и крит
+    считаются потом. Урон называется границами, а не одним числом, - он
+    бросается костями оружия, и «урон 65» обещало бы точность, которой нет.
     """
     spec = spec_for(skill.effect)
     power = skill.power_at_rank(character.loadout.rank_of(skill.code))
 
     if spec.category is EffectCategory.DAMAGE:
-        low, high = blow_range(content, character, state.player.effects, skill.scaling)
+        low, high = blow_range(content, character, viewer.effects, skill.scaling)
         share = power / 100.0 * spec.damage_scale
         rank_scale = 1.0 + skill.rank_step * (character.loadout.rank_of(skill.code) - 1)
         extra = skill.dice
@@ -142,15 +143,15 @@ def skill_effect(
         return _with_extras(line, spec)
 
     if spec.category is EffectCategory.HEAL:
-        return f"лечит {round(state.player.max_health * power / 100.0)}"
+        return f"лечит {round(viewer.max_health * power / 100.0)}"
     if spec.category is EffectCategory.SHIELD:
-        return _with_extras(f"щит {round(state.player.max_health * power / 100.0)}", spec)
+        return _with_extras(f"щит {round(viewer.max_health * power / 100.0)}", spec)
     parts = (_modifier_phrase(spec, power), SPECIAL_NAMES.get(spec.special, ""))
     return ", ".join(part for part in parts if part) or "особое действие"
 
 
 def _with_extras(line: str, spec: EffectSpec) -> str:
-    """The riders that change how a blow is chosen, not how big it is."""
+    """Довески, которые меняют не размер удара, а то, как он выбирается."""
     extras = []
     if spec.pierce:
         extras.append("пробивает броню")
@@ -166,11 +167,7 @@ def _with_extras(line: str, spec: EffectSpec) -> str:
 
 
 def _modifier_phrase(spec: EffectSpec, power: float) -> str:
-    """Buffs and debuffs, named by what they move and by how much.
-
-    Empty when the skill moves nothing measurable - the caller then falls back to
-    the word for the rule the skill actually is.
-    """
+    """Усиления и помехи, названные тем, что двигают, и тем, насколько."""
     if spec.cleanse_count:
         return f"снимает до {cleansed_count(spec, power)} отрицательных эффектов"
 
@@ -191,11 +188,7 @@ def _modifier_phrase(spec: EffectSpec, power: float) -> str:
 
 
 def _weapon_status(content: GameContent, character: Character, skill: Skill) -> str:
-    """Чего умению не хватает в руках. Пусто, когда хватает.
-
-    Кнопка обязана обещать ровно то, что сделает (``Claude.md``, правило 9):
-    «Прицельный выстрел» без лука не выстрелит, и сказать об этом надо до нажатия.
-    """
+    """Чего умению не хватает в руках. Пусто, когда хватает."""
     if not skill.weapon_types:
         return ""
     held = gear.weapon_type_of(content, character)
@@ -209,18 +202,9 @@ def _weapon_status(content: GameContent, character: Character, skill: Skill) -> 
     return f"нужно оружие: {wanted}"
 
 
-def _slot_status(skill: Skill, character: Character, state: CombatState) -> str:
-    """Readiness, the price and the price of using it - always in words.
-
-    A cooldown is stated twice on purpose: as what it will cost ("откат 3 хода")
-    while the skill is ready, and as what is left ("ещё 2 хода") while it is not.
-    Those are different questions and the player asks both.
-
-    Откат называется тот, который выйдет на самом деле: у умения «да или нет»
-    ранг сокращает именно его (``skill_effects.recharged``), и кнопка обязана
-    обещать то, что нажатие сделает.
-    """
-    cooldown = state.player.cooldown_of(skill.code)
+def _slot_status(skill: Skill, character: Character, viewer: Combatant) -> str:
+    """Готовность, цена и цена применения - всегда словами."""
+    cooldown = viewer.cooldown_of(skill.code)
     if cooldown > 0:
         return f"ещё {turns(cooldown)}"
 
@@ -231,35 +215,31 @@ def _slot_status(skill: Skill, character: Character, state: CombatState) -> str:
         parts.append(f"стоит {skill.cost}")
     if ready_in:
         parts.append(f"откат {turns(ready_in)}")
-    if skill.cost > state.player.resource:
-        parts.append(f"не хватает {skill.cost - state.player.resource}")
+    if skill.cost > viewer.resource:
+        parts.append(f"не хватает {skill.cost - viewer.resource}")
     else:
         parts.append(READY)
     return ", ".join(parts)
 
 
 def slotted_skill(content: GameContent, character: Character, slot: int) -> Skill | None:
-    """Умение в этом слоте, если оно там есть и игра его знает.
-
-    Слот, называющий умение, которого в игре больше нет, пуст: панель,
-    нарисованная по сохранению старше содержимого, не падает (правило 12).
-    """
+    """Умение в этом слоте, если оно там есть и игра его знает."""
     code = character.loadout.actives[slot]
     if code is None or not content.has_skill(code):
         return None
     return content.skill(code)
 
 
-def skill_label(content: GameContent, character: Character, state: CombatState, slot: int) -> Label:
-    """One panel button. The number prefix keeps every label unique and stable."""
+def skill_label(content: GameContent, character: Character, viewer: Combatant, slot: int) -> Label:
+    """Одна кнопка панели. Номер держит метку неповторимой и на месте."""
     skill = slotted_skill(content, character, slot)
     if skill is None:
         return label(f"{slot + 1}. {EMPTY_SLOT}")
 
-    status = _weapon_status(content, character, skill) or _slot_status(skill, character, state)
+    status = _weapon_status(content, character, skill) or _slot_status(skill, character, viewer)
     return label(
         f"{slot + 1}. {skill.name} — {TAG_NAMES[tag_of_skill(skill)]}, "
-        f"{skill_effect(content, character, state, skill)}, {status}"
+        f"{skill_effect(content, character, viewer, skill)}, {status}"
     )
 
 
@@ -270,66 +250,102 @@ def racial_skill(content: GameContent, character: Character) -> Skill | None:
     return content.skill(code)
 
 
-def racial_label(content: GameContent, character: Character, state: CombatState) -> Label:
+def racial_label(content: GameContent, character: Character, viewer: Combatant) -> Label:
     skill = racial_skill(content, character)
     if skill is None:
         return label(f"Расовое умение — {EMPTY_SLOT.lower()}")
     return label(
         f"{skill.name} — расовое, {TAG_NAMES[tag_of_skill(skill)]}, "
-        f"{skill_effect(content, character, state, skill)}, {_slot_status(skill, character, state)}"
+        f"{skill_effect(content, character, viewer, skill)}, "
+        f"{_slot_status(skill, character, viewer)}"
     )
 
 
-def enemy_line(enemy: EnemyState, turn: int) -> str:
-    """Health, the announced intent and the tag that would open a breach."""
-    intent = enemy_intent(enemy, turn)
-    rank = RANK_NAMES[enemy.enemy.rank]
-    title = f"{enemy.name} ({rank})" if rank else enemy.name
-    return (
-        f"{title}: здоровье {amount(enemy.health, enemy.enemy.max_health)}. "
-        f"Намерение: {TAG_NAMES[intent]}, брешь — {TAG_NAMES[counter_to(intent)]}."
-    )
+# --- строки о бойцах --------------------------------------------------
+
+
+def foe_line(state: BattleState, one: Combatant) -> str:
+    """Здоровье противника, объявленное намерение и тег, вскрывающий его.
+
+    У живого игрока намерения нет - есть след: чем он бил в прошлый ход. Угадать
+    чужой выбор нельзя, но выбрать ответ на привычку можно, и это ровно та же
+    игра, что и с намерением породы (ADR 0021).
+    """
+    rank = RANK_NAMES[one.rank]
+    title = f"{one.id}. {one.name} ({rank})" if rank else f"{one.id}. {one.name}"
+    line = f"{title}: здоровье {amount(one.health, one.max_health)}"
+    if one.shield:
+        line = f"{line}, щит {one.shield}"
+    intent = intent_of(state, one)
+    if intent is None:
+        return f"{line}. Ещё не бил: намерения не видно."
+    word = "След" if one.live else "Намерение"
+    return f"{line}. {word}: {TAG_NAMES[intent]}, брешь — {TAG_NAMES[counter_to(intent)]}."
+
+
+def ally_line(one: Combatant, *, viewer_id: int) -> str:
+    """Строка о своём. О себе - «вы», и с запасом ресурса."""
+    if one.id == viewer_id:
+        line = f"Вы: здоровье {amount(one.health, one.max_health)}"
+        if one.max_resource:
+            line = (
+                f"{line}, {one.resource_name.lower()} "
+                f"{amount(one.resource, one.max_resource, with_percent=False)}"
+            )
+    else:
+        line = f"{one.id}. {one.name}: здоровье {amount(one.health, one.max_health)}"
+    if one.shield:
+        line = f"{line}, щит {one.shield}"
+    if not one.alive:
+        return f"{line}. Вне боя."
+    return f"{line}."
 
 
 def trace_line(trace: Trace) -> str:
-    """Where the exchange stands, and what the next move would earn."""
+    """Где стоит размен и что даст следующий ход."""
     if trace.last is None:
         return (
             "След пуст. Повтор тега даёт разгон и усиливает удар, "
-            "три разных тега подряд — перелом, и враги пропускают ход."
+            "три разных тега подряд — перелом, и ход остаётся за вами."
         )
 
-    head = f"След: {TAG_NAMES[trace.last]}"
+    lead = f"След: {TAG_NAMES[trace.last]}"
     if trace.streak > 1:
         marks = plural(trace.streak, "след", "следа", "следов")
         gain = percent(MOMENTUM_DAMAGE_PERCENT * (trace.streak - 1))
-        head = f"{head}, {trace.streak} {marks} подряд, разгон {gain}"
+        lead = f"{lead}, {trace.streak} {marks} подряд, разгон {gain}"
     repeat = percent(MOMENTUM_DAMAGE_PERCENT * trace.streak)
     hints = [f"повтор даст разгон {repeat}"]
     hints.extend(f"{TAG_NAMES[tag]} даст перелом" for tag in ActionTag if trace.breaks_with(tag))
-    return f"{head}. Дальше: {'; '.join(hints)}."
+    return f"{lead}. Дальше: {'; '.join(hints)}."
 
 
-def describe_event(event: CombatEvent, player: str = "") -> str:
-    """Events carry no prose; the sentences are written here.
+def describe_event(event: BattleEvent, viewer_id: int = 0) -> str:
+    """События не несут слов; фразы пишутся здесь.
 
-    ``player`` lets the line address the listener directly - "бьёт вас" reads
-    better by ear than a name in the wrong case, and Russian names cannot be
-    declined generically.
+    ``viewer_id`` позволяет обращаться к слушателю напрямую - «бьёт вас» звучит
+    лучше, чем имя в неверном падеже, а русские имена нельзя склонять наугад.
     """
-    hit_you = bool(player) and event.target == player
-    you_hit = bool(player) and event.actor == player
+    hit_you = bool(viewer_id) and event.target_id == viewer_id
+    you_hit = bool(viewer_id) and event.actor_id == viewer_id
     match event.kind:
         case EventKind.DAMAGE if hit_you:
-            return f"{event.actor} наносит вам {event.amount} урона."
+            actor = event.actor or "Что-то"
+            return f"{actor} наносит вам {event.amount} урона."
         case EventKind.DAMAGE if you_hit:
             return f"Вы наносите {event.amount} урона, цель: {event.target}."
+        case EventKind.DAMAGE if not event.actor:
+            return f"{event.target} теряет {event.amount} здоровья."
         case EventKind.DAMAGE:
             return f"{event.actor} наносит {event.target}: {event.amount} урона."
         case EventKind.CRIT if you_hit:
             return f"Критический удар: {event.amount} урона, цель: {event.target}."
+        case EventKind.CRIT if hit_you:
+            return f"{event.actor} критически бьёт вас: {event.amount} урона."
         case EventKind.CRIT:
             return f"{event.actor} критически бьёт {event.target}: {event.amount} урона."
+        case EventKind.MISS if hit_you:
+            return f"{event.actor} промахивается по вам."
         case EventKind.MISS:
             return f"Промах по цели {event.target}."
         case EventKind.DODGE if hit_you:
@@ -340,25 +356,39 @@ def describe_event(event: CombatEvent, player: str = "") -> str:
             return f"Вы восстанавливаете {event.amount} здоровья."
         case EventKind.HEAL:
             return f"{event.actor} восстанавливает {event.amount} здоровья."
+        case EventKind.SHIELD if you_hit:
+            return f"Вы получаете щит на {event.amount}."
         case EventKind.SHIELD:
             return f"{event.actor} получает щит на {event.amount}."
         case EventKind.EFFECT_APPLIED:
             target = event.target or event.actor
+            if (event.target_id or event.actor_id) == viewer_id:
+                target = "Вы"
             return f"{target}: наложен эффект {event.effect_name} на {turns(event.turns)}."
         case EventKind.CLEANSED:
             return f"Снято отрицательных эффектов: {event.amount}."
+        case EventKind.STUNNED if hit_you:
+            return f"Вы пропускаете {turns(event.turns)}."
         case EventKind.STUNNED:
             return f"{event.target} пропускает {turns(event.turns)}."
         case EventKind.RESOURCE:
             return f"{event.actor} восстанавливает {event.amount} ресурса."
-        case EventKind.ENEMY_DEFEATED:
+        case EventKind.DEFEATED if hit_you:
+            return "Вы повержены."
+        case EventKind.DEFEATED:
             return f"{event.target} повержен."
-        case EventKind.PLAYER_DEFEATED:
-            return "Вы проиграли бой."
+        case EventKind.FLED if you_hit:
+            return "Вы вышли из боя."
         case EventKind.FLED:
-            return "Вы сбежали из боя."
-        case EventKind.FLEE_FAILED:
+            return f"{event.actor} выходит из боя."
+        case EventKind.FLEE_FAILED if you_hit:
             return "Сбежать не удалось."
+        case EventKind.FLEE_FAILED:
+            return f"{event.actor}: уйти не вышло."
+        case EventKind.YIELDED if you_hit:
+            return "Вы сдались."
+        case EventKind.YIELDED:
+            return f"{event.actor} сдаётся."
         case EventKind.AVOIDED:
             return "Боя удалось избежать."
         case EventKind.NOT_ENOUGH_RESOURCE:
@@ -366,68 +396,131 @@ def describe_event(event: CombatEvent, player: str = "") -> str:
         case EventKind.ON_COOLDOWN:
             return f"Умение {event.skill_name} на откате ещё {turns(event.turns)}."
         case EventKind.WRONG_WEAPON:
-            # Отказ уже собран словами в домене: он знает и что умение просит, и
-            # что сейчас в руке.
+            # Отказ уже собран словами в домене.
             return event.effect_name
         case EventKind.EMPTY_SLOT:
             return "Слот пуст. Наберите умения в меню, вне боя."
+        case EventKind.NO_TARGET:
+            return "Этой цели в бою нет."
+        case EventKind.TURN_SKIPPED if you_hit:
+            return "Вы пропускаете ход."
         case EventKind.TURN_SKIPPED:
             return f"{event.actor} пропускает ход."
-        case EventKind.OUTPACED:
-            # Не то же самое, что пропуск хода: не сбит, а не успел. Игрок должен
-            # услышать разницу - за ней стоит его инициатива.
-            return f"{event.actor} не успевает ответить."
-        case EventKind.MOMENTUM:
+        case EventKind.MOMENTUM if you_hit:
             marks = plural(event.amount, "след", "следа", "следов")
             gain = percent(MOMENTUM_DAMAGE_PERCENT * (event.amount - 1))
             return f"Разгон: {event.amount} {marks} подряд, удар сильнее на {gain}."
+        case EventKind.MOMENTUM:
+            return f"{event.actor} набирает разгон: удар сильнее."
         case EventKind.BREACH:
             return f"Брешь: {event.target} открылся, броня не в счёт, его удар вдвое слабее."
+        case EventKind.BREAKTHROUGH if you_hit:
+            return "Перелом: размен сломан, и ход остаётся за вами."
         case EventKind.BREAKTHROUGH:
-            return "Перелом: враг сбит с ритма и в этот ход не отвечает."
+            return f"Перелом: {event.actor} сбивает ритм и бьёт снова."
         case _:
             return ""
 
 
-def combat_screen(
-    content: GameContent, character: Character, state: CombatState, notice: str = ""
-) -> Screen:
-    enemies = state.living_enemies
-    lines = list(head(f"Бой. Ход {state.turn}.", notice))
-    lines.extend(enemy_line(enemy, state.turn) for enemy in enemies)
-    lines.append(
-        f"Вы: здоровье {amount(state.player.health, state.player.max_health)}, "
-        f"{state.player.resource_name.lower()} "
-        f"{amount(state.player.resource, state.player.max_resource, with_percent=False)}."
+def turn_lines(state: BattleState, viewer_id: int = 0) -> tuple[str, ...]:
+    """Последний ход словами - весь целиком, а не последние две строки."""
+    return tuple(text for event in state.events if (text := describe_event(event, viewer_id)))
+
+
+# --- сам экран --------------------------------------------------------
+
+
+def _sides(state: BattleState, viewer: Combatant) -> list[str]:
+    lines: list[str] = []
+    foes = tuple(one for one in state.combatants if one.side != viewer.side and one.alive)
+    if foes:
+        lines.append("Против вас:")
+        lines.extend(foe_line(state, one) for one in foes)
+    allies = tuple(
+        one for one in state.combatants if one.side == viewer.side and one.id != viewer.id
     )
-    lines.append(trace_line(state.trace))
-    # Весь ход целиком, а не последние две строки. Обрезка съедала как раз то,
-    # ради чего экран читают: удар игрока стоял первым, а разгон, брешь и ответ
-    # врага выталкивали его наружу - и выходило, что игрок бьёт в тишину.
-    # Ход - это несколько строк, и он и должен звучать целиком.
-    lines.extend(turn_lines(state))
+    if allies:
+        lines.append("С вами:")
+        lines.extend(ally_line(one, viewer_id=viewer.id) for one in allies)
+    lines.append(ally_line(viewer, viewer_id=viewer.id))
+    return lines
+
+
+def _has_live_foes(state: BattleState, viewer: Combatant) -> bool:
+    return any(one.live and one.side != viewer.side for one in state.combatants if one.alive)
+
+
+def battle_screen(
+    content: GameContent,
+    character: Character,
+    state: BattleState,
+    viewer_id: int,
+    notice: str = "",
+) -> Screen:
+    """Панель боя того, чей сейчас ход."""
+    viewer = state.by_id(viewer_id)
+    if viewer is None:  # pragma: no cover - зритель всегда участник
+        return waiting_screen(state, viewer_id, notice)
+
+    lines = list(head(f"Бой. Круг {state.round}.", notice))
+    lines.extend(_sides(state, viewer))
+    lines.append(trace_line(viewer.trace))
+    lines.extend(turn_lines(state, viewer_id))
+    target = state.target_for(viewer_id)
+    if target is not None:
+        lines.append(f"Ваша цель: {target.id}. {target.name}.")
     lines.append("Ваш ход.")
 
     rows: list[tuple[Label, ...]] = [(attack_label(),)]
     # Только занятые слоты: номер за умением закреплён, а пустое место кнопки не
-    # получает. Нажатие на «Пустой слот» стоило игроку целого хода - враги
-    # отвечали, а он не делал ничего.
+    # получает - нажатие на «Пустой слот» стоило игроку целого хода.
     rows.extend(
-        (skill_label(content, character, state, slot),)
+        (skill_label(content, character, viewer, slot),)
         for slot in range(content.rules.active_slots)
         if slotted_skill(content, character, slot) is not None
     )
     if racial_skill(content, character) is not None:
-        rows.append((racial_label(content, character, state),))
+        rows.append((racial_label(content, character, viewer),))
+    foes = state.foes_of(viewer_id)
+    if len(foes) > 1:
+        # Выбор цели ходом не считается: он ничего не делает с боем, кроме того,
+        # что игра начинает целиться туда, куда сказали.
+        rows.extend((target_label(one),) for one in foes)
     rows.append((labels.BAG, labels.FLEE))
+    if _has_live_foes(state, viewer):
+        rows.append((labels.BATTLE_YIELD,))
 
     return Screen(id=ScreenId.COMBAT, lines=tuple(lines), rows=tuple(rows))
+
+
+def waiting_screen(state: BattleState, viewer_id: int, notice: str = "") -> Screen:
+    """Экран того, чей ход ещё не наступил.
+
+    Ждать приходится только живого игрока: за породу ходит движок, и его ходы
+    приходят в том же сообщении, что и ваш. Ожидание не наказывается ничем -
+    таймера нет, - но и молчать оно не должно: экран говорит, чей ход, что уже
+    случилось и как из боя выйти (ADR 0021).
+    """
+    viewer = state.by_id(viewer_id)
+    current = state.active
+    who = current.name if current is not None else ""
+    lines = list(head(f"Бой. Круг {state.round}. Ход: {who}.", notice))
+    if viewer is not None:
+        lines.extend(_sides(state, viewer))
+    lines.extend(turn_lines(state, viewer_id))
+    lines.append("Ждём его хода. Таймера нет: сколько нужно, столько и ждём.")
+    lines.append("«Что там в бою» — перечитать, «Сдаться» — отдать бой и выйти.")
+    rows: tuple[tuple[Label, ...], ...] = (
+        (labels.BATTLE_REFRESH,),
+        (labels.BATTLE_YIELD,),
+    )
+    return Screen(id=ScreenId.COMBAT, lines=tuple(lines), rows=rows)
 
 
 def bag_screen(
     content: GameContent, entries: tuple[tuple[str, str, int], ...], notice: str = ""
 ) -> Screen:
-    """Consumables during a fight. They live here, never in a skill slot."""
+    """Расходники во время боя. Живут здесь, никогда в слоте умения."""
     lines = [
         *head("Сумка. Расходники берут только отсюда.", notice),
         f"Позиций в сумке: {len(entries)}. Всё, что выпито в бою, оставляет след обороны.",
@@ -441,66 +534,62 @@ def bag_screen(
     return Screen(id=ScreenId.COMBAT_BAG, lines=tuple(lines), rows=tuple(rows))
 
 
-def turn_lines(state: CombatState) -> tuple[str, ...]:
-    """Последний ход словами - тот самый, который бой и закончил.
-
-    Без него экран победы начинался с «Опыт, золото» и молчал о том, чем всё
-    кончилось: игрок бил, слышал «Победа» и не знал ни кто добил, ни сколько
-    снял последний удар. Ход - это несколько строк, и последний ход ничем не
-    отличается от прочих.
-    """
-    return tuple(
-        text for event in state.events if (text := describe_event(event, state.player.name))
-    )
-
-
 def victory_screen(
-    state: CombatState,
+    state: BattleState,
+    viewer_id: int,
     level_up: str = "",
     extra: Sequence[str] = (),
     rows: Sequence[tuple[Label, ...]] = (),
     loot: Sequence[str] = (),
+    experience: int = 0,
+    gold: int = 0,
 ) -> Screen:
-    """``loot`` is what the player hears: names, never content ids."""
+    """``loot`` - то, что слышит игрок: имена, никогда не коды содержимого."""
+    viewer = state.by_id(viewer_id)
     lines = [
         "Победа.",
-        *turn_lines(state),
-        f"Опыт: {state.experience}. Золото: {state.gold}.",
+        *turn_lines(state, viewer_id),
+        f"Опыт: {experience}. Золото: {gold}.",
     ]
-    spoils = tuple(loot) or state.loot
-    if spoils:
-        lines.append(f"Добыча: {', '.join(spoils)}.")
+    if loot:
+        lines.append(f"Добыча: {', '.join(loot)}.")
     if level_up:
         lines.append(level_up)
     lines.extend(line for line in extra if line)
-    lines.append(f"Здоровье после боя: {amount(state.player.health, state.player.max_health)}.")
-    # A descent offers its own two buttons; everywhere else the way out is "Назад".
+    if viewer is not None:
+        lines.append(f"Здоровье после боя: {amount(viewer.health, viewer.max_health)}.")
     lines.append(
         "Дальше вниз или наверх — решать сейчас." if rows else "Нажмите «Назад», чтобы вернуться."
     )
     return Screen(id=ScreenId.COMBAT, lines=tuple(lines), rows=tuple(rows))
 
 
-def defeat_screen(state: CombatState | None = None, gold_lost: int = 0) -> Screen:
+def defeat_screen(
+    state: BattleState, viewer_id: int, gold_lost: int = 0, extra: Sequence[str] = ()
+) -> Screen:
     lines = [
         "Поражение.",
-        *(turn_lines(state) if state is not None else ()),
+        *turn_lines(state, viewer_id),
         # Без причастия: у персонажа может быть любой род, а русское прошедшее
         # время заставляет игру угадывать (``screens/group.py``).
         "Вы приходите в себя в городе. Раны перевязаны, дальше идти можно.",
     ]
     if gold_lost:
         lines.append(f"Потеряно золота: {gold_lost}. Ячейку в банке не трогает.")
+    lines.extend(line for line in extra if line)
     lines.append("Нажмите «Главное меню», чтобы продолжить.")
     return Screen(id=ScreenId.COMBAT, lines=tuple(lines))
 
 
-def escaped_screen(fled: bool, state: CombatState | None = None) -> Screen:
+def escaped_screen(
+    fled: bool, state: BattleState, viewer_id: int = 0, extra: Sequence[str] = ()
+) -> Screen:
     return Screen(
         id=ScreenId.COMBAT,
         lines=(
-            "Вы сбежали из боя." if fled else "Боя удалось избежать.",
-            *(turn_lines(state) if state is not None else ()),
+            "Вы вышли из боя." if fled else "Боя удалось избежать.",
+            *turn_lines(state, viewer_id),
+            *(line for line in extra if line),
             "Нажмите «Назад», чтобы вернуться в локацию.",
         ),
     )

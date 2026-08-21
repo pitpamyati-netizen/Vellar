@@ -203,9 +203,8 @@ What the engine reads that is easy to miss:
   tier, by how wounded it is, by your own low health, by the first turn, by one
   target or all, and by whether the blow is a spell or a hand (a skill is a spell
   when its effect carries an element tag);
-- **tempo** - initiative decides how often an opponent fails to answer at all
-  (`combat.outpace_chance`), which is what every "инициатива ниже на N процентов"
-  in content buys;
+- **tempo** - initiative *is* the queue: the whole fight is ordered by it, and
+  that is what every "инициатива ниже на N процентов" in content buys (ADR 0021);
 - **shields expire** (`EffectSpec.shield_turns`), healing over time arrives once a
   turn rather than all at once, and a counter, an undying stand and an immunity to
   stuns are self-modifiers under private keys the combat engine reads by name.
@@ -213,10 +212,14 @@ What the engine reads that is easy to miss:
 ## Combat screen shape
 
 ```
-Бой. Ход 3.
-Волчий вожак (эпический): здоровье 68 из 140, это 49 процентов. Намерение: натиск, брешь — оборона.
+Бой. Круг 3.
+Против вас:
+2. Волчий вожак (эпический): здоровье 68 из 140, это 49 процентов. Намерение: натиск, брешь — оборона.
+С вами:
+3. Мирна: здоровье 210 из 340, это 61 процент.
 Вы: здоровье 91 из 120, это 76 процентов, отвага 40 из 60.
 След: натиск. Дальше: повтор даст разгон 25 процентов; точность даст перелом.
+Ваша цель: 2. Волчий вожак.
 Ваш ход.
 
 [Атака — натиск]
@@ -227,6 +230,14 @@ What the engine reads that is easy to miss:
 [Сумка] [Бежать]
 [Назад] [Главное меню]
 ```
+
+The screen is drawn **for whoever is looking**: "вы" and a name are decided by
+the fighter's number, because in a fight of four there is no other way to hear
+who was hit. Where there is more than one opponent, the panel carries one more
+row - `[Цель 3. Волчица]` - and pressing it costs no turn: it changes where the
+game aims, and nothing else happens (ADR 0021). The player who is not on turn
+sees the same state with two buttons instead of the panel: `[Что там в бою]` and
+`[Сдаться]`.
 
 Every button answers three questions without being pressed: **what it does**
 (a number, not a category), **what it costs**, and **when it comes back**. The

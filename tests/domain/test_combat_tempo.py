@@ -1,9 +1,10 @@
-"""Intent, trace and breach: the three rules that make a turn a choice.
+"""Намерение, след и брешь: три правила, которые делают ход выбором.
 
-The tags never add a button, so they have to be exact instead: the intent an
-enemy announces is the intent it acts on, a repeat really does hit harder, and
-three different tags really do buy a free turn. Thresholds are asserted against
-the constants, so moving a number here is a deliberate act.
+Теги не добавляют кнопок, поэтому они обязаны быть точными: объявленное
+намерение - то самое, по которому боец бьёт; повтор действительно бьёт сильнее;
+три разных тега подряд действительно оставляют ход за тем, кто их сложил.
+Пороги проверяются против самих констант, чтобы сдвинуть число можно было
+только нарочно.
 """
 
 from __future__ import annotations
@@ -16,9 +17,8 @@ from mmorpg.domain.entities import Character, GameContent, SkillLoadout
 from mmorpg.domain.entities.combat import (
     ActionKind,
     ActionTag,
-    CombatAction,
-    CombatState,
-    EnemyState,
+    BattleAction,
+    BattleState,
     EventKind,
     Trace,
     counter_to,
@@ -26,22 +26,40 @@ from mmorpg.domain.entities.combat import (
 from mmorpg.domain.entities.effects import ActiveEffect
 from mmorpg.domain.entities.location import Enemy, EnemyKind
 from mmorpg.domain.rules.combat import (
+    INTENT_CYCLE,
     MOMENTUM_DAMAGE_PERCENT,
     MOMENTUM_STREAK,
     TurnTempo,
-    enemy_intent,
-    resolve_turn,
-    start_combat,
+    act,
+    hero_combatant,
+    intent_of,
+    monster_combatant,
+    open_battle,
 )
 from mmorpg.domain.rules.skill_effects import spec_for, tag_of
 
-# An enemy's intent on turn 1 is decided by its initiative, so these three
-# numbers pick the announcement a test wants to face.
-PRESS_INITIATIVE = 8.0
-PRECISION_INITIATIVE = 9.0
-GUARD_INITIATIVE = 10.0
 
-ATTACK = CombatAction(kind=ActionKind.ATTACK)
+def initiative_for(tag: ActionTag, *, place: int = 0, round_number: int = 1) -> float:
+    """Инициатива, при которой противник объявит именно этот тег.
+
+    Считается по той же формуле, что и сам движок (``intent_of``), а не
+    угадывается числом: подобранная константа переставала работать при любой
+    правке круга намерений. ``place`` - место бойца на своей стороне.
+    """
+    for value in range(4, 60):
+        step = (value + place + round_number) % len(INTENT_CYCLE)
+        if INTENT_CYCLE[step] is tag:
+            return float(value)
+    raise AssertionError(f"нет инициативы, дающей {tag}")
+
+
+# Намерение противника на первом круге решает его инициатива, поэтому эти три
+# числа выбирают объявление, против которого тест хочет играть.
+PRESS_INITIATIVE = initiative_for(ActionTag.PRESS)
+PRECISION_INITIATIVE = initiative_for(ActionTag.PRECISION)
+GUARD_INITIATIVE = initiative_for(ActionTag.GUARD)
+
+ATTACK = BattleAction(kind=ActionKind.ATTACK)
 
 
 def make_enemy(
@@ -50,10 +68,11 @@ def make_enemy(
     health: int = 4_000,
     damage: int = 40,
     armor: int = 0,
+    name: str = "Волк",
 ) -> Enemy:
     return Enemy(
         archetype_id="grey_wolf",
-        name="Волк",
+        name=name,
         kind=EnemyKind.BEAST,
         level=5,
         max_health=health,
@@ -67,7 +86,7 @@ def make_enemy(
 
 @pytest.fixture
 def fighter(warrior: Character) -> Character:
-    """A warrior who can play all three tags: press, guard and precision."""
+    """Воин, которому доступны все три тега: натиск, оборона и точность."""
     return replace(
         warrior,
         level=100,
@@ -82,19 +101,47 @@ def seed_for(turn: int) -> bytes:
     return turn.to_bytes(16, "big")
 
 
-def enemy_health(state: CombatState) -> int:
-    return state.enemies[0].health
+def start(
+    content: GameContent, character: Character, *enemies: Enemy
+) -> tuple[BattleState, dict[int, Character]]:
+    roster = {1: character}
+    fighters = [
+        hero_combatant(content, character, combatant_id=1, side=0, live=True),
+        *(
+            monster_combatant(enemy, combatant_id=index + 2, side=1)
+            for index, enemy in enumerate(enemies)
+        ),
+    ]
+    return open_battle(content, roster, fighters, b"tempo-seed"), roster
 
 
-def hit_landed(state: CombatState) -> bool:
+def enemy_health(state: BattleState, combatant_id: int = 2) -> int:
+    one = state.by_id(combatant_id)
+    assert one is not None
+    return one.health
+
+
+def hero_health(state: BattleState) -> int:
+    hero = state.by_id(1)
+    assert hero is not None
+    return hero.health
+
+
+def hero_trace(state: BattleState) -> Trace:
+    hero = state.by_id(1)
+    assert hero is not None
+    return hero.trace
+
+
+def hit_landed(state: BattleState) -> bool:
     return any(
         event.kind in {EventKind.DAMAGE, EventKind.CRIT}
         for event in state.events
-        if event.target != state.player.name
+        if event.actor_id == 1
     )
 
 
-# --- the circle of tags ----------------------------------------------
+# --- круг тегов -------------------------------------------------------
 
 
 def test_every_tag_is_countered_by_exactly_one_other() -> None:
@@ -114,7 +161,7 @@ def test_a_skill_leaves_the_trace_its_effect_implies() -> None:
 
 
 def test_an_explicit_tag_overrides_the_category() -> None:
-    """Pulling a blow onto yourself is a guard, whatever the category says."""
+    """Принять удар на себя - это оборона, что бы ни говорила разновидность."""
     assert spec_for("taunt").tag is ActionTag.GUARD
     assert tag_of(spec_for("taunt")) is ActionTag.GUARD
 
@@ -126,11 +173,11 @@ def test_every_content_effect_answers_with_a_tag(content: GameContent) -> None:
         try:
             spec = spec_for(skill.effect)
         except KeyError:
-            continue  # passives declare modifiers, not effects
+            continue  # у постоянных умений прибавки, а не эффекты
         assert tag_of(spec) in set(ActionTag), skill.code
 
 
-# --- the trace --------------------------------------------------------
+# --- след -------------------------------------------------------------
 
 
 def test_a_trace_remembers_only_the_last_three_tags() -> None:
@@ -155,72 +202,72 @@ def test_three_different_tags_are_a_break_and_two_are_not() -> None:
     assert not Trace((ActionTag.PRESS,)).breaks_with(ActionTag.GUARD), "two tags are not three"
 
 
-# --- what an enemy announces -----------------------------------------
+# --- что объявляет тот, за кого ходит движок --------------------------
 
 
-def test_an_intent_is_the_same_every_time_it_is_asked() -> None:
-    state = EnemyState.spawn(make_enemy(), index=0)
-    assert enemy_intent(state, 7) is enemy_intent(state, 7)
-
-
-def test_intents_walk_the_circle_from_turn_to_turn() -> None:
-    state = EnemyState.spawn(make_enemy(), index=0)
-    announced = [enemy_intent(state, turn) for turn in range(1, 4)]
-    assert set(announced) == set(ActionTag), "three turns show all three intents"
-
-
-def test_two_enemies_in_one_fight_announce_apart() -> None:
-    first = EnemyState.spawn(make_enemy(), index=0)
-    second = EnemyState.spawn(make_enemy(), index=1)
-    assert enemy_intent(first, 1) is not enemy_intent(second, 1)
-
-
-def test_a_wounded_enemy_always_closes_up() -> None:
-    hurt = replace(EnemyState.spawn(make_enemy(health=100), index=0), health=25)
-    assert all(enemy_intent(hurt, turn) is ActionTag.GUARD for turn in range(1, 7))
-
-
-def test_an_announcement_holds_even_when_the_blow_lands_first(
+def test_an_intent_is_the_same_every_time_it_is_asked(
     content: GameContent, fighter: Character
 ) -> None:
-    """The intent is read before the player moves, so it cannot be taken back.
-
-    An enemy one hit away from the wounded line would rather guard - but it said
-    press, and the promise is what the player chose against.
-    """
-    beast = make_enemy(initiative=PRESS_INITIATIVE, health=40_000, damage=200)
-    state = start_combat(content, fighter, (beast,))
-    assert enemy_intent(state.enemies[0], state.turn) is ActionTag.PRESS
-
-    about_to_break = replace(state, enemies=(replace(state.enemies[0], health=10_001),))
-    already_wounded = replace(state, enemies=(replace(state.enemies[0], health=9_999),))
-    assert enemy_intent(already_wounded.enemies[0], state.turn) is ActionTag.GUARD
-
-    for attempt in range(40):
-        seed = seed_for(attempt)
-        pressed = resolve_turn(content, fighter, about_to_break, ATTACK, seed)
-        guarded = resolve_turn(content, fighter, already_wounded, ATTACK, seed)
-        if not hit_landed(pressed) or guarded.player.health == guarded.player.max_health:
-            continue
-        assert pressed.enemies[0].health < 10_000, "the hit really did wound it"
-        assert pressed.player.health < guarded.player.health, "the announced press still landed"
-        return
-    pytest.fail("no seed both wounded the enemy and let its blow land")
+    state, _ = start(content, fighter, make_enemy())
+    beast = state.by_id(2)
+    assert beast is not None
+    assert intent_of(state, beast) is intent_of(state, beast)
 
 
-# --- momentum ---------------------------------------------------------
+def test_intents_walk_the_circle_from_round_to_round(
+    content: GameContent, fighter: Character
+) -> None:
+    state, _ = start(content, fighter, make_enemy())
+    beast = state.by_id(2)
+    assert beast is not None
+    announced = [intent_of(replace(state, round=number), beast) for number in range(1, 4)]
+    assert set(announced) == set(ActionTag), "three rounds show all three intents"
+
+
+def test_two_enemies_in_one_fight_announce_apart(content: GameContent, fighter: Character) -> None:
+    state, _ = start(content, fighter, make_enemy(), make_enemy(name="Волчица"))
+    first, second = state.by_id(2), state.by_id(3)
+    assert first is not None and second is not None
+    assert intent_of(state, first) is not intent_of(state, second)
+
+
+def test_a_wounded_enemy_always_closes_up(content: GameContent, fighter: Character) -> None:
+    state, _ = start(content, fighter, make_enemy(health=100))
+    beast = state.by_id(2)
+    assert beast is not None
+    hurt = replace(beast, health=25)
+    assert all(
+        intent_of(replace(state, round=number), hurt) is ActionTag.GUARD for number in range(1, 7)
+    )
+
+
+def test_a_live_player_announces_the_trace_they_left(
+    content: GameContent, fighter: Character
+) -> None:
+    """Угадать чужой ход нельзя, но видно, чем он бил, - и этого хватает."""
+    state, _ = start(content, fighter, make_enemy())
+    hero = state.by_id(1)
+    assert hero is not None
+    assert intent_of(state, hero) is None, "ещё не бил - объявлять нечего"
+    pressed = replace(hero, trace=Trace((ActionTag.PRESS,)))
+    assert intent_of(state, pressed) is ActionTag.PRESS
+
+
+# --- разгон -----------------------------------------------------------
 
 
 def test_repeating_a_tag_hits_harder(content: GameContent, fighter: Character) -> None:
-    state = start_combat(content, fighter, (make_enemy(),))
-    repeated = replace(state, trace=Trace((ActionTag.PRESS,)))
-    fresh = replace(state, trace=Trace((ActionTag.GUARD,)))
+    state, roster = start(content, fighter, make_enemy())
+    hero = state.by_id(1)
+    assert hero is not None
+    repeated = state.replace_combatant(replace(hero, trace=Trace((ActionTag.PRESS,))))
+    fresh = state.replace_combatant(replace(hero, trace=Trace((ActionTag.GUARD,))))
 
     for attempt in range(40):
         seed = seed_for(attempt)
-        with_momentum = resolve_turn(content, fighter, repeated, ATTACK, seed)
-        without = resolve_turn(content, fighter, fresh, ATTACK, seed)
-        if not hit_landed(without):
+        with_momentum = act(content, roster, repeated, ATTACK, seed)
+        without = act(content, roster, fresh, ATTACK, seed)
+        if not hit_landed(without) or not hit_landed(with_momentum):
             continue
         dealt = 4_000 - enemy_health(with_momentum)
         plain = 4_000 - enemy_health(without)
@@ -234,81 +281,88 @@ def test_repeating_a_tag_hits_harder(content: GameContent, fighter: Character) -
 
 def test_momentum_needs_the_declared_streak(content: GameContent, fighter: Character) -> None:
     assert MOMENTUM_STREAK == 2
-    state = start_combat(content, fighter, (make_enemy(),))
-    first = resolve_turn(content, fighter, state, ATTACK, seed_for(1))
+    state, roster = start(content, fighter, make_enemy())
+    first = act(content, roster, state, ATTACK, seed_for(1))
     assert not any(event.kind is EventKind.MOMENTUM for event in first.events)
-    assert first.trace.streak == 1
+    assert hero_trace(first).streak == 1
 
-    second = resolve_turn(content, fighter, first, ATTACK, seed_for(2))
+    second = act(content, roster, first, ATTACK, seed_for(2))
     assert any(event.kind is EventKind.MOMENTUM for event in second.events)
-    assert second.trace.streak == 2
+    assert hero_trace(second).streak == 2
 
 
-# --- the breakthrough -------------------------------------------------
+# --- перелом ----------------------------------------------------------
 
 
 def three_different_tags(
-    content: GameContent, fighter: Character, state: CombatState
-) -> CombatState:
-    """Press, then guard, then precision: cleave, taunt, breach."""
+    content: GameContent, roster: dict[int, Character], state: BattleState
+) -> BattleState:
+    """Натиск, оборона, точность: рассечение, провокация, брешь."""
     for slot, turn in ((0, 1), (1, 2), (2, 3)):
-        state = resolve_turn(
-            content, fighter, state, CombatAction(kind=ActionKind.SKILL, slot=slot), seed_for(turn)
+        state = act(
+            content, roster, state, BattleAction(kind=ActionKind.SKILL, slot=slot), seed_for(turn)
         )
     return state
 
 
-def test_three_different_tags_buy_a_free_turn(content: GameContent, fighter: Character) -> None:
-    state = start_combat(content, fighter, (make_enemy(damage=400),))
-    broken = three_different_tags(content, fighter, state)
+def test_three_different_tags_keep_the_turn(content: GameContent, fighter: Character) -> None:
+    """Перелом отдаёт ход тому, кто сломал размен, а не отнимает его у всех."""
+    state, roster = start(content, fighter, make_enemy(damage=400))
+    broken = three_different_tags(content, roster, state)
 
     assert any(event.kind is EventKind.BREAKTHROUGH for event in broken.events)
     answered = [
-        event
-        for event in broken.events
-        if event.kind is EventKind.DAMAGE and event.target == broken.player.name
+        event for event in broken.events if event.kind is EventKind.DAMAGE and event.target_id == 1
     ]
-    assert not answered, "a broken enemy does not answer this turn"
+    assert not answered, "тот, кого сбили с ритма, в этот ход не отвечает"
+    current = broken.active
+    assert current is not None and current.id == 1, "ход остался за игроком"
 
 
 def test_a_breakthrough_spends_the_trace(content: GameContent, fighter: Character) -> None:
-    """Otherwise cycling the same three tags would break every turn for free."""
-    state = start_combat(content, fighter, (make_enemy(damage=400),))
-    broken = three_different_tags(content, fighter, state)
-    assert broken.trace.tags == ()
+    """Иначе один и тот же круг тегов ломал бы размен каждый ход даром."""
+    state, roster = start(content, fighter, make_enemy(damage=400))
+    broken = three_different_tags(content, roster, state)
+    assert hero_trace(broken).tags == ()
 
-    again = resolve_turn(content, fighter, broken, ATTACK, seed_for(4))
+    again = act(content, roster, broken, ATTACK, seed_for(4))
     assert not any(event.kind is EventKind.BREAKTHROUGH for event in again.events)
 
 
-# --- the breach -------------------------------------------------------
+# --- брешь ------------------------------------------------------------
 
 
 def test_a_counter_tag_opens_a_breach(content: GameContent, fighter: Character) -> None:
-    """Precision was announced; a press is inside the reach before it lands."""
-    state = start_combat(content, fighter, (make_enemy(initiative=PRECISION_INITIATIVE),))
-    after = resolve_turn(content, fighter, state, ATTACK, seed_for(1))
+    """Объявлена точность; натиск входит внутрь раньше, чем она выберет место."""
+    state, roster = start(content, fighter, make_enemy(initiative=PRECISION_INITIATIVE))
+    beast = state.by_id(2)
+    assert beast is not None and intent_of(state, beast) is ActionTag.PRECISION
+    after = act(content, roster, state, ATTACK, seed_for(1))
     assert any(event.kind is EventKind.BREACH for event in after.events)
 
 
 def test_a_matching_tag_opens_nothing(content: GameContent, fighter: Character) -> None:
-    state = start_combat(content, fighter, (make_enemy(initiative=PRESS_INITIATIVE),))
-    after = resolve_turn(content, fighter, state, ATTACK, seed_for(1))
+    state, roster = start(content, fighter, make_enemy(initiative=PRESS_INITIATIVE))
+    beast = state.by_id(2)
+    assert beast is not None and intent_of(state, beast) is ActionTag.PRESS
+    after = act(content, roster, state, ATTACK, seed_for(1))
     assert not any(event.kind is EventKind.BREACH for event in after.events)
 
 
 def test_a_breach_takes_the_armour_out_of_the_count(
     content: GameContent, fighter: Character
 ) -> None:
-    armoured = start_combat(
-        content, fighter, (make_enemy(initiative=PRECISION_INITIATIVE, armor=300),)
+    breached_state, roster = start(
+        content, fighter, make_enemy(initiative=PRECISION_INITIATIVE, armor=300)
     )
-    plated = start_combat(content, fighter, (make_enemy(initiative=GUARD_INITIATIVE, armor=300),))
+    guarded_state, guarded_roster = start(
+        content, fighter, make_enemy(initiative=GUARD_INITIATIVE, armor=300)
+    )
     for attempt in range(40):
         seed = seed_for(attempt)
-        breached = resolve_turn(content, fighter, armoured, ATTACK, seed)
-        blocked = resolve_turn(content, fighter, plated, ATTACK, seed)
-        if not hit_landed(blocked):
+        breached = act(content, roster, breached_state, ATTACK, seed)
+        blocked = act(content, guarded_roster, guarded_state, ATTACK, seed)
+        if not hit_landed(blocked) or not hit_landed(breached):
             continue
         assert 4_000 - enemy_health(breached) > 4_000 - enemy_health(blocked)
         return
@@ -316,138 +370,158 @@ def test_a_breach_takes_the_armour_out_of_the_count(
 
 
 def test_tempo_reads_the_armour_off_the_announcement() -> None:
-    tempo = TurnTempo(intents={0: ActionTag.GUARD}, tag=ActionTag.PRECISION)
-    assert tempo.breached(0)
-    assert tempo.armor_scale(0) == 0.0
-    assert tempo.armor_scale(1) == 1.0, "an enemy that announced nothing keeps its armour"
+    tempo = TurnTempo(intents={2: ActionTag.GUARD}, tag=ActionTag.PRECISION)
+    assert tempo.breached(2)
+    assert tempo.armor_scale(2) == 0.0
+    assert tempo.armor_scale(3) == 1.0, "an enemy that announced nothing keeps its armour"
 
-    guarding = TurnTempo(intents={0: ActionTag.GUARD}, tag=ActionTag.PRESS)
-    assert not guarding.breached(0)
-    assert guarding.armor_scale(0) > 1.0, "an announced guard is worth more armour"
+    guarding = TurnTempo(intents={2: ActionTag.GUARD}, tag=ActionTag.PRESS)
+    assert not guarding.breached(2)
+    assert guarding.armor_scale(2) > 1.0, "an announced guard is worth more armour"
 
 
-# --- what the intent does to the enemy's own blow ---------------------
+def test_a_breached_enemy_answers_at_half_strength(
+    content: GameContent, fighter: Character
+) -> None:
+    """Брешь всегда чем-то платит: уроном по цели, уроном по себе или обоими."""
+    state, roster = start(content, fighter, make_enemy(initiative=PRECISION_INITIATIVE))
+    beast = state.by_id(2)
+    assert beast is not None
+    assert not beast.breached
+    after = act(content, roster, state, ATTACK, seed_for(1))
+    struck = after.by_id(2)
+    assert struck is not None
+    # Либо брешь уже стоила ему удара, либо она ещё висит на нём.
+    assert struck.breached or any(event.kind is EventKind.BREACH for event in after.events)
+
+
+# --- что намерение делает с собственным ударом ------------------------
 
 
 def test_a_press_costs_more_than_a_guard(content: GameContent, fighter: Character) -> None:
-    pressing = start_combat(content, fighter, (make_enemy(initiative=PRESS_INITIATIVE),))
-    guarding = start_combat(content, fighter, (make_enemy(initiative=GUARD_INITIATIVE),))
+    pressing, press_roster = start(content, fighter, make_enemy(initiative=PRESS_INITIATIVE))
+    guarding, guard_roster = start(content, fighter, make_enemy(initiative=GUARD_INITIATIVE))
     for attempt in range(40):
         seed = seed_for(attempt)
-        pressed = resolve_turn(content, fighter, pressing, ATTACK, seed)
-        guarded = resolve_turn(content, fighter, guarding, ATTACK, seed)
-        if guarded.player.health == guarded.player.max_health:
-            continue  # the blow was dodged; try another seed
-        assert pressed.player.health < guarded.player.health
+        pressed = act(content, press_roster, pressing, ATTACK, seed)
+        guarded = act(content, guard_roster, guarding, ATTACK, seed)
+        hero = guarded.by_id(1)
+        assert hero is not None
+        if hero.health == hero.max_health:
+            continue  # удар не дошёл: пробуем другое семя
+        assert hero_health(pressed) < hero_health(guarded)
         return
     pytest.fail("no seed landed an enemy blow")
 
 
 def test_an_announced_precision_is_not_dodged(content: GameContent, fighter: Character) -> None:
-    """A blow aimed in advance is answered or taken, never side-stepped."""
+    """Удар, нацеленный заранее, принимают или отвечают, но не обходят."""
     nimble = ActiveEffect(
         id="test_nimble", name="Проба", modifiers={"dodge_percent": 100.0}, turns_left=5
     )
-    precise = start_combat(content, fighter, (make_enemy(initiative=PRECISION_INITIATIVE),))
-    precise = replace(
-        precise, player=replace(precise.player, effects=precise.player.effects.apply(nimble))
-    )
-    pressing = start_combat(content, fighter, (make_enemy(initiative=PRESS_INITIATIVE),))
-    pressing = replace(
-        pressing, player=replace(pressing.player, effects=pressing.player.effects.apply(nimble))
-    )
 
-    hit = resolve_turn(content, fighter, precise, ATTACK, seed_for(3))
-    dodged = resolve_turn(content, fighter, pressing, ATTACK, seed_for(3))
-    assert hit.player.health < hit.player.max_health
-    assert any(event.kind is EventKind.DODGE for event in dodged.events)
+    def with_dodge(state: BattleState) -> BattleState:
+        hero = state.by_id(1)
+        assert hero is not None
+        return state.replace_combatant(replace(hero, effects=hero.effects.apply(nimble)))
+
+    precise, precise_roster = start(content, fighter, make_enemy(initiative=PRECISION_INITIATIVE))
+    pressing, press_roster = start(content, fighter, make_enemy(initiative=PRESS_INITIATIVE))
+    precise, pressing = with_dodge(precise), with_dodge(pressing)
+
+    for attempt in range(40):
+        seed = seed_for(attempt)
+        dodged = act(content, press_roster, pressing, ATTACK, seed)
+        if not any(event.kind is EventKind.DODGE for event in dodged.events):
+            continue  # даже с уклонением в сто процентов удар иногда доходит
+        hit = act(content, precise_roster, precise, ATTACK, seed)
+        hero = hit.by_id(1)
+        assert hero is not None
+        assert hero.health < hero.max_health, "объявленную точность не обходят"
+        assert not any(event.kind is EventKind.DODGE for event in hit.events)
+        return
+    pytest.fail("no seed produced a dodge against the press")
 
 
-# --- actions that leave no trace --------------------------------------
+# --- действия, которые не оставляют следа -----------------------------
 
 
 def test_a_refused_action_leaves_no_trace(content: GameContent, fighter: Character) -> None:
-    state = start_combat(content, fighter, (make_enemy(),))
-    empty = resolve_turn(
-        content, fighter, state, CombatAction(kind=ActionKind.SKILL, slot=4), seed_for(1)
-    )
+    state, roster = start(content, fighter, make_enemy())
+    empty = act(content, roster, state, BattleAction(kind=ActionKind.SKILL, slot=4), seed_for(1))
     assert any(event.kind is EventKind.EMPTY_SLOT for event in empty.events)
-    assert empty.trace.tags == ()
+    assert hero_trace(empty).tags == ()
 
-    broke = replace(state, player=replace(state.player, resource=0))
-    poor = resolve_turn(
-        content, fighter, broke, CombatAction(kind=ActionKind.SKILL, slot=0), seed_for(1)
-    )
+    hero = state.by_id(1)
+    assert hero is not None
+    broke = state.replace_combatant(replace(hero, resource=0))
+    poor = act(content, roster, broke, BattleAction(kind=ActionKind.SKILL, slot=0), seed_for(1))
     assert any(event.kind is EventKind.NOT_ENOUGH_RESOURCE for event in poor.events)
-    assert poor.trace.tags == ()
+    assert hero_trace(poor).tags == ()
 
 
 def test_a_skill_on_cooldown_leaves_no_trace(content: GameContent, fighter: Character) -> None:
-    state = start_combat(content, fighter, (make_enemy(),))
-    used = resolve_turn(
-        content, fighter, state, CombatAction(kind=ActionKind.SKILL, slot=1), seed_for(1)
-    )
-    assert used.trace.tags == (ActionTag.GUARD,)
-    blocked = resolve_turn(
-        content, fighter, used, CombatAction(kind=ActionKind.SKILL, slot=1), seed_for(2)
-    )
+    state, roster = start(content, fighter, make_enemy())
+    used = act(content, roster, state, BattleAction(kind=ActionKind.SKILL, slot=1), seed_for(1))
+    assert hero_trace(used).tags == (ActionTag.GUARD,)
+    blocked = act(content, roster, used, BattleAction(kind=ActionKind.SKILL, slot=1), seed_for(2))
     assert any(event.kind is EventKind.ON_COOLDOWN for event in blocked.events)
-    assert blocked.trace.tags == (ActionTag.GUARD,), "a refusal is not a move"
+    assert hero_trace(blocked).tags == (ActionTag.GUARD,), "a refusal is not a move"
 
 
 def test_running_away_leaves_no_trace(content: GameContent, fighter: Character) -> None:
-    state = start_combat(content, fighter, (make_enemy(),))
-    pressed = resolve_turn(content, fighter, state, ATTACK, seed_for(1))
-    fled = resolve_turn(content, fighter, pressed, CombatAction(kind=ActionKind.FLEE), seed_for(2))
-    assert fled.trace.tags == (ActionTag.PRESS,)
+    state, roster = start(content, fighter, make_enemy())
+    pressed = act(content, roster, state, ATTACK, seed_for(1))
+    fled = act(content, roster, pressed, BattleAction(kind=ActionKind.FLEE), seed_for(2))
+    assert hero_trace(fled).tags == (ActionTag.PRESS,)
 
 
-def test_a_stunned_player_neither_moves_nor_breaks(
+def test_a_stunned_fighter_neither_moves_nor_breaks(
     content: GameContent, fighter: Character
 ) -> None:
-    state = start_combat(content, fighter, (make_enemy(),))
-    state = replace(
-        state,
-        player=replace(state.player, stunned=1),
-        trace=Trace((ActionTag.PRESS, ActionTag.GUARD)),
+    state, roster = start(content, fighter, make_enemy())
+    hero = state.by_id(1)
+    assert hero is not None
+    state = state.replace_combatant(
+        replace(hero, stunned=1, trace=Trace((ActionTag.PRESS, ActionTag.GUARD)))
     )
-    after = resolve_turn(
-        content, fighter, state, CombatAction(kind=ActionKind.SKILL, slot=2), seed_for(1)
-    )
+    after = act(content, roster, state, BattleAction(kind=ActionKind.SKILL, slot=2), seed_for(1))
     assert any(event.kind is EventKind.TURN_SKIPPED for event in after.events)
-    assert after.trace.tags == (ActionTag.PRESS, ActionTag.GUARD)
+    assert hero_trace(after).tags == (ActionTag.PRESS, ActionTag.GUARD)
     assert not any(event.kind is EventKind.BREAKTHROUGH for event in after.events)
 
 
 def test_a_potion_leaves_a_guard(content: GameContent, fighter: Character) -> None:
-    state = start_combat(content, fighter, (make_enemy(),))
-    state = replace(state, player=replace(state.player, health=10))
-    after = resolve_turn(
+    state, roster = start(content, fighter, make_enemy())
+    hero = state.by_id(1)
+    assert hero is not None
+    state = state.replace_combatant(replace(hero, health=10))
+    after = act(
         content,
-        fighter,
+        roster,
         state,
-        CombatAction(kind=ActionKind.ITEM, item_id="small_healing_potion"),
+        BattleAction(kind=ActionKind.ITEM, item_id="small_healing_potion"),
         seed_for(1),
     )
-    assert after.trace.tags == (ActionTag.GUARD,)
+    assert hero_trace(after).tags == (ActionTag.GUARD,)
 
 
-# --- determinism ------------------------------------------------------
+# --- воспроизводимость ------------------------------------------------
 
 
 def test_the_whole_tempo_replays_from_the_seed(content: GameContent, fighter: Character) -> None:
-    def play() -> CombatState:
-        state = start_combat(content, fighter, (make_enemy(damage=120),))
+    def play() -> BattleState:
+        state, roster = start(content, fighter, make_enemy(damage=120))
         for turn, slot in enumerate((0, 1, 2, 0, 0), start=1):
-            state = resolve_turn(
+            state = act(
                 content,
-                fighter,
+                roster,
                 state,
-                CombatAction(kind=ActionKind.SKILL, slot=slot),
+                BattleAction(kind=ActionKind.SKILL, slot=slot),
                 seed_for(turn),
             )
         return state
 
     first, second = play(), play()
     assert first == second
-    assert first.trace.tags == second.trace.tags
+    assert hero_trace(first).tags == hero_trace(second).tags

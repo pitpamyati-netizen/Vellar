@@ -22,7 +22,7 @@ from mmorpg.domain.entities import (
     SkillLoadout,
     StatBlock,
 )
-from mmorpg.domain.entities.combat import ActionTag, CombatState, Trace
+from mmorpg.domain.entities.combat import ActionTag, BattleState, Trace
 from mmorpg.domain.entities.content import Item
 from mmorpg.domain.entities.craft import CraftLog, CraftProgress
 from mmorpg.domain.entities.location import (
@@ -39,7 +39,7 @@ from mmorpg.domain.ports.repositories import Census
 from mmorpg.domain.procgen import generate_location, location_seed
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import overlay as overlay_rules
-from mmorpg.domain.rules.combat import start_combat
+from mmorpg.domain.rules.combat import hero_combatant, monster_combatant, open_battle
 from mmorpg.domain.rules.economy import buy_price, roll_assortment
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.handlers import creation as handlers_creation
@@ -129,8 +129,24 @@ def fighter(content: GameContent) -> Character:
     )
 
 
+def build_battle(
+    content: GameContent,
+    character: Character,
+    enemies: tuple[Enemy, ...],
+    *,
+    seed: bytes = b"battle-seed",
+) -> BattleState:
+    """Бой одного героя против стаи - то, что рисует экран боя."""
+    hero = hero_combatant(content, character, combatant_id=1, side=0, live=True)
+    pack = [
+        monster_combatant(enemy, combatant_id=index + 2, side=1)
+        for index, enemy in enumerate(enemies)
+    ]
+    return open_battle(content, {1: character}, [hero, *pack], seed)
+
+
 @pytest.fixture(scope="session")
-def sample_fight(content: GameContent, fighter: Character) -> CombatState:
+def sample_fight(content: GameContent, fighter: Character) -> BattleState:
     enemy = Enemy(
         archetype_id="grey_wolf",
         name="Серый волк",
@@ -143,11 +159,11 @@ def sample_fight(content: GameContent, fighter: Character) -> CombatState:
         loot=("wolf_pelt",),
         gold=14,
     )
-    return start_combat(content, fighter, (enemy,))
+    return build_battle(content, fighter, (enemy,))
 
 
 @pytest.fixture(scope="session")
-def crowded_fight(content: GameContent, fighter: Character) -> CombatState:
+def crowded_fight(content: GameContent, fighter: Character) -> BattleState:
     """The longest the combat screen can get: three enemies, each announcing, and
     a trace with something to say about it."""
     pack = tuple(
@@ -165,12 +181,28 @@ def crowded_fight(content: GameContent, fighter: Character) -> CombatState:
         )
         for index, name in enumerate(("Серый волк", "Волчица", "Вожак стаи"))
     )
-    state = start_combat(content, fighter, pack)
-    return replace(state, turn=7, trace=Trace((ActionTag.GUARD, ActionTag.PRESS)))
+    state = build_battle(content, fighter, pack)
+    hero = state.by_id(1)
+    assert hero is not None
+    marked = state.replace_combatant(replace(hero, trace=Trace((ActionTag.GUARD, ActionTag.PRESS))))
+    return replace(marked, round=7)
 
 
 @pytest.fixture(scope="session")
-def boss_fight(content: GameContent, fighter: Character) -> CombatState:
+def duel_fight(content: GameContent, fighter: Character) -> BattleState:
+    """Поединок двоих живых: у обоих панель, ход у того, кто быстрее.
+
+    Экран боя обязан звучать и с этой стороны: «Против вас» здесь - человек, а
+    намерения у человека нет, есть след (ADR 0021).
+    """
+    other = replace(fighter, id=77, user_id=99, name="Мирна")
+    left = hero_combatant(content, fighter, combatant_id=1, side=0, live=True)
+    right = hero_combatant(content, other, combatant_id=2, side=1, live=True)
+    return open_battle(content, {1: fighter, 2: other}, [left, right], b"duel-seed")
+
+
+@pytest.fixture(scope="session")
+def boss_fight(content: GameContent, fighter: Character) -> BattleState:
     """A tier that announces itself: the enemy line has to say how long this will
     take before the player commits a turn to it."""
     boss = Enemy(
@@ -186,7 +218,7 @@ def boss_fight(content: GameContent, fighter: Character) -> CombatState:
         gold=140,
         rank=EnemyRank.BOSS,
     )
-    return start_combat(content, fighter, (boss,))
+    return build_battle(content, fighter, (boss,))
 
 
 @pytest.fixture(scope="session")
@@ -387,9 +419,10 @@ def all_screens(
     complete_draft: CharacterDraft,
     sample_location: GeneratedLocation,
     fighter: Character,
-    sample_fight: CombatState,
-    crowded_fight: CombatState,
-    boss_fight: CombatState,
+    sample_fight: BattleState,
+    crowded_fight: BattleState,
+    boss_fight: BattleState,
+    duel_fight: BattleState,
     sample_stock: tuple[Item, ...],
     craftsman: Character,
     sealbearer: Character,
@@ -648,21 +681,25 @@ def all_screens(
         city_screens.dungeon_screen(
             content, fighter, content.city("farhold"), level=12, depth=1, total=3
         ),
-        combat_screens.combat_screen(content, fighter, sample_fight),
-        combat_screens.combat_screen(content, fighter, crowded_fight),
-        combat_screens.combat_screen(content, fighter, boss_fight),
+        combat_screens.battle_screen(content, fighter, sample_fight, 1),
+        combat_screens.battle_screen(content, fighter, crowded_fight, 1),
+        combat_screens.battle_screen(content, fighter, boss_fight, 1),
+        combat_screens.battle_screen(content, fighter, duel_fight, 1),
+        combat_screens.waiting_screen(duel_fight, 2),
+        combat_screens.waiting_screen(crowded_fight, 1, "Сейчас не ваш ход."),
         combat_screens.bag_screen(content, (("small_healing_potion", "Малое зелье лечения", 3),)),
         combat_screens.bag_screen(content, ()),
-        combat_screens.victory_screen(sample_fight),
+        combat_screens.victory_screen(sample_fight, 1, experience=40, gold=14),
         combat_screens.victory_screen(
             sample_fight,
+            1,
             extra=("Уровень 11. Очков характеристик: 3, очков умений: 1.",),
             rows=((labels.DUNGEON_DEEPER, labels.DUNGEON_LEAVE),),
         ),
-        combat_screens.defeat_screen(gold_lost=42),
-        combat_screens.defeat_screen(sample_fight, gold_lost=42),
-        combat_screens.escaped_screen(fled=True),
-        combat_screens.escaped_screen(fled=False, state=sample_fight),
+        combat_screens.defeat_screen(sample_fight, 1),
+        combat_screens.defeat_screen(sample_fight, 1, gold_lost=42),
+        combat_screens.escaped_screen(True, sample_fight, 1),
+        combat_screens.escaped_screen(False, sample_fight, 1),
         shop.inventory_screen(
             content,
             (shop.OwnedItem("small_healing_potion", 3), shop.OwnedItem("sword@1#common", 1)),

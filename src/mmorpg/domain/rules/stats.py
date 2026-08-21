@@ -42,7 +42,14 @@ CRIT_DAMAGE_PER_LUCK = 0.45
 MAX_CRIT_CHANCE = 50.0
 MAX_CRIT_DAMAGE = 250.0
 MAX_DODGE = 75.0
-INITIATIVE_PER_AGILITY = 1.5
+# Инициатива - это очередь удара, и мерить её приходится в той же шкале, в
+# какой она есть у противника (``procgen/enemies.INITIATIVE_BASE``): у породы
+# она растёт с уровнем, а у героя росла только с ловкостью, и маг трёхсотого
+# уровня оказывался вчетверо медленнее камня. База и уровень выравнивают шкалы,
+# ловкость по-прежнему решает, кто быстрее среди равных (ADR 0021).
+INITIATIVE_BASE = 20.0
+INITIATIVE_PER_LEVEL = 0.35
+INITIATIVE_PER_AGILITY = 0.8
 RESOURCE_REGEN_PER_WISDOM = 0.4
 
 
@@ -127,8 +134,10 @@ def derived_stats(
         + mods.flat(modifiers, "crit_damage_percent")
     )
     initiative = (
-        stats[StatCode.AGI] * INITIATIVE_PER_AGILITY * mods.percent(modifiers, "initiative_percent")
-    )
+        INITIATIVE_BASE
+        + INITIATIVE_PER_LEVEL * level
+        + stats[StatCode.AGI] * INITIATIVE_PER_AGILITY
+    ) * mods.percent(modifiers, "initiative_percent")
     resource_regen = (
         resource.regen_per_turn + stats[StatCode.WIS] * RESOURCE_REGEN_PER_WISDOM
     ) * mods.percent(modifiers, "resource_regen_percent")

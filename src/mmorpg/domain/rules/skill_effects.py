@@ -176,8 +176,8 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
         damage_scale=0.85, target_modifiers=(M("accuracy_percent", -25.0),), duration=2
     ),
     "damage_execute": _damage(execute_scaling=0.6),
-    # Темп - это очередь удара: тот, кто быстрее, застаёт противника на замахе
-    # (``combat._outpaced``). До этого «haste_self» не значило ничего.
+    # Темп - это очередь удара буквально: инициатива собирает очередь боя, и
+    # поднявший её ходит раньше (``combat._order_for``, ADR 0021).
     "damage_initiative": _damage(self_modifiers=(M("initiative_percent", 40.0),), duration=2),
     "damage_steal": _damage(special="steal_gold"),
     "damage_companion": _damage(dot_turns=3, damage_scale=0.6),

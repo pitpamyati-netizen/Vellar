@@ -6,8 +6,9 @@ from dataclasses import replace
 
 import pytest
 
+from mmorpg.application.services import battle as battle_service
 from mmorpg.domain.entities import Character, GameContent, SkillLoadout
-from mmorpg.domain.entities.combat import ActionKind, CombatOutcome
+from mmorpg.domain.entities.combat import ActionKind, BattleAction, Verdict
 from mmorpg.domain.entities.location import Enemy, EnemyKind
 from mmorpg.domain.rules.economy import buy_price, roll_assortment, sell_price
 from mmorpg.presentation.telegram.flows import combat as flow
@@ -52,31 +53,54 @@ def fighter(content: GameContent) -> Character:
     )
 
 
+#: Номер героя в бою: сборщик всегда кладёт нападающих первыми.
+HERO = 1
+
+
+def open_fight(
+    content: GameContent,
+    character: Character,
+    enemy: Enemy | None = None,
+    *,
+    node: int = 3,
+) -> battle_service.BattleSession:
+    session, _ = battle_service.begin(
+        content,
+        battle_id="test-battle",
+        attackers=[(character, True)],
+        enemies=(enemy or make_enemy(),),
+        seed=FIGHT_SEED,
+        node=node,
+    )
+    return session
+
+
 @pytest.fixture
-def session(content: GameContent, fighter: Character) -> flow.CombatSession:
-    return flow.begin(content, fighter, (make_enemy(),), seed=FIGHT_SEED, node=3)
+def session(content: GameContent, fighter: Character) -> battle_service.BattleSession:
+    return open_fight(content, fighter)
 
 
 # --- the combat screen ------------------------------------------------
 
 
 def test_screen_leads_with_the_situation(
-    content: GameContent, fighter: Character, session: flow.CombatSession
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
-    text = flow.render(content, fighter, session).text()
+    text = flow.render(content, fighter, session, HERO).text()
     lines = text.split("\n")
-    assert lines[0].startswith("Бой. Ход 1.")
-    assert "Серый волк: здоровье" in lines[1]
-    assert "Вы: здоровье" in lines[2]
+    assert lines[0].startswith("Бой. Круг 1.")
+    assert lines[1] == "Против вас:"
+    assert "Серый волк: здоровье" in lines[2]
+    assert "Вы: здоровье" in lines[3]
     assert lines[-1] == "Ваш ход."
     assert "[" not in text, "no pseudo-graphics"
 
 
 def test_the_panel_holds_the_filled_slots_by_their_own_numbers(
-    content: GameContent, fighter: Character, session: flow.CombatSession
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
     """Умение помнит свой номер, а пустое место кнопки не получает."""
-    screen = flow.render(content, fighter, session)
+    screen = flow.render(content, fighter, session, HERO)
     texts = [row[0].text for row in screen.rows]
     assert texts[0] == "Атака — натиск"
     # У бойца заняты три слота из шести, и это ровно три кнопки, с 1 по 3.
@@ -86,14 +110,14 @@ def test_the_panel_holds_the_filled_slots_by_their_own_numbers(
 
 
 def test_an_empty_slot_gets_no_button(
-    content: GameContent, fighter: Character, session: flow.CombatSession
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
     """Кнопка, отвечающая «слот пуст», - это баг (``Claude.md``, правило 9).
 
     Нажатие на неё стоило игроку целого хода: он не делал ничего, а враги
     отвечали.
     """
-    screen = flow.render(content, fighter, session)
+    screen = flow.render(content, fighter, session, HERO)
     assert not any("Пустой слот" in row[0].text for row in screen.rows)
 
 
@@ -108,28 +132,28 @@ def test_a_slot_keeps_its_number_when_an_earlier_one_is_empty(
             actives=(None, None, "warrior_shield_bash", None, None, None),
         ),
     )
-    session = flow.begin(content, gapped, (make_enemy(),), seed=FIGHT_SEED, node=1)
-    texts = [row[0].text for row in flow.render(content, gapped, session).rows]
+    session = open_fight(content, gapped, node=1)
+    texts = [row[0].text for row in flow.render(content, gapped, session, HERO).rows]
     assert texts[1].startswith("3. Удар щитом")
 
 
 def test_cooldown_is_written_into_the_button(
-    content: GameContent, fighter: Character, session: flow.CombatSession
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
-    ready = flow.render(content, fighter, session).rows[3][0].text
+    ready = flow.render(content, fighter, session, HERO).rows[3][0].text
     # Ready, the button states the price of using it.
     assert "откат 3 хода" in ready
     assert ready.endswith("готово")
 
-    used, _ = flow.advance(content, fighter, session, ready)
-    third = flow.render(content, fighter, used).rows[3][0].text
+    used, _ = flow.advance(content, {HERO: fighter}, session, HERO, ready)
+    third = flow.render(content, fighter, used, HERO).rows[3][0].text
     # Spent, it states what is left of it - a different question.
     assert third.startswith("3. Удар щитом — точность,")
     assert third.endswith("ещё 3 хода")
 
 
 def test_every_button_says_what_it_does(
-    content: GameContent, fighter: Character, session: flow.CombatSession
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
     """A panel of six buttons that all read "готово" tells the player nothing.
 
@@ -138,7 +162,7 @@ def test_every_button_says_what_it_does(
     difference between a skill and a lottery ticket for a player who cannot see
     a tooltip.
     """
-    screen = flow.render(content, fighter, session)
+    screen = flow.render(content, fighter, session, HERO)
     cleave, taunt = screen.rows[1][0].text, screen.rows[2][0].text
     assert "урон " in cleave, cleave
     assert "стоит 10" in cleave, cleave
@@ -153,8 +177,8 @@ def test_a_skill_states_a_number_that_grows_with_the_character(
 
     def damage_on_the_button(level: int) -> int:
         hero = replace(fighter, level=level)
-        session = flow.begin(content, hero, (make_enemy(),), seed=FIGHT_SEED, node=1)
-        label = flow.render(content, hero, session).rows[1][0].text
+        session = open_fight(content, hero, node=1)
+        label = flow.render(content, hero, session, HERO).rows[1][0].text
         # Урон на кнопке — границы, а не одно число: сравнивается верхняя.
         return int(label.split("до ")[1].split(",")[0])
 
@@ -162,12 +186,12 @@ def test_a_skill_states_a_number_that_grows_with_the_character(
 
 
 def test_panel_size_follows_the_loadout_not_the_level(
-    content: GameContent, fighter: Character, session: flow.CombatSession
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
     veteran = replace(fighter, level=300)
-    high = flow.begin(content, veteran, (make_enemy(),), seed=FIGHT_SEED, node=1)
-    assert len(flow.render(content, veteran, high).rows) == len(
-        flow.render(content, fighter, session).rows
+    high = open_fight(content, veteran, node=1)
+    assert len(flow.render(content, veteran, high, HERO).rows) == len(
+        flow.render(content, fighter, session, HERO).rows
     )
 
 
@@ -175,65 +199,67 @@ def test_panel_size_follows_the_loadout_not_the_level(
 
 
 def test_attack_resolves_a_turn(
-    content: GameContent, fighter: Character, session: flow.CombatSession
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
-    after, notice = flow.advance(content, fighter, session, "Атака")
+    after, notice = flow.advance(content, {HERO: fighter}, session, HERO, "Атака")
     assert notice == ""
-    assert after.state.turn == 2
+    assert after.state.round == 2
 
 
 def test_typed_commands_work_in_combat(
-    content: GameContent, fighter: Character, session: flow.CombatSession
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
-    assert flow.action_for(content, fighter, session, "/бой атака") == flow.CombatAction(
+    assert flow.action_for(content, fighter, session, HERO, "/бой атака") == BattleAction(
         kind=ActionKind.ATTACK
     )
-    skill = flow.action_for(content, fighter, session, "/умение 2")
+    skill = flow.action_for(content, fighter, session, HERO, "/умение 2")
     assert skill is not None
     assert (skill.kind, skill.slot) == (ActionKind.SKILL, 1)
-    assert flow.action_for(content, fighter, session, "/бой бежать") == flow.CombatAction(
+    assert flow.action_for(content, fighter, session, HERO, "/бой бежать") == BattleAction(
         kind=ActionKind.FLEE
     )
 
 
 def test_racial_slot_is_addressable_separately(
-    content: GameContent, fighter: Character, session: flow.CombatSession
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
-    action = flow.action_for(content, fighter, session, "/раса")
+    action = flow.action_for(content, fighter, session, HERO, "/раса")
     assert action is not None
     assert action.kind is ActionKind.RACIAL
 
 
 def test_an_empty_slot_answers_without_burning_a_turn(
-    content: GameContent, fighter: Character, session: flow.CombatSession
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
     """Слот пуст - значит хода не было: счётчик стоит, враги не отвечают.
 
     Кнопки такой в панели больше нет, но набранная команда до слота дотянется,
     и старая клавиатура тоже.
     """
-    after, _ = flow.advance(content, fighter, session, "/умение 5")
+    after, _ = flow.advance(content, {HERO: fighter}, session, HERO, "/умение 5")
     assert any(event.kind.value == "empty_slot" for event in after.state.events)
-    assert after.state.turn == session.state.turn
-    assert after.state.player.health == session.state.player.health
+    assert after.state.round == session.state.round
+    before, now = session.state.by_id(HERO), after.state.by_id(HERO)
+    assert before is not None and now is not None
+    assert now.health == before.health
 
 
 def test_a_skill_on_cooldown_costs_no_turn_either(
-    content: GameContent, fighter: Character, session: flow.CombatSession
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
     """Тот же отказ, та же цена: никакой."""
-    ready = flow.render(content, fighter, session).rows[3][0].text
-    used, _ = flow.advance(content, fighter, session, ready)
-    again, _ = flow.advance(content, fighter, used, "/умение 3")
+    ready = flow.render(content, fighter, session, HERO).rows[3][0].text
+    used, _ = flow.advance(content, {HERO: fighter}, session, HERO, ready)
+    again, _ = flow.advance(content, {HERO: fighter}, used, HERO, "/умение 3")
     assert any(event.kind.value == "on_cooldown" for event in again.state.events)
-    assert again.state.turn == used.state.turn
+    assert again.state.round == used.state.round
 
 
 def test_unknown_input_is_refused_without_burning_a_turn(
-    content: GameContent, fighter: Character, session: flow.CombatSession
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
-    after, notice = flow.advance(content, fighter, session, "Купить зелье")
-    assert after.state.turn == session.state.turn
+    after, notice = flow.advance(content, {HERO: fighter}, session, HERO, "Купить зелье")
+    assert after.state.round == session.state.round
     assert notice
 
 
@@ -241,38 +267,38 @@ def test_unknown_input_is_refused_without_burning_a_turn(
 
 
 def test_the_enemy_announces_its_intent_and_the_way_in(
-    content: GameContent, fighter: Character, session: flow.CombatSession
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
     """Rule 1.1.1 and 1.1.3: the choice is made against something, in words."""
-    line = flow.render(content, fighter, session).text().split("\n")[1]
+    line = flow.render(content, fighter, session, HERO).text().split("\n")[2]
     assert "Намерение:" in line
     assert "брешь — " in line
     assert any(tag in line for tag in ("натиск", "оборона", "точность"))
 
 
 def test_the_trace_is_a_spoken_line(
-    content: GameContent, fighter: Character, session: flow.CombatSession
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
     """Rule 1.1.4: no bar, no icon - the state of the exchange is a sentence."""
-    opening = flow.render(content, fighter, session).text()
+    opening = flow.render(content, fighter, session, HERO).text()
     assert "След пуст." in opening
 
-    pressed, _ = flow.advance(content, fighter, session, "Атака — натиск")
-    once = flow.render(content, fighter, pressed).text()
+    pressed, _ = flow.advance(content, {HERO: fighter}, session, HERO, "Атака — натиск")
+    once = flow.render(content, fighter, pressed, HERO).text()
     assert "След: натиск." in once
     assert "повтор даст разгон" in once
 
-    twice, _ = flow.advance(content, fighter, pressed, "Атака — натиск")
+    twice, _ = flow.advance(content, {HERO: fighter}, pressed, HERO, "Атака — натиск")
     assert (
         "След: натиск, 2 следа подряд, разгон 25 процентов."
-        in flow.render(content, fighter, twice).text()
+        in flow.render(content, fighter, twice, HERO).text()
     )
 
 
 def test_every_action_button_names_its_tag(
-    content: GameContent, fighter: Character, session: flow.CombatSession
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
-    texts = [row[0].text for row in flow.render(content, fighter, session).rows]
+    texts = [row[0].text for row in flow.render(content, fighter, session, HERO).rows]
     assert texts[0] == "Атака — натиск"
     assert "натиск" in texts[1], "Рассечение is a plain blow"
     assert "оборона" in texts[2], "Провокация pulls the blow onto you"
@@ -280,27 +306,27 @@ def test_every_action_button_names_its_tag(
 
 
 def test_the_plain_attack_word_still_works(
-    content: GameContent, fighter: Character, session: flow.CombatSession
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
     """The label grew a tag; a player who typed the old word is not locked out."""
-    assert flow.action_for(content, fighter, session, "Атака") == flow.CombatAction(
+    assert flow.action_for(content, fighter, session, HERO, "Атака") == BattleAction(
         kind=ActionKind.ATTACK
     )
-    assert flow.action_for(content, fighter, session, "Атака — натиск") == flow.CombatAction(
+    assert flow.action_for(content, fighter, session, HERO, "Атака — натиск") == BattleAction(
         kind=ActionKind.ATTACK
     )
 
 
 def test_victory_screen_reports_the_rewards(content: GameContent, fighter: Character) -> None:
-    weak = flow.begin(content, fighter, (make_enemy(health=1),), seed=FIGHT_SEED, node=2)
+    weak = open_fight(content, fighter, make_enemy(health=1), node=2)
     state = weak
     for turn in range(10):
         state = replace(state, seed=turn.to_bytes(16, "big"))
-        state, _ = flow.advance(content, fighter, state, "Атака")
+        state, _ = flow.advance(content, {HERO: fighter}, state, HERO, "Атака")
         if state.state.is_over:
             break
-    assert state.state.outcome is CombatOutcome.VICTORY
-    text = flow.render(content, fighter, state).text()
+    assert state.state.verdict_for(HERO) is Verdict.VICTORY
+    text = flow.render(content, fighter, state, HERO).text()
     assert text.startswith("Победа.")
     assert "Опыт:" in text
 
@@ -309,25 +335,29 @@ def test_victory_screen_reports_the_rewards(content: GameContent, fighter: Chara
 
 
 def test_a_fight_survives_a_round_trip_through_redis(
-    content: GameContent, fighter: Character, session: flow.CombatSession
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
-    fought, _ = flow.advance(content, fighter, session, "Атака")
-    restored = flow.deserialise(flow.serialise(fought))
-    assert restored.state.turn == fought.state.turn
-    assert restored.state.trace == fought.state.trace, "the trace outlives a reconnect"
-    assert restored.state.player.health == fought.state.player.health
-    assert restored.state.enemies[0].health == fought.state.enemies[0].health
+    fought, _ = flow.advance(content, {HERO: fighter}, session, HERO, "Атака")
+    restored = battle_service.deserialise(battle_service.serialise(fought))
+    assert restored.state.round == fought.state.round
+    assert restored.state.by_id(HERO) == fought.state.by_id(HERO), "след переживает разрыв связи"
+    assert restored.state.order == fought.state.order
     assert restored.seed == fought.seed
     assert restored.node == fought.node
 
 
 def test_effects_and_cooldowns_survive_the_round_trip(
-    content: GameContent, fighter: Character, session: flow.CombatSession
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
-    taunted, _ = flow.advance(content, fighter, session, "2. Провокация — готово, 15 ресурса")
-    restored = flow.deserialise(flow.serialise(taunted))
-    assert len(restored.state.enemies[0].effects) == len(taunted.state.enemies[0].effects)
-    assert dict(restored.state.player.cooldowns) == dict(taunted.state.player.cooldowns)
+    pressed = flow.render(content, fighter, session, HERO).rows[2][0].text
+    taunted, _ = flow.advance(content, {HERO: fighter}, session, HERO, pressed)
+    restored = battle_service.deserialise(battle_service.serialise(taunted))
+    before, after = taunted.state.by_id(2), restored.state.by_id(2)
+    assert before is not None and after is not None
+    assert len(after.effects) == len(before.effects)
+    hero_before, hero_after = taunted.state.by_id(HERO), restored.state.by_id(HERO)
+    assert hero_before is not None and hero_after is not None
+    assert dict(hero_after.cooldowns) == dict(hero_before.cooldowns)
 
 
 # --- shop economy -----------------------------------------------------

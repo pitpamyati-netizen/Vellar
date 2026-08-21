@@ -5,11 +5,12 @@ players had to be at their phone at the same minute and the slower one lost to a
 clock. Nobody could play it, and a timer is exactly what this game promises not
 to have (``docs/accessibility.md``, rule 13).
 
-So a round of the arena is fought against a **snapshot** of another player -
-their stats, their gear, their level - driven by the ordinary combat engine
-(``domain/rules/pvp.as_enemy``). The other player is not summoned, not told to
-hurry, and loses nothing: the stake is between each fighter and the arena's own
-purse, not between the two of them.
+So a round of the arena is fought against another player's character **played by
+the engine**: the same fighter the ordinary combat engine builds for anybody
+else, only nobody waits for their press (ADR 0021). They fight with their own
+weapon and their own skills; they are not summoned, not told to hurry, and lose
+nothing - the stake is between each fighter and the arena's own purse, not
+between the two of them.
 
 - the stake scales with level, so it stays worth something at 200 as at 20;
 - winning pays the stake back, and the same again out of what the arena is

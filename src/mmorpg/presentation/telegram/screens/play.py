@@ -318,6 +318,16 @@ def attack_label(name: str) -> Label:
     return label(f"Напасть: {name}")
 
 
+def invite_label(name: str) -> Label:
+    """Позвать соседа по узлу в отряд.
+
+    Стоит рядом с «Напасть» нарочно: на одном и том же узле с одним и тем же
+    человеком можно сделать ровно две вещи, и обе видны сразу
+    (``domain/rules/party.py``).
+    """
+    return label(f"Позвать в отряд: {name}", "🤝")
+
+
 def node_left_line(standing: Standing, kind: NodeKind) -> str:
     """Сколько тут ещё есть — словами, без псевдографики.
 
@@ -413,8 +423,14 @@ def location_screen(
 
     action = label(NODE_ACTIONS[node.kind])
     rows: list[tuple[Label, ...]] = [(action,)]
-    if pvp:
-        rows.extend((attack_label(person.name),) for person in others)
+    for person in others:
+        # Позвать можно везде, напасть - только на вольной земле.
+        row = (
+            (attack_label(person.name), invite_label(person.name))
+            if pvp
+            else (invite_label(person.name),)
+        )
+        rows.append(row)
     rows.extend((node_button(neighbour),) for neighbour in neighbours)
     rows.append((LEAVE_LOCATION,))
 

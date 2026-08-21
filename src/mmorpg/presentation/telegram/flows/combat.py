@@ -1,104 +1,37 @@
-"""The combat flow: one button press, one resolved turn.
+"""Поток боя: одно нажатие - один ход, одно сообщение каждому участнику.
 
-The engine itself lives in ``domain.rules.combat``; this module maps button texts
-onto :class:`CombatAction`, keeps the fight in a form that survives a round trip
-through Redis, and decides which screen to show afterwards.
-
-Every turn draws its randomness from ``blake2b(fight_seed, turn)``, so a fight is
-reproducible from its seed and its sequence of actions.
+Сам движок живёт в ``domain.rules.combat``, а бой как запись - в
+``application.services.battle``: он один на всех участников, и лежит в общем
+хранилище, а не в данных автомата каждого игрока (ADR 0021). Здесь остаётся то,
+что делает слой представления: кнопка превращается в действие, а состояние -
+в экран, свой для каждого, кто на него смотрит.
 """
 
 from __future__ import annotations
 
-import json
-from collections.abc import Sequence
-from dataclasses import dataclass, replace
-from types import MappingProxyType
-from typing import Any
+from collections.abc import Mapping, Sequence
+from dataclasses import replace
 
+from mmorpg.application.services.battle import BattleSession
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import (
     ActionKind,
-    ActionTag,
-    CombatAction,
-    CombatOutcome,
-    CombatState,
-    EnemyState,
-    PlayerState,
-    Trace,
+    BattleAction,
+    BattleEvent,
+    BattleOutcome,
+    BattleState,
+    EventKind,
+    Verdict,
 )
 from mmorpg.domain.entities.content import GameContent
-from mmorpg.domain.entities.effects import ActiveEffect, EffectStack
-from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
+from mmorpg.domain.entities.location import Enemy, EnemyRank
 from mmorpg.domain.procgen.enemies import generate_group
-from mmorpg.domain.procgen.seeds import derive
-from mmorpg.domain.rules.combat import resolve_turn, start_combat
+from mmorpg.domain.rules.combat import act
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label
 from mmorpg.presentation.telegram.routing import Intent, resolve
 from mmorpg.presentation.telegram.screens import combat as screens
 from mmorpg.presentation.telegram.screens.base import Screen
-
-
-@dataclass(frozen=True, slots=True)
-class CombatSession:
-    """An active fight, plus the seed it is being replayed from.
-
-    ``depth`` is zero for a fight standing at a location node, and one to three
-    for a descent into the city dungeons, where fights follow one another with no
-    break in between.
-
-    ``opponent`` is the character id of another player when this is a duel on a
-    free location: the fight is against a snapshot of them, and the id is what
-    the handler settles the stake against afterwards (``domain/rules/pvp.py``).
-    """
-
-    state: CombatState
-    seed: bytes
-    node: int = 0
-    #: Волна узла, из которой вышел этот противник. Победа забирает единицу
-    #: именно из неё: если узел успел смениться, забирать уже нечего
-    #: (``domain/rules/nodes.py``).
-    wave: int = 0
-    depth: int = 0
-    opponent: int = 0
-    # A round of the arena. The stake is already paid when the fight opens,
-    # and the outcome settles against the arena rather than against a player.
-    arena: bool = False
-
-    @property
-    def in_descent(self) -> bool:
-        return self.depth > 0
-
-    @property
-    def is_duel(self) -> bool:
-        return self.opponent > 0
-
-    def turn_seed(self) -> bytes:
-        return derive(self.seed, "turn", self.state.turn)
-
-
-def begin(
-    content: GameContent,
-    character: Character,
-    enemies: tuple[Enemy, ...],
-    *,
-    seed: bytes,
-    node: int,
-    wave: int = 0,
-    depth: int = 0,
-    opponent: int = 0,
-    arena: bool = False,
-) -> CombatSession:
-    return CombatSession(
-        state=start_combat(content, character, enemies),
-        seed=seed,
-        node=node,
-        wave=wave,
-        depth=depth,
-        opponent=opponent,
-        arena=arena,
-    )
 
 
 def spawn_for_node(
@@ -109,7 +42,7 @@ def spawn_for_node(
     level: int,
     rank: EnemyRank = EnemyRank.NORMAL,
 ) -> tuple[Enemy, ...]:
-    """Who is standing at this node. Same seed, same opponents, every time."""
+    """Кто стоит в этом узле. То же семя - те же противники, всегда."""
     return generate_group(
         seed,
         archetypes=content.enemy_archetypes,
@@ -120,232 +53,183 @@ def spawn_for_node(
     )
 
 
+# --- экраны -----------------------------------------------------------
+
+
 def render(
     content: GameContent,
     character: Character,
-    session: CombatSession,
+    session: BattleSession,
+    viewer_id: int,
     notice: str = "",
     extra: Sequence[str] = (),
     rows: Sequence[tuple[Label, ...]] = (),
     gold_lost: int = 0,
+    experience: int = 0,
+    gold: int = 0,
+    loot: Sequence[str] = (),
 ) -> Screen:
+    """Экран этого боя для этого участника."""
     state = session.state
-    match state.outcome:
-        case CombatOutcome.VICTORY:
-            loot = tuple(
-                content.item(item_id).name for item_id in state.loot if content.has_item(item_id)
+    match state.verdict_for(viewer_id):
+        case Verdict.VICTORY:
+            return screens.victory_screen(
+                state,
+                viewer_id,
+                extra=extra,
+                rows=rows,
+                loot=loot,
+                experience=experience,
+                gold=gold,
             )
-            return screens.victory_screen(state, extra=extra, rows=rows, loot=loot)
-        case CombatOutcome.DEFEAT:
-            return screens.defeat_screen(state, gold_lost)
-        case CombatOutcome.FLED:
-            return screens.escaped_screen(fled=True, state=state)
-        case CombatOutcome.AVOIDED:
-            return screens.escaped_screen(fled=False, state=state)
+        case Verdict.DEFEAT:
+            return screens.defeat_screen(state, viewer_id, gold_lost, extra=extra)
+        case Verdict.FLED:
+            return screens.escaped_screen(True, state, viewer_id, extra=extra)
+        case Verdict.AVOIDED:
+            return screens.escaped_screen(False, state, viewer_id, extra=extra)
         case _:
-            return screens.combat_screen(content, character, state, notice)
+            current = state.active
+            if current is not None and current.id == viewer_id:
+                return screens.battle_screen(content, character, state, viewer_id, notice)
+            return screens.waiting_screen(state, viewer_id, notice)
 
 
 def action_for(
-    content: GameContent, character: Character, session: CombatSession, text: str
-) -> CombatAction | None:
-    """Map a pressed button or typed command onto a combat action."""
-    screen = render(content, character, session)
+    content: GameContent,
+    character: Character,
+    session: BattleSession,
+    viewer_id: int,
+    text: str,
+) -> BattleAction | None:
+    """Нажатую кнопку или набранную команду - в действие боя."""
+    screen = render(content, character, session, viewer_id)
     command = resolve(text, screen)
 
     match command.intent:
         case Intent.ATTACK:
-            return CombatAction(kind=ActionKind.ATTACK)
+            return BattleAction(kind=ActionKind.ATTACK)
         case Intent.FLEE:
-            return CombatAction(kind=ActionKind.FLEE)
+            return BattleAction(kind=ActionKind.FLEE)
+        case Intent.YIELD:
+            return BattleAction(kind=ActionKind.YIELD)
         case Intent.RACIAL:
-            return CombatAction(kind=ActionKind.RACIAL)
+            return BattleAction(kind=ActionKind.RACIAL)
         case Intent.SKILL if command.number is not None:
-            return CombatAction(kind=ActionKind.SKILL, slot=command.number - 1)
+            return BattleAction(kind=ActionKind.SKILL, slot=command.number - 1)
         case Intent.SELECT:
-            return _action_from_label(content, character, session, command.argument)
+            return _action_from_label(content, character, session, viewer_id, command.argument)
         case _:
             return None
 
 
 def _action_from_label(
-    content: GameContent, character: Character, session: CombatSession, argument: str
-) -> CombatAction | None:
+    content: GameContent,
+    character: Character,
+    session: BattleSession,
+    viewer_id: int,
+    argument: str,
+) -> BattleAction | None:
+    state = session.state
+    viewer = state.by_id(viewer_id)
     for slot in range(content.rules.active_slots):
         if argument.startswith(f"{slot + 1}."):
-            return CombatAction(kind=ActionKind.SKILL, slot=slot)
-    racial = screens.racial_label(content, character, session.state)
-    if racial.matches(argument):
-        return CombatAction(kind=ActionKind.RACIAL)
-    # The label now carries its tag; the bare word a player typed before still works.
+            return BattleAction(kind=ActionKind.SKILL, slot=slot)
+    if viewer is not None:
+        for one in state.foes_of(viewer_id):
+            if screens.target_label(one).matches(argument):
+                return BattleAction(kind=ActionKind.FOCUS, target=one.id)
+        racial = screens.racial_label(content, character, viewer)
+        if racial.matches(argument):
+            return BattleAction(kind=ActionKind.RACIAL)
+    # Метка несёт свой тег; голое слово, которое игрок набирал раньше, работает.
     if screens.attack_label().matches(argument) or labels.ATTACK.matches(argument):
-        return CombatAction(kind=ActionKind.ATTACK)
+        return BattleAction(kind=ActionKind.ATTACK)
     if labels.FLEE.matches(argument):
-        return CombatAction(kind=ActionKind.FLEE)
+        return BattleAction(kind=ActionKind.FLEE)
+    if labels.BATTLE_YIELD.matches(argument):
+        return BattleAction(kind=ActionKind.YIELD)
     return None
 
 
 def advance(
-    content: GameContent, character: Character, session: CombatSession, text: str
-) -> tuple[CombatSession, str]:
-    """Resolve one turn. Returns the new session and a notice for unusable input."""
-    if session.state.is_over:
+    content: GameContent,
+    roster: Mapping[int, Character],
+    session: BattleSession,
+    viewer_id: int,
+    text: str,
+) -> tuple[BattleSession, str]:
+    """Разобрать нажатие и исполнить ход. Второй член - что сказать о непонятом."""
+    state = session.state
+    if state.is_over:
         return session, ""
 
-    action = action_for(content, character, session, text)
+    character = roster.get(viewer_id)
+    if character is None:  # pragma: no cover - зритель всегда в списке
+        return session, ""
+
+    # «Что там в бою» - не ход, а просьба сказать всё заново: ждущему больше
+    # нечего нажать, и нажатие обязано что-то делать (``Claude.md``, правило 9).
+    if resolve(text, render(content, character, session, viewer_id)).intent is Intent.REFRESH:
+        return session, ""
+
+    action = action_for(content, character, session, viewer_id, text)
     if action is None:
         return session, "Не узнал действие. Нажмите кнопку из панели боя."
 
-    state = resolve_turn(content, character, session.state, action, session.turn_seed())
-    return replace(session, state=state), ""
+    current = state.active
+    if current is None or current.id != viewer_id:
+        # Не свой ход: сдаться можно всегда, всё прочее ждёт очереди.
+        if action.kind is ActionKind.YIELD:
+            return yield_out_of_turn(content, roster, session, viewer_id), ""
+        return session, "Сейчас не ваш ход. Дождитесь своей очереди."
+
+    updated = act(content, roster, state, action, session.seed)
+    return replace(session, state=updated), ""
 
 
-# --- serialisation ----------------------------------------------------
-#
-# The fight lives in Redis with a TTL, so it has to survive JSON. Only what the
-# engine needs is stored; everything derived is recomputed on load.
+def yield_out_of_turn(
+    content: GameContent,
+    roster: Mapping[int, Character],
+    session: BattleSession,
+    viewer_id: int,
+) -> BattleSession:
+    """Сдаться, не дожидаясь своей очереди.
 
-
-def _effects_to_json(stack: EffectStack) -> list[dict[str, object]]:
-    return [
-        {
-            "id": effect.id,
-            "name": effect.name,
-            "modifiers": dict(effect.modifiers),
-            "turns": effect.turns_left,
-            "good": effect.beneficial,
-        }
-        for effect in stack
-    ]
-
-
-def _effects_from_json(raw: list[dict[str, Any]]) -> EffectStack:
-    stack = EffectStack()
-    for entry in raw:
-        stack = stack.apply(
-            ActiveEffect(
-                id=str(entry["id"]),
-                name=str(entry["name"]),
-                modifiers={str(key): float(value) for key, value in entry["modifiers"].items()},
-                turns_left=int(entry["turns"]),
-                beneficial=bool(entry["good"]),
-            )
-        )
-    return stack
-
-
-def serialise(session: CombatSession) -> str:
+    Это и есть выход из боя, который бросили с той стороны: ждать нечего, а
+    ходить не дают. Бой доигрывается без сдавшегося - если он был последним на
+    своей стороне, поле остаётся за противником (ADR 0021).
+    """
     state = session.state
-    return json.dumps(
-        {
-            "seed": session.seed.hex(),
-            "node": session.node,
-            "wave": session.wave,
-            "depth": session.depth,
-            "opponent": session.opponent,
-            "arena": session.arena,
-            "turn": state.turn,
-            "outcome": state.outcome.value,
-            "experience": state.experience,
-            "gold": state.gold,
-            "loot": list(state.loot),
-            "trace": [tag.value for tag in state.trace.tags],
-            "player": {
-                "name": state.player.name,
-                "health": state.player.health,
-                "max_health": state.player.max_health,
-                "resource": state.player.resource,
-                "max_resource": state.player.max_resource,
-                "resource_name": state.player.resource_name,
-                "shield": state.player.shield,
-                "stunned": state.player.stunned,
-                "free_cast": state.player.free_cast,
-                "evade": state.player.evade_charges,
-                "cooldowns": dict(state.player.cooldowns),
-                "effects": _effects_to_json(state.player.effects),
-            },
-            "enemies": [
-                {
-                    "index": enemy.index,
-                    "health": enemy.health,
-                    "stunned": enemy.stunned,
-                    "effects": _effects_to_json(enemy.effects),
-                    "enemy": {
-                        "archetype": enemy.enemy.archetype_id,
-                        "name": enemy.enemy.name,
-                        "kind": enemy.enemy.kind.value,
-                        "level": enemy.enemy.level,
-                        "max_health": enemy.enemy.max_health,
-                        "damage": enemy.enemy.damage,
-                        "armor": enemy.enemy.armor,
-                        "initiative": enemy.enemy.initiative,
-                        "rank": enemy.enemy.rank.value,
-                        "loot": list(enemy.enemy.loot),
-                        "gold": enemy.enemy.gold,
-                    },
-                }
-                for enemy in state.enemies
-            ],
-        },
-        ensure_ascii=False,
+    one = state.by_id(viewer_id)
+    if one is None or not one.alive:  # pragma: no cover - сдаётся только живой
+        return session
+    left = state.replace_combatant(replace(one, left=True))
+    left = replace(
+        left,
+        events=(BattleEvent(kind=EventKind.YIELDED, actor_id=one.id, actor=one.name),),
     )
-
-
-def deserialise(raw: str) -> CombatSession:
-    data = json.loads(raw)
-    player_raw = data["player"]
-    player = PlayerState(
-        name=player_raw["name"],
-        health=player_raw["health"],
-        max_health=player_raw["max_health"],
-        resource=player_raw["resource"],
-        max_resource=player_raw["max_resource"],
-        resource_name=player_raw["resource_name"],
-        effects=_effects_from_json(player_raw["effects"]),
-        cooldowns=MappingProxyType(dict(player_raw["cooldowns"])),
-        shield=player_raw["shield"],
-        stunned=player_raw["stunned"],
-        free_cast=player_raw["free_cast"],
-        evade_charges=player_raw["evade"],
-    )
-    enemies = tuple(
-        EnemyState(
-            enemy=Enemy(
-                archetype_id=entry["enemy"]["archetype"],
-                name=entry["enemy"]["name"],
-                kind=EnemyKind(entry["enemy"]["kind"]),
-                level=entry["enemy"]["level"],
-                max_health=entry["enemy"]["max_health"],
-                damage=entry["enemy"]["damage"],
-                armor=entry["enemy"]["armor"],
-                initiative=entry["enemy"]["initiative"],
-                rank=EnemyRank(entry["enemy"]["rank"]),
-                loot=tuple(entry["enemy"]["loot"]),
-                gold=entry["enemy"]["gold"],
-            ),
-            health=entry["health"],
-            effects=_effects_from_json(entry["effects"]),
-            stunned=entry["stunned"],
-            index=entry["index"],
+    current = left.active
+    if current is not None and current.id == viewer_id:
+        # Очередь стояла на сдавшемся: движок передвинет её сам и доиграет
+        # ходы тех, за кого ходит он.
+        return replace(
+            session,
+            state=act(content, roster, left, BattleAction(kind=ActionKind.YIELD), session.seed),
         )
-        for entry in data["enemies"]
-    )
-    state = CombatState(
-        player=player,
-        enemies=enemies,
-        turn=data["turn"],
-        outcome=CombatOutcome(data["outcome"]),
-        experience=data["experience"],
-        gold=data["gold"],
-        loot=tuple(data["loot"]),
-        trace=Trace(tuple(ActionTag(tag) for tag in data.get("trace", ()))),
-    )
-    return CombatSession(
-        state=state,
-        seed=bytes.fromhex(data["seed"]),
-        node=data["node"],
-        wave=int(data.get("wave", 0)),
-        depth=int(data.get("depth", 0)),
-        opponent=int(data.get("opponent", 0)),
-        arena=bool(data.get("arena", False)),
+    return replace(session, state=_settle_if_over(left))
+
+
+def _settle_if_over(state: BattleState) -> BattleState:
+    """Не кончился ли бой оттого, что кто-то из него вышел."""
+    standing = {side: state.living(side) for side in (0, 1)}
+    if standing[0] and standing[1]:
+        return state
+    winner = 0 if standing[0] else 1
+    loser = 1 - winner
+    walked_out = all(one.left for one in state.combatants if one.side == loser)
+    return replace(
+        state,
+        outcome=BattleOutcome.FLED if walked_out else BattleOutcome.DECIDED,
+        winner=winner,
     )

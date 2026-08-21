@@ -31,6 +31,7 @@ from mmorpg import economy_log
 from mmorpg.application.services import group_trade, keeper_panel, moderation
 from mmorpg.application.services.content import ContentRegistry
 from mmorpg.application.services.keeper import set_keeper, sync_keeper
+from mmorpg.application.services.party import PartyStore
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
@@ -45,6 +46,7 @@ from mmorpg.domain.ports.repositories import (
     InventoryRepository,
     KeeperLogRepository,
     LocationStateCache,
+    StateCache,
     TradeRepository,
     User,
     UserRepository,
@@ -53,6 +55,7 @@ from mmorpg.domain.procgen.seeds import rotation_index
 from mmorpg.domain.rules import economy as economy_rules
 from mmorpg.domain.rules import moderation as moderation_rules
 from mmorpg.domain.rules import nodes as node_rules
+from mmorpg.domain.rules import party as party_rules
 from mmorpg.domain.rules import progression
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.economy import buy_price, roll_assortment
@@ -79,6 +82,7 @@ from mmorpg.presentation.telegram.flows.state import (
 from mmorpg.presentation.telegram.handlers.combat import open_fight
 from mmorpg.presentation.telegram.handlers.creation import welcome_screen
 from mmorpg.presentation.telegram.messaging import send_screen, send_text
+from mmorpg.presentation.telegram.routing import Intent, parse_command
 from mmorpg.presentation.telegram.screens import keeper as keeper_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.keeper import KeeperView
@@ -128,6 +132,7 @@ async def play(
     overlays: ContentOverlayRepository,
     registry: ContentRegistry,
     trades: TradeRepository,
+    state_cache: StateCache,
     user: User | None = None,
 ) -> None:
     if message.from_user is None or message.text is None:
@@ -186,19 +191,31 @@ async def play(
         settings,
     )
 
-    updated = advance(
-        content,
-        character,
-        flow,
-        message.text,
-        world_seed=settings.world_seed,
-        clock=clock,
-        goods=goods,
-        settings=accessibility,
-        neighbours=company,
-        keeper=view,
-        location_state=here,
-    )
+    # Отряд собирается командой, а не экраном: звать и соглашаться приходится из
+    # любого места, где игрок сейчас стоит (``domain/rules/party.py``).
+    party_answer = await _party_step(message, character, characters, state_cache)
+    if party_answer is not None:
+        updated = flow.with_notice(party_answer)
+    else:
+        updated = advance(
+            content,
+            character,
+            flow,
+            message.text,
+            world_seed=settings.world_seed,
+            clock=clock,
+            goods=goods,
+            settings=accessibility,
+            neighbours=company,
+            keeper=view,
+            location_state=here,
+        )
+
+    if updated.invite:
+        called = await _call_to_party(
+            message, character, updated.invite, company, characters, state_cache
+        )
+        updated = replace(updated, invite=0).with_notice(called)
 
     before_level = character.level
     character = await _apply(
@@ -235,6 +252,8 @@ async def play(
             flow=updated,
             emoji=emoji,
             characters=characters,
+            state_cache=state_cache,
+            storage=state.storage,
             location_state=here,
             now=now,
         )
@@ -616,6 +635,21 @@ async def _sweep(
     return f"Проверено аккаунтов: {swept.checked}. Из них заблокировали бота: {swept.blocked}."
 
 
+async def _tell(message: Message, telegram_id: int, text: str) -> None:
+    """Одна строка тому, кто сейчас не смотрит в игру.
+
+    Не дошло - значит не дошло: зов в отряд не стоит того, чтобы уронить ход
+    того, кто его отправил.
+    """
+    bot = message.bot
+    if bot is None:  # pragma: no cover - у сообщения всегда есть бот
+        return
+    try:
+        await bot.send_message(chat_id=telegram_id, text=text)
+    except TelegramAPIError:
+        logger.info("party_notice_undelivered", telegram_id=telegram_id)
+
+
 async def _reachable(bot: Bot | None, telegram_id: int) -> bool:
     """Читает ли этот человек бота.
 
@@ -759,3 +793,124 @@ async def take_from_node(
         now=now,
         ttl=LOCATION_TTL,
     )
+
+
+# --- отряд ------------------------------------------------------------
+#
+# Отряд собирается двумя движениями: кнопкой «Позвать в отряд» на своём узле и
+# командой у того, кого позвали. Команда - потому что зов приходит туда, где
+# человек сейчас стоит, а перерисовывать чужой экран под одну кнопку игра не
+# станет: одно действие - одно сообщение (``docs/accessibility.md``, правило 3).
+
+
+async def _party_names(
+    party: party_rules.Party, characters: CharacterRepository
+) -> tuple[str, ...]:
+    names: list[str] = []
+    for member_id in party.members:
+        one = await characters.get(member_id)
+        if one is not None:
+            names.append(one.name)
+    return tuple(names)
+
+
+async def _party_step(
+    message: Message,
+    character: Character,
+    characters: CharacterRepository,
+    state_cache: StateCache,
+) -> str | None:
+    """Ответ на команду отряда. ``None`` - это была не она."""
+    command = parse_command(message.text or "")
+    if command is None:
+        return None
+    parties = PartyStore(state_cache)
+
+    match command.intent:
+        case Intent.PARTY:
+            party = await parties.of(character.id)
+            caller_id = await parties.called_by(character.id)
+            lines = []
+            if party is not None:
+                names = await _party_names(party, characters)
+                lines.append(f"Ваш отряд: {', '.join(names)}.")
+                lines.append("«/отряд уйти» — уйти из отряда.")
+            else:
+                lines.append("Вы идёте один. Позвать соседа можно кнопкой на узле локации.")
+            if caller_id:
+                caller = await characters.get(caller_id)
+                if caller is not None:
+                    lines.append(
+                        f"{caller.name} зовёт вас в отряд: «/отряд принять» или «/отряд отказать»."
+                    )
+            return " ".join(lines)
+
+        case Intent.PARTY_ACCEPT:
+            party = await parties.accept(character.id)
+            if party is None:
+                return "Вас сейчас никто не зовёт."
+            names = await _party_names(party, characters)
+            for member_id in party.members:
+                if member_id == character.id:
+                    continue
+                other = await characters.get(member_id)
+                if other is not None:
+                    await _tell(message, other.user_id, f"{character.name} идёт с вами.")
+            return f"Вы в отряде: {', '.join(names)}. Бой у вас теперь общий."
+
+        case Intent.PARTY_DECLINE:
+            await parties.forget_call(character.id)
+            return "Зов отклонён."
+
+        case Intent.PARTY_LEAVE:
+            party = await parties.of(character.id)
+            if party is None:
+                return "Вы и так идёте один."
+            left = await parties.leave(character.id)
+            if left is None:
+                return "Отряд распущен."
+            for member_id in left.members:
+                other = await characters.get(member_id)
+                if other is not None:
+                    await _tell(message, other.user_id, f"{character.name} ушёл из отряда.")
+            return "Вы вышли из отряда."
+
+        case _:
+            return None
+
+
+async def _call_to_party(
+    message: Message,
+    character: Character,
+    target_id: int,
+    company: Sequence[Presence],
+    characters: CharacterRepository,
+    state_cache: StateCache,
+) -> str:
+    """Позвать соседа по узлу. Согласие даёт он сам, и другого пути нет."""
+    target = await characters.get(target_id)
+    if target is None or not any(person.character_id == target_id for person in company):
+        return "Этого человека здесь больше нет."
+
+    parties = PartyStore(state_cache)
+    party = await parties.of(character.id)
+    theirs = await parties.of(target.id)
+    refused = party_rules.invite_refusal(
+        inviter_level=character.level,
+        invitee_name=target.name,
+        invitee_level=target.level,
+        party=party,
+        invitee_in_party=theirs is not None,
+    )
+    if refused:
+        return refused
+
+    leader_id = party.leader_id if party is not None else character.id
+    await parties.call(leader_id=leader_id, invitee_id=target.id)
+    await _tell(
+        message,
+        target.user_id,
+        f"{character.name}, уровень {character.level}, зовёт вас в отряд. "
+        "Наберите «/отряд принять», чтобы пойти вместе, или «/отряд отказать».",
+    )
+    return f"Зов отправлен: {target.name}. Ответит — пойдёте вместе."

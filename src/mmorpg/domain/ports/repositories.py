@@ -197,8 +197,9 @@ class CharacterRepository(Protocol):
         """Somebody of about this level to fight a copy of, or ``None``.
 
         The arena is asynchronous: what comes back is a character record, and the
-        fight is against a snapshot of it (``domain/rules/pvp.as_enemy``). The
-        opponent is never told and never waits.
+        engine plays that character in the fight (``domain/rules/combat``). The
+        opponent is never told and never waits - but they fight with their own
+        weapon and their own skills, not with a made-up number (ADR 0021).
         """
 
     async def arena_table(self, *, limit: int = 10) -> tuple[Character, ...]:
