@@ -592,6 +592,19 @@ def all_screens(
         play.stub_screen("Арена"),
         skill_screens.skills_screen(content, fighter, PageState()),
         skill_screens.skills_screen(content, hero, PageState(page=2)),
+        # Длинный список умений - самый длинный экран игры: у разбойника на
+        # трёхсотом уровне четырнадцать записей под двести знаков каждая, и
+        # восемь таких в одно сообщение не влезали. Три страницы этого списка
+        # стоят здесь ради правила 11, а не ради разбойника.
+        *(
+            skill_screens.skills_screen(
+                content,
+                replace(hero, class_id=class_id, level=300, unspent_skill_points=2),
+                PageState(page=page),
+            )
+            for class_id in ("rogue", "ranger", "barbarian")
+            for page in (1, 2, 3)
+        ),
         skill_screens.slots_screen(content, fighter),
         skill_screens.pick_screen(content, fighter, 2, PageState()),
         skill_screens.pick_screen(content, hero, 0, PageState()),

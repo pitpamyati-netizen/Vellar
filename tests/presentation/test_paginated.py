@@ -10,6 +10,7 @@ from mmorpg.presentation.telegram.keyboards.labels import (
     SEARCH,
 )
 from mmorpg.presentation.telegram.screens.base import ScreenId
+from mmorpg.presentation.telegram.screens.format import MESSAGE_LIMIT
 from mmorpg.presentation.telegram.screens.paginated import (
     PAGE_SIZE,
     ListEntry,
@@ -161,3 +162,62 @@ def test_selection_counter_is_spoken_not_drawn() -> None:
 def test_metadata_exposes_the_page_for_the_handler() -> None:
     screen = render(30, page=2)
     assert screen.metadata == {"page": "2", "pages": "4", "count": "30"}
+
+
+# --- страница влезает в сообщение ------------------------------------
+
+
+def _wordy(count: int, length: int = 190) -> list[ListEntry]:
+    return [
+        ListEntry(key=f"e{index}", text=f"Запись {index}", detail="о" * length)
+        for index in range(1, count + 1)
+    ]
+
+
+def test_a_long_list_shortens_the_page_instead_of_losing_its_tail() -> None:
+    """Восемь записей — потолок, а не обещание.
+
+    Экран умений собирал восемь кнопок и печатал пять описаний: отправлялась
+    первая страница текста в девятьсот знаков, а хвост пропадал молча — ни
+    строки о том, что он был.
+    """
+    screen = paginated_screen(
+        screen_id=ScreenId.SKILLS,
+        title="Умения",
+        entries=_wordy(14),
+        state=PageState(),
+    )
+    assert len(screen.text()) <= MESSAGE_LIMIT
+    assert screen.pages() == (screen.text(),)
+    described = [line for line in screen.lines if "оооо" in line]
+    buttons = [row for row in screen.rows if len(row) == 1 and "Запись" in row[0].text]
+    assert len(described) == len(buttons)
+    assert int(screen.metadata["pages"]) > 2
+
+
+def test_every_page_of_one_list_holds_the_same_number_of_entries() -> None:
+    """«Четвёртое умение» обязано быть одним и тем же на любой странице."""
+    sizes = {
+        len([row for row in render_wordy(page).rows if "Запись" in row[0].text])
+        for page in (1, 2, 3)
+    }
+    assert len(sizes) == 1
+
+
+def render_wordy(page: int):
+    return paginated_screen(
+        screen_id=ScreenId.SKILLS,
+        title="Умения",
+        entries=_wordy(15),
+        state=PageState(page=page),
+    )
+
+
+def test_a_short_list_still_holds_eight() -> None:
+    screen = paginated_screen(
+        screen_id=ScreenId.INVENTORY,
+        title="Инвентарь",
+        entries=entries(20),
+        state=PageState(),
+    )
+    assert screen.metadata["pages"] == "3"

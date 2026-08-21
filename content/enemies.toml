@@ -7,6 +7,11 @@
 # biomes: which location biomes this archetype can appear in. "*" means anywhere.
 # Every biome used in world.toml must have at least three candidates - checked by
 # tests/content/test_enemies.py.
+#
+# element: чем этот противник бьёт - physical, magic, fire, cold, poison. Не
+# объявлено - решает порода: стихия и тварь бьют чарами, всё прочее железом. По
+# стихии считается сопротивление игрока, и без неё «Рождённый в стуже» и
+# «Стойкая кровь» были надписью без последствий (ADR 0018).
 
 [meta]
 kinds = ["beast", "humanoid", "undead", "elemental", "aberration"]
@@ -41,6 +46,7 @@ loot = ["wolf_pelt"]
 id = "giant_spider"
 name = "Гигантский паук"
 kind = "beast"
+element = "poison"
 biomes = ["лес", "пещеры", "подземелье", "тоннели", "склепы", "шахта"]
 health = 0.8
 damage = 1.2
@@ -153,6 +159,7 @@ loot = ["iron_scrap"]
 id = "ghoul"
 name = "Упырь"
 kind = "undead"
+element = "poison"
 biomes = ["склепы", "болото", "город мёртвых", "курганы", "подземелье"]
 health = 1.1
 damage = 1.2
@@ -164,6 +171,7 @@ loot = []
 id = "drowned"
 name = "Утопленник"
 kind = "undead"
+element = "cold"
 biomes = ["река", "болото", "море", "корабли", "берег", "порт"]
 health = 1.2
 damage = 0.9
@@ -175,6 +183,7 @@ loot = []
 id = "wraith"
 name = "Призрак"
 kind = "undead"
+element = "cold"
 biomes = ["руины", "чертоги", "склепы", "аномалия", "башня", "курганы"]
 health = 0.7
 damage = 1.4
@@ -186,6 +195,7 @@ loot = []
 id = "bog_lurker"
 name = "Болотный лишень"
 kind = "aberration"
+element = "poison"
 biomes = ["болото", "река", "отмели", "лес", "сады"]
 health = 1.3
 damage = 1.0
@@ -197,6 +207,7 @@ loot = ["grove_resin"]
 id = "glass_horror"
 name = "Стеклянный ужас"
 kind = "aberration"
+element = "cold"
 biomes = ["кратер", "аномалия", "тоннели", "пустошь", "разлом"]
 health = 1.1
 damage = 1.3
@@ -219,6 +230,7 @@ loot = []
 id = "stone_golem"
 name = "Каменный истукан"
 kind = "elemental"
+element = "physical"
 biomes = ["горы", "карьер", "ущелье", "скалы", "кузни", "крепость", "шахта"]
 health = 1.6
 damage = 1.1
@@ -230,6 +242,7 @@ loot = ["iron_scrap"]
 id = "fire_elemental"
 name = "Живой огонь"
 kind = "elemental"
+element = "fire"
 biomes = ["вулкан", "пепел", "кузни", "лава", "аномалия"]
 health = 1.0
 damage = 1.5
@@ -241,6 +254,7 @@ loot = []
 id = "frost_elemental"
 name = "Живой лёд"
 kind = "elemental"
+element = "cold"
 biomes = ["снега", "тундра", "горы", "перевал", "подземелье"]
 health = 1.2
 damage = 1.2
@@ -252,6 +266,7 @@ loot = []
 id = "storm_spirit"
 name = "Дух бури"
 kind = "elemental"
+element = "magic"
 biomes = ["плато", "скалы", "небо", "горы", "аномалия", "вершина"]
 health = 0.9
 damage = 1.4
@@ -285,6 +300,7 @@ loot = ["wolf_pelt"]
 id = "treant"
 name = "Древень"
 kind = "aberration"
+element = "poison"
 biomes = ["лес", "сады", "роща", "болото"]
 health = 1.7
 damage = 1.0
@@ -296,6 +312,7 @@ loot = ["grove_resin"]
 id = "guardian_construct"
 name = "Заводной страж"
 kind = "elemental"
+element = "physical"
 biomes = ["чертоги", "башня", "тронный зал", "крепость", "кузни", "галереи"]
 health = 1.5
 damage = 1.3

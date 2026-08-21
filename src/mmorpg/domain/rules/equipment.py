@@ -41,9 +41,12 @@ ARMOR_SOFTENER_PER_LEVEL = 3.2
 
 #: Чем бьют, когда в руках ничего. Кости растут с уровнем героя так же, как у
 #: оружия со ступенью, — иначе на сотом уровне безоружный не бил бы вовсе. Но и
-#: близко не оружие: на первом уровне это в среднем 3 против 7 у меча. Половина
-#: и здесь не бросается: кулак бьёт слабо, но ровно.
+#: близко не оружие: на первом уровне это в среднем 3 против 7 у меча.
 UNARMED_DICE = Dice(count=1, faces=3, bonus=1)
+
+#: Кулак бьёт слабо, но ровнее всякого оружия: размаха у него меньше, чем у
+#: самого ровного меча.
+UNARMED_SPREAD = 1.15
 
 WEAPON_SLOT = "weapon"
 
@@ -122,7 +125,9 @@ def weapon_dice(content: GameContent, character: Character) -> Dice:
     weapon = weapon_of(content, character)
     if weapon is not None and weapon.damage is not None:
         return weapon.damage
-    return UNARMED_DICE.scaled(1.0 + gear_procgen.FACES_PER_LEVEL * (character.level - 1))
+    return UNARMED_DICE.scaled(
+        1.0 + gear_procgen.FACES_PER_LEVEL * (character.level - 1), spread=UNARMED_SPREAD
+    )
 
 
 def type_modifiers(content: GameContent, item_ids: Iterable[str]) -> dict[str, float]:

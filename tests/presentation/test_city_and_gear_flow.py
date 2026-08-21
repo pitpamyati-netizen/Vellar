@@ -23,6 +23,7 @@ from mmorpg.presentation.telegram.flows.play import (
     PlayState,
     advance,
     begin,
+    dungeon_level,
     render,
 )
 from mmorpg.presentation.telegram.screens import city as city_screens
@@ -569,6 +570,34 @@ def test_the_descent_asks_for_a_fight(
     assert down.fight == "dungeon"
     assert down.descent.depth == 1
     assert down.descent.city_id == "farhold"
+
+
+def test_the_descent_is_a_place_and_not_a_mirror(content: GameContent, hero: Character) -> None:
+    """Спуск не растёт вместе с тем, кто в него спускается.
+
+    Уровень спуска был ``character.level + 1``: содержимое, всегда ровно по
+    игроку, а значит опыт без конца — штраф за бой ниже своего уровня в таком
+    спуске не срабатывал никогда. Один персонаж взял так тридцать уровней за
+    сутки, не выходя из одного города (``Roadmap.md``, аномалия роста уровней).
+    """
+    ladder = [
+        dungeon_level(content, replace(hero, level=level), "farhold")
+        for level in (1, 5, 12, 22, 30, 60, 150)
+    ]
+    # Растёт ступенями мира, а не вслед за игроком, и упирается в потолок города.
+    assert ladder == sorted(ladder)
+    deepest = content.city("farhold").locations[-1]
+    assert max(ladder) == deepest.level_min
+    assert dungeon_level(content, replace(hero, level=150), "farhold") < 150
+
+
+def test_a_descent_you_outgrew_says_so_before_you_walk_in(
+    content: GameContent, hero: Character
+) -> None:
+    grown = replace(hero, level=150)
+    dungeon = step(content, grown, begin(grown), "Мир", "Дубно", "Подземелья")
+    text = render(content, grown, dungeon, world_seed=WORLD_SEED).text()
+    assert "переросли этот спуск" in text
 
 
 def test_the_journal_lists_what_is_taken(content: GameContent, hero: Character) -> None:

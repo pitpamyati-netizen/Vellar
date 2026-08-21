@@ -597,3 +597,61 @@ def test_stolen_gold_is_a_share_of_what_the_target_carries(content: GameContent)
     taken = resolve_turn(content, goblin, rich, CombatAction(kind=ActionKind.RACIAL), b"\x05" * 16)
     scraps = resolve_turn(content, goblin, poor, CombatAction(kind=ActionKind.RACIAL), b"\x05" * 16)
     assert taken.gold > scraps.gold
+
+
+# --- стихия чужого удара ---------------------------------------------
+
+
+def test_resistance_is_counted_by_the_element_the_blow_carries(content: GameContent) -> None:
+    """Огню, холоду и яду сопротивлялись только на бумаге.
+
+    О чужом ударе было известно лишь «порода бьющего», и три ключа из
+    ``traits.toml`` не читал никто: «Рождённый в стуже» полгода был надписью
+    (ADR 0018). Теперь у противника есть стихия.
+    """
+    from mmorpg.domain.entities.location import DamageElement
+    from mmorpg.domain.rules.combat import incoming_damage_factor
+
+    frost = replace(enemy(), element=DamageElement.COLD)
+    fire = replace(enemy(), element=DamageElement.FIRE)
+    warm = {"resist_cold_percent": 40.0}
+
+    assert incoming_damage_factor(warm, frost) == pytest.approx(0.6)
+    assert incoming_damage_factor(warm, fire) == pytest.approx(1.0)
+
+
+def test_an_archetype_that_names_no_element_strikes_by_its_kind(content: GameContent) -> None:
+    from mmorpg.domain.procgen.enemies import element_of
+
+    by_id = {archetype.id: archetype for archetype in content.enemy_archetypes}
+    assert str(element_of(by_id["grey_wolf"])) == "physical"
+    assert str(element_of(by_id["void_spawn"])) == "magic"
+    assert str(element_of(by_id["fire_elemental"])) == "fire"
+    # Объявленное содержимым сильнее породы: истукан бьёт камнем, а не чарами.
+    assert str(element_of(by_id["stone_golem"])) == "physical"
+
+
+def test_a_blow_aimed_at_a_body_already_down_does_not_raise(content: GameContent) -> None:
+    """Единственная поломка, дошедшая до живого сервера: семь падений за сутки.
+
+    Удар, у которого не нашлось ни одной цели, доходил до расчёта кровотечения с
+    неназванной переменной и ронял ход целиком: игрок жал «Отравленный клинок» и
+    получал извинение вместо боя (`UnboundLocalError: blow`).
+    """
+    rogue = caster("rogue", "human", "rogue_poison_blade")
+    rogue = replace(
+        rogue,
+        loadout=replace(rogue.loadout, ranks={"rogue_poison_blade": 1}),
+        equipment=Equipment().equip("weapon", "dagger@6#uncommon"),
+    )
+    state = start_combat(content, rogue, (enemy(), enemy(name="Второй")))
+    # Первый уже лежит, но бой не окончен: цель нажатия — именно он.
+    state = replace(state, enemies=(replace(state.enemies[0], health=0), state.enemies[1]))
+    after = resolve_turn(
+        content,
+        rogue,
+        state,
+        CombatAction(kind=ActionKind.SKILL, slot=0, target=0),
+        b"aimed-at-a-corpse",
+    )
+    assert after.turn == state.turn + 1

@@ -42,6 +42,16 @@ active, and take no slot - the same rule class passives now follow.
 Every skill has **ranks 1 to 5**, bought with skill points (one per level). Each
 rank raises the skill's power by `rank_step` (15% by default) - `power_at_rank`.
 
+**A rank always changes something.** Four skills are shaped as yes-or-no -
+«Исчезновение», «Юркость», «Отсрочка», «По памяти»: you either dodge the next
+blow or you do not, and there is no number in them to raise. A point spent on
+their rank bought nothing at all. For those the power lands in the **cooldown**
+instead (`EffectSpec.recharges`, `skill_effects.recharged`): rank 5 brings the
+skill back in two turns where rank 1 took five, and the button says so before it
+is pressed. For «Очищение», whose whole job is removing effects, the power is
+how many it removes (`cleansed_count`). Held by
+`tests/content/test_races_classes_skills.py`.
+
 At **rank 3** the skill gains an **edge**: the player picks one of two
 modifications that change how it behaves, without adding a button.
 

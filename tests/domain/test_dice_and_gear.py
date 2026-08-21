@@ -13,7 +13,7 @@ import random
 import pytest
 
 from mmorpg.domain.entities import GameContent
-from mmorpg.domain.entities.dice import Dice
+from mmorpg.domain.entities.dice import MAX_SPREAD, Dice
 from mmorpg.domain.entities.location import EnemyRank
 from mmorpg.domain.procgen import items as gear_procgen
 
@@ -70,9 +70,44 @@ def test_growing_keeps_the_average_it_promised() -> None:
 
 def test_growing_keeps_the_character_of_the_kind() -> None:
     """Булава бьёт вразброс и на трёхсотом уровне, меч — ровно."""
-    mace = Dice.parse("1d16").scaled(111.6)
-    sword = Dice.parse("2d6").scaled(111.6)
+    mace = Dice.parse("1d16").scaled(111.6, spread=1.5)
+    sword = Dice.parse("2d6").scaled(111.6, spread=1.2)
     assert (mace.high - mace.low) / mace.average > (sword.high - sword.low) / sword.average
+
+
+# --- потолок размаха -------------------------------------------------
+
+
+@pytest.mark.parametrize("text", ["1d16", "2d6", "2d8", "1d11", "2d5", "1d14", "1d3"])
+@pytest.mark.parametrize("spread", [1.15, 1.2, 1.3, 1.4, 1.5])
+def test_the_top_of_a_blow_is_never_more_than_half_again_the_bottom(
+    text: str, spread: float
+) -> None:
+    """Полтора — потолок всей игры, на любой ступени и у любого рода.
+
+    До этого размах задавали сами кости, и он плыл вверх вместе с вещью: «2d5+1»
+    на первой ступени били вразброс втрое, а на трёхсотой — вдесятеро, и «от 146
+    до 1404» не было числом, по которому можно решать (ADR 0017).
+    """
+    dice = Dice.parse(text)
+    for level in (1, 2, 5, 30, 100, 300):
+        grown = dice.scaled(1.0 + 0.37 * (level - 1), spread=spread)
+        assert grown.low >= 1
+        assert grown.high <= round(grown.low * MAX_SPREAD), (level, str(grown))
+
+
+def test_a_kind_may_not_ask_for_more_spread_than_the_game_allows() -> None:
+    """Потолок держится движком, а не доброй волей содержимого."""
+    reckless = Dice.parse("2d6").scaled(50.0, spread=9.0)
+    assert reckless.spread <= MAX_SPREAD
+
+
+def test_every_weapon_kind_in_the_game_stays_under_the_ceiling(content: GameContent) -> None:
+    for kind in content.weapon_types:
+        assert kind.spread <= MAX_SPREAD, kind.id
+        for level in (1, 12, 60, 150, 300):
+            damage = kind.damage_at(1.0 + gear_procgen.FACES_PER_LEVEL * (level - 1))
+            assert damage.high <= round(damage.low * MAX_SPREAD), (kind.id, level, str(damage))
 
 
 def test_growing_never_turns_a_blow_into_a_coin_flip() -> None:

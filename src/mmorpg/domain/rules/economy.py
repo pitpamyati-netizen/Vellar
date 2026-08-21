@@ -15,6 +15,15 @@ from mmorpg.domain.procgen.seeds import rng, shop_seed
 
 STOCK_MIN = 6
 STOCK_MAX = 12
+
+#: Доброе имя. ``reputation`` - это проценты ключа ``reputation_percent``, и
+#: каждые десять процентов кладут на полку одну вещь и поднимают её потолок на
+#: уровень. Ключ обещало «Знакомое лицо» и не читал никто: сама по себе
+#: репутация в игре не растёт, а прибавка к ней была прибавкой к ничему
+#: (``Roadmap.md``, ADR 0018). Теперь она делает ровно то, что говорит, -
+#: держит лавку открытой чуть шире.
+REPUTATION_KEY = "reputation_percent"
+REPUTATION_PER_STEP = 10.0
 LEVEL_WINDOW_BELOW = 6
 LEVEL_WINDOW_ABOVE = 4
 CHARISMA_DISCOUNT_PER_POINT = 0.4
@@ -35,11 +44,13 @@ def roll_assortment(
     city_id: str,
     rotation: int,
     character_level: int,
-    reputation: int = 0,
+    reputation: float = 0.0,
 ) -> tuple[Item, ...]:
     """What this city sells in this rotation of its shelf.
 
-    Higher reputation widens the shelf, so a regular customer sees more.
+    Higher reputation widens the shelf, so a regular customer sees more:
+    ``reputation`` приходит процентами ``reputation_percent`` со всего, что на
+    персонаже надето и выбрано (``REPUTATION_PER_STEP``).
 
     Редкость решает, что вообще может лечь на прилавок. Снаряжение собирается во
     всех редкостях сразу (``domain/procgen/items.py``), и без веса лавка
@@ -48,7 +59,8 @@ def roll_assortment(
     """
     source = rng(shop_seed(world_seed, city_id, rotation))
     low = max(1, character_level - LEVEL_WINDOW_BELOW)
-    high = character_level + LEVEL_WINDOW_ABOVE + reputation // 100
+    widened = int(max(0.0, reputation) / REPUTATION_PER_STEP)
+    high = character_level + LEVEL_WINDOW_ABOVE + widened
 
     candidates = [
         item
@@ -61,7 +73,7 @@ def roll_assortment(
             key=lambda item: abs(item.level - character_level),
         )[:8]
 
-    size = min(len(candidates), source.randint(STOCK_MIN, STOCK_MAX) + reputation // 200)
+    size = min(len(candidates), source.randint(STOCK_MIN, STOCK_MAX) + widened)
     chosen: list[Item] = []
     pool = list(candidates)
     weights = [content.rarity(item.rarity).weight for item in pool]

@@ -48,9 +48,16 @@ id = "seaborn"                       # snake_case, unique, never changes
 name = "Морской народ"               # one or two Russian words, <= 20 letters
 description = "Одна фраза: какие они и что это даёт в дороге."
 bonuses = { AGI = 2, WIS = 1, STR = -1 }
-passive = { id = "tide_born", name = "Приливная выучка", text = "Одна фраза об эффекте." }
+passive = { id = "tide_born", name = "Приливная выучка", text = "Одна фраза об эффекте.", modifiers = { dodge_percent = 5 } }
 active = "race_seaborn_undertow"     # must exist in skills.toml
 ```
+
+**The passive must have `modifiers`, and every key in them must be one the engine
+reads** (`modifiers.EFFECTIVE_KEYS`). A race without them does not load: all
+sixteen used to be an id, a name and a text nobody counted, and the player picked
+a race by a line the game ignored. The `text` says exactly what the modifiers do,
+in numbers - it is read at character creation and is the reason the race is
+picked.
 
 The id is frozen from the moment the first character picks it: characters point
 at it in the database, so a rename is a `name`/`description` change and never a
@@ -226,11 +233,16 @@ player stumbles over.
 Damage, armour, stats and price are **not written either**. They come from
 `[meta]`:
 
-- `weapon_types[].dice` - the dice of the kind on the first grade (`"2d3+3"`).
-  They grow with the grade, in the number of dice, their faces and the flat part
-  alike. Spread is the character of the kind: `1d10+3` swings wider than `2d3+3`
-  at every grade. **Write a flat part** - half the blow is not rolled, or the
-  range the player is read grows into a lottery (ADR 0017).
+- `weapon_types[].dice` - the **average** of the kind on the first grade and the
+  shape of the roll (`"2d6"`): the more dice, the more often the middle comes up.
+  The average grows with the grade.
+- `weapon_types[].spread` - the **character** of the kind: how many times the top
+  of the blow is above the bottom. A sword is 1.2, a mace is 1.5, and nobody goes
+  above 1.5 - that is the ceiling of the whole game (`dice.MAX_SPREAD`), and
+  content cannot get around it: anything declared above is clamped and the author
+  is told at startup. **Do not write a flat part**: it is computed from the
+  average and the spread, because by hand it does not hold - `1d16+3` promised
+  one and a half at the first grade and nine and a half at the last (ADR 0020).
 - `armor_types[].armor` - the share of armour relative to light, and
   `slots[].armor_share` - how much the place covers at all.
 - `rarities[].stats` / `special` / `scaling` - what the rarity is worth: no
@@ -305,6 +317,20 @@ Invariants checked by `tests/content/test_world.py`:
 Location level ranges drive enemy level, loot quality and rarity, experience and
 event difficulty. Location layout itself is generated, never stored - see
 `docs/procgen.md`.
+
+They drive the **descent** too, and that is not a detail: a city's dungeon takes
+its level from the deepest location the player has reached, and never from the
+player. Content that follows the player around also pays as a fresh challenge for
+ever, and the only brake experience has - the penalty for fighting below your
+level - never fires (ADR 0019).
+
+## Enemy archetypes
+
+`content/enemies.toml`. Beyond the multipliers, an archetype may declare
+**`element`** - `physical`, `magic`, `fire`, `cold` or `poison`. Left out, the
+kind decides: an elemental and an aberration strike with magic, everything else
+with iron. The player's resistances are counted by that element, which is what
+makes `resist_fire_percent` and its two siblings mean anything at all.
 
 ## Add a quest
 

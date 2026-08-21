@@ -20,8 +20,14 @@ from mmorpg.domain.entities.content import GameContent, ItemKind
 from mmorpg.domain.entities.location import LocationNode, NodeKind
 from mmorpg.domain.procgen.seeds import rng
 from mmorpg.domain.rules import economy
+from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules import quests as quest_rules
-from mmorpg.domain.rules.progression import LevelUp, experience_reward, grant_experience
+from mmorpg.domain.rules.progression import (
+    LevelUp,
+    earned,
+    experience_reward,
+    grant_experience,
+)
 from mmorpg.domain.rules.quests import QuestStep
 from mmorpg.domain.rules.stats import derived_stats
 
@@ -41,6 +47,12 @@ SEARCH_EXPERIENCE_PER_LEVEL = 3
 SHRINE_HEAL_PERCENT = 35
 CACHE_ITEM_CHANCE = 45.0
 GATHER_ITEM_CHANCE = 80.0
+
+#: Прибавка к тому, что приносит тихий узел: тайник, находка, развилка. Ключ
+#: обещали «Рассказчик», «Разведчик» и «Звезда странника», и до сих пор его не
+#: читал никто (``Roadmap.md``, ADR 0018). Святилище он не трогает: оно лечит, а
+#: не платит, и «награда за событие» лечением не бывает.
+EVENT_REWARD_KEY = "event_reward_percent"
 
 #: Что лежит в узле для сбора, по его имени. Из зарослей не выкапывают руду, а с
 #: останков не срезают травы: узел, который отдаёт железный лом вместо трав,
@@ -105,7 +117,7 @@ def resolve_victory(content: GameContent, character: Character, state: CombatSta
     grown, level_up = grant_experience(content, paid, state.experience)
     return Aftermath(
         character=grown,
-        experience=state.experience,
+        experience=earned(content, paid, state.experience),
         gold=state.gold,
         loot=state.loot,
         level_up=level_up,
@@ -162,12 +174,17 @@ def resolve_search(
         case _:
             gold = max(1, round(EVENT_GOLD_PER_LEVEL * node.level))
 
-    grown, level_up = grant_experience(content, working.with_gold(gold), experience)
+    share = max(0.0, mods.percent(mods.collect_modifiers(content, character), EVENT_REWARD_KEY))
+    if node.kind is not NodeKind.SHRINE:
+        gold = round(gold * share)
+        experience = max(1, round(experience * share))
+    paid = working.with_gold(gold)
+    grown, level_up = grant_experience(content, paid, experience)
     return SearchResult(
         character=grown,
         kind=node.kind,
         gold=gold,
-        experience=experience,
+        experience=earned(content, paid, experience),
         item_id=item_id,
         healed=healed,
         level_up=level_up,
@@ -227,11 +244,12 @@ def descent_prize(
         DESCENT_EXPERIENCE_BASE
         + experience_reward(enemy_level=max(1, level), character_level=character.level),
     )
-    grown, level_up = grant_experience(content, character.with_gold(gold), experience)
+    paid = character.with_gold(gold)
+    grown, level_up = grant_experience(content, paid, experience)
     return DescentPrize(
         character=grown,
         gold=gold,
-        experience=experience,
+        experience=earned(content, paid, experience),
         item_id=item_id,
         level_up=level_up,
     )

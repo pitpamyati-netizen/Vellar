@@ -43,6 +43,7 @@ from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.domain.rules.tutorial import TutorialTask
 from mmorpg.presentation.telegram.flows import keeper as keeper_flow
 from mmorpg.presentation.telegram.flows.state import (
+    LIST_PAGE_FIELD,
     Clock,
     Descent,
     Goods,
@@ -75,7 +76,6 @@ from mmorpg.presentation.telegram.screens.paginated import (
     SEARCH_PROMPT,
     PageState,
     filters_screen,
-    total_pages,
 )
 from mmorpg.presentation.telegram.screens.shop import OwnedItem
 from mmorpg.presentation.telegram.states.screens import NavigationStack
@@ -185,9 +185,27 @@ def descent_fight_seed(world_seed: str, descent: Descent) -> bytes:
 
 
 def dungeon_level(content: GameContent, character: Character, city_id: str) -> int:
-    """A descent is tuned to the player, inside the band the city allows."""
+    """Уровень спуска. Его решает город, а не тот, кто в него спускается.
+
+    Спуск был зеркалом: ``character.level + 1``, всегда на голову выше игрока и
+    всегда внутри полосы города. Из-за этого штраф за бой ниже своего уровня —
+    единственный тормоз, который есть у опыта (``progression.experience_reward``),
+    — в подземелье не срабатывал никогда: противник рос ровно так же быстро, как
+    игрок. Считанное по живой игре: девяносто четыре процента опыта одного
+    персонажа пришло из спусков, тридцать уровней за сутки, не выходя из одного
+    города, — а пятнадцать городов и их пороги входа при этом ничего не решали.
+
+    Теперь спуск идёт по земле самой глубокой локации города, до которой игрок
+    дорос: у него свой уровень, как у локации, и вырасти вместе с игроком он не
+    может. Пока игрок внутри полосы — спуск ему по росту; как только он её
+    перерос, спуск платит ровно столько, сколько платит переросшая локация, и
+    дорога ведёт в следующий город. Ниже уровня игрока спуск бывает, выше —
+    нет: три схватки подряд без передышки опасны сами по себе.
+    """
     city = content.city(city_id)
-    return max(city.level_min, min(city.level_max, character.level + 1))
+    reached = [place for place in city.locations if character.level >= place.level_min]
+    deepest = reached[-1] if reached else city.locations[0]
+    return max(city.level_min, min(city.level_max, deepest.level_min))
 
 
 # --- rendering --------------------------------------------------------
@@ -580,6 +598,16 @@ def advance(
     if command.intent is Intent.BACK:
         return go_back(state)
 
+    # Страницы считает сам экран, и только он: сколько записей влезло в одно
+    # сообщение, зависит от их длины (``screens/paginated.py``). Каждая ветка
+    # считала это же число ещё раз, по количеству записей, - и на длинном списке
+    # две цифры расходились: экран рисовал четыре страницы, ветка знала о двух,
+    # и «Следующая страница» переставала работать на середине списка.
+    if state.screen in LIST_PAGE_FIELD:
+        turned = page_move(command, list_page(state), int(screen.metadata.get("pages", 1)))
+        if turned is not None:
+            return with_list_page(state, turned).with_notice("")
+
     state = replace(state, pending=PendingWrite(), fight="")
     shelf = goods or Goods(gold=character.gold)
     ticking = clock or Clock()
@@ -744,9 +772,6 @@ def _handle_pledge(
 ) -> PlayState:
     """Заклад. Нажатие здесь совершает перерождение: экран предупреждал об этом."""
     entries = chamber_screens.pledge_entries(content, character)
-    moved = page_move(command, state.list_page, total_pages(len(entries)))
-    if moved is not None:
-        return replace(state, list_page=moved)
     if command.intent is not Intent.SELECT or not entries:
         return state.with_notice("Нажмите, что отдать, или «Назад».")
 
@@ -934,9 +959,6 @@ def _handle_world(
     available = (
         content.cities if character.is_admin else content.cities_available_at(character.level)
     )
-    moved = page_move(command, state.world_page, total_pages(len(available)))
-    if moved is not None:
-        return replace(state, world_page=moved, notice="")
 
     if command.intent is Intent.SELECT:
         for city in available:
@@ -1037,9 +1059,6 @@ def _handle_shop(
     goods: Goods,
 ) -> PlayState:
     shown = _visible_stock(content, state, goods)
-    moved = page_move(command, state.list_page, total_pages(len(shown)))
-    if moved is not None:
-        return replace(state, list_page=moved, notice="")
     listed = _search_and_filters(content, state, command)
     if listed is not None:
         return listed
@@ -1101,9 +1120,6 @@ def _handle_sell(
     goods: Goods,
 ) -> PlayState:
     shown = _visible_bag(content, state, goods)
-    moved = page_move(command, state.list_page, total_pages(len(shown)))
-    if moved is not None:
-        return replace(state, list_page=moved, notice="")
     listed = _search_and_filters(content, state, command)
     if listed is not None:
         return listed
@@ -1129,9 +1145,6 @@ def _handle_inventory(
     goods: Goods,
 ) -> PlayState:
     shown = _visible_bag(content, state, goods)
-    moved = page_move(command, state.list_page, total_pages(len(shown)))
-    if moved is not None:
-        return replace(state, list_page=moved, notice="")
     listed = _search_and_filters(content, state, command)
     if listed is not None:
         return listed
@@ -1232,9 +1245,6 @@ def _handle_skills(
     pool = skill_screens.matching_skills(
         content, character, skill_rules.teachable(content, character), state.skill_page
     )
-    moved = page_move(command, state.skill_page, total_pages(len(pool)))
-    if moved is not None:
-        return replace(state, skill_page=moved, notice="")
     listed = _search_and_filters(content, state, command)
     if listed is not None:
         return listed
@@ -1285,9 +1295,6 @@ def _handle_pick(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
     available = skill_rules.equippable(content, character)
-    moved = page_move(command, state.list_page, total_pages(len(available)))
-    if moved is not None:
-        return replace(state, list_page=moved, notice="")
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите умение из списка.")
 
@@ -1401,9 +1408,6 @@ def _handle_board(
     working = tuple(
         step for step in quest_rules.taken(content, character) if step.quest.city_id == city.id
     )
-    moved = page_move(command, state.board_page, total_pages(len(offered) + len(working)))
-    if moved is not None:
-        return replace(state, board_page=moved, notice="")
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите задание из списка.")
     for quest in offered:
@@ -1464,9 +1468,6 @@ def _handle_mentor(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
     known = skill_rules.forgettable(content, character)
-    moved = page_move(command, state.mentor_page, total_pages(len(known)))
-    if moved is not None:
-        return replace(state, mentor_page=moved, notice="")
     listed = _search_and_filters(content, state, command)
     if listed is not None:
         return listed
@@ -1546,9 +1547,6 @@ def _handle_location_list(
     command: Command,
 ) -> PlayState:
     city = known_city(content, state.city_id, character.city_id)
-    moved = page_move(command, state.location_page, total_pages(len(city.locations)))
-    if moved is not None:
-        return replace(state, location_page=moved, notice="")
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите локацию из списка.")
 

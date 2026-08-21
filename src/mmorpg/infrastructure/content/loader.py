@@ -54,12 +54,13 @@ from mmorpg.domain.entities.craft import (
     Recipe,
     RecipeInput,
 )
-from mmorpg.domain.entities.dice import Dice
-from mmorpg.domain.entities.location import EnemyArchetype, EnemyKind
+from mmorpg.domain.entities.dice import MAX_SPREAD, MIN_SPREAD, Dice
+from mmorpg.domain.entities.location import DamageElement, EnemyArchetype, EnemyKind
 from mmorpg.domain.entities.quest import ObjectiveKind, Quest
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.rules.equipment import WEAPON_SLOT
+from mmorpg.domain.rules.modifiers import EFFECTIVE_KEYS
 
 CONTENT_FILES = (
     "world.toml",
@@ -471,6 +472,23 @@ def _parse_races(
             )
 
         passive_raw = entry.get("passive", {})
+        passive_id = str(passive_raw.get("id", ""))
+        # Прибавки расовой способности проверяются по тому, что движок считает,
+        # а не по словарю: словарь шире нарочно (``Claude.md``, правило 7).
+        passive_modifiers: dict[str, float] = {}
+        for key, value in dict(passive_raw.get("modifiers", {})).items():
+            if key not in EFFECTIVE_KEYS:
+                problems.append(
+                    f"races.toml: {race_id} passive {passive_id!r} promises {key!r}, "
+                    "and nothing in the engine counts it"
+                )
+                continue
+            passive_modifiers[str(key)] = float(value)
+        if not passive_modifiers:
+            problems.append(
+                f"races.toml: {race_id} passive {passive_id!r} does nothing: "
+                "a named ability with no modifiers is a promise, not an ability"
+            )
         parsed.append(
             Race(
                 id=race_id,
@@ -478,9 +496,10 @@ def _parse_races(
                 description=str(entry.get("description", "")),
                 bonuses=bonuses,
                 passive=RacePassive(
-                    id=str(passive_raw.get("id", "")),
+                    id=passive_id,
                     name=str(passive_raw.get("name", "")),
                     text=str(passive_raw.get("text", "")),
+                    modifiers=passive_modifiers,
                 ),
                 active_code=active_code,
             )
@@ -884,11 +903,21 @@ def _parse_items(
         gender = str(entry.get("gender", "m"))
         if gender not in GENDERS:
             problems.append(f"items.toml: weapon type {type_id} has unknown gender {gender!r}")
+        # Размах читается как объявлен, но выше потолка не пускается: «в полтора
+        # раза» - это правило игры, а не пожелание содержимому. Объявленное сверх
+        # него - ошибка автора, и она называется вслух, а не зажимается молча.
+        spread = float(entry.get("spread", MAX_SPREAD))
+        if not MIN_SPREAD <= spread <= MAX_SPREAD:
+            problems.append(
+                f"items.toml: weapon type {type_id} has spread {spread}, "
+                f"allowed is {MIN_SPREAD}..{MAX_SPREAD}"
+            )
         weapon_types.append(
             WeaponType(
                 id=type_id,
                 name=str(entry["name"]),
                 dice=dice,
+                spread=min(MAX_SPREAD, max(MIN_SPREAD, spread)),
                 gender=gender if gender in GENDERS else "m",
                 modifiers=_type_modifiers(f"weapon type {type_id}", entry, modifier_keys, problems),
             )
@@ -1010,6 +1039,7 @@ def _parse_enemies(
     meta = raw.get("meta", {})
     elite_titles = tuple(str(title) for title in meta.get("elite_titles", ()))
     known_kinds = {kind.value for kind in EnemyKind}
+    known_elements = {element.value for element in DamageElement}
 
     parsed: list[EnemyArchetype] = []
     for entry in raw.get("enemy", ()):
@@ -1023,6 +1053,13 @@ def _parse_enemies(
             if item_id not in item_ids:
                 problems.append(f"enemies.toml: {enemy_id} drops unknown item {item_id!r}")
 
+        element_raw = str(entry.get("element", ""))
+        if element_raw and element_raw not in known_elements:
+            problems.append(
+                f"enemies.toml: {enemy_id} strikes with unknown element {element_raw!r}"
+            )
+            element_raw = ""
+
         parsed.append(
             EnemyArchetype(
                 id=enemy_id,
@@ -1034,6 +1071,7 @@ def _parse_enemies(
                 armor=float(entry.get("armor", 1.0)),
                 initiative=float(entry.get("initiative", 1.0)),
                 loot=loot,
+                element=DamageElement(element_raw) if element_raw else None,
             )
         )
     _check_unique((enemy.id for enemy in parsed), "enemies.toml", problems)

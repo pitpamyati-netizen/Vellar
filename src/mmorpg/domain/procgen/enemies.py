@@ -11,7 +11,13 @@ import random
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from mmorpg.domain.entities.location import Enemy, EnemyArchetype, EnemyRank
+from mmorpg.domain.entities.location import (
+    DEFAULT_ELEMENTS,
+    DamageElement,
+    Enemy,
+    EnemyArchetype,
+    EnemyRank,
+)
 from mmorpg.domain.procgen.seeds import rng
 
 # Level baseline. An "average" archetype (all multipliers 1.0) uses these values.
@@ -23,7 +29,15 @@ from mmorpg.domain.procgen.seeds import rng
 # против голых рук, ложился за два хода, стоил игроку одного процента здоровья и
 # делал вылазку формальностью. Сорок процентов сверху возвращают бою обещанные три хода
 # при том же оружии, каким его дерётся живой игрок.
-HEALTH_BASE = 32.8
+#
+# Основание правилось ещё раз, когда у оружия сузился размах (ADR 0017 и
+# ``entities/dice.py``): длина боя держалась на невезении. Пока верхняя граница
+# удара была вчетверо выше нижней, первый уровень выигрывал бой то за два хода,
+# то за шесть, и середина ложилась куда надо; с размахом в полтора раза бой
+# встал ровно на своё среднее — а среднее на первом уровне было четыре с
+# половиной хода. Правится основание, а не рост: выше десятого уровня разница
+# меньше двух процентов.
+HEALTH_BASE = 30.0
 HEALTH_PER_LEVEL = 12.30
 # Damage is set against the player's health pool rather than against their blow:
 # an ordinary opponent should cost a noticeable share of it over the three turns
@@ -35,7 +49,10 @@ HEALTH_PER_LEVEL = 12.30
 # (Roadmap, "Риски"). Tripling it is the whole change; the long tiers give the
 # tripling back in ``RANK_FACTORS`` so that an epic and a boss hurt exactly as
 # much as they did before - they were already dangerous.
-DAMAGE_BASE = 8.75
+# Основание урона поднято той же правкой и по той же причине: бой, вставший на
+# своё среднее, стал стоить меньше — крайних случаев не осталось ни с той
+# стороны, ни с этой.
+DAMAGE_BASE = 10.5
 DAMAGE_PER_LEVEL = 1.75
 ARMOR_PER_LEVEL = 1.15
 INITIATIVE_BASE = 8.0
@@ -43,10 +60,15 @@ INITIATIVE_PER_LEVEL = 0.35
 GOLD_BASE = 4.0
 GOLD_PER_LEVEL = 2.4
 
-#: A pack shares one fight's worth of health and damage rather than multiplying
-#: it. Three full-strength opponents made an "ordinary" fight nine turns long -
-#: three fights in a row wearing one name. Each extra body still adds to the
-#: total, just far less than a whole opponent.
+#: A pack shares one fight's worth of health, damage **and pay** rather than
+#: multiplying it. Three full-strength opponents made an "ordinary" fight nine
+#: turns long - three fights in a row wearing one name. Each extra body still
+#: adds to the total, just far less than a whole opponent.
+#:
+#: Плата делится тем же делителем, и это не мелочь: делили только здоровье и
+#: урон, а золото и опыт стая множила на троих. Один и тот же бой стоил
+#: полутора боёв по времени и платил как три - и грести стаи было выгоднее
+#: всего, что есть в игре (``domain/rules/combat._check_outcome``).
 GROUP_MEMBER_TAX = 0.45
 
 
@@ -137,7 +159,7 @@ def generate_enemy(
     )
     armor = ARMOR_PER_LEVEL * level * archetype.armor * factors.armor
     initiative = (INITIATIVE_BASE + INITIATIVE_PER_LEVEL * level) * archetype.initiative
-    gold = (GOLD_BASE + GOLD_PER_LEVEL * level) * spread * factors.gold
+    gold = (GOLD_BASE + GOLD_PER_LEVEL * level) * spread * factors.gold * share
 
     return Enemy(
         archetype_id=archetype.id,
@@ -151,7 +173,15 @@ def generate_enemy(
         loot=archetype.loot,
         gold=max(1, round(gold)),
         rank=rank,
+        element=element_of(archetype),
     )
+
+
+def element_of(archetype: EnemyArchetype) -> DamageElement:
+    """Чем бьёт этот противник. Не объявлено в содержимом - решает порода."""
+    if archetype.element is not None:
+        return archetype.element
+    return DEFAULT_ELEMENTS.get(archetype.kind, DamageElement.PHYSICAL)
 
 
 def _name_for(

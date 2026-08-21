@@ -8,9 +8,10 @@
 
 Три числа и одно правило.
 
-- **Урон** — кости вида, у которых растут грани: ``2d6`` на первой ступени и
-  ``2d670`` на последней. Размах остаётся размахом рода: булава бьёт вразброс и
-  на первом уровне, и на трёхсотом.
+- **Урон** — кости вида, у которых растёт среднее. Размах остаётся размахом
+  рода и не плывёт со ступенью: булава бьёт вразброс и на первом уровне, и на
+  трёхсотом, но верхняя граница нигде не выше полутора нижних
+  (``entities/dice.py``, ``MAX_SPREAD``).
 - **Броня** — число, считанное из ступени, рода доспеха и того, сколько
   прикрывает место.
 - **Характеристики** — их даёт редкость, и только она: обычная вещь не даёт ни
@@ -112,7 +113,7 @@ def build(
     damage = None
     if archetype.weapon_type and content.has_weapon_type(archetype.weapon_type):
         kind = content.weapon_type(archetype.weapon_type)
-        damage = kind.dice.scaled(1.0 + FACES_PER_LEVEL * (counted - 1))
+        damage = kind.damage_at(1.0 + FACES_PER_LEVEL * (counted - 1))
 
     armor = 0
     if archetype.armor_type and content.has_armor_type(archetype.armor_type):

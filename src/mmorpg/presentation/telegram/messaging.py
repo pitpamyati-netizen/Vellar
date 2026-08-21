@@ -25,7 +25,7 @@ from mmorpg.presentation.telegram.screens.group import GroupReply
 async def send_screen(message: Message, screen: Screen, *, emoji: bool = False) -> None:
     """Send a screen as a single new message with its keyboard attached."""
     await message.answer(
-        text=screen.pages()[0],
+        text=screen.body(),
         reply_markup=keyboard_for(screen, emoji=emoji),
         parse_mode=None,
     )

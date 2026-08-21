@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import statistics
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import NamedTuple
 
 import pytest
@@ -38,10 +39,16 @@ from mmorpg.domain.entities.combat import (
 )
 from mmorpg.domain.entities.location import EnemyRank
 from mmorpg.domain.entities.stats import StatBlock, StatCode
-from mmorpg.domain.procgen.enemies import generate_group
+from mmorpg.domain.procgen.enemies import generate_enemy, generate_group
 from mmorpg.domain.procgen.seeds import derive
 from mmorpg.domain.rules import equipment as gear
-from mmorpg.domain.rules.combat import blow_of, enemy_intent, resolve_turn, start_combat
+from mmorpg.domain.rules.combat import (
+    _check_outcome,
+    blow_of,
+    enemy_intent,
+    resolve_turn,
+    start_combat,
+)
 from mmorpg.domain.rules.skill_effects import EffectCategory, spec_for, tag_of_skill
 from mmorpg.domain.rules.stats import derived_stats, stat_allowance
 
@@ -444,3 +451,42 @@ def test_a_skill_always_beats_a_plain_attack(content: GameContent, level: int) -
             continue
         power = blow * skill.power_at_rank(1) / 100.0
         assert power > blow, f"{skill.name} at level {level} is weaker than an attack"
+
+
+# --- стая платит как один бой ----------------------------------------
+
+
+def test_a_pack_pays_like_one_fight_because_it_is_one_fight(content: GameContent) -> None:
+    """Троих делили по здоровью и урону, а платили за троих.
+
+    Стая делит бюджет одного боя (``procgen/enemies.group_scale``): втроём
+    противники слабее каждый и вместе тянут полтора боя по времени. Золото и
+    опыт при этом множились на число тел — и грести стаи было самым выгодным,
+    что есть в игре (``Roadmap.md``, аномалия роста уровней).
+    """
+    character = build(content, "warrior", 20)
+    seed = derive(b"pack", "pay")
+
+    def paid(members: int) -> tuple[int, int]:
+        pack = tuple(
+            generate_enemy(
+                derive(seed, "member", index),
+                archetypes=content.enemy_archetypes,
+                biome="*",
+                level=character.level,
+                members=members,
+            )
+            for index in range(members)
+        )
+        state = start_combat(content, character, pack)
+        state = replace(state, enemies=tuple(replace(one, health=0) for one in state.enemies))
+        done = _check_outcome(content, character, state)
+        return done.experience, done.gold
+
+    alone_xp, alone_gold = paid(1)
+    pack_xp, pack_gold = paid(3)
+
+    assert pack_xp < 3 * alone_xp
+    assert pack_gold < 3 * alone_gold
+    assert pack_xp > alone_xp
+    assert pack_gold > alone_gold

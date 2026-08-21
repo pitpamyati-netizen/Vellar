@@ -120,12 +120,24 @@ entry - a player looks for "уклонение", not for "Кошачья пос�
 
 Every keyboard ends with exactly: `Назад` · `Главное меню`.
 
+**One exception: the main menu.** It is the root, so `Назад` led back to the main
+menu and `Главное меню` led to where the player already stood - two buttons that
+did nothing, on the most-heard screen in the game (rule 9 of `Claude.md`). Both
+commands still work from there, and so does a `Назад` pressed off an older
+keyboard.
+
 There is no "look around" button. Telegram keeps every message the bot has sent,
 so re-reading the current screen costs a scroll, not a press; a third button on
 every screen only added noise. The command `/осмотреться` still re-sends the
 current screen for anyone who wants it as a fresh message.
 
-*Enforced by:* a test asserting the last row of every screen keyboard.
+**Coming back to a screen unwinds the walk, it does not stack on it.** After a
+skill is put into a slot the player lands back on «Слоты умений», and `Назад`
+there must lead to «Умения» - not to the very pick screen that just ended, which
+reads as an empty slot holding a skill (`NavigationStack.push`).
+
+*Enforced by:* a test asserting the last row of every screen keyboard, and a flow
+test walking the panel there and back.
 
 ## 9. Button labels are unique within a screen
 
@@ -155,6 +167,17 @@ If the keyboard fails to render, the game must stay playable:
 Longer content is paginated with an explicit page indicator, never split into
 several consecutive messages. One action produces exactly one message - the single
 exception is a level taken, which gets a second one of its own (rule 3).
+
+**A page holds what fits, not eight entries.** Eight is a ceiling
+(`paginated.PAGE_SIZE`); the number that actually goes on a page is computed from
+the longest entry in the list (`entries_per_page`), so a skill list whose entries
+run to two hundred characters is cut to three per page. It is one number for the
+whole list - «the fourth skill» must be the same skill on every page (rule 7).
+
+The list is where the cutting happens, and nowhere else: sending used to take
+`pages()[0]`, the first nine hundred characters, and drop the rest without a
+word. A skills page carried eight buttons and five descriptions. Sending now
+hands over the whole body (`Screen.body()`).
 
 ## 12. Stale keyboards are answered, never ignored
 

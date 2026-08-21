@@ -118,13 +118,15 @@ def skills_screen(
         for skill in pool
     ]
     edge_due = [skill.name for skill in pool if skill_rules.needs_edge(content, character, skill)]
+    # Вступление короткое нарочно: оно повторяется на каждой странице списка, а
+    # места в сообщении столько же, сколько у самих умений. Устройство панели
+    # рассказывает экран слотов - тот, на котором это и делают.
     lead = [
         notice or f"Умения. Очков умений: {character.unspent_skill_points}.",
-        f"В панели шесть боевых слотов, это не меняется. Постоянные умения слотов "
-        f"не занимают: изученное работает. Ваш уровень: {character.level}.",
+        f"Ваш уровень: {character.level}. Постоянные умения слотов не занимают.",
     ]
     if not character.unspent_skill_points:
-        lead.append("Очко умений даёт каждый новый уровень. Первое умение выдано без очков.")
+        lead.append("Очко умений даёт каждый новый уровень.")
     if edge_due:
         lead.append(f"Ждут выбора грани: {', '.join(edge_due)}.")
     return paginated_screen(

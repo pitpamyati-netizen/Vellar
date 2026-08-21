@@ -350,6 +350,45 @@ def test_back_walks_the_stack(
     assert step(content, hero, in_location, "Назад", "Назад", "Назад").screen is ScreenId.WORLD
 
 
+def test_coming_back_to_a_screen_unwinds_instead_of_stacking(
+    content: GameContent, hero: Character
+) -> None:
+    """Положив умение в слот, «Назад» ведёт в «Умения», а не в выбор умения.
+
+    Прогулка была стопкой посещённого: «Умения» → «Слоты» → «Слот 3» → «Слоты»,
+    и шаг назад открывал тот самый выбор, который только что кончился, —
+    «Слот 3, боевой. Выберите умение». Слот при этом читался пустым, хотя умение
+    в нём уже лежало.
+    """
+    learned = replace(
+        hero,
+        loadout=replace(hero.loadout, ranks={**hero.loadout.ranks, "warrior_shield_bash": 1}),
+    )
+    slots = step(content, learned, begin(learned), "Умения", "Слоты умений")
+    picking = step(content, learned, slots, "Боевой слот 3: пусто")
+    assert picking.screen is ScreenId.SKILL_PICK
+
+    back_to_slots = step(content, learned, picking, "Назад")
+    assert back_to_slots.screen is ScreenId.SKILL_SLOTS
+    assert back_to_slots.stack.screens.count(ScreenId.SKILL_SLOTS) == 1
+    assert ScreenId.SKILL_PICK not in back_to_slots.stack.screens
+    assert step(content, learned, back_to_slots, "Назад").screen is ScreenId.SKILLS
+
+
+def test_the_main_menu_has_no_buttons_that_do_nothing(
+    content: GameContent, hero: Character
+) -> None:
+    """«Назад» из главного меню вело в главное меню, «Главное меню» — туда же."""
+    home = render(content, hero, begin(hero), world_seed=WORLD_SEED)
+    assert home.id is ScreenId.MAIN_MENU
+    pressed = [text for row in home.button_texts() for text in row]
+    assert "Назад" not in pressed
+    assert "Главное меню" not in pressed
+    # Команды при этом работают, и старая клавиатура тоже не молчит.
+    assert step(content, hero, begin(hero), "/назад").screen is ScreenId.MAIN_MENU
+    assert step(content, hero, begin(hero), "Назад").screen is ScreenId.MAIN_MENU
+
+
 def test_main_menu_resets_the_stack(
     content: GameContent, hero: Character, in_location: PlayState
 ) -> None:

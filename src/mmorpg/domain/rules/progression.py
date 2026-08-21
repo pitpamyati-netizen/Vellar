@@ -11,6 +11,8 @@ import bisect
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from mmorpg.domain.rules import modifiers as mods
+
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from mmorpg.domain.entities.character import Character
     from mmorpg.domain.entities.content import GameContent
@@ -105,6 +107,27 @@ def apply_experience(
     )
 
 
+#: Прибавка к опыту. Ключ лежал в словаре особенностей с самого начала - его
+#: обещали «Закалённый», «Долг души», «Схватывает на лету» и раса человека, -
+#: и не читал его никто (``Roadmap.md``, ADR 0018). Читается здесь: опыт
+#: становится уровнем в одном месте, значит и прибавка к нему одна на всю игру.
+EXPERIENCE_KEY = "exp_percent"
+
+
+def earned(content: GameContent, character: Character, gained: int) -> int:
+    """Сколько опыта на самом деле достанется этому персонажу.
+
+    Прибавка к опыту - обычная прибавка (``exp_percent``), и считается она в
+    одном месте, здесь. Отчёт о бое, о задании и о дне спуска называет игроку
+    это же число: сказать «99 опыта» и записать 104 - это та же ложь, что и
+    прибавка, которой никто не считает (``Claude.md``, правило 7).
+    """
+    if gained <= 0:
+        return gained
+    share = mods.percent(mods.collect_modifiers(content, character), EXPERIENCE_KEY)
+    return max(1, round(gained * max(0.0, share)))
+
+
 def grant_experience(
     content: GameContent, character: Character, gained: int
 ) -> tuple[Character, LevelUp]:
@@ -114,6 +137,7 @@ def grant_experience(
     always brings the same points no matter what earned it.
     """
     rules = content.rules
+    gained = earned(content, character, gained)
     level_up = apply_experience(
         current_level=character.level,
         current_experience=character.experience,

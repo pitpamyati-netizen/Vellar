@@ -229,8 +229,20 @@ class NavigationStack:
         return self.screens[-1] if self.screens else None
 
     def push(self, screen: ScreenId) -> NavigationStack:
+        """Шаг вперёд - или разматывание до того места, куда вернулись.
+
+        Экран, на котором игрок уже стоял, не кладётся сверху ещё раз: положив
+        умение в слот, игрок попадает обратно на «Слоты умений», и «Назад»
+        оттуда обязано вести в «Умения», а не в тот самый выбор умения, который
+        только что кончился. Иначе шаг назад открывает экран «Слот 3, боевой.
+        Выберите умение», и слот читается пустым, хотя умение в нём уже лежит.
+        Заодно у прогулки перестаёт расти хвост: пять заходов в один и тот же
+        слот - это по-прежнему один экран в стопке, а не пять.
+        """
         if self.current is screen:
             return self
+        if screen in self.screens:
+            return NavigationStack(self.screens[: self.screens.index(screen) + 1])
         return NavigationStack((*self.screens, screen))
 
     def pop(self) -> tuple[NavigationStack, ScreenId | None]:

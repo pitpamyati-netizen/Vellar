@@ -82,6 +82,13 @@ class EffectSpec:
     duration: int = 0
     cleanse_count: int = 0
     special: str = ""
+    #: Сила ранга ложится в откат, а не в число. Так устроены умения «да или
+    #: нет»: «Исчезновение» либо уводит от удара, либо нет, и поднимать в нём
+    #: нечего. Ранг у них полгода не менял ровно ничего, и очко, вложенное в
+    #: такой ранг, пропадало (``Roadmap.md``, «Что осталось»). Теперь ранг
+    #: возвращает умение быстрее: сила - это по-прежнему процент, только процент
+    #: от того, как часто умением можно пользоваться.
+    recharges: bool = False
     tags: tuple[str, ...] = field(default_factory=tuple)
     # The trace this effect leaves. Left out, it is read off the category by
     # `tag_of`; set it only where the category would say the wrong thing.
@@ -107,6 +114,33 @@ UNDYING = "_undying"
 UNSTUNNABLE = "_unstunnable"
 #: Сколько щита ещё держится этим источником: щит сгорает вместе с ним.
 SHIELD_HELD = "_shield_held"
+
+
+def cleansed_count(spec: EffectSpec, power: float) -> int:
+    """Сколько отрицательных эффектов снимет это умение на этой силе.
+
+    У умения, которое только и делает, что снимает эффекты, сила ранга больше
+    ложиться некуда: ``cleanse_count`` в спецификации говорит лишь о том, что
+    умение снимает вообще. У всех прочих - тех, где снятие идёт довеском к удару
+    или щиту, - число написано в спецификации и от ранга не зависит.
+    """
+    if spec.category is not EffectCategory.CLEANSE:
+        return spec.cleanse_count
+    return max(1, round(power))
+
+
+def recharged(cooldown: int, spec: EffectSpec, power: float) -> int:
+    """Откат умения «да или нет» на этой силе.
+
+    Сила ранга ложится сюда, потому что больше ей лечь некуда: «Исчезновение»
+    либо уводит от удара, либо нет. Сто процентов - это откат, написанный в
+    содержимом; сто шестьдесят на пятом ранге - тот же откат, поделённый на
+    полтора. Ниже одного хода не опускается: умение с откатом - это умение,
+    которое нельзя нажимать подряд.
+    """
+    if not spec.recharges or not cooldown or power <= 0:
+        return cooldown
+    return max(1, round(cooldown * 100.0 / power))
 
 
 def _damage(**kwargs: object) -> EffectSpec:
@@ -178,6 +212,9 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
     ),
     "cleanse_shield": EffectSpec(category=EffectCategory.SHIELD, shield_turns=3, cleanse_count=99),
     # --- cleansing ---
+    # Сколько эффектов снимает, решает сила умения, а не это число: оно только
+    # говорит, что умение вообще снимает. Стояла двойка намертво, и ранг у
+    # «Очищения» не менял ничего (``cleansed_count``).
     "cleanse": EffectSpec(category=EffectCategory.CLEANSE, cleanse_count=2),
     "cleanse_dodge": EffectSpec(
         category=EffectCategory.CLEANSE,
@@ -222,9 +259,15 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
     ),
     "buff_form_bear": _buff(self_modifiers=(M("health_percent"), M("armor_percent"))),
     "buff_form_wolf": _buff(self_modifiers=(M("damage_percent"), M("initiative_percent"))),
-    "buff_evade_full": EffectSpec(category=EffectCategory.SPECIAL, special="evade_next"),
-    "buff_free_cast": EffectSpec(category=EffectCategory.SPECIAL, special="free_cast"),
-    "buff_cooldown_reset": EffectSpec(category=EffectCategory.SPECIAL, special="cooldown_reset"),
+    "buff_evade_full": EffectSpec(
+        category=EffectCategory.SPECIAL, special="evade_next", recharges=True
+    ),
+    "buff_free_cast": EffectSpec(
+        category=EffectCategory.SPECIAL, special="free_cast", recharges=True
+    ),
+    "buff_cooldown_reset": EffectSpec(
+        category=EffectCategory.SPECIAL, special="cooldown_reset", recharges=True
+    ),
     # --- debuffs (power is the size of the penalty, hence scale=-1) ---
     "debuff_damage": _debuff(aoe=True, target_modifiers=(M("damage_percent", scale=-1.0),)),
     "debuff_accuracy": _debuff(aoe=True, target_modifiers=(M("accuracy_percent", scale=-1.0),)),

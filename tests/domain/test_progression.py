@@ -8,6 +8,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from mmorpg.domain.entities import Character, GameContent
 from mmorpg.domain.rules.progression import (
     MAX_LEVEL,
     apply_experience,
@@ -106,3 +107,23 @@ def test_reward_is_not_inflated_by_over_levelled_enemies() -> None:
     assert experience_reward(enemy_level=30, character_level=10) == experience_reward(
         enemy_level=30, character_level=30
     )
+
+
+# --- прибавки, которые полгода не считались --------------------------
+
+
+def test_experience_bonus_is_counted_and_named(content: GameContent) -> None:
+    """``exp_percent`` обещали четыре особенности и раса человека, а читал его
+    никто (``Roadmap.md``, ADR 0018)."""
+    from dataclasses import replace as _replace
+
+    from mmorpg.domain.rules import progression
+
+    human = Character(id=1, user_id=1, name="Проба", race_id="human", class_id="warrior", level=5)
+    dwarf = _replace(human, race_id="dwarf")
+
+    assert progression.earned(content, human, 100) > 100
+    assert progression.earned(content, dwarf, 100) == 100
+
+    grown, _ = progression.grant_experience(content, human, 100)
+    assert grown.experience == progression.earned(content, human, 100)

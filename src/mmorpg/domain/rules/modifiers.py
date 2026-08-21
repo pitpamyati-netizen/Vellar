@@ -57,6 +57,12 @@ EFFECTIVE_KEYS: frozenset[str] = frozenset(
         "reflect_percent",
         "resist_magic_percent",
         "resist_physical_percent",
+        # Стихии. У чужого удара она есть с тех пор, как у противника появился
+        # ``element`` (``entities/location.DamageElement``); до этого три ключа
+        # лежали в словаре и не значили ничего.
+        "resist_fire_percent",
+        "resist_cold_percent",
+        "resist_poison_percent",
         "flee_chance_percent",
         # запасы
         "health_percent",
@@ -68,14 +74,19 @@ EFFECTIVE_KEYS: frozenset[str] = frozenset(
         "healing_done_percent",
         "healing_taken_percent",
         # что остаётся после боя
+        "exp_percent",
         "gold_percent",
         "drop_rate_percent",
         "rarity_percent",
+        "quest_reward_percent",
+        "event_reward_percent",
         # город и ремесло
         "shop_price_percent",
         "sell_price_percent",
+        "reputation_percent",
         "craft_quality_percent",
         "gather_yield_percent",
+        "salvage_yield_percent",
     }
     | {f"{STAT_MODIFIER_PREFIX}{code.value}" for code in StatCode}
 )
@@ -92,6 +103,19 @@ def merge(*bundles: Mapping[str, float]) -> dict[str, float]:
 
 def trait_modifiers(content: GameContent, trait_ids: Iterable[str]) -> dict[str, float]:
     return merge(*(content.trait(trait_id).modifiers for trait_id in trait_ids))
+
+
+def race_modifiers(content: GameContent, character: Character) -> Mapping[str, float]:
+    """Что даёт расовая постоянная способность.
+
+    Шестнадцать рас, шестнадцать названных вслух способностей - и ни одна из них
+    не делала ничего: ``RacePassive`` был идентификатором, именем и текстом, а
+    сюда не заглядывал никто (``Roadmap.md``, «Что осталось»). Текст при этом
+    игрок читал при создании персонажа и выбирал по нему расу.
+    """
+    if not content.has_race(character.race_id):
+        return {}
+    return content.race(character.race_id).passive.modifiers
 
 
 def equipment_modifiers(
@@ -156,6 +180,7 @@ def collect_modifiers(
     """Every modifier acting on a character right now."""
     return merge(
         trait_modifiers(content, character.trait_ids),
+        race_modifiers(content, character),
         passive_modifiers(content, character),
         equipment_modifiers(content, character.equipment.item_ids(), character.level),
         # Чужая вещь не запрещена — она дорога, и цена берётся здесь же, вместе

@@ -70,8 +70,16 @@ def test_service_row_is_stable() -> None:
     assert LOOK not in SERVICE_ROW
 
 
+#: Единственный экран без служебного ряда - корень. «Назад» из главного меню
+#: вело в главное меню, «Главное меню» - туда же: две кнопки, не делающие ничего.
+ROOT_SCREEN = ScreenId.MAIN_MENU
+
+
 def test_every_screen_ends_with_the_service_row(all_screens: list[Screen]) -> None:
     for screen in all_screens:
+        if screen.id is ROOT_SCREEN:
+            assert SERVICE_ROW not in screen.all_rows(), screen.id
+            continue
         assert screen.all_rows()[-1] == SERVICE_ROW, screen.id
 
 

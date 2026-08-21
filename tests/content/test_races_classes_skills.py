@@ -6,6 +6,12 @@ import pytest
 
 from mmorpg.domain.entities import GameContent, SkillKind
 from mmorpg.domain.rules.modifiers import EFFECTIVE_KEYS
+from mmorpg.domain.rules.skill_effects import (
+    EffectCategory,
+    cleansed_count,
+    recharged,
+    spec_for,
+)
 
 RACE_STAT_BUDGET = 3
 
@@ -174,3 +180,65 @@ def test_every_edge_points_at_a_modifier_the_engine_reads(content: GameContent) 
         if key not in EFFECTIVE_KEYS
     ]
     assert not promised, promised
+
+
+def test_every_racial_passive_does_something(content: GameContent) -> None:
+    """Шестнадцать рас, шестнадцать способностей — и все они считаются.
+
+    ``RacePassive`` был идентификатором, именем и текстом: игрок выбирал расу по
+    строке, которую движок нигде не читал (``Roadmap.md``, «Что осталось»).
+    """
+    empty = [race.id for race in content.races if not race.passive.modifiers]
+    assert not empty, empty
+
+    promised = [
+        (race.id, key)
+        for race in content.races
+        for key in race.passive.modifiers
+        if key not in EFFECTIVE_KEYS
+    ]
+    assert not promised, promised
+
+
+def test_no_trait_promises_a_modifier_nobody_counts(content: GameContent) -> None:
+    """И у особенностей не осталось ни одного мёртвого ключа.
+
+    Их было десять на всю игру: опыт, плата за задания, находки на событиях,
+    доброе имя, уцелевшие материалы, засады, ловушки и три стихийных
+    сопротивления. Семь из них теперь считаются, засада и ловушка ушли из
+    словаря вместе с механикой, которой у них не было.
+    """
+    promised = [
+        (trait.id, key)
+        for trait in content.traits
+        for key in trait.modifiers
+        if key not in EFFECTIVE_KEYS
+    ]
+    assert not promised, promised
+
+
+def test_a_rank_always_changes_something(content: GameContent) -> None:
+    """Очко, вложенное в ранг, обязано что-то менять.
+
+    У четырёх умений оно не меняло ничего: «Исчезновение», «Юркость»,
+    «Отсрочка» и «По памяти» устроены как «да или нет», и силе ранга там было
+    некуда лечь (``Roadmap.md``, «Что осталось»). Теперь ранг у таких умений
+    возвращает умение быстрее, а у «Очищения» снимает больше.
+    """
+    idle: list[str] = []
+    for skill in content.skills:
+        if not skill.is_active:
+            continue
+        spec = spec_for(skill.effect)
+        first, top = skill.power_at_rank(1), skill.power_at_rank(content.rules.max_rank)
+        if spec.recharges:
+            if recharged(skill.cooldown, spec, first) == recharged(skill.cooldown, spec, top):
+                idle.append(skill.code)
+            continue
+        if spec.category is EffectCategory.CLEANSE:
+            if cleansed_count(spec, first) == cleansed_count(spec, top):
+                idle.append(skill.code)
+            continue
+        if first == top:
+            idle.append(skill.code)
+    assert not idle, idle

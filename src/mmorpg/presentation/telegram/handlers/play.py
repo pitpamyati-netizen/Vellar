@@ -50,11 +50,13 @@ from mmorpg.domain.ports.repositories import (
     UserRepository,
 )
 from mmorpg.domain.procgen.seeds import rotation_index
+from mmorpg.domain.rules import economy as economy_rules
 from mmorpg.domain.rules import moderation as moderation_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import progression
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.economy import buy_price, roll_assortment
+from mmorpg.domain.rules.modifiers import collect_modifiers
 from mmorpg.domain.rules.stats import derived_stats, primary_stats
 from mmorpg.logging import get_logger
 from mmorpg.presentation.telegram.flows import keeper as keeper_flow
@@ -367,12 +369,14 @@ async def _goods(
     if flow.screen is not ScreenId.SHOP:
         return Goods(gold=character.gold, owned=owned)
 
+    bundle = collect_modifiers(content, character)
     stock = roll_assortment(
         content,
         world_seed=settings.world_seed,
         city_id=flow.city_id or character.city_id,
         rotation=rotation,
         character_level=character.level,
+        reputation=bundle.get(economy_rules.REPUTATION_KEY, 0.0),
     )
     charisma = primary_stats(content, character)[StatCode.CHA]
     prices = {item.id: buy_price(content, item, charisma=charisma) for item in stock}

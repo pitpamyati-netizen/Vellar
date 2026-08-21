@@ -68,6 +68,30 @@ class EnemyKind(StrEnum):
     ABERRATION = "aberration"
 
 
+class DamageElement(StrEnum):
+    """Чем именно бьёт противник.
+
+    До этого о чужом ударе было известно только «порода бьющего», и три
+    сопротивления из содержимого - огню, холоду и яду - не считались ни разу:
+    ключ был, стихии не было (``Roadmap.md``, ADR 0018). Теперь стихия есть у
+    противника, и «Рождённый в стуже» наконец что-то значит.
+    """
+
+    PHYSICAL = "physical"
+    MAGIC = "magic"
+    FIRE = "fire"
+    COLD = "cold"
+    POISON = "poison"
+
+
+#: Стихия по умолчанию - по породе: стихия и тварь бьют чарами, всё прочее
+#: железом. Ровно то, что делалось раньше, только теперь это написано один раз.
+DEFAULT_ELEMENTS: dict[EnemyKind, DamageElement] = {
+    EnemyKind.ELEMENTAL: DamageElement.MAGIC,
+    EnemyKind.ABERRATION: DamageElement.MAGIC,
+}
+
+
 @dataclass(frozen=True, slots=True)
 class EnemyArchetype:
     """Content-defined template an enemy is generated from."""
@@ -81,6 +105,10 @@ class EnemyArchetype:
     armor: float
     initiative: float
     loot: tuple[str, ...]
+    #: Чем бьёт этот архетип. ``None`` - не объявлено, и решает порода
+    #: (``DEFAULT_ELEMENTS``): «железом» и «не объявлено» - разные вещи, иначе
+    #: каменный истукан не смог бы бить камнем.
+    element: DamageElement | None = None
 
     def fits(self, biome: str) -> bool:
         return "*" in self.biomes or biome in self.biomes
@@ -101,6 +129,7 @@ class Enemy:
     loot: tuple[str, ...]
     gold: int
     rank: EnemyRank = EnemyRank.NORMAL
+    element: DamageElement = DamageElement.PHYSICAL
 
     @property
     def is_elite(self) -> bool:

@@ -36,7 +36,14 @@ from mmorpg.domain.rules.combat import (
     blow_range,
     enemy_intent,
 )
-from mmorpg.domain.rules.skill_effects import EffectCategory, EffectSpec, spec_for, tag_of_skill
+from mmorpg.domain.rules.skill_effects import (
+    EffectCategory,
+    EffectSpec,
+    cleansed_count,
+    recharged,
+    spec_for,
+    tag_of_skill,
+)
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
@@ -165,7 +172,7 @@ def _modifier_phrase(spec: EffectSpec, power: float) -> str:
     the word for the rule the skill actually is.
     """
     if spec.cleanse_count:
-        return f"снимает до {spec.cleanse_count} отрицательных эффектов"
+        return f"снимает до {cleansed_count(spec, power)} отрицательных эффектов"
 
     bundle = spec.self_modifiers or spec.target_modifiers
     whose = "вам" if spec.self_modifiers else "цели"
@@ -202,22 +209,28 @@ def _weapon_status(content: GameContent, character: Character, skill: Skill) -> 
     return f"нужно оружие: {wanted}"
 
 
-def _slot_status(skill: Skill, state: CombatState) -> str:
+def _slot_status(skill: Skill, character: Character, state: CombatState) -> str:
     """Readiness, the price and the price of using it - always in words.
 
     A cooldown is stated twice on purpose: as what it will cost ("откат 3 хода")
     while the skill is ready, and as what is left ("ещё 2 хода") while it is not.
     Those are different questions and the player asks both.
+
+    Откат называется тот, который выйдет на самом деле: у умения «да или нет»
+    ранг сокращает именно его (``skill_effects.recharged``), и кнопка обязана
+    обещать то, что нажатие сделает.
     """
     cooldown = state.player.cooldown_of(skill.code)
     if cooldown > 0:
         return f"ещё {turns(cooldown)}"
 
+    rank = character.loadout.rank_of(skill.code)
+    ready_in = recharged(skill.cooldown, spec_for(skill.effect), skill.power_at_rank(rank))
     parts = []
     if skill.cost:
         parts.append(f"стоит {skill.cost}")
-    if skill.cooldown:
-        parts.append(f"откат {turns(skill.cooldown)}")
+    if ready_in:
+        parts.append(f"откат {turns(ready_in)}")
     if skill.cost > state.player.resource:
         parts.append(f"не хватает {skill.cost - state.player.resource}")
     else:
@@ -243,7 +256,7 @@ def skill_label(content: GameContent, character: Character, state: CombatState, 
     if skill is None:
         return label(f"{slot + 1}. {EMPTY_SLOT}")
 
-    status = _weapon_status(content, character, skill) or _slot_status(skill, state)
+    status = _weapon_status(content, character, skill) or _slot_status(skill, character, state)
     return label(
         f"{slot + 1}. {skill.name} — {TAG_NAMES[tag_of_skill(skill)]}, "
         f"{skill_effect(content, character, state, skill)}, {status}"
@@ -263,7 +276,7 @@ def racial_label(content: GameContent, character: Character, state: CombatState)
         return label(f"Расовое умение — {EMPTY_SLOT.lower()}")
     return label(
         f"{skill.name} — расовое, {TAG_NAMES[tag_of_skill(skill)]}, "
-        f"{skill_effect(content, character, state, skill)}, {_slot_status(skill, state)}"
+        f"{skill_effect(content, character, state, skill)}, {_slot_status(skill, character, state)}"
     )
 
 

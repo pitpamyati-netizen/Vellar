@@ -45,9 +45,13 @@ from mmorpg.presentation.telegram.keyboards.labels import (
     label,
 )
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
-from mmorpg.presentation.telegram.screens.format import found, plural
+from mmorpg.presentation.telegram.screens.format import MESSAGE_LIMIT, found, plural
 
 PAGE_SIZE = 8
+
+#: Запас под строку «Найдено N записей, страница X из Y.» - её длину надо знать
+#: до того, как страницы посчитаны, иначе счёт ходит по кругу.
+COUNTS_LINE = 48
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +137,40 @@ def total_pages(count: int, page_size: int = PAGE_SIZE) -> int:
     return max(1, -(-count // page_size))
 
 
+def entry_line(entry: ListEntry) -> str:
+    """Строка записи в теле сообщения. Пусто - у записи нечего рассказывать."""
+    return f"{entry.text} — {entry.detail}" if entry.detail else ""
+
+
+def entries_per_page(
+    entries: Sequence[ListEntry],
+    *,
+    overhead: int = 0,
+    page_size: int = PAGE_SIZE,
+    limit: int = MESSAGE_LIMIT,
+) -> int:
+    """Сколько записей списка помещается в одно сообщение.
+
+    Восемь записей - это потолок, а не обещание. У списка умений строка записи
+    длиной под двести знаков, и восемь таких не влезали в предел сообщения: у
+    страницы было восемь кнопок и пять описаний, а три умения игрок слышал
+    только как кнопку - без того, что она делает и что стоит. Резать описание
+    нельзя (оно и есть содержимое списка), молча терять хвост - тем более, и
+    остаётся третье: на такой странице записей меньше.
+
+    Число одно на весь список, по самой длинной его записи: страница из трёх
+    записей и страница из восьми в одном списке означали бы, что «четвёртое
+    умение» - это разное умение на разных страницах (правило доступности 7).
+    """
+    if not entries:
+        return page_size
+    longest = max((len(entry_line(entry)) for entry in entries), default=0)
+    if longest <= 0:
+        return page_size
+    room = max(0, limit - max(0, overhead))
+    return max(1, min(page_size, room // (longest + 1)))
+
+
 def page_slice(
     entries: Sequence[ListEntry], state: PageState, page_size: int = PAGE_SIZE
 ) -> tuple[ListEntry, ...]:
@@ -212,12 +250,24 @@ def paginated_screen(
     entries matched and which page this is - so a player who hears only this
     message knows exactly where they are.
     """
+    described = state.filters.describe()
+    header = f"{title}. {described}." if described else f"{title}."
+    # Сколько записей влезет, решается до нарезки: длинный список умений режется
+    # по три на страницу, короткий инвентарь - по восемь, как и раньше.
+    overhead = (
+        len(header)
+        + COUNTS_LINE
+        + sum(len(line) + 1 for line in lead_lines)
+        + (len(empty_text) + 1 if not entries else 0)
+    )
+    page_size = entries_per_page(
+        entries, overhead=overhead, page_size=page_size, limit=MESSAGE_LIMIT
+    )
+
     pages = total_pages(len(entries), page_size)
     current = state.clamped(pages)
     visible = page_slice(entries, current, page_size)
 
-    described = current.filters.describe()
-    header = f"{title}. {described}." if described else f"{title}."
     counts = (
         f"{found(len(entries))}, страница {current.page} из {pages}."
         if pages > 1
@@ -227,9 +277,7 @@ def paginated_screen(
     lines: list[str] = [header, counts, *lead_lines]
     if not entries:
         lines.append(empty_text)
-    for entry in visible:
-        if entry.detail:
-            lines.append(f"{entry.text} — {entry.detail}")
+    lines.extend(line for entry in visible if (line := entry_line(entry)))
 
     rows: list[tuple[Label, ...]] = [(entry.as_label(),) for entry in visible]
     # Everything below the entries is machinery, and machinery nobody needs is not

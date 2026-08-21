@@ -15,7 +15,8 @@ from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.location import Enemy, NodeKind
 from mmorpg.domain.entities.quest import ObjectiveKind, Quest, QuestLog
-from mmorpg.domain.rules.progression import LevelUp, grant_experience
+from mmorpg.domain.rules import modifiers as mods
+from mmorpg.domain.rules.progression import LevelUp, earned, grant_experience
 
 # How far above the contract's level a character may still take it. Below the
 # level it is simply not offered; there is no ceiling, because an easy contract
@@ -200,19 +201,27 @@ class QuestPayout:
     item_id: str = ""
 
 
+#: Прибавка к плате за задание. Её обещали «Серебряный язык» и
+#: «Дипломатическая неприкосновенность», а считал её никто (``Roadmap.md``).
+#: Считается здесь: задание закрывается в одном месте, значит и плата за него.
+QUEST_REWARD_KEY = "quest_reward_percent"
+
+
 def hand_in(content: GameContent, character: Character, quest: Quest) -> QuestPayout | None:
     """Close a counted-out contract and pay for it. ``None`` if it is not due."""
     log = character.quests
     if not log.is_taken(quest.id) or log.progress(quest.id) < quest.target_count:
         return None
-    paid, level_up = grant_experience(
-        content, character.with_gold(quest.reward_gold), quest.reward_experience
-    )
+    share = max(0.0, mods.percent(mods.collect_modifiers(content, character), QUEST_REWARD_KEY))
+    gold = round(quest.reward_gold * share)
+    experience = round(quest.reward_experience * share)
+    given = character.with_gold(gold)
+    paid, level_up = grant_experience(content, given, experience)
     return QuestPayout(
         character=replace(paid, quests=log.complete(quest.id)),
         quest=quest,
-        gold=quest.reward_gold,
-        experience=quest.reward_experience,
+        gold=gold,
+        experience=earned(content, given, experience),
         level_up=level_up,
         item_id=quest.reward_item,
     )

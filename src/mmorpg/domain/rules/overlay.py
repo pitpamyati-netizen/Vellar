@@ -23,7 +23,7 @@ from enum import StrEnum
 from types import MappingProxyType
 
 from mmorpg.domain.entities.content import City, GameContent, Location, Npc
-from mmorpg.domain.entities.location import EnemyArchetype, EnemyKind
+from mmorpg.domain.entities.location import DamageElement, EnemyArchetype, EnemyKind
 from mmorpg.domain.entities.overlay import KEEPER_PREFIX, OverlayKind, OverlayRecord
 from mmorpg.domain.entities.quest import ObjectiveKind, Quest
 
@@ -167,6 +167,15 @@ FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
         FieldSpec("damage", "Урон, доля", FieldKind.RATE),
         FieldSpec("armor", "Броня, доля", FieldKind.RATE),
         FieldSpec("initiative", "Инициатива, доля", FieldKind.RATE),
+        # Чем бьёт. По ней считается сопротивление игрока; не выбрано — решает
+        # порода: стихия и тварь бьют чарами, всё прочее железом.
+        FieldSpec(
+            "element",
+            "Чем бьёт",
+            FieldKind.CHOICE,
+            choices=tuple(element.value for element in DamageElement),
+            hint="не выбрано — по породе",
+        ),
         FieldSpec("loot", "Что падает", FieldKind.LIST, source=Source.ITEM),
     ),
     OverlayKind.CITY: (
@@ -861,6 +870,7 @@ def _apply_enemies(
             damage=record.rate("damage"),
             armor=record.rate("armor"),
             initiative=record.rate("initiative"),
+            element=(DamageElement(chosen) if (chosen := record.value("element")) else None),
             loot=record.listed("loot"),
         )
     return tuple(by_id.values())

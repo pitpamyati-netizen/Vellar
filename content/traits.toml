@@ -34,8 +34,7 @@ modifier_keys = [
     "exp_percent", "gold_percent", "shop_price_percent", "sell_price_percent",
     "drop_rate_percent", "rarity_percent", "quest_reward_percent", "event_reward_percent",
     "craft_quality_percent", "gather_yield_percent", "salvage_yield_percent",
-    "reflect_percent", "dot_damage_percent",
-    "ambush_chance_percent", "flee_chance_percent", "trap_damage_percent",
+    "reflect_percent", "dot_damage_percent", "flee_chance_percent",
     "first_turn_damage_percent", "single_target_damage_percent", "aoe_damage_percent",
     "low_health_damage_percent", "wounded_target_damage_percent",
     "elite_damage_percent", "beast_damage_percent",
@@ -47,8 +46,6 @@ modifier_keys = [
 lower_is_better = [
     "damage_taken_percent",
     "shop_price_percent",
-    "ambush_chance_percent",
-    "trap_damage_percent",
 ]
 
 # --- Combat ---
@@ -267,11 +264,11 @@ text = "В конце хода вы восстанавливаете 2 проц�
 
 [[trait]]
 id = "trap_sense"
-name = "Чутьё на ловушки"
+name = "Чутьё на подвох"
 category = "defense"
-tags = ["ловушки"]
-modifiers = { trap_damage_percent = -30 }
-text = "Ловушки наносят вам на 30 процентов меньше урона."
+tags = ["урон"]
+modifiers = { damage_taken_percent = -4 }
+text = "Подвох вы замечаете первым: получаемый урон ниже на 4 процента."
 
 [[trait]]
 id = "shield_wall"
@@ -305,7 +302,7 @@ name = "Знакомое лицо"
 category = "social"
 tags = ["репутация"]
 modifiers = { reputation_percent = 20 }
-text = "Репутация растёт на 20 процентов быстрее."
+text = "Вас знают: лавки держат для вас на две вещи больше и на два уровня выше."
 
 [[trait]]
 id = "storyteller"
@@ -363,7 +360,7 @@ name = "Разборщик"
 category = "crafting"
 tags = ["разбор"]
 modifiers = { salvage_yield_percent = 25 }
-text = "С разбора вещей вы получаете на 25 процентов больше материалов."
+text = "После работы у вас уцелевает на 25 процентов больше материалов."
 
 [[trait]]
 id = "herbalist"
@@ -403,9 +400,9 @@ text = "Зелья лечат вас на 12 процентов сильнее."
 id = "pathfinder"
 name = "Следопыт троп"
 category = "survival"
-tags = ["засады"]
-modifiers = { ambush_chance_percent = -25 }
-text = "Шанс попасть в засаду ниже на 25 процентов."
+tags = ["инициатива"]
+modifiers = { initiative_percent = 10 }
+text = "Чужой лагерь вы видите раньше, чем он вас: инициатива выше на 10 процентов."
 
 [[trait]]
 id = "light_sleeper"

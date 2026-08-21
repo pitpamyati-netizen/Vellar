@@ -50,10 +50,10 @@ from mmorpg.domain.entities.combat import (
 from mmorpg.domain.entities.content import GameContent, Skill
 from mmorpg.domain.entities.dice import Dice
 from mmorpg.domain.entities.effects import ActiveEffect, EffectStack
-from mmorpg.domain.entities.location import Enemy, EnemyRank
+from mmorpg.domain.entities.location import DamageElement, Enemy, EnemyRank
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.procgen import items as item_procgen
-from mmorpg.domain.procgen.enemies import RANK_FACTORS
+from mmorpg.domain.procgen.enemies import RANK_FACTORS, group_scale
 from mmorpg.domain.rules import edges as edge_rules
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import modifiers as mods
@@ -68,6 +68,8 @@ from mmorpg.domain.rules.skill_effects import (
     UNSTUNNABLE,
     EffectCategory,
     EffectSpec,
+    cleansed_count,
+    recharged,
     spec_for,
     tag_of_skill,
 )
@@ -92,11 +94,6 @@ DEFAULT_SHIELD_TURNS = 3
 #: Чем удар считается ударом чар, а не руки: стихия, названная у самого умения.
 #: Обычный удар и умение без стихии - физические.
 MAGIC_TAGS = frozenset({"arcane", "cold", "elemental", "fire", "holy", "nature", "poison"})
-
-#: Чей удар по герою считается магическим. Порода противника - единственное, что
-#: о его ударе вообще известно, и она же говорит об этом достаточно: стихия и
-#: тварь бьют не железом.
-MAGIC_ENEMY_KINDS = frozenset({"aberration", "elemental"})
 
 #: Прибавка к урону по породе противника - тем же ключом, каким она объявлена.
 KIND_DAMAGE_KEYS: dict[str, str] = {
@@ -232,13 +229,25 @@ def situational_damage(
     return 1.0 + total / 100.0
 
 
+#: Каким ключом называется сопротивление каждой стихии.
+RESIST_KEYS: dict[DamageElement, str] = {
+    DamageElement.PHYSICAL: "resist_physical_percent",
+    DamageElement.MAGIC: "resist_magic_percent",
+    DamageElement.FIRE: "resist_fire_percent",
+    DamageElement.COLD: "resist_cold_percent",
+    DamageElement.POISON: "resist_poison_percent",
+}
+
+
 def incoming_damage_factor(modifiers: Mapping[str, float], enemy: Enemy) -> float:
     """Что сопротивление оставляет от удара противника.
 
-    О чужом ударе известна только порода бьющего, и её достаточно: стихия и
-    тварь бьют чарами, всё прочее - железом.
+    У чужого удара есть стихия (``entities/location.DamageElement``), и
+    сопротивление считается по ней. Раньше её не было вовсе - была только порода
+    бьющего, - и три сопротивления из содержимого, огню, холоду и яду, не
+    считались ни разу: ключ в словаре, механики никакой (ADR 0018).
     """
-    key = "resist_magic_percent" if enemy.kind in MAGIC_ENEMY_KINDS else "resist_physical_percent"
+    key = RESIST_KEYS.get(enemy.element, "resist_physical_percent")
     return max(0.0, 1.0 - modifiers.get(key, 0.0) / 100.0)
 
 
@@ -685,7 +694,7 @@ def _use_skill(
     edge = skill_rules.chosen_edge(character, skill)
     power = skill.power_at_rank(rank) * edge_rules.power_factor(edge)
     spec = edge_rules.applied(spec_for(skill.effect), edge)
-    cooldown = edge_rules.cooldown_of(skill.cooldown, edge)
+    cooldown = recharged(edge_rules.cooldown_of(skill.cooldown, edge), spec, power)
     # Откаты короче - это прибавка, которую носят вещи; до сих пор её никто не
     # читал. Ниже одного хода откат не сокращается: умение с откатом - это
     # умение, которое нельзя нажимать подряд.
@@ -831,7 +840,7 @@ def _apply_spec(
 
     if spec.cleanse_count:
         before = len(working.player.effects.penalties())
-        cleansed = working.player.effects.cleanse(spec.cleanse_count)
+        cleansed = working.player.effects.cleanse(cleansed_count(spec, power))
         removed = before - len(cleansed.penalties())
         working = replace(working, player=replace(working.player, effects=cleansed))
         if removed:
@@ -1548,8 +1557,15 @@ def _check_outcome(
     if not state.player.alive:
         return replace(state, outcome=CombatOutcome.DEFEAT)
     if not state.living_enemies:
+        # Стая делит один бой - и делит его целиком. Здоровье и урон ей уже
+        # делили при сборке (``procgen/enemies.group_scale``), а опыт и золото
+        # множили на число тел: трое волков стоили полутора боёв по времени и
+        # платили как три. Отсюда и брался самый выгодный способ играть - искать
+        # стаи побольше, - вместо того, за что бой вообще считается.
+        share = group_scale(len(state.enemies))
         experience = round(
-            sum(
+            share
+            * sum(
                 experience_reward(enemy_level=enemy.enemy.level, character_level=character.level)
                 * RANK_FACTORS[enemy.enemy.rank].experience
                 for enemy in state.enemies

@@ -21,7 +21,7 @@ from mmorpg.domain.entities.location import (
     LocationNode,
     NodeKind,
 )
-from mmorpg.domain.rules import adventure
+from mmorpg.domain.rules import adventure, progression
 from mmorpg.domain.rules.economy import inn_price, mentor_price
 from mmorpg.domain.rules.stats import derived_stats
 
@@ -85,9 +85,27 @@ def test_a_won_fight_pays_and_can_raise_a_level(content: GameContent, hero: Char
     result = adventure.resolve_victory(content, hero, a_won_fight(content, hero))
     assert result.gold == 25
     assert result.character.gold == hero.gold + 25
-    assert result.experience == 400
+    # Названо то, что записано: у человека расовая прибавка к опыту, и отчёт о
+    # бое обязан называть уже её (``progression.earned``).
+    assert result.experience == progression.earned(content, hero, 400)
+    assert result.experience > 400
+    assert result.character.experience == hero.experience + result.experience
     assert result.loot == ("wolf_pelt",)
     assert result.character.level >= hero.level
+
+
+def test_a_won_fight_reports_the_experience_it_actually_gave(
+    content: GameContent, hero: Character
+) -> None:
+    """Раса, которая обещает больше опыта, обещает его и в отчёте.
+
+    Отчёт печатал число до прибавки, а записывал число после неё: «400 опыта» на
+    экране и 420 в базе - это та же ложь, что и прибавка, которой никто не
+    считает (``Claude.md``, правило 7)."""
+    plain = replace(hero, race_id="dwarf")
+    result = adventure.resolve_victory(content, plain, a_won_fight(content, plain))
+    assert result.experience == 400
+    assert result.character.experience == plain.experience + 400
 
 
 def test_wounds_are_carried_out_of_the_fight(content: GameContent, hero: Character) -> None:

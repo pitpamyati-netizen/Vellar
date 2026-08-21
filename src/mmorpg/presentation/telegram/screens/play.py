@@ -159,7 +159,11 @@ def main_menu_screen(
     # never hears this row at all.
     if character.is_admin:
         rows.append((labels.KEEPER,))
-    return Screen(id=ScreenId.MAIN_MENU, lines=tuple(lines), rows=tuple(rows))
+    # Служебного ряда здесь нет, и это единственный экран, где его нет: «Назад»
+    # из главного меню вело в главное меню, а «Главное меню» - туда, где игрок
+    # уже стоит. Две кнопки, которые ничего не делают, на самом слышимом экране
+    # игры (``Claude.md``, правило 9). Обе команды - /назад и /меню - работают.
+    return Screen(id=ScreenId.MAIN_MENU, lines=tuple(lines), rows=tuple(rows), service_row=False)
 
 
 def world_screen(

@@ -17,7 +17,7 @@ from types import MappingProxyType
 
 from mmorpg.domain.entities.combat import ActionTag
 from mmorpg.domain.entities.craft import Craft, CraftKind, CraftRules, Recipe
-from mmorpg.domain.entities.dice import Dice
+from mmorpg.domain.entities.dice import MAX_SPREAD, Dice
 from mmorpg.domain.entities.location import EnemyArchetype
 from mmorpg.domain.entities.quest import Quest
 from mmorpg.domain.entities.stats import StatBlock, StatCode
@@ -152,11 +152,20 @@ class Skill:
 
 @dataclass(frozen=True, slots=True)
 class RacePassive:
-    """Always-on racial ability. It never occupies a slot."""
+    """Always-on racial ability. It never occupies a slot.
+
+    ``modifiers`` — то, что она делает. Долго здесь были только ``id``, ``name``
+    и ``text``: шестнадцать способностей, названных вслух при создании
+    персонажа, и ни одной, которую движок считал бы (``Roadmap.md``). Ключи —
+    из того же словаря, что у особенностей, и проверяются по
+    ``modifiers.EFFECTIVE_KEYS``: прибавка, которой никто не считает, — это не
+    прибавка, а обещание (``Claude.md``, правило 7).
+    """
 
     id: str
     name: str
     text: str
+    modifiers: Mapping[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -312,14 +321,22 @@ class WeaponType:
 
     id: str
     name: str
-    #: Кости этого рода на первом уровне. Дальше растут грани, а не число костей:
-    #: размах — это характер рода, и он не меняется от того, что вещь нашлась
-    #: уровнем выше (``entities/dice.py``).
+    #: Кости этого рода на первой ступени: среднее удара и форма броска. Границы
+    #: удара задаёт не этот бросок, а ``spread`` (``entities/dice.py``).
     dice: Dice
+    #: Размах: во сколько раз верхняя граница удара выше нижней. Это и есть
+    #: характер рода — меч ровный, булава широкая, — и он не меняется от того,
+    #: что вещь нашлась ступенью выше. Выше ``dice.MAX_SPREAD`` не поднимается
+    #: никто: там кончается решение и начинается монетка.
+    spread: float = MAX_SPREAD
     #: Род оружия — ещё и существительное, от которого строится имя вещи:
     #: «Крепкий меч», но «Крепкая булава». m, f, n или p (множественное).
     gender: str = "m"
     modifiers: Mapping[str, float] = field(default_factory=dict)
+
+    def damage_at(self, factor: float) -> Dice:
+        """Кости этого рода на вещи, которая во столько раз крупнее первой."""
+        return self.dice.scaled(factor, spread=self.spread)
 
 
 @dataclass(frozen=True, slots=True)
@@ -672,6 +689,9 @@ class GameContent:
 
     def race(self, race_id: str) -> Race:
         return self._races_by_id[race_id]
+
+    def has_race(self, race_id: str) -> bool:
+        return race_id in self._races_by_id
 
     def character_class(self, class_id: str) -> CharacterClass:
         return self._classes_by_id[class_id]

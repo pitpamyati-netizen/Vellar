@@ -30,6 +30,10 @@ from mmorpg.domain.rules.modifiers import collect_modifiers, percent
 
 GATHER_YIELD_KEY = "gather_yield_percent"
 CRAFT_QUALITY_KEY = "craft_quality_percent"
+#: Насколько больше материалов уцелевает при работе. Ключ обещал «Разборщик» и
+#: не читал его никто (``Roadmap.md``, ADR 0018). Место у него было готово всё
+#: это время: качество партии и так решает, сколько материалов не ушло в дело.
+SALVAGE_YIELD_KEY = "salvage_yield_percent"
 
 
 def rank_of(rules: CraftRules, experience: int) -> int:
@@ -231,9 +235,8 @@ def make(
     modifiers = collect_modifiers(content, character)
     quality = _roll_quality(rules, rank, percent(modifiers, CRAFT_QUALITY_KEY), seed)
 
-    spent = tuple(
-        (need.item_id, -_spend(need.count, quality.refund_percent)) for need in recipe.inputs
-    )
+    kept = quality.refund_percent * max(0.0, percent(modifiers, SALVAGE_YIELD_KEY))
+    spent = tuple((need.item_id, -_spend(need.count, kept)) for need in recipe.inputs)
     count = recipe.output_count + quality.extra
     log = character.crafts.with_experience(recipe.craft_id, recipe.experience)
     return (
@@ -249,9 +252,9 @@ def make(
     )
 
 
-def _spend(count: int, refund_percent: int) -> int:
+def _spend(count: int, refund_percent: float) -> int:
     """Materials actually used up. A refund never gives work away for free."""
-    kept = count * refund_percent // 100
+    kept = int(count * max(0.0, refund_percent) // 100)
     return max(1, count - kept)
 
 
