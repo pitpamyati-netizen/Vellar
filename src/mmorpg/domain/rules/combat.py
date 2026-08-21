@@ -93,7 +93,7 @@ DEFAULT_SHIELD_TURNS = 3
 
 #: Чем удар считается ударом чар, а не руки: стихия, названная у самого умения.
 #: Обычный удар и умение без стихии - физические.
-MAGIC_TAGS = frozenset({"arcane", "cold", "elemental", "fire", "holy", "nature", "poison"})
+MAGIC_TAGS = frozenset({"arcane", "cold", "air", "fire", "holy", "negative", "chaos", "nature", "poison", "acid", "light", "mental"})
 
 #: Прибавка к урону по породе противника - тем же ключом, каким она объявлена.
 KIND_DAMAGE_KEYS: dict[str, str] = {
