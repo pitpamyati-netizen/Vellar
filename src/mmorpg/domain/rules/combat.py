@@ -119,7 +119,24 @@ MAX_AUTOPLAY_TURNS = 400
 # на выходе (``Claude.md``, правило 7).
 
 #: Чем удар считается ударом чар, а не руки: стихия, названная у самого умения.
-MAGIC_TAGS = frozenset({"arcane", "cold", "elemental", "fire", "holy", "nature", "poison"})
+#: Обычный удар и умение без стихии - физические.
+MAGIC_TAGS = frozenset(
+    {
+        "acid",
+        "air",
+        "arcane",
+        "chaos",
+        "cold",
+        "elemental",
+        "fire",
+        "holy",
+        "light",
+        "mental",
+        "nature",
+        "negative",
+        "poison",
+    }
+)
 
 #: Какой стихией бьёт умение с такой пометкой. По ней считается сопротивление
 #: цели - и цели-противника, и цели-игрока: в поединке двоих «Рождённый в стуже»
