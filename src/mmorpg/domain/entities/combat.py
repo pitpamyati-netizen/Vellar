@@ -23,8 +23,10 @@ from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from types import MappingProxyType
 
+from mmorpg.domain.entities.damage import UNARMED, DamageType
 from mmorpg.domain.entities.effects import EffectStack
-from mmorpg.domain.entities.location import DamageElement, Enemy, EnemyKind, EnemyRank
+from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
+from mmorpg.domain.entities.statuses import StatusKind
 
 #: Сколько бойцов помещается на одной стороне. Четверо: столько строк экрана
 #: слушается за раз, и столько имён игрок держит в голове (``docs/accessibility``).
@@ -158,10 +160,18 @@ class EventKind(StrEnum):
     DODGE = "dodge"
     CRIT = "crit"
     HEAL = "heal"
-    SHIELD = "shield"
+    #: Барьер: раньше он назывался щитом и был просто числом на бойце.
+    BARRIER = "barrier"
     EFFECT_APPLIED = "effect_applied"
+    #: Состояние наложено, снято, кончилось.
+    STATUS_APPLIED = "status_applied"
+    STATUS_ENDED = "status_ended"
     CLEANSED = "cleansed"
     STUNNED = "stunned"
+    #: Удар не дошёл вовсе: цель неуязвима.
+    IMMUNE = "immune"
+    #: Умением не воспользоваться: на бойце молчание.
+    SILENCED = "silenced"
     RESOURCE = "resource"
     DEFEATED = "defeated"
     FLED = "fled"
@@ -240,8 +250,12 @@ class Combatant:
     enemy: Enemy | None = None
     effects: EffectStack = field(default_factory=EffectStack)
     cooldowns: Mapping[str, int] = field(default_factory=dict)
-    shield: int = 0
-    stunned: int = 0
+    #: Сколько урона держит барьер. Само состояние - в ``effects``: барьер
+    #: сгорает вместе с тем, кто его поставил (``StatusKind.BARRIER``).
+    barrier: int = 0
+    #: Чем бьёт этот боец без умения. У противника род урона лежит в породе, у
+    #: героя - в оружии, и ставится при сборке бойца.
+    damage_type: DamageType | None = None
     free_cast: bool = False
     evade_charges: int = 0
     trace: Trace = field(default_factory=Trace)
@@ -272,9 +286,17 @@ class Combatant:
         return self.enemy.kind.value if self.enemy is not None else EnemyKind.HUMANOID.value
 
     @property
-    def element(self) -> DamageElement:
-        """Чем бьёт этот боец, когда бьёт без умения."""
-        return self.enemy.element if self.enemy is not None else DamageElement.PHYSICAL
+    def element(self) -> DamageType:
+        """Род урона этого бойца, когда он бьёт без умения."""
+        if self.enemy is not None:
+            return self.enemy.element
+        return self.damage_type if self.damage_type is not None else UNARMED
+
+    @property
+    def controlled(self) -> StatusKind | None:
+        """Состояние, отнимающее у бойца ход. ``None`` - ход за ним."""
+        held = self.effects.control()
+        return held.status if held is not None else None
 
     def cooldown_of(self, skill_code: str) -> int:
         return self.cooldowns.get(skill_code, 0)
@@ -290,13 +312,13 @@ class Combatant:
         return replace(self, cooldowns=MappingProxyType(cooldowns))
 
     def damaged(self, amount: int) -> tuple[Combatant, int]:
-        """Урон идёт сперва в щит. Второй член - сколько дошло до здоровья."""
-        absorbed = min(self.shield, amount)
+        """Урон идёт сперва в барьер. Второй член - сколько дошло до здоровья."""
+        absorbed = min(self.barrier, amount)
         to_health = amount - absorbed
         return (
             replace(
                 self,
-                shield=self.shield - absorbed,
+                barrier=self.barrier - absorbed,
                 health=max(0, self.health - to_health),
             ),
             to_health,

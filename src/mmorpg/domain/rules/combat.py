@@ -54,10 +54,12 @@ from mmorpg.domain.entities.combat import (
     counter_to,
 )
 from mmorpg.domain.entities.content import GameContent, Skill
+from mmorpg.domain.entities.damage import UNARMED, DamageType
 from mmorpg.domain.entities.dice import Dice
-from mmorpg.domain.entities.effects import ActiveEffect, EffectStack
-from mmorpg.domain.entities.location import DamageElement, Enemy
+from mmorpg.domain.entities.effects import ActiveEffect, EffectStack, status_effect
+from mmorpg.domain.entities.location import Enemy
 from mmorpg.domain.entities.stats import StatCode
+from mmorpg.domain.entities.statuses import StatusKind, status_spec
 from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.procgen.enemies import RANK_FACTORS, group_scale
 from mmorpg.domain.procgen.seeds import derive, rng, to_int
@@ -67,14 +69,12 @@ from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.progression import experience_reward
 from mmorpg.domain.rules.skill_effects import (
-    BLEED_PER_TURN,
     COUNTER,
-    MEND_PER_TURN,
-    SHIELD_HELD,
     UNDYING,
     UNSTUNNABLE,
     EffectCategory,
     EffectSpec,
+    Inflict,
     cleansed_count,
     recharged,
     spec_for,
@@ -90,6 +90,7 @@ __all__ = [
     "blow_of",
     "blow_range",
     "blow_roll",
+    "damage_type_of",
     "hero_combatant",
     "incoming_damage_factor",
     "intent_of",
@@ -97,14 +98,15 @@ __all__ = [
     "monster_combatant",
     "open_battle",
     "situational_damage",
-    "spend_bleeding",
+    "spend_dot",
 ]
 
-#: Какая доля удара достаётся цели каждый ход, пока она истекает кровью.
-BLEED_SHARE = 0.25
+#: Какая доля удара достаётся цели каждый ход, пока на ней горение, яд или
+#: кровотечение. Одна на все три: разница между ними в роде урона, а не в силе.
+DOT_SHARE = 0.25
 
-#: Сколько ходов держится щит, которому срок не назначен, - щит от грани.
-DEFAULT_SHIELD_TURNS = 3
+#: Сколько ходов держится барьер, которому срок не назначен, - барьер от грани.
+DEFAULT_BARRIER_TURNS = 3
 
 #: Потолок на число ходов, которые движок прокручивает за одно нажатие. Бой
 #: четверых, где все под управлением движка, кончается сам; счётчик стоит на
@@ -118,38 +120,10 @@ MAX_AUTOPLAY_TURNS = 400
 # здесь, и только здесь: один проход по обстоятельствам удара, один множитель
 # на выходе (``Claude.md``, правило 7).
 
-#: Чем удар считается ударом чар, а не руки: стихия, названная у самого умения.
-#: Обычный удар и умение без стихии - физические.
-MAGIC_TAGS = frozenset(
-    {
-        "acid",
-        "air",
-        "arcane",
-        "chaos",
-        "cold",
-        "elemental",
-        "fire",
-        "holy",
-        "light",
-        "mental",
-        "nature",
-        "negative",
-        "poison",
-    }
-)
-
-#: Какой стихией бьёт умение с такой пометкой. По ней считается сопротивление
-#: цели - и цели-противника, и цели-игрока: в поединке двоих «Рождённый в стуже»
-#: значит ровно то же, что и против ледяного волка.
-TAG_ELEMENTS: dict[str, DamageElement] = {
-    "fire": DamageElement.FIRE,
-    "cold": DamageElement.COLD,
-    "poison": DamageElement.POISON,
-    "arcane": DamageElement.MAGIC,
-    "elemental": DamageElement.MAGIC,
-    "holy": DamageElement.MAGIC,
-    "nature": DamageElement.MAGIC,
-}
+#: Род урона умения - это его собственный тег: тег ``fire`` и есть
+#: ``DamageType.FIRE`` (``entities/damage.py``). Тега нет - умение бьёт тем же,
+#: чем боец бьёт и без него: оружием или своей породой. Тега ``elemental``,
+#: обещавшего стихию и не называвшего ни одной, больше нет.
 
 #: Прибавка к урону по породе цели - тем же ключом, каким она объявлена.
 KIND_DAMAGE_KEYS: dict[str, str] = {
@@ -253,6 +227,7 @@ def hero_combatant(
         resource_name=stats.resource_name,
         initiative=stats.initiative,
         live=live,
+        damage_type=gear.weapon_damage_type(content, character),
         character_id=character.id,
         user_id=character.user_id if live else 0,
     )
@@ -452,17 +427,27 @@ def _take_turn(
         return _advance(state, seed)
 
     unstunnable = actor.effects.modifiers().get(UNSTUNNABLE, 0.0) > 0
-    if actor.stunned > 0 and unstunnable:
-        # Обещание держится с той стороны, с какой его дают.
-        actor = replace(actor, stunned=0)
+    if unstunnable and actor.effects.control() is not None:
+        # Обещание держится с той стороны, с какой его дают: всё, что отнимает
+        # ход, с такого бойца снимается разом.
+        actor = replace(actor, effects=actor.effects.without_control())
         state = state.replace_combatant(actor)
 
-    if actor.stunned > 0:
-        working = state.replace_combatant(replace(actor, stunned=actor.stunned - 1)).with_events(
-            BattleEvent(kind=EventKind.TURN_SKIPPED, actor_id=actor.id, actor=actor.name)
+    if (held := actor.effects.control()) is not None:
+        working = state.with_events(
+            BattleEvent(
+                kind=EventKind.TURN_SKIPPED,
+                actor_id=actor.id,
+                actor=actor.name,
+                effect_name=held.name,
+            )
         )
         working = _upkeep(content, roster, working, actor.id)
         return _advance(working, seed)
+
+    # Очарованный дерётся против своих, спутанный бьёт куда попало. Ход у них
+    # есть - они просто не решают, куда он уйдёт.
+    action = _hijacked(state, actor, action, seed)
 
     tempo = _tempo(content, roster, state, actor, action)
     working = _announce_tempo(state, actor, tempo)
@@ -505,7 +490,14 @@ def _off_balance(state: BattleState, actor: Combatant, target: Combatant | None)
     current = working.by_id(shaken.id)
     if current is None or not current.alive:  # pragma: no cover - цель могла пасть
         return working
-    return working.replace_combatant(replace(current, stunned=max(current.stunned, 1)))
+    return _inflicted(
+        working,
+        current.id,
+        Inflict(kind=StatusKind.STUN, turns=1),
+        power=0.0,
+        skill_name="",
+        source_code="breakthrough",
+    )
 
 
 def _advance(state: BattleState, seed: bytes) -> BattleState:
@@ -541,10 +533,16 @@ def _refusal(
     Спрашивается до всего остального и только про то, что игра отказывается
     делать вовсе. Промах отказом не является: он и есть результат хода.
     """
-    if actor.stunned > 0:
+    if actor.effects.control() is not None:
+        return None
+    if actor.effects.has(StatusKind.CHARM) or actor.effects.has(StatusKind.CONFUSION):
+        # Нажатое всё равно будет заменено: спрашивать о цене нечего.
         return None
     match action.kind:
         case ActionKind.SKILL | ActionKind.RACIAL:
+            if actor.effects.has(StatusKind.SILENCE):
+                # Молчание - отказ до хода, а не промах: ход остаётся за бойцом.
+                return BattleEvent(kind=EventKind.SILENCED, actor_id=actor.id, actor=actor.name)
             attempt = _attempt_skill(content, roster, state, actor, action)
             return attempt if isinstance(attempt, BattleEvent) else None
         case _:
@@ -568,7 +566,7 @@ def _tempo(
     # Объявленное самим ходящим: по нему считается сила его удара и то, можно ли
     # от удара увернуться. У живого игрока объявления нет.
     own = None if actor.live else intent_of(state, actor)
-    if tag is None or actor.stunned > 0:
+    if tag is None or actor.effects.control() is not None:
         return TurnTempo(intents=intents, own_intent=own)
 
     trace = actor.trace
@@ -662,11 +660,42 @@ def _perform(
 # --- кого бьём --------------------------------------------------------
 
 
+def _hijacked(
+    state: BattleState, actor: Combatant, action: BattleAction, seed: bytes
+) -> BattleAction:
+    """Что боец сделает на самом деле, если выбор больше не за ним.
+
+    Очарованный бьёт своих, спутанный - кого попало, включая своих. Ход при этом
+    состоится: отнимать его - дело оглушения, заморозки и страха, и три разных
+    состояния не должны делать одно и то же.
+    """
+    if actor.effects.has(StatusKind.CHARM):
+        allies = state.allies_of(actor.id, include_self=False)
+        if not allies:
+            return action
+        pick = rng(derive(seed, "charm", state.round, actor.id)).choice(allies)
+        return BattleAction(kind=ActionKind.ATTACK, target=pick.id)
+    if actor.effects.has(StatusKind.CONFUSION):
+        others = tuple(one for one in state.living() if one.id != actor.id)
+        if not others:  # pragma: no cover - бой без второго бойца уже кончен
+            return action
+        pick = rng(derive(seed, "confusion", state.round, actor.id)).choice(others)
+        return BattleAction(kind=ActionKind.ATTACK, target=pick.id)
+    return action
+
+
+def _strays(actor: Combatant) -> bool:
+    """Бьёт ли этот боец по кому попало, включая своих."""
+    return actor.effects.has(StatusKind.CHARM) or actor.effects.has(StatusKind.CONFUSION)
+
+
 def _target_of(state: BattleState, actor: Combatant, requested: int) -> Combatant | None:
     """Цель этого удара: названная в действии, потом выбранная, потом любая."""
     named = state.by_id(requested)
-    if named is not None and named.alive and named.side != actor.side:
-        return named
+    if named is not None and named.alive:
+        strayed = _strays(actor) and named.id != actor.id
+        if named.side != actor.side or strayed:
+            return named
     return state.target_for(actor.id)
 
 
@@ -947,7 +976,7 @@ def _apply_spec(
                     landed.append(target.id)
             falloff *= 1.0 - spec.chain_falloff
 
-        working = _bleeding(
+        working = _dotted(
             working,
             spec=spec,
             skill=skill,
@@ -987,11 +1016,11 @@ def _apply_spec(
             else:
                 working = _heal(working, actor_id, amount, modifiers, skill_name=skill.name)
 
-    if spec.category is EffectCategory.SHIELD:
+    if spec.category is EffectCategory.BARRIER:
         holder = working.by_id(actor_id)
         if holder is not None:
-            shield = round(holder.max_health * power / 100.0)
-            working = _shielded(working, actor_id, skill=skill, spec=spec, amount=shield)
+            held = round(holder.max_health * power / 100.0)
+            working = _barriered(working, actor_id, skill=skill, spec=spec, amount=held)
 
     if spec.bonus_heal:
         holder = working.by_id(actor_id)
@@ -999,11 +1028,11 @@ def _apply_spec(
             extra = round(holder.max_health * spec.bonus_heal / 100.0)
             working = _heal(working, actor_id, extra, modifiers, skill_name=skill.name)
 
-    if spec.bonus_shield:
+    if spec.bonus_barrier:
         holder = working.by_id(actor_id)
         if holder is not None:
-            extra = round(holder.max_health * spec.bonus_shield / 100.0)
-            working = _shielded(working, actor_id, skill=skill, spec=spec, amount=extra)
+            extra = round(holder.max_health * spec.bonus_barrier / 100.0)
+            working = _barriered(working, actor_id, skill=skill, spec=spec, amount=extra)
 
     if spec.cleanse_count:
         holder = working.by_id(actor_id)
@@ -1051,7 +1080,74 @@ def _apply_spec(
         requested,
         landed=tuple(landed) if spec.category is EffectCategory.DAMAGE else None,
     )
+    working = _apply_statuses(
+        working,
+        actor_id,
+        skill,
+        spec,
+        power,
+        requested,
+        blow=blow,
+        modifiers=modifiers,
+        landed=tuple(landed) if spec.category is EffectCategory.DAMAGE else None,
+    )
     return _apply_special(working, actor_id, skill, spec, power, requested)
+
+
+def _apply_statuses(
+    state: BattleState,
+    actor_id: int,
+    skill: Skill,
+    spec: EffectSpec,
+    power: float,
+    requested: int,
+    *,
+    blow: float,
+    modifiers: Mapping[str, float],
+    landed: tuple[int, ...] | None,
+) -> BattleState:
+    """Состояния, которые умение вешает: на себя и на цель.
+
+    На цель - только следом за попаданием: всё, что умение обещает цели, идёт за
+    состоявшимся ударом, а не за нажатием (ADR 0016).
+    """
+    working = state
+    actor = working.by_id(actor_id)
+    if actor is None:  # pragma: no cover
+        return working
+
+    for hold in spec.holds:
+        working = _inflicted(
+            working,
+            actor_id,
+            hold,
+            power=power,
+            skill_name=skill.name,
+            source_code=skill.code,
+        )
+
+    if not spec.inflicts:
+        return working
+    if landed is None:
+        targets = tuple(one.id for one in _foes(working, actor, requested, aoe=spec.aoe))
+    else:
+        targets = landed
+    per_turn = max(
+        1.0, blow * power / 100.0 * DOT_SHARE * mods.percent(modifiers, "dot_damage_percent")
+    )
+    for target_id in targets:
+        for inflict in spec.inflicts:
+            magnitude = per_turn if status_spec(inflict.kind).is_dot else None
+            working = _inflicted(
+                working,
+                target_id,
+                inflict,
+                power=power,
+                skill_name=skill.name,
+                source_code=skill.code,
+                magnitude=magnitude,
+            )
+    return working
 
 
 def _heal(
@@ -1070,6 +1166,10 @@ def _heal(
     one = state.by_id(combatant_id)
     if one is None:  # pragma: no cover
         return state
+    if one.effects.has(StatusKind.HEAL_BLOCK):
+        # Запрет лечения не уменьшает лечение, а отменяет его: половинчатый
+        # запрет читался бы как «слабое лечение» и не был бы виден вовсе.
+        return state
     healed = round(amount * mods.percent(modifiers, "healing_taken_percent"))
     updated, restored = one.healed(max(0, healed))
     if not restored:
@@ -1085,62 +1185,91 @@ def _heal(
     )
 
 
+def _inflicted(
+    state: BattleState,
+    combatant_id: int,
+    inflict: Inflict,
+    *,
+    power: float,
+    skill_name: str,
+    source_code: str,
+    magnitude: float | None = None,
+) -> BattleState:
+    """Повесить состояние на бойца и сказать об этом.
+
+    ``magnitude`` называется прямо там, где величину считает не сила умения, а
+    удар: горение сильного бойца жжёт сильнее, чем горение слабого.
+    """
+    one = state.by_id(combatant_id)
+    if one is None or not one.alive:
+        return state
+    kind = inflict.kind
+    spec = status_spec(kind)
+    if spec.skips_turn and one.effects.modifiers().get(UNSTUNNABLE, 0.0) > 0:
+        # Обещание «вас нельзя оглушить» держится с той стороны, с какой дано.
+        return state
+    amount = inflict.magnitude(power) if magnitude is None else magnitude
+    effect = status_effect(kind, turns=inflict.turns, magnitude=amount, source=source_code)
+    updated = replace(one, effects=one.effects.apply(effect))
+    if kind is StatusKind.BARRIER:
+        updated = replace(updated, barrier=updated.barrier + max(0, round(amount)))
+    return state.replace_combatant(updated).with_events(
+        BattleEvent(
+            kind=EventKind.BARRIER if kind is StatusKind.BARRIER else EventKind.STATUS_APPLIED,
+            actor_id=updated.id if spec.beneficial else 0,
+            actor=updated.name if spec.beneficial else "",
+            target_id=0 if spec.beneficial else updated.id,
+            target="" if spec.beneficial else updated.name,
+            amount=max(0, round(amount)) if kind is StatusKind.BARRIER else 0,
+            skill_name=skill_name,
+            effect_name=spec.name,
+            turns=inflict.turns,
+        )
+    )
+
+
 def _mending(
     state: BattleState, combatant_id: int, *, skill: Skill, spec: EffectSpec, per_turn: float
 ) -> BattleState:
-    """Лечение, которое приходит каждый ход, а не сейчас."""
+    """Лечение, которое приходит каждый ход, а не сейчас.
+
+    Величина - доля максимума здоровья за ход: состояние живёт дольше, чем
+    посчитанное однажды число, и здоровье за это время могло вырасти.
+    """
     one = state.by_id(combatant_id)
     if one is None:  # pragma: no cover
         return state
-    effect = ActiveEffect(
-        id=f"{skill.code}_mend",
-        name=skill.name,
-        modifiers={MEND_PER_TURN: per_turn},
-        turns_left=max(1, spec.dot_turns),
-        source=skill.code,
-        beneficial=True,
-    )
-    updated = replace(one, effects=one.effects.apply(effect))
-    return state.replace_combatant(updated).with_events(
-        BattleEvent(
-            kind=EventKind.EFFECT_APPLIED,
-            actor_id=updated.id,
-            actor=updated.name,
-            effect_name=skill.name,
-            turns=max(1, spec.dot_turns),
-        )
+    share = per_turn / max(1, one.max_health) * 100.0
+    return _inflicted(
+        state,
+        combatant_id,
+        Inflict(kind=StatusKind.HEALTH_REGEN, turns=max(1, spec.dot_turns)),
+        power=share,
+        skill_name=skill.name,
+        source_code=skill.code,
+        magnitude=share,
     )
 
 
-def _shielded(
+def _barriered(
     state: BattleState, combatant_id: int, *, skill: Skill, spec: EffectSpec, amount: int
 ) -> BattleState:
-    """Щит и срок, который его держит."""
-    one = state.by_id(combatant_id)
-    if one is None or amount <= 0:
+    """Барьер и срок, который его держит."""
+    if amount <= 0:
         return state
-    turns = spec.shield_turns or DEFAULT_SHIELD_TURNS
-    effect = ActiveEffect(
-        id=f"{skill.code}_shield",
-        name=skill.name,
-        modifiers={SHIELD_HELD: float(amount)},
-        turns_left=turns,
-        source=skill.code,
-        beneficial=True,
-    )
-    updated = replace(one, shield=one.shield + amount, effects=one.effects.apply(effect))
-    return state.replace_combatant(updated).with_events(
-        BattleEvent(
-            kind=EventKind.SHIELD,
-            actor_id=updated.id,
-            actor=updated.name,
-            amount=amount,
-            skill_name=skill.name,
-        )
+    turns = spec.barrier_turns or DEFAULT_BARRIER_TURNS
+    return _inflicted(
+        state,
+        combatant_id,
+        Inflict(kind=StatusKind.BARRIER, turns=turns),
+        power=float(amount),
+        skill_name=skill.name,
+        source_code=skill.code,
+        magnitude=float(amount),
     )
 
 
-def _bleeding(
+def _dotted(
     state: BattleState,
     *,
     spec: EffectSpec,
@@ -1150,27 +1279,28 @@ def _bleeding(
     struck: tuple[int, ...],
     modifiers: Mapping[str, float],
 ) -> BattleState:
-    """Оставить на раненых то, что будет их точить каждый ход."""
-    if not spec.dot_turns or spec.category is not EffectCategory.DAMAGE:
+    """Оставить на раненых то, что будет их точить каждый ход.
+
+    Каким состоянием точит, называет само умение: огненное жжёт, ядовитое травит,
+    а всё прочее пускает кровь. Раньше все три были одним безымянным числом.
+    """
+    if not spec.dot_turns:
         return state
     per_turn = max(
         1.0,
-        blow * power / 100.0 * BLEED_SHARE * mods.percent(modifiers, "dot_damage_percent"),
+        blow * power / 100.0 * DOT_SHARE * mods.percent(modifiers, "dot_damage_percent"),
     )
     working = state
     for combatant_id in struck:
-        target = working.by_id(combatant_id)
-        if target is None or not target.alive:
-            continue
-        effect = ActiveEffect(
-            id=f"{skill.code}_dot",
-            name=skill.name,
-            modifiers={BLEED_PER_TURN: per_turn},
-            turns_left=spec.dot_turns,
-            source=skill.code,
-            beneficial=False,
+        working = _inflicted(
+            working,
+            combatant_id,
+            Inflict(kind=spec.dot_status, turns=spec.dot_turns),
+            power=per_turn,
+            skill_name=skill.name,
+            source_code=skill.code,
+            magnitude=per_turn,
         )
-        working = working.replace_combatant(replace(target, effects=target.effects.apply(effect)))
     return working
 
 
@@ -1390,24 +1520,22 @@ def _stats_of(
     return None
 
 
-def element_of(attacker: Combatant, spec: EffectSpec | None) -> DamageElement:
-    """Стихия удара: названная умением, иначе своя собственная."""
-    if spec is not None:
-        for tag in spec.tags:
-            if (element := TAG_ELEMENTS.get(tag)) is not None:
-                return element
+def damage_type_of(attacker: Combatant, spec: EffectSpec | None) -> DamageType:
+    """Род урона: названный умением, иначе свой собственный.
+
+    Свой - это оружие в руке героя или порода противника. Умение, назвавшее род,
+    бьёт им, чем бы боец ни держал: огненная стрела жжёт и из лука, и из посоха.
+    """
+    if spec is not None and (named := spec.damage_type) is not None:
+        return named
     return attacker.element
-
-
-def _is_magic(spec: EffectSpec | None) -> bool:
-    """Чары это или рука. Обычный удар - всегда рука."""
-    return spec is not None and bool(MAGIC_TAGS & set(spec.tags))
 
 
 def situational_damage(
     modifiers: Mapping[str, float],
     *,
     spec: EffectSpec | None,
+    magic: bool,
     target: Combatant,
     target_health_ratio: float,
     attacker_health_ratio: float,
@@ -1419,7 +1547,7 @@ def situational_damage(
     источников не должен ничего решать (``rules/modifiers``).
     """
     total = 0.0
-    kind = "magic" if _is_magic(spec) else "physical"
+    kind = "magic" if magic else "physical"
     total += modifiers.get(f"{kind}_damage_percent", 0.0)
     total += modifiers.get(
         "aoe_damage_percent" if spec is not None and spec.aoe else "single_target_damage_percent",
@@ -1438,20 +1566,15 @@ def situational_damage(
     return 1.0 + total / 100.0
 
 
-#: Каким ключом называется сопротивление каждой стихии.
-RESIST_KEYS: dict[DamageElement, str] = {
-    DamageElement.PHYSICAL: "resist_physical_percent",
-    DamageElement.MAGIC: "resist_magic_percent",
-    DamageElement.FIRE: "resist_fire_percent",
-    DamageElement.COLD: "resist_cold_percent",
-    DamageElement.POISON: "resist_poison_percent",
-}
+def incoming_damage_factor(modifiers: Mapping[str, float], damage: DamageType) -> float:
+    """Что сопротивление оставляет от чужого удара этого рода.
 
-
-def incoming_damage_factor(modifiers: Mapping[str, float], element: DamageElement) -> float:
-    """Что сопротивление оставляет от чужого удара этой стихии."""
-    key = RESIST_KEYS.get(element, "resist_physical_percent")
-    return max(0.0, 1.0 - modifiers.get(key, 0.0) / 100.0)
+    Считаются оба ключа: сопротивление самому роду и сопротивление его половине -
+    физической или магической. Латы держат удар вообще, а стёганка под ними -
+    именно колющий, и складываются они, а не выбирают друг друга.
+    """
+    resisted = modifiers.get(damage.resist_key, 0.0) + modifiers.get(damage.half_resist_key, 0.0)
+    return max(0.0, 1.0 - resisted / 100.0)
 
 
 def _strike(
@@ -1476,6 +1599,23 @@ def _strike(
     working = state
     attacker_mods = _modifiers_of(content, roster, actor)
     target_mods = _modifiers_of(content, roster, target)
+
+    # Неуязвимость - не большая броня, а её отсутствие с той стороны: удар
+    # доходит и не значит ничего.
+    if target.effects.has(StatusKind.INVULNERABILITY):
+        return (
+            working.with_events(
+                BattleEvent(
+                    kind=EventKind.IMMUNE,
+                    actor_id=actor.id,
+                    actor=actor.name,
+                    target_id=target.id,
+                    target=target.name,
+                    skill_name=skill_name,
+                )
+            ),
+            False,
+        )
 
     # Уклонение, купленное умением: заряд тратится на первый же удар по цели.
     if target.evade_charges > 0:
@@ -1527,9 +1667,11 @@ def _strike(
 
     raw = power
     raw *= mods.percent(attacker_mods, "damage_percent")
+    struck_with = damage_type_of(actor, spec)
     raw *= situational_damage(
         attacker_mods,
         spec=spec,
+        magic=struck_with.is_magic,
         target=target,
         target_health_ratio=target.health / max(1, target.max_health),
         attacker_health_ratio=actor.health / max(1, actor.max_health),
@@ -1551,7 +1693,7 @@ def _strike(
         _armor_of(content, roster, target) * (1.0 - pierce) * tempo.armor_scale(target.id)
     )
     raw *= armor_factor(effective_armor, target.level)
-    raw *= incoming_damage_factor(target_mods, element_of(actor, spec))
+    raw *= incoming_damage_factor(target_mods, struck_with)
     # Удар того, в ком пробили брешь, доходит вполсилы: его застали на замахе, и
     # платит он этим ходом, а не следующим.
     if actor.breached:
@@ -1568,6 +1710,10 @@ def _strike(
 
     amount = max(1, round(raw))
     hurt, lost = target.damaged(amount)
+    # Испуганного приводит в чувство первый же удар: тем страх и отличается от
+    # оглушения, которое надо переждать.
+    if hurt.effects.has(StatusKind.FEAR):
+        hurt = replace(hurt, effects=hurt.effects.without(StatusKind.FEAR))
     if tempo.breached(target.id):
         hurt = replace(hurt, breached=True)
     # Пока держится «Последний рубеж», боец не падает.
@@ -1587,14 +1733,13 @@ def _strike(
     )
 
     if spec is not None and spec.stun_turns and hurt.alive:
-        working = working.replace_combatant(replace(hurt, stunned=spec.stun_turns))
-        working = working.with_events(
-            BattleEvent(
-                kind=EventKind.STUNNED,
-                target_id=hurt.id,
-                target=hurt.name,
-                turns=spec.stun_turns,
-            )
+        working = _inflicted(
+            working,
+            hurt.id,
+            Inflict(kind=StatusKind.STUN, turns=spec.stun_turns),
+            power=0.0,
+            skill_name=skill_name,
+            source_code="",
         )
 
     lifesteal = spec.lifesteal if spec is not None else 0.0
@@ -1639,7 +1784,7 @@ def _answered(
 
     Два обещания, за которыми долго ничего не стояло: «вы отвечаете на каждый
     удар по вам» у выпада воина и «часть полученного урона возвращается
-    обидчику» у постоянного умения паладина. Ответ ответа не вызывает: размен
+    обидчику» у пассивного умения паладина. Ответ ответа не вызывает: размен
     двух отражений не кончился бы никогда.
     """
     working = state
@@ -1813,8 +1958,8 @@ def _upkeep(
 ) -> BattleState:
     """Что случается с бойцом в конце его собственного хода.
 
-    Всё, что меряется ходами, - откаты, сроки эффектов, кровотечение, лечение по
-    ходам, восстановление ресурса, - тикает здесь и только здесь. Своими ходами,
+    Всё, что меряется ходами, - откаты, сроки состояний, горение, яд, кровь,
+    восстановление здоровья и сил, - тикает здесь и только здесь. Своими ходами,
     а не чужими: в бою четверых «три хода» иначе значило бы разное для каждого.
     """
     one = state.by_id(combatant_id)
@@ -1824,52 +1969,111 @@ def _upkeep(
     modifiers = _modifiers_of(content, roster, one)
     # Брешь стоила ему одного удара - того, который он только что нанёс.
     updated = replace(one.tick_cooldowns(), breached=False)
-    # Лечение по ходам платит до того, как срок укоротится: умение, обещавшее
-    # три хода, лечит три раза, а не два.
-    mending = round(updated.effects.modifiers().get(MEND_PER_TURN, 0.0))
-    bleeding = round(updated.effects.modifiers().get(BLEED_PER_TURN, 0.0))
+
+    # Состояния платят по счёту до того, как срок укоротится: горение на три
+    # хода жжёт три раза, а не два.
+    dots = tuple(
+        (effect.status, max(0, round(effect.magnitude)))
+        for effect in updated.effects.statuses()
+        if effect.status is not None and status_spec(effect.status).is_dot
+    )
+    mending = updated.effects.magnitude_of(StatusKind.HEALTH_REGEN)
+    refill = updated.effects.magnitude_of(StatusKind.RESOURCE_REGEN)
+    blocked = updated.effects.has(StatusKind.RESOURCE_BLOCK)
+    ended = tuple(
+        effect
+        for effect in updated.effects.statuses()
+        if effect.turns_left <= 1 and effect.status is not None
+    )
     updated = replace(updated, effects=updated.effects.tick())
 
     regen_percent = modifiers.get("regen_per_turn_percent", 0.0)
     if regen_percent:
         updated, _ = updated.healed(round(updated.max_health * regen_percent / 100.0))
-    if updated.max_resource:
+    if updated.max_resource and not blocked:
         stats = _stats_of(content, roster, updated)
         regen = round(stats.resource_regen) if stats is not None else 0
+        regen += round(updated.max_resource * refill / 100.0)
         updated = replace(updated, resource=min(updated.max_resource, updated.resource + regen))
-    # Щит стоит ровно столько, сколько его держат: источник ушёл - ушёл и он.
-    held = round(updated.effects.modifiers().get(SHIELD_HELD, 0.0))
-    updated = replace(updated, shield=min(updated.shield, max(0, held)))
+    # Барьер стоит ровно столько, сколько его держат: состояние ушло - ушёл и он.
+    held = round(updated.effects.magnitude_of(StatusKind.BARRIER))
+    updated = replace(updated, barrier=min(updated.barrier, max(0, held)))
 
     working = state.replace_combatant(updated)
     working = _repooled(content, roster, working, combatant_id)
     if mending > 0:
-        working = _heal(working, combatant_id, mending, modifiers)
-    if bleeding > 0:
-        working = spend_bleeding(working, combatant_id, bleeding)
+        healed = round(updated.max_health * mending / 100.0)
+        working = _heal(working, combatant_id, healed, modifiers)
+    for kind, amount in dots:
+        if kind is None or amount <= 0:  # pragma: no cover - величина всегда есть
+            continue
+        working = spend_dot(working, combatant_id, kind, amount)
+    for effect in ended:
+        working = working.with_events(
+            BattleEvent(
+                kind=EventKind.STATUS_ENDED,
+                actor_id=combatant_id,
+                actor=updated.name,
+                effect_name=effect.name,
+            )
+        )
     return working
 
 
-def spend_bleeding(state: BattleState, combatant_id: int, amount: int | None = None) -> BattleState:
-    """Кровотечение и горение платят по счёту - раз в ход, до конца срока.
+def spend_dot(
+    state: BattleState,
+    combatant_id: int,
+    kind: StatusKind | None = None,
+    amount: int | None = None,
+) -> BattleState:
+    """Горение, яд и кровотечение платят по счёту - раз в ход, до конца срока.
 
-    ``amount`` не назван - берётся то, что висит на бойце сейчас.
+    Урон идёт своим родом: огонь жжёт огнём, яд травит ядом, кровь течёт от
+    разрыва, - и сопротивление цели считается по нему, как у всякого другого
+    удара. Раньше все три были одним безымянным числом, которое не смягчалось
+    ничем.
     """
     one = state.by_id(combatant_id)
     if one is None or not one.alive:
         return state
-    if amount is None:
-        amount = round(one.effects.modifiers().get(BLEED_PER_TURN, 0.0))
-    if amount <= 0:
-        return state
-    hurt = replace(one, health=max(0, one.health - amount))
-    working = state.replace_combatant(hurt).with_events(
-        BattleEvent(kind=EventKind.DAMAGE, target_id=hurt.id, target=hurt.name, amount=amount)
+
+    working = state
+    pending: list[tuple[StatusKind, int | None]] = (
+        [(kind, amount)]
+        if kind is not None
+        else [
+            (effect.status, round(effect.magnitude))
+            for effect in one.effects.statuses()
+            if effect.status is not None and status_spec(effect.status).is_dot
+        ]
     )
-    if not hurt.alive:
-        working = working.with_events(
-            BattleEvent(kind=EventKind.DEFEATED, target_id=hurt.id, target=hurt.name)
+    for status, raw in pending:
+        held = raw if raw is not None else round(one.effects.magnitude_of(status))
+        if held <= 0:
+            continue
+        current = working.by_id(combatant_id)
+        if current is None or not current.alive:
+            break
+        if current.effects.has(StatusKind.INVULNERABILITY):
+            continue
+        spec = status_spec(status)
+        damage = spec.damage if spec.damage is not None else UNARMED
+        toll = max(1, round(held * incoming_damage_factor(current.effects.modifiers(), damage)))
+        hurt = replace(current, health=max(0, current.health - toll))
+        working = working.replace_combatant(hurt).with_events(
+            BattleEvent(
+                kind=EventKind.DAMAGE,
+                target_id=hurt.id,
+                target=hurt.name,
+                amount=toll,
+                effect_name=spec.name,
+            )
         )
+        if not hurt.alive:
+            working = working.with_events(
+                BattleEvent(kind=EventKind.DEFEATED, target_id=hurt.id, target=hurt.name)
+            )
+            break
     return working
 
 

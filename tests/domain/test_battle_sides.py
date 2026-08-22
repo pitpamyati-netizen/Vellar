@@ -52,7 +52,7 @@ def a_hero(name: str, character_id: int, *, level: int = 10) -> Character:
         class_id="warrior",
         level=level,
         loadout=SkillLoadout(
-            actives=("warrior_cleave", "warrior_taunt", None, None, None, None),
+            actives=("warrior_rassechenie", "warrior_provokatsiya", None, None, None, None),
             racial="race_human_second_wind",
         ),
     )

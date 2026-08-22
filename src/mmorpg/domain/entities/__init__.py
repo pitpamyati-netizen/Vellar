@@ -41,7 +41,14 @@ from mmorpg.domain.entities.craft import (
     Recipe,
     RecipeInput,
 )
-from mmorpg.domain.entities.effects import ActiveEffect, EffectStack
+from mmorpg.domain.entities.damage import (
+    DAMAGE_TYPE_NAMES,
+    MAGIC_TYPES,
+    PHYSICAL_TYPES,
+    DamageType,
+    damage_type_name,
+)
+from mmorpg.domain.entities.effects import ActiveEffect, EffectStack, status_effect
 from mmorpg.domain.entities.location import (
     Enemy,
     EnemyArchetype,
@@ -55,6 +62,16 @@ from mmorpg.domain.entities.location import (
 from mmorpg.domain.entities.overlay import KEEPER_PREFIX, OverlayKind, OverlayRecord
 from mmorpg.domain.entities.quest import ObjectiveKind, Quest, QuestLog
 from mmorpg.domain.entities.stats import StatBlock, StatCode
+from mmorpg.domain.entities.statuses import (
+    CONTROL_STATUSES,
+    DOT_STATUSES,
+    STATUSES,
+    StatusKind,
+    StatusSpec,
+    status_id,
+    status_name,
+    status_spec,
+)
 from mmorpg.domain.entities.trade import (
     Offer,
     OfferKind,
@@ -64,7 +81,13 @@ from mmorpg.domain.entities.trade import (
 )
 
 __all__ = [
+    "CONTROL_STATUSES",
+    "DAMAGE_TYPE_NAMES",
+    "DOT_STATUSES",
     "KEEPER_PREFIX",
+    "MAGIC_TYPES",
+    "PHYSICAL_TYPES",
+    "STATUSES",
     "ActiveEffect",
     "ArmorType",
     "Character",
@@ -77,6 +100,7 @@ __all__ = [
     "CraftProgress",
     "CraftRules",
     "CraftYield",
+    "DamageType",
     "EffectStack",
     "Enemy",
     "EnemyArchetype",
@@ -118,8 +142,15 @@ __all__ = [
     "SkillLoadout",
     "StatBlock",
     "StatCode",
+    "StatusKind",
+    "StatusSpec",
     "TradeRecord",
     "TradeStatus",
     "Trait",
     "WeaponType",
+    "damage_type_name",
+    "status_effect",
+    "status_id",
+    "status_name",
+    "status_spec",
 ]

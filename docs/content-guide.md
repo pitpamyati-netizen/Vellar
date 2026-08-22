@@ -12,7 +12,7 @@ wrong - the bot refuses to start on broken content.
 | `races.toml` | 16 races: stat bonuses, passive ability, racial active reference |
 | `classes.toml` | 8 classes: key stats, resource curve, health curve, progression meta |
 | `traits.toml` | 64 traits, the modifier vocabulary, categories |
-| `skills.toml` | 8 active + 6 passive per class, 1 active per race, both edges of each |
+| `skills.toml` | 20 active + 40 passive per class, 1 active per race, both edges of each |
 | `items.toml` | kinds of gear, grades, rarities, consumables, materials |
 | `crafts.toml` | gathering and making crafts, recipes, rank and quality rules |
 
@@ -95,10 +95,12 @@ two-handed sword is not a rogue. Both lists are required and both must name kind
 that at least one item in `items.toml` actually is, at a level the class can
 reach early: a class with nothing to put on plays bare-handed in a shirt.
 
-A class needs exactly **8 active** skills at levels `[1, 4, 8, 14, 22, 35, 60,
-100]` and exactly **6 passive** skills at levels `[2, 6, 12, 20, 30, 50]` (the lists
-in `classes.toml [meta]`). The loader checks both the counts and the exact level
-sequence.
+A class needs exactly **20 active** and exactly **40 passive** skills, at the
+levels listed in `classes.toml [meta].active_unlock_levels` /
+`passive_unlock_levels`. The loader checks both the counts and the exact level
+sequence. The schedule is even by design - sixty skills over three hundred levels,
+one active roughly every dozen-odd levels with two passives between each pair -
+and a skill point per level is exactly what sixty skills at five ranks cost.
 
 ## Add a craft or a recipe
 
@@ -233,6 +235,11 @@ player stumbles over.
 Damage, armour, stats and price are **not written either**. They come from
 `[meta]`:
 
+- `weapon_types[].damage_type` - **what the kind deals**: a spear pierces, a sword
+  slashes, a mace bludgeons, a wand deals arcane. It is required, because a weapon
+  that does not say what it deals is a blow with no kind: the hero's plain attack
+  takes its kind from here, and the target's resistances are counted by it. The
+  sixteen kinds live in `domain/entities/damage.py`.
 - `weapon_types[].dice` - the **average** of the kind on the first grade and the
   shape of the roll (`"2d6"`): the more dice, the more often the middle comes up.
   The average grows with the grade.
@@ -327,10 +334,18 @@ level - never fires (ADR 0019).
 ## Enemy archetypes
 
 `content/enemies.toml`. Beyond the multipliers, an archetype may declare
-**`element`** - `physical`, `magic`, `fire`, `cold` or `poison`. Left out, the
-kind decides: an elemental and an aberration strike with magic, everything else
-with iron. The player's resistances are counted by that element, which is what
-makes `resist_fire_percent` and its two siblings mean anything at all.
+**`element`** - the **kind of damage** it deals. Four physical ones (`piercing`,
+`slashing`, `bludgeoning`, `rending`) and twelve magical ones (`arcane`, `fire`,
+`cold`, `poison`, `acid`, `air`, `chaos`, `holy`, `light`, `mental`, `nature`,
+`negative`); the whole list is `domain/entities/damage.py`. Left out, the breed
+decides: a beast rends, a humanoid slashes, undead strike with `negative`, an
+elemental with `arcane`, an aberration with `mental`.
+
+The target's resistances are counted by that kind **and** by its half - a
+`resist_piercing_percent` and a `resist_physical_percent` add up rather than
+replace each other, so plate softens every blow of iron while the gambeson under
+it softens the spear in particular. There is no `elemental` any more: it promised
+an element and named none.
 
 ## Add a quest
 

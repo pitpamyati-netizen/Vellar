@@ -140,8 +140,9 @@ that says so, with a working "Назад", never silence.
 
 ## Content at a glance
 
-16 races · 8 classes · 64 traits · 128 skills (112 class + 16 racial, each with two
-rank-3 edges, 256 edges in all) · 5 crafts with 12 recipes · 26 enemy archetypes ·
+16 races · 8 classes · 64 traits · 496 skills (480 class - 20 active and 40 passive
+each - plus 16 racial, every one with two rank-3 edges) · 16 kinds of damage, four
+of them physical · 20 statuses · 5 crafts with 12 recipes · 26 enemy archetypes ·
 10 contracts of act I · 30 kinds of gear on 12 grades in 5 rarities · 15 cities × 5
 locations covering levels 1-300 · 3 endgame questions the Chamber counts.
 All of it lives in [`content/`](content/) as TOML and is validated at startup - the

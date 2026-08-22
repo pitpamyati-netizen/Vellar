@@ -157,9 +157,9 @@ async def argus(characters: InMemoryCharacterRepository) -> Character:
             gold=200,
             unspent_skill_points=2,
             loadout=SkillLoadout(
-                actives=("warrior_cleave", None, None, None, None, None),
+                actives=("warrior_rassechenie", None, None, None, None, None),
                 racial="race_human_second_wind",
-                ranks={"warrior_cleave": 1},
+                ranks={"warrior_rassechenie": 1},
             ),
         )
     )

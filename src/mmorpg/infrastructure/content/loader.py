@@ -54,8 +54,9 @@ from mmorpg.domain.entities.craft import (
     Recipe,
     RecipeInput,
 )
+from mmorpg.domain.entities.damage import DamageType
 from mmorpg.domain.entities.dice import MAX_SPREAD, MIN_SPREAD, Dice
-from mmorpg.domain.entities.location import DamageElement, EnemyArchetype, EnemyKind
+from mmorpg.domain.entities.location import EnemyArchetype, EnemyKind
 from mmorpg.domain.entities.quest import ObjectiveKind, Quest
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.procgen import items as item_procgen
@@ -82,6 +83,11 @@ SEARCHABLE_NODES = frozenset({"gather", "cache", "shrine", "event"})
 MINIMUM_CRAFTS = 4
 EXPECTED_RACES = 16
 EXPECTED_CLASSES = 8
+
+#: Сколько умений у класса. Двадцать боевых на шесть слотов панели - это выбор;
+#: сорок пассивных - то, во что уходит очко между боевыми (``docs/skills.md``).
+ACTIVES_PER_CLASS = 20
+PASSIVES_PER_CLASS = 40
 MINIMUM_TRAITS = 60
 EXPECTED_CITIES = 15
 LOCATIONS_PER_CITY = 5
@@ -223,10 +229,14 @@ def _build_rules(raw: Mapping[str, Mapping[str, Any]], problems: list[str]) -> P
         edge_rank=int(skill_meta.get("edge_rank", 3)),
         skill_point_per_level=int(skill_meta.get("skill_point_per_level", 1)),
     )
-    if len(rules.active_unlock_levels) != 8:
-        problems.append("classes.toml: [meta].active_unlock_levels must list 8 levels")
-    if len(rules.passive_unlock_levels) != 6:
-        problems.append("classes.toml: [meta].passive_unlock_levels must list 6 levels")
+    if len(rules.active_unlock_levels) != ACTIVES_PER_CLASS:
+        problems.append(
+            f"classes.toml: [meta].active_unlock_levels must list {ACTIVES_PER_CLASS} levels"
+        )
+    if len(rules.passive_unlock_levels) != PASSIVES_PER_CLASS:
+        problems.append(
+            f"classes.toml: [meta].passive_unlock_levels must list {PASSIVES_PER_CLASS} levels"
+        )
     if rules.active_slots != 6 or rules.racial_slots != 1:
         problems.append("classes.toml: the panel is fixed at 6 active and 1 racial slot")
     return rules
@@ -379,7 +389,7 @@ _EDGE_KEYS = frozenset(
         "lifesteal",
         "cleanse",
         "heal",
-        "shield",
+        "barrier",
         "self_modifiers",
         "target_modifiers",
     }
@@ -419,7 +429,7 @@ def _edge_effect(
         lifesteal=float(raw.get("lifesteal", 0)),
         cleanse=int(raw.get("cleanse", 0)),
         heal=float(raw.get("heal", 0)),
-        shield=float(raw.get("shield", 0)),
+        barrier=float(raw.get("barrier", 0)),
         self_modifiers=_edge_modifiers(where, raw.get("self_modifiers"), modifier_keys, problems),
         target_modifiers=_edge_modifiers(
             where, raw.get("target_modifiers"), modifier_keys, problems
@@ -687,20 +697,24 @@ def _validate_classes(
         passives = sorted(
             (skill for skill in owned if skill.kind is SkillKind.PASSIVE), key=lambda s: s.level
         )
-        if len(actives) != 8:
-            problems.append(f"skills.toml: class {klass.id} has {len(actives)} actives, expected 8")
-        if len(passives) != 6:
+        if len(actives) != ACTIVES_PER_CLASS:
             problems.append(
-                f"skills.toml: class {klass.id} has {len(passives)} passives, expected 6"
+                f"skills.toml: class {klass.id} has {len(actives)} actives, "
+                f"expected {ACTIVES_PER_CLASS}"
+            )
+        if len(passives) != PASSIVES_PER_CLASS:
+            problems.append(
+                f"skills.toml: class {klass.id} has {len(passives)} passives, "
+                f"expected {PASSIVES_PER_CLASS}"
             )
         active_levels = tuple(skill.level for skill in actives)
-        if len(actives) == 8 and active_levels != rules.active_unlock_levels:
+        if len(actives) == ACTIVES_PER_CLASS and active_levels != rules.active_unlock_levels:
             problems.append(
                 f"skills.toml: class {klass.id} unlocks actives at {active_levels}, "
                 f"expected {rules.active_unlock_levels}"
             )
         passive_levels = tuple(skill.level for skill in passives)
-        if len(passives) == 6 and passive_levels != rules.passive_unlock_levels:
+        if len(passives) == PASSIVES_PER_CLASS and passive_levels != rules.passive_unlock_levels:
             problems.append(
                 f"skills.toml: class {klass.id} unlocks passives at {passive_levels}, "
                 f"expected {rules.passive_unlock_levels}"
@@ -770,6 +784,18 @@ class ItemContent(NamedTuple):
 
 #: Рода существительных, в которых объявляются прилагательные ступеней.
 GENDERS = ("m", "f", "n", "p")
+
+
+def _weapon_damage_type(type_id: str, entry: Mapping[str, Any], problems: list[str]) -> DamageType:
+    """Чем этот род оружия бьёт. Не объявлено - рубящий: так бьёт большинство."""
+    raw = str(entry.get("damage_type", "")).strip()
+    if not raw:
+        problems.append(f"items.toml: weapon type {type_id} does not say what damage it deals")
+        return DamageType.SLASHING
+    if raw not in {one.value for one in DamageType}:
+        problems.append(f"items.toml: weapon type {type_id} deals unknown damage {raw!r}")
+        return DamageType.SLASHING
+    return DamageType(raw)
 
 
 def _type_modifiers(
@@ -919,6 +945,7 @@ def _parse_items(
                 dice=dice,
                 spread=min(MAX_SPREAD, max(MIN_SPREAD, spread)),
                 gender=gender if gender in GENDERS else "m",
+                damage_type=_weapon_damage_type(type_id, entry, problems),
                 modifiers=_type_modifiers(f"weapon type {type_id}", entry, modifier_keys, problems),
             )
         )
@@ -1039,7 +1066,7 @@ def _parse_enemies(
     meta = raw.get("meta", {})
     elite_titles = tuple(str(title) for title in meta.get("elite_titles", ()))
     known_kinds = {kind.value for kind in EnemyKind}
-    known_elements = {element.value for element in DamageElement}
+    known_elements = {one.value for one in DamageType}
 
     parsed: list[EnemyArchetype] = []
     for entry in raw.get("enemy", ()):
@@ -1071,7 +1098,7 @@ def _parse_enemies(
                 armor=float(entry.get("armor", 1.0)),
                 initiative=float(entry.get("initiative", 1.0)),
                 loot=loot,
-                element=DamageElement(element_raw) if element_raw else None,
+                element=DamageType(element_raw) if element_raw else None,
             )
         )
     _check_unique((enemy.id for enemy in parsed), "enemies.toml", problems)

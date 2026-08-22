@@ -30,6 +30,7 @@ from collections.abc import Iterable
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, Item, Skill
+from mmorpg.domain.entities.damage import UNARMED, DamageType
 from mmorpg.domain.entities.dice import Dice
 from mmorpg.domain.procgen import items as gear_procgen
 
@@ -118,6 +119,18 @@ def weapon_type_of(content: GameContent, character: Character) -> str:
     """Род оружия в руке. Пусто — рук хватает и без него."""
     weapon = weapon_of(content, character)
     return weapon.weapon_type if weapon is not None else ""
+
+
+def weapon_damage_type(content: GameContent, character: Character) -> DamageType:
+    """Каким родом урона бьёт этот герой без умения.
+
+    Род урона живёт у рода оружия (``items.toml``, ``damage_type``): копьё колет,
+    булава дробит, а голые руки дробят тоже - бьют они костяшками.
+    """
+    type_id = weapon_type_of(content, character)
+    if type_id and content.has_weapon_type(type_id):
+        return content.weapon_type(type_id).damage_type
+    return UNARMED
 
 
 def weapon_dice(content: GameContent, character: Character) -> Dice:

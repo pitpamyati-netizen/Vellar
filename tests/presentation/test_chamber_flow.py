@@ -28,9 +28,9 @@ def elder(content: GameContent) -> Character:
         level=turning_rules.MIN_LEVEL,
         equipment=Equipment(MappingProxyType({"trinket": "ring@26#legendary"})),
         loadout=SkillLoadout(
-            actives=("warrior_cleave", None, None, None, None, None),
-            ranks=MappingProxyType({"warrior_cleave": 5}),
-            edges=MappingProxyType({"warrior_cleave": "warrior_cleave_a"}),
+            actives=("warrior_rassechenie", None, None, None, None, None),
+            ranks=MappingProxyType({"warrior_rassechenie": 5}),
+            edges=MappingProxyType({"warrior_rassechenie": "warrior_rassechenie_a"}),
         ),
     )
 

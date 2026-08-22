@@ -17,6 +17,7 @@ from types import MappingProxyType
 
 from mmorpg.domain.entities.combat import ActionTag
 from mmorpg.domain.entities.craft import Craft, CraftKind, CraftRules, Recipe
+from mmorpg.domain.entities.damage import DamageType
 from mmorpg.domain.entities.dice import MAX_SPREAD, Dice
 from mmorpg.domain.entities.location import EnemyArchetype
 from mmorpg.domain.entities.quest import Quest
@@ -71,9 +72,10 @@ class EdgeEffect:
     lifesteal: float = 0.0
     #: Сколько отрицательных эффектов снимается сверх снятого умением.
     cleanse: int = 0
-    #: Лечение и щит сверх основного действия, в процентах от максимума здоровья.
+    #: Лечение и барьер сверх основного действия, в процентах от максимума
+    #: здоровья.
     heal: float = 0.0
-    shield: float = 0.0
+    barrier: float = 0.0
     #: Модификаторы сверх наложенных умением: ключи из ``traits.toml``.
     self_modifiers: Mapping[str, float] = field(default_factory=lambda: MappingProxyType({}))
     target_modifiers: Mapping[str, float] = field(default_factory=lambda: MappingProxyType({}))
@@ -332,6 +334,10 @@ class WeaponType:
     #: Род оружия — ещё и существительное, от которого строится имя вещи:
     #: «Крепкий меч», но «Крепкая булава». m, f, n или p (множественное).
     gender: str = "m"
+    #: Каким родом урона бьёт это оружие: копьё колет, меч рубит, булава дробит.
+    #: Отсюда его берёт обычный удар героя, и по нему считается сопротивление
+    #: цели (``entities/damage.py``).
+    damage_type: DamageType = DamageType.SLASHING
     modifiers: Mapping[str, float] = field(default_factory=dict)
 
     def damage_at(self, factor: float) -> Dice:

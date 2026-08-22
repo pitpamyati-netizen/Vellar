@@ -52,9 +52,9 @@ def hero() -> Character:
         gold=900,
         unspent_skill_points=3,
         loadout=SkillLoadout(
-            actives=("warrior_cleave", None, None, None, None, None),
+            actives=("warrior_rassechenie", None, None, None, None, None),
             racial="race_human_second_wind",
-            ranks={"warrior_cleave": 2},
+            ranks={"warrior_rassechenie": 2},
         ),
     )
 
@@ -407,7 +407,7 @@ def test_a_point_you_do_not_have_is_refused_in_words(content: GameContent, hero:
 def test_the_third_rank_asks_for_an_edge_before_anything_else(
     content: GameContent, hero: Character
 ) -> None:
-    skill = content.skill("warrior_cleave")
+    skill = content.skill("warrior_rassechenie")
     ready = replace(
         hero, loadout=replace(hero.loadout, ranks={skill.code: content.rules.edge_rank})
     )
@@ -430,7 +430,7 @@ def test_a_skill_waiting_for_its_edge_says_so_on_its_own_button(
     говорила «повысить за одно очко», игрок нажимал, выбирал грань, возвращался и
     видел тот же ранг и ту же надпись - то есть заевший экран.
     """
-    skill = content.skill("warrior_cleave")
+    skill = content.skill("warrior_rassechenie")
     ready = replace(
         hero, loadout=replace(hero.loadout, ranks={skill.code: content.rules.edge_rank})
     )
@@ -442,7 +442,7 @@ def test_a_skill_waiting_for_its_edge_says_so_on_its_own_button(
 
 
 def test_choosing_an_edge_says_the_rank_grows_again(content: GameContent, hero: Character) -> None:
-    skill = content.skill("warrior_cleave")
+    skill = content.skill("warrior_rassechenie")
     ready = replace(
         hero, loadout=replace(hero.loadout, ranks={skill.code: content.rules.edge_rank})
     )
@@ -457,7 +457,7 @@ def test_choosing_an_edge_says_the_rank_grows_again(content: GameContent, hero: 
 def test_a_slot_is_filled_and_emptied_from_the_panel(content: GameContent, hero: Character) -> None:
     known = replace(
         hero,
-        loadout=replace(hero.loadout, ranks={"warrior_cleave": 2, "warrior_taunt": 1}),
+        loadout=replace(hero.loadout, ranks={"warrior_rassechenie": 2, "warrior_provokatsiya": 1}),
     )
     slots = step(content, known, begin(known), "Умения", "Слоты умений")
     assert slots.screen is ScreenId.SKILL_SLOTS
@@ -472,7 +472,7 @@ def test_a_slot_is_filled_and_emptied_from_the_panel(content: GameContent, hero:
 
     filled = step(content, known, picking, "Провокация — ранг 1")
     assert filled.pending.character is not None
-    assert filled.pending.character.loadout.actives[1] == "warrior_taunt"
+    assert filled.pending.character.loadout.actives[1] == "warrior_provokatsiya"
 
     emptied = step(content, filled.pending.character, picking, "Освободить слот")
     assert emptied.pending.character is not None
@@ -485,7 +485,9 @@ def test_a_slot_is_filled_and_emptied_from_the_panel(content: GameContent, hero:
 def test_the_mentor_takes_gold_and_hands_the_points_back(
     content: GameContent, hero: Character, in_city: PlayState
 ) -> None:
-    student = replace(hero, loadout=replace(hero.loadout, ranks={"warrior_cleave": 2}), gold=900)
+    student = replace(
+        hero, loadout=replace(hero.loadout, ranks={"warrior_rassechenie": 2}), gold=900
+    )
     mentor = step(content, student, in_city, "Наставник")
     assert mentor.screen is ScreenId.MENTOR
 
@@ -508,7 +510,7 @@ def test_the_mentor_does_not_sell_what_he_cannot_take(
     bearer = replace(
         hero,
         gold=900,
-        loadout=replace(hero.loadout, racial=racial, ranks={"warrior_cleave": 2}),
+        loadout=replace(hero.loadout, racial=racial, ranks={"warrior_rassechenie": 2}),
     )
     mentor = step(content, bearer, in_city, "Наставник")
     listed = mentor_screen(content, bearer, content.city(bearer.city_id), PageState()).text()
@@ -528,7 +530,7 @@ def test_the_mentor_does_not_sell_what_he_cannot_take(
 def test_the_mentor_refuses_a_customer_who_cannot_pay(
     content: GameContent, hero: Character, in_city: PlayState
 ) -> None:
-    broke = replace(hero, gold=0, loadout=replace(hero.loadout, ranks={"warrior_cleave": 2}))
+    broke = replace(hero, gold=0, loadout=replace(hero.loadout, ranks={"warrior_rassechenie": 2}))
     mentor = step(content, broke, in_city, "Наставник")
     refused = step(content, broke, mentor, city_screens.forget_label("Рассечение", 2).text)
     assert refused.pending.empty

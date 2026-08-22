@@ -195,7 +195,7 @@ def test_keyboards_are_cached_by_layout(content: GameContent, hero: Character) -
 def test_content_is_loaded_once_and_shared(content: GameContent) -> None:
     """Static content lives in memory; lookups are dict hits, not file reads."""
     assert content.race("human") is content.race("human")
-    assert content.skill("warrior_cleave") is content.skill("warrior_cleave")
+    assert content.skill("warrior_rassechenie") is content.skill("warrior_rassechenie")
 
 
 def test_no_blocking_calls_in_handlers_or_flows() -> None:

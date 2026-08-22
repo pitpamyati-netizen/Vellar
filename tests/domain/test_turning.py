@@ -25,9 +25,9 @@ def elder() -> Character:
         level=turning.MIN_LEVEL,
         equipment=Equipment(MappingProxyType({"trinket": "ring@26#legendary"})),
         loadout=SkillLoadout(
-            actives=("warrior_cleave", None, None, None, None, None),
-            ranks=MappingProxyType({"warrior_cleave": 5}),
-            edges=MappingProxyType({"warrior_cleave": "warrior_cleave_a"}),
+            actives=("warrior_rassechenie", None, None, None, None, None),
+            ranks=MappingProxyType({"warrior_rassechenie": 5}),
+            edges=MappingProxyType({"warrior_rassechenie": "warrior_rassechenie_a"}),
         ),
     )
 
@@ -80,23 +80,23 @@ def test_a_pledged_edge_is_gone_and_stays_gone(content: GameContent, elder: Char
     заложил опять.
     """
     offered = turning.pledgeable_edges(content, elder)
-    assert [skill.code for skill in offered] == ["warrior_cleave"]
+    assert [skill.code for skill in offered] == ["warrior_rassechenie"]
 
-    sealed = turning.pledge_edge(content, elder, "warrior_cleave")
+    sealed = turning.pledge_edge(content, elder, "warrior_rassechenie")
     assert sealed is not None
     assert sealed.character.seals == 1
-    assert sealed.character.loadout.edge_of("warrior_cleave") is None
-    assert sealed.character.loadout.rank_of("warrior_cleave") == 5
+    assert sealed.character.loadout.edge_of("warrior_rassechenie") is None
+    assert sealed.character.loadout.rank_of("warrior_rassechenie") == 5
     # Ранг остался, грань ушла, и второй раз её Палата не возьмёт.
     assert turning.pledgeable_edges(content, sealed.character) == ()
-    assert turning.pledge_edge(content, sealed.character, "warrior_cleave") is None
+    assert turning.pledge_edge(content, sealed.character, "warrior_rassechenie") is None
 
 
 def test_a_half_learned_edge_is_not_a_pledge(content: GameContent, elder: Character) -> None:
     """Грань брошенного умения отдать не жалко, поэтому её и не берут."""
     shallow = replace(
         elder,
-        loadout=replace(elder.loadout, ranks=MappingProxyType({"warrior_cleave": 3})),
+        loadout=replace(elder.loadout, ranks=MappingProxyType({"warrior_rassechenie": 3})),
     )
     assert turning.pledgeable_edges(content, shallow) == ()
 
@@ -143,4 +143,4 @@ def test_the_lead_needs_a_lead() -> None:
 def test_nothing_is_pledged_below_the_last_level(content: GameContent, elder: Character) -> None:
     young = replace(elder, level=10)
     assert turning.pledge_item(content, young, "ring@26#legendary") is None
-    assert turning.pledge_edge(content, young, "warrior_cleave") is None
+    assert turning.pledge_edge(content, young, "warrior_rassechenie") is None

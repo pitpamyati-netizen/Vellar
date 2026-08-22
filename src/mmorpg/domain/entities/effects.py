@@ -1,8 +1,13 @@
-"""Temporary effects and the stack that holds them.
+"""Временные эффекты и стопка, в которой они лежат.
 
-Effects are keyed by id. Applying the same effect again **refreshes** it - it never
-stacks a second copy, so a player spamming a buff cannot double its bonus. That
-rule is asserted by ``tests/domain/test_effects.py``.
+Эффекты лежат по ключу. Повторное наложение **обновляет** эффект, а не кладёт
+второй такой же, поэтому усиление, нажатое трижды, не даёт тройной прибавки. Это
+проверяет ``tests/domain/test_effects.py``.
+
+У эффекта бывает имя состояния (``status``) - одно из двадцати, объявленных в
+``entities/statuses.py``. Тогда ключ у него общий на всё состояние: горение от
+жезла и горение от стрелы - это одно горение, а не два. Что состояние делает,
+сказано там же; здесь оно только лежит и считает свои ходы.
 """
 
 from __future__ import annotations
@@ -11,20 +16,32 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 
+from mmorpg.domain.entities.statuses import (
+    CONTROL_STATUSES,
+    StatusKind,
+    status_id,
+    status_spec,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class ActiveEffect:
-    """A modifier bundle with a lifetime measured in turns."""
+    """Набор прибавок со сроком, измеренным в ходах."""
 
     id: str
     name: str
     modifiers: Mapping[str, float]
     turns_left: int
     source: str = ""
-    # Whether the effect helps its holder. Set explicitly by whoever creates the
-    # effect: the sign of a modifier is not enough to tell (a positive
-    # damage_taken_percent is a penalty).
+    # Помогает ли эффект носителю. Ставится тем, кто эффект создаёт: по знаку
+    # прибавки этого не понять (положительный ``damage_taken_percent`` - беда).
     beneficial: bool = True
+    #: Какое это состояние. ``None`` - обычная прибавка, не состояние.
+    status: StatusKind | None = None
+    #: Величина состояния. Что она значит, решает само состояние: для слабости
+    #: это проценты урона, для горения - урон за ход, для барьера - сколько он
+    #: держит.
+    magnitude: float = 0.0
 
     def ticked(self) -> ActiveEffect:
         return replace(self, turns_left=self.turns_left - 1)
@@ -34,9 +51,32 @@ class ActiveEffect:
         return self.turns_left <= 0
 
 
+def status_effect(
+    kind: StatusKind,
+    *,
+    turns: int,
+    magnitude: float = 0.0,
+    source: str = "",
+) -> ActiveEffect:
+    """Состояние как эффект: имя, знак и прибавки берутся из его описания."""
+    spec = status_spec(kind)
+    return ActiveEffect(
+        id=status_id(kind),
+        name=spec.name,
+        modifiers=MappingProxyType(
+            {key: magnitude * scale for key, scale in spec.modifiers.items()}
+        ),
+        turns_left=max(1, turns),
+        source=source,
+        beneficial=spec.beneficial,
+        status=kind,
+        magnitude=magnitude,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class EffectStack:
-    """Immutable collection of active effects, keyed by effect id."""
+    """Неизменяемый набор действующих эффектов по ключу."""
 
     effects: Mapping[str, ActiveEffect] = field(default_factory=dict)
 
@@ -50,17 +90,18 @@ class EffectStack:
         return effect_id in self.effects
 
     def apply(self, effect: ActiveEffect) -> EffectStack:
-        """Add or refresh an effect.
+        """Добавить или обновить эффект.
 
-        Re-applying keeps the longer of the two remaining durations and does not
-        add the modifiers twice.
+        Повторное наложение оставляет больший из двух сроков и большую из двух
+        величин, а прибавки не складывает: состояние, наложенное дважды, - это
+        одно состояние, только посильнее и подольше.
         """
         current = self.effects.get(effect.id)
-        merged = (
-            effect
-            if current is None
-            else replace(effect, turns_left=max(effect.turns_left, current.turns_left))
-        )
+        if current is None:
+            merged = effect
+        else:
+            stronger = effect if effect.magnitude >= current.magnitude else current
+            merged = replace(stronger, turns_left=max(effect.turns_left, current.turns_left))
         return EffectStack(MappingProxyType({**self.effects, effect.id: merged}))
 
     def remove(self, effect_id: str) -> EffectStack:
@@ -68,9 +109,9 @@ class EffectStack:
         return EffectStack(MappingProxyType(remaining))
 
     def cleanse(self, count: int, *, beneficial: bool = False) -> EffectStack:
-        """Remove up to ``count`` effects, oldest first.
+        """Снять до ``count`` эффектов, начиная со старших.
 
-        By default it strips penalties, which is what every cleansing skill does.
+        По умолчанию снимаются беды - это и делает всякое умение очищения.
         """
         remaining = dict(self.effects)
         for effect_id, effect in self.effects.items():
@@ -82,7 +123,7 @@ class EffectStack:
         return EffectStack(MappingProxyType(remaining))
 
     def tick(self) -> EffectStack:
-        """Advance one turn and drop whatever expired."""
+        """Прожить один ход и выбросить то, что кончилось."""
         advanced = {
             effect_id: ticked
             for effect_id, effect in self.effects.items()
@@ -91,7 +132,7 @@ class EffectStack:
         return EffectStack(MappingProxyType(advanced))
 
     def modifiers(self) -> dict[str, float]:
-        """Sum of every active effect's modifiers."""
+        """Сумма прибавок всех действующих эффектов."""
         total: dict[str, float] = {}
         for effect in self.effects.values():
             for key, value in effect.modifiers.items():
@@ -100,3 +141,42 @@ class EffectStack:
 
     def penalties(self) -> tuple[ActiveEffect, ...]:
         return tuple(effect for effect in self.effects.values() if not effect.beneficial)
+
+    # --- состояния ----------------------------------------------------
+
+    def statuses(self) -> tuple[ActiveEffect, ...]:
+        """Всё, что висит на бойце состоянием, а не безымянной прибавкой."""
+        return tuple(effect for effect in self.effects.values() if effect.status is not None)
+
+    def has(self, kind: StatusKind) -> bool:
+        return status_id(kind) in self.effects
+
+    def status(self, kind: StatusKind) -> ActiveEffect | None:
+        return self.effects.get(status_id(kind))
+
+    def magnitude_of(self, kind: StatusKind) -> float:
+        effect = self.status(kind)
+        return effect.magnitude if effect is not None else 0.0
+
+    def turns_of(self, kind: StatusKind) -> int:
+        effect = self.status(kind)
+        return effect.turns_left if effect is not None else 0
+
+    def without(self, kind: StatusKind) -> EffectStack:
+        return self.remove(status_id(kind))
+
+    def control(self) -> ActiveEffect | None:
+        """Состояние, отнимающее у носителя ход. ``None`` - ход за ним."""
+        for effect in self.effects.values():
+            if effect.status is not None and effect.status in CONTROL_STATUSES:
+                return effect
+        return None
+
+    def without_control(self) -> EffectStack:
+        """Снять всё, что отнимает ход: то, чем платит «вас нельзя оглушить»."""
+        remaining = {
+            key: value
+            for key, value in self.effects.items()
+            if value.status is None or value.status not in CONTROL_STATUSES
+        }
+        return EffectStack(MappingProxyType(remaining))

@@ -46,8 +46,16 @@ def fighter(content: GameContent) -> Character:
         level=10,
         gold=500,
         loadout=SkillLoadout(
-            actives=("warrior_cleave", "warrior_taunt", "warrior_shield_bash", None, None, None),
-            ranks={"warrior_toughness": 1},
+            actives=(
+                # Простой удар, провокация и удар щитом: натиск, оборона, точность.
+                "warrior_sekushchiy_roscherk",
+                "warrior_provokatsiya",
+                "warrior_udar_shchitom",
+                None,
+                None,
+                None,
+            ),
+            ranks={"warrior_stoykost": 1},
             racial="race_human_second_wind",
         ),
     )
@@ -129,7 +137,7 @@ def test_a_slot_keeps_its_number_when_an_earlier_one_is_empty(
         fighter,
         loadout=replace(
             fighter.loadout,
-            actives=(None, None, "warrior_shield_bash", None, None, None),
+            actives=(None, None, "warrior_udar_shchitom", None, None, None),
         ),
     )
     session = open_fight(content, gapped, node=1)
@@ -300,7 +308,7 @@ def test_every_action_button_names_its_tag(
 ) -> None:
     texts = [row[0].text for row in flow.render(content, fighter, session, HERO).rows]
     assert texts[0] == "Атака — натиск"
-    assert "натиск" in texts[1], "Рассечение is a plain blow"
+    assert "натиск" in texts[1], "Секущий росчерк is a plain blow"
     assert "оборона" in texts[2], "Провокация pulls the blow onto you"
     assert "оборона" in texts[4], "the racial slot names its tag too"
 

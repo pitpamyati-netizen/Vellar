@@ -1,6 +1,6 @@
 """Learning skills, raising their ranks, choosing an edge, filling the panel.
 
-The panel never grows: six active slots and one racial, forever. Постоянные
+The panel never grows: six active slots and one racial, forever. Пассивные
 умения слотов не занимают вовсе - изученное работает (``docs/skills.md``). All
 depth comes from ranks one to five and from the single edge chosen at rank three.
 This module is the only place that decides what a skill point may be spent on.
@@ -203,7 +203,7 @@ def reclaim_lost(content: GameContent, character: Character) -> Character | None
 def equippable(content: GameContent, character: Character) -> tuple[Skill, ...]:
     """Known battle skills that are not already in a slot.
 
-    Только боевые: постоянному умению слот не нужен, и предлагать его к укладке
+    Только боевые: пассивному умению слот не нужен, и предлагать его к укладке
     значило бы обещать, что без укладки оно не работает.
     """
     in_panel = set(character.loadout.equipped_actives())
@@ -218,7 +218,7 @@ def equippable(content: GameContent, character: Character) -> tuple[Skill, ...]:
 
 
 def known_passives(content: GameContent, character: Character) -> tuple[Skill, ...]:
-    """Постоянные умения, которые персонаж изучил. Все они и работают."""
+    """Пассивные умения, которые персонаж изучил. Все они и работают."""
     return tuple(
         content.skill(code)
         for code in sorted(known_codes(character))

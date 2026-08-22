@@ -362,7 +362,7 @@ def test_coming_back_to_a_screen_unwinds_instead_of_stacking(
     """
     learned = replace(
         hero,
-        loadout=replace(hero.loadout, ranks={**hero.loadout.ranks, "warrior_shield_bash": 1}),
+        loadout=replace(hero.loadout, ranks={**hero.loadout.ranks, "warrior_udar_shchitom": 1}),
     )
     slots = step(content, learned, begin(learned), "Умения", "Слоты умений")
     picking = step(content, learned, slots, "Боевой слот 3: пусто")

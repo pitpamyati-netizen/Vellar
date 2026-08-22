@@ -100,30 +100,33 @@ def test_known_passives_apply_at_their_rank(content: GameContent, warrior: Chara
     plain = derived_stats(content, veteran)
     with_passive = replace(
         veteran,
-        loadout=SkillLoadout(ranks={"warrior_toughness": 1}),
+        loadout=SkillLoadout(ranks={"warrior_shchitonosets": 1}),
     )
     ranked = replace(
         veteran,
-        loadout=SkillLoadout(ranks={"warrior_toughness": 5}),
+        loadout=SkillLoadout(ranks={"warrior_shchitonosets": 5}),
     )
     assert derived_stats(content, with_passive).armor > plain.armor
     assert derived_stats(content, ranked).armor > derived_stats(content, with_passive).armor
 
 
 def test_every_known_passive_counts(content: GameContent, warrior: Character) -> None:
-    """Изучено - значит работает: слотов у постоянных умений больше нет.
+    """Изучено - значит работает: слотов у пассивных умений больше нет.
 
     Три слота на шесть изученных означали, что половина потраченных очков не
     считалась ни в одном бою, и узнать об этом было неоткуда.
     """
-    plain = derived_stats(content, warrior)
+    # На пятидесятом: у первого уровня броня десять, и три процента от неё
+    # округляются в ту же десятку - проверять было бы нечего.
+    veteran = replace(warrior, level=50, allocated=StatBlock(END=40))
+    plain = derived_stats(content, veteran)
+    one = replace(veteran, loadout=SkillLoadout(ranks={"warrior_zakalka": 5}))
     every = replace(
-        warrior,
-        loadout=SkillLoadout(ranks={"warrior_toughness": 5, "warrior_veteran": 5}),
+        veteran,
+        loadout=SkillLoadout(ranks={"warrior_zakalka": 5, "warrior_shchitonosets": 5}),
     )
-    one = replace(warrior, loadout=SkillLoadout(ranks={"warrior_toughness": 5}))
-    assert derived_stats(content, one).armor > plain.armor
-    assert derived_stats(content, every).max_health > derived_stats(content, one).max_health
+    assert derived_stats(content, one).max_health > plain.max_health
+    assert derived_stats(content, every).armor > derived_stats(content, one).armor
 
 
 def test_level_raises_health_and_resource(content: GameContent, warrior: Character) -> None:

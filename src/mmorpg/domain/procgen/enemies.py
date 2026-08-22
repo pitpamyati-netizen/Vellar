@@ -11,9 +11,9 @@ import random
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from mmorpg.domain.entities.damage import DamageType
 from mmorpg.domain.entities.location import (
-    DEFAULT_ELEMENTS,
-    DamageElement,
+    DEFAULT_DAMAGE_TYPES,
     Enemy,
     EnemyArchetype,
     EnemyRank,
@@ -177,11 +177,11 @@ def generate_enemy(
     )
 
 
-def element_of(archetype: EnemyArchetype) -> DamageElement:
+def element_of(archetype: EnemyArchetype) -> DamageType:
     """Чем бьёт этот противник. Не объявлено в содержимом - решает порода."""
     if archetype.element is not None:
         return archetype.element
-    return DEFAULT_ELEMENTS.get(archetype.kind, DamageElement.PHYSICAL)
+    return DEFAULT_DAMAGE_TYPES[archetype.kind]
 
 
 def _name_for(

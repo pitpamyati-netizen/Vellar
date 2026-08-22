@@ -261,8 +261,9 @@ def test_every_edge_in_the_game_declares_what_it_does(content: GameContent) -> N
 
 def test_an_edge_changes_the_numbers_it_promises(content: GameContent, veteran: Character) -> None:
     """Выбранная грань доходит до умения, а невыбранная ничего не трогает."""
-    skill = content.skill("warrior_cleave")
-    bleeding, splashing = skill.edges
+    # Умение, которое само крови не пускает: кровь на цели - работа грани.
+    skill = content.skill("warrior_sekushchiy_roscherk")
+    heavier, bleeding = skill.edges
 
     plain = replace(veteran, loadout=SkillLoadout(ranks={skill.code: 3}))
     assert skill_rules.chosen_edge(plain, skill) is None
@@ -271,21 +272,23 @@ def test_an_edge_changes_the_numbers_it_promises(content: GameContent, veteran: 
     cutting = replace(plain, loadout=replace(plain.loadout, edges={skill.code: bleeding.code}))
     chosen = skill_rules.chosen_edge(cutting, skill)
     assert chosen is not None
-    # «Цель теряет здоровье ещё 3 хода» - именно это и происходит.
+    # «Цель истекает кровью 3 хода» - именно это и происходит.
     assert edge_rules.applied(spec_for(skill.effect), chosen).dot_turns == 3
 
-    wide = replace(plain, loadout=replace(plain.loadout, edges={skill.code: splashing.code}))
-    reach = skill_rules.chosen_edge(wide, skill)
-    assert reach is not None
-    assert edge_rules.applied(spec_for(skill.effect), reach).splash == pytest.approx(0.6)
+    # А вторая грань трогает силу и откат, но не само действие.
+    strong = replace(plain, loadout=replace(plain.loadout, edges={skill.code: heavier.code}))
+    harder = skill_rules.chosen_edge(strong, skill)
+    assert harder is not None
+    assert harder.power == pytest.approx(25.0)
+    assert edge_rules.applied(spec_for(skill.effect), harder).dot_turns == 0
 
 
 def test_an_edge_of_a_skill_that_changed_is_read_as_unchosen(
     content: GameContent, veteran: Character
 ) -> None:
     """Содержимое переживает сохранённого персонажа (``Claude.md``, правило 8)."""
-    skill = content.skill("warrior_cleave")
-    stale = replace(veteran, loadout=SkillLoadout(edges={skill.code: "warrior_cleave_z"}))
+    skill = content.skill("warrior_rassechenie")
+    stale = replace(veteran, loadout=SkillLoadout(edges={skill.code: "warrior_rassechenie_z"}))
 
     assert skill_rules.chosen_edge(stale, skill) is None
     assert skill_rules.power_factor(stale, skill) == 1.0

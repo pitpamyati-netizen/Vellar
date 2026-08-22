@@ -68,6 +68,11 @@ slots = [
 
 # Рода оружия. Род решает, чем игрок бьёт, и говорит о себе двумя числами.
 #
+# damage_type - каким родом урона это оружие бьёт: копьё колет, меч рубит,
+# булава дробит, жезл бьёт чарами. Отсюда его берёт обычный удар героя, и по нему
+# считается сопротивление цели (docs/skills.md, entities/damage.py). Объявить
+# обязательно: оружие, о котором не сказано, чем оно бьёт, - это удар без рода.
+#
 # dice - среднее удара на первой ступени и форма броска: чем костей больше, тем
 # чаще выпадает середина. Дальше среднее растёт вместе со ступенью вещи.
 #
@@ -83,17 +88,17 @@ slots = [
 # Класс носит своё (classes.toml), но чужое не запрещено: за чужое оружие платят
 # точностью и инициативой, а не отказом (ADR 0015).
 weapon_types = [
-    { id = "dagger", name = "Кинжал", gender = "m", dice = "1d11", spread = 1.35, modifiers = { crit_chance_percent = 4, initiative_percent = 8 } },
-    { id = "short_sword", name = "Короткий меч", gender = "m", dice = "2d6", spread = 1.25, modifiers = { initiative_percent = 4, accuracy_percent = 3 } },
-    { id = "sword", name = "Меч", gender = "m", dice = "2d6", spread = 1.2, modifiers = { accuracy_percent = 4 } },
-    { id = "greatsword", name = "Двуручный меч", gender = "m", dice = "2d8", spread = 1.4, modifiers = { initiative_percent = -10, dodge_percent = -3 } },
-    { id = "axe", name = "Топор", gender = "m", dice = "2d7", spread = 1.45, modifiers = { crit_damage_percent = 10, accuracy_percent = -4 } },
-    { id = "mace", name = "Булава", gender = "f", dice = "1d16", spread = 1.5, modifiers = { initiative_percent = -4, damage_percent = 4 } },
-    { id = "spear", name = "Копьё", gender = "n", dice = "1d14", spread = 1.3, modifiers = { accuracy_percent = 5, initiative_percent = -3 } },
-    { id = "bow", name = "Лук", gender = "m", dice = "2d6", spread = 1.3, modifiers = { initiative_percent = 6, accuracy_percent = 4 } },
-    { id = "staff", name = "Посох", gender = "m", dice = "2d5", spread = 1.2, modifiers = { damage_percent = 4, resource_percent = 5 } },
-    { id = "wand", name = "Жезл", gender = "m", dice = "1d12", spread = 1.3, modifiers = { damage_percent = 6, resource_regen_percent = 8 } },
-    { id = "symbol", name = "Символ веры", gender = "m", dice = "2d5", spread = 1.25, modifiers = { healing_done_percent = 10, resource_percent = 8 } },
+    { id = "dagger", name = "Кинжал", gender = "m", damage_type = "piercing", dice = "1d11", spread = 1.35, modifiers = { crit_chance_percent = 4, initiative_percent = 8 } },
+    { id = "short_sword", name = "Короткий меч", gender = "m", damage_type = "slashing", dice = "2d6", spread = 1.25, modifiers = { initiative_percent = 4, accuracy_percent = 3 } },
+    { id = "sword", name = "Меч", gender = "m", damage_type = "slashing", dice = "2d6", spread = 1.2, modifiers = { accuracy_percent = 4 } },
+    { id = "greatsword", name = "Двуручный меч", gender = "m", damage_type = "slashing", dice = "2d8", spread = 1.4, modifiers = { initiative_percent = -10, dodge_percent = -3 } },
+    { id = "axe", name = "Топор", gender = "m", damage_type = "slashing", dice = "2d7", spread = 1.45, modifiers = { crit_damage_percent = 10, accuracy_percent = -4 } },
+    { id = "mace", name = "Булава", gender = "f", damage_type = "bludgeoning", dice = "1d16", spread = 1.5, modifiers = { initiative_percent = -4, damage_percent = 4 } },
+    { id = "spear", name = "Копьё", gender = "n", damage_type = "piercing", dice = "1d14", spread = 1.3, modifiers = { accuracy_percent = 5, initiative_percent = -3 } },
+    { id = "bow", name = "Лук", gender = "m", damage_type = "piercing", dice = "2d6", spread = 1.3, modifiers = { initiative_percent = 6, accuracy_percent = 4 } },
+    { id = "staff", name = "Посох", gender = "m", damage_type = "bludgeoning", dice = "2d5", spread = 1.2, modifiers = { damage_percent = 4, resource_percent = 5 } },
+    { id = "wand", name = "Жезл", gender = "m", damage_type = "arcane", dice = "1d12", spread = 1.3, modifiers = { damage_percent = 6, resource_regen_percent = 8 } },
+    { id = "symbol", name = "Символ веры", gender = "m", damage_type = "holy", dice = "2d5", spread = 1.25, modifiers = { healing_done_percent = 10, resource_percent = 8 } },
 ]
 
 # Рода доспеха. armor - доля брони относительно лёгкого доспеха той же ступени.

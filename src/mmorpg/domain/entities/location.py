@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
 
+from mmorpg.domain.entities.damage import DamageType
+
 
 class EnemyRank(StrEnum):
     """How long an opponent is meant to hold out.
@@ -68,27 +70,16 @@ class EnemyKind(StrEnum):
     ABERRATION = "aberration"
 
 
-class DamageElement(StrEnum):
-    """Чем именно бьёт противник.
-
-    До этого о чужом ударе было известно только «порода бьющего», и три
-    сопротивления из содержимого - огню, холоду и яду - не считались ни разу:
-    ключ был, стихии не было (``Roadmap.md``, ADR 0018). Теперь стихия есть у
-    противника, и «Рождённый в стуже» наконец что-то значит.
-    """
-
-    PHYSICAL = "physical"
-    MAGIC = "magic"
-    FIRE = "fire"
-    COLD = "cold"
-    POISON = "poison"
-
-
-#: Стихия по умолчанию - по породе: стихия и тварь бьют чарами, всё прочее
-#: железом. Ровно то, что делалось раньше, только теперь это написано один раз.
-DEFAULT_ELEMENTS: dict[EnemyKind, DamageElement] = {
-    EnemyKind.ELEMENTAL: DamageElement.MAGIC,
-    EnemyKind.ABERRATION: DamageElement.MAGIC,
+#: Чем бьёт порода, когда о роде урона у неё не сказано ничего. Зверь рвёт,
+#: гуманоид рубит, нежить бьёт скверной, стихия - чарами, тварь - разумом. Ровно
+#: то же делалось раньше делением на «железо и чары», только теперь у каждой
+#: породы свой род урона, а не один магический на всех.
+DEFAULT_DAMAGE_TYPES: dict[EnemyKind, DamageType] = {
+    EnemyKind.BEAST: DamageType.RENDING,
+    EnemyKind.HUMANOID: DamageType.SLASHING,
+    EnemyKind.UNDEAD: DamageType.NEGATIVE,
+    EnemyKind.ELEMENTAL: DamageType.ARCANE,
+    EnemyKind.ABERRATION: DamageType.MENTAL,
 }
 
 
@@ -108,7 +99,7 @@ class EnemyArchetype:
     #: Чем бьёт этот архетип. ``None`` - не объявлено, и решает порода
     #: (``DEFAULT_ELEMENTS``): «железом» и «не объявлено» - разные вещи, иначе
     #: каменный истукан не смог бы бить камнем.
-    element: DamageElement | None = None
+    element: DamageType | None = None
 
     def fits(self, biome: str) -> bool:
         return "*" in self.biomes or biome in self.biomes
@@ -129,7 +120,7 @@ class Enemy:
     loot: tuple[str, ...]
     gold: int
     rank: EnemyRank = EnemyRank.NORMAL
-    element: DamageElement = DamageElement.PHYSICAL
+    element: DamageType = DamageType.SLASHING
 
     @property
     def is_elite(self) -> bool:

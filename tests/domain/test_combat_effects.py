@@ -22,13 +22,14 @@ from mmorpg.domain.entities.combat import (
 )
 from mmorpg.domain.entities.effects import ActiveEffect
 from mmorpg.domain.entities.location import Enemy, EnemyKind
+from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.rules.combat import (
     act,
     hero_combatant,
     is_low_health,
     monster_combatant,
     open_battle,
-    spend_bleeding,
+    spend_dot,
 )
 from mmorpg.domain.rules.skill_effects import EffectCategory, spec_for
 
@@ -123,7 +124,7 @@ def strike(
 
 
 def test_healing_restores_health(content: GameContent) -> None:
-    cleric = caster("cleric", "aasimar", "cleric_mend")
+    cleric = caster("cleric", "aasimar", "cleric_dlan_zhizni")
     hurt = tweak(start(content, cleric, (enemy(),)), health=10)
     healed = use(content, cleric, hurt)
     assert hero(healed).health > 10
@@ -131,7 +132,7 @@ def test_healing_restores_health(content: GameContent) -> None:
 
 
 def test_healing_cannot_exceed_the_maximum(content: GameContent) -> None:
-    cleric = caster("cleric", "aasimar", "cleric_mend")
+    cleric = caster("cleric", "aasimar", "cleric_dlan_zhizni")
     healed = use(content, cleric, start(content, cleric, (enemy(),)))
     assert hero(healed).health <= hero(healed).max_health
 
@@ -145,17 +146,17 @@ def test_percentage_healing_scales_with_maximum_health(content: GameContent) -> 
 
 
 def test_shields_absorb_damage_before_health(content: GameContent) -> None:
-    mage = caster("mage", "high_elf", "mage_arcane_shield")
+    mage = caster("mage", "high_elf", "mage_kamennaya_kozha")
     shielded = use(content, mage, start(content, mage, (enemy(damage=1),)))
-    assert hero(shielded).shield > 0 or hero(shielded).health < hero(shielded).max_health
+    assert hero(shielded).barrier > 0 or hero(shielded).health < hero(shielded).max_health
 
 
 def test_a_shield_is_consumed_before_health(content: GameContent) -> None:
-    mage = caster("mage", "high_elf", "mage_arcane_shield")
-    with_shield = tweak(start(content, mage, (enemy(damage=10),)), shield=1_000)
+    mage = caster("mage", "high_elf", "mage_kamennaya_kozha")
+    with_shield = tweak(start(content, mage, (enemy(damage=10),)), barrier=1_000)
     hit, lost = hero(with_shield).damaged(50)
     assert lost == 0
-    assert hit.shield == 950
+    assert hit.barrier == 950
     assert hit.health == hero(with_shield).health
 
 
@@ -163,7 +164,7 @@ def test_a_shield_is_consumed_before_health(content: GameContent) -> None:
 
 
 def test_area_damage_reaches_every_enemy(content: GameContent) -> None:
-    mage = caster("mage", "high_elf", "mage_fireball")
+    mage = caster("mage", "high_elf", "mage_meteor")
     state = start(content, mage, (enemy("Первый"), enemy("Второй"), enemy("Третий")))
     for attempt in range(30):
         after = use(content, mage, state, seed=attempt)
@@ -181,7 +182,7 @@ def test_chain_damage_falls_off(content: GameContent) -> None:
 
 
 def test_a_self_buff_lands_as_an_effect(content: GameContent) -> None:
-    warrior = caster("warrior", "human", "warrior_rally")
+    warrior = caster("warrior", "human", "warrior_klich_splocheniya")
     buffed = use(content, warrior, start(content, warrior, (enemy(),)))
     assert len(hero(buffed).effects) >= 1
     assert any(event.kind is EventKind.EFFECT_APPLIED for event in buffed.events)
@@ -189,13 +190,13 @@ def test_a_self_buff_lands_as_an_effect(content: GameContent) -> None:
 
 def test_damage_reduction_buffs_store_a_negative_modifier(content: GameContent) -> None:
     """Сила 30 у ``buff_damage_taken`` значит «на 30 процентов *меньше* урона»."""
-    paladin = caster("paladin", "human", "paladin_aegis")
+    paladin = caster("paladin", "human", "paladin_stoykost_very")
     guarded = use(content, paladin, start(content, paladin, (enemy(),)))
     assert hero(guarded).effects.modifiers()["damage_taken_percent"] < 0
 
 
 def test_a_debuff_lands_on_the_enemy_as_a_penalty(content: GameContent) -> None:
-    rogue = caster("rogue", "goblin", "rogue_smoke_bomb")
+    rogue = caster("rogue", "goblin", "rogue_dymovaya_shashka")
     smoked = use(content, rogue, start(content, rogue, (enemy(),)))
     effects = foe(smoked).effects
     assert len(effects) == 1
@@ -204,7 +205,7 @@ def test_a_debuff_lands_on_the_enemy_as_a_penalty(content: GameContent) -> None:
 
 
 def test_vulnerability_debuffs_are_positive(content: GameContent) -> None:
-    ranger = caster("ranger", "wood_elf", "ranger_hunters_mark")
+    ranger = caster("ranger", "wood_elf", "ranger_okhotnichya_metka")
     marked = use(content, ranger, start(content, ranger, (enemy(),)))
     assert foe(marked).effects.modifiers()["damage_taken_percent"] > 0
 
@@ -213,7 +214,7 @@ def test_vulnerability_debuffs_are_positive(content: GameContent) -> None:
 
 
 def test_cleansing_strips_penalties(content: GameContent) -> None:
-    cleric = caster("cleric", "aasimar", "cleric_purify")
+    cleric = caster("cleric", "aasimar", "cleric_ochishchenie")
     state = start(content, cleric, (enemy(),))
     cursed = tweak(
         state,
@@ -233,7 +234,7 @@ def test_cleansing_strips_penalties(content: GameContent) -> None:
 
 
 def test_free_cast_makes_the_next_skill_cost_nothing(content: GameContent) -> None:
-    elf = caster("mage", "high_elf", "mage_firebolt")
+    elf = caster("mage", "high_elf", "mage_ognennaya_strela")
     elf = replace(elf, loadout=replace(elf.loadout, racial="race_high_elf_mana_surge"))
     surged = racial(content, elf, start(content, elf, (enemy(),)), b"\x02" * 16)
     assert hero(surged).free_cast is True
@@ -244,7 +245,7 @@ def test_free_cast_makes_the_next_skill_cost_nothing(content: GameContent) -> No
 
 
 def test_cooldown_reset_clears_every_cooldown(content: GameContent) -> None:
-    mage = caster("mage", "high_elf", "mage_arcane_shield", "mage_time_slip")
+    mage = caster("mage", "high_elf", "mage_kamennaya_kozha", "mage_po_pamyati")
     shielded = use(content, mage, start(content, mage, (enemy(),)), slot=0)
     assert hero(shielded).cooldowns
     reset = use(content, mage, shielded, slot=1)
@@ -288,20 +289,26 @@ def test_avoid_combat_needs_someone_who_can_be_reasoned_with(content: GameConten
 
 
 def test_stuns_make_an_enemy_skip_a_turn(content: GameContent) -> None:
-    warrior = caster("warrior", "human", "warrior_shield_bash")
+    warrior = caster("warrior", "human", "warrior_udar_shchitom")
     state = start(content, warrior, (enemy(),))
     for attempt in range(40):
         bashed = use(content, warrior, state, seed=attempt)
-        if any(event.kind is EventKind.STUNNED for event in bashed.events):
+        skipped = [
+            event
+            for event in bashed.events
+            if event.kind is EventKind.TURN_SKIPPED and event.actor_id != 1
+        ]
+        if skipped:
+            assert skipped[0].effect_name == "Оглушение"
             return
-    pytest.fail("shield bash never stunned across 40 seeds")
+    pytest.fail("удар щитом ни разу не оглушил за 40 семян")
 
 
 # --- содержание и вспомогательное -------------------------------------
 
 
 def test_regeneration_traits_heal_at_end_of_turn(content: GameContent) -> None:
-    troll = caster("warrior", "troll", "warrior_cleave")
+    troll = caster("warrior", "troll", "warrior_rassechenie")
     troll = replace(troll, trait_ids=("steady_breath",))
     hurt = tweak(start(content, troll, (enemy(damage=1),)), health=100)
     later = strike(content, troll, hurt)
@@ -309,7 +316,7 @@ def test_regeneration_traits_heal_at_end_of_turn(content: GameContent) -> None:
 
 
 def test_low_health_helper(content: GameContent) -> None:
-    warrior = caster("warrior", "human", "warrior_cleave")
+    warrior = caster("warrior", "human", "warrior_rassechenie")
     state = start(content, warrior, (enemy(),))
     assert is_low_health(state, 1) is False
     assert is_low_health(tweak(state, health=1), 1) is True
@@ -320,7 +327,7 @@ def test_low_health_helper(content: GameContent) -> None:
     [
         EffectCategory.DAMAGE,
         EffectCategory.HEAL,
-        EffectCategory.SHIELD,
+        EffectCategory.BARRIER,
         EffectCategory.BUFF,
         EffectCategory.DEBUFF,
         EffectCategory.CLEANSE,
@@ -356,8 +363,9 @@ def test_an_edge_that_promises_a_second_target_hits_a_second_target(
     content: GameContent,
 ) -> None:
     """«Размах» у рассечения: удар по одной цели задевает соседа."""
-    skill = content.skill("warrior_cleave")
+    skill = content.skill("warrior_rassechenie")
     splashing = skill.edges[1]
+    assert splashing.name == "Размах"
     character = caster("warrior", "human", skill.code)
     character = replace(character, loadout=replace(character.loadout, ranks={skill.code: 3}))
     pair = (enemy("Волк"), enemy("Волчица"))
@@ -374,8 +382,10 @@ def test_an_edge_that_promises_a_second_target_hits_a_second_target(
 def test_an_edge_that_promises_bleeding_leaves_the_target_bleeding(
     content: GameContent,
 ) -> None:
-    skill = content.skill("warrior_cleave")
-    bleeding = skill.edges[0]
+    # Умение, которое само по себе крови не пускает: кровь на цели - работа грани.
+    skill = content.skill("warrior_sekushchiy_roscherk")
+    bleeding = skill.edges[1]
+    assert bleeding.name == "Кровопускание"
     character = caster("warrior", "human", skill.code)
     character = replace(character, loadout=replace(character.loadout, ranks={skill.code: 3}))
     pack = (enemy(),)
@@ -384,13 +394,13 @@ def test_an_edge_that_promises_bleeding_leaves_the_target_bleeding(
     plain = use(content, character, start(content, character, pack))
     cutting = use(content, edged, start(content, edged, pack))
 
-    assert foe(plain).effects.penalties() == ()
-    assert foe(cutting).effects.penalties() != ()
+    assert not foe(plain).effects.has(StatusKind.BLEEDING)
+    assert foe(cutting).effects.has(StatusKind.BLEEDING)
 
 
 def test_an_edge_that_promises_a_discount_is_a_discount(content: GameContent) -> None:
     """«Экономный шар»: тот же шар за меньшие чары."""
-    skill = content.skill("mage_fireball")
+    skill = content.skill("mage_meteor")
     cheaper = skill.edges[1]
     character = caster("mage", "human", skill.code)
     character = replace(character, loadout=replace(character.loadout, ranks={skill.code: 3}))
@@ -404,10 +414,10 @@ def test_an_edge_that_promises_a_discount_is_a_discount(content: GameContent) ->
 
 
 def test_a_passive_edge_is_not_just_a_label(content: GameContent) -> None:
-    """Половина выбранных граней в игре - у постоянных умений."""
+    """Половина выбранных граней в игре - у пассивных умений."""
     from mmorpg.domain.rules import modifiers as mods
 
-    skill = content.skill("warrior_toughness")
+    skill = content.skill("warrior_stoykost")
     character = caster("warrior", "human")
     character = replace(character, loadout=replace(character.loadout, ranks={skill.code: 3}))
 
@@ -419,7 +429,7 @@ def test_a_passive_edge_is_not_just_a_label(content: GameContent) -> None:
 
 def test_bleeding_actually_takes_health_every_turn(content: GameContent) -> None:
     """«и ещё 3 хода» долго было надписью: ``dot_turns`` не читал никто."""
-    skill = content.skill("rogue_poison_blade")
+    skill = content.skill("rogue_otravlennyy_klinok")
     character = caster("rogue", "human", skill.code)
     # Отравленный клинок просит клинок: без кинжала умение не сработает вовсе.
     character = replace(
@@ -432,7 +442,7 @@ def test_bleeding_actually_takes_health_every_turn(content: GameContent) -> None
     poisoned = foe(after)
     assert poisoned.effects.penalties() != ()
 
-    bleeding = spend_bleeding(after, poisoned.id)
+    bleeding = spend_dot(after, poisoned.id)
     assert foe(bleeding).health < poisoned.health
 
 
@@ -460,8 +470,8 @@ def _turns_until_a_miss(
 
 def test_a_missed_blow_leaves_no_debuff(content: GameContent) -> None:
     """«Промах» и «наложен эффект» в одном ходу - это один и тот же удар."""
-    rogue = caster("rogue", "human", "rogue_feint")
-    rogue = replace(rogue, loadout=replace(rogue.loadout, ranks={"rogue_feint": 1}))
+    rogue = caster("rogue", "human", "rogue_fint")
+    rogue = replace(rogue, loadout=replace(rogue.loadout, ranks={"rogue_fint": 1}))
     state = start(content, rogue, (enemy(),))
 
     missed, landed = _turns_until_a_miss(content, rogue, state)
@@ -473,10 +483,10 @@ def test_a_missed_blow_leaves_no_debuff(content: GameContent) -> None:
 
 def test_a_missed_blow_draws_no_blood(content: GameContent) -> None:
     """Кровотечение - тоже след удара: не попал, значит нечему течь."""
-    rogue = caster("rogue", "human", "rogue_poison_blade")
+    rogue = caster("rogue", "human", "rogue_otravlennyy_klinok")
     rogue = replace(
         rogue,
-        loadout=replace(rogue.loadout, ranks={"rogue_poison_blade": 1}),
+        loadout=replace(rogue.loadout, ranks={"rogue_otravlennyy_klinok": 1}),
         equipment=Equipment().equip("weapon", "dagger@6#uncommon"),
     )
     state = start(content, rogue, (enemy(),))
@@ -484,7 +494,7 @@ def test_a_missed_blow_draws_no_blood(content: GameContent) -> None:
     missed, landed = _turns_until_a_miss(content, rogue, state)
 
     assert foe(missed).effects.penalties() == ()
-    assert spend_bleeding(missed, 2).by_id(2) == missed.by_id(2)
+    assert spend_dot(missed, 2).by_id(2) == missed.by_id(2)
     assert foe(landed).effects.penalties() != ()
 
 
@@ -493,7 +503,7 @@ def test_a_missed_blow_draws_no_blood(content: GameContent) -> None:
 
 def test_healing_over_time_arrives_every_turn(content: GameContent) -> None:
     """«Лечит вас каждый ход 3 хода» - каждый ход, а не один раз и тишина."""
-    druid = caster("druid", "human", "druid_regrowth")
+    druid = caster("druid", "human", "druid_rodnik_zhizni")
     state = start(content, druid, (enemy(damage=0),))
     hurt = tweak(state, health=hero(state).max_health // 4)
     started = hero(hurt).health
@@ -506,17 +516,17 @@ def test_healing_over_time_arrives_every_turn(content: GameContent) -> None:
 
 def test_a_shield_burns_out_with_its_skill(content: GameContent) -> None:
     """«Поглощает урон 3 хода» - и на четвёртом его нет."""
-    mage = caster("mage", "high_elf", "mage_arcane_shield")
+    mage = caster("mage", "high_elf", "mage_kamennaya_kozha")
     working = use(content, mage, start(content, mage, (enemy(damage=0),)))
-    assert hero(working).shield > 0
+    assert hero(working).barrier > 0
     for turn in range(3):
         working = strike(content, mage, working, bytes([turn + 3]) * 16)
-    assert hero(working).shield == 0
+    assert hero(working).barrier == 0
 
 
 def test_a_riposte_answers_the_blow_it_took(content: GameContent) -> None:
     """«3 хода вы отвечаете на каждый удар по вам» - раньше не отвечали ничем."""
-    warrior = caster("warrior", "human", "warrior_riposte")
+    warrior = caster("warrior", "human", "warrior_otvetnyy_vypad")
     answered = use(content, warrior, start(content, warrior, (enemy(damage=40),)))
     assert any(
         event.kind in {EventKind.DAMAGE, EventKind.CRIT} and event.target == "Волк"
@@ -526,7 +536,7 @@ def test_a_riposte_answers_the_blow_it_took(content: GameContent) -> None:
 
 def test_undying_keeps_the_last_stand_standing(content: GameContent) -> None:
     """«Не даёт вам пасть 3 хода» - и не даёт."""
-    warrior = caster("warrior", "human", "warrior_last_stand")
+    warrior = caster("warrior", "human", "warrior_posledniy_rubezh")
     doomed = tweak(start(content, warrior, (enemy(damage=100_000),)), health=1)
     stood = use(content, warrior, doomed)
     assert hero(stood).alive
@@ -539,7 +549,7 @@ def test_a_slowed_enemy_loses_its_place_in_the_queue(content: GameContent) -> No
     Инициатива в новом движке решает ровно одно и делает это буквально: кто
     быстрее, тот бьёт раньше (ADR 0021). Снятые проценты двигают бойца назад.
     """
-    ranger = caster("ranger", "human", "ranger_snare")
+    ranger = caster("ranger", "human", "ranger_kapkan")
     swift = replace(enemy(damage=10), initiative=10_000.0)
     state = start(content, ranger, (swift,))
     assert state.order[0] == 2, "быстрый противник ходит первым"
@@ -562,6 +572,7 @@ def test_a_beast_hunter_hits_beasts_harder(content: GameContent) -> None:
     plain = situational_damage(
         {},
         spec=None,
+        magic=False,
         target=beast,
         target_health_ratio=1.0,
         attacker_health_ratio=1.0,
@@ -570,6 +581,7 @@ def test_a_beast_hunter_hits_beasts_harder(content: GameContent) -> None:
     hunter = situational_damage(
         {"beast_damage_percent": 20.0},
         spec=None,
+        magic=False,
         target=beast,
         target_health_ratio=1.0,
         attacker_health_ratio=1.0,
@@ -590,8 +602,10 @@ def test_a_magic_blow_and_a_physical_one_are_told_apart(content: GameContent) ->
         "attacker_health_ratio": 1.0,
         "round_number": 2,
     }
-    assert situational_damage(bundle, spec=spec_for("damage_fire"), **kwargs) == pytest.approx(1.3)
-    assert situational_damage(bundle, spec=spec_for("damage"), **kwargs) == pytest.approx(1.1)
+    fiery = situational_damage(bundle, spec=spec_for("damage_fire"), magic=True, **kwargs)
+    iron = situational_damage(bundle, spec=spec_for("damage"), magic=False, **kwargs)
+    assert fiery == pytest.approx(1.3)
+    assert iron == pytest.approx(1.1)
 
 
 def test_a_hero_counts_as_a_humanoid_for_the_bonuses(content: GameContent) -> None:
@@ -603,6 +617,7 @@ def test_a_hero_counts_as_a_humanoid_for_the_bonuses(content: GameContent) -> No
     factor = situational_damage(
         {"humanoid_damage_percent": 25.0},
         spec=None,
+        magic=False,
         target=target,
         target_health_ratio=1.0,
         attacker_health_ratio=1.0,
@@ -625,46 +640,58 @@ def test_stolen_gold_is_a_share_of_what_the_target_carries(content: GameContent)
 # --- стихия чужого удара ---------------------------------------------
 
 
-def test_resistance_is_counted_by_the_element_the_blow_carries(content: GameContent) -> None:
-    """Огню, холоду и яду сопротивлялись только на бумаге (ADR 0018)."""
-    from mmorpg.domain.entities.location import DamageElement
+def test_resistance_is_counted_by_the_kind_of_damage_the_blow_carries(
+    content: GameContent,
+) -> None:
+    """Сопротивление считается по роду урона и по его половине разом."""
+    from mmorpg.domain.entities.damage import DamageType
     from mmorpg.domain.rules.combat import incoming_damage_factor
 
     warm = {"resist_cold_percent": 40.0}
+    assert incoming_damage_factor(warm, DamageType.COLD) == pytest.approx(0.6)
+    assert incoming_damage_factor(warm, DamageType.FIRE) == pytest.approx(1.0)
 
-    assert incoming_damage_factor(warm, DamageElement.COLD) == pytest.approx(0.6)
-    assert incoming_damage_factor(warm, DamageElement.FIRE) == pytest.approx(1.0)
+    # Латы держат удар вообще, стёганка под ними - именно колющий: складываются.
+    plated = {"resist_physical_percent": 20.0, "resist_piercing_percent": 15.0}
+    assert incoming_damage_factor(plated, DamageType.PIERCING) == pytest.approx(0.65)
+    assert incoming_damage_factor(plated, DamageType.SLASHING) == pytest.approx(0.8)
+    assert incoming_damage_factor(plated, DamageType.FIRE) == pytest.approx(1.0)
 
 
-def test_a_skill_carries_its_own_element(content: GameContent) -> None:
-    """Умение бьёт своей стихией, чем бы ни был его хозяин."""
-    from mmorpg.domain.entities.location import DamageElement
-    from mmorpg.domain.rules.combat import element_of
+def test_a_skill_carries_its_own_kind_of_damage(content: GameContent) -> None:
+    """Умение бьёт своим родом урона, чем бы ни был вооружён его хозяин."""
+    from mmorpg.domain.entities.damage import DamageType
+    from mmorpg.domain.rules.combat import damage_type_of
 
     warrior = caster("warrior", "human")
     striker = hero_combatant(content, warrior, combatant_id=1, side=0, live=True)
-    assert element_of(striker, None) is DamageElement.PHYSICAL
-    assert element_of(striker, spec_for("damage_fire")) is DamageElement.FIRE
-    assert element_of(striker, spec_for("damage_aoe_slow")) is DamageElement.COLD
+    # Без умения бьёт то, что в руках; голыми руками - дробящий.
+    assert damage_type_of(striker, None) is DamageType.BLUDGEONING
+    assert damage_type_of(striker, spec_for("damage_fire")) is DamageType.FIRE
+    assert damage_type_of(striker, spec_for("damage_piercing")) is DamageType.PIERCING
+    assert damage_type_of(striker, spec_for("damage_aoe_slow")) is DamageType.COLD
 
 
-def test_an_archetype_that_names_no_element_strikes_by_its_kind(content: GameContent) -> None:
+def test_an_archetype_that_names_no_damage_kind_strikes_by_its_breed(
+    content: GameContent,
+) -> None:
     from mmorpg.domain.procgen.enemies import element_of as archetype_element
 
     by_id = {archetype.id: archetype for archetype in content.enemy_archetypes}
-    assert str(archetype_element(by_id["grey_wolf"])) == "physical"
-    assert str(archetype_element(by_id["void_spawn"])) == "magic"
+    # Зверь рвёт, тварь бьёт по разуму, стихия огня - огнём.
+    assert str(archetype_element(by_id["grey_wolf"])) == "rending"
+    assert str(archetype_element(by_id["void_spawn"])) == "mental"
     assert str(archetype_element(by_id["fire_elemental"])) == "fire"
     # Объявленное содержимым сильнее породы: истукан бьёт камнем, а не чарами.
-    assert str(archetype_element(by_id["stone_golem"])) == "physical"
+    assert str(archetype_element(by_id["stone_golem"])) == "bludgeoning"
 
 
 def test_a_blow_aimed_at_a_body_already_down_does_not_raise(content: GameContent) -> None:
     """Удар, у которого не нашлось названной цели, находит живую и не падает."""
-    rogue = caster("rogue", "human", "rogue_poison_blade")
+    rogue = caster("rogue", "human", "rogue_otravlennyy_klinok")
     rogue = replace(
         rogue,
-        loadout=replace(rogue.loadout, ranks={"rogue_poison_blade": 1}),
+        loadout=replace(rogue.loadout, ranks={"rogue_otravlennyy_klinok": 1}),
         equipment=Equipment().equip("weapon", "dagger@6#uncommon"),
     )
     state = start(content, rogue, (enemy(), enemy(name="Второй")))

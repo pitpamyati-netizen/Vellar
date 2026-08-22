@@ -285,7 +285,7 @@ class PlayState:
         session_parts = [*data.get("session", []), "", 0, 0][:3]
         city_id, slot, node = session_parts
         descent_city, descent_level, depth, descent_started = data.get("descent", ["", 0, 0, 0])
-        # Раньше здесь лежала пара [вид, слот]: постоянные умения тоже клали в
+        # Раньше здесь лежала пара [вид, слот]: пассивные умения тоже клали в
         # слоты. Сохранённая пара читается как её второй член - номер слота.
         pick_raw = data.get("pick", 0)
         pick_slot = pick_raw[1] if isinstance(pick_raw, list) else pick_raw

@@ -17,7 +17,7 @@ from mmorpg.domain.entities.combat import (
 )
 from mmorpg.domain.entities.location import Enemy, EnemyKind
 from mmorpg.domain.rules.combat import act, hero_combatant, monster_combatant, open_battle
-from mmorpg.domain.rules.skill_effects import known_effects, spec_for
+from mmorpg.domain.rules.skill_effects import DAMAGE_TAGS, known_effects, spec_for
 
 SEED = b"combat-seed-0001"
 
@@ -43,10 +43,17 @@ def fighter(warrior: Character) -> Character:
         warrior,
         level=10,
         loadout=SkillLoadout(
-            actives=("warrior_cleave", "warrior_taunt", "warrior_shield_bash", None, None, None),
+            actives=(
+                "warrior_rassechenie",
+                "warrior_provokatsiya",
+                "warrior_udar_shchitom",
+                None,
+                None,
+                None,
+            ),
             racial="race_human_second_wind",
             # Постоянное умение слота не занимает: изучено - значит работает.
-            ranks={"warrior_toughness": 1},
+            ranks={"warrior_stoykost": 1},
         ),
     )
 
@@ -116,9 +123,21 @@ def test_every_content_effect_has_an_implementation(content: GameContent) -> Non
 
 
 def test_every_implemented_effect_is_used_by_content(content: GameContent) -> None:
-    """И в обратную сторону: мёртвых спецификаций в движке не держат."""
+    """И в обратную сторону: мёртвых спецификаций в движке не держат.
+
+    Кроме одной семьи: удар каждым родом урона объявлен целиком, все шестнадцать
+    родов и по цели, и по всем (``skill_effects.DAMAGE_TAGS``). Это не шестьдесят
+    четыре разных поведения, а одно, у которого объявлен род, - ровно так же, как
+    у снаряжения объявлен вид, а вещи собираются из него (ADR 0015). Содержимое
+    берёт из семьи то, что ему нужно, и незанятое не мёртвое: оно ждёт умения.
+    """
     used = {skill.effect for skill in content.skills if skill.kind is SkillKind.ACTIVE}
-    assert not sorted(known_effects() - used)
+    family = (
+        {"damage"}
+        | {f"damage_{tag}" for tag in DAMAGE_TAGS}
+        | {f"damage_aoe_{tag}" for tag in DAMAGE_TAGS}
+    )
+    assert not sorted(known_effects() - used - family)
 
 
 def test_spec_lookup_fails_loudly() -> None:
@@ -279,7 +298,7 @@ def test_a_skill_on_cooldown_is_refused_politely(content: GameContent, fighter: 
     state, roster = start(content, fighter, make_enemy(health=5_000))
     state = act(content, roster, state, BattleAction(kind=ActionKind.SKILL, slot=2), SEED)
     hero = state.by_id(1)
-    assert hero is not None and hero.cooldown_of("warrior_shield_bash") > 0
+    assert hero is not None and hero.cooldown_of("warrior_udar_shchitom") > 0
     blocked = act(content, roster, state, BattleAction(kind=ActionKind.SKILL, slot=2), SEED)
     assert any(event.kind is EventKind.ON_COOLDOWN for event in blocked.events)
 
@@ -289,13 +308,13 @@ def test_cooldowns_tick_down_and_expire(content: GameContent, fighter: Character
     state = act(content, roster, state, BattleAction(kind=ActionKind.SKILL, slot=2), SEED)
     hero = state.by_id(1)
     assert hero is not None
-    remaining = hero.cooldown_of("warrior_shield_bash")
+    remaining = hero.cooldown_of("warrior_udar_shchitom")
     assert remaining == 3
     for _ in range(remaining):
         state = attack(content, roster, state)
     hero = state.by_id(1)
     assert hero is not None
-    assert hero.cooldown_of("warrior_shield_bash") == 0
+    assert hero.cooldown_of("warrior_udar_shchitom") == 0
 
 
 def test_not_enough_resource_is_refused_politely(content: GameContent, fighter: Character) -> None:
@@ -308,7 +327,7 @@ def test_not_enough_resource_is_refused_politely(content: GameContent, fighter: 
 
 
 def test_rank_makes_a_skill_stronger(content: GameContent, fighter: Character) -> None:
-    ranked = replace(fighter, loadout=fighter.loadout.with_rank("warrior_cleave", 5))
+    ranked = replace(fighter, loadout=fighter.loadout.with_rank("warrior_rassechenie", 5))
     cleave = BattleAction(kind=ActionKind.SKILL, slot=0)
     seed = seed_for(1)
     plain, plain_roster = start(content, fighter, make_enemy(health=5_000), seed=seed)
@@ -328,7 +347,7 @@ def test_area_skills_hit_every_enemy(content: GameContent, fighter: Character) -
         # не срабатывает, и это проверяет отдельный тест.
         equipment=fighter.equipment.equip("weapon", "sword@1#common"),
         loadout=replace(
-            fighter.loadout, actives=("warrior_blade_whirl", None, None, None, None, None)
+            fighter.loadout, actives=("warrior_vikhr_klinkov", None, None, None, None, None)
         ),
     )
     state, roster = start(

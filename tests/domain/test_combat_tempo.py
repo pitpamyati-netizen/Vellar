@@ -23,8 +23,9 @@ from mmorpg.domain.entities.combat import (
     Trace,
     counter_to,
 )
-from mmorpg.domain.entities.effects import ActiveEffect
+from mmorpg.domain.entities.effects import ActiveEffect, status_effect
 from mmorpg.domain.entities.location import Enemy, EnemyKind
+from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.rules.combat import (
     INTENT_CYCLE,
     MOMENTUM_DAMAGE_PERCENT,
@@ -91,7 +92,15 @@ def fighter(warrior: Character) -> Character:
         warrior,
         level=100,
         loadout=SkillLoadout(
-            actives=("warrior_cleave", "warrior_taunt", "warrior_breach", None, None, None),
+            actives=(
+                # Натиск, оборона, точность: простой удар, провокация, пробой.
+                "warrior_sekushchiy_roscherk",
+                "warrior_provokatsiya",
+                "warrior_proboy_stroya",
+                None,
+                None,
+                None,
+            ),
             racial="race_human_second_wind",
         ),
     )
@@ -156,7 +165,7 @@ def test_a_skill_leaves_the_trace_its_effect_implies() -> None:
     assert tag_of(spec_for("damage_execute")) is ActionTag.PRECISION
     assert tag_of(spec_for("debuff_vulnerable")) is ActionTag.PRECISION
     assert tag_of(spec_for("heal")) is ActionTag.GUARD
-    assert tag_of(spec_for("shield")) is ActionTag.GUARD
+    assert tag_of(spec_for("barrier")) is ActionTag.GUARD
     assert tag_of(spec_for("buff_free_cast")) is ActionTag.GUARD
 
 
@@ -173,7 +182,7 @@ def test_every_content_effect_answers_with_a_tag(content: GameContent) -> None:
         try:
             spec = spec_for(skill.effect)
         except KeyError:
-            continue  # у постоянных умений прибавки, а не эффекты
+            continue  # у пассивных умений прибавки, а не эффекты
         assert tag_of(spec) in set(ActionTag), skill.code
 
 
@@ -483,7 +492,11 @@ def test_a_stunned_fighter_neither_moves_nor_breaks(
     hero = state.by_id(1)
     assert hero is not None
     state = state.replace_combatant(
-        replace(hero, stunned=1, trace=Trace((ActionTag.PRESS, ActionTag.GUARD)))
+        replace(
+            hero,
+            effects=hero.effects.apply(status_effect(StatusKind.STUN, turns=1)),
+            trace=Trace((ActionTag.PRESS, ActionTag.GUARD)),
+        )
     )
     after = act(content, roster, state, BattleAction(kind=ActionKind.SKILL, slot=2), seed_for(1))
     assert any(event.kind is EventKind.TURN_SKIPPED for event in after.events)

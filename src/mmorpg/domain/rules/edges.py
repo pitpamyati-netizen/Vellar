@@ -98,7 +98,7 @@ def applied(spec: EffectSpec, edge: EdgeEffect | None) -> EffectSpec:
         stun_turns=spec.stun_turns + edge.stun_turns,
         cleanse_count=spec.cleanse_count + edge.cleanse,
         bonus_heal=spec.bonus_heal + edge.heal,
-        bonus_shield=spec.bonus_shield + edge.shield,
+        bonus_barrier=spec.bonus_barrier + edge.barrier,
         duration=duration,
         self_modifiers=self_modifiers,
         target_modifiers=target_modifiers,

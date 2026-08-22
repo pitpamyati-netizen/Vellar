@@ -34,8 +34,10 @@ from mmorpg.domain.entities.combat import (
     Trace,
 )
 from mmorpg.domain.entities.content import GameContent
+from mmorpg.domain.entities.damage import DamageType
 from mmorpg.domain.entities.effects import ActiveEffect, EffectStack
-from mmorpg.domain.entities.location import DamageElement, Enemy, EnemyKind, EnemyRank
+from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
+from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.ports.repositories import StateCache
 from mmorpg.domain.rules.combat import hero_combatant, monster_combatant, open_battle
 
@@ -250,6 +252,8 @@ def _effects_to_json(stack: EffectStack) -> list[dict[str, object]]:
             "modifiers": dict(effect.modifiers),
             "turns": effect.turns_left,
             "good": effect.beneficial,
+            "status": effect.status.value if effect.status is not None else "",
+            "magnitude": effect.magnitude,
         }
         for effect in stack
     ]
@@ -265,6 +269,8 @@ def _effects_from_json(raw: list[dict[str, Any]]) -> EffectStack:
                 modifiers={str(key): float(value) for key, value in entry["modifiers"].items()},
                 turns_left=int(entry["turns"]),
                 beneficial=bool(entry["good"]),
+                status=StatusKind(kind) if (kind := entry.get("status")) else None,
+                magnitude=float(entry.get("magnitude", 0.0)),
             )
         )
     return stack
@@ -300,7 +306,7 @@ def _enemy_from_json(raw: Mapping[str, Any]) -> Enemy:
         rank=EnemyRank(raw["rank"]),
         loot=tuple(raw["loot"]),
         gold=int(raw["gold"]),
-        element=DamageElement(raw.get("element", DamageElement.PHYSICAL.value)),
+        element=DamageType(raw.get("element", DamageType.SLASHING.value)),
     )
 
 
@@ -323,8 +329,8 @@ def _combatant_to_json(one: Combatant) -> dict[str, object]:
         "enemy": _enemy_to_json(one.enemy) if one.enemy is not None else None,
         "effects": _effects_to_json(one.effects),
         "cooldowns": dict(one.cooldowns),
-        "shield": one.shield,
-        "stunned": one.stunned,
+        "barrier": one.barrier,
+        "damage_type": one.damage_type.value if one.damage_type is not None else "",
         "free_cast": one.free_cast,
         "evade": one.evade_charges,
         "trace": [tag.value for tag in one.trace.tags],
@@ -355,8 +361,8 @@ def _combatant_from_json(raw: Mapping[str, Any]) -> Combatant:
         cooldowns=MappingProxyType(
             {str(key): int(value) for key, value in raw["cooldowns"].items()}
         ),
-        shield=int(raw["shield"]),
-        stunned=int(raw["stunned"]),
+        barrier=int(raw.get("barrier", 0)),
+        damage_type=DamageType(kind) if (kind := raw.get("damage_type")) else None,
         free_cast=bool(raw["free_cast"]),
         evade_charges=int(raw["evade"]),
         trace=Trace(tuple(ActionTag(tag) for tag in raw.get("trace", ()))),

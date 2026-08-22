@@ -24,15 +24,24 @@ point, and that is price enough.
 
 | Source | Actives | Passives |
 | --- | --- | --- |
-| Class | 8, unlocked at levels 1, 4, 8, 14, 22, 35, 60, 100 | 6, unlocked at 2, 6, 12, 20, 30, 50 |
+| Class | 20, one every dozen-odd levels from 1 to 286 | 40, two between each pair of actives |
 | Race | 1 (racial slot) | 1, always on, occupies no slot |
 
-Total content: 8 classes x 14 + 16 races x 2 = **144 abilities**. On screen at any
+Total content: 8 classes x 60 + 16 races x 2 = **512 abilities**. On screen at any
 moment: **at most 7 action buttons**, and only the ones that do something.
 
-The player equips **6 of 8** actives. That gap is the build - the interest is in
+**Progression is even.** Sixty skills over three hundred levels is one skill per
+five, and a skill point per level is exactly what sixty skills at five ranks cost:
+by level 300 everything is learned and everything is maxed, and nothing along the
+way is a forty-level wait for the next button. The unlock levels live in
+`classes.toml [meta]`; the step grows a little with level because the level does,
+but there is no gap anywhere - the old table jumped from 60 straight to 100 and
+then said nothing for two hundred levels.
+
+The player equips **6 of 20** actives. That gap is the build - the interest is in
 choosing, not in accumulating. Passives are not part of that choice: every one
-learned is on.
+learned is on, and there are twice as many of them as of actives on purpose. A
+button is the scarce thing; a bonus is not.
 
 Race passives live in `races.toml` rather than the panel: they are inherent, always
 active, and take no slot - the same rule class passives now follow.
@@ -56,12 +65,12 @@ At **rank 3** the skill gains an **edge**: the player picks one of two
 modifications that change how it behaves, without adding a button.
 
 ```
-Рассечение, ранг 3. Выберите грань:
-— Кровопускание: цель теряет здоровье ещё 3 хода.
-— Размах: удар задевает вторую цель на 60 процентов урона.
+Секущий росчерк, ранг 3. Выберите грань:
+— Тяжёлая рука: урон выше на 25 процентов. Откат дольше на 1 ход.
+— Кровопускание: цель истекает кровью 3 хода.
 ```
 
-128 skills x 2 edges = 256 behaviours behind 7 buttons (a race passive has none:
+496 skills x 2 edges = 992 behaviours behind 7 buttons (a race passive has none:
 it is not in the panel and never bought with a point). Edges are re-picked at a
 city Mentor for gold, so a build is a decision, not a life sentence.
 
@@ -75,7 +84,7 @@ Seals.
 `skills.toml`, using the vocabulary in `domain/rules/edges.py`: a percentage or a
 number of turns per key (`power`, `cost`, `cooldown`, `duration`, `dot_turns`,
 `stun_turns`, `hits`, `splash`, `aoe`, `pierce`, `crit`, `lifesteal`, `cleanse`,
-`heal`, `shield`, `self_modifiers`, `target_modifiers`). `edges.applied` lays the
+`heal`, `barrier`, `self_modifiers`, `target_modifiers`). `edges.applied` lays the
 declaration over the skill's effect; the loader refuses an edge that declares
 nothing at all.
 
@@ -145,8 +154,8 @@ A skill's `power` in content is a **percentage**, never an absolute:
 | category | percentage of | 100 means |
 | --- | --- | --- |
 | damage | one roll of the weapon in hand | one plain "Атака" |
-| healing, shields | maximum health | a full bar |
-| buffs, debuffs | the modifier itself | +100% to that stat |
+| healing, barriers | maximum health | a full bar |
+| buffs, debuffs, statuses | the modifier itself | +100% to that stat |
 
 A damage skill may add dice of its own on top of the weapon roll:
 
@@ -201,13 +210,49 @@ What the engine reads that is easy to miss:
 
 - **situational damage** - by the target's kind (beast, undead, humanoid), by its
   tier, by how wounded it is, by your own low health, by the first turn, by one
-  target or all, and by whether the blow is a spell or a hand (a skill is a spell
-  when its effect carries an element tag);
+  target or all, and by whether the blow is a spell or a hand (which the blow's
+  kind of damage decides - the four physical kinds are a hand, the twelve magical
+  ones are a spell);
 - **tempo** - initiative *is* the queue: the whole fight is ordered by it, and
   that is what every "инициатива ниже на N процентов" in content buys (ADR 0021);
-- **shields expire** (`EffectSpec.shield_turns`), healing over time arrives once a
-  turn rather than all at once, and a counter, an undying stand and an immunity to
-  stuns are self-modifiers under private keys the combat engine reads by name.
+- **barriers expire** (`EffectSpec.barrier_turns`), healing over time arrives once
+  a turn rather than all at once, and a counter and an undying stand are
+  self-modifiers under private keys the combat engine reads by name.
+
+## Statuses
+
+Twenty of them, and no more (`domain/entities/statuses.py`). A status is an
+effect with a name from that list, and the name decides the rest: whether it
+helps or harms, what it adds, whether it gnaws at its holder each turn and with
+what kind of damage, and whether it takes the turn away.
+
+| what they do | statuses |
+| --- | --- |
+| gnaw each turn | горение, яд, кровотечение |
+| take the turn | оглушение, заморозка, страх |
+| take the choice | очарование, спутанность сознания, молчание |
+| bend the numbers | слабость, замедление, усиление, ускорение, берсерк |
+| forbid or hurry recovery | запрет лечения, запрет восстановления сил, ускоренное восстановление здоровья и сил |
+| absorb | барьер, неуязвимость |
+
+Three rules make them a system rather than twenty special cases:
+
+- **one key per status.** Burning from a wand and burning from an arrow are the
+  same burning: re-applying refreshes it and keeps the larger of the two sizes,
+  it never stacks a second copy.
+- **a status carries one number.** What it means is decided by the status:
+  percent of damage for weakness, damage per turn for burning, absorbed damage
+  for a barrier.
+- **the three that take a turn are three different things.** A stun is waited
+  out; a freeze is waited out and makes the next blow land harder; a fear is
+  shaken off by the first blow that lands. Charm and confusion do not take the
+  turn at all - they take the aim: the charmed fighter strikes their own side,
+  the confused one strikes whoever the dice pick.
+
+Content never spells a status out by hand: a skill's effect declares which one it
+applies and for how many turns (`skill_effects.Inflict`), and the screen reads the
+Russian name off the status itself. That is why «щит» is now «барьер» everywhere:
+it was a number on the fighter with no name, and now it is a status like the rest.
 
 ## Combat screen shape
 

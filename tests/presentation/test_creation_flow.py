@@ -119,7 +119,7 @@ def test_the_draft_becomes_a_playable_character(
     assert character.level == 1
     assert character.city_id == "farhold"
     # The first class active and the racial active are slotted; nothing else is.
-    assert character.loadout.actives[0] == "warrior_cleave"
+    assert character.loadout.actives[0] == "warrior_sekushchiy_roscherk"
     assert character.loadout.actives[1:] == (None,) * 5
     assert character.loadout.racial == "race_dwarf_ancestral_stance"
 

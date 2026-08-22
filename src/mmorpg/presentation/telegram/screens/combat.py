@@ -34,6 +34,7 @@ from mmorpg.domain.entities.combat import (
 )
 from mmorpg.domain.entities.content import GameContent, Skill
 from mmorpg.domain.entities.location import EnemyRank
+from mmorpg.domain.entities.statuses import StatusKind, status_name
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules.combat import (
     MOMENTUM_DAMAGE_PERCENT,
@@ -98,7 +99,7 @@ SPECIAL_NAMES: dict[str, str] = {
     "unstunnable": "вас нельзя оглушить",
     "companion": "зверь бьёт за вас",
     "heal_over_time": "лечение по ходам",
-    "cleanse_and_shield": "снимает эффекты и даёт щит",
+    "cleanse_and_barrier": "снимает эффекты и ставит барьер",
     "haste_self": "ускоряет вас",
 }
 
@@ -144,8 +145,8 @@ def skill_effect(
 
     if spec.category is EffectCategory.HEAL:
         return f"лечит {round(viewer.max_health * power / 100.0)}"
-    if spec.category is EffectCategory.SHIELD:
-        return _with_extras(f"щит {round(viewer.max_health * power / 100.0)}", spec)
+    if spec.category is EffectCategory.BARRIER:
+        return _with_extras(f"барьер {round(viewer.max_health * power / 100.0)}", spec)
     parts = (_modifier_phrase(spec, power), SPECIAL_NAMES.get(spec.special, ""))
     return ", ".join(part for part in parts if part) or "особое действие"
 
@@ -158,7 +159,13 @@ def _with_extras(line: str, spec: EffectSpec) -> str:
     if spec.stun_turns:
         extras.append(f"цель пропускает {turns(spec.stun_turns)}")
     if spec.dot_turns:
-        extras.append(f"и ещё {turns(spec.dot_turns)}")
+        extras.append(f"{status_name(spec.dot_status).lower()} на {turns(spec.dot_turns)}")
+    extras.extend(
+        f"{status_name(one.kind).lower()} цели на {turns(one.turns)}" for one in spec.inflicts
+    )
+    extras.extend(
+        f"вам {status_name(one.kind).lower()} на {turns(one.turns)}" for one in spec.holds
+    )
     if spec.special in SPECIAL_NAMES and spec.category is not EffectCategory.SPECIAL:
         extras.append(SPECIAL_NAMES[spec.special])
     if spec.cleanse_count and spec.category is not EffectCategory.CLEANSE:
@@ -274,8 +281,10 @@ def foe_line(state: BattleState, one: Combatant) -> str:
     rank = RANK_NAMES[one.rank]
     title = f"{one.id}. {one.name} ({rank})" if rank else f"{one.id}. {one.name}"
     line = f"{title}: здоровье {amount(one.health, one.max_health)}"
-    if one.shield:
-        line = f"{line}, щит {one.shield}"
+    if one.barrier:
+        line = f"{line}, барьер {one.barrier}"
+    if held := status_line(one):
+        line = f"{line}, {held}"
     intent = intent_of(state, one)
     if intent is None:
         return f"{line}. Ещё не бил: намерения не видно."
@@ -294,11 +303,27 @@ def ally_line(one: Combatant, *, viewer_id: int) -> str:
             )
     else:
         line = f"{one.id}. {one.name}: здоровье {amount(one.health, one.max_health)}"
-    if one.shield:
-        line = f"{line}, щит {one.shield}"
+    if one.barrier:
+        line = f"{line}, барьер {one.barrier}"
+    if held := status_line(one):
+        line = f"{line}, {held}"
     if not one.alive:
         return f"{line}. Вне боя."
     return f"{line}."
+
+
+def status_line(one: Combatant) -> str:
+    """Что висит на бойце, словами и с оставшимся сроком.
+
+    Состояния читаются вслух вместе со здоровьем: игрок обязан слышать, что он
+    горит, а не догадываться об этом по убывающей полоске (``docs/accessibility``).
+    """
+    held = sorted(one.effects.statuses(), key=lambda effect: effect.name)
+    return ", ".join(
+        f"{effect.name.lower()} {turns(effect.turns_left)}"
+        for effect in held
+        if effect.status is not None and effect.status is not StatusKind.BARRIER
+    )
 
 
 def trace_line(trace: Trace) -> str:
@@ -335,7 +360,8 @@ def describe_event(event: BattleEvent, viewer_id: int = 0) -> str:
         case EventKind.DAMAGE if you_hit:
             return f"Вы наносите {event.amount} урона, цель: {event.target}."
         case EventKind.DAMAGE if not event.actor:
-            return f"{event.target} теряет {event.amount} здоровья."
+            source = f" ({event.effect_name.lower()})" if event.effect_name else ""
+            return f"{event.target} теряет {event.amount} здоровья{source}."
         case EventKind.DAMAGE:
             return f"{event.actor} наносит {event.target}: {event.amount} урона."
         case EventKind.CRIT if you_hit:
@@ -356,15 +382,31 @@ def describe_event(event: BattleEvent, viewer_id: int = 0) -> str:
             return f"Вы восстанавливаете {event.amount} здоровья."
         case EventKind.HEAL:
             return f"{event.actor} восстанавливает {event.amount} здоровья."
-        case EventKind.SHIELD if you_hit:
-            return f"Вы получаете щит на {event.amount}."
-        case EventKind.SHIELD:
-            return f"{event.actor} получает щит на {event.amount}."
+        case EventKind.BARRIER if you_hit:
+            return f"Вы получаете барьер на {event.amount}."
+        case EventKind.BARRIER:
+            return f"{event.actor} получает барьер на {event.amount}."
         case EventKind.EFFECT_APPLIED:
             target = event.target or event.actor
             if (event.target_id or event.actor_id) == viewer_id:
                 target = "Вы"
             return f"{target}: наложен эффект {event.effect_name} на {turns(event.turns)}."
+        case EventKind.STATUS_APPLIED:
+            who = event.target or event.actor
+            if (event.target_id or event.actor_id) == viewer_id:
+                who = "Вы"
+            return f"{who}: {event.effect_name.lower()} на {turns(event.turns)}."
+        case EventKind.STATUS_ENDED:
+            who = "Вы" if you_hit else event.actor
+            return f"{who}: {event.effect_name.lower()} проходит."
+        case EventKind.IMMUNE if hit_you:
+            return f"{event.actor} бьёт вас, но вы неуязвимы."
+        case EventKind.IMMUNE:
+            return f"{event.target} неуязвим: удар не проходит."
+        case EventKind.SILENCED if you_hit:
+            return "Молчание: умением сейчас не воспользоваться."
+        case EventKind.SILENCED:
+            return f"{event.actor} молчит: умение не сработало."
         case EventKind.CLEANSED:
             return f"Снято отрицательных эффектов: {event.amount}."
         case EventKind.STUNNED if hit_you:
@@ -403,9 +445,11 @@ def describe_event(event: BattleEvent, viewer_id: int = 0) -> str:
         case EventKind.NO_TARGET:
             return "Этой цели в бою нет."
         case EventKind.TURN_SKIPPED if you_hit:
-            return "Вы пропускаете ход."
+            reason = f": {event.effect_name.lower()}" if event.effect_name else ""
+            return f"Вы пропускаете ход{reason}."
         case EventKind.TURN_SKIPPED:
-            return f"{event.actor} пропускает ход."
+            reason = f": {event.effect_name.lower()}" if event.effect_name else ""
+            return f"{event.actor} пропускает ход{reason}."
         case EventKind.MOMENTUM if you_hit:
             marks = plural(event.amount, "след", "следа", "следов")
             gain = percent(MOMENTUM_DAMAGE_PERCENT * (event.amount - 1))

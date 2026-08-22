@@ -12,6 +12,7 @@ from mmorpg.domain.rules.skill_effects import (
     recharged,
     spec_for,
 )
+from mmorpg.infrastructure.content.loader import ACTIVES_PER_CLASS, PASSIVES_PER_CLASS
 
 RACE_STAT_BUDGET = 3
 
@@ -75,11 +76,20 @@ def test_eight_classes(content: GameContent) -> None:
     assert len(content.classes) == 8
 
 
-def test_each_class_has_eight_actives_and_six_passives(content: GameContent) -> None:
+def test_each_class_has_twenty_actives_and_forty_passives(content: GameContent) -> None:
+    """Шестьдесят умений на класс, и пассивных вдвое больше боевых.
+
+    Пассивных большинство нарочно: боевое умение - это кнопка, а кнопок в панели
+    шесть, и они не растут (``docs/skills.md``). Всё остальное развитие идёт в
+    то, что работает изученным.
+    """
     for klass in content.classes:
         owner = f"class:{klass.id}"
-        assert len(content.skills_of(owner, SkillKind.ACTIVE)) == 8, klass.id
-        assert len(content.skills_of(owner, SkillKind.PASSIVE)) == 6, klass.id
+        actives = content.skills_of(owner, SkillKind.ACTIVE)
+        passives = content.skills_of(owner, SkillKind.PASSIVE)
+        assert len(actives) == ACTIVES_PER_CLASS, klass.id
+        assert len(passives) == PASSIVES_PER_CLASS, klass.id
+        assert len(passives) == 2 * len(actives), klass.id
 
 
 def test_class_unlock_levels_match_the_rules(content: GameContent) -> None:
@@ -95,13 +105,13 @@ def test_class_unlock_levels_match_the_rules(content: GameContent) -> None:
 def test_panel_size_is_fixed(content: GameContent) -> None:
     """The panel never grows: 6 active and 1 racial. See docs/skills.md.
 
-    Постоянных слотов нет вовсе: изученное постоянное умение работает, и выбор
+    Пассивных слотов нет вовсе: изученное пассивное умение работает, и выбор
     делается только из боевых.
     """
     rules = content.rules
     assert (rules.active_slots, rules.racial_slots) == (6, 1)
-    # There is always a real choice to make: 6 of 8 actives.
-    assert rules.active_slots < 8
+    # Выбор есть всегда: шесть слотов из двадцати боевых умений.
+    assert rules.active_slots < ACTIVES_PER_CLASS
 
 
 def test_every_skill_has_exactly_two_edges(content: GameContent) -> None:
@@ -123,13 +133,13 @@ def test_skill_codes_and_names_are_unique(content: GameContent) -> None:
 
 
 def test_skill_catalogue_size(content: GameContent) -> None:
-    """8 classes x 14 skills + 16 racial actives."""
-    assert len(content.skills) == 8 * 14 + 16
+    """8 классов по 60 умений плюс 16 расовых боевых."""
+    assert len(content.skills) == 8 * (ACTIVES_PER_CLASS + PASSIVES_PER_CLASS) + 16
 
 
 @pytest.mark.parametrize("rank", [1, 2, 3, 4, 5])
 def test_power_grows_with_rank(content: GameContent, rank: int) -> None:
-    skill = content.skill("warrior_cleave")
+    skill = content.skill("warrior_rassechenie")
     expected = skill.power * (1 + skill.rank_step * (rank - 1))
     assert skill.power_at_rank(rank) == pytest.approx(expected)
     assert skill.power_at_rank(rank) >= skill.power
@@ -146,16 +156,20 @@ def test_active_skills_cost_and_target_are_sane(content: GameContent) -> None:
 
 
 def test_class_skills_unlock_progressively(content: GameContent) -> None:
+    """Ровно по одному боевому умению на каждые пятнадцать уровней."""
+    rules = content.rules
     unlocked_at_1 = content.class_skills_up_to("warrior", 1, SkillKind.ACTIVE)
-    unlocked_at_100 = content.class_skills_up_to("warrior", 100, SkillKind.ACTIVE)
     assert len(unlocked_at_1) == 1
-    assert len(unlocked_at_100) == 8
+    for count, level in enumerate(rules.active_unlock_levels, start=1):
+        assert len(content.class_skills_up_to("warrior", level, SkillKind.ACTIVE)) == count
+    top = content.class_skills_up_to("warrior", 300, SkillKind.ACTIVE)
+    assert len(top) == ACTIVES_PER_CLASS
 
 
 def test_every_passive_points_at_a_modifier_the_engine_reads(content: GameContent) -> None:
-    """Постоянное умение обязано что-то делать, а не что-то обещать.
+    """Пассивное умение обязано что-то делать, а не что-то обещать.
 
-    Пятнадцать из сорока восьми классовых постоянных умений полгода называли
+    Пятнадцать из сорока восьми классовых пассивных умений полгода называли
     ключ, которого не считал никто: «физический урон выше», «урон по зверям
     выше», «часть полученного урона возвращается обидчику». Игрок вкладывал в них
     очко и получал строку на экране. Словарь ``traits.toml`` шире того, что

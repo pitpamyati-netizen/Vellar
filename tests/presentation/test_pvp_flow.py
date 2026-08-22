@@ -113,7 +113,7 @@ def a_fighter(name: str, account: int) -> Character:
         level=15,
         gold=500,
         loadout=SkillLoadout(
-            actives=("warrior_cleave", None, None, None, None, None),
+            actives=("warrior_rassechenie", None, None, None, None, None),
             racial="race_human_second_wind",
         ),
     )

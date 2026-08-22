@@ -8,10 +8,11 @@
 # Every biome used in world.toml must have at least three candidates - checked by
 # tests/content/test_enemies.py.
 #
-# element: чем этот противник бьёт - physical, magic, fire, cold, poison. Не
-# объявлено - решает порода: стихия и тварь бьют чарами, всё прочее железом. По
-# стихии считается сопротивление игрока, и без неё «Рождённый в стуже» и
-# «Стойкая кровь» были надписью без последствий (ADR 0018).
+# element: каким родом урона этот противник бьёт. Физические четыре - piercing,
+# slashing, bludgeoning, rending - и магические двенадцать; полный список в
+# entities/damage.py. Не объявлено - решает порода: зверь рвёт, гуманоид рубит,
+# нежить бьёт скверной, стихия - чарами, тварь - разумом. По роду урона считается
+# сопротивление цели, и без него «Рождённый в стуже» был надписью (ADR 0018).
 
 [meta]
 kinds = ["beast", "humanoid", "undead", "elemental", "aberration"]
@@ -230,7 +231,7 @@ loot = []
 id = "stone_golem"
 name = "Каменный истукан"
 kind = "elemental"
-element = "physical"
+element = "bludgeoning"
 biomes = ["горы", "карьер", "ущелье", "скалы", "кузни", "крепость", "шахта"]
 health = 1.6
 damage = 1.1
@@ -266,7 +267,7 @@ loot = []
 id = "storm_spirit"
 name = "Дух бури"
 kind = "elemental"
-element = "magic"
+element = "arcane"
 biomes = ["плато", "скалы", "небо", "горы", "аномалия", "вершина"]
 health = 0.9
 damage = 1.4
@@ -312,7 +313,7 @@ loot = ["grove_resin"]
 id = "guardian_construct"
 name = "Заводной страж"
 kind = "elemental"
-element = "physical"
+element = "bludgeoning"
 biomes = ["чертоги", "башня", "тронный зал", "крепость", "кузни", "галереи"]
 health = 1.5
 damage = 1.3

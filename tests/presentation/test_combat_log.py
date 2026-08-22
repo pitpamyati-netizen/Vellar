@@ -81,7 +81,7 @@ def test_a_button_says_what_weapon_it_needs(
         fighter,
         level=20,
         loadout=replace(
-            fighter.loadout, actives=("warrior_blade_whirl", None, None, None, None, None)
+            fighter.loadout, actives=("warrior_vikhr_klinkov", None, None, None, None, None)
         ),
     )
     viewer = sample_fight.by_id(HERO)
@@ -102,7 +102,7 @@ def test_the_refusal_is_read_out_when_the_button_is_pressed_anyway(
         fighter,
         level=20,
         loadout=replace(
-            fighter.loadout, actives=("warrior_blade_whirl", None, None, None, None, None)
+            fighter.loadout, actives=("warrior_vikhr_klinkov", None, None, None, None, None)
         ),
     )
     resolved = act(

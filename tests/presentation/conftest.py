@@ -118,11 +118,11 @@ def fighter(content: GameContent) -> Character:
         gold=400,
         health=90,
         loadout=SkillLoadout(
-            actives=("warrior_cleave", "warrior_taunt", None, None, None, None),
+            actives=("warrior_rassechenie", "warrior_provokatsiya", None, None, None, None),
             racial="race_human_second_wind",
             # Постоянное умение слота не занимает: изучено - значит работает.
             ranks=MappingProxyType(
-                {"warrior_cleave": 3, "warrior_taunt": 1, "warrior_toughness": 1}
+                {"warrior_rassechenie": 3, "warrior_provokatsiya": 1, "warrior_stoykost": 1}
             ),
         ),
         quests=QuestLog(taken=MappingProxyType({"farhold_tallies": 2})),
@@ -240,8 +240,8 @@ def sealbearer(fighter: Character) -> Character:
         ),
         loadout=replace(
             fighter.loadout,
-            ranks=MappingProxyType({"warrior_cleave": 5, "warrior_taunt": 5}),
-            edges=MappingProxyType({"warrior_cleave": "warrior_cleave_a"}),
+            ranks=MappingProxyType({"warrior_rassechenie": 5, "warrior_provokatsiya": 5}),
+            edges=MappingProxyType({"warrior_rassechenie": "warrior_rassechenie_a"}),
         ),
     )
 
@@ -641,7 +641,7 @@ def all_screens(
         skill_screens.slots_screen(content, fighter),
         skill_screens.pick_screen(content, fighter, 2, PageState()),
         skill_screens.pick_screen(content, hero, 0, PageState()),
-        skill_screens.edge_screen(content, fighter, content.skill("warrior_cleave")),
+        skill_screens.edge_screen(content, fighter, content.skill("warrior_rassechenie")),
         craft_screens.crafts_screen(content, hero),
         craft_screens.crafts_screen(content, craftsman),
         craft_screens.craft_screen(

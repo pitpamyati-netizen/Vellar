@@ -9,7 +9,7 @@ Three screens, and no more, because the panel itself never changes shape:
 A slot always keeps its number and its place, empty or not, so a player can learn
 the panel by position once and never relearn it (accessibility rule 7).
 
-Постоянные умения слотов не занимают: изученное работает, и укладывать его
+Пассивные умения слотов не занимают: изученное работает, и укладывать его
 некуда. Три слота из шести означали только то, что половина потраченных очков
 не считалась ни в одном бою.
 """
@@ -35,7 +35,7 @@ CLEAR_SLOT = label("Освободить слот")
 #: Разделы списка умений. Их ровно два, потому что умение либо жмут в бою, либо
 #: оно работает само; третьего вида в игре нет.
 ACTIVE_SECTION = "Боевые"
-PASSIVE_SECTION = "Постоянные"
+PASSIVE_SECTION = "Пассивные"
 SKILL_SECTIONS: tuple[str, ...] = (ACTIVE_SECTION, PASSIVE_SECTION)
 
 
@@ -97,7 +97,7 @@ def skill_detail(content: GameContent, skill: Skill) -> str:
 
 
 def skill_entry_text(content: GameContent, character: Character, skill: Skill) -> str:
-    kind = "боевое" if skill.is_active else "постоянное"
+    kind = "боевое" if skill.is_active else "пассивное"
     return f"{skill.name} — {kind}, {skill_state(content, character, skill)}"
 
 
@@ -123,7 +123,7 @@ def skills_screen(
     # рассказывает экран слотов - тот, на котором это и делают.
     lead = [
         notice or f"Умения. Очков умений: {character.unspent_skill_points}.",
-        f"Ваш уровень: {character.level}. Постоянные умения слотов не занимают.",
+        f"Ваш уровень: {character.level}. Пассивные умения слотов не занимают.",
     ]
     if not character.unspent_skill_points:
         lead.append("Очко умений даёт каждый новый уровень.")
@@ -163,7 +163,7 @@ def slots_screen(content: GameContent, character: Character, notice: str = "") -
         "Нажмите слот, чтобы положить в него умение.",
         f"Боевых слотов {rules.active_slots}, расовый один, и он не меняется.",
         f"Расовое умение: {racial}.",
-        "Постоянные умения слотов не занимают: изученное работает всегда.",
+        "Пассивные умения слотов не занимают: изученное работает всегда.",
     ]
     if working:
         lines.append(

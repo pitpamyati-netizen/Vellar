@@ -12,6 +12,7 @@ from collections.abc import Iterable, Mapping
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
+from mmorpg.domain.entities.damage import RESIST_KEYS
 from mmorpg.domain.entities.effects import EffectStack
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.rules import edges as edge_rules
@@ -55,14 +56,6 @@ EFFECTIVE_KEYS: frozenset[str] = frozenset(
         "accuracy_percent",
         "initiative_percent",
         "reflect_percent",
-        "resist_magic_percent",
-        "resist_physical_percent",
-        # Стихии. У чужого удара она есть с тех пор, как у противника появился
-        # ``element`` (``entities/location.DamageElement``); до этого три ключа
-        # лежали в словаре и не значили ничего.
-        "resist_fire_percent",
-        "resist_cold_percent",
-        "resist_poison_percent",
         "flee_chance_percent",
         # запасы
         "health_percent",
@@ -88,6 +81,10 @@ EFFECTIVE_KEYS: frozenset[str] = frozenset(
         "gather_yield_percent",
         "salvage_yield_percent",
     }
+    # Сопротивления: по одному на каждый род урона плюс два на половины -
+    # физическую и магическую. Считаются оба, и складываются
+    # (``combat.incoming_damage_factor``).
+    | RESIST_KEYS
     | {f"{STAT_MODIFIER_PREFIX}{code.value}" for code in StatCode}
 )
 
@@ -106,7 +103,7 @@ def trait_modifiers(content: GameContent, trait_ids: Iterable[str]) -> dict[str,
 
 
 def race_modifiers(content: GameContent, character: Character) -> Mapping[str, float]:
-    """Что даёт расовая постоянная способность.
+    """Что даёт расовая пассивная способность.
 
     Шестнадцать рас, шестнадцать названных вслух способностей - и ни одна из них
     не делала ничего: ``RacePassive`` был идентификатором, именем и текстом, а
@@ -152,10 +149,10 @@ def passive_modifiers(content: GameContent, character: Character) -> dict[str, f
     """Modifiers from every passive skill the character has learned.
 
     Изучено - значит работает. Раньше их укладывали в три слота из шести, и
-    очко, вложенное в седьмое постоянное умение, не делало ровно ничего: игрок
+    очко, вложенное в седьмое пассивное умение, не делало ровно ничего: игрок
     платил за прибавку, которую игра не считала.
 
-    Грань постоянного умения считается здесь и больше нигде: у постоянного умения
+    Грань пассивного умения считается здесь и больше нигде: у пассивного умения
     нет ни хода, ни цели, поэтому всё, что грань может ему сделать, - поднять его
     собственную прибавку и добавить свою. Долго не делалось и этого: половина
     выбранных граней в игре была надписью без последствий.
