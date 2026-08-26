@@ -1,7 +1,8 @@
 """Отряд: как он собирается и где лежит.
 
-Правила отряда - в ``domain/rules/party.py``; здесь только хранение и четыре
-действия, из которых оно состоит: позвать, согласиться, встать на место, уйти.
+Правила отряда - в ``domain/rules/party.py``; здесь только хранение и те
+действия, из которых оно состоит: завести, позвать, согласиться, уйти,
+расформировать.
 
 Всё со сроком. Отряд, о котором забыли, распадается сам через пару часов, а зов,
 на который не ответили, - через несколько минут: висящее приглашение, которое
@@ -12,7 +13,6 @@ from __future__ import annotations
 
 import json
 
-from mmorpg.domain.entities.party import PartyRole
 from mmorpg.domain.ports.repositories import StateCache
 from mmorpg.domain.rules.party import Party
 
@@ -59,14 +59,6 @@ class PartyStore:
         party = Party(
             leader_id=int(data["leader"]),
             members=tuple(int(one) for one in data["members"]),
-            # Отряд переживает выпуск игры так же, как экран: место, которого
-            # больше нет, читается как «без места», а не роняет вылазку
-            # (``Claude.md``, правило 8).
-            roles={
-                int(member): PartyRole(place)
-                for member, place in data.get("roles", {}).items()
-                if place in set(PartyRole)
-            },
         )
         return None if party.disbanded else party
 
@@ -76,17 +68,23 @@ class PartyStore:
             return
         await self._cache.set(
             self._party_key(party.leader_id),
-            json.dumps(
-                {
-                    "leader": party.leader_id,
-                    "members": list(party.members),
-                    "roles": {str(member): place.value for member, place in party.roles.items()},
-                }
-            ),
+            json.dumps({"leader": party.leader_id, "members": list(party.members)}),
             self._ttl,
         )
         for member in party.members:
             await self._cache.set(self._member_key(member), str(party.leader_id), self._ttl)
+
+    async def create(self, leader_id: int) -> Party | None:
+        """Завести отряд. ``None`` - этот игрок уже в отряде.
+
+        Отряд из одного человека - это отряд: он заведён нарочно, и звать в него
+        можно с первой же минуты (``domain/rules/party.py``).
+        """
+        if await self.of(leader_id) is not None:
+            return None
+        party = Party(leader_id=leader_id)
+        await self.save(party)
+        return party
 
     async def disband(self, party: Party) -> None:
         """Распустить отряд. Тот, кто ушёл последним, гасит свет."""
@@ -109,36 +107,29 @@ class PartyStore:
     async def accept(self, invitee_id: int) -> Party | None:
         """Согласиться идти вместе. ``None`` - звать уже некому.
 
-        Отряд заводится в тот момент, когда зов приняли: отряд из одного - это
-        просто игрок, и заводить под него запись незачем.
+        Отряд к этому времени уже заведён: звать умеет только тот, у кого он
+        есть. Распущенный, пока зов висел, отряд заново не собирается - зов
+        просто оказался ни к чему.
         """
         leader_id = await self.called_by(invitee_id)
         await self.forget_call(invitee_id)
         if not leader_id or leader_id == invitee_id:
             return None
-        party = await self.by_leader(leader_id) or Party(leader_id=leader_id)
+        party = await self.by_leader(leader_id)
+        if party is None:
+            return None
         if party.full or party.has(invitee_id):
             return party
         joined = party.with_member(invitee_id)
         await self.save(joined)
         return joined
 
-    async def take_role(self, character_id: int, role: PartyRole | None) -> Party | None:
-        """Занять место в отряде или освободить его. ``None`` - отряда нет.
-
-        Занятое чужим место не отбирается: ``Party.with_role`` вернёт тот же
-        отряд, и сказать об этом - дело того, кто спрашивал
-        (``domain/rules/party.role_refusal``).
-        """
-        party = await self.of(character_id)
-        if party is None:
-            return None
-        updated = party.with_role(character_id, role)
-        await self.save(updated)
-        return updated
-
     async def leave(self, character_id: int) -> Party | None:
-        """Уйти из отряда. Ушёл собравший - отряда больше нет."""
+        """Уйти из отряда. Ушёл собравший - отряда больше нет.
+
+        Оставшийся один собравший остаётся с заведённым отрядом: расформировать
+        его - отдельное движение, а не побочный итог чужого ухода.
+        """
         party = await self.of(character_id)
         if party is None:
             return None

@@ -55,9 +55,10 @@ def screen() -> Screen:
         ("/бой защита", Intent.DEFEND),
         ("/отряд", Intent.PARTY),
         ("/отряд принять", Intent.PARTY_ACCEPT),
-        ("/отряд щит", Intent.PARTY_ROLE),
-        ("/отряд снять", Intent.PARTY_ROLE),
-        ("/party scout", Intent.PARTY_ROLE),
+        ("/отряд создать", Intent.PARTY_CREATE),
+        ("/отряд расформировать", Intent.PARTY_DISBAND),
+        ("/отряд пригласить", Intent.PARTY_INVITE),
+        ("/party invite", Intent.PARTY_INVITE),
     ],
 )
 def test_every_action_has_a_typed_duplicate(text: str, intent: Intent) -> None:
@@ -66,11 +67,11 @@ def test_every_action_has_a_typed_duplicate(text: str, intent: Intent) -> None:
     assert parsed.intent is intent
 
 
-def test_a_party_place_command_carries_the_word() -> None:
-    """Слово места едет с командой: разбирать его - дело хендлера отряда."""
-    parsed = parse_command("/отряд лекарь")
+def test_an_unknown_party_word_opens_the_party_screen() -> None:
+    """Незнакомое слово отряда - это не отказ: игрока ведут туда, где он всё увидит."""
+    parsed = parse_command("/отряд щит")
     assert parsed is not None
-    assert (parsed.intent, parsed.argument) == (Intent.PARTY_ROLE, "лекарь")
+    assert (parsed.intent, parsed.argument) == (Intent.PARTY, "щит")
 
 
 def test_skill_and_page_commands_carry_numbers() -> None:

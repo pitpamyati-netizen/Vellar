@@ -138,6 +138,15 @@ def render(content: GameContent, outcome: GroupOutcome) -> GroupReply:
                     _sides("Отправитель", outcome.author_name, "Получатель", outcome.target_name),
                 )
             )
+        case GroupResult.PARTY_INVITED:
+            return GroupReply(
+                text=_lines(
+                    f"Зов в отряд: {outcome.target_name}.",
+                    _sides("Зовёт", outcome.author_name, "Позван", outcome.target_name),
+                    "Согласие даёт позванный сам, в личных сообщениях боту: "
+                    "«/отряд принять» или «/отряд отказать».",
+                )
+            )
         case GroupResult.OFFER_MADE | GroupResult.OFFER_ACCEPTED | GroupResult.OFFER_DECLINED:
             if outcome.offer is None:  # pragma: no cover
                 return GroupReply(text=REFUSALS[Refusal.UNKNOWN_OFFER])
@@ -220,6 +229,10 @@ def _duty(price: int, tax: int) -> str:
 
 def refusal_text(outcome: GroupOutcome) -> str:
     """Отказ всегда говорит, в чём отказано, а потом почему."""
+    # Отряд отказывает целой фразой, потому что причин у него ровно столько,
+    # сколько чисел в правиле (``domain/rules/party.invite_refusal``).
+    if outcome.reason:
+        return outcome.reason
     if outcome.refusal is None:  # pragma: no cover
         return REFUSALS[Refusal.UNKNOWN_OFFER]
     reason = REFUSALS[outcome.refusal]

@@ -64,6 +64,8 @@ class ScreenId(StrEnum):
     TURNING = "turning"
     NPCS = "npcs"
     NPC = "npc"
+    PARTY = "party"
+    PARTY_INVITE = "party_invite"
     SETTINGS = "settings"
     TUTORIAL = "tutorial"
     KEEPER = "keeper"

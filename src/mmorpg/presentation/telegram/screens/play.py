@@ -142,7 +142,8 @@ def main_menu_screen(
         (labels.WORLD,),
         (labels.CHARACTER, labels.INVENTORY),
         (labels.SKILLS, labels.QUESTS),
-        (labels.CRAFTS, labels.SETTINGS),
+        (labels.CRAFTS, labels.PARTY),
+        (labels.SETTINGS,),
     ]
     # Вступление предлагают, пока ему есть что сказать, а потом оно уходит навсегда:
     # вечная кнопка «обучение» на разыгранном персонаже - это кнопка, отвечающая на

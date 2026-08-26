@@ -37,7 +37,6 @@ from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.damage import DamageType
 from mmorpg.domain.entities.effects import ActiveEffect, EffectStack
 from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
-from mmorpg.domain.entities.party import PartyRole
 from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.ports.repositories import StateCache
 from mmorpg.domain.rules.combat import hero_combatant, monster_combatant, open_battle
@@ -121,7 +120,6 @@ def begin(
     node: int = 0,
     wave: int = 0,
     depth: int = 0,
-    roles: Mapping[int, PartyRole] | None = None,
 ) -> tuple[BattleSession, dict[int, Character]]:
     """Собрать бой из тех, кто в нём участвует.
 
@@ -129,11 +127,7 @@ def begin(
     слепок противника на арене ходит сам, но дерётся своими умениями. Второй
     член ответа - персонажи по номерам бойцов: по нему движок читает умения и
     оружие (``domain/rules/combat.act``).
-
-    ``roles`` - места в отряде по номеру персонажа, с обеих сторон разом: в бою
-    отряда против отряда щит стоит у каждой (``domain/rules/party.py``).
     """
-    places = dict(roles or {})
     combatants: list[Combatant] = []
     roster: dict[int, Character] = {}
     next_id = 1
@@ -146,7 +140,6 @@ def begin(
                 combatant_id=next_id,
                 side=0,
                 live=live,
-                role=places.get(character.id),
             )
         )
         roster[next_id] = character
@@ -160,7 +153,6 @@ def begin(
                 combatant_id=next_id,
                 side=1,
                 live=live,
-                role=places.get(character.id),
             )
         )
         roster[next_id] = character
@@ -357,7 +349,6 @@ def _combatant_to_json(one: Combatant) -> dict[str, object]:
         "evade": one.evade_charges,
         "trace": [tag.value for tag in one.trace.tags],
         "focus": one.focus,
-        "role": one.role.value if one.role is not None else "",
         "left": one.left,
         "breached": one.breached,
     }
@@ -390,7 +381,6 @@ def _combatant_from_json(raw: Mapping[str, Any]) -> Combatant:
         evade_charges=int(raw["evade"]),
         trace=Trace(tuple(ActionTag(tag) for tag in raw.get("trace", ()))),
         focus=int(raw.get("focus", 0)),
-        role=PartyRole(place) if (place := raw.get("role")) else None,
         left=bool(raw.get("left", False)),
         breached=bool(raw.get("breached", False)),
     )

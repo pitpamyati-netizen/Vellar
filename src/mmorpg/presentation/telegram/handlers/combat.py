@@ -38,7 +38,6 @@ from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import ActionKind, BattleAction, Combatant, EventKind, Verdict
 from mmorpg.domain.entities.content import GameContent, ItemKind
 from mmorpg.domain.entities.location import EnemyRank, LocationState
-from mmorpg.domain.entities.party import PartyRole
 from mmorpg.domain.ports.repositories import (
     CharacterRepository,
     InventoryRepository,
@@ -147,14 +146,13 @@ async def open_fight(
             await _show(message, state, content, character, session, storage=storage, emoji=emoji)
             return
 
-    allies, places = await _party_of(character, parties, characters, store)
+    allies = await _party_of(character, parties, characters, store)
     session, roster = await _spawn(
         message,
         content=content,
         settings=settings,
         character=character,
         allies=allies,
-        places=places,
         flow=flow,
         characters=characters,
         store=store,
@@ -185,19 +183,16 @@ async def _party_of(
     parties: PartyStore,
     characters: CharacterRepository,
     store: BattleStore,
-) -> tuple[tuple[Character, ...], dict[int, PartyRole]]:
-    """Кто идёт вместе с этим игроком и кто на каком месте стоит.
+) -> tuple[Character, ...]:
+    """Кто идёт в этот бой вместе с игроком.
 
-    Занятые чужим боем остаются дома, и место с ними: щит, которого в бою нет,
-    ничего не держит (``domain/rules/party.py``).
+    Занятые чужим боем остаются дома: в двух боях сразу не стоит никто
+    (``domain/rules/party.py``).
     """
     party = await parties.of(character.id)
     if party is None:
-        return (), {}
+        return ()
     companions: list[Character] = []
-    places: dict[int, PartyRole] = {}
-    if (mine := party.role_of(character.id)) is not None:
-        places[character.id] = mine
     for member_id in party.members:
         if member_id == character.id:
             continue
@@ -205,11 +200,9 @@ async def _party_of(
         if other is None or await store.busy(other.id) is not None:
             continue
         companions.append(other)
-        if (place := party.role_of(member_id)) is not None:
-            places[other.id] = place
         if len(companions) + 1 >= party_rules.MAX_MEMBERS:
             break
-    return tuple(companions), places
+    return tuple(companions)
 
 
 async def _spawn(
@@ -219,7 +212,6 @@ async def _spawn(
     settings: Settings,
     character: Character,
     allies: tuple[Character, ...],
-    places: Mapping[int, PartyRole],
     flow: PlayState,
     characters: CharacterRepository,
     store: BattleStore,
@@ -237,7 +229,6 @@ async def _spawn(
             content=content,
             character=character,
             allies=allies,
-            places=places,
             flow=flow,
             characters=characters,
             store=store,
@@ -277,7 +268,6 @@ async def _spawn(
             content,
             battle_id=battle_id,
             attackers=side,
-            roles=places,
             enemies=enemies,
             seed=seed,
             kind=BattleKind.DESCENT,
@@ -304,7 +294,6 @@ async def _spawn(
         content,
         battle_id=battle_id,
         attackers=side,
-        roles=places,
         enemies=enemies,
         seed=seed,
         kind=BattleKind.NODE,
@@ -322,7 +311,6 @@ async def _spawn_duel(
     content: GameContent,
     character: Character,
     allies: tuple[Character, ...],
-    places: Mapping[int, PartyRole],
     flow: PlayState,
     characters: CharacterRepository,
     store: BattleStore,
@@ -345,12 +333,8 @@ async def _spawn_duel(
         return None, {}
 
     defenders: list[tuple[Character, bool]] = [(target, True)]
-    # Места считаются с обеих сторон: щит стоит и у тех, на кого напали.
-    both: dict[int, PartyRole] = dict(places)
     party = await parties.of(target.id)
     if party is not None:
-        if (theirs := party.role_of(target.id)) is not None:
-            both[target.id] = theirs
         for member_id in party.members:
             if member_id == target.id or len(defenders) >= party_rules.MAX_MEMBERS:
                 continue
@@ -358,8 +342,6 @@ async def _spawn_duel(
             if other is None or await store.busy(other.id) is not None:
                 continue
             defenders.append((other, True))
-            if (place := party.role_of(member_id)) is not None:
-                both[other.id] = place
 
     seed = derive("duel", character.id, target.id, flow.session.node, battle_id)
     return begin(
@@ -367,7 +349,6 @@ async def _spawn_duel(
         battle_id=battle_id,
         attackers=[(character, True), *((one, True) for one in allies)],
         defenders=defenders,
-        roles=both,
         seed=seed,
         kind=BattleKind.DUEL,
         owner=character.id,

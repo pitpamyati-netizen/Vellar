@@ -44,6 +44,7 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from mmorpg import economy_log
+from mmorpg.application.services.party import PartyStore
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.trade import (
@@ -59,6 +60,7 @@ from mmorpg.domain.ports.repositories import (
     PrivacyRepository,
     TradeRepository,
 )
+from mmorpg.domain.rules import party as party_rules
 from mmorpg.domain.rules.economy import payout, refund, trade_tax
 from mmorpg.domain.rules.group_commands import GroupCommand, GroupIntent
 from mmorpg.domain.rules.group_offers import (
@@ -214,6 +216,7 @@ class GroupResult(StrEnum):
     OFFER_MADE = "offer_made"
     OFFER_ACCEPTED = "offer_accepted"
     OFFER_DECLINED = "offer_declined"
+    PARTY_INVITED = "party_invited"
     REFUSED = "refused"
 
 
@@ -235,6 +238,11 @@ class GroupOutcome:
     target_name: str = ""
     # Кандидаты, стоящие за AMBIGUOUS_ITEM, чтобы ответ мог их перечислить.
     options: tuple[str, ...] = ()
+    # Отказ, у которого нет своего названия: правила отряда отказывают целой
+    # фразой, и придумывать ей ещё и имя незачем (``domain/rules/party.py``).
+    reason: str = ""
+    # Кого позвали в отряд: телеграм-номер, чтобы зов дошёл и в личные сообщения.
+    invited_user_id: int = 0
 
 
 def _refused(
@@ -268,6 +276,9 @@ class GroupTrade:
     inventory: InventoryRepository
     trades: TradeRepository
     privacy: PrivacyRepository
+    # Отряд лежит не в базе, а в хранилище со сроком, поэтому он приходит
+    # отдельно (``application/services/party.py``).
+    parties: PartyStore | None = None
     # Предложения нумеруются внутри группы, поэтому две группы никогда не дерутся за
     # «принять 7».
     scope: str = "group"
@@ -338,6 +349,8 @@ class GroupTrade:
                     stats=derived_stats(self.content, target_character),
                     target_name=target.name,
                 )
+            case GroupIntent.PARTY_INVITE:
+                return await self._invite(author, author_character, target, target_character)
             case GroupIntent.GIVE_GOLD:
                 return await self._give_gold(command, author, target)
             case GroupIntent.GIVE_ITEM:
@@ -346,6 +359,47 @@ class GroupTrade:
             # разобраны выше, а других намерений разборщик не порождает.
             case _:
                 return await self._propose(command, author, target, now=now)
+
+    # --- отряд ----------------------------------------------------------
+
+    async def _invite(
+        self,
+        author: Party,
+        inviter: Character,
+        target: Party,
+        invitee: Character,
+    ) -> GroupOutcome:
+        """Позвать в отряд ответом на сообщение. Согласие даёт позванный сам.
+
+        Отряд к этому времени уже заведён: звать умеет только тот, у кого он
+        есть (``domain/rules/party.invite_refusal``). Правило одно на все три
+        дороги - имя, кнопку на узле и этот ответ в группе.
+        """
+        if self.parties is None:  # pragma: no cover - отряд есть везде, где есть игра
+            return GroupOutcome(result=GroupResult.REFUSED, reason="Отряды сейчас недоступны.")
+        mine = await self.parties.of(author.character_id)
+        theirs = await self.parties.of(target.character_id)
+        refused = party_rules.invite_refusal(
+            inviter_level=inviter.level,
+            invitee_name=target.name,
+            invitee_level=invitee.level,
+            party=mine,
+            invitee_in_party=theirs is not None,
+        )
+        if refused or mine is None:
+            return GroupOutcome(
+                result=GroupResult.REFUSED,
+                reason=refused,
+                author_name=author.name,
+                target_name=target.name,
+            )
+        await self.parties.call(leader_id=mine.leader_id, invitee_id=target.character_id)
+        return GroupOutcome(
+            result=GroupResult.PARTY_INVITED,
+            author_name=author.name,
+            target_name=target.name,
+            invited_user_id=target.user_id,
+        )
 
     # --- приватность --------------------------------------------------
 

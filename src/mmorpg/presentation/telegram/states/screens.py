@@ -66,6 +66,8 @@ class Play(StatesGroup):
     turning = State()
     npcs = State()
     npc = State()
+    party = State()
+    party_invite = State()
     settings = State()
     tutorial = State()
     keeper = State()
@@ -129,6 +131,8 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.TURNING: Play.turning,
     ScreenId.NPCS: Play.npcs,
     ScreenId.NPC: Play.npc,
+    ScreenId.PARTY: Play.party,
+    ScreenId.PARTY_INVITE: Play.party_invite,
     ScreenId.SETTINGS: Play.settings,
     ScreenId.TUTORIAL: Play.tutorial,
     ScreenId.KEEPER: Play.keeper,
@@ -192,6 +196,8 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.TURNING: ScreenId.CHAMBER,
     ScreenId.NPCS: ScreenId.CITY,
     ScreenId.NPC: ScreenId.NPCS,
+    ScreenId.PARTY: ScreenId.MAIN_MENU,
+    ScreenId.PARTY_INVITE: ScreenId.PARTY,
     ScreenId.SETTINGS: ScreenId.MAIN_MENU,
     ScreenId.TUTORIAL: ScreenId.MAIN_MENU,
     ScreenId.KEEPER: ScreenId.MAIN_MENU,

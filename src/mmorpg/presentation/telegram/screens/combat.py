@@ -34,7 +34,6 @@ from mmorpg.domain.entities.combat import (
 )
 from mmorpg.domain.entities.content import GameContent, Skill
 from mmorpg.domain.entities.location import EnemyRank
-from mmorpg.domain.entities.party import role_name
 from mmorpg.domain.entities.statuses import StatusKind, status_name
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules.combat import (
@@ -306,7 +305,7 @@ def foe_line(state: BattleState, one: Combatant) -> str:
     чужой выбор нельзя, но выбрать ответ на привычку можно, и это ровно та же
     игра, что и с намерением породы (ADR 0021).
     """
-    rank = RANK_NAMES[one.rank] or (role_name(one.role) if one.role is not None else "")
+    rank = RANK_NAMES[one.rank]
     title = f"{one.id}. {one.name} ({rank})" if rank else f"{one.id}. {one.name}"
     line = f"{title}: здоровье {amount(one.health, one.max_health)}"
     if one.barrier:
@@ -321,21 +320,20 @@ def foe_line(state: BattleState, one: Combatant) -> str:
 
 
 def ally_line(one: Combatant, *, viewer_id: int) -> str:
-    """Строка о своём: место в отряде, здоровье, что висит. О себе - «вы».
+    """Строка о своём: здоровье, запас, что висит. О себе - «вы».
 
-    Место называется первым: в бою впятером «кого лечить» решается по нему, и
-    услышать его надо раньше числа (``entities/party.py``).
+    Мест в отряде нет, и называть у своего нечего, кроме имени и чисел: пятеро
+    в отряде дерутся тем, что каждый принёс (``domain/rules/party.py``).
     """
-    place = f" ({role_name(one.role).lower()})" if one.role is not None else ""
     if one.id == viewer_id:
-        line = f"Вы{place}: здоровье {amount(one.health, one.max_health)}"
+        line = f"Вы: здоровье {amount(one.health, one.max_health)}"
         if one.max_resource:
             line = (
                 f"{line}, {one.resource_name.lower()} "
                 f"{amount(one.resource, one.max_resource, with_percent=False)}"
             )
     else:
-        line = f"{one.id}. {one.name}{place}: здоровье {amount(one.health, one.max_health)}"
+        line = f"{one.id}. {one.name}: здоровье {amount(one.health, one.max_health)}"
     if one.barrier:
         line = f"{line}, барьер {one.barrier}"
     if held := status_line(one):

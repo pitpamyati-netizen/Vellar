@@ -182,6 +182,9 @@ BATTLE_YIELD = label("Сдаться", "🏳")
 # --- отряд (``domain/rules/party.py``) ---
 
 PARTY = label("Отряд", "🤝")
+PARTY_CREATE = label("Создать отряд", "🤝")
+PARTY_DISBAND = label("Расформировать отряд", "🚪")
+PARTY_INVITE = label("Пригласить в отряд", "✉️")
 PARTY_ACCEPT = label("Пойти вместе", "🤝")
 PARTY_DECLINE = label("Отказаться", "🙅")
 PARTY_LEAVE = label("Покинуть отряд", "🚪")

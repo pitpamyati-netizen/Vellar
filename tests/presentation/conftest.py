@@ -53,6 +53,7 @@ from mmorpg.presentation.telegram.screens import crafts as craft_screens
 from mmorpg.presentation.telegram.screens import creation, play, shop
 from mmorpg.presentation.telegram.screens import items as item_screens
 from mmorpg.presentation.telegram.screens import keeper as keeper_screens
+from mmorpg.presentation.telegram.screens import party as party_screens
 from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import skills as skill_screens
 from mmorpg.presentation.telegram.screens import tutorial as tutorial_screens
@@ -606,6 +607,16 @@ def all_screens(
             replace(fighter, unspent_stat_points=4),
             derived_stats(content, fighter),
         ),
+        party_screens.party_screen(party_screens.PartyView()),
+        party_screens.party_screen(
+            party_screens.PartyView(members=("Аргус", "Мирна"), leader=True),
+            notice="Отряд создан.",
+        ),
+        party_screens.party_screen(
+            party_screens.PartyView(members=("Мирна", "Аргус"), caller="Тьен")
+        ),
+        party_screens.invite_screen(party_screens.PartyView(members=("Аргус",), leader=True)),
+        party_screens.invite_screen(party_screens.PartyView()),
         tutorial_screens.tutorial_screen(hero),
         tutorial_screens.tutorial_screen(replace(hero, tutorial=0b000111)),
         tutorial_screens.tutorial_screen(replace(hero, tutorial=0b111111)),

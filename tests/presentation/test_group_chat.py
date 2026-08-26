@@ -17,6 +17,7 @@ import pytest
 from aiogram.types import Chat, Message, User
 
 from mmorpg.application.services.group_trade import GroupOutcome, GroupResult
+from mmorpg.application.services.party import PartyStore
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
@@ -24,6 +25,7 @@ from mmorpg.domain.entities.trade import Offer, OfferKind, Party
 from mmorpg.domain.rules.economy import trade_tax
 from mmorpg.domain.rules.group_commands import GroupIntent, parse_group_command
 from mmorpg.domain.rules.group_offers import Refusal
+from mmorpg.infrastructure.cache.memory import InMemoryStateCache
 from mmorpg.infrastructure.persistence import (
     InMemoryCharacterRepository,
     InMemoryInventoryRepository,
@@ -146,6 +148,11 @@ def privacy() -> InMemoryPrivacyRepository:
 
 
 @pytest.fixture
+def cache() -> InMemoryStateCache:
+    return InMemoryStateCache()
+
+
+@pytest.fixture
 def bus(
     content: GameContent,
     settings: Settings,
@@ -153,6 +160,7 @@ def bus(
     inventory: InMemoryInventoryRepository,
     trades: InMemoryTradeRepository,
     privacy: InMemoryPrivacyRepository,
+    cache: InMemoryStateCache,
     reaper: MessageReaper,
 ):
     """Всё, что нужно ``handle_group_message``, одним вызовом."""
@@ -169,12 +177,13 @@ def bus(
             inventory=inventory,
             trades=trades,
             privacy=privacy,
+            state_cache=cache,
             limiter=limiter,
             reaper=reaper,
             now=now,
         )
 
-    return SimpleNamespace(deliver=deliver, bot=bot, limiter=limiter, privacy=privacy)
+    return SimpleNamespace(deliver=deliver, bot=bot, limiter=limiter, privacy=privacy, cache=cache)
 
 
 async def drain(reaper: MessageReaper) -> None:
@@ -748,3 +757,50 @@ def test_a_group_the_bot_does_not_answer_in_is_written_down(
     written = capsys.readouterr().out
     assert written.count("group_not_configured") == 1, "written down once, not every message"
     assert str(OTHER_CHAT) in written
+
+
+# --- зов в отряд ответом на сообщение ----------------------------------
+
+
+async def test_an_invite_needs_a_party_and_a_reply(
+    bus, argus_account: User, merla_account: User, world
+) -> None:
+    """Звать умеет тот, у кого отряд есть; выкрикнутое в комнату не зовёт никого."""
+    assert await bus.deliver(message("пригласить", sender=argus_account)) is None
+
+    target = message("я тут", sender=merla_account, message_id=1)
+    await bus.deliver(message("пригласить", sender=argus_account, reply_to=target, message_id=2))
+    assert "Создайте его" in bus.bot.sent[0]["text"]
+
+
+async def test_an_invite_from_the_group_reaches_the_one_who_was_called(
+    bus, argus_account: User, merla_account: User, world
+) -> None:
+    """Зов ответом на сообщение кладётся в отряд и доходит в личные сообщения."""
+    parties = PartyStore(bus.cache)
+    await parties.create(world["Аргус"].id)
+
+    target = message("я тут", sender=merla_account, message_id=1)
+    await bus.deliver(message("пригласить", sender=argus_account, reply_to=target, message_id=2))
+
+    said = [posted for posted in bus.bot.sent if posted["chat_id"] == GROUP_ID]
+    assert said and said[0]["text"].startswith("Зов в отряд: Мерла.")
+    whispered = [posted for posted in bus.bot.sent if posted["chat_id"] == MERLA_ACCOUNT]
+    assert whispered and "зовёт вас в отряд" in whispered[0]["text"]
+
+    assert await parties.called_by(world["Мерла"].id) == world["Аргус"].id
+    joined = await parties.accept(world["Мерла"].id)
+    assert joined is not None and joined.members == (world["Аргус"].id, world["Мерла"].id)
+
+
+async def test_an_invite_is_refused_to_the_one_who_drew_the_line(
+    bus, argus_account: User, merla_account: User, world
+) -> None:
+    """Чёрный список закрывает и зов: он такое же дело, как обмен."""
+    await PartyStore(bus.cache).create(world["Аргус"].id)
+    await bus.privacy.block(MERLA_ACCOUNT, ARGUS_ACCOUNT, at=NOW)
+
+    target = message("я тут", sender=merla_account, message_id=1)
+    await bus.deliver(message("пригласить", sender=argus_account, reply_to=target, message_id=2))
+
+    assert bus.bot.sent[0]["text"] == group_screens.REFUSALS[Refusal.BLOCKED_BY_TARGET]

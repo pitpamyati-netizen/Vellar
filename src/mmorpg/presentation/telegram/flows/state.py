@@ -222,6 +222,12 @@ class PlayState:
     #: Кого шаг попросил позвать в отряд. Переходное, как и ``fight``: хендлер
     #: читает и обнуляет, потому что звать умеет только он (``rules/party.py``).
     invite: int = 0
+    #: Кого попросили позвать по набранному имени - когда позванного нет рядом.
+    invite_name: str = ""
+    #: Что шаг попросил сделать с отрядом: ``create``, ``disband``, ``leave``,
+    #: ``accept``, ``decline``. Переходное, как и ``invite``: отряд лежит в общем
+    #: хранилище, а автомат не читает и не пишет ничего.
+    party_action: str = ""
 
     def at(self, screen: ScreenId) -> PlayState:
         return replace(self, screen=screen, stack=self.stack.push(screen), notice="")

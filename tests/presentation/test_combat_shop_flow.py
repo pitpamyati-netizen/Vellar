@@ -10,7 +10,6 @@ from mmorpg.application.services import battle as battle_service
 from mmorpg.domain.entities import Character, GameContent, SkillLoadout
 from mmorpg.domain.entities.combat import ActionKind, BattleAction, Verdict
 from mmorpg.domain.entities.location import Enemy, EnemyKind
-from mmorpg.domain.entities.party import PartyRole
 from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.rules.economy import buy_price, roll_assortment, sell_price
 from mmorpg.presentation.telegram.flows import combat as flow
@@ -319,7 +318,7 @@ def test_every_action_button_names_its_tag(
     assert "оборона" in texts[5], "the racial slot names its tag too"
 
 
-# --- защита, цели и места отряда --------------------------------------
+# --- защита, цели и отряд ---------------------------------------------
 
 
 def test_the_attack_button_says_how_much_it_takes_off(
@@ -382,10 +381,8 @@ def test_choosing_a_target_names_its_health_and_costs_no_turn(
     assert "Ваша цель:" in flow.render(content, fighter, aimed, HERO).text()
 
 
-def test_the_place_in_the_party_is_read_out_in_the_fight(
-    content: GameContent, fighter: Character
-) -> None:
-    """Кого лечить, решают по месту, и услышать его надо вместе со здоровьем."""
+def test_the_party_is_read_out_by_name_and_health(content: GameContent, fighter: Character) -> None:
+    """У своих есть имя и числа, и больше ничего: мест в отряде нет."""
     ally = replace(fighter, id=2, user_id=43, name="Мирна")
     session, _ = battle_service.begin(
         content,
@@ -393,11 +390,10 @@ def test_the_place_in_the_party_is_read_out_in_the_fight(
         attackers=[(fighter, True), (ally, True)],
         enemies=(make_enemy(),),
         seed=FIGHT_SEED,
-        roles={fighter.id: PartyRole.SHIELD, ally.id: PartyRole.MENDER},
     )
     text = flow.render(content, fighter, session, HERO).text()
-    assert "Вы (щит):" in text
-    assert "Мирна (лекарь):" in text
+    assert "Вы: здоровье" in text
+    assert "Мирна: здоровье" in text
 
 
 def test_the_plain_attack_word_still_works(

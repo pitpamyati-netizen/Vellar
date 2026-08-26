@@ -27,15 +27,18 @@ import time
 
 from aiogram import Bot, F, Router
 from aiogram.enums import ChatType
+from aiogram.exceptions import TelegramAPIError
 from aiogram.types import Chat, Message
 
 from mmorpg.application.services.group_trade import GroupResult, GroupTrade
+from mmorpg.application.services.party import PartyStore
 from mmorpg.config import ANY_GROUP, Settings
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.ports.repositories import (
     CharacterRepository,
     InventoryRepository,
     PrivacyRepository,
+    StateCache,
     TradeRepository,
 )
 from mmorpg.domain.rules.group_commands import UNADDRESSED, GroupIntent, parse_group_command
@@ -78,6 +81,7 @@ def build_router(reaper: MessageReaper, limiter: RateLimiter | None = None) -> R
         inventory: InventoryRepository,
         trades: TradeRepository,
         privacy: PrivacyRepository,
+        state_cache: StateCache,
     ) -> None:
         await handle_group_message(
             message,
@@ -88,6 +92,7 @@ def build_router(reaper: MessageReaper, limiter: RateLimiter | None = None) -> R
             inventory=inventory,
             trades=trades,
             privacy=privacy,
+            state_cache=state_cache,
             limiter=limits,
             reaper=reaper,
         )
@@ -139,6 +144,7 @@ async def handle_group_message(
     inventory: InventoryRepository,
     trades: TradeRepository,
     privacy: PrivacyRepository,
+    state_cache: StateCache,
     limiter: RateLimiter,
     reaper: MessageReaper,
     now: int | None = None,
@@ -181,6 +187,7 @@ async def handle_group_message(
         inventory=inventory,
         trades=trades,
         privacy=privacy,
+        parties=PartyStore(state_cache),
         scope=str(message.chat.id),
     )
     outcome = await trade.run(
@@ -190,6 +197,15 @@ async def handle_group_message(
         now=now if now is not None else int(time.time()),
     )
     reply = render(content, outcome)
+    # Зов, о котором сказали только в группе, ждёт человека там, где он его
+    # услышит: бот пишет позванному в личные сообщения, и там же тот отвечает.
+    if outcome.result is GroupResult.PARTY_INVITED and outcome.invited_user_id:
+        await _whisper(
+            bot,
+            outcome.invited_user_id,
+            f"{outcome.author_name} зовёт вас в отряд. "
+            "Наберите «/отряд принять», чтобы пойти вместе, или «/отряд отказать».",
+        )
 
     # Предложение привязано к сообщению того, кому предложили, чтобы кнопки видел только
     # он; всё остальное отвечает тому, кто заговорил.
@@ -205,6 +221,18 @@ async def handle_group_message(
         reaper=reaper,
         dismiss=answering and outcome.result in CLOSED,
     )
+
+
+async def _whisper(bot: Bot, telegram_id: int, text: str) -> None:
+    """Одна строка тому, кого позвали. Не дошло - значит не дошло.
+
+    Зов остался лежать в хранилище, и в игре его всё равно видно: ронять ход
+    того, кто звал, из-за закрытых личных сообщений не за что.
+    """
+    try:
+        await bot.send_message(chat_id=telegram_id, text=text)
+    except TelegramAPIError:
+        logger.info("party_notice_undelivered", telegram_id=telegram_id)
 
 
 async def _say(

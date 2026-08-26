@@ -63,6 +63,7 @@ from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import crafts as craft_screens
 from mmorpg.presentation.telegram.screens import format as format_screens
 from mmorpg.presentation.telegram.screens import items as item_screens
+from mmorpg.presentation.telegram.screens import party as party_screens
 from mmorpg.presentation.telegram.screens import play as screens
 from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import settings as settings_screens
@@ -77,6 +78,7 @@ from mmorpg.presentation.telegram.screens.paginated import (
     PageState,
     filters_screen,
 )
+from mmorpg.presentation.telegram.screens.party import PartyView
 from mmorpg.presentation.telegram.screens.shop import OwnedItem
 from mmorpg.presentation.telegram.states.screens import NavigationStack
 
@@ -226,6 +228,7 @@ def render(
     arena_table: Sequence[Character] = (),
     tally: Mapping[str, int] | None = None,
     keeper: KeeperView | None = None,
+    party: PartyView | None = None,
     location_state: LocationState | None = None,
 ) -> Screen:
     shelf = goods or Goods(gold=character.gold)
@@ -237,6 +240,10 @@ def render(
     if state.screen in KEEPER_SCREENS:
         return keeper_flow.render(content, character, state, keeper or KeeperView())
     match state.screen:
+        case ScreenId.PARTY:
+            return party_screens.party_screen(party or PartyView(), state.notice)
+        case ScreenId.PARTY_INVITE:
+            return party_screens.invite_screen(party or PartyView(), state.notice)
         case ScreenId.SETTINGS:
             return settings_screens.settings_screen(settings or DEFAULT_SETTINGS, state.notice)
         case ScreenId.LIST_FILTERS:
@@ -517,6 +524,7 @@ def advance(
     settings: AccessibilitySettings | None = None,
     neighbours: Sequence[Presence] = (),
     keeper: KeeperView | None = None,
+    party: PartyView | None = None,
     location_state: LocationState | None = None,
 ) -> PlayState:
     """Применить одно сообщение. Отвечает всегда; на неожиданный ввод не падает."""
@@ -571,6 +579,7 @@ def advance(
         clock=clock,
         neighbours=neighbours,
         keeper=view,
+        party=party,
         location_state=location_state,
     )
     command = resolve(text, screen)
@@ -610,9 +619,17 @@ def advance(
         if turned is not None:
             return with_list_page(state, turned).with_notice("")
 
-    state = replace(state, pending=PendingWrite(), fight="")
+    state = replace(
+        state, pending=PendingWrite(), fight="", invite=0, invite_name="", party_action=""
+    )
     shelf = goods or Goods(gold=character.gold)
     ticking = clock or Clock()
+
+    # Отряд отвечает откуда угодно: зов приходит туда, где игрок сейчас стоит, и
+    # соглашаться, уходя ради этого с экрана, ему не приходится
+    # (``domain/rules/party.py``).
+    if (with_party := _party_intent(state, command)) is not None:
+        return with_party
 
     if state.screen in KEEPER_SCREENS:
         return keeper_flow.advance(content, character, state, command, view)
@@ -678,6 +695,10 @@ def advance(
             return _handle_bank(content, character, state, command)
         case ScreenId.DUNGEON:
             return _handle_dungeon(content, character, state, command, clock=ticking)
+        case ScreenId.PARTY:
+            return state.with_notice("Нажмите кнопку отряда.")
+        case ScreenId.PARTY_INVITE:
+            return _handle_party_invite(state, command, text)
         case ScreenId.LOCATION_LIST:
             return _handle_location_list(content, character, state, command)
         case ScreenId.LOCATION:
@@ -1537,6 +1558,44 @@ def _handle_dungeon(
 
 
 # --- локации ----------------------------------------------------------
+
+
+# --- отряд ------------------------------------------------------------
+#
+# Автомат об отряде не знает ничего: он лежит в общем хранилище, а автомат не
+# читает и не пишет. Здесь только намерение - что игрок попросил сделать, - а
+# делает это хендлер (``handlers/play.py``).
+
+#: Намерение отряда и то слово, которым оно называется в состоянии.
+_PARTY_ACTIONS: dict[Intent, str] = {
+    Intent.PARTY_CREATE: "create",
+    Intent.PARTY_DISBAND: "disband",
+    Intent.PARTY_LEAVE: "leave",
+    Intent.PARTY_ACCEPT: "accept",
+    Intent.PARTY_DECLINE: "decline",
+}
+
+
+def _party_intent(state: PlayState, command: Command) -> PlayState | None:
+    """Шаг отряда, откуда бы его ни сделали. ``None`` - это был не он."""
+    if command.intent is Intent.PARTY:
+        return state.at(ScreenId.PARTY)
+    if command.intent is Intent.PARTY_INVITE:
+        return state.at(ScreenId.PARTY_INVITE)
+    action = _PARTY_ACTIONS.get(command.intent)
+    if action is None:
+        return None
+    # Экран остаётся тем же: зов приходит туда, где игрок стоит, и соглашаться
+    # он должен там же, не бросая ни боя, ни лавки.
+    return replace(state, party_action=action)
+
+
+def _handle_party_invite(state: PlayState, command: Command, text: str) -> PlayState:
+    """Набранное на этом экране - имя того, кого зовут, и больше ничего."""
+    name = text.strip()
+    if command.intent is not Intent.UNKNOWN or not name:
+        return state.with_notice("Напишите имя того, кого зовёте, одним сообщением.")
+    return replace(state, invite_name=name)
 
 
 def _handle_location_list(

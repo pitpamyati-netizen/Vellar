@@ -58,12 +58,6 @@ from mmorpg.domain.entities.damage import UNARMED, DamageType
 from mmorpg.domain.entities.dice import Dice
 from mmorpg.domain.entities.effects import ActiveEffect, EffectStack, status_effect
 from mmorpg.domain.entities.location import Enemy
-from mmorpg.domain.entities.party import (
-    SHIELD_HOLDS_ABOVE,
-    PartyRole,
-    modifiers_of,
-    role_name,
-)
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.entities.statuses import StatusKind, status_spec
 from mmorpg.domain.procgen import items as item_procgen
@@ -219,28 +213,6 @@ DEFEND_NAME = "Защита"
 # --- сборка бойцов ----------------------------------------------------
 
 
-def role_effect(role: PartyRole | None) -> ActiveEffect | None:
-    """Место в отряде как эффект: прибавки места и их цена, одним свёртком.
-
-    Держится весь бой и очищением не снимается: место - это не то, что на бойца
-    повесили, а то, кем он в этом бою стоит (``entities/effects.permanent``).
-    """
-    bundle = modifiers_of(role)
-    if role is None or not bundle:
-        return None
-    return ActiveEffect(
-        id=f"role:{role.value}",
-        name=role_name(role),
-        modifiers=dict(bundle),
-        # Срок у постоянного эффекта не считается вовсе; единица стоит затем,
-        # чтобы он не выглядел кончившимся ни для кого, кто прочтёт его число.
-        turns_left=1,
-        source="party",
-        beneficial=True,
-        permanent=True,
-    )
-
-
 def hero_combatant(
     content: GameContent,
     character: Character,
@@ -249,7 +221,6 @@ def hero_combatant(
     side: int,
     live: bool = True,
     user_id: int = 0,
-    role: PartyRole | None = None,
 ) -> Combatant:
     """Персонаж как боец.
 
@@ -257,16 +228,13 @@ def hero_combatant(
     дерётся тем же оружием и теми же умениями, что и его хозяин: выдуманного
     числа урона у него больше нет (ADR 0021).
 
-    ``role`` - место в отряде. Его прибавки ложатся на бойца до того, как
-    считаются здоровье и очередь: дозорный и правда ходит раньше, а не
-    называется быстрым (ADR 0025).
+    Отряд на числа бойца не влияет ничем: в бой впятером идут ровно теми, кем
+    ходили бы поодиночке (``domain/rules/party.py``).
 
     Бой начинается с тем здоровьем, с каким персонаж в него вошёл: раны
     переходят из узла в узел, и потому зелье и ночлег стоят денег.
     """
     effects = EffectStack()
-    if (place := role_effect(role)) is not None:
-        effects = effects.apply(place)
     stats = derived_stats(content, character, effects)
     return Combatant(
         id=combatant_id,
@@ -275,8 +243,6 @@ def hero_combatant(
         name=character.name,
         level=character.level,
         max_health=stats.max_health,
-        # Место может убавить здоровья (дозорный), и тогда вошедший в бой целым
-        # входит в него целым, а не с запасом сверх собственного потолка.
         health=min(character.health_or(stats.max_health), stats.max_health),
         max_resource=stats.max_resource,
         resource=stats.max_resource,
@@ -287,7 +253,6 @@ def hero_combatant(
         character_id=character.id,
         user_id=character.user_id if live else 0,
         effects=effects,
-        role=role,
     )
 
 
@@ -2310,28 +2275,17 @@ ENGINE_SKILL_CHANCE = 40.0
 
 
 def _weakest_foe(state: BattleState, actor: Combatant) -> Combatant | None:
-    """Кого движок бьёт: щита, пока тот держится, иначе - кому осталось меньше.
+    """Кого движок бьёт: того, кому осталось меньше всех.
 
-    Щит и есть работа щита: пока он на ногах, стая идёт на него, и лекарь за
-    его спиной успевает лечить. Ниже четверти здоровья стая чует слабину и
-    берётся за тех, кто мягче, - удержать щит выше этой четверти и есть то, ради
-    чего отряд расходится по местам (ADR 0025).
-
-    Без щита - как и раньше: добить раненого. Это то, что сделал бы всякий, и
-    это читается со слуха: игрок слышит, кого бьют, и успевает его прикрыть.
+    Добить раненого - это то, что сделал бы всякий, и это читается со слуха:
+    игрок слышит, кого бьют, и успевает его прикрыть. Перехватить удар на себя
+    отряд не может: мест в отряде нет, и обещать защиту нечем
+    (``domain/rules/party.py``).
     """
     foes = state.foes_of(actor.id)
     if not foes:
         return None
-    holding = tuple(one for one in foes if _holds_the_line(one))
-    if holding:
-        return min(holding, key=lambda one: one.id)
     return min(foes, key=lambda one: (one.health / max(1, one.max_health), one.id))
-
-
-def _holds_the_line(one: Combatant) -> bool:
-    """Стоит ли этот боец щитом и держится ли он ещё."""
-    return one.role is PartyRole.SHIELD and one.health > one.max_health * SHIELD_HOLDS_ABOVE
 
 
 def is_low_health(state: BattleState, combatant_id: int) -> bool:

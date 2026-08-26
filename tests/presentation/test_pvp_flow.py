@@ -370,6 +370,7 @@ async def test_a_party_goes_into_the_duel_together(
     """Отряд нападающего входит в бой целиком: двое против одного - тот же бой."""
     ally = await characters.create(a_fighter("Тьен", 700_003))
     parties = PartyStore(cache)
+    await parties.create(attacker.id)
     await parties.call(leader_id=attacker.id, invitee_id=ally.id)
     await parties.accept(ally.id)
 

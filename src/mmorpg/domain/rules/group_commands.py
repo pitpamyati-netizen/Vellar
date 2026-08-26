@@ -13,6 +13,7 @@
     передать <предмет>
     передать <количество> <предмет>
     передать <количество> золота
+    пригласить
     блок
     разблок
     принять <номер>
@@ -49,6 +50,7 @@ class GroupIntent(StrEnum):
     GIVE_GOLD = "give_gold"
     ACCEPT = "accept"
     DECLINE = "decline"
+    PARTY_INVITE = "party_invite"
     BLOCK = "block"
     UNBLOCK = "unblock"
     HIDE_PROFILE = "hide_profile"
@@ -77,6 +79,8 @@ _VERBS: dict[str, GroupIntent] = {
     "продать": GroupIntent.SELL,
     "купить": GroupIntent.BUY,
     "передать": GroupIntent.GIVE_ITEM,
+    "пригласить": GroupIntent.PARTY_INVITE,
+    "позвать": GroupIntent.PARTY_INVITE,
     "принять": GroupIntent.ACCEPT,
     "отказ": GroupIntent.DECLINE,
     "блок": GroupIntent.BLOCK,
@@ -90,7 +94,9 @@ _PHRASES: dict[str, GroupIntent] = {
     "снять блок": GroupIntent.UNBLOCK,
 }
 # Команды, после глагола которых не идёт ничего.
-_BARE = frozenset({GroupIntent.PROFILE, GroupIntent.BLOCK, GroupIntent.UNBLOCK})
+_BARE = frozenset(
+    {GroupIntent.PROFILE, GroupIntent.BLOCK, GroupIntent.UNBLOCK, GroupIntent.PARTY_INVITE}
+)
 _GOLD_WORDS = frozenset({"золота", "золото", "золотых"})
 _SPACES = re.compile(r"\s+")
 

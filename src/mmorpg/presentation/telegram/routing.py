@@ -17,7 +17,6 @@ import re
 from dataclasses import dataclass
 from enum import StrEnum
 
-from mmorpg.domain.entities.party import CLEAR_WORDS, ROLE_WORDS
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.screens.base import Screen
 
@@ -35,11 +34,12 @@ class Intent(StrEnum):
     YIELD = "yield"
     REFRESH = "refresh"
     PARTY = "party"
+    PARTY_CREATE = "party_create"
+    PARTY_DISBAND = "party_disband"
+    PARTY_INVITE = "party_invite"
     PARTY_ACCEPT = "party_accept"
     PARTY_DECLINE = "party_decline"
     PARTY_LEAVE = "party_leave"
-    #: Встать на место в отряде: щитом, лекарем, клинком, дозорным.
-    PARTY_ROLE = "party_role"
     PAGE = "page"
     NEXT_PAGE = "next_page"
     PREVIOUS_PAGE = "previous_page"
@@ -115,9 +115,17 @@ _COMBAT_WORDS: dict[str, Intent] = {
     "refresh": Intent.REFRESH,
 }
 
-#: Слова после ``/отряд``: принять зов, уйти, посмотреть, встать на место.
+#: Слова после ``/отряд``: завести, расформировать, позвать, принять зов, уйти.
 _PARTY_COMMAND = re.compile(r"^/(?:отряд|party)\s+(\S+)$", re.IGNORECASE)
 _PARTY_WORDS: dict[str, Intent] = {
+    "создать": Intent.PARTY_CREATE,
+    "create": Intent.PARTY_CREATE,
+    "расформировать": Intent.PARTY_DISBAND,
+    "распустить": Intent.PARTY_DISBAND,
+    "disband": Intent.PARTY_DISBAND,
+    "пригласить": Intent.PARTY_INVITE,
+    "позвать": Intent.PARTY_INVITE,
+    "invite": Intent.PARTY_INVITE,
     "принять": Intent.PARTY_ACCEPT,
     "accept": Intent.PARTY_ACCEPT,
     "отказать": Intent.PARTY_DECLINE,
@@ -147,10 +155,6 @@ def parse_command(text: str) -> Command | None:
         word = match.group(1).casefold()
         if word in _PARTY_WORDS:
             return Command(intent=_PARTY_WORDS[word])
-        # Название места - тоже слово отряда: «/отряд щит» ставит на место, а
-        # «/отряд снять» его освобождает (``entities/party.py``).
-        if word in ROLE_WORDS or word in CLEAR_WORDS:
-            return Command(intent=Intent.PARTY_ROLE, argument=word)
         return Command(intent=Intent.PARTY, argument=word)
 
     if (match := _COMBAT_COMMAND.match(stripped)) is not None:
@@ -172,6 +176,10 @@ _BUTTON_INTENTS: tuple[tuple[object, Intent], ...] = (
     (labels.FLEE, Intent.FLEE),
     (labels.BATTLE_YIELD, Intent.YIELD),
     (labels.BATTLE_REFRESH, Intent.REFRESH),
+    (labels.PARTY, Intent.PARTY),
+    (labels.PARTY_CREATE, Intent.PARTY_CREATE),
+    (labels.PARTY_DISBAND, Intent.PARTY_DISBAND),
+    (labels.PARTY_INVITE, Intent.PARTY_INVITE),
     (labels.PARTY_ACCEPT, Intent.PARTY_ACCEPT),
     (labels.PARTY_DECLINE, Intent.PARTY_DECLINE),
     (labels.PARTY_LEAVE, Intent.PARTY_LEAVE),

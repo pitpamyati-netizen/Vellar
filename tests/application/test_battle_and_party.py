@@ -13,7 +13,6 @@ from mmorpg.application.services import battle as battle_service
 from mmorpg.application.services.party import PartyStore
 from mmorpg.domain.entities import Character, GameContent, SkillLoadout
 from mmorpg.domain.entities.combat import ActionKind, BattleAction, Verdict
-from mmorpg.domain.entities.party import PartyRole
 from mmorpg.domain.rules import party as party_rules
 from mmorpg.domain.rules.combat import act
 from mmorpg.domain.rules.party import Party
@@ -140,8 +139,39 @@ def test_the_verdict_is_read_per_participant(content: GameContent) -> None:
 # --- отряд -------------------------------------------------------------
 
 
-async def test_a_party_is_born_when_the_call_is_accepted(cache: InMemoryStateCache) -> None:
+async def test_a_party_is_created_before_anyone_is_called(cache: InMemoryStateCache) -> None:
+    """Отряд из одного - это отряд: он заведён нарочно, и звать в него можно."""
     parties = PartyStore(cache)
+    party = await parties.create(1)
+    assert party is not None and party.members == (1,) and party.alone
+    assert await parties.of(1) == party
+    assert await parties.create(1) is None, "второго отряда у одного человека не бывает"
+
+
+async def test_nobody_is_called_into_a_party_that_was_never_created(
+    cache: InMemoryStateCache,
+) -> None:
+    """Зов без отряда ни к чему не ведёт: звать умеет тот, у кого отряд есть."""
+    parties = PartyStore(cache)
+    await parties.call(leader_id=1, invitee_id=2)
+    assert await parties.accept(2) is None
+    assert await parties.of(2) is None
+
+
+async def test_disbanding_lets_everyone_go(cache: InMemoryStateCache) -> None:
+    parties = PartyStore(cache)
+    await parties.save(Party(leader_id=1, members=(1, 2, 3)))
+    party = await parties.of(1)
+    assert party is not None
+
+    await parties.disband(party)
+    assert await parties.of(1) is None
+    assert await parties.of(3) is None
+
+
+async def test_a_party_is_joined_when_the_call_is_accepted(cache: InMemoryStateCache) -> None:
+    parties = PartyStore(cache)
+    await parties.create(1)
     await parties.call(leader_id=1, invitee_id=2)
     assert await parties.called_by(2) == 1
 
@@ -161,6 +191,7 @@ async def test_nobody_joins_a_party_they_were_not_called_to(cache: InMemoryState
 
 async def test_declining_forgets_the_call(cache: InMemoryStateCache) -> None:
     parties = PartyStore(cache)
+    await parties.create(1)
     await parties.call(leader_id=1, invitee_id=2)
     await parties.forget_call(2)
     assert await parties.accept(2) is None
@@ -175,37 +206,33 @@ async def test_leaving_shrinks_the_party_and_the_leader_ends_it(
     left = await parties.leave(3)
     assert left is not None and left.members == (1, 2)
 
+    alone = await parties.leave(2)
+    assert alone is not None and alone.alone, "оставшийся один отряд не распускается сам"
+
     assert await parties.leave(1) is None, "ушёл собравший - отряда больше нет"
-    assert await parties.of(2) is None
+    assert await parties.of(1) is None
 
 
-async def test_a_place_in_the_party_survives_the_storage(cache: InMemoryStateCache) -> None:
-    """Место лежит там же, где отряд, и переживает дорогу через кэш."""
+async def test_the_party_survives_the_storage(cache: InMemoryStateCache) -> None:
+    """Отряд переживает дорогу через кэш - составом и тем, кто его собрал."""
     parties = PartyStore(cache)
     await parties.save(Party(leader_id=1, members=(1, 2)))
 
-    taken = await parties.take_role(2, PartyRole.SHIELD)
-    assert taken is not None and taken.role_of(2) is PartyRole.SHIELD
-    assert (await parties.of(1)).role_of(2) is PartyRole.SHIELD  # type: ignore[union-attr]
-
-    given_up = await parties.take_role(2, None)
-    assert given_up is not None and given_up.role_of(2) is None
-
-
-async def test_a_place_taken_by_another_is_not_handed_over(cache: InMemoryStateCache) -> None:
-    parties = PartyStore(cache)
-    await parties.save(Party(leader_id=1, members=(1, 2, 3)))
-    await parties.take_role(2, PartyRole.MENDER)
-
-    refused = await parties.take_role(3, PartyRole.MENDER)
-    assert refused is not None
-    assert refused.role_of(3) is None
-    assert refused.role_of(2) is PartyRole.MENDER
+    read = await parties.of(2)
+    assert read is not None
+    assert (read.leader_id, read.members) == (1, (1, 2))
 
 
 def test_the_party_has_a_ceiling_and_a_level_window() -> None:
     full = Party(leader_id=1, members=tuple(range(1, party_rules.MAX_MEMBERS + 1)))
     assert full.full
+    assert "Создайте его" in party_rules.invite_refusal(
+        inviter_level=10,
+        invitee_name="Мирна",
+        invitee_level=10,
+        party=None,
+        invitee_in_party=False,
+    ), "звать некуда, пока отряда нет"
     assert "не помещается" in party_rules.invite_refusal(
         inviter_level=10,
         invitee_name="Мирна",
@@ -213,11 +240,12 @@ def test_the_party_has_a_ceiling_and_a_level_window() -> None:
         party=full,
         invitee_in_party=False,
     )
+    mine = Party(leader_id=1)
     assert "Разница уровней" in party_rules.invite_refusal(
         inviter_level=10,
         invitee_name="Мирна",
         invitee_level=10 + party_rules.LEVEL_WINDOW + 1,
-        party=None,
+        party=mine,
         invitee_in_party=False,
     )
     assert (
@@ -225,7 +253,7 @@ def test_the_party_has_a_ceiling_and_a_level_window() -> None:
             inviter_level=10,
             invitee_name="Мирна",
             invitee_level=12,
-            party=None,
+            party=mine,
             invitee_in_party=False,
         )
         == ""
