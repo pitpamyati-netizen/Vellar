@@ -56,6 +56,25 @@ def matching_skills(
     )
 
 
+def points_word(count: int) -> str:
+    """«одно очко», «два очка», «пять очков» - слово согласовано с числом."""
+    tail = count % 100
+    if 11 <= tail <= 14:
+        return f"{count} очков"
+    last = count % 10
+    if last == 1:
+        return "одно очко" if count == 1 else f"{count} очко"
+    if 2 <= last <= 4:
+        return f"{count} очка"
+    return f"{count} очков"
+
+
+def branch_name(skill: Skill) -> str:
+    """Ветвь умения словом. Пусто - умение вне классового дерева, как расовое."""
+    branch = skill_rules.branch_of(skill)
+    return skill_rules.BRANCH_NAMES[branch] if branch is not None else ""
+
+
 def skill_state(content: GameContent, character: Character, skill: Skill) -> str:
     """Одна фраза, говорящая всё, что игроку нужно знать о положении умения.
 
@@ -63,15 +82,53 @@ def skill_state(content: GameContent, character: Character, skill: Skill) -> str
     как «повысить за одно очко», а нажатие вместо этого уходило на вопрос о грани:
     игрок выбирал грань, возвращался, видел тот же ранг и ту же кнопку и имел все
     основания решить, что экран ходит по кругу.
+
+    Цена ранга теперь растёт (ADR 0024), поэтому она называется вслух, а не
+    подразумевается: «повысить за одно очко» было правдой ровно до тех пор, пока
+    все ранги стоили одинаково.
     """
+    rules = content.rules
     if not skill_rules.is_known(character, skill.code):
-        return "не изучено, одно очко умений"
+        taken = skill_rules.fork_taken(content, character, skill)
+        if taken is not None:
+            return f"закрыто развилкой: взято {taken.name}"
+        if not skill_rules.gate_met(content, character, skill):
+            gate = skill_rules.gate_of(content, skill)
+            return f"закрыто: нужно {points_word(gate)} в ветви «{branch_name(skill)}»"
+        return f"не изучено, {points_word(skill_rules.cost_to_learn(content, character, skill))}"
     rank = character.loadout.rank_of(skill.code)
     if skill_rules.needs_edge(content, character, skill):
-        return f"ранг {rank} из {content.rules.max_rank}, сначала выберите грань"
-    if rank >= content.rules.max_rank:
-        return f"ранг {rank} из {content.rules.max_rank}, выше некуда"
-    return f"ранг {rank} из {content.rules.max_rank}, повысить за одно очко"
+        return f"ранг {rank} из {rules.max_rank}, сначала выберите грань"
+    if rank >= rules.max_rank:
+        return f"ранг {rank} из {rules.max_rank}, выше некуда"
+    cost = skill_rules.cost_to_learn(content, character, skill)
+    return f"ранг {rank} из {rules.max_rank}, следующий за {points_word(cost)}"
+
+
+def refusal(content: GameContent, character: Character, skill: Skill) -> str:
+    """Почему очко не легло. Отказ обязан называть причину, а не просто случиться."""
+    if skill_rules.is_known(character, skill.code):
+        if character.loadout.rank_of(skill.code) >= content.rules.max_rank:
+            return f"{skill.name} уже на высшем ранге."
+    else:
+        taken = skill_rules.fork_taken(content, character, skill)
+        if taken is not None:
+            return (
+                f"{skill.name} и {taken.name} стоят на одной развилке, и {taken.name} "
+                "уже взято. Разобрать его может наставник."
+            )
+        if not skill_rules.gate_met(content, character, skill):
+            branch = skill_rules.branch_of(skill)
+            have = skill_rules.branch_points(content, character)[branch] if branch else 0
+            return (
+                f"{skill.name} стоит выше по ветви «{branch_name(skill)}»: нужно "
+                f"{points_word(skill_rules.gate_of(content, skill))} в ней, вложено {have}."
+            )
+    cost = skill_rules.cost_to_learn(content, character, skill)
+    return (
+        f"На {skill.name} нужно {points_word(cost)}, а есть {character.unspent_skill_points}. "
+        "Очки дают за уровень, и их возвращает наставник."
+    )
 
 
 def weapon_demand(content: GameContent, skill: Skill) -> str:
@@ -90,15 +147,35 @@ def weapon_demand(content: GameContent, skill: Skill) -> str:
     return f"Работает только с таким оружием: {wanted}." if wanted else ""
 
 
+def fork_note(content: GameContent, skill: Skill) -> str:
+    """Чему это умение соперник. Пусто - оно ни с чем не спорит."""
+    rivals = skill_rules.fork_rivals(content, skill)
+    if not rivals:
+        return ""
+    names = ", ".join(rival.name for rival in rivals)
+    return f"Развилка: или это, или {names}."
+
+
 def skill_detail(content: GameContent, skill: Skill) -> str:
     """Строка под названием умения: что оно делает и чем его для этого держат."""
-    demand = weapon_demand(content, skill)
-    return f"{skill.text} {demand}".strip() if demand else skill.text
+    parts = [skill.text, weapon_demand(content, skill), fork_note(content, skill)]
+    return " ".join(part for part in parts if part)
 
 
 def skill_entry_text(content: GameContent, character: Character, skill: Skill) -> str:
     kind = "боевое" if skill.is_active else "пассивное"
-    return f"{skill.name} — {kind}, {skill_state(content, character, skill)}"
+    branch = branch_name(skill)
+    where = f"{kind}, ветвь «{branch}»" if branch else kind
+    return f"{skill.name} — {where}, {skill_state(content, character, skill)}"
+
+
+def branch_line(content: GameContent, character: Character) -> str:
+    """Три числа, по которым читается вся сборка: во что вложены очки."""
+    tally = skill_rules.branch_points(content, character)
+    said = ", ".join(
+        f"{skill_rules.BRANCH_NAMES[branch]} {tally[branch]}" for branch in skill_rules.BRANCHES
+    )
+    return f"Вложено по ветвям: {said}."
 
 
 def skills_screen(
@@ -124,6 +201,7 @@ def skills_screen(
     lead = [
         notice or f"Умения. Очков умений: {character.unspent_skill_points}.",
         f"Ваш уровень: {character.level}. Пассивные умения слотов не занимают.",
+        branch_line(content, character),
     ]
     if not character.unspent_skill_points:
         lead.append("Очко умений даёт каждый новый уровень.")

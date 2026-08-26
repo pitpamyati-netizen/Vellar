@@ -100,11 +100,11 @@ def test_known_passives_apply_at_their_rank(content: GameContent, warrior: Chara
     plain = derived_stats(content, veteran)
     with_passive = replace(
         veteran,
-        loadout=SkillLoadout(ranks={"warrior_shchitonosets": 1}),
+        loadout=SkillLoadout(ranks={"warrior_privychka_k_latam": 1}),
     )
     ranked = replace(
         veteran,
-        loadout=SkillLoadout(ranks={"warrior_shchitonosets": 5}),
+        loadout=SkillLoadout(ranks={"warrior_privychka_k_latam": 5}),
     )
     assert derived_stats(content, with_passive).armor > plain.armor
     assert derived_stats(content, ranked).armor > derived_stats(content, with_passive).armor
@@ -123,7 +123,7 @@ def test_every_known_passive_counts(content: GameContent, warrior: Character) ->
     one = replace(veteran, loadout=SkillLoadout(ranks={"warrior_zakalka": 5}))
     every = replace(
         veteran,
-        loadout=SkillLoadout(ranks={"warrior_zakalka": 5, "warrior_shchitonosets": 5}),
+        loadout=SkillLoadout(ranks={"warrior_zakalka": 5, "warrior_privychka_k_latam": 5}),
     )
     assert derived_stats(content, one).max_health > plain.max_health
     assert derived_stats(content, every).armor > derived_stats(content, one).armor

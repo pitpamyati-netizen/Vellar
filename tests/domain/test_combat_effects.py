@@ -190,7 +190,7 @@ def test_a_self_buff_lands_as_an_effect(content: GameContent) -> None:
 
 def test_damage_reduction_buffs_store_a_negative_modifier(content: GameContent) -> None:
     """Сила 30 у ``buff_damage_taken`` значит «на 30 процентов *меньше* урона»."""
-    paladin = caster("paladin", "human", "paladin_stoykost_very")
+    paladin = caster("paladin", "human", "paladin_krepost_dukha")
     guarded = use(content, paladin, start(content, paladin, (enemy(),)))
     assert hero(guarded).effects.modifiers()["damage_taken_percent"] < 0
 
@@ -205,7 +205,7 @@ def test_a_debuff_lands_on_the_enemy_as_a_penalty(content: GameContent) -> None:
 
 
 def test_vulnerability_debuffs_are_positive(content: GameContent) -> None:
-    ranger = caster("ranger", "wood_elf", "ranger_okhotnichya_metka")
+    ranger = caster("ranger", "wood_elf", "ranger_metka_okhotnika")
     marked = use(content, ranger, start(content, ranger, (enemy(),)))
     assert foe(marked).effects.modifiers()["damage_taken_percent"] > 0
 
@@ -503,7 +503,7 @@ def test_a_missed_blow_draws_no_blood(content: GameContent) -> None:
 
 def test_healing_over_time_arrives_every_turn(content: GameContent) -> None:
     """«Лечит вас каждый ход 3 хода» - каждый ход, а не один раз и тишина."""
-    druid = caster("druid", "human", "druid_rodnik_zhizni")
+    druid = caster("druid", "human", "druid_dykhanie_roshchi")
     state = start(content, druid, (enemy(damage=0),))
     hurt = tweak(state, health=hero(state).max_health // 4)
     started = hero(hurt).health
@@ -549,7 +549,7 @@ def test_a_slowed_enemy_loses_its_place_in_the_queue(content: GameContent) -> No
     Инициатива в новом движке решает ровно одно и делает это буквально: кто
     быстрее, тот бьёт раньше (ADR 0021). Снятые проценты двигают бойца назад.
     """
-    ranger = caster("ranger", "human", "ranger_kapkan")
+    ranger = caster("ranger", "human", "ranger_lovushka")
     swift = replace(enemy(damage=10), initiative=10_000.0)
     state = start(content, ranger, (swift,))
     assert state.order[0] == 2, "быстрый противник ходит первым"

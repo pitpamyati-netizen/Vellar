@@ -93,10 +93,12 @@ def fighter(warrior: Character) -> Character:
         level=100,
         loadout=SkillLoadout(
             actives=(
-                # Натиск, оборона, точность: простой удар, провокация, пробой.
+                # Натиск, оборона, точность: простой удар, провокация, подрез.
+                # Ветвь умения и есть его тег (ADR 0024), поэтому три разных
+                # тега - это три разные ветви, а не три случайных умения.
                 "warrior_sekushchiy_roscherk",
                 "warrior_provokatsiya",
-                "warrior_proboy_stroya",
+                "warrior_podrez",
                 None,
                 None,
                 None,
@@ -306,7 +308,7 @@ def test_momentum_needs_the_declared_streak(content: GameContent, fighter: Chara
 def three_different_tags(
     content: GameContent, roster: dict[int, Character], state: BattleState
 ) -> BattleState:
-    """Натиск, оборона, точность: рассечение, провокация, брешь."""
+    """Натиск, оборона, точность: росчерк, провокация, подрез."""
     for slot, turn in ((0, 1), (1, 2), (2, 3)):
         state = act(
             content, roster, state, BattleAction(kind=ActionKind.SKILL, slot=slot), seed_for(turn)

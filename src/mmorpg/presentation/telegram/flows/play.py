@@ -1262,11 +1262,7 @@ def _handle_skills(
             return replace(state, edge_skill=skill.code).at(ScreenId.SKILL_EDGE)
         learned = skill_rules.learn(content, character, skill)
         if learned is None:
-            if character.unspent_skill_points < 1:
-                return state.with_notice(
-                    "Очков умений нет. Их дают за уровень и возвращает наставник."
-                )
-            return state.with_notice(f"{skill.name} уже на высшем ранге.")
+            return state.with_notice(skill_screens.refusal(content, character, skill))
         rank = learned.loadout.rank_of(skill.code)
         said = f"{skill.name}: ранг {rank}. Осталось очков: {learned.unspent_skill_points}."
         if skill_rules.needs_edge(content, learned, skill):
@@ -1483,12 +1479,13 @@ def _handle_mentor(
             continue
         if character.gold < price:
             return state.with_notice(f"Наставник берёт {price} золота, у вас {character.gold}.")
+        refund = skill_rules.spent_on(content, character, skill.code)
         forgotten = skill_rules.forget(content, character, skill)
-        if forgotten is None:  # pragma: no cover - в списке лежат только изученные умения
-            return state.with_notice("Это умение вы не изучали.")
+        if forgotten is None:  # pragma: no cover - в списке лежат только разбираемые умения
+            return state.with_notice("Это умение сейчас не разобрать.")
         paid = forgotten.with_gold(-price)
         return state.storing(PendingWrite(character=paid).because(economy_log.SERVICE)).with_notice(
-            f"{skill.name} забыто. Вернулось очков: {rank}. Заплачено {price} золота."
+            f"{skill.name} забыто. Вернулось очков: {refund}. Заплачено {price} золота."
         )
     return state.with_notice("Нажмите умение из списка.")
 

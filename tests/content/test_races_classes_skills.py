@@ -12,7 +12,11 @@ from mmorpg.domain.rules.skill_effects import (
     recharged,
     spec_for,
 )
-from mmorpg.infrastructure.content.loader import ACTIVES_PER_CLASS, PASSIVES_PER_CLASS
+from mmorpg.infrastructure.content.loader import (
+    ACTIVES_PER_CLASS,
+    FORKS_PER_CLASS,
+    PASSIVES_PER_CLASS,
+)
 
 RACE_STAT_BUDGET = 3
 
@@ -77,12 +81,13 @@ def test_eight_classes(content: GameContent) -> None:
     assert len(content.classes) == 8
 
 
-def test_each_class_has_twenty_actives_and_forty_passives(content: GameContent) -> None:
-    """Шестьдесят умений на класс, и пассивных вдвое больше боевых.
+def test_each_class_has_its_actives_and_passives(content: GameContent) -> None:
+    """Сорок четыре умения на класс, и на четырёх уровнях из двадцати - развилка.
 
-    Пассивных большинство нарочно: боевое умение - это кнопка, а кнопок в панели
-    шесть, и они не растут (``docs/skills.md``). Всё остальное развитие идёт в
-    то, что работает изученным.
+    Боевых написано 24, а изучить можно 20: четыре пары стоят на одном месте
+    каждая, и взявший одно закрывает второе (ADR 0024). Пассивных двадцать -
+    вчетверо меньше прежнего и вдвое весомее каждое: сорок строк «плюс четыре
+    процента» были не развитием, а налогом на очко.
     """
     for klass in content.classes:
         owner = f"class:{klass.id}"
@@ -90,7 +95,13 @@ def test_each_class_has_twenty_actives_and_forty_passives(content: GameContent) 
         passives = content.skills_of(owner, SkillKind.PASSIVE)
         assert len(actives) == ACTIVES_PER_CLASS, klass.id
         assert len(passives) == PASSIVES_PER_CLASS, klass.id
-        assert len(passives) == 2 * len(actives), klass.id
+        forks = {skill.fork for skill in actives if skill.fork}
+        assert len(forks) == FORKS_PER_CLASS, klass.id
+        for fork in forks:
+            pair = [skill for skill in actives if skill.fork == fork]
+            assert len(pair) == 2, fork
+            assert pair[0].level == pair[1].level, fork
+            assert pair[0].branch is pair[1].branch, fork
 
 
 def test_class_unlock_levels_match_the_rules(content: GameContent) -> None:
@@ -99,7 +110,8 @@ def test_class_unlock_levels_match_the_rules(content: GameContent) -> None:
         owner = f"class:{klass.id}"
         actives = sorted(content.skills_of(owner, SkillKind.ACTIVE), key=lambda s: s.level)
         passives = sorted(content.skills_of(owner, SkillKind.PASSIVE), key=lambda s: s.level)
-        assert tuple(skill.level for skill in actives) == rules.active_unlock_levels
+        expected = tuple(sorted((*rules.active_unlock_levels, *rules.fork_levels)))
+        assert tuple(skill.level for skill in actives) == expected
         assert tuple(skill.level for skill in passives) == rules.passive_unlock_levels
 
 
@@ -157,12 +169,14 @@ def test_active_skills_cost_and_target_are_sane(content: GameContent) -> None:
 
 
 def test_class_skills_unlock_progressively(content: GameContent) -> None:
-    """Ровно по одному боевому умению на каждые пятнадцать уровней."""
+    """Боевое умение на каждые пятнадцать уровней, а на уровне развилки - пара."""
     rules = content.rules
     unlocked_at_1 = content.class_skills_up_to("warrior", 1, SkillKind.ACTIVE)
     assert len(unlocked_at_1) == 1
-    for count, level in enumerate(rules.active_unlock_levels, start=1):
-        assert len(content.class_skills_up_to("warrior", level, SkillKind.ACTIVE)) == count
+    seen = 0
+    for level in rules.active_unlock_levels:
+        seen += 2 if level in rules.fork_levels else 1
+        assert len(content.class_skills_up_to("warrior", level, SkillKind.ACTIVE)) == seen
     top = content.class_skills_up_to("warrior", 300, SkillKind.ACTIVE)
     assert len(top) == ACTIVES_PER_CLASS
 

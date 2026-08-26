@@ -329,9 +329,10 @@ def test_forgetting_hands_every_point_back_and_empties_the_slot(
             edges={skill.code: skill.edges[0].code},
         ),
     )
+    spent = skill_rules.spent_on(content, student, skill.code)
     forgotten = skill_rules.forget(content, student, skill)
     assert forgotten is not None
-    assert forgotten.unspent_skill_points == veteran.unspent_skill_points + 3
+    assert forgotten.unspent_skill_points == veteran.unspent_skill_points + spent
     assert not skill_rules.is_known(forgotten, skill.code)
     assert forgotten.loadout.actives[0] is None
     assert forgotten.loadout.edge_of(skill.code) is None
@@ -382,7 +383,8 @@ def test_a_skill_removed_from_the_game_hands_its_points_back(content: GameConten
     assert repaired is not None
     assert repaired.loadout.actives[0] is None
     assert "умения-такого-нет" not in repaired.loadout.ranks
-    assert repaired.unspent_skill_points == 3, "вернулось ровно столько, сколько было вложено"
+    # Ранг стоит тем дороже, чем он выше: второй ранг это 1 + 2, первый - 1.
+    assert repaired.unspent_skill_points == 4, "вернулось ровно столько, сколько было вложено"
     # Расовое умение не выбирают: вместо пропавшего встаёт то, что есть у расы.
     assert repaired.loadout.racial == content.race("human").active_code
 

@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from mmorpg.domain.entities.character import Character
+from mmorpg.domain.entities.combat import ActionTag
 from mmorpg.domain.entities.content import (
     EdgeEffect,
     GameContent,
@@ -23,6 +24,21 @@ from mmorpg.domain.entities.content import (
     SkillKind,
 )
 from mmorpg.domain.rules import edges as edge_rules
+
+#: Ветви развития - те же три тега, которыми умение оставляет след в бою.
+BRANCHES: tuple[ActionTag, ...] = (ActionTag.PRESS, ActionTag.GUARD, ActionTag.PRECISION)
+
+#: На сколько ходов предельный ранг возвращает умение раньше. Пятый ранг стоит
+#: вчетверо дороже первого, и одной прибавкой к силе он этого не отрабатывает:
+#: чем ближе умение к пределу, тем чаще оно в руках (ADR 0024).
+MASTERY_COOLDOWN = 1
+
+#: Как ветвь называется вслух. Игрок слышит слово, а не код.
+BRANCH_NAMES: dict[ActionTag, str] = {
+    ActionTag.PRESS: "Натиск",
+    ActionTag.GUARD: "Оборона",
+    ActionTag.PRECISION: "Точность",
+}
 
 # Что делают две грани третьего ранга, здесь больше не решается: каждая грань
 # объявляет это сама, в ``skills.toml``, и словарь объявления живёт в
@@ -57,12 +73,100 @@ def teachable(content: GameContent, character: Character) -> tuple[Skill, ...]:
 
 
 def cost_to_learn(content: GameContent, character: Character, skill: Skill) -> int:
-    """Очко на изучение и по очку за каждый следующий ранг. Ноль, когда ранг предельный."""
+    """Во что обойдётся следующий ранг этого умения. Ноль, когда ранг предельный.
+
+    Цена растёт с рангом (``ProgressionRules.rank_costs``): вширь дёшево, вглубь
+    дорого. Раньше цена была одна на все ранги, и дерево стоило ровно столько,
+    сколько игра выдаёт за триста уровней, - то есть не стоило ничего (ADR 0024).
+    """
     if not is_known(character, skill.code):
-        return 1
-    if character.loadout.rank_of(skill.code) >= content.rules.max_rank:
+        return content.rules.rank_cost(1)
+    rank = character.loadout.rank_of(skill.code)
+    if rank >= content.rules.max_rank:
         return 0
-    return 1
+    return content.rules.rank_cost(rank + 1)
+
+
+def spent_on(content: GameContent, character: Character, code: str) -> int:
+    """Сколько очков лежит в этом умении - столько же и вернёт наставник."""
+    rank = character.loadout.rank_of(code)
+    return sum(content.rules.rank_cost(step) for step in range(1, rank + 1))
+
+
+def branch_of(skill: Skill) -> ActionTag | None:
+    """Ветвь умения. У расового её нет: оно вне классового дерева."""
+    if skill.owner_kind is not OwnerKind.CLASS:
+        return None
+    return skill.branch
+
+
+def branch_points(content: GameContent, character: Character) -> dict[ActionTag, int]:
+    """Сколько очков вложено в каждую ветвь. Три числа, и они решают всё.
+
+    Считается по изученному, а не запоминается: производного не хранится
+    (``Claude.md``, правило 8).
+    """
+    tally = dict.fromkeys(BRANCHES, 0)
+    for code in character.loadout.ranks:
+        if not content.has_skill(code):
+            continue
+        branch = branch_of(content.skill(code))
+        if branch is None:
+            continue
+        tally[branch] = tally[branch] + spent_on(content, character, code)
+    return tally
+
+
+def tier_of(content: GameContent, skill: Skill) -> int:
+    """Ступень ветви, на которой стоит умение."""
+    return content.rules.tier_of_level(skill.level)
+
+
+def gate_of(content: GameContent, skill: Skill) -> int:
+    """Сколько очков в своей ветви требует это умение. Ноль - первая ступень."""
+    if branch_of(skill) is None:
+        return 0
+    return content.rules.gate_for_tier(tier_of(content, skill))
+
+
+def gate_met(content: GameContent, character: Character, skill: Skill) -> bool:
+    """Открыта ли ступень: хватает ли вложенного в ветвь этого умения."""
+    branch = branch_of(skill)
+    if branch is None:
+        return True
+    return branch_points(content, character)[branch] >= gate_of(content, skill)
+
+
+def fork_rivals(content: GameContent, skill: Skill) -> tuple[Skill, ...]:
+    """Умения, с которыми это спорит за одно место. Пусто - оно ни с чем не спорит."""
+    if not skill.fork:
+        return ()
+    return tuple(
+        other
+        for other in content.skills
+        if other.fork == skill.fork and other.code != skill.code and other.owner == skill.owner
+    )
+
+
+def fork_taken(content: GameContent, character: Character, skill: Skill) -> Skill | None:
+    """Соперник по развилке, которого уже взяли. ``None`` - развилка свободна."""
+    return next(
+        (rival for rival in fork_rivals(content, skill) if is_known(character, rival.code)), None
+    )
+
+
+def learnable(content: GameContent, character: Character, skill: Skill) -> bool:
+    """Можно ли прямо сейчас потратить очко на это умение.
+
+    Три условия, и каждое объясняется словами: хватает очков, открыта ступень
+    ветви, свободна развилка. Ранг предельный - тратить тоже не на что.
+    """
+    cost = cost_to_learn(content, character, skill)
+    if cost < 1 or character.unspent_skill_points < cost:
+        return False
+    if fork_taken(content, character, skill) is not None:
+        return False
+    return is_known(character, skill.code) or gate_met(content, character, skill)
 
 
 def edge_rank_for(content: GameContent, character: Character) -> int:
@@ -85,21 +189,24 @@ def needs_edge(content: GameContent, character: Character, skill: Skill) -> bool
 
 
 def learn(content: GameContent, character: Character, skill: Skill) -> Character | None:
-    """Изучить умение или поднять его на ранг. ``None``, когда платить нечем."""
-    if character.unspent_skill_points < 1:
+    """Изучить умение или поднять его на ранг. ``None``, когда так делать нельзя.
+
+    Отказать может любое из трёх: не хватило очков, ступень ветви ещё закрыта,
+    место в развилке уже занято. Что именно случилось, читает вызывающий через
+    ``learnable``, ``gate_met`` и ``fork_taken``, - здесь решается только «да».
+    """
+    if not learnable(content, character, skill):
         return None
+    cost = cost_to_learn(content, character, skill)
     loadout = character.loadout
     if not is_known(character, skill.code):
         updated = loadout.with_rank(skill.code, 1)
     else:
-        rank = loadout.rank_of(skill.code)
-        if rank >= content.rules.max_rank:
-            return None
-        updated = loadout.with_rank(skill.code, rank + 1)
+        updated = loadout.with_rank(skill.code, loadout.rank_of(skill.code) + 1)
     return replace(
         character,
         loadout=updated,
-        unspent_skill_points=character.unspent_skill_points - 1,
+        unspent_skill_points=character.unspent_skill_points - cost,
     )
 
 
@@ -135,14 +242,37 @@ def forget(content: GameContent, character: Character, skill: Skill) -> Characte
         return None
     if skill.owner_kind is not OwnerKind.CLASS or skill.code == character.loadout.racial:
         return None
-    rank = character.loadout.rank_of(skill.code)
+    if undercuts_branch(content, character, skill):
+        return None
+    refund = spent_on(content, character, skill.code)
     ranks = {key: value for key, value in character.loadout.ranks.items() if key != skill.code}
     edges = {key: value for key, value in character.loadout.edges.items() if key != skill.code}
     actives = tuple(None if code == skill.code else code for code in character.loadout.actives)
     return replace(
         character,
         loadout=replace(character.loadout, ranks=ranks, edges=edges, actives=actives),
-        unspent_skill_points=character.unspent_skill_points + rank,
+        unspent_skill_points=character.unspent_skill_points + refund,
+    )
+
+
+def undercuts_branch(content: GameContent, character: Character, skill: Skill) -> bool:
+    """Уронит ли разбор этого умения ветвь ниже того, что в ней уже открыто.
+
+    Без этой проверки ветви не было бы вовсе: можно было бы набрать дешёвых
+    умений натиска, открыть его четвёртую ступень, взять её - и разобрать всё,
+    на чём она стояла. Гейт, который проверяется только при покупке, - это не
+    гейт, а пошлина (ADR 0024).
+    """
+    branch = branch_of(skill)
+    if branch is None:
+        return False
+    left = branch_points(content, character)[branch] - spent_on(content, character, skill.code)
+    return any(
+        gate_of(content, other) > left
+        for code in character.loadout.ranks
+        if code != skill.code and content.has_skill(code)
+        for other in (content.skill(code),)
+        if branch_of(other) is branch
     )
 
 
@@ -158,6 +288,7 @@ def forgettable(content: GameContent, character: Character) -> tuple[Skill, ...]
         if content.has_skill(code)
         and content.skill(code).owner_kind is OwnerKind.CLASS
         and code != character.loadout.racial
+        and not undercuts_branch(content, character, content.skill(code))
     )
 
 
@@ -178,7 +309,7 @@ def reclaim_lost(content: GameContent, character: Character) -> Character | None
         return None
 
     gone = set(lost)
-    points = sum(loadout.rank_of(code) for code in lost)
+    points = sum(spent_on(content, character, code) for code in lost)
     ranks = {key: value for key, value in loadout.ranks.items() if key not in gone}
     edges = {key: value for key, value in loadout.edges.items() if key not in gone}
     actives = tuple(None if code in gone else code for code in loadout.actives)

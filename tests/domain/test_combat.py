@@ -16,6 +16,7 @@ from mmorpg.domain.entities.combat import (
     Verdict,
 )
 from mmorpg.domain.entities.location import Enemy, EnemyKind
+from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.combat import act, hero_combatant, monster_combatant, open_battle
 from mmorpg.domain.rules.skill_effects import DAMAGE_TAGS, known_effects, spec_for
 
@@ -315,6 +316,31 @@ def test_cooldowns_tick_down_and_expire(content: GameContent, fighter: Character
     hero = state.by_id(1)
     assert hero is not None
     assert hero.cooldown_of("warrior_udar_shchitom") == 0
+
+
+def test_mastery_returns_the_skill_a_turn_earlier(content: GameContent, fighter: Character) -> None:
+    """Предельный ранг стоит вчетверо дороже первого и отбивает это откатом.
+
+    Одной прибавкой к силе четыре очка не отбиваются: пятнадцать процентов урона
+    за четыре очка проигрывают целому новому умению за одно. Поэтому у мастерства
+    есть второе следствие - умение возвращается на ход раньше (ADR 0024).
+    """
+    plain, _ = start(content, fighter, make_enemy(health=5_000))
+    plain = act(content, {1: fighter}, plain, BattleAction(kind=ActionKind.SKILL, slot=2), SEED)
+    novice = plain.by_id(1)
+    assert novice is not None
+
+    master = replace(
+        fighter,
+        loadout=fighter.loadout.with_rank("warrior_udar_shchitom", content.rules.max_rank),
+    )
+    state, roster = start(content, master, make_enemy(health=5_000))
+    state = act(content, roster, state, BattleAction(kind=ActionKind.SKILL, slot=2), SEED)
+    hero = state.by_id(1)
+    assert hero is not None
+    assert hero.cooldown_of("warrior_udar_shchitom") == (
+        novice.cooldown_of("warrior_udar_shchitom") - skill_rules.MASTERY_COOLDOWN
+    )
 
 
 def test_not_enough_resource_is_refused_politely(content: GameContent, fighter: Character) -> None:

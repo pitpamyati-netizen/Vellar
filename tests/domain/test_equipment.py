@@ -288,7 +288,7 @@ def test_a_full_foreign_set_costs_more_than_one_piece(content: GameContent) -> N
 
 def test_a_skill_asks_for_its_weapon(content: GameContent) -> None:
     """Здесь отказ, а не штраф: выстрелить без лука нечем."""
-    shot = content.skill("ranger_metkiy_vystrel")
+    shot = content.skill("ranger_tochnyy_vystrel")
     assert gear.skill_refusal(content, hero("ranger", weapon="bow@14#common"), shot) == ""
     assert "лук" in gear.skill_refusal(content, hero("ranger"), shot)
     with_knife = hero("ranger", weapon="dagger@14#common")

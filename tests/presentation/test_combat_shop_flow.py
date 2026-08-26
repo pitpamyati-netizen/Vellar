@@ -156,7 +156,7 @@ def test_cooldown_is_written_into_the_button(
     used, _ = flow.advance(content, {HERO: fighter}, session, HERO, ready)
     third = flow.render(content, fighter, used, HERO).rows[3][0].text
     # Потраченное называет, сколько от него осталось, - а это другой вопрос.
-    assert third.startswith("3. Удар щитом — точность,")
+    assert third.startswith("3. Удар щитом — оборона,")
     assert third.endswith("ещё 3 хода")
 
 
@@ -172,8 +172,8 @@ def test_every_button_says_what_it_does(
     screen = flow.render(content, fighter, session, HERO)
     cleave, taunt = screen.rows[1][0].text, screen.rows[2][0].text
     assert "урон " in cleave, cleave
-    assert "стоит 10" in cleave, cleave
-    assert "урон минус 20 процентов" in taunt, taunt
+    assert "стоит 8" in cleave, cleave
+    assert "урон минус 18 процентов" in taunt, taunt
     assert "на 2 хода" in taunt, taunt
 
 

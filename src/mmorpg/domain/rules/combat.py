@@ -882,6 +882,8 @@ def _use_skill(
     power = skill.power_at_rank(rank) * edge_rules.power_factor(edge)
     spec = edge_rules.applied(spec_for(skill.effect), edge)
     cooldown = recharged(edge_rules.cooldown_of(skill.cooldown, edge), spec, power)
+    if rank >= content.rules.max_rank:
+        cooldown = max(0, cooldown - skill_rules.MASTERY_COOLDOWN)
     reduction = mods.collect_modifiers(content, character, actor.effects).get(
         "cooldown_reduction_percent", 0.0
     )

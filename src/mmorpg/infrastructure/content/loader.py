@@ -87,8 +87,12 @@ EXPECTED_CLASSES = 8
 
 #: Сколько умений у класса. Двадцать боевых на шесть слотов панели - это выбор;
 #: сорок пассивных - то, во что уходит очко между боевыми (``docs/skills.md``).
-ACTIVES_PER_CLASS = 20
-PASSIVES_PER_CLASS = 40
+#: Боевых умений на класс: двадцать уровней открытия, и на четырёх из них стоит
+#: развилка - два умения на одно место (ADR 0024).
+ACTIVES_PER_CLASS = 24
+#: Развилок на класс. Столько уровней открытия несут по два умения.
+FORKS_PER_CLASS = 4
+PASSIVES_PER_CLASS = 20
 MINIMUM_TRAITS = 60
 EXPECTED_CITIES = 15
 LOCATIONS_PER_CITY = 5
@@ -223,16 +227,44 @@ def _build_rules(raw: Mapping[str, Mapping[str, Any]], problems: list[str]) -> P
         stat_points_per_level=int(class_meta.get("stat_points_per_level", 2)),
         active_unlock_levels=tuple(class_meta.get("active_unlock_levels", ())),
         passive_unlock_levels=tuple(class_meta.get("passive_unlock_levels", ())),
+        fork_levels=tuple(class_meta.get("fork_levels", ())),
         active_slots=int(class_meta.get("active_slots", 6)),
         racial_slots=int(class_meta.get("racial_slots", 1)),
         traits_at_creation=int(trait_meta.get("picks_at_creation", 2)),
         max_rank=int(skill_meta.get("max_rank", 5)),
         edge_rank=int(skill_meta.get("edge_rank", 3)),
         skill_point_per_level=int(skill_meta.get("skill_point_per_level", 1)),
+        rank_costs=tuple(int(value) for value in skill_meta.get("rank_costs", (1, 2, 2, 3, 4))),
+        branch_gates=tuple(int(value) for value in skill_meta.get("branch_gates", (0, 20, 50, 90))),
+        branch_tier_levels=tuple(
+            int(value) for value in skill_meta.get("branch_tier_levels", (1, 61, 154, 227))
+        ),
     )
-    if len(rules.active_unlock_levels) != ACTIVES_PER_CLASS:
+    if len(rules.rank_costs) != rules.max_rank:
         problems.append(
-            f"classes.toml: [meta].active_unlock_levels must list {ACTIVES_PER_CLASS} levels"
+            f"skills.toml: [meta].rank_costs must price all {rules.max_rank} ranks, "
+            f"got {len(rules.rank_costs)}"
+        )
+    if len(rules.branch_gates) != len(rules.branch_tier_levels):
+        problems.append(
+            "skills.toml: [meta].branch_gates and [meta].branch_tier_levels "
+            "must have the same length - one number per tier"
+        )
+    if rules.branch_gates and rules.branch_gates[0] != 0:
+        problems.append("skills.toml: [meta].branch_gates must open the first tier at 0")
+    if list(rules.branch_gates) != sorted(rules.branch_gates):
+        problems.append("skills.toml: [meta].branch_gates must not fall as tiers rise")
+    unlock_count = ACTIVES_PER_CLASS - FORKS_PER_CLASS
+    if len(rules.active_unlock_levels) != unlock_count:
+        problems.append(
+            f"classes.toml: [meta].active_unlock_levels must list {unlock_count} levels"
+        )
+    if len(rules.fork_levels) != FORKS_PER_CLASS:
+        problems.append(f"classes.toml: [meta].fork_levels must list {FORKS_PER_CLASS} levels")
+    stray = [level for level in rules.fork_levels if level not in rules.active_unlock_levels]
+    if stray:
+        problems.append(
+            f"classes.toml: [meta].fork_levels names levels {stray} that no active unlock stands on"
         )
     if len(rules.passive_unlock_levels) != PASSIVES_PER_CLASS:
         problems.append(
@@ -331,6 +363,7 @@ def _parse_skills(
         parsed.append(
             Skill(
                 code=code,
+                fork=str(entry.get("fork", "")),
                 name=str(entry["name"]),
                 owner_kind=OwnerKind(owner_kind_raw),
                 owner_id=owner_id,
@@ -709,10 +742,11 @@ def _validate_classes(
                 f"expected {PASSIVES_PER_CLASS}"
             )
         active_levels = tuple(skill.level for skill in actives)
-        if len(actives) == ACTIVES_PER_CLASS and active_levels != rules.active_unlock_levels:
+        expected_actives = tuple(sorted((*rules.active_unlock_levels, *rules.fork_levels)))
+        if len(actives) == ACTIVES_PER_CLASS and active_levels != expected_actives:
             problems.append(
                 f"skills.toml: class {klass.id} unlocks actives at {active_levels}, "
-                f"expected {rules.active_unlock_levels}"
+                f"expected {expected_actives}"
             )
         passive_levels = tuple(skill.level for skill in passives)
         if len(passives) == PASSIVES_PER_CLASS and passive_levels != rules.passive_unlock_levels:
@@ -720,6 +754,97 @@ def _validate_classes(
                 f"skills.toml: class {klass.id} unlocks passives at {passive_levels}, "
                 f"expected {rules.passive_unlock_levels}"
             )
+        _check_branches(klass.id, (*actives, *passives), rules, problems)
+        _check_forks(klass.id, actives, rules, problems)
+
+
+def _check_branches(
+    class_id: str,
+    owned: Sequence[Skill],
+    rules: ProgressionRules,
+    problems: list[str],
+) -> None:
+    """Ветвь названа у каждого умения, и каждая ступень достижима.
+
+    Ступень, гейт которой дороже всего, что лежит в ветви ниже неё, - это кнопка,
+    которая не нажмётся никогда (``Claude.md``, правило 9). Проверяется здесь, а
+    не в бою: содержимое обязано быть проходимым до того, как в него сыграют.
+    """
+    nameless = [skill.code for skill in owned if skill.branch is None]
+    if nameless:
+        problems.append(
+            f"skills.toml: class {class_id} leaves {len(nameless)} skills without a branch, "
+            f"first {nameless[0]}"
+        )
+        return
+
+    full = rules.full_rank_cost()
+    for branch in ActionTag:
+        in_branch = [skill for skill in owned if skill.branch is branch]
+        if not in_branch:
+            problems.append(f"skills.toml: class {class_id} has no skills in branch {branch.value}")
+            continue
+        if not any(rules.tier_of_level(skill.level) == 1 for skill in in_branch):
+            problems.append(
+                f"skills.toml: class {class_id} branch {branch.value} opens above tier 1 "
+                "and can never be entered"
+            )
+        for tier in range(2, len(rules.branch_gates) + 1):
+            if not any(rules.tier_of_level(skill.level) == tier for skill in in_branch):
+                continue
+            # Развилка даёт очкам одно место, а не два: считаем её один раз.
+            below = {
+                skill.fork or skill.code
+                for skill in in_branch
+                if rules.tier_of_level(skill.level) < tier
+            }
+            if len(below) * full < rules.gate_for_tier(tier):
+                problems.append(
+                    f"skills.toml: class {class_id} branch {branch.value} gates tier {tier} "
+                    f"behind {rules.gate_for_tier(tier)} points, but only "
+                    f"{len(below) * full} can be spent below it"
+                )
+
+
+def _check_forks(
+    class_id: str,
+    actives: Sequence[Skill],
+    rules: ProgressionRules,
+    problems: list[str],
+) -> None:
+    """Развилка - ровно два умения, один уровень, одна ветвь.
+
+    Развилка из одного умения - это обычное умение с лишним словом на экране;
+    развилка из трёх - панель, которая не влезает в сообщение.
+    """
+    groups: dict[str, list[Skill]] = {}
+    for skill in actives:
+        if skill.fork:
+            groups.setdefault(skill.fork, []).append(skill)
+        elif skill.level in rules.fork_levels:
+            problems.append(
+                f"skills.toml: {skill.code} stands on fork level {skill.level} "
+                "without declaring a fork"
+            )
+    if len(groups) != FORKS_PER_CLASS:
+        problems.append(
+            f"skills.toml: class {class_id} declares {len(groups)} forks, "
+            f"expected {FORKS_PER_CLASS}"
+        )
+    for fork, members in sorted(groups.items()):
+        if len(members) != 2:
+            problems.append(f"skills.toml: fork {fork} holds {len(members)} skills, expected 2")
+            continue
+        first, second = members
+        if first.level != second.level:
+            problems.append(f"skills.toml: fork {fork} spans levels {first.level}/{second.level}")
+        elif first.level not in rules.fork_levels:
+            problems.append(
+                f"skills.toml: fork {fork} stands on level {first.level}, "
+                f"which is not one of {rules.fork_levels}"
+            )
+        if first.branch is not second.branch:
+            problems.append(f"skills.toml: fork {fork} spans two branches")
 
 
 # --- traits ----------------------------------------------------------

@@ -401,7 +401,10 @@ def test_a_point_you_do_not_have_is_refused_in_words(content: GameContent, hero:
     )
     refused = step(content, broke, skills, skill_screens.skill_entry_text(content, broke, fresh))
     assert refused.pending.empty
-    assert "Очков умений нет" in refused.notice
+    # Отказ называет цену и остаток, а не отсылает к общему правилу: цена ранга
+    # теперь у каждого своя (ADR 0024).
+    assert "а есть 0" in refused.notice
+    assert "Очки дают за уровень" in refused.notice
 
 
 def test_the_third_rank_asks_for_an_edge_before_anything_else(
@@ -427,7 +430,7 @@ def test_a_skill_waiting_for_its_edge_says_so_on_its_own_button(
     """Кнопка обязана обещать то, что нажатие сделает.
 
     На ранге грани нажатие уходит на выбор грани, а не на ранг. Пока кнопка
-    говорила «повысить за одно очко», игрок нажимал, выбирал грань, возвращался и
+    говорила «следующий за одно очко», игрок нажимал, выбирал грань, возвращался и
     видел тот же ранг и ту же надпись - то есть заевший экран.
     """
     skill = content.skill("warrior_rassechenie")
@@ -438,7 +441,7 @@ def test_a_skill_waiting_for_its_edge_says_so_on_its_own_button(
     assert "сначала выберите грань" in skill_screens.skill_entry_text(content, ready, skill)
 
     chosen = replace(ready, loadout=replace(ready.loadout, edges={skill.code: skill.edges[0].code}))
-    assert "повысить за одно очко" in skill_screens.skill_entry_text(content, chosen, skill)
+    assert "следующий за" in skill_screens.skill_entry_text(content, chosen, skill)
 
 
 def test_choosing_an_edge_says_the_rank_grows_again(content: GameContent, hero: Character) -> None:
@@ -491,9 +494,10 @@ def test_the_mentor_takes_gold_and_hands_the_points_back(
     mentor = step(content, student, in_city, "Наставник")
     assert mentor.screen is ScreenId.MENTOR
 
+    spent = skill_rules.spent_on(content, student, "warrior_rassechenie")
     forgotten = step(content, student, mentor, city_screens.forget_label("Рассечение", 2).text)
     assert forgotten.pending.character is not None
-    assert forgotten.pending.character.unspent_skill_points == student.unspent_skill_points + 2
+    assert forgotten.pending.character.unspent_skill_points == student.unspent_skill_points + spent
     assert forgotten.pending.character.gold == student.gold - mentor_price(student.level)
 
 
