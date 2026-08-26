@@ -6,17 +6,25 @@
 чужие раны (``docs/accessibility.md``: бой ждёт нажатия, а не соглашается за
 игрока).
 
-Отряд не делает игру легче: противник тот же, а плата делится. Ходить вчетвером
+Отряд не делает игру легче: противник тот же, а плата делится. Ходить впятером
 стоит того ради боя, который в одиночку не берётся, - хозяин логова и дно
-спуска, - а не ради того, чтобы вчетверо быстрее собирать волков.
+спуска, - а не ради того, чтобы впятеро быстрее собирать волков.
+
+У места в отряде есть имя и есть дело (``entities/party.py``): щит принимает
+удар, лекарь держит щит на ногах, клинок бьёт, дозорный ходит первым. Место
+занято одним человеком, берут его сами, и стоит оно ровно столько, сколько
+сказано: ни одна прибавка места не идёт даром (ADR 0025).
 """
 
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, replace
+from collections.abc import Mapping
+from dataclasses import dataclass, field, replace
+from types import MappingProxyType
 
 from mmorpg.domain.entities.combat import MAX_SIDE
+from mmorpg.domain.entities.party import PartyRole, role_name
 
 #: Сколько человек помещается в отряд. Столько же, сколько бойцов на стороне:
 #: отряд и есть сторона (``domain/entities/combat.MAX_SIDE``).
@@ -38,10 +46,44 @@ class Party:
 
     leader_id: int
     members: tuple[int, ...] = ()
+    #: Кто какое место занял. Здесь только занятые боевые места: вожаком тот,
+    #: кто собрал отряд, стоит и без записи.
+    roles: Mapping[int, PartyRole] = field(default_factory=lambda: MappingProxyType({}))
 
     def __post_init__(self) -> None:
         if self.leader_id not in self.members:
             object.__setattr__(self, "members", (self.leader_id, *self.members))
+        object.__setattr__(self, "roles", MappingProxyType(dict(self.roles)))
+
+    def role_of(self, character_id: int) -> PartyRole | None:
+        """Место этого человека. У собравшего отряд оно есть и без выбора."""
+        chosen = self.roles.get(character_id)
+        if chosen is not None:
+            return chosen
+        return PartyRole.LEADER if character_id == self.leader_id else None
+
+    def holder_of(self, role: PartyRole) -> int:
+        """Кто занял это место. Ноль - место свободно."""
+        for character_id, taken in self.roles.items():
+            if taken is role:
+                return character_id
+        return 0
+
+    def with_role(self, character_id: int, role: PartyRole | None) -> Party:
+        """Занять место или освободить его. Чужое место не отбирается.
+
+        Отбирать было бы нечестно молча: тот, у кого место забрали, узнал бы об
+        этом посреди боя, когда стая перестала бы идти на него.
+        """
+        if not self.has(character_id):
+            return self
+        taken = {key: value for key, value in self.roles.items() if key != character_id}
+        if role is not None and role is not PartyRole.LEADER:
+            holder = self.holder_of(role)
+            if holder and holder != character_id:
+                return self
+            taken[character_id] = role
+        return replace(self, roles=MappingProxyType(taken))
 
     @property
     def size(self) -> int:
@@ -63,7 +105,15 @@ class Party:
         """Отряд без этого человека. Ушёл собравший - отряда больше нет."""
         if character_id == self.leader_id:
             return Party(leader_id=0, members=())
-        return replace(self, members=tuple(one for one in self.members if one != character_id))
+        # Ушедший освобождает и своё место: щит, которого нет в бою, - это не
+        # щит, а строка в списке.
+        return replace(
+            self,
+            members=tuple(one for one in self.members if one != character_id),
+            roles=MappingProxyType(
+                {key: value for key, value in self.roles.items() if key != character_id}
+            ),
+        )
 
     @property
     def disbanded(self) -> bool:
@@ -88,6 +138,18 @@ def invite_refusal(
             f"Разница уровней больше {LEVEL_WINDOW}: "
             f"ваш {inviter_level}, у {invitee_name} {invitee_level}."
         )
+    return ""
+
+
+def role_refusal(party: Party, character_id: int, role: PartyRole, holder_name: str) -> str:
+    """Пусто, когда место занять можно; иначе - почему нельзя, целой фразой."""
+    if not party.has(character_id):
+        return "Вы не в отряде: места раздают только в отряде."
+    if role is PartyRole.LEADER:
+        return "Вожаком стоит тот, кто собрал отряд."
+    holder = party.holder_of(role)
+    if holder and holder != character_id:
+        return f"{role_name(role)} в отряде уже есть: {holder_name}."
     return ""
 
 

@@ -4,7 +4,7 @@
 второй такой же, поэтому усиление, нажатое трижды, не даёт тройной прибавки. Это
 проверяет ``tests/domain/test_effects.py``.
 
-У эффекта бывает имя состояния (``status``) - одно из двадцати, объявленных в
+У эффекта бывает имя состояния (``status``) - одно из объявленных в
 ``entities/statuses.py``. Тогда ключ у него общий на всё состояние: горение от
 жезла и горение от стрелы - это одно горение, а не два. Что состояние делает,
 сказано там же; здесь оно только лежит и считает свои ходы.
@@ -42,13 +42,19 @@ class ActiveEffect:
     #: это проценты урона, для горения - урон за ход, для барьера - сколько он
     #: держит.
     magnitude: float = 0.0
+    #: Держится весь бой и ходами не меряется. Так живёт место в отряде: щит
+    #: остаётся щитом до конца боя, и снять это ни ходом, ни очищением нельзя
+    #: (``entities/party.py``).
+    permanent: bool = False
 
     def ticked(self) -> ActiveEffect:
+        if self.permanent:
+            return self
         return replace(self, turns_left=self.turns_left - 1)
 
     @property
     def expired(self) -> bool:
-        return self.turns_left <= 0
+        return not self.permanent and self.turns_left <= 0
 
 
 def status_effect(
@@ -65,6 +71,7 @@ def status_effect(
         name=spec.name,
         modifiers=MappingProxyType(
             {key: magnitude * scale for key, scale in spec.modifiers.items()}
+            | dict(spec.flat_modifiers)
         ),
         turns_left=max(1, turns),
         source=source,
@@ -117,6 +124,10 @@ class EffectStack:
         for effect_id, effect in self.effects.items():
             if count <= 0:
                 break
+            if effect.permanent:
+                # Место в отряде очищением не снимается: это не то, что на бойца
+                # повесили, а то, кем он в этом бою стоит.
+                continue
             if effect.beneficial is beneficial:
                 del remaining[effect_id]
                 count -= 1

@@ -17,6 +17,7 @@ import re
 from dataclasses import dataclass
 from enum import StrEnum
 
+from mmorpg.domain.entities.party import CLEAR_WORDS, ROLE_WORDS
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.screens.base import Screen
 
@@ -26,6 +27,7 @@ class Intent(StrEnum):
     LOOK = "look"
     MAIN_MENU = "main_menu"
     ATTACK = "attack"
+    DEFEND = "defend"
     SKILL = "skill"
     RACIAL = "racial"
     BAG = "bag"
@@ -36,6 +38,8 @@ class Intent(StrEnum):
     PARTY_ACCEPT = "party_accept"
     PARTY_DECLINE = "party_decline"
     PARTY_LEAVE = "party_leave"
+    #: Встать на место в отряде: щитом, лекарем, клинком, дозорным.
+    PARTY_ROLE = "party_role"
     PAGE = "page"
     NEXT_PAGE = "next_page"
     PREVIOUS_PAGE = "previous_page"
@@ -67,6 +71,9 @@ SIMPLE_COMMANDS: dict[str, Intent] = {
     "/bag": Intent.BAG,
     "/бежать": Intent.FLEE,
     "/flee": Intent.FLEE,
+    "/защита": Intent.DEFEND,
+    "/защититься": Intent.DEFEND,
+    "/defend": Intent.DEFEND,
     # Выход из боя, который бросили с той стороны, и способ услышать его заново.
     "/сдаться": Intent.YIELD,
     "/yield": Intent.YIELD,
@@ -96,6 +103,8 @@ _COMBAT_COMMAND = re.compile(r"^/(?:бой|combat)\s+(\S+)$", re.IGNORECASE)
 _COMBAT_WORDS: dict[str, Intent] = {
     "атака": Intent.ATTACK,
     "attack": Intent.ATTACK,
+    "защита": Intent.DEFEND,
+    "defend": Intent.DEFEND,
     "сумка": Intent.BAG,
     "bag": Intent.BAG,
     "бежать": Intent.FLEE,
@@ -106,7 +115,7 @@ _COMBAT_WORDS: dict[str, Intent] = {
     "refresh": Intent.REFRESH,
 }
 
-#: Слова после ``/отряд``: принять зов, уйти, посмотреть.
+#: Слова после ``/отряд``: принять зов, уйти, посмотреть, встать на место.
 _PARTY_COMMAND = re.compile(r"^/(?:отряд|party)\s+(\S+)$", re.IGNORECASE)
 _PARTY_WORDS: dict[str, Intent] = {
     "принять": Intent.PARTY_ACCEPT,
@@ -138,6 +147,10 @@ def parse_command(text: str) -> Command | None:
         word = match.group(1).casefold()
         if word in _PARTY_WORDS:
             return Command(intent=_PARTY_WORDS[word])
+        # Название места - тоже слово отряда: «/отряд щит» ставит на место, а
+        # «/отряд снять» его освобождает (``entities/party.py``).
+        if word in ROLE_WORDS or word in CLEAR_WORDS:
+            return Command(intent=Intent.PARTY_ROLE, argument=word)
         return Command(intent=Intent.PARTY, argument=word)
 
     if (match := _COMBAT_COMMAND.match(stripped)) is not None:
@@ -154,6 +167,7 @@ _BUTTON_INTENTS: tuple[tuple[object, Intent], ...] = (
     (labels.LOOK, Intent.LOOK),
     (labels.MAIN_MENU, Intent.MAIN_MENU),
     (labels.ATTACK, Intent.ATTACK),
+    (labels.DEFEND, Intent.DEFEND),
     (labels.BAG, Intent.BAG),
     (labels.FLEE, Intent.FLEE),
     (labels.BATTLE_YIELD, Intent.YIELD),

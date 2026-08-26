@@ -53,6 +53,10 @@ EFFECTIVE_KEYS: frozenset[str] = frozenset(
         # бой: чужой удар
         "damage_taken_percent",
         "armor_percent",
+        # Броня числом, а не процентом: столько её даёт закрывшемуся собственный
+        # уровень (``rules/combat.DEFEND_ARMOR_PER_LEVEL``), и проценты доспеха
+        # её не трогают - обещано ровно это число.
+        "armor_flat",
         "dodge_percent",
         "accuracy_percent",
         "initiative_percent",

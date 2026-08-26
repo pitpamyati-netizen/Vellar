@@ -26,11 +26,13 @@ from types import MappingProxyType
 from mmorpg.domain.entities.damage import UNARMED, DamageType
 from mmorpg.domain.entities.effects import EffectStack
 from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
+from mmorpg.domain.entities.party import PartyRole
 from mmorpg.domain.entities.statuses import StatusKind
 
-#: Сколько бойцов помещается на одной стороне. Четверо: столько строк экрана
-#: слушается за раз, и столько имён игрок держит в голове (``docs/accessibility``).
-MAX_SIDE = 4
+#: Сколько бойцов помещается на одной стороне. Пятеро: столько мест в отряде, и
+#: у каждого из них своё дело (``entities/party.py``). Больше - и строй уже не
+#: удержать в голове с одного прочтения (``docs/accessibility``).
+MAX_SIDE = 5
 
 #: Две стороны, и больше их не бывает: «все против всех» - это не бой, а
 #: сообщение об ошибке, прочитанное вслух.
@@ -77,6 +79,9 @@ class CombatantKind(StrEnum):
 
 class ActionKind(StrEnum):
     ATTACK = "attack"
+    #: Закрыться: ход уходит целиком на оборону, зато чужой удар и находит реже,
+    #: и стоит дешевле (``rules/combat.DEFEND_*``).
+    DEFEND = "defend"
     SKILL = "skill"
     RACIAL = "racial"
     ITEM = "item"
@@ -261,6 +266,9 @@ class Combatant:
     trace: Trace = field(default_factory=Trace)
     #: На кого этот боец смотрит. Ноль - ни на кого пока.
     focus: int = 0
+    #: Место в отряде. У одиночки и у породы его нет: место - это отряд, а не
+    #: свойство человека (``entities/party.py``).
+    role: PartyRole | None = None
     #: Ушёл из боя сам: сбежал или сдался. Не то же, что пал.
     left: bool = False
     #: В нём пробили брешь: его ближайший удар доходит вполсилы. Снимается в

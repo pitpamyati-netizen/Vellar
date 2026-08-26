@@ -13,6 +13,7 @@ from mmorpg.application.services import battle as battle_service
 from mmorpg.application.services.party import PartyStore
 from mmorpg.domain.entities import Character, GameContent, SkillLoadout
 from mmorpg.domain.entities.combat import ActionKind, BattleAction, Verdict
+from mmorpg.domain.entities.party import PartyRole
 from mmorpg.domain.rules import party as party_rules
 from mmorpg.domain.rules.combat import act
 from mmorpg.domain.rules.party import Party
@@ -176,6 +177,30 @@ async def test_leaving_shrinks_the_party_and_the_leader_ends_it(
 
     assert await parties.leave(1) is None, "ушёл собравший - отряда больше нет"
     assert await parties.of(2) is None
+
+
+async def test_a_place_in_the_party_survives_the_storage(cache: InMemoryStateCache) -> None:
+    """Место лежит там же, где отряд, и переживает дорогу через кэш."""
+    parties = PartyStore(cache)
+    await parties.save(Party(leader_id=1, members=(1, 2)))
+
+    taken = await parties.take_role(2, PartyRole.SHIELD)
+    assert taken is not None and taken.role_of(2) is PartyRole.SHIELD
+    assert (await parties.of(1)).role_of(2) is PartyRole.SHIELD  # type: ignore[union-attr]
+
+    given_up = await parties.take_role(2, None)
+    assert given_up is not None and given_up.role_of(2) is None
+
+
+async def test_a_place_taken_by_another_is_not_handed_over(cache: InMemoryStateCache) -> None:
+    parties = PartyStore(cache)
+    await parties.save(Party(leader_id=1, members=(1, 2, 3)))
+    await parties.take_role(2, PartyRole.MENDER)
+
+    refused = await parties.take_role(3, PartyRole.MENDER)
+    assert refused is not None
+    assert refused.role_of(3) is None
+    assert refused.role_of(2) is PartyRole.MENDER
 
 
 def test_the_party_has_a_ceiling_and_a_level_window() -> None:

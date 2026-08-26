@@ -38,6 +38,7 @@ from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.location import LocationState, Presence
 from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind
+from mmorpg.domain.entities.party import ROLE_DUTIES, PartyRole, role_by_word, role_name
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.entities.trade import TradeRecord
 from mmorpg.domain.ports.repositories import (
@@ -804,12 +805,25 @@ async def take_from_node(
 async def _party_names(
     party: party_rules.Party, characters: CharacterRepository
 ) -> tuple[str, ...]:
+    """Кто в отряде и кто на каком месте - в том порядке, в каком собрались."""
     names: list[str] = []
     for member_id in party.members:
         one = await characters.get(member_id)
         if one is not None:
-            names.append(one.name)
+            place = party.role_of(member_id)
+            names.append(f"{one.name} — {role_name(place).lower()}" if place else one.name)
     return tuple(names)
+
+
+def _free_places(party: party_rules.Party) -> str:
+    """Какие места ещё свободны, вместе с тем, что каждое из них делает."""
+    free = [
+        role for role in PartyRole if role is not PartyRole.LEADER and not party.holder_of(role)
+    ]
+    if not free:
+        return "Свободных мест нет."
+    listed = "; ".join(f"{role_name(role).lower()} — {ROLE_DUTIES[role]}" for role in free)
+    return f"Свободные места: {listed}. Встать: «/отряд щит», уйти с места: «/отряд снять»."
 
 
 async def _party_step(
@@ -832,6 +846,7 @@ async def _party_step(
             if party is not None:
                 names = await _party_names(party, characters)
                 lines.append(f"Ваш отряд: {', '.join(names)}.")
+                lines.append(_free_places(party))
                 lines.append("«/отряд уйти» — уйти из отряда.")
             else:
                 lines.append("Вы идёте один. Позвать соседа можно кнопкой на узле локации.")
@@ -856,6 +871,9 @@ async def _party_step(
                     await _tell(message, other.user_id, f"{character.name} идёт с вами.")
             return f"Вы в отряде: {', '.join(names)}. Бой у вас теперь общий."
 
+        case Intent.PARTY_ROLE:
+            return await _take_place(character, command.argument, parties, characters)
+
         case Intent.PARTY_DECLINE:
             await parties.forget_call(character.id)
             return "Зов отклонён."
@@ -875,6 +893,39 @@ async def _party_step(
 
         case _:
             return None
+
+
+async def _take_place(
+    character: Character,
+    word: str,
+    parties: PartyStore,
+    characters: CharacterRepository,
+) -> str:
+    """Встать на место в отряде или уйти с него.
+
+    Место занимает сам человек: раздавать чужие места вожаку было бы правом
+    менять чужой бой, не спросив, - а в бой за игрока в Велларе не ходит никто
+    (``docs/accessibility.md``).
+    """
+    party = await parties.of(character.id)
+    if party is None:
+        return "Вы идёте один: места раздают только в отряде."
+
+    role = role_by_word(word)
+    if role is None:
+        left = await parties.take_role(character.id, None)
+        return "Вы сошли с места." if left is not None else "Вы идёте один."
+
+    holder_id = party.holder_of(role)
+    holder = await characters.get(holder_id) if holder_id else None
+    refused = party_rules.role_refusal(
+        party, character.id, role, holder.name if holder is not None else ""
+    )
+    if refused:
+        return refused
+
+    await parties.take_role(character.id, role)
+    return f"Вы встали на место: {role_name(role).lower()}. В бою это значит: {ROLE_DUTIES[role]}."
 
 
 async def _call_to_party(

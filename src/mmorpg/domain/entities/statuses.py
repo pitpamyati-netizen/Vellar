@@ -13,7 +13,12 @@
 
 Величина состояния (``magnitude``) - одно число, и что оно значит, сказано
 здесь: для слабости это проценты урона, для горения - урон за ход, для барьера
-- сколько он держит.
+- сколько он держит, для защиты - сколько брони она добавляет.
+
+У состояния бывает и то, что от величины не зависит вовсе (``flat_modifiers``):
+защита прибавляет брони столько, сколько стоит закрыться на этом уровне, а
+уклонения - всегда одну и ту же треть. Обе прибавки объявлены здесь, потому что
+обещает их состояние, а не тот, кто его повесил.
 """
 
 from __future__ import annotations
@@ -27,7 +32,7 @@ from mmorpg.domain.entities.damage import DamageType
 
 
 class StatusKind(StrEnum):
-    """Двадцать состояний игры. Больше их не бывает."""
+    """Двадцать одно состояние игры. Больше их не бывает."""
 
     SILENCE = "silence"
     BURNING = "burning"
@@ -49,6 +54,8 @@ class StatusKind(StrEnum):
     FREEZE = "freeze"
     STUN = "stun"
     BARRIER = "barrier"
+    #: Закрылся: ход отдан обороне (``rules/combat.DEFEND_*``).
+    GUARD = "guard"
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +71,8 @@ class StatusSpec:
     name: str
     beneficial: bool
     modifiers: Mapping[str, float] = field(default_factory=lambda: MappingProxyType({}))
+    #: Прибавки, которые состояние даёт целиком, не оглядываясь на величину.
+    flat_modifiers: Mapping[str, float] = field(default_factory=lambda: MappingProxyType({}))
     #: Каким родом урона состояние точит носителя каждый ход. ``None`` - не точит.
     damage: DamageType | None = None
     #: Ход носителя не состоится вовсе.
@@ -82,6 +91,7 @@ def _spec(
     *,
     beneficial: bool = False,
     modifiers: Mapping[str, float] | None = None,
+    flat_modifiers: Mapping[str, float] | None = None,
     damage: DamageType | None = None,
     skips_turn: bool = False,
     broken_by_damage: bool = False,
@@ -91,6 +101,7 @@ def _spec(
         name=name,
         beneficial=beneficial,
         modifiers=MappingProxyType(dict(modifiers or {})),
+        flat_modifiers=MappingProxyType(dict(flat_modifiers or {})),
         damage=damage,
         skips_turn=skips_turn,
         broken_by_damage=broken_by_damage,
@@ -151,6 +162,15 @@ STATUSES: Mapping[StatusKind, StatusSpec] = MappingProxyType(
             StatusKind.RESOURCE_REGEN, "Восстановление сил", beneficial=True
         ),
         StatusKind.BARRIER: _spec(StatusKind.BARRIER, "Барьер", beneficial=True),
+        # Защита - единственное состояние, которое вешает не умение, а кнопка:
+        # закрыться умеет всякий, и стоит это целого хода (ADR 0025).
+        StatusKind.GUARD: _spec(
+            StatusKind.GUARD,
+            "Защита",
+            beneficial=True,
+            modifiers={"armor_flat": 1.0},
+            flat_modifiers={"dodge_percent": 30.0},
+        ),
     }
 )
 

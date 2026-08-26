@@ -58,6 +58,12 @@ from mmorpg.domain.entities.damage import UNARMED, DamageType
 from mmorpg.domain.entities.dice import Dice
 from mmorpg.domain.entities.effects import ActiveEffect, EffectStack, status_effect
 from mmorpg.domain.entities.location import Enemy
+from mmorpg.domain.entities.party import (
+    SHIELD_HOLDS_ABOVE,
+    PartyRole,
+    modifiers_of,
+    role_name,
+)
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.entities.statuses import StatusKind, status_spec
 from mmorpg.domain.procgen import items as item_procgen
@@ -91,6 +97,8 @@ __all__ = [
     "blow_range",
     "blow_roll",
     "damage_type_of",
+    "defend_armor",
+    "defend_dodge",
     "hero_combatant",
     "incoming_damage_factor",
     "intent_of",
@@ -191,8 +199,46 @@ MOMENTUM_DAMAGE_PERCENT = 25.0
 #: Удар того, в ком пробили брешь, доходит вполсилы.
 BREACH_ANSWER_SCALE = 0.5
 
+# --- защита ------------------------------------------------------------
+#
+# Закрыться умеет всякий, и умения на это не нужно: ход уходит целиком на
+# оборону, а взамен чужой удар и находит реже, и стоит дешевле (ADR 0025).
+# Броня считается от уровня, потому что от уровня растёт и чужой удар: постоянное
+# число к трёхсотому уровню не значило бы ничего.
+
+#: Сколько брони прибавляет закрывшемуся каждый его уровень.
+DEFEND_ARMOR_PER_LEVEL = 3.0
+#: Сколько ходов держится защита. Два, а не один: срок укорачивается в конце
+#: того же хода, в который защита поставлена (``_upkeep``), и «один ход» значило
+#: бы, что закрывшийся не закрыт ни от чего.
+DEFEND_TURNS = 2
+#: Как защита называется в событии - тем же словом, каким её называет кнопка.
+DEFEND_NAME = "Защита"
+
 
 # --- сборка бойцов ----------------------------------------------------
+
+
+def role_effect(role: PartyRole | None) -> ActiveEffect | None:
+    """Место в отряде как эффект: прибавки места и их цена, одним свёртком.
+
+    Держится весь бой и очищением не снимается: место - это не то, что на бойца
+    повесили, а то, кем он в этом бою стоит (``entities/effects.permanent``).
+    """
+    bundle = modifiers_of(role)
+    if role is None or not bundle:
+        return None
+    return ActiveEffect(
+        id=f"role:{role.value}",
+        name=role_name(role),
+        modifiers=dict(bundle),
+        # Срок у постоянного эффекта не считается вовсе; единица стоит затем,
+        # чтобы он не выглядел кончившимся ни для кого, кто прочтёт его число.
+        turns_left=1,
+        source="party",
+        beneficial=True,
+        permanent=True,
+    )
 
 
 def hero_combatant(
@@ -203,6 +249,7 @@ def hero_combatant(
     side: int,
     live: bool = True,
     user_id: int = 0,
+    role: PartyRole | None = None,
 ) -> Combatant:
     """Персонаж как боец.
 
@@ -210,10 +257,17 @@ def hero_combatant(
     дерётся тем же оружием и теми же умениями, что и его хозяин: выдуманного
     числа урона у него больше нет (ADR 0021).
 
+    ``role`` - место в отряде. Его прибавки ложатся на бойца до того, как
+    считаются здоровье и очередь: дозорный и правда ходит раньше, а не
+    называется быстрым (ADR 0025).
+
     Бой начинается с тем здоровьем, с каким персонаж в него вошёл: раны
     переходят из узла в узел, и потому зелье и ночлег стоят денег.
     """
-    stats = derived_stats(content, character)
+    effects = EffectStack()
+    if (place := role_effect(role)) is not None:
+        effects = effects.apply(place)
+    stats = derived_stats(content, character, effects)
     return Combatant(
         id=combatant_id,
         side=side,
@@ -221,7 +275,9 @@ def hero_combatant(
         name=character.name,
         level=character.level,
         max_health=stats.max_health,
-        health=character.health_or(stats.max_health),
+        # Место может убавить здоровья (дозорный), и тогда вошедший в бой целым
+        # входит в него целым, а не с запасом сверх собственного потолка.
+        health=min(character.health_or(stats.max_health), stats.max_health),
         max_resource=stats.max_resource,
         resource=stats.max_resource,
         resource_name=stats.resource_name,
@@ -230,6 +286,8 @@ def hero_combatant(
         damage_type=gear.weapon_damage_type(content, character),
         character_id=character.id,
         user_id=character.user_id if live else 0,
+        effects=effects,
+        role=role,
     )
 
 
@@ -597,6 +655,8 @@ def _action_tag(
     match action.kind:
         case ActionKind.ATTACK:
             return ActionTag.PRESS
+        case ActionKind.DEFEND:
+            return ActionTag.GUARD
         case ActionKind.ITEM:
             return ActionTag.GUARD if action.item_id is not None else None
         case ActionKind.FLEE | ActionKind.FOCUS | ActionKind.YIELD:
@@ -647,6 +707,8 @@ def _perform(
     match action.kind:
         case ActionKind.ATTACK:
             return _basic_attack(content, roster, state, actor, action.target, tempo, source)
+        case ActionKind.DEFEND:
+            return _defend(state, actor)
         case ActionKind.SKILL | ActionKind.RACIAL:
             return _use_skill(content, roster, state, actor, action, tempo, source)
         case ActionKind.ITEM:
@@ -799,6 +861,30 @@ def blow_roll(
     """Один настоящий удар: бросок костей оружия плюс характеристика."""
     dice, bonus = _blow_parts(content, character, effects, scaling)
     return dice.roll(source) + bonus
+
+
+def defend_armor(level: int) -> int:
+    """Сколько брони даёт защита на этом уровне. То же число слышит игрок."""
+    return max(1, round(level * DEFEND_ARMOR_PER_LEVEL))
+
+
+def defend_dodge() -> float:
+    """Насколько защита поднимает уклонение. Объявлено у самого состояния."""
+    return status_spec(StatusKind.GUARD).flat_modifiers.get("dodge_percent", 0.0)
+
+
+def _defend(state: BattleState, actor: Combatant) -> BattleState:
+    """Закрыться: броня от уровня и уклонение до своего следующего хода."""
+    armor = float(defend_armor(actor.level))
+    return _inflicted(
+        state,
+        actor.id,
+        Inflict(kind=StatusKind.GUARD, turns=DEFEND_TURNS),
+        power=armor,
+        skill_name=DEFEND_NAME,
+        source_code="defend",
+        magnitude=armor,
+    )
 
 
 # --- умения -----------------------------------------------------------
@@ -2224,15 +2310,28 @@ ENGINE_SKILL_CHANCE = 40.0
 
 
 def _weakest_foe(state: BattleState, actor: Combatant) -> Combatant | None:
-    """Кого движок бьёт: того, кому осталось меньше всех.
+    """Кого движок бьёт: щита, пока тот держится, иначе - кому осталось меньше.
 
-    Не жребий: добить раненого - это то, что сделал бы всякий, и это читается со
-    слуха. Игрок слышит, кого бьют, и успевает его прикрыть.
+    Щит и есть работа щита: пока он на ногах, стая идёт на него, и лекарь за
+    его спиной успевает лечить. Ниже четверти здоровья стая чует слабину и
+    берётся за тех, кто мягче, - удержать щит выше этой четверти и есть то, ради
+    чего отряд расходится по местам (ADR 0025).
+
+    Без щита - как и раньше: добить раненого. Это то, что сделал бы всякий, и
+    это читается со слуха: игрок слышит, кого бьют, и успевает его прикрыть.
     """
     foes = state.foes_of(actor.id)
     if not foes:
         return None
+    holding = tuple(one for one in foes if _holds_the_line(one))
+    if holding:
+        return min(holding, key=lambda one: one.id)
     return min(foes, key=lambda one: (one.health / max(1, one.max_health), one.id))
+
+
+def _holds_the_line(one: Combatant) -> bool:
+    """Стоит ли этот боец щитом и держится ли он ещё."""
+    return one.role is PartyRole.SHIELD and one.health > one.max_health * SHIELD_HOLDS_ABOVE
 
 
 def is_low_health(state: BattleState, combatant_id: int) -> bool:

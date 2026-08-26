@@ -10,6 +10,8 @@ from mmorpg.application.services import battle as battle_service
 from mmorpg.domain.entities import Character, GameContent, SkillLoadout
 from mmorpg.domain.entities.combat import ActionKind, BattleAction, Verdict
 from mmorpg.domain.entities.location import Enemy, EnemyKind
+from mmorpg.domain.entities.party import PartyRole
+from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.rules.economy import buy_price, roll_assortment, sell_price
 from mmorpg.presentation.telegram.flows import combat as flow
 from mmorpg.presentation.telegram.screens import shop as shop_screens
@@ -110,10 +112,13 @@ def test_the_panel_holds_the_filled_slots_by_their_own_numbers(
     """Умение помнит свой номер, а пустое место кнопки не получает."""
     screen = flow.render(content, fighter, session, HERO)
     texts = [row[0].text for row in screen.rows]
-    assert texts[0] == "Атака — натиск"
+    # Обычный удар говорит и свой тег, и то, сколько он снимет.
+    assert texts[0].startswith("Атака — натиск, урон от ")
+    # Следом - защита: закрыться умеет всякий, и умения на это не нужно.
+    assert texts[1].startswith("Защититься — оборона, броня плюс ")
     # У бойца заняты три слота из шести, и это ровно три кнопки, с 1 по 3.
-    assert [text.split(".")[0] for text in texts[1:4]] == ["1", "2", "3"]
-    assert "расовое" in texts[4]
+    assert [text.split(".")[0] for text in texts[2:5]] == ["1", "2", "3"]
+    assert "расовое" in texts[5]
     assert screen.rows[-1][0].text == "Сумка"
 
 
@@ -142,19 +147,20 @@ def test_a_slot_keeps_its_number_when_an_earlier_one_is_empty(
     )
     session = open_fight(content, gapped, node=1)
     texts = [row[0].text for row in flow.render(content, gapped, session, HERO).rows]
-    assert texts[1].startswith("3. Удар щитом")
+    # Удар, защита, а следом - третье умение со своим номером.
+    assert texts[2].startswith("3. Удар щитом")
 
 
 def test_cooldown_is_written_into_the_button(
     content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
-    ready = flow.render(content, fighter, session, HERO).rows[3][0].text
+    ready = flow.render(content, fighter, session, HERO).rows[4][0].text
     # Готовое умение называет на кнопке цену применения.
     assert "откат 3 хода" in ready
     assert ready.endswith("готово")
 
     used, _ = flow.advance(content, {HERO: fighter}, session, HERO, ready)
-    third = flow.render(content, fighter, used, HERO).rows[3][0].text
+    third = flow.render(content, fighter, used, HERO).rows[4][0].text
     # Потраченное называет, сколько от него осталось, - а это другой вопрос.
     assert third.startswith("3. Удар щитом — оборона,")
     assert third.endswith("ещё 3 хода")
@@ -170,7 +176,7 @@ def test_every_button_says_what_it_does(
     между умением и лотерейным билетом для того, кто не может увидеть подсказку.
     """
     screen = flow.render(content, fighter, session, HERO)
-    cleave, taunt = screen.rows[1][0].text, screen.rows[2][0].text
+    cleave, taunt = screen.rows[2][0].text, screen.rows[3][0].text
     assert "урон " in cleave, cleave
     assert "стоит 8" in cleave, cleave
     assert "урон минус 18 процентов" in taunt, taunt
@@ -185,7 +191,7 @@ def test_a_skill_states_a_number_that_grows_with_the_character(
     def damage_on_the_button(level: int) -> int:
         hero = replace(fighter, level=level)
         session = open_fight(content, hero, node=1)
-        label = flow.render(content, hero, session, HERO).rows[1][0].text
+        label = flow.render(content, hero, session, HERO).rows[2][0].text
         # Урон на кнопке — границы, а не одно число: сравнивается верхняя.
         return int(label.split("до ")[1].split(",")[0])
 
@@ -255,7 +261,7 @@ def test_a_skill_on_cooldown_costs_no_turn_either(
     content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
     """Тот же отказ, та же цена: никакой."""
-    ready = flow.render(content, fighter, session, HERO).rows[3][0].text
+    ready = flow.render(content, fighter, session, HERO).rows[4][0].text
     used, _ = flow.advance(content, {HERO: fighter}, session, HERO, ready)
     again, _ = flow.advance(content, {HERO: fighter}, used, HERO, "/умение 3")
     assert any(event.kind.value == "on_cooldown" for event in again.state.events)
@@ -306,10 +312,92 @@ def test_every_action_button_names_its_tag(
     content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
     texts = [row[0].text for row in flow.render(content, fighter, session, HERO).rows]
-    assert texts[0] == "Атака — натиск"
-    assert "натиск" in texts[1], "Секущий росчерк is a plain blow"
-    assert "оборона" in texts[2], "Провокация pulls the blow onto you"
-    assert "оборона" in texts[4], "the racial slot names its tag too"
+    assert texts[0].startswith("Атака — натиск,")
+    assert texts[1].startswith("Защититься — оборона,")
+    assert "натиск" in texts[2], "Секущий росчерк is a plain blow"
+    assert "оборона" in texts[3], "Провокация pulls the blow onto you"
+    assert "оборона" in texts[5], "the racial slot names its tag too"
+
+
+# --- защита, цели и места отряда --------------------------------------
+
+
+def test_the_attack_button_says_how_much_it_takes_off(
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
+) -> None:
+    """Границы удара стоят прямо на кнопке: их не приходится искать в строках."""
+    attack = flow.render(content, fighter, session, HERO).rows[0][0].text
+    least = int(attack.split("урон от ")[1].split(" до ")[0])
+    most = int(attack.split(" до ")[1])
+    assert 0 < least <= most
+
+
+def test_the_defend_button_names_both_numbers_and_spends_the_turn(
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
+) -> None:
+    """Закрыться умеет всякий, и кнопка говорит, что за ход дают."""
+    defend = flow.render(content, fighter, session, HERO).rows[1][0].text
+    assert "броня плюс 30" in defend, defend
+    assert "уклонение плюс 30 процентов" in defend, defend
+
+    after, notice = flow.advance(content, {HERO: fighter}, session, HERO, defend)
+    assert not notice
+    hero = after.state.by_id(HERO)
+    assert hero is not None and hero.effects.has(StatusKind.GUARD)
+    assert "защита" in flow.render(content, fighter, after, HERO).text()
+
+
+def test_the_defend_command_works_without_the_keyboard(
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
+) -> None:
+    assert flow.action_for(content, fighter, session, HERO, "/защита") == BattleAction(
+        kind=ActionKind.DEFEND
+    )
+    assert flow.action_for(content, fighter, session, HERO, "/бой защита") == BattleAction(
+        kind=ActionKind.DEFEND
+    )
+
+
+def test_choosing_a_target_names_its_health_and_costs_no_turn(
+    content: GameContent, fighter: Character
+) -> None:
+    """Целей несколько - значит, есть и кнопки, и на них написано, кого бьют."""
+    session, _ = battle_service.begin(
+        content,
+        battle_id="test-pack",
+        attackers=[(fighter, True)],
+        enemies=(make_enemy(), make_enemy(name="Волчица"), make_enemy(name="Вожак")),
+        seed=FIGHT_SEED,
+    )
+    screen = flow.render(content, fighter, session, HERO)
+    targets = [row[0].text for row in screen.rows if row[0].text.startswith("Цель ")]
+    assert len(targets) == 3
+    assert "здоровье" in targets[0]
+
+    aimed, notice = flow.advance(content, {HERO: fighter}, session, HERO, targets[2])
+    assert not notice
+    assert aimed.state.round == session.state.round, "выбор цели ходом не считается"
+    hero = aimed.state.by_id(HERO)
+    assert hero is not None and hero.focus != 0
+    assert "Ваша цель:" in flow.render(content, fighter, aimed, HERO).text()
+
+
+def test_the_place_in_the_party_is_read_out_in_the_fight(
+    content: GameContent, fighter: Character
+) -> None:
+    """Кого лечить, решают по месту, и услышать его надо вместе со здоровьем."""
+    ally = replace(fighter, id=2, user_id=43, name="Мирна")
+    session, _ = battle_service.begin(
+        content,
+        battle_id="test-party",
+        attackers=[(fighter, True), (ally, True)],
+        enemies=(make_enemy(),),
+        seed=FIGHT_SEED,
+        roles={fighter.id: PartyRole.SHIELD, ally.id: PartyRole.MENDER},
+    )
+    text = flow.render(content, fighter, session, HERO).text()
+    assert "Вы (щит):" in text
+    assert "Мирна (лекарь):" in text
 
 
 def test_the_plain_attack_word_still_works(

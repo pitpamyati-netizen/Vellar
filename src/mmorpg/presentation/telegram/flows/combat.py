@@ -109,6 +109,8 @@ def action_for(
     match command.intent:
         case Intent.ATTACK:
             return BattleAction(kind=ActionKind.ATTACK)
+        case Intent.DEFEND:
+            return BattleAction(kind=ActionKind.DEFEND)
         case Intent.FLEE:
             return BattleAction(kind=ActionKind.FLEE)
         case Intent.YIELD:
@@ -119,8 +121,27 @@ def action_for(
             return BattleAction(kind=ActionKind.SKILL, slot=command.number - 1)
         case Intent.SELECT:
             return _action_from_label(content, character, session, viewer_id, command.argument)
+        case Intent.UNKNOWN:
+            return _from_older_label(command.argument)
         case _:
             return None
+
+
+def _from_older_label(argument: str) -> BattleAction | None:
+    """Кнопка прежней панели, у которой с тех пор выросла надпись.
+
+    Надписи удара и защиты растут вместе с числами, которые они называют, и
+    нажатие на старую клавиатуру не должно запирать игрока: слово в начале
+    надписи решает то же, что решала вся она (правило доступности 12).
+    """
+    grown = (
+        (labels.ATTACK.text, ActionKind.ATTACK),
+        (labels.DEFEND.text, ActionKind.DEFEND),
+    )
+    for text, kind in grown:
+        if argument.strip().startswith(f"{text} —"):
+            return BattleAction(kind=kind)
+    return None
 
 
 def _action_from_label(
@@ -142,9 +163,16 @@ def _action_from_label(
         racial = screens.racial_label(content, character, viewer)
         if racial.matches(argument):
             return BattleAction(kind=ActionKind.RACIAL)
-    # Метка несёт свой тег; голое слово, которое игрок набирал раньше, работает.
-    if screens.attack_label().matches(argument) or labels.ATTACK.matches(argument):
+        # Метка несёт свои числа; голое слово, которое игрок набирал раньше,
+        # работает по-прежнему.
+        if screens.attack_label(content, character, viewer).matches(argument):
+            return BattleAction(kind=ActionKind.ATTACK)
+        if screens.defend_label(viewer).matches(argument):
+            return BattleAction(kind=ActionKind.DEFEND)
+    if labels.ATTACK.matches(argument):
         return BattleAction(kind=ActionKind.ATTACK)
+    if labels.DEFEND.matches(argument):
+        return BattleAction(kind=ActionKind.DEFEND)
     if labels.FLEE.matches(argument):
         return BattleAction(kind=ActionKind.FLEE)
     if labels.BATTLE_YIELD.matches(argument):

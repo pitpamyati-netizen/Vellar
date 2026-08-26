@@ -114,9 +114,11 @@ def derived_stats(
     max_resource = raw_resource * mods.percent(modifiers, "resource_percent")
 
     worn = gear.worn_armor(content, character.equipment.item_ids(), character.level)
+    # Плоская броня прибавляется после процентов нарочно: закрывшемуся обещано
+    # ровно «уровень, взятый трижды», и доспех этого числа не двигает.
     armor = (stats[StatCode.END] * ARMOR_PER_ENDURANCE + worn) * mods.percent(
         modifiers, "armor_percent"
-    )
+    ) + mods.flat(modifiers, "armor_flat")
 
     accuracy = (ACCURACY_BASE + stats[StatCode.AGI] * ACCURACY_PER_AGILITY) * mods.percent(
         modifiers, "accuracy_percent"

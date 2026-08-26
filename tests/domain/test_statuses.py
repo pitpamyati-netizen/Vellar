@@ -1,4 +1,4 @@
-"""Двадцать состояний: что каждое из них делает на самом деле.
+"""Двадцать одно состояние: что каждое из них делает на самом деле.
 
 Раньше половина этого была признаком внутри бойца - ``stunned`` считал ходы, а
 горение отличалось от кровотечения только названием умения. Здесь проверяется,
@@ -105,8 +105,8 @@ def held(one: Combatant) -> set[StatusKind]:
 # --- сам список -------------------------------------------------------
 
 
-def test_there_are_twenty_statuses_and_every_one_is_described() -> None:
-    assert len(StatusKind) == 20
+def test_there_are_twenty_one_statuses_and_every_one_is_described() -> None:
+    assert len(StatusKind) == 21
     for kind in StatusKind:
         spec = STATUSES[kind]
         assert spec.name, kind
@@ -127,10 +127,14 @@ def test_control_and_dot_families_are_what_they_say() -> None:
 
 
 def test_every_status_is_reachable_from_content(content: GameContent) -> None:
-    """Состояние, которое не вешает ни одно умение, - это код без содержимого."""
+    """Состояние, которое не вешает ни одно умение, - это код без содержимого.
+
+    Кроме защиты: её вешает не умение, а кнопка, которая есть у всякого в бою
+    (``rules/combat._defend``), и содержимому она поэтому не принадлежит.
+    """
     from mmorpg.domain.rules.skill_effects import spec_for
 
-    reachable: set[StatusKind] = set()
+    reachable: set[StatusKind] = {StatusKind.GUARD}
     for skill in content.skills:
         if not skill.is_active:
             continue

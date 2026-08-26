@@ -34,11 +34,15 @@ from mmorpg.domain.entities.combat import (
 )
 from mmorpg.domain.entities.content import GameContent, Skill
 from mmorpg.domain.entities.location import EnemyRank
+from mmorpg.domain.entities.party import role_name
 from mmorpg.domain.entities.statuses import StatusKind, status_name
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules.combat import (
+    BASIC_ATTACK_PERCENT,
     MOMENTUM_DAMAGE_PERCENT,
     blow_range,
+    defend_armor,
+    defend_dodge,
     intent_of,
 )
 from mmorpg.domain.rules.skill_effects import (
@@ -104,17 +108,41 @@ SPECIAL_NAMES: dict[str, str] = {
 }
 
 
-def attack_label() -> Label:
-    """Обычный удар тоже несёт тег, и метка говорит какой."""
+def attack_label(content: GameContent, character: Character, viewer: Combatant) -> Label:
+    """Обычный удар: тег и то, сколько он снимет.
+
+    Урон назван границами броска, как и у умений: он бросается костями оружия, и
+    одно число обещало бы точность, которой нет. Броня цели, крит и разгон
+    считаются после, поэтому это обещание об ударе, а не предсказание хода.
+    """
+    low, high = blow_range(content, character, viewer.effects)
+    share = BASIC_ATTACK_PERCENT / 100.0
+    least = max(1, round(low * share))
+    most = max(least, round(high * share))
     return label(
-        f"{labels.ATTACK.text} — {TAG_NAMES[ActionTag.PRESS]}",
+        f"{labels.ATTACK.text} — {TAG_NAMES[ActionTag.PRESS]}, урон от {least} до {most}",
         labels.ATTACK.emoji,
     )
 
 
+def defend_label(viewer: Combatant) -> Label:
+    """Закрыться: ход уходит целиком, и метка называет, что за него дают."""
+    return label(
+        f"{labels.DEFEND.text} — {TAG_NAMES[ActionTag.GUARD]}, "
+        f"броня плюс {defend_armor(viewer.level)}, "
+        f"уклонение плюс {percent(defend_dodge())} до вашего следующего хода",
+        labels.DEFEND.emoji,
+    )
+
+
 def target_label(one: Combatant) -> Label:
-    """Кнопка выбора цели. Номер бойца делает метку неповторимой."""
-    return label(f"Цель {one.id}. {one.name}", "🎯")
+    """Кнопка выбора цели: номер, имя и сколько цели осталось.
+
+    Номер бойца делает метку неповторимой, а здоровье стоит прямо в кнопке:
+    выбирают цель по нему, и искать его в строках выше не приходится.
+    """
+    left = amount(one.health, one.max_health, with_percent=False)
+    return label(f"Цель {one.id}. {one.name}, здоровье {left}", "🎯")
 
 
 def skill_effect(
@@ -278,7 +306,7 @@ def foe_line(state: BattleState, one: Combatant) -> str:
     чужой выбор нельзя, но выбрать ответ на привычку можно, и это ровно та же
     игра, что и с намерением породы (ADR 0021).
     """
-    rank = RANK_NAMES[one.rank]
+    rank = RANK_NAMES[one.rank] or (role_name(one.role) if one.role is not None else "")
     title = f"{one.id}. {one.name} ({rank})" if rank else f"{one.id}. {one.name}"
     line = f"{title}: здоровье {amount(one.health, one.max_health)}"
     if one.barrier:
@@ -293,16 +321,21 @@ def foe_line(state: BattleState, one: Combatant) -> str:
 
 
 def ally_line(one: Combatant, *, viewer_id: int) -> str:
-    """Строка о своём. О себе - «вы», и с запасом ресурса."""
+    """Строка о своём: место в отряде, здоровье, что висит. О себе - «вы».
+
+    Место называется первым: в бою впятером «кого лечить» решается по нему, и
+    услышать его надо раньше числа (``entities/party.py``).
+    """
+    place = f" ({role_name(one.role).lower()})" if one.role is not None else ""
     if one.id == viewer_id:
-        line = f"Вы: здоровье {amount(one.health, one.max_health)}"
+        line = f"Вы{place}: здоровье {amount(one.health, one.max_health)}"
         if one.max_resource:
             line = (
                 f"{line}, {one.resource_name.lower()} "
                 f"{amount(one.resource, one.max_resource, with_percent=False)}"
             )
     else:
-        line = f"{one.id}. {one.name}: здоровье {amount(one.health, one.max_health)}"
+        line = f"{one.id}. {one.name}{place}: здоровье {amount(one.health, one.max_health)}"
     if one.barrier:
         line = f"{line}, барьер {one.barrier}"
     if held := status_line(one):
@@ -515,7 +548,11 @@ def battle_screen(
         lines.append(f"Ваша цель: {target.id}. {target.name}.")
     lines.append("Ваш ход.")
 
-    rows: list[tuple[Label, ...]] = [(attack_label(),)]
+    rows: list[tuple[Label, ...]] = [
+        (attack_label(content, character, viewer),),
+        # Закрыться умеет всякий: умения на это не нужно, а ход стоит целиком.
+        (defend_label(viewer),),
+    ]
     # Только занятые слоты: номер за умением закреплён, а пустое место кнопки не
     # получает - нажатие на «Пустой слот» стоило игроку целого хода.
     rows.extend(
