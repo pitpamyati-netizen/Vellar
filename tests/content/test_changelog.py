@@ -1,8 +1,8 @@
-"""The update history players read.
+"""История обновлений, которую читают игроки.
 
-Two things are guarded here: that ``content/changelog.toml`` is a file the game
-can actually post, and that a malformed one is refused with every problem listed
-at once, the way the rest of the content directory is.
+Здесь стерегут два дела: что ``content/changelog.toml`` - это файл, который игра
+и правда может опубликовать, и что испорченный отвергается со всеми бедами,
+названными разом, - ровно так же, как весь остальной каталог содержимого.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ def write(tmp_path: Path, body: str) -> Path:
     return tmp_path
 
 
-# --- the real file ---------------------------------------------------
+# --- настоящий файл --------------------------------------------------
 
 
 def test_the_shipped_changelog_loads() -> None:
@@ -38,7 +38,7 @@ def test_the_shipped_changelog_loads() -> None:
 
 
 def test_every_shipped_release_is_a_postable_update() -> None:
-    """A version nobody can post is a version players never hear about."""
+    """Версия, которую никто не может опубликовать, - это версия, о которой игроки не узнают."""
     for release in load_changelog(CONTENT_ROOT):
         event = bc.changelog(
             release.version,
@@ -53,11 +53,11 @@ def test_every_shipped_release_is_a_postable_update() -> None:
         assert len(text) <= bc.limit_for(bc.BroadcastKind.CHANGELOG)
 
 
-# --- the headline ----------------------------------------------------
+# --- заголовок -------------------------------------------------------
 
 
 def test_the_headline_written_in_the_file_is_the_first_line(tmp_path: Path) -> None:
-    """The line a player hears first is written by an author, not assembled."""
+    """Строку, которую игрок слышит первой, пишет автор, а не сборка."""
     content_dir = write(
         tmp_path,
         """
@@ -96,7 +96,7 @@ def test_a_release_without_a_headline_still_posts(tmp_path: Path) -> None:
 
 
 def test_a_headline_that_hides_the_version_is_refused(tmp_path: Path) -> None:
-    """A first line read on its own has to say which update it announces."""
+    """Первая строка, прочитанная отдельно, обязана назвать, о каком обновлении речь."""
     content_dir = write(
         tmp_path,
         """
@@ -135,7 +135,7 @@ def test_an_empty_or_overlong_headline_is_refused(tmp_path: Path) -> None:
     assert f"headline, the limit is {ENTRY_LIMIT}" in problems
 
 
-# --- ordering --------------------------------------------------------
+# --- порядок ---------------------------------------------------------
 
 
 def test_ten_comes_after_nine() -> None:
@@ -175,7 +175,7 @@ def test_selecting_from_nothing_is_refused() -> None:
         select_release(())
 
 
-# --- refusals --------------------------------------------------------
+# --- отказы ----------------------------------------------------------
 
 
 def test_a_missing_file_is_named(tmp_path: Path) -> None:

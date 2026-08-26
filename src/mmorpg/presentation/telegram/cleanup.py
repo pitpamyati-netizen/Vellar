@@ -1,18 +1,19 @@
-"""Deleting the bot's own messages in the group after five minutes.
+"""Удаление собственных сообщений бота в группе через пять минут.
 
-The group belongs to the people talking in it. A bot that leaves every answer in
-place turns a conversation into a log, and for someone reading by ear that log is
-worse than clutter: scrolling back through it costs real time. So a group message
-is temporary - it is delivered, read, and removed (``Narrative.md``, section 9).
+Группа принадлежит тем, кто в ней разговаривает. Бот, оставляющий каждый свой
+ответ на месте, превращает разговор в протокол, а для того, кто читает на слух,
+такой протокол хуже беспорядка: прокрутить его назад стоит настоящего времени.
+Поэтому сообщение в группе временное - его доставили, прочитали и убрали
+(``Narrative.md``, раздел 9).
 
-**Only in the group.** Nothing is ever deleted in a private chat, where the
-message *is* the screen and the player re-reads it as long as they need
-(``docs/accessibility.md``, rule 3).
+**Только в группе.** В личной переписке не удаляется ничто: там сообщение *и
+есть* экран, и игрок перечитывает его столько, сколько нужно
+(``docs/accessibility.md``, правило 3).
 
-The deletion is a background task with no result anyone waits on. It must never
-touch the update that produced it: a message deleted by a moderator first, a lost
-admin right, a network blip - all of them are dropped quietly, exactly like a
-failed broadcast.
+Удаление - фоновая задача, результата которой никто не ждёт. Трогать обновление,
+её породившее, ей нельзя ни при каких обстоятельствах: сообщение, удалённое
+раньше модератором, отобранное право администратора, сбой сети - всё это тихо
+отбрасывается, ровно как несостоявшийся пост в канал.
 """
 
 from __future__ import annotations
@@ -25,8 +26,8 @@ from mmorpg.logging import get_logger
 
 logger = get_logger(__name__)
 
-# The same five minutes an offer lives, and for the same reason: it is how long a
-# message stays worth reading.
+# Те же пять минут, что живёт предложение, и по той же причине: столько сообщение
+# остаётся достойным чтения.
 GROUP_MESSAGE_TTL_SECONDS = 300.0
 
 Deleter = Callable[[int, int], Awaitable[object]]
@@ -34,7 +35,7 @@ Deleter = Callable[[int, int], Awaitable[object]]
 
 @dataclass(slots=True)
 class MessageReaper:
-    """Schedules deletions and owns the tasks that perform them."""
+    """Откладывает удаления и владеет задачами, которые их выполняют."""
 
     delay: float = GROUP_MESSAGE_TTL_SECONDS
     _tasks: set[asyncio.Task[None]] = field(default_factory=set)
@@ -44,10 +45,10 @@ class MessageReaper:
         return len(self._tasks)
 
     def schedule(self, deleter: Deleter, chat_id: int, message_id: int) -> None:
-        """Delete one message once the delay has passed."""
+        """Удалить одно сообщение, когда пройдёт отсрочка."""
         task = asyncio.create_task(self._reap(deleter, chat_id, message_id))
-        # asyncio keeps only a weak reference to a running task, so a set that
-        # outlives the call is the difference between a deletion and a lost one.
+        # asyncio держит на работающую задачу только слабую ссылку, поэтому множество,
+        # живущее дольше вызова, - это разница между удалением и потерянным удалением.
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
@@ -57,12 +58,12 @@ class MessageReaper:
             await deleter(chat_id, message_id)
         except asyncio.CancelledError:
             raise
-        # Broad on purpose: an undeletable message is untidy, never fatal.
+        # Широко нарочно: неудаляемое сообщение - это неопрятно, но не смертельно.
         except Exception as error:
             logger.debug("group_message_not_deleted", message_id=message_id, error=str(error))
 
     async def aclose(self) -> None:
-        """Cancel everything still waiting. Called from the shutdown stack."""
+        """Отменить всё, что ещё ждёт. Зовётся из стека остановки."""
         pending = tuple(self._tasks)
         for task in pending:
             task.cancel()

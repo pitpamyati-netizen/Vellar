@@ -1,9 +1,9 @@
-"""Initial schema: users, characters, inventory.
+"""Первая схема: пользователи, персонажи, сумка.
 
-Only durable state lives in PostgreSQL. Everything derived (total stats, location
-layouts, shop assortments) is recomputed, and everything short-lived (FSM state,
-active fights, location deltas) lives in Redis with a TTL - see
-docs/architecture.md, "Storage split".
+В PostgreSQL живёт только долговечное состояние. Всё производное (итоги
+характеристик, карты локаций, прилавки лавок) считается заново, а всё
+короткоживущее (состояние автомата, начатые бои, изменения в локациях) живёт в
+Redis со сроком - см. docs/architecture.md, «Что где лежит».
 
 Revision ID: 0001
 Revises:

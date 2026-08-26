@@ -1,8 +1,9 @@
-"""The arena screen: the stake, the record, the table, one button.
+"""Экран арены: ставка, счёт, таблица, одна кнопка.
 
-Everything a player needs before they commit gold is on the screen before they
-press anything: what a round costs, what it pays, how they have done so far, and
-who is ahead this season. There is no queue to join and nothing to wait for.
+Всё, что игроку нужно знать до того, как он поставит золото, стоит на экране
+раньше любого нажатия: сколько стоит круг, сколько он платит, как дела шли до
+сих пор и кто впереди в этом сезоне. Очереди, в которую надо встать, нет, и
+ждать нечего.
 """
 
 from __future__ import annotations
@@ -32,8 +33,8 @@ def arena_screen(
         *head("Арена.", notice),
         "Здесь спор решают боем: Палате дешевле принять исход боя, чем считать чужие долги.",
         f"Ставка: {stake} золота. Выигрыш: {payout} золота, проигрыш — ставка.",
-        # The whole rule in one sentence, on the screen where the gold is
-        # committed: the arena hands back debts and never invents money.
+        # Всё правило одной фразой, на том экране, где ставят золото: арена отдаёт долги
+        # и никогда не выдумывает денег.
         f"Арена держит ваших {held} золота: сверху ставки она отдаёт только их, "
         "и отыграться на ней можно ровно на то, что на ней оставлено.",
         "Соперника ждать не нужно: против вас выставят снимок другого приключенца "
@@ -55,7 +56,7 @@ def arena_screen(
 
 
 def round_line(result: arena_rules.Round) -> str:
-    """What one settled round is worth saying, in one sentence."""
+    """Что стоит сказать об одном закрытом круге, одной фразой."""
     if result.won:
         over = result.payout - result.stake
         top_up = f"сверху {over}" if over else "сверху ничего: арена ваших денег не держит"

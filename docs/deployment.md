@@ -1,361 +1,353 @@
-# Deployment
+# Развёртывание
 
-How the bot is actually run: locally while working on it, and as a stack that a
-hundred players can be left on.
+Как бот на самом деле запускают: локально, пока над ним работают, и стеком, на
+котором можно оставить сотню игроков.
 
-## Three ways to run
+## Три способа запустить
 
-| | `Start.bat local` | `Start.bat` (or `solo`) | `Start.bat docker` |
+| | `Start.bat local` | `Start.bat` (или `solo`) | `Start.bat docker` |
 | --- | --- | --- | --- |
-| Processes | one, on the host | one, on the host | PostgreSQL, Redis, migrations, bot |
-| Storage | in memory | PostgreSQL on this machine | PostgreSQL + Redis, on disk |
-| Characters survive a restart | no | yes | yes |
-| Screens and fights survive it | no | no | yes |
-| Restarted automatically | no | no | yes |
-| Needs | `uv`, a bot token | `uv`, PostgreSQL, a bot token | Docker Desktop, a bot token |
-| For | trying a change | one machine, no Docker | players |
+| Процессов | один, на машине | один, на машине | PostgreSQL, Redis, миграции, бот |
+| Хранение | в памяти | PostgreSQL этой машины | PostgreSQL + Redis, на диске |
+| Персонажи переживают перезапуск | нет | да | да |
+| Экраны и бои переживают его | нет | нет | да |
+| Перезапускается сам | нет | нет | да |
+| Нужно | `uv`, токен бота | `uv`, PostgreSQL, токен бота | Docker Desktop, токен бота |
+| Для чего | попробовать правку | одна машина, без Docker | игроки |
 
-`local` forgets every character the moment the process exits. It is a development
-convenience (`docs/adr/0005-in-memory-adapters.md`), never somewhere to leave
-players.
+`local` забывает каждого персонажа, как только процесс вышел. Это удобство
+разработки (`docs/adr/0005-in-memory-adapters.md`), а не место, где оставляют игроков.
 
-`solo` is the middle: the world is in a real database and the session is not
-(`docs/adr/0010-a-machine-without-containers.md`). It exists because Docker
-Desktop is several gigabytes to keep a world that one installer already keeps.
+`solo` посередине: мир в настоящей базе, сессия — нет
+(`docs/adr/0010-a-machine-without-containers.md`). Он существует потому, что Docker
+Desktop — это несколько гигабайт ради мира, который и так держит один установщик.
 
-## Solo: PostgreSQL without Docker
+## Solo: PostgreSQL без Docker
 
-Once, when setting the machine up:
+Один раз, когда настраивают машину:
 
-1. Install PostgreSQL from <https://www.postgresql.org/download/windows/>, taking
-   the defaults. Remember the superuser password it asks for.
-2. `Start.bat setup-db` - creates the role `vellar` with the password from
-   `POSTGRES_PASSWORD` and a database of the same name owned by it. It asks for
-   that superuser password, is idempotent, and touches nothing else.
+1. Поставить PostgreSQL с <https://www.postgresql.org/download/windows/> со значениями
+   по умолчанию. Запомнить пароль суперпользователя, который он спросит.
+2. `Start.bat setup-db` — заводит роль `vellar` с паролем из `POSTGRES_PASSWORD` и базу
+   того же имени, принадлежащую ей. Спрашивает тот самый пароль суперпользователя,
+   идемпотентен и не трогает ничего больше.
 
-Then, every time:
+Дальше, каждый раз:
 
 ```
 Start.bat solo
 ```
 
-which brings the schema up to date (`alembic upgrade head`) and starts the bot in
-this window. Ctrl+C stops it. `POSTGRES_DSN` in `.env` is what both of them
-connect to, so pointing it at a database you made yourself works as well.
+Он накатывает схему (`alembic upgrade head`) и запускает бота в этом окне. Ctrl+C
+останавливает. Оба подключаются по `POSTGRES_DSN` из `.env`, поэтому указать его на
+базу, которую вы сделали сами, тоже работает.
 
-What a restart costs is the session, not the world: everyone is put back in the
-main menu unhurt, and a fight in progress ends. That is done rather than hoped
-for: the keyboard in a player's chat outlives the process, so the first press
-after a restart arrives with no screen behind it and is answered by the main menu
-plus one sentence saying the previous screen is gone (`handlers/creation.resume`).
-Before that catch-all existed such a press reached no handler at all, and the
-player got silence. Characters, gold, bags, quests
-and keeper edits are in PostgreSQL and are untouched. Updating is the same few
-seconds of silence as an update to the stack - Ctrl+C, then `Start.bat solo`.
+Перезапуск стоит сессии, но не мира: всех возвращает в главное меню целыми, а начатый
+бой кончается. Это сделано, а не понадеяно: клавиатура в чате игрока переживает
+процесс, поэтому первое нажатие после перезапуска приходит без экрана за ним, и на него
+отвечают главным меню плюс одной фразой о том, что прежнего экрана больше нет
+(`handlers/creation.resume`). До того как этот перехват появился, такое нажатие не
+доходило ни до одного хендлера, и игрок получал тишину. Персонажи, золото, сумки,
+задания и правки смотрителя лежат в PostgreSQL и не трогаются. Обновление — те же
+несколько секунд тишины, что и обновление стека: Ctrl+C, потом `Start.bat solo`.
 
-`stop.bat` still works without Docker: it cannot stop a process in another window,
-but it takes the same `pg_dump` into `backups\`. The dump is interchangeable with
-the stack's, so a solo world can be carried into Docker later and back.
+`stop.bat` работает и без Docker: остановить процесс в чужом окне он не может, но тот
+же `pg_dump` в `backups\` он делает. Дамп взаимозаменяем со стековым, поэтому мир из
+solo можно перенести в Docker и обратно.
 
-### Carrying a world out of Docker
+### Вынести мир из Docker
 
-A stack that has already been played on holds the world in a Docker volume, which
-goes when Docker does. Move it first, while the stack still runs:
+Стек, на котором уже играли, держит мир в томе Docker, а том уходит вместе с Docker.
+Перенесите его заранее, пока стек ещё работает:
 
 ```
-stop.bat                             # dumps into backups\
-Start.bat setup-db                   # once, on the new PostgreSQL
+stop.bat                             # делает дамп в backups\
+Start.bat setup-db                   # один раз, на новом PostgreSQL
 psql "postgresql://vellar:vellar@localhost:5432/vellar" -f backups\vellar-<stamp>.sql
 Start.bat solo
 ```
 
-The dump is taken with `--clean --if-exists`, so it restores over an empty
-database and over an existing one alike. Going back the other way is the same
-file into the container's `psql`.
+Дамп снимается с `--clean --if-exists`, поэтому разворачивается и в пустую базу, и в
+существующую. Обратно — тот же файл в `psql` контейнера.
 
-If PostgreSQL is not answering, its Windows service is usually stopped:
-`net start postgresql-x64-17` from an administrator prompt, or set it to start
-with Windows in `services.msc`.
+Если PostgreSQL не отвечает, обычно остановлена его служба Windows:
+`net start postgresql-x64-17` из окна администратора или запуск вместе с Windows в
+`services.msc`.
 
-## The Docker stack
+## Стек Docker
 
 ```
-docker compose up -d          # or Start.bat docker
+docker compose up -d          # или Start.bat docker
 docker compose logs -f bot
-docker compose down           # or stop.bat
+docker compose down           # или stop.bat
 ```
 
-## Updating a game that is running
+## Обновление работающей игры
 
-In solo mode: Ctrl+C in the bot's window, then `Start.bat` again. It brings the
-schema up to date before it starts, and PostgreSQL is never stopped, so
-characters, bags and quests carry straight over. The session does not - the
-same restart everyone else pays for. Take a dump first if the change touches the
-schema: `stop.bat` writes one into `backups\` without stopping anything of yours.
+В solo: Ctrl+C в окне бота и снова `Start.bat`. Схему он накатывает до запуска, а
+PostgreSQL не останавливается, поэтому персонажи, сумки и задания переезжают как есть.
+Сессия — нет: тот же перезапуск, за который платят и все прочие. Сделайте дамп заранее,
+если правка трогает схему: `stop.bat` пишет его в `backups\`, ничего вашего не
+останавливая.
 
-In the stack: `Start.bat docker` on a stack that is already up rebuilds the image
-and lets compose swap the bot; `migrate` runs to completion first, and PostgreSQL
-and Redis are left alone, so the fight a player is mid-way through survives the
-swap. A build that fails stops before anything is replaced and the old bot keeps
-serving. The cost is a few seconds in which a press gets no answer; Telegram
-holds it and the new process replies.
+В стеке: `Start.bat docker` на уже поднятом стеке пересобирает образ и даёт compose
+подменить бота; `migrate` сначала доходит до конца, а PostgreSQL и Redis не трогаются,
+поэтому бой, который игрок ведёт в эту минуту, подмену переживает. Несобравшаяся сборка
+останавливается до того, как что-то заменено, и старый бот продолжает обслуживать. Цена
+— несколько секунд, в которые нажатие остаётся без ответа; Telegram его придержит, и
+ответит уже новый процесс.
 
-Going back is `git checkout` of the commit that worked and starting again - there
-is no saved previous image. A migration that already ran stays applied either
-way: the schema only moves forward, and going back past that means restoring a
-dump.
+Назад — это `git checkout` того коммита, который работал, и запуск снова: сохранённого
+предыдущего образа нет. Уже накатанная миграция в любом случае остаётся накатанной:
+схема двигается только вперёд, а вернуться дальше неё значит развернуть дамп.
 
-Which build is running is not a matter of memory. `Start.bat` stamps it with the
-commit (`-dirty` when anything is uncommitted or untracked) and the bot logs it
-as `build ref=...`; `Start.bat status` prints tree and container side by side.
+Какая сборка работает — не дело памяти. `Start.bat` штампует её коммитом (`-dirty`,
+когда что-то не закоммичено или не отслеживается), бот пишет это как `build ref=...`, а
+`Start.bat status` печатает дерево и контейнер рядом.
 
-Four services:
+Четыре службы:
 
-- **postgres** - durable state. Tuned in `docker-compose.yml`, published on
-  loopback only.
-- **redis** - FSM state, active fights, location deltas. Persisted with an append-only
-  file, because losing it drops players out of a fight mid-turn.
-- **migrate** - `alembic upgrade head`, runs to completion before the bot starts and
-  is a no-op on an up-to-date database.
-- **bot** - long polling. One replica, always.
+- **postgres** — долговечное состояние. Настроен в `docker-compose.yml`, опубликован
+  только на loopback.
+- **redis** — состояние автомата, начатые бои, изменения в локациях. Сохраняется в файл
+  дописывания, потому что его потеря выбивает игроков из боя посреди хода.
+- **migrate** — `alembic upgrade head`, доходит до конца раньше, чем стартует бот, и на
+  свежей базе ничего не делает.
+- **bot** — long polling. Одна копия, всегда.
 
-The bot reads `.env`, except for `APP_ENV`, `POSTGRES_DSN` and `REDIS_DSN`, which
-compose overrides so the container can never quietly fall back to the in-memory
-adapters.
+Бот читает `.env`, кроме `APP_ENV`, `POSTGRES_DSN` и `REDIS_DSN`: их перекрывает
+compose, чтобы контейнер никогда не откатился тихо на адаптеры в памяти.
 
-### Why polling, and why one replica
+### Почему опрос и почему одна копия
 
-Telegram hands `getUpdates` to a single consumer. A second replica would spend its
-life losing races with the first, so the bot never scales out horizontally in this
-mode. That is not a limit worth engineering around at this size: one process
-handles a hundred players with the latency budget intact (below).
+Telegram отдаёт `getUpdates` одному потребителю. Вторая копия провела бы жизнь,
+проигрывая гонки первой, поэтому в этом режиме бот не растёт вширь. На таком размере
+это не тот предел, вокруг которого стоит городить: один процесс держит сотню игроков, не
+выходя за бюджет задержки (ниже).
 
-Webhook mode is the answer when it stops being enough, since several instances can
-sit behind one URL. It needs a public HTTPS endpoint:
+Ответ на «стало мало» — режим вебхука: за одним адресом может стоять несколько
+образцов. Ему нужен публичный HTTPS:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-with `WEBHOOK_BASE_URL` and `WEBHOOK_SECRET` set in `.env`, and a reverse proxy
-holding the certificate in front of port 8080.
+с `WEBHOOK_BASE_URL` и `WEBHOOK_SECRET` в `.env` и обратным прокси с сертификатом перед
+портом 8080.
 
-## Sizing for a hundred players
+## Расчёт на сотню игроков
 
-The numbers in `docker-compose.yml` and `.env.example` come from this chain:
+Числа в `docker-compose.yml` и `.env.example` идут из этой цепочки:
 
-| Assumption | Value |
+| Допущение | Значение |
 | --- | --- |
-| Players online | 100 |
-| Actions per player per minute | ~6, a button press every 10 seconds |
-| Updates per second | ~10, with bursts several times that |
-| Work per update | one or two indexed row lookups, then pure rendering |
-| Budget per update | p95 under 100 ms (`architecture.md`) |
+| Игроков онлайн | 100 |
+| Действий игрока в минуту | ~6, нажатие раз в 10 секунд |
+| Обновлений в секунду | ~10, со всплесками в несколько раз выше |
+| Работы на обновление | один-два поиска строки по указателю, дальше чистая отрисовка |
+| Бюджет обновления | p95 меньше 100 мс (`architecture.md`) |
 
-Ten updates a second against a 100 ms budget needs about one update in flight at a
-time on average. The settings are sized for the bursts, not the average:
+Десять обновлений в секунду при бюджете 100 мс — это в среднем около одного обновления в
+работе разом. Настройки рассчитаны на всплески, а не на среднее:
 
-- **`UPDATE_CONCURRENCY_LIMIT=100`** caps updates handled at once. Without it a
-  burst queues unbounded work, every task waits on the connection pool, and the
-  latency for everyone degrades together. With it the excess waits at the door
-  instead, and the players already being served stay fast.
-- **`POSTGRES_POOL_MAX=20`** is the ceiling on concurrent queries. Queries here are
-  primary-key lookups; twenty of them at once is far more than ten updates a second
-  can produce.
-- **`max_connections=100`** on PostgreSQL leaves the pool five times its headroom
-  for migrations, `psql` and backups.
-- **Redis `maxmemory 512mb`** with `volatile-lru`. FSM keys carry no TTL, so this
-  policy can never evict a player's position - only the cache entries the game
-  marked as expendable.
-- **Memory limits** of 512 MB for the bot and 1 GB for PostgreSQL. Measured idle
-  use is well under those; the gap is burst headroom, and the limit is there so a
-  leak takes one container down instead of the host.
+- **`UPDATE_CONCURRENCY_LIMIT=100`** ограничивает число одновременно обрабатываемых
+  обновлений. Без него всплеск ставит в очередь неограниченную работу, каждая задача
+  ждёт пул соединений, и задержка ухудшается сразу у всех. С ним лишние ждут у двери, а
+  те, кого уже обслуживают, остаются быстрыми.
+- **`POSTGRES_POOL_MAX=20`** — потолок одновременных запросов. Запросы здесь — это
+  поиск по первичному ключу; двадцать разом куда больше, чем породят десять обновлений в
+  секунду.
+- **`max_connections=100`** у PostgreSQL оставляет пулу пятикратный запас на миграции,
+  `psql` и резервные копии.
+- **Redis `maxmemory 512mb`** с `volatile-lru`. У ключей автомата срока нет, поэтому эта
+  политика не может вытеснить место игрока — только те записи кэша, которые игра сама
+  пометила расходными.
+- **Пределы памяти** 512 МБ для бота и 1 ГБ для PostgreSQL. Замеренный простой куда
+  ниже; зазор — запас на всплеск, а предел стоит затем, чтобы утечка уронила один
+  контейнер, а не машину.
 
-### What a hundred players actually cost
+### Во что сотня игроков обходится на самом деле
 
-Measured rather than assumed, with `scripts/loadtest.py` against the real
-repositories (no Telegram in the path):
+Замерено, а не предположено, через `scripts/loadtest.py` против настоящих хранилищ (без
+Telegram на пути):
 
-| Run | p95 | Slowest |
+| Прогон | p95 | Самое медленное |
 | --- | --- | --- |
-| 100 players, a press every ~3 s (`--pause 3`) | 5 ms | 78 ms |
-| 100 players, all pressing in the same instant | 500 ms | 504 ms |
+| 100 игроков, нажатие раз в ~3 с (`--pause 3`) | 5 мс | 78 мс |
+| 100 игроков, все жмут в одно мгновение | 500 мс | 504 мс |
 
-The first line is the game as it will be played and it sits well inside the 100 ms
-budget. The second is the worst case that exists - a hundred simultaneous presses
-against a pool of twenty connections - and it is a queue, not a failure: nothing
-errored, everyone was served. If real traffic ever looks like the second line,
-`POSTGRES_POOL_MAX` is the number to raise, and `UPDATE_CONCURRENCY_LIMIT` with it.
+Первая строка — игра такой, какой в неё будут играть, и она с запасом внутри бюджета в
+100 мс. Вторая — худший случай, какой вообще бывает: сотня одновременных нажатий против
+пула из двадцати соединений, — и это очередь, а не отказ: ничто не упало, обслужены все.
+Если настоящий поток когда-нибудь станет похож на вторую строку, поднимать надо
+`POSTGRES_POOL_MAX`, а вместе с ним `UPDATE_CONCURRENCY_LIMIT`.
 
-### Where the ceiling actually is
+### Где потолок на самом деле
 
-Telegram rate limits before this stack does: roughly 30 messages a second per bot.
-At a hundred players that is comfortable, at a thousand it is the binding
-constraint, and no amount of local capacity changes it. The queue that keeps the
-bot inside that count is `middlewares/sending.py`.
+Telegram ограничивает раньше, чем этот стек: примерно 30 сообщений в секунду на бота. На
+сотне игроков это просторно, на тысяче — связывающее ограничение, и никакая местная
+ёмкость этого не меняет. Очередь, которая держит бота внутри этого счёта, —
+`middlewares/sending.py`.
 
-The next things to change, in order:
+Что менять дальше, по порядку:
 
-1. Raise `UPDATE_CONCURRENCY_LIMIT` and `POSTGRES_POOL_MAX` together - the first
-   without the second only moves the queue.
-2. Switch to webhook mode, which allows more than one bot instance.
-3. Give PostgreSQL more `shared_buffers` and a real disk.
+1. Поднять `UPDATE_CONCURRENCY_LIMIT` и `POSTGRES_POOL_MAX` вместе — первое без второго
+   просто передвигает очередь.
+2. Перейти в режим вебхука, который позволяет держать больше одного образца бота.
+3. Дать PostgreSQL больше `shared_buffers` и настоящий диск.
 
-## Staying up
+## Как игра держится
 
-Three different failures, three different mechanisms.
+Три разных отказа — три разных механизма.
 
-**The process dies.** `restart: unless-stopped` brings it back. State is in
-PostgreSQL and Redis, so players lose nothing but the seconds it takes to restart.
+**Процесс умер.** `restart: unless-stopped` его поднимает. Состояние в PostgreSQL и
+Redis, поэтому игроки теряют только те секунды, что занимает перезапуск.
 
-**The process lives but stops working** - a wedged event loop, a socket that never
-times out. Nothing outside the process can see this: the container is running,
-the port is open, and every player waits in silence. So the loop proves it is alive
-by touching a file every ten seconds (`src/mmorpg/health.py`), the image's
-`HEALTHCHECK` reads the file's age (`scripts/healthcheck.py`), and three missed
-beats mark the container unhealthy.
+**Процесс жив, но перестал работать** — вставший цикл событий, сокет без срока. Снаружи
+этого не видит никто: контейнер работает, порт открыт, а каждый игрок ждёт в тишине.
+Поэтому цикл доказывает, что он жив, трогая файл каждые десять секунд
+(`src/mmorpg/health.py`), `HEALTHCHECK` образа читает возраст файла
+(`scripts/healthcheck.py`), и три пропущенных удара помечают контейнер нездоровым.
 
-**A link breaks and the process lives.** PostgreSQL restarts, Redis is restarted
-by an update, the network hiccups. The connection is replaced by the pool, and the
-call that was in the air is made again: reads and Redis commands always, Telegram
-requests that never left, and writes only while it is certain nothing was sent
-(`docs/adr/0009-repeating-a-lost-query.md`). Nothing has to be restarted by hand.
-In the log it reads `postgres_repeating` / `postgres_recovered` and
-`telegram_repeating` / `telegram_recovered`; `postgres_call_lost` is the line that
-means a player did lose an action. Startup is patient in the same way -
-`waiting_for_service` is the bot waiting for a database that Docker started second.
+**Связь оборвалась, а процесс жив.** PostgreSQL перезапустился, Redis перезапустило
+обновление, сеть икнула. Соединение заменяет пул, а вызов, бывший в воздухе, делается
+заново: чтения и команды Redis всегда, запросы Telegram, которые не ушли, — тоже, а
+записи только пока ясно, что ничего не отправлено
+(`docs/adr/0009-repeating-a-lost-query.md`). Руками перезапускать не надо ничего. В
+журнале это читается как `postgres_repeating` / `postgres_recovered` и
+`telegram_repeating` / `telegram_recovered`; `postgres_call_lost` — та строка, которая
+значит, что игрок и правда потерял действие. Старт терпелив так же:
+`waiting_for_service` — это бот, ждущий базу, которую Docker запустил второй.
 
-Shutdown is graceful in both transports: `docker stop` sends `SIGTERM`, aiogram
-drains the updates in flight during polling, the webhook runner stops on the same
-signal, and the exit stack closes both pools before the process leaves.
+Остановка мягкая в обоих транспортах: `docker stop` шлёт `SIGTERM`, aiogram даёт
+доработать обновлениям в полёте при опросе, вебхук останавливается по тому же сигналу, а
+стек выхода закрывает оба пула до того, как процесс уйдёт.
 
-Logs are capped at 5 files of 10 MB per service. Uncapped JSON logs fill the disk,
-and a full disk takes PostgreSQL down with it.
+Журналы ограничены пятью файлами по 10 МБ на службу. Неограниченные журналы JSON
+заполняют диск, а полный диск уносит с собой PostgreSQL.
 
-## Operating it
+## Как этим управлять
 
 ```bash
-docker compose ps                       # what is running and whether it is healthy
-docker compose logs -f bot              # follow the bot
-docker compose restart bot              # restart just the bot
+docker compose ps                       # что работает и здорово ли оно
+docker compose logs -f bot              # следить за ботом
+docker compose restart bot              # перезапустить только бота
 docker inspect -f "{{.State.Health.Status}}" vellar-bot
 ```
 
-Back up the database before anything irreversible:
+Сделайте копию базы перед всем необратимым:
 
 ```bash
 docker compose exec postgres pg_dump -U vellar vellar > backup.sql
 ```
 
-A plain `stop.bat` saves first: `redis-cli SAVE` writes the temporary state -
-screens, fights, offers - on top of the append-only log, and `pg_dump` puts
-everything permanent in `backups\`, newest twenty kept. Neither is what makes a
-stop safe (no volume is touched), but a dump is what turns "the world is still
-there" into something you can carry elsewhere. With no stack running it takes the
-same dump through the machine's own `pg_dump`, which is how a solo world is
-backed up.
+Обычный `stop.bat` сначала сохраняет: `redis-cli SAVE` пишет временное состояние —
+экраны, бои, предложения — поверх журнала дописывания, а `pg_dump` кладёт всё постоянное
+в `backups\`, где держатся последние двадцать копий. Безопасной остановку делает не это
+(тома не трогают вовсе), но именно дамп превращает «мир всё ещё на месте» в то, что
+можно унести. Без поднятого стека тот же дамп берётся через собственный `pg_dump`
+машины — так делают копию мира solo.
 
-`stop.bat purge` and `docker compose down --volumes` delete every character in the
-world. There is no undo, which is why the batch file asks first.
+`stop.bat purge` и `docker compose down --volumes` удаляют всех персонажей мира. Отмены
+нет, поэтому .bat и спрашивает.
 
-### Backups on a schedule, and proof that they restore
+### Копии по расписанию и доказательство, что они разворачиваются
 
-A world only stopped once a month is a world backed up once a month, so the copy
-is taken on a clock rather than on a stop:
+Мир, который останавливают раз в месяц, — это мир с копией раз в месяц, поэтому копию
+снимают по часам, а не по остановке:
 
 ```bash
 pwsh -File scripts/backup.ps1 -Schedule 04:00
 ```
 
-That registers a Windows scheduled task ("Vellar backup"); `-Unschedule` removes
-it. Each run dumps, prunes to the newest twenty (`-Keep N`), and then **restores
-the dump into a database of its own**, counts the characters in it, compares that
-with the living database, and drops it again. A file nobody ever unpacked is not
-a backup, and a run that cannot unpack it exits non-zero and says so. The role
-needs `CREATEDB` for that, which `scripts/setup-db.sql` now grants; an older
-installation is one statement behind:
+Это заводит задачу в планировщике Windows («Vellar backup»); `-Unschedule` её убирает.
+Каждый прогон делает дамп, подрезает до последних двадцати (`-Keep N`), а потом
+**разворачивает дамп в отдельную базу**, считает в ней персонажей, сверяет с живой базой
+и снова её удаляет. Файл, который никто ни разу не распаковал, копией не является, а
+прогон, который не смог его распаковать, выходит с ненулевым кодом и говорит об этом.
+Роли для этого нужен `CREATEDB`, который теперь выдаёт `scripts/setup-db.sql`; старая
+установка отстаёт на один запрос:
 
 ```bash
 psql -U postgres -c "ALTER ROLE vellar CREATEDB;"
 ```
 
-### Being told the game stopped
+### Как узнать, что игра встала
 
-The heartbeat is read by Docker's probe in the stack. Without containers nothing
-reads it: the window is open, the process looks alive, and the players are the
-alarm. `scripts/watchdog.py` is that reader - it lives outside the game on
-purpose, checks the age of the beat, writes to every id in `ADMIN_IDS` when it has
-gone stale, and exits 1 so any scheduler can act on it. Hang it next to the
-backup, every five minutes:
+Сердцебиение в стеке читает проверка Docker. Без контейнеров его не читает никто: окно
+открыто, процесс выглядит живым, а тревогой служат игроки. `scripts/watchdog.py` и есть
+этот читатель — он нарочно живёт вне игры, смотрит на возраст удара, пишет каждому id из
+`ADMIN_IDS`, когда удар протух, и выходит с кодом 1, чтобы любой планировщик мог на это
+среагировать. Повесьте его рядом с копией, каждые пять минут:
 
 ```bash
 pwsh -Command "Register-ScheduledTask -TaskName 'Vellar watchdog' -Action (New-ScheduledTaskAction -Execute 'uv' -Argument 'run python scripts/watchdog.py' -WorkingDirectory (Get-Location)) -Trigger (New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)) -Force"
 ```
 
-### The journal on disk
+### Журнал на диске
 
-A solo run writes two files under `logs/` beside stdout, and keeps writing them
-across restarts (`src/mmorpg/logging.py`):
+Solo-запуск пишет два файла под `logs/` рядом со stdout и продолжает писать их через
+перезапуски (`src/mmorpg/logging.py`):
 
-| File | Holds | Kept |
+| Файл | Что держит | Сколько |
 | --- | --- | --- |
-| `logs/vellar.log` | every served update: who pressed what, the outcome, the milliseconds | `LOG_RETENTION_DAYS`, 7 by default |
-| `logs/important.log` | warnings, errors and tracebacks, every `gold_flow` line, every action that failed or was turned away, every start and stop | `LOG_IMPORTANT_RETENTION_DAYS`, `0` = forever |
+| `logs/vellar.log` | каждое обслуженное обновление: кто что нажал, исход, миллисекунды | `LOG_RETENTION_DAYS`, по умолчанию 7 |
+| `logs/important.log` | предупреждения, отказы и трассировки, каждую строку `gold_flow`, каждое несостоявшееся или отвергнутое действие, каждый старт и каждую остановку | `LOG_IMPORTANT_RETENTION_DAYS`, `0` = навсегда |
 
-Both roll over at midnight; the cleanup deletes rollovers past their term and
-runs by itself, once at startup and again on every rollover. It only ever touches
-the file it is allowed to, which is the point of the split: a week of chatter is
-worth deleting, a failure is worth reading a year later.
+Оба переворачиваются в полночь; уборка удаляет перевороты старше срока и идёт сама —
+один раз на старте и потом на каждом перевороте. Трогает она только тот файл, который ей
+разрешён, и в этом весь смысл деления: неделю болтовни стоит удалить, а отказ стоит
+прочитать и через год.
 
 ```bash
-Get-Content logs\vellar.log -Tail 50 -Wait     # follow the game
-Select-String result=failed logs\important.log  # what broke, ever
+Get-Content logs\vellar.log -Tail 50 -Wait      # следить за игрой
+Select-String result=failed logs\important.log  # что ломалось, когда-либо
 ```
 
-The Docker stack sets `LOG_DIR=""` instead: there the log belongs to the daemon
-collecting stdout, and the bot owns nothing under `/app`.
+Стек Docker вместо этого ставит `LOG_DIR=""`: там журнал принадлежит демону, собирающему
+stdout, а боту под `/app` не принадлежит ничего.
 
-### What the numbers say while it runs
+### Что говорят числа, пока игра работает
 
-One line a minute, in the same log as everything else:
+Строка в минуту, в том же журнале, что и всё остальное:
 
 ```text
 metrics updates=412 failures=0 p50=0.01 p95=0.05 slowest=0.22
 ```
 
-`p95` above `SLOW_CALLBACK_SECONDS` is the game missing its promise; `failures`
-above zero is a player who got an apology instead of a screen. `METRICS_SECONDS`
-changes how often it is written. Gold is counted separately and read afterwards:
+`p95` выше `SLOW_CALLBACK_SECONDS` — это игра, не сдержавшая обещания; `failures` выше
+нуля — это игрок, получивший извинение вместо экрана. `METRICS_SECONDS` меняет, как
+часто это пишется. Золото считают отдельно и читают потом:
 
 ```bash
 uv run python scripts/economy.py logs/important.log --hours 24
 ```
 
-That sums every `gold_flow` line by kind - what the world paid out, what the
-cities took back, what the duty removed - which is the whole reason those lines
-exist (`src/mmorpg/economy_log.py`).
+Он складывает каждую строку `gold_flow` по видам — что мир выплатил, что города забрали
+обратно, что убрала пошлина, — и ради этого те строки и существуют
+(`src/mmorpg/economy_log.py`).
 
-### The rate Telegram counts
+### Счёт, который ведёт Telegram
 
-Telegram accepts about thirty sends a second from one bot, for the bot as a
-whole. The queue that keeps the game inside that count sits below the retry
-middleware (`middlewares/sending.py`); `telegram_send_queued` in the log means it
-is actually holding messages back, which at a hundred players it should not be.
-`TELEGRAM_SENDS_PER_SECOND` is the knob, and lowering it is safer than raising it.
+Telegram принимает от одного бота около тридцати отправок в секунду, и на бота целиком.
+Очередь, которая держит игру внутри этого счёта, стоит ниже мидлвари повторов
+(`middlewares/sending.py`); `telegram_send_queued` в журнале значит, что она и правда
+придерживает сообщения, а на сотне игроков не должна.
+`TELEGRAM_SENDS_PER_SECOND` — это ручка, и убавлять её безопаснее, чем прибавлять.
 
-## Before exposing this beyond your own machine
+## До того как выставить это дальше собственной машины
 
-- Change `POSTGRES_PASSWORD` in `.env`. The default is `vellar`, which is fine
-  while PostgreSQL is bound to loopback and not otherwise.
-- Keep `BOT_TOKEN` out of the repository. `.env` is gitignored; if a token ever
-  reaches a commit or a chat log, revoke it with `@BotFather` and issue a new one.
-- Set `WEBHOOK_SECRET` to a long random string. It is what stops anyone who learns
-  your webhook URL from posting updates to it.
-- Leave `SLOW_CALLBACK_DETECTOR` alone. Unset, it is on for `APP_ENV=local` and
-  off everywhere players are, because that is where it would have been forgotten;
-  it needs asyncio debug mode, which timestamps every callback - useful while
-  developing, wasteful under load.
-- Keep `ADMIN_IDS` short and true. Every id on that list hands itself gold and
-  levels from inside the game, and hands the keeper right to anybody else
-  (`docs/keeper.md`); an id left there by accident is a keeper nobody remembers
-  appointing, with keepers of its own.
+- Смените `POSTGRES_PASSWORD` в `.env`. По умолчанию там `vellar`, и это годится, пока
+  PostgreSQL привязан к loopback, и не годится иначе.
+- Держите `BOT_TOKEN` вне репозитория. `.env` в `.gitignore`; если токен когда-нибудь
+  попал в коммит или в переписку, отзовите его у `@BotFather` и заведите новый.
+- Поставьте `WEBHOOK_SECRET` длинной случайной строкой. Это то, что не даёт всякому, кто
+  узнал адрес вебхука, слать в него обновления.
+- Не трогайте `SLOW_CALLBACK_DETECTOR`. Незаданный, он включён для `APP_ENV=local` и
+  выключен везде, где сидят игроки, — потому что именно там о нём и забыли бы; ему нужен
+  режим отладки asyncio, а тот проставляет время каждому колбэку: полезно при
+  разработке, расточительно под нагрузкой.
+- Держите `ADMIN_IDS` коротким и правдивым. Каждый id из этого списка выдаёт себе золото
+  и уровни изнутри игры и выдаёт право смотрителя кому угодно ещё (`docs/keeper.md`); id,
+  оставшийся там по случайности, — это смотритель, о назначении которого никто не помнит,
+  и у него уже свои смотрители.

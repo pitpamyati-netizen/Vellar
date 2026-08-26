@@ -1,102 +1,97 @@
-# Procedural generation
+# Процедурная сборка
 
-Locations are **not stored anywhere**. A map is a pure function of its seed, so
-the server rebuilds it on demand and throws it away after rendering. The only
-thing kept is what the players *took out of it* - how much of each node's wave is
-gone - and that is a small hash in Redis with a time to live. In `solo` there is
-no Redis at all: the same hash lives in the process and goes when it does
-(`docs/adr/0010-a-machine-without-containers.md`).
+Локации **нигде не хранятся**. Карта — чистая функция от своего сида, поэтому сервер
+собирает её по требованию и выбрасывает сразу после отрисовки. Держится только то, что
+игроки *из неё вынесли*, — сколько от волны каждого узла ушло, — и это небольшая
+хеш-таблица в Redis со сроком. В `solo` никакого Redis нет вовсе: та же таблица живёт в
+процессе и уходит вместе с ним (`docs/adr/0010-a-machine-without-containers.md`).
 
-## The seed chain
+## Цепочка сидов
 
 ```
-world_seed              constant, from configuration (WORLD_SEED)
-location_seed           = blake2b(world_seed, city_id, slot)      # permanent
+world_seed              постоянный, из настроек (WORLD_SEED)
+location_seed           = blake2b(world_seed, city_id, slot)      # навсегда
 node_seed(i)            = blake2b(location_seed, i)
 wave_seed(i, wave)      = blake2b(location_seed, "wave", i, wave)
 enemy_seed(node, try)   = blake2b(node_seed, "enemy", try)
-rotation                = unix_time // SHOP_ROTATION_SECONDS  # 1800, half an hour
+rotation                = unix_time // SHOP_ROTATION_SECONDS  # 1800, полчаса
 shop_seed               = blake2b(world_seed, "shop", city_id, rotation)
 ```
 
-Every part is separated by a `\x00` byte before hashing, so `("ab", "c")` and
-`("a", "bc")` cannot collide.
+Части разделяются байтом `\x00` перед хешированием, поэтому `("ab", "c")` и
+`("a", "bc")` столкнуться не могут.
 
-**Rules that must never be broken:**
+**Правила, которые не нарушают никогда:**
 
-1. **No global randomness.** `random.random()`, `random.choice()` and friends are
-   forbidden. Every generator receives an explicit `random.Random` built from its
-   seed by `procgen.seeds.rng`. A test seeds the global generator, runs generation,
-   and asserts the global stream is untouched.
-2. **The domain does not know the time.** The moment and the rotation are always
-   arguments. `mmorpg.domain.procgen` never calls `time.time()`.
-3. **Same seed, same bytes.** A test compares 10 000 derivations of the same seed.
+1. **Никакой глобальной случайности.** `random.random()`, `random.choice()` и их родня
+   запрещены. Каждый сборщик получает явный `random.Random`, собранный из своего сида
+   через `procgen.seeds.rng`. Тест засевает глобальный источник, прогоняет сборку и
+   убеждается, что глобальный поток не тронут.
+2. **Домен не знает времени.** Момент и номер переворота всегда приходят аргументами.
+   `mmorpg.domain.procgen` не зовёт `time.time()` никогда.
+3. **Тот же сид — те же байты.** Тест сверяет 10 000 выводов из одного сида.
 
-## The map is permanent, the contents come in waves
+## Карта постоянна, наполнение приходит волнами
 
-A location never rolls over. Its nodes, their names, their levels and the paths
-between them are the same for ever, so a player can learn a place by ear and keep
-knowing it (`docs/adr/0013-permanent-locations-and-waves.md`).
+Локация не переворачивается никогда. Её узлы, их имена, их уровни и тропы между ними
+одни и те же навсегда, поэтому игрок может выучить место на слух и продолжать его
+знать (`docs/adr/0013-permanent-locations-and-waves.md`).
 
-What changes is what stands **in** the nodes. Every node holds a wave of several
-things, sized by kind (`WAVE_SIZE` in `domain/rules/nodes.py`):
+Меняется то, что стоит **в** узлах. В каждом узле стоит волна из нескольких вещей,
+размером по виду узла (`WAVE_SIZE` в `domain/rules/nodes.py`):
 
-| node | wave |
+| узел | волна |
 | --- | --- |
-| стычка | 2-4 packs |
-| сильный противник | 1-2 |
+| стычка | 2–4 стаи |
+| сильный противник | 1–2 |
 | хозяин логова | 1 |
-| заросли, жила руды | 3-5 handfuls |
-| тайник | 1-3 |
-| событие, святилище | 1-2 |
+| заросли, жила руды | 3–5 горстей |
+| тайник | 1–3 |
+| событие, святилище | 1–2 |
 
-One action takes **one** thing out of the wave, not the node. When the last one
-goes the node is empty, and `RESPAWN_SECONDS = 180` later the next wave stands
-there - seeded by `wave_seed`, so it is different opponents and different finds
-in the same place. There is no "этот узел кто-то прошёл" flag anywhere in the
-game any more; what a screen says is a count.
+Одно действие вынимает **одну** вещь из волны, а не из узла. Когда уходит последняя,
+узел пуст, а через `RESPAWN_SECONDS = 180` там встаёт следующая волна — засеянная
+`wave_seed`, поэтому это другие противники и другие находки на том же месте. Признака
+«этот узел кто-то прошёл» в игре больше нет нигде; то, что говорит экран, — это счёт.
 
-The state is shared by everybody standing in the location, so a pack one player
-killed is gone for the next one who walks in, and what neither of them touched
-is still waiting.
+Состояние общее для всех, кто стоит в локации, поэтому стая, убитая одним игроком, для
+следующего вошедшего мертва, а то, чего не тронул никто, всё ещё ждёт.
 
-The shop is the one thing left on a wall clock: `SHOP_ROTATION_SECONDS = 1800`,
-so the shelf turns over every half hour and there is a reason to come back to a
-city. Gathering has a personal cooldown, `GATHER_COOLDOWN_SECONDS = 900`, which
-belongs to a character rather than to the world.
+По живым часам осталась одна лавка: `SHOP_ROTATION_SECONDS = 1800`, прилавок
+переворачивается каждые полчаса, и есть причина вернуться в город. У сбора есть личный
+откат, `GATHER_COOLDOWN_SECONDS = 900`, и он принадлежит персонажу, а не миру.
 
-## Location structure
+## Устройство локации
 
-- 8 to 14 nodes.
-- Node 0 is the entrance, the last node is the exit.
-- Interior node kinds are weighted: battle 42, gather 16, event 14, cache 12, elite
-  battle 9, shrine 7.
-- The **deepest interior node is always the boss**, so every location has exactly
-  one and always the same distance in. It is not a toll on the way out: the graph
-  has shortcuts, so fighting it is a decision. Because that node is forced, a
-  location always contains at least one fight.
-- Node level rises with depth from the location's `level_min` to its `level_max`.
+- От 8 до 14 узлов.
+- Узел 0 — вход, последний — выход.
+- Виды внутренних узлов взвешены: бой 42, сбор 16, событие 14, тайник 12, сильный
+  противник 9, святилище 7.
+- **Самый глубокий внутренний узел всегда босс**, поэтому у каждой локации босс ровно
+  один и всегда на одном удалении. По дороге к выходу он не стоит: в графе есть
+  короткие тропы, поэтому драться с ним — решение. И раз этот узел закреплён, в локации
+  всегда есть хотя бы один бой.
+- Уровень узла растёт с глубиной от `level_min` локации до её `level_max`.
 
-**Connectivity is structural, not checked-and-retried.** Node `i` is always linked
-to some node `j < i` before any extra edges are added, which makes the graph a
-spanning tree rooted at the entrance; a few random shortcuts are added on top.
-Every node - including the exit - is therefore reachable from the entrance by
-construction. Links are symmetric: the graph is undirected.
+**Связность обеспечена постройкой, а не проверкой с повтором.** Узел `i` всегда
+привязывается к какому-то узлу `j < i` до того, как добавляются лишние рёбра, поэтому
+граф — остовное дерево, растущее от входа; сверху добавляется несколько случайных
+коротких троп. Каждый узел — выход в том числе — достижим от входа по самой постройке.
+Связи симметричны: граф неориентированный.
 
-Property tests (`tests/domain/test_procgen.py`) assert, over hundreds of generated
-seeds and cities:
+Тесты свойств (`tests/domain/test_procgen.py`) на сотнях сидов и городов проверяют:
 
-- node count within bounds;
-- graph connected, exit reachable from the entrance;
-- no isolated nodes, no self-links, links symmetric;
-- node levels inside the location's band and non-decreasing with depth;
-- at least one combat node.
+- число узлов внутри границ;
+- граф связен, выход достижим от входа;
+- нет изолированных узлов, нет петель, связи симметричны;
+- уровни узлов внутри полосы локации и не убывают с глубиной;
+- есть хотя бы один боевой узел.
 
-## Enemies
+## Противники
 
-Enemies come from archetypes in `content/enemies.toml`, filtered by the location
-biome (with a wildcard pool as fallback so an unknown biome degrades instead of
-crashing), then scaled to the node level:
+Противники берутся из пород в `content/enemies.toml`, отобранных по биому локации (с
+запасным набором «на любой биом», чтобы незнакомый биом ухудшал игру, а не ронял её), и
+растягиваются на уровень узла:
 
 ```
 health = (34.6 + 12.83 * level) * archetype.health * spread * rank.health * share
@@ -104,91 +99,91 @@ damage = (3.5 + 0.7 * level) * archetype.damage * spread * rank.damage * share
 armor  = 1.15 * level        * archetype.armor          * rank.armor
 ```
 
-`spread` is a deterministic +-12% wobble derived from the same seed, so two fights
-against "серый волк" at level 12 are not carbon copies while staying reproducible.
+`spread` — определённое колебание ±12 % из того же сида, поэтому два боя против «серого
+волка» двенадцатого уровня не выглядят копией друг друга, оставаясь воспроизводимыми.
 
-Health is set against one roll of the player's *weapon* (ADR 0015) and damage
-against their health pool, both of which grow with level on their own - so the shape of a fight is the
-same at level 3 and at level 300. What that shape is, `tests/domain/test_combat_balance.py`
-pins down: an ordinary fight is about three turns.
+Здоровье выставлено против одного броска *оружия* игрока (ADR 0015), а урон — против
+его запаса здоровья, и оба растут с уровнем сами, — поэтому форма боя одна и та же на
+третьем уровне и на трёхсотом. Какова эта форма, закрепляет
+`tests/domain/test_combat_balance.py`: обычный бой — это примерно три хода.
 
-**Three tiers** (`EnemyRank`), and they differ in one thing only - how long the
-fight lasts:
+**Три ступени** (`EnemyRank`), и отличаются они одним — тем, сколько длится бой:
 
-| tier | health | damage | armour | gold | turns |
+| ступень | здоровье | урон | броня | золото | ходов |
 | --- | --- | --- | --- | --- | --- |
 | обычный | 1.0 | 1.0 | 1.0 | 1.0 | ~3 |
 | эпический | 2.6 | 1.25 | 1.2 | 3.0 | ~5 |
 | босс | 5.2 | 1.25 | 1.35 | 7.0 | ~10 |
 
-Damage deliberately lags health: a boss that lasted four times as long *and* hit
-four times as hard would simply end the fight on turn three of ten.
+Урон нарочно отстаёт от здоровья: босс, который держался бы вчетверо дольше *и* бил бы
+вчетверо сильнее, просто кончал бы бой на третьем ходу из десяти.
 
-Both long tiers are single opponents and wear a title from `[meta].elite_titles` -
-adjectives only, since they are glued in front of the archetype name ("Матёрый
-серый волк"). The title does not say which tier: the combat screen does that in
-words, so the name stays a name.
+Обе долгие ступени — это одиночные противники, и они носят прозвище из
+`[meta].elite_titles`: только прилагательные, потому что их приклеивают перед именем
+породы («Матёрый серый волк»). Прозвище не называет ступень — это словами делает боевой
+экран, поэтому имя остаётся именем.
 
-`share` is the **pack tax**: an ordinary encounter rolls one to three enemies
-(weighted 6:3:1) and they divide one fight's budget, `1 / (1 + 0.45 * (size - 1))`.
-Three full-strength opponents made an "ordinary" fight nine turns long - three
-fights in a row wearing one name.
+`share` — **плата за стаю**: обычная встреча бросает от одного до трёх противников
+(веса 6:3:1), и они делят бюджет одного боя, `1 / (1 + 0.45 * (size - 1))`. Трое
+противников в полную силу делали «обычный» бой девятиходовым — три боя подряд под одним
+именем.
 
-## Gear
+## Снаряжение
 
-Gear is generated the same way an enemy is, and for the same reason: a sword
-exists on twelve grades in five rarities, and so does every other kind - about two
-thousand things nobody would ever write out by hand. `content/items.toml` declares
-thirty **kinds** (`[[gear]]`), twelve **grades** and five **rarities**; a thing is
-assembled from the three (`domain/procgen/items.py`).
+Снаряжение собирается так же, как противник, и по той же причине: меч существует на
+двенадцати ступенях в пяти редкостях, и так же — любой другой вид: около двух тысяч
+вещей, которые руками не выпишет никто. `content/items.toml` объявляет тридцать
+**видов** (`[[gear]]`), двенадцать **ступеней** и пять **редкостей**; вещь собирается
+из этих трёх (`domain/procgen/items.py`).
 
 ```
-damage = kind.dice grown by (1 + 0.37 * (level - 1))   # both dice and faces
+damage = kind.dice, выросшие на (1 + 0.37 * (level - 1))   # и кости, и грани
 armor  = (5.5 + 0.32 * level) * armor_type.armor * slot.armor_share
-stats  = rarity.stats keys, each round(0.06 * level)
+stats  = ключи rarity.stats, каждый round(0.06 * level)
 price  = (30 + 7.0 * level) * rarity.price_factor
 ```
 
-Everything "random" in a thing - which stats, which special property - is derived
-from the thing's own id (`sword@14#rare`), so «Крепкий меч редкой работы» is the
-same sword for everyone and after any restart. A **relic** is the exception that proves the rule:
-its numbers are counted from the *hero's* level rather than its own, so it grows
-with them and never goes stale. That is why it only ever comes off a boss or a
-contract chain walked to its end, and never off a shelf.
+Всё «случайное» в вещи — какие характеристики, какое особое свойство — выводится из
+собственного идентификатора вещи (`sword@14#rare`), поэтому «Крепкий меч редкой работы»
+у всех один и тот же и после любого перезапуска тоже. **Реликвия** — исключение,
+которое подтверждает правило: её числа считаются от уровня *героя*, а не от её
+собственного, поэтому она растёт вместе с ним и не устаревает. Потому она и падает
+только с босса или с цепочки заданий, пройденной до конца, и никогда не лежит на
+прилавке.
 
-What falls off a defeated enemy is rolled the same way: the grade comes from the
-enemy's level, the rarity from its weight, and only a boss can roll a relic.
+То, что падает с побеждённого противника, бросается так же: ступень — от уровня
+противника, редкость — по её весу, и реликвию может выбросить только босс.
 
-## The shared state of a location
+## Общее состояние локации
 
-What is left in each of its nodes - the wave standing there, how much of it is
-gone, and the moment it was emptied:
-
-```
-key    loc:{city}:{slot}          hash {node: "wave:taken:emptied_at"}
-ttl    a week, refreshed on every write
-```
-
-A write names the wave the player saw: a press that arrives after the node has
-already refilled belongs to a wave that is gone and changes nothing, which is
-what makes two players killing the last pack together kill it once.
-
-Who is standing in it, and where:
+Что осталось в каждом её узле — какая волна там стоит, сколько от неё ушло и когда его
+вычистили:
 
 ```
-key    loc:{city}:{slot}:who      hash {character_id: {node, name, level, seen}}
-ttl    ten minutes of silence and a player is no longer there
+ключ   loc:{city}:{slot}          хеш {node: "wave:taken:emptied_at"}
+срок   неделя, обновляется на каждой записи
 ```
 
-PostgreSQL never sees any of it: losing Redis refills every node and forgets who
-was where, which costs a walk and never a character.
+Запись называет ту волну, которую видел игрок: нажатие, пришедшее после того, как узел
+уже наполнился, принадлежит ушедшей волне и не меняет ничего, — именно это и делает так,
+что двое, убивающие последнюю стаю разом, убивают её один раз.
 
-## What is generated versus stored
+Кто в ней стоит и где:
 
-| Generated on demand | Stored |
+```
+ключ   loc:{city}:{slot}:who      хеш {character_id: {node, name, level, seen}}
+срок   десять минут молчания — и игрока там больше нет
+```
+
+PostgreSQL не видит ничего из этого: потерянный Redis наполняет каждый узел заново и
+забывает, кто где был, а стоит это прогулки и никогда не персонажа.
+
+## Что собирается, а что хранится
+
+| Собирается по требованию | Хранится |
 | --- | --- |
-| location layout, node kinds, node names, node levels | how much of each node's wave is gone (Redis, TTL) |
-| enemies, their stats, their loot | items actually taken (PostgreSQL) |
-| every piece of gear: damage, armour, stats, price, name | which gear a character holds and wears, by id - `sword@14#rare` (PostgreSQL) |
-| shop assortment | gold and purchases (PostgreSQL) |
-| total character stats | raw stats, level, experience (PostgreSQL) |
+| карта локации, виды узлов, их имена и уровни | сколько от волны каждого узла ушло (Redis, со сроком) |
+| противники, их характеристики, их добыча | вещи, которые и правда взяли (PostgreSQL) |
+| каждая вещь снаряжения: урон, броня, характеристики, цена, имя | какое снаряжение у персонажа и что надето, по идентификатору — `sword@14#rare` (PostgreSQL) |
+| прилавок лавки | золото и покупки (PostgreSQL) |
+| итоговые характеристики персонажа | сырые характеристики, уровень, опыт (PostgreSQL) |

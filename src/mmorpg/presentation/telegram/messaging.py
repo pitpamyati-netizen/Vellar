@@ -1,11 +1,12 @@
-"""Sending screens.
+"""Отправка экранов.
 
-One player action produces exactly **one** new message (accessibility rule 3 and
-the latency budget). Messages are never edited and never split into a burst -
-if a body genuinely cannot fit, it is paged and the player asks for the next page.
+Одно действие игрока порождает ровно **одно** новое сообщение (правило
+доступности 3 и бюджет задержки). Сообщения не правятся никогда и не рассыпаются
+очередью: если тело действительно не влезает, оно режется на страницы, и
+следующую игрок просит сам.
 
-``parse_mode`` is ``None`` everywhere: Markdown asterisks and underscores are read
-aloud by screen readers (rule 14).
+``parse_mode`` везде ``None``: звёздочки и подчёркивания разметки экранный диктор
+читает вслух (правило 14).
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from mmorpg.presentation.telegram.screens.group import GroupReply
 
 
 async def send_screen(message: Message, screen: Screen, *, emoji: bool = False) -> None:
-    """Send a screen as a single new message with its keyboard attached."""
+    """Отправить экран одним новым сообщением с прицепленной клавиатурой."""
     await message.answer(
         text=screen.body(),
         reply_markup=keyboard_for(screen, emoji=emoji),
@@ -55,10 +56,10 @@ async def push_screen(bot: Bot, chat_id: int, screen: Screen, *, emoji: bool = F
 
 
 async def send_text(message: Message, text: str, screen: Screen, *, emoji: bool = False) -> None:
-    """Send a one-off answer that still carries the current keyboard.
+    """Отправить разовый ответ, всё же несущий нынешнюю клавиатуру.
 
-    Used for stale buttons: the player always gets an explanation *and* the
-    buttons that actually work right now (rule 12).
+    Берётся для устаревших кнопок: игрок всегда получает и объяснение, *и* те
+    кнопки, которые сейчас работают (правило 12).
     """
     await message.answer(
         text=text,
@@ -75,15 +76,15 @@ async def send_group_reply(
     answering: int,
     dismiss: bool = False,
 ) -> int:
-    """Post one group answer as a reply, and return the id of what was sent.
+    """Написать один ответ в группу ответом на сообщение и вернуть идентификатор отправленного.
 
-    The reply anchor is what makes a ``selective`` keyboard work: Telegram shows
-    it to the sender of the message being answered and to nobody else. So an offer
-    is anchored to the target's message, and the closing note to the message of
-    whoever answered.
+    Привязка ответом - это то, что заставляет работать ``selective``: Telegram
+    покажет клавиатуру отправителю того сообщения, которому отвечают, и больше
+    никому. Поэтому предложение привязано к сообщению того, кому предложили, а
+    закрывающая записка - к сообщению того, кто ответил.
 
-    ``allow_sending_without_reply`` keeps a deleted anchor from swallowing the
-    answer: the group would rather see a floating message than nothing at all.
+    ``allow_sending_without_reply`` не даёт удалённой привязке проглотить ответ:
+    группе лучше увидеть висящее сообщение, чем не увидеть ничего.
     """
     markup: ReplyKeyboardMarkup | ReplyKeyboardRemove | None = None
     if reply.buttons:

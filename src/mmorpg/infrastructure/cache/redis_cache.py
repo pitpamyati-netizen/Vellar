@@ -1,8 +1,9 @@
-"""Redis-backed caches.
+"""Кэши поверх Redis.
 
-Everything stored here is short-lived and reconstructible: FSM state, the active
-fight, location deltas, shop rolls, update deduplication. Nothing here is a source
-of truth, so losing Redis costs a player their current screen, not their character.
+Всё, что здесь лежит, короткоживущее и собирается заново: состояние автомата,
+начатый бой, изменения в локации, прилавок лавки, отсев повторных обновлений.
+Источником истины здесь не является ничто, поэтому потерянный Redis стоит игроку
+текущего экрана, а не персонажа.
 """
 
 from __future__ import annotations
@@ -15,12 +16,12 @@ from typing import TYPE_CHECKING, Any
 from mmorpg.domain.entities.location import LocationState, NodeState, Presence
 from mmorpg.domain.rules.nodes import refreshed, taken_one
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:  # pragma: no cover - только для типов
     from redis.asyncio import Redis
 
 
 def _text(value: object) -> str:
-    """Redis hands back bytes unless told otherwise; both are read the same way."""
+    """Redis отдаёт байты, если не попросить иначе; читаются оба одинаково."""
     return value.decode("utf-8") if isinstance(value, bytes) else str(value)
 
 
@@ -29,7 +30,7 @@ def _encode(node: NodeState) -> str:
 
 
 def _decode(raw: Mapping[Any, Any], now: int) -> dict[int, NodeState]:
-    """The stored nodes, each already carried forward to ``now``."""
+    """Сохранённые узлы, каждый уже переведённый на ``now``."""
     nodes: dict[int, NodeState] = {}
     for field, value in raw.items():
         wave, taken, emptied_at = (int(part) for part in _text(value).split(":"))
@@ -57,12 +58,12 @@ class RedisStateCache:
 
 
 class RedisLocationStateCache:
-    """One location, shared: what is left in its nodes and who is walking in it.
+    """Одна локация, общая: что осталось в её узлах и кто по ней ходит.
 
-    Two hashes per location - the nodes and the people in them - both with a time
-    to live, because a location nobody has visited for days is better refilled
-    than kept for ever (``Claude.md``, rule 8: every key expires). The map itself
-    is never stored: it is the same map every time.
+    По две хеш-таблицы на локацию - узлы и люди в них, - и обе со сроком, потому что
+    локацию, в которую никто не заходил сутками, лучше наполнить заново, чем хранить
+    вечно (``Claude.md``, правило 8: у каждого ключа есть срок). Сама карта не
+    хранится никогда: она каждый раз одна и та же.
     """
 
     def __init__(self, client: Redis) -> None:
@@ -86,8 +87,8 @@ class RedisLocationStateCache:
         key = self._state_key(city_id, slot)
         nodes = _decode(await self._client.hgetall(key), now)
         current = nodes.get(node, NodeState())
-        # A press that names an older wave belongs to a node that has already
-        # rolled over: it is not an error, it just changes nothing.
+        # Нажатие, называющее прежнюю волну, принадлежит узлу, который уже перевернулся:
+        # это не ошибка, оно просто ничего не меняет.
         nodes[node] = taken_one(current, size, now) if current.wave == wave else current
         await self._client.hset(key, str(node), _encode(nodes[node]))
         await self._client.expire(key, max(1, ttl))
@@ -145,7 +146,7 @@ class RedisLocationStateCache:
 
 
 class RedisIdempotencyStore:
-    """SET NX is the whole implementation: the first writer wins, the rest are dupes."""
+    """SET NX - и вся реализация: первый записавший выигрывает, остальные повторы."""
 
     def __init__(self, client: Redis) -> None:
         self._client = client

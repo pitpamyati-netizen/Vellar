@@ -1,16 +1,15 @@
-"""Keeping the keeper flag honest.
+"""Флаг смотрителя, которому можно верить.
 
-The right comes from two places and the character column mirrors both. One is
-``ADMIN_IDS``: an id standing there is a keeper always, cannot be stripped of it
-from inside the game, and is the only one who hands the right to somebody else.
-The other is that handing out: it is stored on the account (``users.keeper``),
-because a right a player could walk around by rolling a second character would
-not be one.
+Право приходит из двух мест, и колонка на персонаже отражает оба. Первое -
+``ADMIN_IDS``: стоящий там id смотритель всегда, права его изнутри игры не
+лишить, и только он выдаёт право кому-то ещё. Второе - как раз эта выдача: она
+хранится на аккаунте (``users.keeper``), потому что право, которое обходится
+заведением второго персонажа, правом не является.
 
-The two are reconciled every time a character is loaded for their owner, so a
-right given or taken away lands on the next press. Nothing in the game writes the
-character column directly - it is only ever copied from these two sources
-(``Claude.md``, rule 5: the handler asks, the service decides).
+Оба сверяются каждый раз, когда персонаж загружается для своего владельца,
+поэтому выданное или отобранное право ложится на следующем нажатии. Ничто в игре
+не пишет колонку персонажа напрямую - её только переписывают из этих двух
+источников (``Claude.md``, правило 5: хендлер спрашивает, сервис решает).
 """
 
 from __future__ import annotations
@@ -28,12 +27,12 @@ async def sync_keeper(
     *,
     granted: bool = False,
 ) -> Character:
-    """Return the character with the flag the two sources say it should have.
+    """Вернуть персонажа с тем флагом, какой ему полагается по обоим источникам.
 
-    ``granted`` is what the account was handed from inside the game; the setting
-    is checked here. Writes only when the answer changed, so the common case - a
-    player who is not a keeper, and never was - costs one comparison and no round
-    trip.
+    ``granted`` - то, что аккаунту выдали изнутри игры; настройка проверяется здесь.
+    Пишется, только когда ответ изменился, поэтому обычный случай - игрок, который
+    не смотритель и никогда им не был, - стоит одного сравнения и ни одного похода в
+    базу.
     """
     wanted = granted or settings.is_admin(telegram_id)
     if character.is_admin == wanted:
@@ -44,7 +43,7 @@ async def sync_keeper(
 
 
 async def is_keeper(users: UserRepository, telegram_id: int, settings: Settings) -> bool:
-    """Whether this account holds the right at all, from either source."""
+    """Держит ли этот аккаунт право вообще, хоть из одного источника."""
     if settings.is_admin(telegram_id):
         return True
     user = await users.get(telegram_id)
@@ -59,14 +58,14 @@ async def set_keeper(
     keeper: bool,
     settings: Settings,
 ) -> bool:
-    """Hand the right to an account, or take it back. False when it cannot change.
+    """Выдать право аккаунту или забрать его. False, когда изменить нельзя.
 
-    An account named by ``ADMIN_IDS`` is refused: its right lives outside the game
-    and pretending to take it away here would only put the mirror out of step with
-    what the next load reads back.
+    Аккаунту, названному в ``ADMIN_IDS``, отказывают: его право живёт вне игры, и
+    притворная попытка отобрать его здесь лишь развела бы отражение с тем, что
+    прочитает следующая загрузка.
 
-    Every character of the account gets the mirror written, not just the active
-    one: the right belongs to the person, and they may be playing any of them.
+    Отражение пишется каждому персонажу аккаунта, а не только тому, кем играют
+    сейчас: право принадлежит человеку, а играть он может любым из них.
     """
     if settings.is_admin(telegram_id):
         return False

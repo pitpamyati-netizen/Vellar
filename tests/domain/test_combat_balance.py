@@ -1,15 +1,14 @@
-"""How long a fight lasts, and what a good decision is worth.
+"""Сколько длится бой и чего стоит хорошее решение.
 
-These are the numbers the design promises out loud: an ordinary fight is about
-three turns, an epic one roughly twice that, a boss twice again, and a player who
-reads the announced intent finishes sooner than one who only presses "Атака".
-Nothing here checks a formula - it checks the experience the formulas add up to,
-which is the only thing a player can feel.
+Это те числа, которые замысел обещает вслух: обычный бой — примерно три хода,
+эпический вдвое дольше, босс вчетверо, а игрок, читающий объявленные намерения,
+кончает раньше того, кто только жмёт «Атака». Здесь не проверяется ни одна
+формула — проверяется то ощущение, в которое формулы складываются, а это
+единственное, что игрок может почувствовать.
 
-The fights are simulated with a deliberately simple "competent player": take the
-biggest blow available, prefer the tag that counters what the enemy announced.
-A real player can do better; if even this one cannot finish in time, the balance
-is wrong.
+Бои разыгрываются нарочно простым «толковым игроком»: бери самый сильный
+доступный удар, предпочитай тег, отвечающий объявленному намерению. Живой игрок
+сыграет лучше; если уж этот не укладывается в срок, значит, баланс неверен.
 """
 
 from __future__ import annotations
@@ -55,15 +54,15 @@ from mmorpg.domain.rules.combat import (
 from mmorpg.domain.rules.skill_effects import EffectCategory, spec_for, tag_of_skill
 from mmorpg.domain.rules.stats import derived_stats, stat_allowance
 
-#: A fight sampled across the whole level band, not just at the levels a
-#: developer happens to play.
+#: Бой, взятый по всей полосе уровней, а не только на тех уровнях, на которых случается
+#: играть разработчику.
 LEVELS = (1, 10, 40, 150, 300)
 CLASSES = ("warrior", "rogue", "mage", "cleric")
 TRIALS = 20
 
-#: What the design promises. The median is the contract; the ceiling only stops a
-#: single unlucky roll from being called a regression, and the floor stops the
-#: opposite regression - a fight that is over before it is a fight.
+#: Что обещает замысел. Медиана - это договор; потолок лишь не даёт назвать откатом один
+#: неудачный бросок, а пол не даёт случиться откату обратному - бою, который кончился
+#: раньше, чем стал боем.
 ORDINARY_TURNS = 4
 ORDINARY_FLOOR = 2
 #: Потолок стал выше на два хода вместе с костями: урон теперь бросается, и один
@@ -74,13 +73,12 @@ ORDINARY_CEILING = 10
 ELITE_FLOOR = 1.5
 BOSS_FLOOR = 2.5
 
-#: An ordinary fight is won, but it is not free: this share of the health pool is
-#: what makes a run through a location a series of decisions instead of a
-#: formality. Pooled across classes - a warrior in plate spends less than a mage,
-#: and that is the point of wearing plate.
+#: Обычный бой выигрывают, но он не бесплатен: как раз эта доля запаса здоровья и делает
+#: проход по локации чередой решений, а не формальностью. Сложено по классам - воин в
+#: латах тратит меньше мага, и в этом весь смысл лат.
 ORDINARY_HEALTH_COST = 0.07
-#: How many ordinary fights in a row a run through a location is worth measuring
-#: over: about what stands between the entrance and the exit of one.
+#: По скольким обычным боям подряд стоит мерить проход по локации: примерно столько и
+#: стоит между входом и выходом.
 RUN_LENGTH_FLOOR = 4
 #: Сколько таких пробегов меряется и какая их доля должна дойти до конца.
 #: Один пробег - это один сид, а один сид это не обещание: полгода он был
@@ -97,12 +95,12 @@ RUN_SURVIVAL = 0.7
 #: который мир кладёт перед тобой, выигрывается», а не «выигрывается, что бы ни
 #: выпало»: второе значило бы, что бросок ничего не решает.
 ORDINARY_WINS = 0.95
-#: How much faster reading the announced intent may make a fight. It has to pay
-#: (``test_reading_the_intent_shortens_the_fight``), and it has to stay a way of
-#: fighting well rather than the only fight that exists.
+#: Насколько прочитанное намерение вправе ускорить бой. Оно обязано платить
+#: (``test_reading_the_intent_shortens_the_fight``) и обязано остаться способом драться
+#: хорошо, а не единственным существующим боем.
 TEMPO_CEILING = 2.0
-#: How far apart the fastest and the slowest class may be on a boss. A class is
-#: allowed a character; it is not allowed to make the same boss a different game.
+#: Насколько далеко могут стоять самый быстрый и самый медленный класс на боссе. Классу
+#: позволен характер; превращать одного и того же босса в другую игру ему не позволено.
 CLASS_SPREAD = 1.75
 
 
@@ -112,7 +110,7 @@ def armed(
     level: int,
     actives: Sequence[str | None] = (),
 ) -> Equipment:
-    """The best weapon of its class this character could be holding by now.
+    """Лучшее оружие своего класса, какое этот персонаж мог бы держать к этой минуте.
 
     Оружие здесь не украшение: весь урон в игре растёт из костей оружия, а
     половина умений разбойника и следопыта без своего оружия просто не сработает.
@@ -165,8 +163,9 @@ def armed(
 
 
 def build(content: GameContent, class_id: str, level: int) -> Character:
-    """A character built the way a player would: points into the key stats, the
-    newest skills equipped, damage first, and a weapon in hand."""
+    """Персонаж, собранный так, как собрал бы игрок: очки в ключевые характеристики,
+    самые свежие умения в панели, урон первым, и оружие в руке.
+    """
     klass = content.character_class(class_id)
     keys = list(klass.key_stats) or [StatCode.STR]
     allocated: dict[str, int] = {}
@@ -237,7 +236,7 @@ def _options(content: GameContent, character: Character, state: BattleState) -> 
 def _value(
     content: GameContent, character: Character, state: BattleState, action: BattleAction
 ) -> float:
-    """Roughly what this action is worth this turn, in damage and in tempo."""
+    """Примерно чего стоит это действие на этом ходу - в уроне и в темпе."""
     enemies = state.foes_of(1)
     if not enemies:
         return 0.0
@@ -254,8 +253,8 @@ def _value(
             if spec.aoe:
                 worth *= len(enemies)
         else:
-            # Support is worth what it saves: nothing at full health, a blow and
-            # a half when the fight is nearly lost.
+            # Поддержка стоит того, что она сберегает: ничего на полном здоровье и
+            # полтора удара, когда бой почти проигран.
             missing = 1.0 - hero(state).health / hero(state).max_health
             worth = blow * 1.5 * missing
 
@@ -270,7 +269,7 @@ def _value(
 
 
 class FightResult(NamedTuple):
-    """One simulated fight, in the three numbers the promises are about."""
+    """Один разыгранный бой, в трёх числах, о которых и говорят обещания."""
 
     turns: int
     outcome: Verdict
@@ -279,7 +278,7 @@ class FightResult(NamedTuple):
 
     @property
     def health_spent(self) -> float:
-        """The share of the pool this fight cost, between 0 and 1."""
+        """Доля запаса, которой стоил этот бой, от 0 до 1."""
         return (self.health_start - max(0, self.health_left)) / self.health_start
 
 
@@ -291,7 +290,7 @@ def fight(
     trial: int,
     clever: bool = True,
 ) -> FightResult:
-    """Run one whole fight and report what it took out of the character."""
+    """Прогнать один бой целиком и доложить, чего он стоил персонажу."""
     seed = derive(b"balance", character.class_id, character.level, trial, rank.value)
     enemies = generate_group(
         seed,
@@ -333,7 +332,7 @@ def sample(
     return [result.turns for result in trials(content, class_id, level, rank=rank, clever=clever)]
 
 
-# --- the promise ------------------------------------------------------
+# --- обещание ---------------------------------------------------------
 
 
 @pytest.mark.parametrize("class_id", CLASSES)
@@ -352,17 +351,19 @@ def test_an_ordinary_fight_is_about_three_turns(
 def test_an_ordinary_fight_at_your_own_level_is_won(
     content: GameContent, class_id: str, level: int
 ) -> None:
-    """A fight the world hands you is not a coin flip. Losing is for the tiers
-    that announce themselves as long."""
+    """Бой, который выдаёт мир, - не подбрасывание монеты. Проигрывают тем ступеням,
+    которые сами объявляют себя долгими.
+    """
     results = trials(content, class_id, level, rank=EnemyRank.NORMAL)
     won = sum(1 for result in results if result.outcome is Verdict.VICTORY)
     assert won >= ORDINARY_WINS * len(results), f"{class_id} at {level}: won {won}/{len(results)}"
 
 
 def test_the_long_tiers_are_the_only_long_fights(content: GameContent) -> None:
-    """Pooled across classes on purpose: the tiers are a promise about the game,
-    not about any one class, and a per-class ratio over medians of two and three
-    turns is arithmetic noise."""
+    """Сложено по классам нарочно: ступени - это обещание об игре, а не о каком-то
+    одном классе, а отношение по классам поверх медиан из двух и трёх ходов -
+    арифметический шум.
+    """
 
     def pooled(rank: EnemyRank) -> float:
         turns = [turn for class_id in CLASSES for turn in sample(content, class_id, 40, rank=rank)]
@@ -377,13 +378,12 @@ def test_the_long_tiers_are_the_only_long_fights(content: GameContent) -> None:
 
 @pytest.mark.parametrize("level", LEVELS)
 def test_an_ordinary_fight_is_won_but_not_for_free(content: GameContent, level: int) -> None:
-    """A fight that costs nothing is not a fight, it is a button.
+    """Бой, который ничего не стоит, — это не бой, а кнопка.
 
-    Ordinary opponents used to take about a twentieth of the health pool, so a
-    location could be walked end to end without a thought: the wounds that
-    outlive a fight, the potions and the beds were all decoration (Roadmap,
-    "Риски"). Pooled across classes, because plate is *supposed* to spend less
-    than a robe.
+    Обычные противники когда-то отнимали примерно двадцатую часть запаса здоровья, и
+    локацию можно было пройти из конца в конец не задумываясь: раны, переживающие
+    бой, зелья и постели были украшением. Сложено по классам, потому что латам
+    *полагается* тратить меньше робы.
     """
     spent = [
         result.health_spent
@@ -395,10 +395,10 @@ def test_an_ordinary_fight_is_won_but_not_for_free(content: GameContent, level: 
 
 
 def _walk(content: GameContent, class_id: str, offset: int) -> tuple[bool, float]:
-    """One run through a location: fights in a row, nothing drunk, no bed paid.
+    """Один проход по локации: бои подряд, ничего не выпито, постель не оплачена.
 
-    Returns whether the run was walked to the end and what share of the health
-    pool was left at that point.
+    Возвращает, пройдена ли вылазка до конца и какая доля запаса здоровья осталась к
+    этой минуте.
     """
     character = build(content, class_id, 40)
     stats = derived_stats(content, character)
@@ -413,12 +413,12 @@ def _walk(content: GameContent, class_id: str, offset: int) -> tuple[bool, float
 
 
 def test_wounds_add_up_over_a_run(content: GameContent) -> None:
-    """Wounds carry, so a location is walked with an eye on the health line.
+    """Раны переносятся, поэтому по локации идут, поглядывая на полосу здоровья.
 
-    Fight after fight with nothing drunk and no bed paid for. How far a character
-    gets is theirs - plate walks the whole location and a robe stops for a potion
-    halfway - but a run is walked far more often than not, and nobody comes out
-    of one untouched.
+    Бой за боем, ничего не выпито и за постель не заплачено. Как далеко дойдёт
+    персонаж - его дело: латы проходят локацию целиком, а роба останавливается на
+    зелье посередине, - но вылазку проходят куда чаще, чем нет, и нетронутым из неё
+    не выходит никто.
     """
     walked = [
         _walk(content, klass.id, offset)
@@ -433,12 +433,12 @@ def test_wounds_add_up_over_a_run(content: GameContent) -> None:
 
 
 def test_no_class_makes_a_boss_a_different_game(content: GameContent) -> None:
-    """The classes are allowed to feel different, not to be a different length.
+    """Классам позволено ощущаться по-разному, но не быть разной длины.
 
-    A rogue used to finish a boss in half the turns a cleric needed, which made
-    the same content a ten-turn fight for one player and a five-turn one for
-    another (Roadmap, "Риски"). Sampled at both ends of the band: the gap used to
-    be widest at the top, where crit caps out.
+    Разбойник когда-то кончал босса вдвое быстрее, чем требовалось жрецу, и одно и то
+    же содержимое было десятиходовым боем для одного игрока и пятиходовым для
+    другого. Берётся с обоих концов полосы: разрыв был шире всего наверху, где крит
+    упирается в потолок.
     """
     for level in (10, 40, 150, 300):
         medians = {
@@ -452,15 +452,15 @@ def test_no_class_makes_a_boss_a_different_game(content: GameContent) -> None:
 
 @pytest.mark.parametrize("class_id", CLASSES)
 def test_reading_the_intent_shortens_the_fight(content: GameContent, class_id: str) -> None:
-    """The whole point of intent, trace and breach: choosing well has to pay.
+    """Весь смысл намерения, следа и бреши: выбирать хорошо обязано платить.
 
-    Ordinary fights, where both players win, so the comparison is turns and not
-    survival - a player who dies on turn four also "finished" in four turns.
+    Обычные бои, где выигрывают оба игрока, чтобы сравнивались ходы, а не выживание:
+    игрок, погибший на четвёртом ходу, тоже «закончил» за четыре хода.
 
-    The ceiling is the other half of the promise: tempo is how a fight is fought
-    well, not the only fight there is. If a breach ever becomes worth more than
-    everything else put together, the thresholds in ``domain/rules/combat.py``
-    are what moves - not the mechanic (Roadmap, "Риски").
+    Потолок — вторая половина обещания: темп это то, как бой ведут хорошо, а не
+    единственный существующий бой. Если брешь когда-нибудь станет стоить больше всего
+    остального вместе взятого, двигать надо пороги в ``domain/rules/combat.py``, а не
+    саму механику.
     """
     clever = sum(sample(content, class_id, 40, rank=EnemyRank.NORMAL))
     plain = sum(sample(content, class_id, 40, rank=EnemyRank.NORMAL, clever=False))
@@ -472,9 +472,10 @@ def test_reading_the_intent_shortens_the_fight(content: GameContent, class_id: s
 
 @pytest.mark.parametrize("level", (1, 40, 300))
 def test_a_skill_always_beats_a_plain_attack(content: GameContent, level: int) -> None:
-    """The regression that started all this: skill power used to be a flat number
-    from content while the plain attack grew with level, so by level 30 every
-    skill in the game was worse than pressing "Атака"."""
+    """Тот откат, с которого всё началось: сила умения была в содержимом плоским
+    числом, пока обычная атака росла с уровнем, — и к тридцатому уровню всякое
+    умение в игре было хуже нажатия «Атака».
+    """
     character = build(content, "warrior", level)
     blow = blow_of(content, character)
     for code in character.loadout.equipped_actives():

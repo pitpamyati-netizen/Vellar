@@ -1,9 +1,10 @@
-"""Collecting modifiers from every source into one bundle.
+"""Сбор прибавок из всех источников в один свёрток.
 
-Traits, known passives, equipment and active effects all speak the same
-vocabulary (``traits.toml [meta].modifier_keys``). Percentages from different
-sources add up and are applied **once** at the end, so ordering never changes the
-result and applying the same source twice is impossible by construction.
+Черты, изученные пассивные умения, снаряжение и действующие эффекты говорят на
+одном языке (``traits.toml [meta].modifier_keys``). Проценты из разных
+источников складываются и применяются **один раз** в конце, поэтому порядок
+никогда не меняет итог, а применить один источник дважды нельзя по самой
+постройке.
 """
 
 from __future__ import annotations
@@ -90,7 +91,7 @@ EFFECTIVE_KEYS: frozenset[str] = frozenset(
 
 
 def merge(*bundles: Mapping[str, float]) -> dict[str, float]:
-    """Sum modifier bundles key by key."""
+    """Сложить свёртки прибавок ключ к ключу."""
     total: dict[str, float] = {}
     for bundle in bundles:
         for key, value in bundle.items():
@@ -146,7 +147,7 @@ def equipment_modifiers(
 
 
 def passive_modifiers(content: GameContent, character: Character) -> dict[str, float]:
-    """Modifiers from every passive skill the character has learned.
+    """Прибавки от каждого изученного пассивного умения.
 
     Изучено - значит работает. Раньше их укладывали в три слота из шести, и
     очко, вложенное в седьмое пассивное умение, не делало ровно ничего: игрок
@@ -174,7 +175,7 @@ def collect_modifiers(
     character: Character,
     effects: EffectStack | None = None,
 ) -> dict[str, float]:
-    """Every modifier acting on a character right now."""
+    """Все прибавки, действующие на персонажа прямо сейчас."""
     return merge(
         trait_modifiers(content, character.trait_ids),
         race_modifiers(content, character),
@@ -188,7 +189,7 @@ def collect_modifiers(
 
 
 def stat_bonuses(modifiers: Mapping[str, float]) -> StatBlock:
-    """Extract flat stat bonuses (``stat_STR`` and friends) from a bundle."""
+    """Вынуть из свёртка плоские прибавки к характеристикам (``stat_STR`` и подобные)."""
     values: dict[str, int] = {}
     for key, value in modifiers.items():
         if not key.startswith(STAT_MODIFIER_PREFIX):
@@ -200,7 +201,7 @@ def stat_bonuses(modifiers: Mapping[str, float]) -> StatBlock:
 
 
 def percent(modifiers: Mapping[str, float], key: str) -> float:
-    """A percentage modifier as a multiplier: 12 -> 1.12, -8 -> 0.92."""
+    """Процентная прибавка как множитель: 12 -> 1.12, -8 -> 0.92."""
     return 1.0 + modifiers.get(key, 0.0) / 100.0
 
 

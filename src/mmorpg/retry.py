@@ -1,13 +1,13 @@
-"""Waiting out a connection that went away.
+"""Как пережидают пропавшую связь.
 
-Three different links can break under a running game - PostgreSQL, Redis and
-Telegram - and all three break the same way: a call that was in the air when the
-socket died comes back as an error, while the link itself is healthy again a
-second later. The rule for all three is one rule, so the arithmetic of the waits
-lives here, in one place, and the layers that know about sockets use it.
+Под работающей игрой рвутся три разные связи - PostgreSQL, Redis и Telegram, -
+и рвутся все три одинаково: вызов, который был в воздухе, когда умер сокет,
+возвращается ошибкой, а сама связь секундой позже уже здорова. Правило на все
+три одно, поэтому арифметика пауз живёт здесь, в одном месте, а слои, знающие о
+сокетах, ею пользуются.
 
-Nothing here decides *what* may be repeated: that is the caller's business,
-because only the caller knows whether repeating changes the world twice
+Здесь не решается, *что* можно повторять: это дело вызывающего, потому что
+только он знает, изменит ли повтор мир дважды
 (``docs/adr/0009-repeating-a-lost-query.md``).
 """
 
@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 from mmorpg.logging import get_logger
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:  # pragma: no cover - только для типов
     from mmorpg.config import Settings
 
 logger = get_logger(__name__)
@@ -28,12 +28,12 @@ logger = get_logger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class RetryPolicy:
-    """How many times a lost call is repeated, and how long the waits are.
+    """Сколько раз повторяется пропавший вызов и какие между повторами паузы.
 
-    The waits double and then stop growing: the first repeat is quick, because
-    most breaks are a dropped connection that is replaced instantly, and the
-    later ones are slow, because a database that is still down after a second
-    is restarting rather than blinking.
+    Паузы удваиваются и перестают расти: первый повтор быстрый, потому что
+    большинство обрывов - это упавшее соединение, которое заменяют мгновенно, а
+    поздние медленные, потому что база, всё ещё лежащая через секунду, не мигает, а
+    перезапускается.
     """
 
     attempts: int = 5
@@ -49,7 +49,7 @@ class RetryPolicy:
         )
 
     def pause(self, attempt: int) -> float:
-        """How long to wait before repeat number ``attempt``; the first one is 1."""
+        """Сколько ждать перед повтором номер ``attempt``; первый - единица."""
         return min(self.delay * 2.0 ** (attempt - 1), self.max_delay)
 
 
@@ -61,13 +61,13 @@ async def keep_trying[T](
     what: str,
     recoverable: Callable[[BaseException], bool],
 ) -> T:
-    """Call until it works, or until ``seconds`` of waiting have passed.
+    """Звать, пока не сработает, или пока не выйдут ``seconds`` ожидания.
 
-    This is the startup path, and it is deliberately patient rather than
-    counted: a stack that comes up together does not come up in order, and a
-    PostgreSQL that needs five more seconds to open its socket is not a reason
-    for the bot to exit. Under a running game the counted repeats are used
-    instead - a player waiting for a screen must not wait a minute for it.
+    Это путь старта, и он нарочно терпелив, а не сосчитан: стек, который
+    поднимается разом, поднимается не по порядку, и PostgreSQL, которому нужно ещё
+    пять секунд, чтобы открыть сокет, - не повод боту выходить. Под работающей
+    игрой берутся сосчитанные повторы: игрок, ждущий экрана, не должен ждать его
+    минуту.
     """
     loop = asyncio.get_running_loop()
     deadline = loop.time() + seconds

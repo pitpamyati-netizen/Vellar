@@ -1,18 +1,19 @@
-# Webhook mode. Overlay on top of the base stack:
+# Режим вебхука. Накладывается поверх основного стека:
 #
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
-# Telegram will only deliver to a public HTTPS URL, so this expects a reverse
-# proxy (Caddy, nginx, Cloudflare Tunnel) in front of port 8080 holding the
-# certificate for WEBHOOK_BASE_URL. Requires WEBHOOK_BASE_URL and WEBHOOK_SECRET
-# in .env; the bot refuses to start without the secret.
+# Telegram доставляет только на публичный адрес HTTPS, поэтому здесь ждут обратный
+# прокси (Caddy, nginx, Cloudflare Tunnel) перед портом 8080, держащий сертификат
+# для WEBHOOK_BASE_URL. Нужны WEBHOOK_BASE_URL и WEBHOOK_SECRET в .env; без секрета
+# бот отказывается стартовать.
 services:
   bot:
     environment:
       APP_ENV: prod
-      # JSON logs are forced in prod anyway; stated here so it is not a surprise.
+      # В prod журнал в JSON включён и так; сказано здесь, чтобы это не было
+      # неожиданностью.
       LOG_JSON: "true"
     ports:
-      # Loopback: the reverse proxy terminates TLS and forwards here. Publish on
-      # 0.0.0.0 only if something else already fronts this host.
+      # Loopback: TLS завершает обратный прокси и передаёт сюда. Публикуйте на 0.0.0.0,
+      # только если перед этой машиной уже что-то стоит.
       - "127.0.0.1:8080:8080"

@@ -1,4 +1,4 @@
-"""Combat screen, shop economy and inventory rendering."""
+"""Боевой экран, экономика лавки и отрисовка сумки."""
 
 from __future__ import annotations
 
@@ -88,7 +88,7 @@ def session(content: GameContent, fighter: Character) -> battle_service.BattleSe
     return open_fight(content, fighter)
 
 
-# --- the combat screen ------------------------------------------------
+# --- боевой экран -----------------------------------------------------
 
 
 def test_screen_leads_with_the_situation(
@@ -149,13 +149,13 @@ def test_cooldown_is_written_into_the_button(
     content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
     ready = flow.render(content, fighter, session, HERO).rows[3][0].text
-    # Ready, the button states the price of using it.
+    # Готовое умение называет на кнопке цену применения.
     assert "откат 3 хода" in ready
     assert ready.endswith("готово")
 
     used, _ = flow.advance(content, {HERO: fighter}, session, HERO, ready)
     third = flow.render(content, fighter, used, HERO).rows[3][0].text
-    # Spent, it states what is left of it - a different question.
+    # Потраченное называет, сколько от него осталось, - а это другой вопрос.
     assert third.startswith("3. Удар щитом — точность,")
     assert third.endswith("ещё 3 хода")
 
@@ -163,12 +163,11 @@ def test_cooldown_is_written_into_the_button(
 def test_every_button_says_what_it_does(
     content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
-    """A panel of six buttons that all read "готово" tells the player nothing.
+    """Панель из шести кнопок, на каждой из которых написано «готово», не говорит игроку ничего.
 
-    Each filled slot has to name a consequence - a number of damage, of healing,
-    of a shield, or the rule it applies - before it is pressed. That is the whole
-    difference between a skill and a lottery ticket for a player who cannot see
-    a tooltip.
+    Каждый заполненный слот обязан назвать последствие — число урона, лечения, щита
+    или правило, которое он применяет, — до того, как его нажали. В этом вся разница
+    между умением и лотерейным билетом для того, кто не может увидеть подсказку.
     """
     screen = flow.render(content, fighter, session, HERO)
     cleave, taunt = screen.rows[1][0].text, screen.rows[2][0].text
@@ -181,7 +180,7 @@ def test_every_button_says_what_it_does(
 def test_a_skill_states_a_number_that_grows_with_the_character(
     content: GameContent, fighter: Character
 ) -> None:
-    """The number on the button is the character's, not the skill's."""
+    """Число на кнопке принадлежит персонажу, а не умению."""
 
     def damage_on_the_button(level: int) -> int:
         hero = replace(fighter, level=level)
@@ -203,7 +202,7 @@ def test_panel_size_follows_the_loadout_not_the_level(
     )
 
 
-# --- actions ----------------------------------------------------------
+# --- действия ---------------------------------------------------------
 
 
 def test_attack_resolves_a_turn(
@@ -271,13 +270,13 @@ def test_unknown_input_is_refused_without_burning_a_turn(
     assert notice
 
 
-# --- the tag rules, spoken -------------------------------------------
+# --- правила тегов, сказанные вслух ----------------------------------
 
 
 def test_the_enemy_announces_its_intent_and_the_way_in(
     content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
-    """Rule 1.1.1 and 1.1.3: the choice is made against something, in words."""
+    """Правила 1.1.1 и 1.1.3: выбор делается против чего-то, и это сказано словами."""
     line = flow.render(content, fighter, session, HERO).text().split("\n")[2]
     assert "Намерение:" in line
     assert "брешь — " in line
@@ -287,7 +286,7 @@ def test_the_enemy_announces_its_intent_and_the_way_in(
 def test_the_trace_is_a_spoken_line(
     content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
-    """Rule 1.1.4: no bar, no icon - the state of the exchange is a sentence."""
+    """Правило 1.1.4: ни полосы, ни значка - состояние размена это фраза."""
     opening = flow.render(content, fighter, session, HERO).text()
     assert "След пуст." in opening
 
@@ -316,7 +315,7 @@ def test_every_action_button_names_its_tag(
 def test_the_plain_attack_word_still_works(
     content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
-    """The label grew a tag; a player who typed the old word is not locked out."""
+    """У надписи вырос тег; игрок, набравший прежнее слово, не оказывается заперт."""
     assert flow.action_for(content, fighter, session, HERO, "Атака") == BattleAction(
         kind=ActionKind.ATTACK
     )
@@ -339,7 +338,7 @@ def test_victory_screen_reports_the_rewards(content: GameContent, fighter: Chara
     assert "Опыт:" in text
 
 
-# --- serialisation ----------------------------------------------------
+# --- перевод в строку и обратно ---------------------------------------
 
 
 def test_a_fight_survives_a_round_trip_through_redis(
@@ -368,7 +367,7 @@ def test_effects_and_cooldowns_survive_the_round_trip(
     assert dict(hero_after.cooldowns) == dict(hero_before.cooldowns)
 
 
-# --- shop economy -----------------------------------------------------
+# --- экономика лавки --------------------------------------------------
 
 
 def test_assortment_is_deterministic_per_rotation(content: GameContent) -> None:
@@ -444,7 +443,7 @@ def test_rarity_raises_the_price(content: GameContent) -> None:
     assert epic > common
 
 
-# --- shop and inventory screens ---------------------------------------
+# --- экраны лавки и сумки ---------------------------------------------
 
 
 def test_shop_screen_states_price_and_affordability(content: GameContent) -> None:

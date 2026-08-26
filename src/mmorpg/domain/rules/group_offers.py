@@ -1,22 +1,24 @@
-"""Offers made in the group: what one player may propose to another, and when it
-may actually settle.
+"""Предложения в группе: что один игрок вправе предложить другому и когда это
+действительно может закрыться.
 
-The grammar lives in ``group_commands`` and the nouns in ``entities/trade``; this
-module is about consequences. Three rules shape everything here:
+Грамматика живёт в ``group_commands``, существительные - в ``entities/trade``, а
+этот модуль о последствиях. Всё здесь держится на трёх правилах:
 
-- **only the target may answer** - an offer names one person, and a stranger
-  pressing the button gets a refusal, not the goods (``Narrative.md``, section 9);
-- **the author stakes their side up front** - publishing an offer takes the item
-  out of the seller's pack, or the gold out of the buyer's purse, and holds it
-  until the offer is answered (Roadmap 2.3). An offer is therefore a promise the
-  author can no longer break by accident: they cannot spend what they have already
-  put on the table;
-- **the target stakes nothing until they say yes** - taking gold from someone who
-  has not agreed would be theft, so their side is read at the moment they answer,
-  and that is the only thing a settlement still has to check.
+- **отвечает только тот, кому предложили**: предложение называет одного
+  человека, и чужому, нажавшему кнопку, достаётся отказ, а не товар
+  (``Narrative.md``, раздел 9);
+- **автор ставит своё вперёд**: объявленное предложение вынимает вещь из сумки
+  продавца или золото из кошелька покупателя и держит это, пока не ответят
+  (Roadmap 2.3). Поэтому предложение - обещание, которое автор уже не нарушит
+  по случайности: истратить то, что он выложил на стол, нельзя;
+- **тот, кому предложили, не ставит ничего, пока не согласился**: забрать
+  золото у того, кто не соглашался, было бы воровством, поэтому его сторона
+  читается в тот момент, когда он отвечает, и это единственное, что закрытию
+  ещё остаётся проверить.
 
-There is no clock here. ``now`` is a unix timestamp handed in by the caller, which
-is what keeps expiry testable without waiting five minutes (``Claude.md``, rule 1).
+Часов здесь нет. ``now`` - unix-время, которое передаёт вызывающий, и это то,
+что позволяет проверять срок, не дожидаясь пяти минут (``Claude.md``,
+правило 1).
 """
 
 from __future__ import annotations
@@ -28,15 +30,15 @@ from enum import StrEnum
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party
 from mmorpg.domain.rules.group_commands import GroupIntent, normalise
 
-# Five minutes, from Narrative.md: long enough to read the message aloud and
-# think, short enough that a forgotten offer cannot be accepted the next day.
+# Пять минут, из Narrative.md: достаточно, чтобы прочитать сообщение вслух и подумать, и
+# достаточно мало, чтобы забытое предложение нельзя было принять назавтра.
 OFFER_TTL_SECONDS = 300
 MAX_OFFER_NUMBER = 999
 
-# The sweep that returns stakes runs a minute behind expiry on purpose. A player
-# who presses "Принять" a moment too late should be told that the offer ran out,
-# not that it never existed - and that answer only exists while the row does.
-# The cost is one extra minute of escrow on an offer nobody answered at all.
+# Уборка, возвращающая ставки, идёт на минуту позже срока нарочно. Игроку, нажавшему
+# «Принять» мгновением позже нужного, надо сказать, что предложение вышло по сроку, а не
+# что его не было вовсе, — а такой ответ существует, только пока существует строка. Цена
+# — лишняя минута эскроу на предложении, на которое никто и не ответил.
 SWEEP_GRACE_SECONDS = 60
 
 OFFER_KIND_FOR_INTENT: dict[GroupIntent, OfferKind] = {
@@ -46,7 +48,7 @@ OFFER_KIND_FOR_INTENT: dict[GroupIntent, OfferKind] = {
 
 
 class Refusal(StrEnum):
-    """Why the bot said no. The wording lives in the presentation layer."""
+    """Почему бот сказал «нет». Слова живут в слое представления."""
 
     SELF = "self"
     NO_CHARACTER = "no_character"
@@ -72,23 +74,23 @@ def is_expired(offer: Offer, now: int, *, ttl: int = OFFER_TTL_SECONDS) -> bool:
 
 
 def sweep_before(now: int) -> int:
-    """The moment an offer stops being answerable *and* stops being remembered.
+    """Момент, когда предложение перестаёт быть отвечаемым *и* перестаёт помниться.
 
-    Everything published at or before this instant has both run out and served
-    out its grace period, so its stake goes back to the author. One expression,
-    because the sweep now happens in more than one place: before a group command,
-    and once when the game starts (``application.services.group_trade``).
+    Всё объявленное в это мгновение или раньше и вышло по сроку, и отстояло свою
+    отсрочку, поэтому ставка возвращается автору. Одно выражение, потому что уборка
+    теперь случается не в одном месте: перед командой в группе и один раз на старте
+    игры (``application.services.group_trade``).
     """
     return now - OFFER_TTL_SECONDS - SWEEP_GRACE_SECONDS
 
 
 def answerable_by(offer: Offer, user_id: int) -> bool:
-    """Only the target answers. Both sides may walk away, but only one may agree."""
+    """Отвечает только тот, кому предложили. Уйти вправе оба, согласиться - один."""
     return user_id == offer.target.user_id
 
 
 def next_number(previous: int) -> int:
-    """Offer numbers are short because a player types them: 1 to 999, then round."""
+    """Номера предложений короткие, потому что их набирают руками: от 1 до 999 и по кругу."""
     return previous % MAX_OFFER_NUMBER + 1
 
 
@@ -96,12 +98,12 @@ def next_number(previous: int) -> int:
 
 
 def stakes_item(offer: Offer) -> bool:
-    """Whether publishing this offer took an item out of the author's pack."""
+    """Вынуло ли объявление этого предложения вещь из сумки автора."""
     return offer.kind is OfferKind.SELL
 
 
 def stakes_gold(offer: Offer) -> bool:
-    """Whether publishing this offer took gold out of the author's purse."""
+    """Вынуло ли объявление этого предложения золото из кошелька автора."""
     return offer.kind is OfferKind.BUY
 
 
@@ -118,13 +120,13 @@ def check_proposal(
     price: int,
     author_gold: int,
 ) -> Refusal | None:
-    """Whether an offer may be published at all.
+    """Можно ли вообще объявить это предложение.
 
-    The item is checked on whichever side is meant to hand it over, because that
-    is also how the item was named. The **author's** gold is checked too, and only
-    the author's: a buyer stakes their money the moment they offer it, while
-    reading the target's purse would answer a question nobody asked and leak a
-    balance to the whole group.
+    Вещь проверяется у той стороны, которая должна её отдать, - потому что так же её
+    и называли. Золото **автора** проверяется тоже, и только автора: покупатель
+    ставит свои деньги в ту минуту, когда предлагает, а чтение чужого кошелька
+    ответило бы на вопрос, которого никто не задавал, и выдало бы остаток всей
+    группе.
     """
     if author.user_id == target.user_id:
         return Refusal.SELF
@@ -138,11 +140,11 @@ def check_proposal(
 def check_settlement(
     offer: Offer, *, target_holds: int, target_gold: int, now: int
 ) -> Refusal | None:
-    """Whether the offer can still be honoured right now.
+    """Можно ли исполнить предложение прямо сейчас.
 
-    Only the target is read: the author's side has been in escrow since the offer
-    was published, so the one thing that can still have changed is the purse - or
-    the pack - of the person now answering.
+    Читается только тот, кому предложили: сторона автора лежит в эскроу с той
+    минуты, как предложение объявили, поэтому измениться мог лишь кошелёк - или
+    сумка - того, кто отвечает.
     """
     if is_expired(offer, now):
         return Refusal.EXPIRED
@@ -154,7 +156,7 @@ def check_settlement(
 
 
 def check_gift(*, author: Party, target: Party, holds: int, quantity: int) -> Refusal | None:
-    """A hand-over asks nothing in return, so it needs no confirmation - only stock."""
+    """Передача не просит ничего взамен, поэтому ей не нужно подтверждение - только наличие."""
     if author.user_id == target.user_id:
         return Refusal.SELF
     if holds < quantity:
@@ -163,11 +165,12 @@ def check_gift(*, author: Party, target: Party, holds: int, quantity: int) -> Re
 
 
 def check_contact(*, blocked_by_target: bool, blocks_target: bool) -> Refusal | None:
-    """Whether these two players deal with each other at all (Roadmap 2.5).
+    """Имеют ли эти двое дело друг с другом вообще (Roadmap 2.5).
 
-    A block works both ways on purpose. Whoever drew the line, the pair is closed:
-    a one-way block would let the blocker keep pushing offers at somebody who has
-    already said no, which is the behaviour a black list exists to stop.
+    Блокировка работает в обе стороны нарочно. Кто бы ни провёл черту, пара закрыта:
+    односторонняя блокировка позволила бы блокирующему и дальше слать предложения
+    тому, кто уже сказал «нет», а чёрный список существует ровно затем, чтобы этого
+    не было.
     """
     if blocked_by_target:
         return Refusal.BLOCKED_BY_TARGET
@@ -177,7 +180,7 @@ def check_contact(*, blocked_by_target: bool, blocks_target: bool) -> Refusal | 
 
 
 def check_profile(*, visible: bool) -> Refusal | None:
-    """A closed profile is a refusal, not silence: the asker is owed an answer."""
+    """Закрытый профиль - это отказ, а не молчание: спросившему ответ причитается."""
     return None if visible else Refusal.PROFILE_HIDDEN
 
 
@@ -189,25 +192,25 @@ def check_gold_gift(*, author: Party, target: Party, purse: int, amount: int) ->
     return None
 
 
-# --- naming goods the way a player names them ------------------------
+# --- как игрок называет товар ---------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
 class ItemOption:
-    """One candidate the player might have meant."""
+    """Один из тех, кого игрок мог иметь в виду."""
 
     item_id: str
     name: str
 
 
 def match_items(query: str, catalogue: Sequence[ItemOption]) -> tuple[ItemOption, ...]:
-    """Resolve a typed item name against what someone actually holds.
+    """Свести набранное имя вещи с тем, что у человека и правда есть.
 
-    Players do not type identifiers, they type "кожаная броня" and sometimes just
-    "броня". So matching walks from strict to loose and stops at the first tier
-    that finds anything: an exact name beats a prefix, a prefix beats a substring.
-    Returning several candidates is not a failure - it means "say which one", and
-    guessing between them would move the wrong goods.
+    Игроки не набирают идентификаторы, они набирают «кожаная броня», а иногда просто
+    «броня». Поэтому сверка идёт от строгой к вольной и останавливается на первой
+    ступени, что-то нашедшей: точное имя сильнее начала, начало сильнее вхождения.
+    Вернуть несколько кандидатов — не отказ, это значит «скажите, какая именно», а
+    угадывание двинуло бы не тот товар.
     """
     wanted = normalise(query)
     if not wanted:
@@ -217,7 +220,7 @@ def match_items(query: str, catalogue: Sequence[ItemOption]) -> tuple[ItemOption
     if exact:
         return tuple(exact)
 
-    # An identifier still works, for anyone who reads the content files.
+    # Идентификатор тоже работает - для тех, кто читает файлы содержимого.
     by_id = [option for option in catalogue if option.item_id.casefold() == wanted]
     if by_id:
         return tuple(by_id)

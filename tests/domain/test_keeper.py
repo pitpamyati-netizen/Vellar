@@ -1,7 +1,7 @@
-"""Keeper shortcuts: gold, a level, a healed character, spare points.
+"""Обходы смотрителя: золото, уровень, вылеченный персонаж, лишние очки.
 
-The point of every test here is that a shortcut produces a *legal* character -
-the same one the long way round would have produced.
+Смысл каждого здешнего теста в том, что обход даёт *законного* персонажа - того
+же самого, какого дала бы долгая дорога.
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ def test_a_level_costs_the_experience_it_actually_costs(
 
 
 def test_a_level_brings_the_points_a_level_brings(content: GameContent, hero: Character) -> None:
-    """The shortcut goes through progression, so the points are not invented here."""
+    """Обход идёт через прогрессию, поэтому очки здесь не выдумываются."""
     rules = content.rules
     grown, level_up = keeper.raise_level(content, hero)
 
@@ -116,7 +116,7 @@ def test_moving_a_character_changes_only_where_they_stand(hero: Character) -> No
 
 
 def test_a_keeper_flag_is_not_a_game_rule(hero: Character) -> None:
-    """Nothing in the rules reads it: it only opens a screen."""
+    """Ни одно правило этого не читает: флаг только открывает экран."""
     assert hero.is_admin is False
     assert hero.as_admin(True).is_admin is True
     assert hero.as_admin(True).as_admin(False).is_admin is False

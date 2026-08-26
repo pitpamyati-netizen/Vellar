@@ -1,4 +1,4 @@
-"""Total stat computation: pure, reproducible, never double-applied."""
+"""Счёт итоговых характеристик: чистый, воспроизводимый, никогда не двойной."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def test_traits_contribute_flat_stat_bonuses(content: GameContent, warrior: Char
     lucky = replace(warrior, trait_ids=("born_lucky",))
     after = primary_stats(content, lucky)
     assert after[StatCode.LCK] == before + 2
-    # born_lucky also costs a point of endurance.
+    # born_lucky стоит ещё и очка выносливости.
     assert after[StatCode.END] == primary_stats(content, warrior)[StatCode.END] - 1
 
 
@@ -55,7 +55,7 @@ def test_computation_is_pure(content: GameContent, warrior: Character) -> None:
 
 
 def test_effects_do_not_double_apply(content: GameContent, warrior: Character) -> None:
-    """The core idempotency rule: re-applying an effect never doubles its bonus."""
+    """Главное правило идемпотентности: заново применённый эффект не удваивает прибавку."""
     effect = ActiveEffect(
         id="rally", name="Клич сплочения", modifiers={"health_percent": 20.0}, turns_left=3
     )
@@ -86,7 +86,7 @@ def test_health_percent_effect_raises_max_health(content: GameContent, warrior: 
 
 
 def test_equipment_modifiers_apply(content: GameContent, warrior: Character) -> None:
-    # Levelled up so a few percent of armour is more than a rounding artefact.
+    # Взят уровень, чтобы несколько процентов брони были больше, чем след округления.
     veteran = replace(warrior, level=50, allocated=StatBlock(END=40))
     plain = derived_stats(content, veteran)
     armored = derived_stats(
@@ -143,7 +143,7 @@ def test_resource_name_comes_from_the_class(content: GameContent, warrior: Chara
 
 
 def test_dodge_and_crit_are_capped(content: GameContent) -> None:
-    """No build reaches 100 percent dodge; the cap keeps combat resolvable."""
+    """Ни одна сборка не доходит до 100 процентов уклонения; потолок держит бой разрешимым."""
     halfling = Character(
         id=3,
         user_id=1,

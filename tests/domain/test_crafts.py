@@ -1,4 +1,4 @@
-"""Crafts: ranks earned by work, one gathering per watch, and what a batch gives."""
+"""Ремёсла: ранги, заработанные работой, один сбор за стражу и что даёт партия."""
 
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ def test_every_rank_has_a_name(content: GameContent) -> None:
     assert len(names) == rules.max_rank
 
 
-# --- gathering --------------------------------------------------------
+# --- сбор -------------------------------------------------------------
 
 
 def test_gathering_brings_back_a_material_and_records_the_work(
@@ -126,7 +126,7 @@ def test_a_making_craft_gathers_nothing(content: GameContent, miner: Character) 
 
 
 def test_a_level_below_every_yield_is_told_so(content: GameContent, miner: Character) -> None:
-    """A craft whose materials all start higher up says so instead of paying out."""
+    """Ремесло, у которого всё сырьё начинается выше, говорит об этом, а не платит."""
     deep = replace(
         content.craft("mining"),
         yields=tuple(entry for entry in content.craft("mining").yields if entry.level > 1),
@@ -175,7 +175,7 @@ def test_a_recipe_above_the_rank_is_refused(content: GameContent, miner: Charact
 
 
 def test_quality_decides_what_comes_out(content: GameContent, miner: Character) -> None:
-    """Over many batches every tier shows up, and a better one is worth more."""
+    """На многих партиях всплывает каждая ступень, и лучшая стоит больше."""
     recipe = content.recipes_of("smithing")[0]
     owned = {need.item_id: need.count * 3 for need in recipe.inputs}
     seen = {
@@ -207,13 +207,13 @@ def test_crafts_split_into_gathering_and_making(content: GameContent) -> None:
     assert len(gathering) + len(making) == len(content.crafts)
 
 
-# --- where the work is done -------------------------------------------
+# --- где делается работа ----------------------------------------------
 
 
 def test_what_a_craft_brings_back_depends_on_where_it_is_worked(
     content: GameContent, miner: Character
 ) -> None:
-    """One button used to give the same thing in every city (Roadmap, "Риски")."""
+    """Одна кнопка когда-то давала одно и то же в каждом городе."""
     mining = content.craft("mining")
     stony = frozenset({"горы"})
     roadside = frozenset({"дорога"})
@@ -251,14 +251,14 @@ def test_ground_that_holds_nothing_for_this_craft_says_so(
         biomes=nowhere,
     )
     assert not result.ok
-    # A refused gathering costs nothing: the cooldown has not started either.
+    # Отказанный сбор не стоит ничего: откат тоже не начался.
     assert miner.crafts.progress("mining").gathered_at == 0
 
 
 def test_a_place_that_only_holds_deeper_materials_talks_about_the_level(
     content: GameContent, miner: Character
 ) -> None:
-    """Two different silences: "not for you yet" and "not here at all"."""
+    """Два разных молчания: «тебе ещё рано» и «здесь этого нет вовсе»."""
     junior = replace(miner, level=1)
     deep = frozenset({"пещеры"})
     refused = craft_rules.can_gather(

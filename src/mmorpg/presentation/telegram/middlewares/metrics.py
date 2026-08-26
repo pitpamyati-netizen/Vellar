@@ -1,13 +1,12 @@
-"""Counting and timing every update.
+"""Счёт и замер каждого обновления.
 
-The outermost middleware there is: what it measures is the whole cost of an
-update as the player experiences it - the duplicate check, the repositories, the
-flow, the answer - and not the part of it a handler happens to be responsible
-for.
+Самая внешняя мидлварь из всех: она меряет полную цену обновления такой, какой
+её чувствует игрок, - проверку на повтор, хранилища, флоу, ответ, - а не ту
+часть, за которую случайно отвечает хендлер.
 
-It measures and nothing else. An exception passes through untouched, because the
-answer to a broken update belongs to ``ErrorMiddleware``, and a middleware that
-swallowed one to keep its counters tidy would turn a crash into silence.
+Она меряет и больше ничего. Исключение проходит сквозь неё нетронутым, потому
+что ответ на сломанное обновление - дело ``ErrorMiddleware``, а мидлварь,
+проглотившая его ради опрятных счётчиков, превратила бы падение в тишину.
 """
 
 from __future__ import annotations
@@ -22,7 +21,7 @@ from mmorpg.metrics import Metrics, Stopwatch
 
 
 class MetricsMiddleware(BaseMiddleware):
-    """Records how long each update took, and whether it blew up."""
+    """Записывает, сколько заняло каждое обновление и не взорвалось ли оно."""
 
     def __init__(self, metrics: Metrics) -> None:
         self._metrics = metrics

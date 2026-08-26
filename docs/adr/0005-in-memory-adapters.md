@@ -1,31 +1,32 @@
-# ADR 0005 - In-memory adapters for local development and tests
+# ADR 0005 — Адаптеры в памяти для локальной разработки и тестов
 
-Status: accepted (2026-08-12)
+Статус: принято (2026-08-12)
 
-## Context
+## Обстоятельства
 
-Running the bot required PostgreSQL and Redis, which means a working Docker daemon
-before a single message can be exchanged. That is a poor first-run experience and it
-also makes the fast test suite depend on external services.
+Чтобы запустить бота, требовались PostgreSQL и Redis, а значит, работающий демон
+Docker раньше, чем удастся обменяться хоть одним сообщением. Это плохое первое
+знакомство, и из-за него же быстрый набор тестов зависел от внешних служб.
 
-## Decision
+## Решение
 
-Every port in `mmorpg/domain/ports/` gets two implementations:
+У каждого порта в `mmorpg/domain/ports/` две реализации:
 
-- `infrastructure/persistence/postgres/` and `infrastructure/cache/redis_*` - the
-  production path, used when `APP_ENV` is `dev` or `prod`;
-- `infrastructure/persistence/memory/` and `infrastructure/cache/memory_*` - dicts
-  behind the same protocol, used when `APP_ENV=local` and in the test suite.
+- `infrastructure/persistence/postgres/` и `infrastructure/cache/redis_*` — боевой путь,
+  берётся, когда `APP_ENV` равен `dev` или `prod`;
+- `infrastructure/persistence/memory/` и `infrastructure/cache/memory_*` — словари за
+  тем же протоколом, берутся при `APP_ENV=local` и в наборе тестов.
 
-aiogram's FSM storage follows the same rule: `RedisStorage` for dev and prod,
-`MemoryStorage` for local.
+Хранилище автомата aiogram следует тому же правилу: `RedisStorage` для dev и prod,
+`MemoryStorage` для local.
 
-## Consequences
+## Последствия
 
-- `uv sync && uv run python -m mmorpg.main` plays end to end with only a bot token.
-- The port protocols are exercised by two implementations, so leaking a
-  PostgreSQL-specific concept into a port fails fast.
-- In-memory state is lost on restart; it is a development convenience, never a
-  deployment target. The startup log warns about this explicitly.
-- Repository tests that assert real SQL behaviour are marked `integration` and are
-  skipped unless PostgreSQL and Redis are reachable.
+- `uv sync && uv run python -m mmorpg.main` играется от начала до конца с одним лишь
+  токеном бота.
+- Протоколы портов прогоняются двумя реализациями, поэтому утёкшее в порт
+  PostgreSQL-специфичное понятие падает сразу.
+- Состояние в памяти теряется при перезапуске; это удобство разработки, а не то, на чём
+  разворачивают игру. Журнал старта предупреждает об этом прямо.
+- Тесты хранилищ, проверяющие поведение настоящего SQL, помечены `integration` и
+  пропускаются, пока PostgreSQL и Redis недоступны.

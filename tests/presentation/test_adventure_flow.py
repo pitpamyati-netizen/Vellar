@@ -1,12 +1,13 @@
-"""The core loop, driven through the real handlers.
+"""Главный цикл, прогнанный через настоящие хендлеры.
 
-Everything else in this suite tests a pure function. This file tests the wiring:
-a character walks into a location, presses "Вступить в бой", fights to the end,
-and the result reaches the repositories. A fight the player cannot actually enter
-is the one failure the flow tests cannot see, so it is checked here.
+Всё остальное в этом наборе проверяет чистую функцию. Этот файл проверяет
+связывание: персонаж входит в локацию, жмёт «Вступить в бой», доводит бой до
+конца, и результат доходит до хранилищ. Бой, в который игрок на самом деле не
+может войти, — единственный отказ, которого тесты веток не видят, поэтому он
+проверяется здесь.
 
-No network: the two handlers are called directly and their one message per step
-is captured.
+Никакой сети: два хендлера зовутся напрямую, а их одно сообщение на шаг
+перехватывается.
 """
 
 from __future__ import annotations
@@ -52,13 +53,13 @@ from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.states.screens import Play
 
 ACCOUNT = 500_001
-# A shelf that will not turn over while the test runs: the location a player
-# walks into must be the one the test computed.
+# Прилавок, который не перевернётся за время теста: локация, в которую входит игрок,
+# обязана быть той, которую тест и посчитал.
 SETTINGS = Settings(_env_file=None, shop_rotation_seconds=10**9)  # type: ignore[call-arg]
 
 
 class Recorder:
-    """Stands in for send_screen: keeps every screen the handlers produced."""
+    """Заменяет собой send_screen: держит все экраны, которые выдали хендлеры."""
 
     def __init__(self) -> None:
         self.screens: list[Screen] = []
@@ -73,7 +74,7 @@ class Recorder:
 
 
 class Aside:
-    """Stands in for send_text: keeps the extra messages a step produced.
+    """Заменяет собой send_text: держит лишние сообщения, которые породил шаг.
 
     Ровно одно действие в игре отвечает двумя сообщениями - взятый уровень, - и
     здесь ловится именно второе (``screens/play.level_up_report``).
@@ -184,7 +185,7 @@ def a_message(text: str) -> Message:
 
 
 class Player:
-    """One test player: presses buttons, and the right handler answers."""
+    """Один подопытный игрок: жмёт кнопки, и отвечает правильный хендлер."""
 
     def __init__(self, state: FSMContext, sent: Recorder, **deps: Any) -> None:
         self.state = state
@@ -260,7 +261,7 @@ async def player(
 
 
 def path_to(location: Any, kind: NodeKind) -> tuple[list[int], int] | None:
-    """A walk from the entrance to the nearest node of this kind."""
+    """Дорога от входа до ближайшего узла этого вида."""
     parents: dict[int, int] = {0: 0}
     queue = deque([0])
     while queue:
@@ -278,7 +279,7 @@ def path_to(location: Any, kind: NodeKind) -> tuple[list[int], int] | None:
 
 
 async def walk_to(player: Player, content: GameContent, kind: NodeKind) -> int:
-    """Enter the first location of the first city and stand on a node of ``kind``."""
+    """Войти в первую локацию первого города и встать на узел вида ``kind``."""
     await player.press("Мир")
     await player.press("Дубно")
     await player.press("Локации")
@@ -296,16 +297,17 @@ async def walk_to(player: Player, content: GameContent, kind: NodeKind) -> int:
     return target
 
 
-# --- the loop ---------------------------------------------------------
+# --- цикл -------------------------------------------------------------
 
 
 async def test_a_battle_node_actually_starts_a_fight(player: Player, content: GameContent) -> None:
-    """The one thing every other feature stands on: the fight opens."""
+    """То единственное, на чём стоит всё остальное: бой открывается."""
     await walk_to(player, content, NodeKind.BATTLE)
     screen = await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
     assert screen.id is ScreenId.COMBAT
     assert screen.text().startswith("Бой. Круг 1.")
-    # The first button is the plain attack; its label now names the tag it leaves.
+    # Первая кнопка - обычный удар; её надпись теперь называет след, который он
+    # оставляет.
     assert next(row[0].text for row in screen.rows).startswith("Атака")
 
 
@@ -323,7 +325,7 @@ async def test_a_fight_ends_and_the_result_is_stored(
         text = screen.text()
         if text.startswith(("Победа.", "Поражение.")):
             break
-    else:  # pragma: no cover - a fight that never ends is the bug this catches
+    else:  # pragma: no cover - бой, который не кончается, и есть та ошибка, которую это ловит
         pytest.fail("the fight never finished in 40 turns")
 
     stored = await characters.get_active(ACCOUNT)
@@ -334,14 +336,14 @@ async def test_a_fight_ends_and_the_result_is_stored(
         assert "Опыт:" in text
     else:
         assert stored.gold < argus.gold
-    # Wounds outlive the fight, whatever its outcome.
+    # Раны переживают бой, чем бы он ни кончился.
     assert 0 < stored.health <= derived_stats(content, stored).max_health
 
 
 async def test_a_won_fight_takes_one_pack_out_of_the_node(
     player: Player, content: GameContent, deltas: Any
 ) -> None:
-    """A node is not a switch: it holds several packs and counts them down."""
+    """Узел - не рубильник: в нём стоит несколько стай, и он их отсчитывает."""
     node = await walk_to(player, content, NodeKind.BATTLE)
     await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
     for _ in range(40):
@@ -351,7 +353,7 @@ async def test_a_won_fight_takes_one_pack_out_of_the_node(
 
     flow = await player.flow()
     if not flow.session.active:
-        # A lost fight sends the player back to the city instead.
+        # Проигранный бой вместо этого отправляет игрока обратно в город.
         assert flow.session == LocationSession()
         return
 
@@ -443,7 +445,7 @@ async def test_a_new_level_arrives_as_its_own_message(
             continue
         screen = await player.press(play_screens.NODE_ACTIONS[kind])
         break
-    else:  # pragma: no cover - this seed always has a quiet node
+    else:  # pragma: no cover - у этого сида тихий узел есть всегда
         pytest.fail("this seed produced no quiet node at all")
 
     grown = await characters.get_active(ACCOUNT)
@@ -478,12 +480,12 @@ async def test_a_level_taken_in_a_fight_is_announced_too(
         text = (await player.press("Атака")).text()
         if text.startswith(("Победа.", "Поражение.")):
             break
-    else:  # pragma: no cover - a fight that never ends is another bug
+    else:  # pragma: no cover - бой, который не кончается, это другая ошибка
         pytest.fail("the fight never finished in 40 turns")
 
     grown = await characters.get_active(ACCOUNT)
     assert grown is not None
-    if not text.startswith("Победа."):  # pragma: no cover - this seed wins
+    if not text.startswith("Победа."):  # pragma: no cover - этот сид выигрывает
         pytest.skip("этот сид кончился поражением: опыта за него не платят")
 
     assert grown.level == argus.level + 1
@@ -501,7 +503,7 @@ async def test_a_step_that_takes_no_level_answers_once(
     assert aside.texts == []
 
 
-# --- the city ---------------------------------------------------------
+# --- город ------------------------------------------------------------
 
 
 async def test_the_inn_sells_health_and_the_bank_keeps_gold(
@@ -549,8 +551,8 @@ async def test_a_contract_is_taken_counted_and_paid(
     assert holder is not None
     assert holder.quests.is_taken(quest.id)
 
-    # Hand it in already counted out: how the counter moves is tested in the
-    # domain, what matters here is that the payment arrives.
+    # Сдать уже досчитанным: как двигается счётчик, проверяет домен, а здесь важно, что
+    # плата приходит.
     counted = await characters.get_active(ACCOUNT)
     assert counted is not None
     await characters.save(replace(counted, quests=QuestLog(taken={quest.id: quest.target_count})))
@@ -593,7 +595,7 @@ async def test_a_skill_point_buys_a_skill_and_a_slot_holds_it(
     assert equipped.loadout.actives[1] == fresh.code
 
 
-# --- the location is common ground ------------------------------------
+# --- локация - общая земля --------------------------------------------
 
 
 async def test_what_one_player_took_is_gone_for_everybody(
@@ -608,7 +610,7 @@ async def test_what_one_player_took_is_gone_for_everybody(
     state: FSMContext,
     sent: Recorder,
 ) -> None:
-    """A location is not a private instance: one player's work shows in it."""
+    """Локация - не личная копия: работа одного игрока в ней видна."""
     quiet = next(
         kind
         for kind in (NodeKind.GATHER, NodeKind.CACHE, NodeKind.EVENT, NodeKind.SHRINE)
@@ -628,7 +630,7 @@ async def test_what_one_player_took_is_gone_for_everybody(
     stored = await deltas.state("farhold", 1, now=int(time.time()))
     assert stored.node(node).taken == 1, "the node was worked and nobody was told"
 
-    # A second player walks the same road and finds the cache already searched.
+    # Второй игрок идёт той же дорогой и находит тайник уже обысканным.
     other_account = ACCOUNT + 1
     other = await characters.create(
         Character(
@@ -682,7 +684,7 @@ async def test_what_one_player_took_is_gone_for_everybody(
 async def test_the_map_is_the_same_map_after_the_place_is_emptied(
     player: Player, content: GameContent, deltas: Any
 ) -> None:
-    """A location is permanent: emptying it changes what is in it, not where it is."""
+    """Локация постоянна: вычистить её значит изменить то, что в ней, а не то, где она."""
     await player.press("Мир")
     await player.press("Дубно")
     await player.press("Локации")
@@ -708,12 +710,12 @@ async def test_the_map_is_the_same_map_after_the_place_is_emptied(
     emptied = await deltas.state("farhold", 1, now=now)
     assert all(emptied.node(index).empty for index in inside)
 
-    # Three minutes later everything is standing again, and it is new.
+    # Через три минуты всё стоит снова, и это новое.
     filled = await deltas.state("farhold", 1, now=now + node_rules.RESPAWN_SECONDS)
     assert all(filled.node(index).wave == 1 for index in inside)
 
 
-# --- the Debt Circle --------------------------------------------------
+# --- Круг долгов ------------------------------------------------------
 
 
 async def test_a_descent_pays_at_the_bottom_and_not_before(
@@ -722,14 +724,13 @@ async def test_a_descent_pays_at_the_bottom_and_not_before(
     characters: InMemoryCharacterRepository,
     argus: Character,
 ) -> None:
-    """Three fights in a row used to be worth three fights (Roadmap, "Риски").
+    """Три боя подряд когда-то стоили трёх боёв.
 
-    The screen promised a reward "внизу"; nothing in the game paid one. Now the
-    bottom hands over gold, experience and something to carry out - and only to
-    somebody who got that far.
+    Экран обещал награду «внизу»; в игре её не платило ничто. Теперь дно отдаёт
+    золото, опыт и то, что можно вынести, — и только тому, кто до него дошёл.
     """
-    # Points spent the way a player would spend them: the bottom of a descent is
-    # an epic opponent, and a bare level-12 character has no business winning it.
+    # Очки потрачены так, как их потратил бы игрок: дно спуска - эпический противник, и
+    # голому персонажу двенадцатого уровня выигрывать там нечего.
     allowance = stat_allowance(content, 12)
     strong = replace(
         argus,
@@ -757,7 +758,7 @@ async def test_a_descent_pays_at_the_bottom_and_not_before(
             pytest.skip("the descent was lost; the prize is for whoever gets down")
         button = "Идти глубже" if "Пройдено схваток:" in text else "Атака"
         screen = await player.press(button)
-    else:  # pragma: no cover - a descent that never ends is the bug this catches
+    else:  # pragma: no cover - спуск, который не кончается, и есть та ошибка, которую это ловит
         pytest.fail("the descent never reached the bottom")
 
     assert "Спуск пройден до дна" in bottom
@@ -772,7 +773,7 @@ async def test_a_round_of_the_circle_is_fought_and_paid_out(
     characters: InMemoryCharacterRepository,
     argus: Character,
 ) -> None:
-    """No queue, no timer: a stake, a snapshot of somebody, and an answer."""
+    """Ни очереди, ни таймера: ставка, слепок с кого-то и ответ."""
     from mmorpg.domain.rules import arena as arena_rules
 
     rich = replace(argus, level=12, gold=5_000)
@@ -797,7 +798,7 @@ async def test_a_round_of_the_circle_is_fought_and_paid_out(
 
     opened = await player.press("Выйти на арену")
     assert opened.id is ScreenId.COMBAT
-    # The stake is taken the moment the fight exists, not when it ends.
+    # Ставку берут в ту минуту, когда бой возник, а не когда он кончился.
     charged = await characters.get(rich.id)
     assert charged is not None
     assert charged.gold == rich.gold - stake
@@ -806,7 +807,7 @@ async def test_a_round_of_the_circle_is_fought_and_paid_out(
         screen = await player.press("Атака")
         if screen.text().startswith(("Победа.", "Поражение.")):
             break
-    else:  # pragma: no cover - a fight that never ends is the bug this catches
+    else:  # pragma: no cover - бой, который не кончается, и есть та ошибка, которую это ловит
         raise AssertionError("the arena fight never finished")
 
     settled = await characters.get(rich.id)
@@ -825,7 +826,7 @@ async def test_an_empty_circle_says_so_and_charges_nothing(
     characters: InMemoryCharacterRepository,
     argus: Character,
 ) -> None:
-    """Nobody to copy means no round - and no stake taken for it."""
+    """Копировать некого - значит, нет круга, и ставки за него не берут."""
     rich = replace(argus, level=12, gold=5_000)
     await characters.save(rich)
 

@@ -1,19 +1,19 @@
-"""Liveness heartbeat.
+"""Сердцебиение: жив ли цикл событий.
 
-A restart policy handles a process that dies. It cannot see a process whose event
-loop is wedged - a blocking call, a deadlock, a socket that never times out - and
-such a container stays "up" while every player waits in silence. That is the
-failure mode this module exists for.
+С процессом, который умер, разберётся политика перезапуска. Процесс, у которого
+встал цикл событий, она не видит - блокирующий вызов, взаимная блокировка,
+сокет без срока, - и такой контейнер считается «поднятым», пока каждый игрок
+ждёт в тишине. Ради этого отказа модуль и написан.
 
-So the loop proves it is alive by doing something only a running loop can do: a
-background task touches a file every ``heartbeat_seconds``. ``scripts/healthcheck.py``
-reads the file's age, the container is declared unhealthy once the beat stops,
-and the restart policy takes it from there.
+Поэтому цикл доказывает, что он жив, делая то, что может сделать только живой
+цикл: фоновая задача трогает файл каждые ``heartbeat_seconds``.
+``scripts/healthcheck.py`` читает возраст файла, контейнер объявляется
+нездоровым, как только удары прекратились, а дальше дело политики перезапуска.
 
-The file is written from a worker thread. It is 30 bytes and the beat is slow, but
-the p95 budget of 100 ms per update (``docs/architecture.md``) leaves no room for
-surprise file I/O on the loop - a container volume can stall for far longer than
-the write itself costs.
+Файл пишется из рабочего потока. В нём 30 байт, и удары редки, но бюджет p95 в
+100 мс на обновление (``docs/architecture.md``) не оставляет места
+неожиданному файловому вводу-выводу в цикле: том контейнера умеет вставать
+намного дольше, чем стоит сама запись.
 """
 
 from __future__ import annotations
@@ -32,17 +32,17 @@ logger = get_logger(__name__)
 
 
 def touch(path: Path) -> None:
-    """Record "the loop was alive just now" as the file's modification time.
+    """Записать «цикл был жив только что» временем изменения файла.
 
-    The contents are for a human reading the file over ``docker exec``; the probe
-    only looks at the timestamp, so a partially written file cannot mislead it.
+    Содержимое - для человека, который читает файл через ``docker exec``; проверка
+    смотрит только на отметку времени, поэтому недописанный файл её не обманет.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(datetime.now(UTC).isoformat(), encoding="utf-8")
 
 
 def age_seconds(path: Path, *, now: float | None = None) -> float | None:
-    """Seconds since the last beat, or ``None`` when there has never been one."""
+    """Сколько секунд прошло с последнего удара, или ``None``, если ударов не было."""
     try:
         modified = path.stat().st_mtime
     except OSError:
@@ -51,18 +51,18 @@ def age_seconds(path: Path, *, now: float | None = None) -> float | None:
 
 
 def is_alive(settings: Settings, *, now: float | None = None) -> bool:
-    """Whether the heartbeat is recent enough to call the bot healthy."""
+    """Достаточно ли свежо сердцебиение, чтобы считать бота здоровым."""
     age = age_seconds(settings.heartbeat_path, now=now)
     return age is not None and age <= settings.heartbeat_stale_after
 
 
 async def _beat(path: Path, interval: float, stop: asyncio.Event) -> None:
-    """Touch the file every ``interval`` until asked to stop.
+    """Трогать файл каждые ``interval``, пока не попросят остановиться.
 
-    Stopping is an event rather than a cancellation on purpose: cancelling does
-    not reach into the worker thread, so a cancelled beat can still land its write
-    *after* the shutdown deleted the file - leaving a fresh heartbeat behind for a
-    process that is gone.
+    Остановка - это событие, а не отмена задачи, и нарочно: отмена не дотягивается
+    до рабочего потока, поэтому отменённый удар успевает положить свою запись
+    *после* того, как остановка удалила файл, - и оставить свежее сердцебиение
+    процессу, которого больше нет.
     """
     while not stop.is_set():
         with suppress(TimeoutError):
@@ -74,10 +74,10 @@ async def _beat(path: Path, interval: float, stop: asyncio.Event) -> None:
 
 @asynccontextmanager
 async def heartbeat(settings: Settings) -> AsyncIterator[None]:
-    """Beat for as long as the block is running.
+    """Биться, пока выполняется блок.
 
-    The first beat lands before the block is entered, so the probe has something
-    to read from the moment the bot starts serving.
+    Первый удар ложится до входа в блок, чтобы проверке было что читать с той
+    минуты, как бот начал обслуживать игроков.
     """
     path = settings.heartbeat_path
     await asyncio.to_thread(touch, path)
@@ -87,13 +87,13 @@ async def heartbeat(settings: Settings) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        # Ask, then wait: the beat returns at once, and any write already in
-        # flight has finished by the time the file is removed below.
+        # Сначала попросить, потом дождаться: удар возвращается сразу, и запись, уже
+        # ушедшая в полёт, успевает лечь до того, как файл ниже будет удалён.
         stop.set()
         with suppress(asyncio.CancelledError):
             await task
-        # A file left behind by a clean shutdown would make the next start look
-        # wedged for its first three beats.
+        # Файл, оставшийся после чистой остановки, заставил бы следующий старт три удара
+        # подряд выглядеть вставшим.
         with suppress(OSError):
             path.unlink()
         logger.info("heartbeat_stopped")

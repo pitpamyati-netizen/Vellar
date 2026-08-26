@@ -1,9 +1,9 @@
-"""Reply keyboard construction.
+"""Сборка reply-клавиатур.
 
-`ReplyKeyboardMarkup` is the only markup in the project; inline keyboards are
-forbidden outright (``docs/adr/0002-reply-keyboards-only.md``). Markup objects are
-cached by layout, so an unchanged screen never rebuilds its keyboard - one of the
-measures behind the 100 ms budget.
+`ReplyKeyboardMarkup` - единственная разметка в проекте; inline-клавиатуры
+запрещены прямо (``docs/adr/0002-reply-keyboards-only.md``). Объекты разметки
+кэшируются по раскладке, поэтому неизменившийся экран не собирает клавиатуру
+заново - одна из мер, стоящих за бюджетом в 100 мс.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ KEYBOARD_CACHE_SIZE = 512
 
 @lru_cache(maxsize=KEYBOARD_CACHE_SIZE)
 def _build(layout: tuple[tuple[str, ...], ...]) -> ReplyKeyboardMarkup:
-    """Cached by exact layout: same buttons in the same order, same object."""
+    """Кэшируется по точной раскладке: те же кнопки в том же порядке - тот же объект."""
     return ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text=text) for text in row] for row in layout],
         resize_keyboard=True,
@@ -31,21 +31,21 @@ def _build(layout: tuple[tuple[str, ...], ...]) -> ReplyKeyboardMarkup:
 
 
 def keyboard_for(screen: Screen, *, emoji: bool = False) -> ReplyKeyboardMarkup:
-    """The markup for a screen, honouring the player's emoji setting."""
+    """Разметка экрана, с учётом того, что игрок выбрал про значки."""
     return _build(screen.button_texts(emoji=emoji))
 
 
 @lru_cache(maxsize=KEYBOARD_CACHE_SIZE)
 def _build_selective(buttons: tuple[str, ...]) -> ReplyKeyboardMarkup:
-    """One row, shown to one person.
+    """Один ряд, показанный одному человеку.
 
-    ``selective`` means Telegram displays the keyboard only to the sender of the
-    message this one replies to - which is exactly the target of an offer. It is
-    a convenience, not a permission check: the handler refuses a stranger's press
-    regardless of who could see the button.
+    ``selective`` значит, что Telegram покажет клавиатуру только отправителю того
+    сообщения, которому это отвечает, - а это ровно тот, кому предложили. Это
+    удобство, а не проверка права: чужое нажатие хендлер отвергнет независимо от
+    того, кто мог видеть кнопку.
 
-    ``one_time_keyboard`` because the answer is a single decision, and leaving the
-    buttons in a group chat would attach them to unrelated conversation.
+    ``one_time_keyboard`` - потому что ответ здесь одно решение, а оставленные в
+    группе кнопки прицепились бы к разговору, к которому не относятся.
     """
     return ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text=text) for text in buttons]],
@@ -58,17 +58,17 @@ def _build_selective(buttons: tuple[str, ...]) -> ReplyKeyboardMarkup:
 
 
 def selective_keyboard(buttons: Sequence[str]) -> ReplyKeyboardMarkup:
-    """The two answer buttons of a pending offer."""
+    """Две кнопки ответа у стоящего предложения."""
     return _build_selective(tuple(buttons))
 
 
 def dismiss_keyboard() -> ReplyKeyboardRemove:
-    """Take the answer buttons back once the offer is closed."""
+    """Убрать кнопки ответа, когда предложение закрылось."""
     return ReplyKeyboardRemove(selective=True)
 
 
 def cache_info() -> str:
-    """Exposed for the latency tests and for operational logging."""
+    """Открыто наружу ради тестов задержки и служебного журнала."""
     return str(_build.cache_info())
 
 

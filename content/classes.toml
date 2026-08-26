@@ -1,25 +1,27 @@
-# Eight classes, chosen right after the race during character creation.
+# Восемь классов, выбираются сразу после расы при создании персонажа.
 #
-# A class says how the adventurer fights, not what they do for a living: making
-# things for pay is a craft, and crafts live in crafts.toml (Narrative.md,
-# section 2). Ids are frozen - characters in the database point at them.
+# Класс говорит, как приключенец дерётся, а не чем он зарабатывает: делать вещи за
+# плату - это ремесло, и ремёсла живут в crafts.toml (Narrative.md, раздел 2).
 #
-# ``power`` is the one line the game says about how this class does damage: it
-# names the stat the standard blow scales on (key_stats[0]), because a screen
-# that only prints "ключевые характеристики" never answers *why* they are key.
+# Идентификаторы заморожены: на них показывают персонажи в базе.
 #
-# ``weapons`` and ``armor`` are what the class may put on: the ids come from
-# items.toml [meta].weapon_types / armor_types. They are the class in the player's
-# hands - a rogue with a two-handed sword is not a rogue - and a skill may narrow
-# them further (skills.toml, ``weapons``), never widen them.
+# ``power`` - та единственная строка, которую игра говорит о том, как этот класс
+# наносит урон: она называет характеристику, на которой меряется обычный удар
+# (key_stats[0]), потому что экран, печатающий одни лишь «ключевые характеристики»,
+# не отвечает, *почему* они ключевые.
 #
-# Each class contributes 20 active and 40 passive skills across the whole
-# progression (skills.toml, owner = "class:<id>"), unlocked at the levels in
-# [meta].active_unlock_levels / passive_unlock_levels. Развитие ровное: боевое
-# умение каждые пятнадцать уровней, между ними два пассивных, шестьдесят умений
-# на триста уровней. The player equips 6 of the 20 actives - that choice is the
-# build. Пассивные умения слотов не занимают: изученное работает.
-# See docs/skills.md.
+# ``weapons`` и ``armor`` - что класс вправе надеть: идентификаторы берутся из
+# items.toml [meta].weapon_types / armor_types. Это класс в руках игрока - разбойник
+# с двуручным мечом уже не разбойник, - и умение вправе сузить их ещё
+# (skills.toml, ``weapons``), но никогда не расширить.
+#
+# Каждый класс даёт 20 боевых и 40 пассивных умений на всё развитие (skills.toml,
+# owner = "class:<id>"), открываемых на уровнях из [meta].active_unlock_levels /
+# passive_unlock_levels. Развитие ровное: боевое умение каждые пятнадцать уровней,
+# между ними два пассивных, шестьдесят умений на триста уровней.
+#
+# Игрок ставит в панель 6 из 20 боевых - этот выбор и есть сборка. Пассивные умения
+# слотов не занимают: изученное работает. См. docs/skills.md.
 
 [meta]
 base_stat_value = 5
@@ -84,7 +86,7 @@ key_stats = ["AGI", "WIS"]
 weapons = ["bow", "dagger", "short_sword", "spear"]
 armor = ["cloth", "light", "medium"]
 bonuses = { AGI = 2, WIS = 1 }
-resource = { id = "focus", name = "Выдержка", base = 50, per_level = 1.2, stat = "WIS", per_stat = 1.5, regen_per_turn = 8 }
+resource = { id = "focus", name = "Фокус", base = 50, per_level = 1.2, stat = "WIS", per_stat = 1.5, regen_per_turn = 8 }
 health = { base = 95, per_level = 7.5, per_endurance = 6.0 }
 
 [[class]]

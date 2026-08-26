@@ -1,8 +1,8 @@
-"""Experience, levels and the points a level grants.
+"""Опыт, уровни и очки, которые уровень даёт.
 
-Pure arithmetic over a precomputed table: the curve is evaluated once at import
-time for levels 1..300, so ``level_for_experience`` is a binary search rather than
-a loop over levels.
+Чистая арифметика по заранее посчитанной таблице: кривая считается один раз при
+импорте для уровней 1..300, поэтому ``level_for_experience`` - двоичный поиск, а
+не проход по уровням.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from mmorpg.domain.rules import modifiers as mods
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:  # pragma: no cover - только для типов
     from mmorpg.domain.entities.character import Character
     from mmorpg.domain.entities.content import GameContent
 
@@ -23,7 +23,7 @@ _CURVE_EXPONENT = 1.6
 
 
 def experience_to_next_level(level: int) -> int:
-    """Experience needed to go from ``level`` to ``level + 1``."""
+    """Сколько опыта нужно, чтобы уйти с ``level`` на ``level + 1``."""
     if level < 1 or level >= MAX_LEVEL:
         return 0
     cost: float = _CURVE_FACTOR * float(level) ** _CURVE_EXPONENT
@@ -31,7 +31,7 @@ def experience_to_next_level(level: int) -> int:
 
 
 def _build_thresholds() -> tuple[int, ...]:
-    """Cumulative experience required to *reach* each level, index = level - 1."""
+    """Накопленный опыт, нужный, чтобы *достичь* каждого уровня; индекс = уровень - 1."""
     thresholds = [0]
     total = 0
     for level in range(1, MAX_LEVEL):
@@ -44,13 +44,13 @@ EXPERIENCE_THRESHOLDS: tuple[int, ...] = _build_thresholds()
 
 
 def experience_to_reach(level: int) -> int:
-    """Total experience required to reach ``level`` from scratch."""
+    """Сколько всего опыта нужно, чтобы дойти до ``level`` с нуля."""
     clamped = max(1, min(level, MAX_LEVEL))
     return EXPERIENCE_THRESHOLDS[clamped - 1]
 
 
 def level_for_experience(experience: int) -> int:
-    """The level a character with this much total experience has."""
+    """Уровень персонажа, у которого столько всего опыта."""
     if experience <= 0:
         return 1
     index = bisect.bisect_right(EXPERIENCE_THRESHOLDS, experience)
@@ -58,9 +58,9 @@ def level_for_experience(experience: int) -> int:
 
 
 def experience_into_level(experience: int) -> tuple[int, int]:
-    """Progress inside the current level as ``(earned, needed)``.
+    """Продвижение внутри нынешнего уровня в виде ``(набрано, нужно)``.
 
-    At the maximum level this is ``(0, 0)`` - there is nothing left to fill.
+    На последнем уровне это ``(0, 0)``: заполнять уже нечего.
     """
     level = level_for_experience(experience)
     if level >= MAX_LEVEL:
@@ -72,7 +72,7 @@ def experience_into_level(experience: int) -> tuple[int, int]:
 
 @dataclass(frozen=True, slots=True)
 class LevelUp:
-    """What a character gained by levelling up."""
+    """Что персонаж получил, взяв уровень."""
 
     previous_level: int
     new_level: int
@@ -93,7 +93,7 @@ def apply_experience(
     stat_points_per_level: int,
     skill_points_per_level: int,
 ) -> LevelUp:
-    """Compute the level change caused by gaining ``gained`` experience."""
+    """Посчитать смену уровня, вызванную ``gained`` опыта."""
     if gained < 0:
         msg = "experience gain cannot be negative"
         raise ValueError(msg)
@@ -131,10 +131,10 @@ def earned(content: GameContent, character: Character, gained: int) -> int:
 def grant_experience(
     content: GameContent, character: Character, gained: int
 ) -> tuple[Character, LevelUp]:
-    """The one place experience turns into a level.
+    """Единственное место, где опыт превращается в уровень.
 
-    Every source - a fight, a contract, a cache - goes through here, so a level
-    always brings the same points no matter what earned it.
+    Каждый источник - бой, задание, тайник - проходит здесь, поэтому уровень всегда
+    приносит одни и те же очки, чем бы он ни был заработан.
     """
     rules = content.rules
     gained = earned(content, character, gained)
@@ -176,10 +176,10 @@ def growth(content: GameContent, previous_level: int, new_level: int) -> LevelUp
 
 
 def experience_reward(*, enemy_level: int, character_level: int, base: int = 12) -> int:
-    """Experience for defeating an enemy, reduced when it is far below the player.
+    """Опыт за побеждённого противника, урезанный, когда он сильно ниже игрока.
 
-    Fighting far under your level is not a farming strategy: at 10 levels of
-    difference the reward drops to a tenth.
+    Драться сильно ниже своего уровня - не способ фармить: на разнице в 10 уровней
+    награда падает до десятой части.
     """
     difference = character_level - enemy_level
     penalty = max(0.1, 1.0 - max(0, difference) * 0.09)

@@ -1,4 +1,4 @@
-"""World table invariants: 15 cities, 5 locations each, levels 1-300 without gaps."""
+"""Основа мира: 15 городов, по 5 локаций, уровни 1-300 без пробелов."""
 
 from __future__ import annotations
 
@@ -41,8 +41,8 @@ def test_city_bands_overlap_and_increase(content: GameContent) -> None:
     for earlier, later in itertools.pairwise(ordered):
         assert later.level_min > earlier.level_min
         assert later.level_max > earlier.level_max
-        # The next city starts inside the previous band: there is always both
-        # somewhere to push forward and somewhere to go back and farm.
+        # Следующий город начинается внутри полосы предыдущего: всегда есть и куда
+        # рваться вперёд, и куда вернуться и подкопить.
         assert later.level_min < earlier.level_max
 
 

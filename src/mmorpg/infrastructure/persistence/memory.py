@@ -1,8 +1,8 @@
-"""In-memory repositories.
+"""Хранилища в памяти.
 
-Used when ``APP_ENV=local`` and by the whole fast test suite. State lives in plain
-dicts and is lost on restart - that is a development convenience, never a
-deployment target (``docs/adr/0005-in-memory-adapters.md``).
+Берутся при ``APP_ENV=local`` и всем быстрым набором тестов. Состояние живёт в
+обычных словарях и теряется при перезапуске - это удобство разработки, а не то,
+на чём разворачивают игру (``docs/adr/0005-in-memory-adapters.md``).
 """
 
 from __future__ import annotations
@@ -94,10 +94,10 @@ class InMemoryKeeperLogRepository:
 
 
 class InMemoryPrivacyRepository:
-    """Profile visibility and black lists, by account id.
+    """Видимость карточки и чёрные списки, по идентификатору аккаунта.
 
-    Absence is the open state: an account nobody stored anything about shows its
-    profile and blocks no one.
+    Отсутствие - это открытое состояние: аккаунт, о котором ничего не сохранено,
+    показывает карточку и не блокирует никого.
     """
 
     def __init__(self) -> None:
@@ -184,10 +184,10 @@ class InMemoryCharacterRepository:
         return any(character.name.casefold() == folded for character in self._characters.values())
 
     async def arena_opponent(self, *, level: int, window: int, exclude_id: int) -> Character | None:
-        """The nearest level match. Deterministic here, unlike the SQL one.
+        """Ближайший по уровню. Здесь - определённо, в отличие от версии на SQL.
 
-        A game running in memory has a handful of characters and no reason to
-        randomise: the test that asks for an opponent wants the same one twice.
+        У игры, работающей в памяти, персонажей горстка, и случайность ни к чему: тест,
+        просящий противника, хочет получить того же самого дважды.
         """
         pool = [
             character
@@ -329,10 +329,10 @@ class InMemoryContentOverlayRepository:
 
 
 class InMemoryTradeRepository:
-    """Pending offers and the trade journal, in a list.
+    """Стоящие предложения и журнал сделок, списком.
 
-    Nothing here needs a lock: one process, one event loop, and every method
-    below runs to the end without awaiting anything.
+    Замок здесь не нужен: один процесс, один цикл событий, и каждый метод ниже
+    доходит до конца, ничего не дожидаясь.
     """
 
     def __init__(self) -> None:

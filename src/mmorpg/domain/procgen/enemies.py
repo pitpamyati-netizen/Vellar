@@ -1,8 +1,8 @@
-"""Enemy generation.
+"""Сборка противников.
 
-An enemy is an archetype from ``content/enemies.toml`` scaled to a level. The
-archetype is picked with an explicit RNG built from the node seed, so the same
-node in the same cycle always produces the same opponent.
+Противник - это порода из ``content/enemies.toml``, растянутая на уровень.
+Порода выбирается явным источником случайности, собранным из сида узла, поэтому
+один и тот же узел в одном и том же цикле всегда даёт того же противника.
 """
 
 from __future__ import annotations
@@ -20,38 +20,32 @@ from mmorpg.domain.entities.location import (
 )
 from mmorpg.domain.procgen.seeds import rng
 
-# Level baseline. An "average" archetype (all multipliers 1.0) uses these values.
-# Health is set against the standard blow of a character of the same level
-# (`domain.rules.combat.standard_blow`): an ordinary opponent is meant to fall in
-# about three turns, which is what tests/domain/test_combat_balance.py pins down.
-# Здоровье меряется против стандартного удара, а стандартный удар с тех пор
-# считает оружие в руке (``domain/rules/equipment.py``): противник, посчитанный
-# против голых рук, ложился за два хода, стоил игроку одного процента здоровья и
-# делал вылазку формальностью. Сорок процентов сверху возвращают бою обещанные три хода
-# при том же оружии, каким его дерётся живой игрок.
-#
-# Основание правилось ещё раз, когда у оружия сузился размах (ADR 0017 и
-# ``entities/dice.py``): длина боя держалась на невезении. Пока верхняя граница
-# удара была вчетверо выше нижней, первый уровень выигрывал бой то за два хода,
-# то за шесть, и середина ложилась куда надо; с размахом в полтора раза бой
-# встал ровно на своё среднее — а среднее на первом уровне было четыре с
-# половиной хода. Правится основание, а не рост: выше десятого уровня разница
-# меньше двух процентов.
+# Основание по уровням. «Средняя» порода (все множители 1.0) пользуется этими
+# значениями. Здоровье выставлено против стандартного удара персонажа того же уровня
+# (`domain.rules.combat.standard_blow`): обычный противник должен падать ходов за три, и
+# это закрепляет tests/domain/test_combat_balance.py. Здоровье меряется против
+# стандартного удара, а стандартный удар с тех пор считает оружие в руке
+# (``domain/rules/equipment.py``): противник, посчитанный против голых рук, ложился за
+# два хода, стоил игроку одного процента здоровья и делал вылазку формальностью. Сорок
+# процентов сверху возвращают бою обещанные три хода при том же оружии, каким его
+# дерётся живой игрок.  Основание правилось ещё раз, когда у оружия сузился размах (ADR
+# 0017 и ``entities/dice.py``): длина боя держалась на невезении. Пока верхняя граница
+# удара была вчетверо выше нижней, первый уровень выигрывал бой то за два хода, то за
+# шесть, и середина ложилась куда надо; с размахом в полтора раза бой встал ровно на
+# своё среднее — а среднее на первом уровне было четыре с половиной хода. Правится
+# основание, а не рост: выше десятого уровня разница меньше двух процентов.
 HEALTH_BASE = 30.0
 HEALTH_PER_LEVEL = 12.30
-# Damage is set against the player's health pool rather than against their blow:
-# an ordinary opponent should cost a noticeable share of it over the three turns
-# it lives, so that a run through a location is a series of decisions - press on,
-# drink, walk back and pay for a bed - and not a formality.
-#
-# It used to cost about a twentieth. Every fight was won, nothing was ever spent,
-# and the inn, the potions and the wounds that outlive a fight were all decoration
-# (Roadmap, "Риски"). Tripling it is the whole change; the long tiers give the
-# tripling back in ``RANK_FACTORS`` so that an epic and a boss hurt exactly as
-# much as they did before - they were already dangerous.
-# Основание урона поднято той же правкой и по той же причине: бой, вставший на
-# своё среднее, стал стоить меньше — крайних случаев не осталось ни с той
-# стороны, ни с этой.
+# Урон выставлен против запаса здоровья игрока, а не против его удара: обычный противник
+# должен стоить заметной его доли за те три хода, что он живёт, — чтобы проход по
+# локации был чередой решений (идти дальше, выпить, вернуться и заплатить за постель), а
+# не формальностью.  Раньше он стоил примерно двадцатой части. Всякий бой выигрывался,
+# не тратилось ничего, и постоялый двор, зелья и раны, переживающие бой, были
+# украшением. Утроение — вся правка целиком; долгие ступени отдают это утроение обратно
+# через ``RANK_FACTORS``, чтобы эпический противник и босс били ровно так же, как били
+# прежде: они и без того были опасны. Основание урона поднято той же правкой и по той же
+# причине: бой, вставший на своё среднее, стал стоить меньше — крайних случаев не
+# осталось ни с той стороны, ни с этой.
 DAMAGE_BASE = 10.5
 DAMAGE_PER_LEVEL = 1.75
 ARMOR_PER_LEVEL = 1.15
@@ -60,32 +54,30 @@ INITIATIVE_PER_LEVEL = 0.35
 GOLD_BASE = 4.0
 GOLD_PER_LEVEL = 2.4
 
-#: A pack shares one fight's worth of health, damage **and pay** rather than
-#: multiplying it. Three full-strength opponents made an "ordinary" fight nine
-#: turns long - three fights in a row wearing one name. Each extra body still
-#: adds to the total, just far less than a whole opponent.
-#:
-#: Плата делится тем же делителем, и это не мелочь: делили только здоровье и
-#: урон, а золото и опыт стая множила на троих. Один и тот же бой стоил
-#: полутора боёв по времени и платил как три - и грести стаи было выгоднее
-#: всего, что есть в игре (``domain/rules/combat._check_outcome``).
+#: Стая делит здоровье, урон **и плату** одного боя, а не умножает их. Трое противников
+#: в полную силу делали «обычный» бой девятиходовым — три боя подряд под одним именем.
+#: Каждое лишнее тело всё ещё прибавляет к общему счёту, просто куда меньше целого
+#: противника.  Плата делится тем же делителем, и это не мелочь: делили только здоровье
+#: и урон, а золото и опыт стая множила на троих. Один и тот же бой стоил полутора боёв
+#: по времени и платил как три - и грести стаи было выгоднее всего, что есть в игре
+#: (``domain/rules/combat._check_outcome``).
 GROUP_MEMBER_TAX = 0.45
 
 
 def group_scale(size: int) -> float:
-    """What each member of a pack of ``size`` is worth on its own."""
+    """Сколько стоит сам по себе каждый из стаи размером ``size``."""
     return 1.0 / (1.0 + GROUP_MEMBER_TAX * (size - 1))
 
 
 @dataclass(frozen=True, slots=True)
 class RankFactors:
-    """What a tier multiplies. Health buys the turns, gold pays for them.
+    """Что умножает ступень. Здоровье покупает ходы, золото за них платит.
 
-    Damage does not grow with the tier - it shrinks. A boss lasts four times as
-    long as an ordinary opponent, so it lands four times as many blows: a blow of
-    the same size would kill the player on turn three of ten. What a tier costs is
-    counted over the whole fight, and over the whole fight a boss still takes far
-    more health than an ordinary opponent does.
+    Урон со ступенью не растёт - он падает. Босс держится вчетверо дольше обычного
+    противника, а значит, наносит вчетверо больше ударов: удар прежней величины
+    убил бы игрока на третьем ходу из десяти. Цена ступени считается по всему бою, и
+    по всему бою босс всё равно отнимает куда больше здоровья, чем обычный
+    противник.
     """
 
     health: float
@@ -95,22 +87,22 @@ class RankFactors:
     experience: float
 
 
-#: Gold and experience are paid per turn spent, near enough: a boss that takes
-#: four times as long has to be worth four times as much, or the shortest fight
-#: in the location is always the best one to grind.
+#: Золото и опыт платятся, считай, за потраченный ход: босс, который держится вчетверо
+#: дольше, обязан и стоить вчетверо больше, иначе выгоднее всего в локации всегда самый
+#: короткий бой.
 RANK_FACTORS: dict[EnemyRank, RankFactors] = {
     EnemyRank.NORMAL: RankFactors(health=1.0, damage=1.0, armor=1.0, gold=1.0, experience=1.0),
     EnemyRank.ELITE: RankFactors(health=2.6, damage=0.5, armor=1.2, gold=3.0, experience=2.5),
     EnemyRank.BOSS: RankFactors(health=5.2, damage=0.5, armor=1.35, gold=7.0, experience=5.0),
 }
 
-# Same enemy at the same level still varies a little, so two fights do not feel
-# copy-pasted. The spread is deterministic - it comes from the seed.
+# Тот же противник того же уровня всё-таки немного разный, чтобы два боя не выглядели
+# одним, скопированным дважды. Разброс при этом определён: он идёт из сида.
 VARIANCE = 0.12
 
 
 def candidates(archetypes: Sequence[EnemyArchetype], biome: str) -> tuple[EnemyArchetype, ...]:
-    """Archetypes that fit a biome, falling back to the wildcard ones."""
+    """Породы, подходящие биому, с откатом к тем, что годятся везде."""
     fitting = tuple(archetype for archetype in archetypes if archetype.fits(biome))
     if fitting:
         return fitting
@@ -127,10 +119,10 @@ def generate_enemy(
     elite_titles: Sequence[str] = (),
     members: int = 1,
 ) -> Enemy:
-    """Build one opponent. Same seed, same enemy - down to the last hit point.
+    """Собрать одного противника. Тот же сид - тот же противник, до последней жизни.
 
-    ``members`` is how many stand beside it, itself included: a pack shares one
-    fight's budget, so each of three is weaker than one alone.
+    ``members`` - сколько их стоит рядом, вместе с ним самим: стая делит бюджет
+    одного боя, поэтому каждый из троих слабее одиночки.
     """
     pool = candidates(archetypes, biome)
     if not pool:
@@ -190,10 +182,10 @@ def _name_for(
     elite_titles: Sequence[str],
     random_source: random.Random,
 ) -> str:
-    """A titled name for the long-fight tiers.
+    """Имя с прозвищем для ступеней долгого боя.
 
-    The title does not say which tier - the combat screen does that in words. It
-    only says that this one is not an ordinary animal.
+    Прозвище не называет ступень - её словами называет боевой экран. Оно говорит
+    только, что перед тобой не обычный зверь.
     """
     if rank is EnemyRank.NORMAL or not elite_titles:
         return archetype.name
@@ -211,13 +203,12 @@ def generate_group(
     elite_titles: Sequence[str] = (),
     max_size: int = 3,
 ) -> tuple[Enemy, ...]:
-    """One to ``max_size`` opponents. A long fight is always a single opponent.
+    """От одного до ``max_size`` противников. Долгий бой - всегда бой с одним.
 
-    An epic or a boss stands alone because its whole cost is measured in turns:
-    two of them side by side would double a fight that is already meant to be the
-    longest in the game.
+    Эпический противник и босс стоят в одиночку, потому что вся их цена меряется
+    ходами: двое рядом удвоили бы бой, который и так задуман самым долгим в игре.
     """
-    from mmorpg.domain.procgen.seeds import derive  # local: keeps the seed API in one place
+    from mmorpg.domain.procgen.seeds import derive  # local: держит работу с сидом в одном месте
 
     if rank.is_long_fight:
         return (

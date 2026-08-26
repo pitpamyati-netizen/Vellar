@@ -1,4 +1,4 @@
-"""Domain fixtures: real content, hand-built characters."""
+"""Приспособления домена: настоящее содержимое, персонажи, собранные руками."""
 
 from __future__ import annotations
 

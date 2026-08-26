@@ -1,10 +1,10 @@
-"""Offers between players (``Narrative.md``, section 9).
+"""Предложения между игроками (``Narrative.md``, раздел 9).
 
-The rules that matter are the ones that protect a player from someone else's
-mistake or malice: only the target may agree, nothing is guessed when a name is
-ambiguous, and a stale offer refuses rather than settles. Since Roadmap 2.3 the
-author also stakes their side up front, so most of these checks are about who is
-still allowed to change their mind.
+Важны те правила, которые берегут игрока от чужой ошибки или чужого умысла:
+согласиться вправе только адресат, при двусмысленном имени не угадывают ничего,
+а протухшее предложение отказывает, а не закрывается. С Roadmap 2.3 автор ещё и
+ставит свою сторону вперёд, поэтому большая часть здешних проверок - о том, кому
+ещё позволено передумать.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def offer(kind: OfferKind = OfferKind.SELL, *, price: int = 100, created_at: int
     )
 
 
-# --- who does what ----------------------------------------------------
+# --- кто что делает ---------------------------------------------------
 
 
 def test_selling_means_the_author_parts_with_the_item() -> None:
@@ -72,7 +72,7 @@ def test_only_the_target_may_agree() -> None:
     assert answerable_by(sale, STRANGER) is False
 
 
-# --- the five minutes -------------------------------------------------
+# --- пять минут -------------------------------------------------------
 
 
 def test_an_offer_expires_exactly_when_it_says_it_does() -> None:
@@ -83,7 +83,7 @@ def test_an_offer_expires_exactly_when_it_says_it_does() -> None:
 
 
 def test_an_expired_offer_refuses_before_anything_else_is_checked() -> None:
-    """Even a perfectly funded settlement is refused once the time is up."""
+    """Даже безупречно обеспеченное закрытие отвергается, когда время вышло."""
     refusal = check_settlement(
         offer(created_at=0), target_holds=5, target_gold=10_000, now=OFFER_TTL_SECONDS
     )
@@ -91,18 +91,18 @@ def test_an_expired_offer_refuses_before_anything_else_is_checked() -> None:
     assert refusal is Refusal.EXPIRED
 
 
-# --- what an offer holds ----------------------------------------------
+# --- что держит предложение -------------------------------------------
 
 
 def test_a_sale_stakes_the_item_and_a_purchase_stakes_the_gold() -> None:
-    """Whichever the author put up is what comes back if the offer dies."""
+    """Что бы автор ни выложил, оно и вернётся, если предложение умрёт."""
     assert stakes_item(offer(OfferKind.SELL)) is True
     assert stakes_gold(offer(OfferKind.SELL)) is False
     assert stakes_item(offer(OfferKind.BUY)) is False
     assert stakes_gold(offer(OfferKind.BUY)) is True
 
 
-# --- publishing an offer ----------------------------------------------
+# --- объявление предложения -------------------------------------------
 
 
 def proposal(
@@ -138,22 +138,22 @@ def test_buying_what_they_do_not_have_names_the_right_side() -> None:
 
 
 def test_a_buyer_has_to_have_the_money_before_they_offer_it() -> None:
-    """The gold is staked the moment the offer is published, so it must exist."""
+    """Золото ставится в ту минуту, когда предложение объявлено, значит, оно обязано быть."""
     assert proposal(OfferKind.BUY, price=100, author_gold=99) is Refusal.AUTHOR_LACKS_GOLD
     assert proposal(OfferKind.BUY, price=100, author_gold=100) is None
 
 
 def test_the_targets_purse_is_never_read_to_publish_an_offer() -> None:
-    """Checking the target's gold here would answer a question nobody asked.
+    """Проверять здесь золото адресата значило бы отвечать на вопрос, которого никто не задавал.
 
-    They have five minutes to find the money; refusing up front would both leak
-    their balance and deny a trade they could have made. Only the author's own
-    purse is read, and only when the author is the one paying.
+    У него есть пять минут, чтобы найти деньги; отказ вперёд и выдал бы его остаток,
+    и запретил бы сделку, которую он мог бы совершить. Читается только собственный
+    кошелёк автора, и только когда платит автор.
     """
     assert proposal(OfferKind.SELL, author_gold=0) is None
 
 
-# --- settling ---------------------------------------------------------
+# --- закрытие ---------------------------------------------------------
 
 
 def test_a_settlement_reads_only_the_side_that_is_answering() -> None:
@@ -161,21 +161,21 @@ def test_a_settlement_reads_only_the_side_that_is_answering() -> None:
 
 
 def test_a_buyer_who_spent_the_money_meanwhile_cannot_agree() -> None:
-    """The seller's item is in escrow; the buyer's purse is the open question."""
+    """Вещь продавца в эскроу; открытый вопрос - кошелёк покупателя."""
     refusal = check_settlement(offer(OfferKind.SELL), target_holds=0, target_gold=99, now=1000)
 
     assert refusal is Refusal.TARGET_LACKS_GOLD
 
 
 def test_a_seller_who_sold_it_elsewhere_cannot_agree_to_a_purchase() -> None:
-    """A purchase holds the buyer's gold, so the item is the open question."""
+    """Покупка держит золото покупателя, поэтому открытый вопрос - вещь."""
     refusal = check_settlement(offer(OfferKind.BUY), target_holds=0, target_gold=0, now=1000)
 
     assert refusal is Refusal.TARGET_LACKS_ITEM
 
 
 def test_the_author_can_no_longer_break_their_own_offer() -> None:
-    """Whatever the author staked is already gone from their side of the table."""
+    """Что бы автор ни поставил, с его стороны стола этого уже нет."""
     assert check_settlement(offer(OfferKind.BUY), target_holds=1, target_gold=0, now=1000) is None
 
 
@@ -183,7 +183,7 @@ def test_paying_the_exact_price_is_enough() -> None:
     assert check_settlement(offer(price=100), target_holds=0, target_gold=100, now=1000) is None
 
 
-# --- hand-overs -------------------------------------------------------
+# --- передачи ---------------------------------------------------------
 
 
 def test_a_gift_only_needs_the_stock() -> None:
@@ -200,7 +200,7 @@ def test_gold_cannot_be_given_to_yourself_or_out_of_thin_air() -> None:
     assert check_gold_gift(author=ARGUS, target=MERLA, purse=100, amount=100) is None
 
 
-# --- numbering --------------------------------------------------------
+# --- номера -----------------------------------------------------------
 
 
 def test_offer_numbers_stay_short_enough_to_type() -> None:
@@ -209,7 +209,7 @@ def test_offer_numbers_stay_short_enough_to_type() -> None:
     assert next_number(MAX_OFFER_NUMBER) == 1
 
 
-# --- naming an item the way a player names it -------------------------
+# --- как игрок называет вещь ------------------------------------------
 
 
 CATALOGUE = (
@@ -236,7 +236,7 @@ def test_a_prefix_is_enough_when_it_is_unambiguous() -> None:
 
 
 def test_an_ambiguous_prefix_returns_every_candidate() -> None:
-    """Two leather things and one word: the caller must ask, never guess."""
+    """Две кожаные вещи и одно слово: вызывающий обязан спросить, а не гадать."""
     found = match_items("кожа", CATALOGUE)
 
     assert len(found) == 2

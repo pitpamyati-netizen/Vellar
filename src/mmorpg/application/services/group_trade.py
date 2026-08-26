@@ -1,37 +1,41 @@
-"""What a group command actually does.
+"""Что на самом деле делает команда в группе.
 
-The handler parses a message and prints a sentence; everything between those two
-things happens here (``Claude.md``, rule 5). This service knows repositories and
-domain rules, and nothing about Telegram: it takes account ids and a timestamp,
-and returns an outcome that the presentation layer turns into words.
+Хендлер разбирает сообщение и печатает фразу; всё, что между этими двумя делами,
+происходит здесь (``Claude.md``, правило 5). Этот сервис знает хранилища и
+правила домена и ничего не знает о Telegram: он принимает идентификаторы
+аккаунтов и время, а возвращает исход, который слой представления превращает в
+слова.
 
-Two shapes of operation live side by side:
+Рядом живут два разных вида действий:
 
-- a **hand-over** takes effect immediately - it costs the receiver nothing, so
-  asking them to confirm a gift would only add a step (``Narrative.md``, section 9);
-- an **offer** costs both sides something, so it is published, numbered, and waits
-  for the target to answer within five minutes.
+- **передача** случается сразу: получателю она ничего не стоит, и просить у него
+  подтверждения подарка значило бы добавить лишний шаг (``Narrative.md``,
+  раздел 9);
+- **предложение** чего-то стоит обеим сторонам, поэтому оно объявляется, получает
+  номер и пять минут ждёт ответа того, кому предложили.
 
-An offer holds the author's side in escrow. Publishing a sale takes the item out
-of the seller's pack; publishing a purchase takes the gold out of the buyer's
-purse. Both come back the moment the offer is declined or runs out of time. The
-target stakes nothing until they answer, because nobody has asked them yet.
+Предложение держит сторону автора в эскроу. Объявленная продажа вынимает вещь из
+сумки продавца, объявленная покупка - золото из кошелька покупателя. И то и
+другое возвращается в ту минуту, когда предложение отклонили или оно вышло по
+сроку. Тот, кому предложили, не ставит ничего, пока не ответил, потому что его
+пока ни о чём не просили.
 
-Three things follow from that, and they are the whole point of Roadmap 2.3:
+Из этого следуют три вещи, и в них весь смысл Roadmap 2.3:
 
-- an offer cannot fail because the *author* spent their side meanwhile - they no
-  longer have it to spend;
-- the escrow outlives a restart, because it lives in the trade journal in
-  PostgreSQL rather than in a cache that expires on its own;
-- every settled trade pays a duty, which is the one place gold leaves the game
-  (``domain/rules/economy.trade_tax``).
+- предложение не может сорваться из-за того, что *автор* тем временем истратил
+  свою сторону: тратить ему уже нечего;
+- эскроу переживает перезапуск, потому что живёт в журнале сделок в PostgreSQL,
+  а не в кэше, истекающем самом по себе;
+- каждая закрытая сделка платит пошлину, и это единственное место, где золото
+  уходит из игры (``domain/rules/economy.trade_tax``).
 
-What the target answers *with*, though, has to be there in the instant they
-answer, and it is checked one step earlier. So every purse in this module moves
-by ``spend_gold``/``grant_gold`` - one conditional step in the database - and
-never by writing back a character read a few awaits ago. Checking a purse and
-then writing a purse are two different moments, and a player who is fighting in
-their private chat while their group offer settles lives in between them.
+А вот то, *чем* отвечает вторая сторона, обязано быть у неё в ту самую минуту,
+когда она отвечает, и проверяется на шаг раньше. Поэтому каждый кошелёк в этом
+модуле двигается через ``spend_gold``/``grant_gold`` - одним условным шагом в
+базе - и никогда записью персонажа, прочитанного несколько ``await`` назад.
+Проверить кошелёк и записать кошелёк - два разных мгновения, и игрок, который
+дерётся в личной переписке, пока закрывается его предложение в группе, живёт
+как раз между ними.
 """
 
 from __future__ import annotations
@@ -79,11 +83,11 @@ from mmorpg.domain.rules.stats import DerivedStats, derived_stats
 async def return_stake(
     offer: Offer, *, characters: CharacterRepository, inventory: InventoryRepository
 ) -> None:
-    """Give the author back what publishing the offer took from them.
+    """Вернуть автору то, что забрало у него объявление предложения.
 
-    A free function rather than a method, because a stake is returned in two very
-    different situations: by the group service while the game runs, and by
-    :func:`release_expired_offers` when it starts. Both move the same two things.
+    Отдельная функция, а не метод, потому что ставку возвращают в двух очень разных
+    случаях: групповым сервисом на ходу игры и :func:`release_expired_offers` на её
+    старте. Обоим двигать одни и те же две вещи.
     """
     if stakes_item(offer):
         await inventory.add(offer.author.character_id, offer.item_id, offer.quantity)
@@ -98,17 +102,18 @@ async def release_expired_offers(
     inventory: InventoryRepository,
     now: int,
 ) -> int:
-    """Roll back every offer that ran out and was never answered. Returns how many.
+    """Откатить все предложения, вышедшие по сроку без ответа. Возвращает, сколько.
 
-    The sweep before each group command (``GroupTrade._sweep``) is the usual way
-    this happens, and it is enough while somebody is talking. It is not enough on
-    its own: an offer published into a group that then went quiet - or into a
-    group the bot was removed from - would hold its author's item until that group
-    spoke again, which it may never do. So the game also sweeps once at startup,
-    and the group sweep no longer looks at one scope only.
+    Уборка перед каждой командой в группе (``GroupTrade._sweep``) - обычный способ,
+    которым это происходит, и его хватает, пока кто-то говорит. Самого по себе его
+    мало: предложение, объявленное в группе, которая потом затихла, - или в группе,
+    откуда бота убрали, - держало бы вещь автора, пока эта группа не заговорит
+    снова, а она может и не заговорить. Поэтому игра убирает ещё и один раз на
+    старте, а уборка в группе больше не смотрит на одну область.
 
-    This is not a timer (``Claude.md``, rule 3): nothing is scheduled and nothing
-    wakes up. It runs once, where the game already stops to build itself.
+    Это не таймер (``Claude.md``, правило 3): ничего не откладывается и ничто не
+    просыпается. Это случается один раз там, где игра и так останавливается, чтобы
+    себя собрать.
     """
     stale = await trades.expire(before=sweep_before(now))
     for record in stale:
@@ -197,7 +202,7 @@ async def roll_back(
 
 
 class GroupResult(StrEnum):
-    """What happened, in the terms the group message will describe."""
+    """Что произошло, в тех же словах, какими это опишет сообщение в группе."""
 
     PROFILE = "profile"
     PROFILE_CLOSED = "profile_closed"
@@ -214,7 +219,7 @@ class GroupResult(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class GroupOutcome:
-    """The result of one group command, ready to be worded."""
+    """Итог одной команды в группе, готовый к тому, чтобы его высказали."""
 
     result: GroupResult
     refusal: Refusal | None = None
@@ -224,11 +229,11 @@ class GroupOutcome:
     item_name: str = ""
     quantity: int = 1
     gold: int = 0
-    # The duty on this trade: charged on settlement, quoted when the offer is made.
+    # Пошлина с этой сделки: берётся при закрытии, называется при объявлении.
     tax: int = 0
     author_name: str = ""
     target_name: str = ""
-    # The candidates behind AMBIGUOUS_ITEM, so the answer can list them.
+    # Кандидаты, стоящие за AMBIGUOUS_ITEM, чтобы ответ мог их перечислить.
     options: tuple[str, ...] = ()
 
 
@@ -256,17 +261,18 @@ def _refused(
 
 @dataclass(frozen=True, slots=True)
 class GroupTrade:
-    """Group operations over the repositories. One instance per application."""
+    """Работа группы поверх хранилищ. Один образец на приложение."""
 
     content: GameContent
     characters: CharacterRepository
     inventory: InventoryRepository
     trades: TradeRepository
     privacy: PrivacyRepository
-    # Offers are numbered per group, so two groups never fight over "принять 7".
+    # Предложения нумеруются внутри группы, поэтому две группы никогда не дерутся за
+    # «принять 7».
     scope: str = "group"
 
-    # --- entry points -------------------------------------------------
+    # --- точки входа --------------------------------------------------
 
     async def run(
         self,
@@ -276,7 +282,7 @@ class GroupTrade:
         target_id: int | None,
         now: int,
     ) -> GroupOutcome:
-        """Perform one parsed command. ``target_id`` is who the author replied to."""
+        """Выполнить одну разобранную команду. ``target_id`` - тот, кому автор ответил."""
         await self._sweep(now)
 
         author_character = await self.characters.get_active(author_id)
@@ -303,8 +309,8 @@ class GroupTrade:
             return _refused(Refusal.TARGET_HAS_NO_CHARACTER)
         target = _party(target_id, target_character)
 
-        # Drawing the line is always allowed, in either direction: a black list
-        # somebody else's block could freeze would be a trap, not a list.
+        # Провести черту можно всегда и в любую сторону: чёрный список, который
+        # заморозила бы чужая блокировка, был бы ловушкой, а не списком.
         if command.intent in (GroupIntent.BLOCK, GroupIntent.UNBLOCK):
             return await self._list_entry(
                 author, target, adding=command.intent is GroupIntent.BLOCK, now=now
@@ -319,7 +325,7 @@ class GroupTrade:
 
         match command.intent:
             case GroupIntent.PROFILE:
-                # A player always sees their own card, closed or not.
+                # Собственную карточку игрок видит всегда, закрыта она или нет.
                 if author.user_id != target.user_id:
                     hidden = check_profile(
                         visible=await self.privacy.profile_visible(target.user_id)
@@ -336,15 +342,15 @@ class GroupTrade:
                 return await self._give_gold(command, author, target)
             case GroupIntent.GIVE_ITEM:
                 return await self._give_item(command, author, target)
-            # Nothing else reaches here: answers, privacy and the black list were
-            # handled above, and the parser produces no other intent.
+            # Сюда больше не доходит ничего: ответы, приватность и чёрный список
+            # разобраны выше, а других намерений разборщик не порождает.
             case _:
                 return await self._propose(command, author, target, now=now)
 
-    # --- privacy ------------------------------------------------------
+    # --- приватность --------------------------------------------------
 
     async def _set_visible(self, author: Party, *, visible: bool) -> GroupOutcome:
-        """Open or close the profile card. Saying it twice is not an error."""
+        """Открыть или закрыть карточку. Сказать это дважды - не ошибка."""
         await self.privacy.set_profile_visible(author.user_id, visible)
         return GroupOutcome(
             result=GroupResult.PROFILE_OPENED if visible else GroupResult.PROFILE_CLOSED,
@@ -354,22 +360,22 @@ class GroupTrade:
     async def _list_entry(
         self, author: Party, target: Party, *, adding: bool, now: int
     ) -> GroupOutcome:
-        """Add somebody to the black list, or take them off it."""
+        """Занести кого-то в чёрный список или убрать оттуда."""
         if author.user_id == target.user_id:
             return _refused(Refusal.SELF, author_name=author.name, target_name=target.name)
         if adding:
             await self.privacy.block(author.user_id, target.user_id, at=now)
         else:
             await self.privacy.unblock(author.user_id, target.user_id)
-        # The answer states the state, not the change, so a repeated command reads
-        # the same as the first one - which is what a player who lost the reply needs.
+        # Ответ называет состояние, а не изменение, поэтому повторная команда читается
+        # так же, как первая, - именно это и нужно игроку, потерявшему ответ.
         return GroupOutcome(
             result=GroupResult.BLOCK_ADDED if adding else GroupResult.BLOCK_REMOVED,
             author_name=author.name,
             target_name=target.name,
         )
 
-    # --- hand-overs ---------------------------------------------------
+    # --- передачи -----------------------------------------------------
 
     async def _give_gold(self, command: GroupCommand, author: Party, target: Party) -> GroupOutcome:
         giver = await self._character(author)
@@ -379,8 +385,8 @@ class GroupTrade:
         if refusal is not None:
             return _refused(refusal, author_name=author.name, target_name=target.name)
 
-        # Both sides move as increments, not as whole characters written back: a
-        # purse read a moment ago is already out of date if its owner is playing.
+        # Обе стороны двигаются приращениями, а не записью персонажа целиком: кошелёк,
+        # прочитанный мгновением раньше, уже устарел, если его владелец играет.
         if not await self.characters.spend_gold(author.character_id, command.amount):
             return _refused(
                 Refusal.AUTHOR_LACKS_GOLD, author_name=author.name, target_name=target.name
@@ -450,8 +456,8 @@ class GroupTrade:
 
         record = await self.trades.open(
             Offer(
-                # The repository assigns the number a player will type; until it
-                # does, this offer has none.
+                # Номер, который будут набирать игроки, выдаёт хранилище; до тех пор у
+                # этого предложения номера нет.
                 number=0,
                 kind=kind,
                 author=author,
@@ -468,8 +474,9 @@ class GroupTrade:
                 Refusal.TOO_MANY_OFFERS, author_name=author.name, target_name=target.name
             )
 
-        # The row exists before the stake moves, so a stake that moved is always
-        # recorded somewhere. If it cannot move, the row closes again immediately.
+        # Строка появляется раньше, чем двинется ставка, поэтому двинувшаяся ставка
+        # всегда где-то записана. Если двинуть её нельзя, строка тут же закрывается
+        # снова.
         if not await self._take_stake(record.offer):
             await self.trades.close(
                 record.number, scope=self.scope, status=TradeStatus.DECLINED, settled_at=now
@@ -497,7 +504,8 @@ class GroupTrade:
             return _refused(Refusal.UNKNOWN_OFFER)
         offer = record.offer
 
-        # Either side may walk away from an offer; only the target may agree to it.
+        # Уйти от предложения вправе любая сторона; согласиться - только тот, кому
+        # предложили.
         if not accept and answering.user_id in (offer.target.user_id, offer.author.user_id):
             closed = await self._close(number, TradeStatus.DECLINED, now=now)
             if closed is None:
@@ -506,8 +514,9 @@ class GroupTrade:
         if not answerable_by(offer, answering.user_id):
             return _refused(Refusal.NOT_YOURS, offer=offer)
 
-        # A block drawn while the offer stood cancels it: the stake goes back to
-        # its author, and neither side is left waiting on business they refused.
+        # Блокировка, проведённая, пока предложение стояло, его отменяет: ставка уходит
+        # обратно автору, и ни одна сторона не остаётся ждать дела, от которого
+        # отказалась.
         wall = check_contact(
             blocked_by_target=await self.privacy.blocks(offer.author.user_id, answering.user_id),
             blocks_target=await self.privacy.blocks(answering.user_id, offer.author.user_id),
@@ -531,13 +540,13 @@ class GroupTrade:
         return await self._settle(record, now=now)
 
     async def _settle(self, record: TradeRecord, *, now: int) -> GroupOutcome:
-        """Move everything, once. The trade row decides who gets to do it."""
+        """Двинуть всё, один раз. Кому это позволено, решает строка сделки."""
         offer = record.offer
         tax = trade_tax(offer.price)
 
-        # A purchase takes the target's item first, because that is the only side
-        # whose removal is atomic: if it is gone in this very instant, nothing has
-        # happened yet and the offer simply refuses.
+        # Покупка сначала забирает вещь у второй стороны, потому что только её изъятие
+        # неделимо: если вещи не стало ровно в это мгновение, ещё ничего не случилось, и
+        # предложение просто отказывает.
         took_item = stakes_gold(offer) and await self.inventory.remove(
             offer.target.character_id, offer.item_id, offer.quantity
         )
@@ -545,37 +554,37 @@ class GroupTrade:
             await self._close(offer.number, TradeStatus.DECLINED, now=now)
             return _refused(Refusal.TARGET_LACKS_ITEM, offer=offer)
 
-        # The target's side is taken before the row closes, and taken atomically:
-        # a buyer answering a sale pays out of a purse they may be spending in
-        # this very instant, and ``check_settlement`` only read it (Roadmap,
-        # "Риски"). A buyer who *proposed* the purchase paid at publication, and
-        # their gold is already in escrow.
+        # Сторона того, кому предложили, забирается до закрытия строки и забирается
+        # неделимо: покупатель, отвечающий на продажу, платит из кошелька, который может
+        # тратить в это самое мгновение, а ``check_settlement`` его только прочитал.
+        # Покупатель, который сам *предложил* покупку, заплатил при объявлении, и его
+        # золото уже в эскроу.
         paid = stakes_item(offer) and await self.characters.spend_gold(
             offer.payer.character_id, offer.price
         )
         if stakes_item(offer) and not paid:
             await self._close(offer.number, TradeStatus.DECLINED, now=now)
-            if took_item:  # pragma: no cover - a sale never takes an item first
+            if took_item:  # pragma: no cover - продажа никогда не забирает вещь первой
                 await self.inventory.add(offer.target.character_id, offer.item_id, offer.quantity)
             return _refused(Refusal.TARGET_LACKS_GOLD, offer=offer)
 
         closed = await self._close(offer.number, TradeStatus.ACCEPTED, now=now, tax=tax)
         if closed is None:
-            # Somebody answered first. Undo whatever was already done.
+            # Кто-то ответил раньше. Отменить всё, что уже сделано.
             if took_item:
                 await self.inventory.add(offer.target.character_id, offer.item_id, offer.quantity)
             if paid:
                 await self.characters.grant_gold(offer.payer.character_id, offer.price)
             return _refused(Refusal.UNKNOWN_OFFER)
 
-        # The item goes to whoever paid for it, whichever way the offer was worded:
-        # out of escrow for a sale, straight from the target for a purchase.
+        # Вещь уходит тому, кто за неё заплатил, как бы предложение ни было сказано: из
+        # эскроу при продаже и прямо от второй стороны при покупке.
         await self.inventory.add(offer.payer.character_id, offer.item_id, offer.quantity)
 
-        # The seller is paid out of escrow or out of the buyer's purse; either way
-        # the duty is simply never credited to anyone. Both halves are written
-        # down, because "is five per cent the right number" is a question about a
-        # day of real trading and not about arithmetic (``mmorpg.economy_log``).
+        # Продавцу платят из эскроу или из кошелька покупателя; так или иначе пошлина
+        # просто не зачисляется никому. Записываются обе половины, потому что «пять
+        # процентов - верное ли число» - вопрос о дне настоящей торговли, а не об
+        # арифметике (``mmorpg.economy_log``).
         await self.characters.grant_gold(offer.giver.character_id, payout(offer.price))
         economy_log.record(
             economy_log.TRADE_PRICE,
@@ -589,7 +598,7 @@ class GroupTrade:
     # --- escrow -------------------------------------------------------
 
     async def _take_stake(self, offer: Offer) -> bool:
-        """Hold the author's side of a published offer. False if it is not there."""
+        """Придержать сторону автора у объявленного предложения. False, если её нет."""
         if stakes_item(offer):
             return await self.inventory.remove(
                 offer.author.character_id, offer.item_id, offer.quantity
@@ -597,16 +606,16 @@ class GroupTrade:
         return await self.characters.spend_gold(offer.author.character_id, offer.price)
 
     async def _return_stake(self, offer: Offer) -> None:
-        """Give the author back what publishing the offer took from them."""
+        """Вернуть автору то, что забрало у него объявление предложения."""
         await return_stake(offer, characters=self.characters, inventory=self.inventory)
 
     async def _close(
         self, number: int, status: TradeStatus, *, now: int, tax: int = 0
     ) -> TradeRecord | None:
-        """Close a pending trade and, unless it settled, hand the stake back.
+        """Закрыть стоящую сделку и, если она не состоялась, вернуть ставку.
 
-        Only the caller that actually closed the row returns the stake, so two
-        answers arriving together cannot refund the same item twice.
+        Ставку возвращает только тот, кто действительно закрыл строку, поэтому два
+        ответа, пришедшие вместе, не вернут одну вещь дважды.
         """
         closed = await self.trades.close(
             number, scope=self.scope, status=status, settled_at=now, tax=tax
@@ -616,27 +625,27 @@ class GroupTrade:
         return closed
 
     async def _sweep(self, now: int) -> None:
-        """Return the stakes of every offer nobody answered in time, anywhere.
+        """Вернуть ставки всех предложений, на которые никто не ответил вовремя, где бы они ни были.
 
-        Run before each command rather than on a timer: the group is the only
-        place offers are made, so anything that expired is discovered the next
-        time somebody speaks, and an idle group needs no background work at all.
+        Выполняется перед каждой командой, а не по таймеру: предложения делают только в
+        группе, поэтому просроченное обнаруживается в следующий раз, когда кто-то
+        заговорит, а затихшей группе фоновая работа не нужна вовсе.
 
-        Deliberately not limited to ``self.scope``. Whoever speaks next sweeps for
-        everyone, so one busy group frees the stakes left behind in a quiet one;
-        what a scope that never speaks again would otherwise hold is picked up by
-        :func:`release_expired_offers` the next time the game starts.
+        Нарочно не ограничено ``self.scope``. Кто заговорил следующим, тот и убрал за
+        всех, поэтому одна оживлённая группа освобождает ставки, оставшиеся в тихой; а
+        то, что иначе держала бы область, в которой больше не заговорят, подберёт
+        :func:`release_expired_offers` при следующем запуске игры.
 
-        The grace period is what keeps "просрочено" a real answer instead of
-        "не найдено" - see ``SWEEP_GRACE_SECONDS``.
+        Отсрочка — это то, что делает «просрочено» настоящим ответом вместо «не
+        найдено», см. ``SWEEP_GRACE_SECONDS``.
         """
         for record in await self.trades.expire(before=sweep_before(now)):
             await self._return_stake(record.offer)
 
-    # --- shared steps -------------------------------------------------
+    # --- общие шаги ---------------------------------------------------
 
     async def _resolve(self, query: str, owner: Party) -> ItemOption | GroupOutcome:
-        """Turn what the player typed into one item of the owner's pack."""
+        """Превратить набранное игроком в одну вещь из сумки владельца."""
         entries = await self.inventory.list_items(owner.character_id)
         catalogue = [
             ItemOption(item_id=entry.item_id, name=self.content.item(entry.item_id).name)
@@ -654,13 +663,13 @@ class GroupTrade:
         return found[0]
 
     async def _move_item(self, item_id: str, quantity: int, giver: Party, taker: Party) -> None:
-        """Take first, then give: a failed take must not conjure the item."""
+        """Сначала забрать, потом отдать: несостоявшееся изъятие не должно выдумывать вещь."""
         if await self.inventory.remove(giver.character_id, item_id, quantity):
             await self.inventory.add(taker.character_id, item_id, quantity)
 
     async def _character(self, party: Party) -> Character:
         character = await self.characters.get(party.character_id)
-        if character is None:  # pragma: no cover - the party was built from a character
+        if character is None:  # pragma: no cover - отряд собран из персонажа
             msg = f"character {party.character_id} disappeared mid-trade"
             raise LookupError(msg)
         return character

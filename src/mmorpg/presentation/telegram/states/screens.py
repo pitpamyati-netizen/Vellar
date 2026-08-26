@@ -1,8 +1,9 @@
-"""FSM states and the back-navigation stack.
+"""Состояния автомата и стопка для возврата назад.
 
-Character creation is a linear walk with a real "back" at every step, including
-the first one (spec section 12). The stack of visited steps lives in FSM data, not
-in heuristics: going back pops one entry and every choice already made is kept.
+Создание персонажа - прямая дорога с настоящим «назад» на каждом шаге, включая
+первый (спецификация, раздел 12). Стопка пройденных шагов лежит в данных
+автомата, а не выводится догадками: шаг назад снимает одну запись, и всякий уже
+сделанный выбор остаётся на месте.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from mmorpg.presentation.telegram.screens.base import ScreenId
 
 
 class Creation(StatesGroup):
-    """The character creation flow."""
+    """Ветка создания персонажа."""
 
     name = State()
     race = State()
@@ -29,7 +30,7 @@ class Creation(StatesGroup):
 
 
 class Play(StatesGroup):
-    """Everything after a character exists."""
+    """Всё, что идёт после того, как персонаж появился."""
 
     main_menu = State()
     world = State()
@@ -82,8 +83,8 @@ class Play(StatesGroup):
     stub = State()
 
 
-# Which screen belongs to which state. The resolver uses this to tell the player
-# where they actually are when they press a button from an old keyboard.
+# Какой экран какому состоянию принадлежит. По этому разборщик говорит игроку, где он на
+# самом деле стоит, когда тот нажал кнопку старой клавиатуры.
 STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.CREATE_NAME: Creation.name,
     ScreenId.CREATE_RACE: Creation.race,
@@ -145,10 +146,10 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.STUB: Play.stub,
 }
 
-# The single step "back" leads to, per screen. Creation walks backwards through
-# its own steps; play screens fall back towards the main menu.
+# Тот единственный шаг, куда ведёт «назад», для каждого экрана. Создание идёт назад по
+# собственным шагам, игровые экраны откатываются к главному меню.
 BACK_TARGET: dict[ScreenId, ScreenId | None] = {
-    ScreenId.CREATE_NAME: None,  # the first step confirms before leaving creation
+    ScreenId.CREATE_NAME: None,  # первый шаг спрашивает подтверждение перед выходом из создания
     ScreenId.CREATE_RACE: ScreenId.CREATE_NAME,
     ScreenId.CREATE_RACE_DETAILS: ScreenId.CREATE_RACE,
     ScreenId.CREATE_CLASS: ScreenId.CREATE_RACE,
@@ -220,7 +221,7 @@ CREATION_ORDER: tuple[ScreenId, ...] = (
 
 @dataclass(frozen=True, slots=True)
 class NavigationStack:
-    """The screens the player walked through, oldest first."""
+    """Экраны, через которые прошёл игрок, старые сверху."""
 
     screens: tuple[ScreenId, ...] = ()
 
@@ -246,7 +247,7 @@ class NavigationStack:
         return NavigationStack((*self.screens, screen))
 
     def pop(self) -> tuple[NavigationStack, ScreenId | None]:
-        """Step back one screen, keeping every choice already made."""
+        """Шагнуть на экран назад, сохранив всякий уже сделанный выбор."""
         if len(self.screens) <= 1:
             return NavigationStack(()), None
         remaining = self.screens[:-1]
@@ -257,10 +258,10 @@ class NavigationStack:
 
     @classmethod
     def deserialise(cls, raw: str) -> NavigationStack:
-        """Rebuild the stack, dropping screens the game no longer has.
+        """Собрать стопку заново, выбросив экраны, которых у игры больше нет.
 
-        A player can be standing on a screen that was renamed or removed between
-        two releases; their walk back is then shorter, but nothing raises.
+        Игрок может стоять на экране, который между двумя выпусками переименовали или
+        убрали; его дорога назад тогда короче, но не падает ничто.
         """
         if not raw:
             return cls(())
@@ -269,5 +270,5 @@ class NavigationStack:
 
 
 def back_target(screen: ScreenId) -> ScreenId | None:
-    """The declared previous screen, used when the stack is empty."""
+    """Объявленный предыдущий экран; берётся, когда стопка пуста."""
     return BACK_TARGET.get(screen)

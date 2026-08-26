@@ -1,24 +1,25 @@
-"""structlog configuration, and where the lines end up.
+"""Настройка structlog и то, куда ложатся строки.
 
-Console renderer in development, JSON in production. Configured once at startup.
+В разработке - консольный вывод, в бою - JSON. Настраивается один раз на старте.
 
-Everything is still written to stdout, because that is what the log driver of a
-container collects and what a solo run shows in its window. Beside it, when
-``LOG_DIR`` is set - and it is by default - the same lines go to two files,
-because a window that scrolls away is not a record of anything:
+Всё по-прежнему пишется в stdout, потому что именно это собирает драйвер
+журнала контейнера и именно это показывает solo-запуск в своём окне. Рядом,
+когда задан ``LOG_DIR`` - а он задан по умолчанию, - те же строки ложатся в два
+файла, потому что уехавшее вверх окно записью ни о чём не является:
 
-- ``vellar.log``    - all of it, rolled over at midnight and swept after
-  ``LOG_RETENTION_DAYS`` days. This is the busy half: every button pressed, every
-  metrics line, every screen served.
-- ``important.log`` - the half that must survive that sweep: warnings, errors and
-  tracebacks, every movement of gold, every account turned away, and every start
-  and stop of the game. Kept for ``LOG_IMPORTANT_RETENTION_DAYS`` days, and ``0``
-  - the default - means it is never deleted at all.
+- ``vellar.log``    - всё подряд, с переворотом в полночь и уборкой через
+  ``LOG_RETENTION_DAYS`` дней. Это шумная половина: каждая нажатая кнопка,
+  каждая строка метрик, каждый показанный экран.
+- ``important.log`` - половина, которая обязана эту уборку пережить:
+  предупреждения, отказы и трассировки, каждое движение золота, каждый закрытый
+  аккаунт, каждый старт и каждая остановка игры. Держится
+  ``LOG_IMPORTANT_RETENTION_DAYS`` дней, а ``0`` - и это значение по умолчанию -
+  означает, что не удаляется вовсе.
 
-That split is the whole point of the automatic cleanup. Old chatter is worth
-deleting; a failure is worth reading a year later, and a cleanup that cannot tell
-them apart is one that eventually erases the evidence. So importance is decided
-once, here, and the sweep only ever touches the file it is allowed to.
+В этом делении весь смысл автоочистки. Старую болтовню стоит удалять, а отказ
+стоит прочитать и через год, и уборка, которая их не различает, рано или поздно
+стирает улику. Поэтому важность решается один раз, здесь, а уборка трогает
+только тот файл, который ей разрешено трогать.
 """
 
 from __future__ import annotations
@@ -35,15 +36,14 @@ import structlog
 
 from mmorpg.config import AppEnv, Settings
 
-#: Everything the game said, and the part of it worth keeping.
+#: Всё, что игра сказала, и та часть сказанного, которую стоит сохранить.
 ACTIVITY_FILE = "vellar.log"
 IMPORTANT_FILE = "important.log"
 
-#: Events kept regardless of their level. All of them answer a question asked
-#: long after the fact: where the gold went (``gold_flow``, the ledger
-#: ``scripts/economy.py`` reads), who was turned away and when, and when the game
-#: was actually up - the first thing anyone checks against "it was broken all
-#: evening".
+#: События, которые держатся независимо от уровня. Все они отвечают на вопрос, заданный
+#: много позже: куда ушло золото (``gold_flow``, книга, которую читает
+#: ``scripts/economy.py``), кого и когда закрыли и когда игра действительно работала -
+#: первое, что сверяют с «оно весь вечер было сломано».
 KEPT_EVENTS = frozenset(
     {
         "gold_flow",
@@ -56,9 +56,8 @@ KEPT_EVENTS = frozenset(
     }
 )
 
-#: Outcomes of a player action (``middlewares.audit``) that are kept as well. A
-#: duplicate update and an unanswered button are noise; a crash and a locked door
-#: are not.
+#: Исходы действия игрока (``middlewares.audit``), которые держатся тоже. Повторное
+#: обновление и неотвеченная кнопка - шум, а падение и закрытая дверь - нет.
 KEPT_RESULTS = frozenset({"failed", "banned"})
 
 SECONDS_IN_DAY = 86_400
@@ -72,7 +71,7 @@ QUIET_LOGGERS: Mapping[str, int] = MappingProxyType({"aiogram.event": logging.WA
 
 
 def configure_logging(settings: Settings) -> None:
-    """Configure structlog, the stdlib bridge, and the log files."""
+    """Настроить structlog, мост к стандартному журналу и файлы."""
     level = getattr(logging, settings.log_level)
     shared: list[structlog.typing.Processor] = [
         structlog.contextvars.merge_contextvars,
@@ -91,10 +90,10 @@ def configure_logging(settings: Settings) -> None:
     use_json = settings.log_json or settings.app_env is AppEnv.PROD
     root = logging.getLogger()
     _drop_our_handlers(root)
-    # Never above INFO, whatever the level asked for: the ledger and the failed
-    # actions are INFO lines, and a root that dropped them would leave the
-    # important file empty on exactly the run somebody turned the noise down.
-    # What the level does is decide what the console and the everyday file show.
+    # Никогда не выше INFO, какой бы уровень ни просили: и книга золота, и
+    # несостоявшиеся действия - это строки INFO, и корень, который их отбросил, оставил
+    # бы важный файл пустым ровно на том запуске, где кто-то убавил шум. Уровень решает
+    # другое - что покажут консоль и повседневный файл.
     root.setLevel(min(level, logging.INFO))
 
     for name, quiet_at in QUIET_LOGGERS.items():
@@ -109,9 +108,9 @@ def configure_logging(settings: Settings) -> None:
     if directory is None:
         return
 
-    # A run that starts after a week away sweeps before it writes: the handlers
-    # below only delete on their own rollover, which is a midnight that may be a
-    # day off.
+    # Запуск после недели простоя убирает до того, как начнёт писать: обработчики ниже
+    # удаляют только на собственном перевороте, а это полночь, до которой может быть
+    # сутки.
     swept = sweep(directory, days=settings.log_retention_days, stem=ACTIVITY_FILE)
     swept += sweep(directory, days=settings.log_important_retention_days, stem=IMPORTANT_FILE)
 
@@ -121,8 +120,8 @@ def configure_logging(settings: Settings) -> None:
     root.addHandler(activity)
 
     important = _rotating(directory / IMPORTANT_FILE, keep=settings.log_important_retention_days)
-    # DEBUG, not ``level``: what is kept is decided by the filter below, and a
-    # game running at WARNING must still keep its gold ledger.
+    # DEBUG, а не ``level``: что сохранить, решает фильтр ниже, и игра, работающая на
+    # WARNING, обязана сохранить свою книгу золота.
     important.setLevel(logging.DEBUG)
     important.addFilter(_ImportantOnly())
     important.setFormatter(_formatter(shared, json=use_json, colors=False))
@@ -138,17 +137,17 @@ def configure_logging(settings: Settings) -> None:
 
 
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:
-    """Return a bound logger for the given module name."""
+    """Вернуть журнал, привязанный к имени модуля."""
     logger: structlog.stdlib.BoundLogger = structlog.get_logger(name)
     return logger
 
 
 def is_important(event: object, level: int) -> bool:
-    """Whether this line outlives the cleanup.
+    """Переживёт ли эта строка автоочистку.
 
-    Takes the event dictionary a structlog line carries, or anything else for a
-    line that reached the bridge from a library - where only the level is known,
-    which is exactly the case the level rule is for.
+    Принимает словарь события, который несёт строка structlog, или что угодно
+    другое для строки, дошедшей до моста из библиотеки, - там известен только
+    уровень, и правило по уровню написано ровно для этого случая.
     """
     if level >= logging.WARNING:
         return True
@@ -158,12 +157,12 @@ def is_important(event: object, level: int) -> bool:
 
 
 def sweep(directory: Path, *, days: int, stem: str, now: float | None = None) -> int:
-    """Delete rolled-over copies of ``stem`` older than ``days``; ``0`` deletes none.
+    """Удалить перевёрнутые копии ``stem`` старше ``days``; ``0`` не удаляет ничего.
 
-    Only the rollovers (``vellar.log.2026-08-12``) are considered: the file being
-    written to has no age worth reading, and a stem the caller did not name is
-    never touched - that is what keeps a sweep of the everyday log away from the
-    important one.
+    Считаются только перевороты (``vellar.log.2026-08-12``): у файла, в который
+    пишут прямо сейчас, нет возраста, который стоило бы читать, а до основы,
+    которую не назвал вызывающий, дело не доходит вовсе - именно это и держит
+    уборку повседневного журнала подальше от важного.
     """
     if days <= 0 or not directory.is_dir():
         return 0
@@ -174,13 +173,13 @@ def sweep(directory: Path, *, days: int, stem: str, now: float | None = None) ->
             if path.stat().st_mtime < cutoff:
                 path.unlink()
                 removed += 1
-        except OSError:  # pragma: no cover - a file somebody else holds open
+        except OSError:  # pragma: no cover - файл, который кто-то держит открытым
             continue
     return removed
 
 
 class _ImportantOnly(logging.Filter):
-    """Passes only what the cleanup is not allowed to lose."""
+    """Пропускает только то, что автоочистке терять нельзя."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         return is_important(record.msg, record.levelno)
@@ -198,7 +197,7 @@ def _formatter(
 
 
 def _rotating(path: Path, *, keep: int) -> logging.handlers.TimedRotatingFileHandler:
-    """One file a day. ``keep=0`` rolls over and deletes nothing, ever."""
+    """Один файл в день. ``keep=0`` переворачивает и не удаляет ничего, никогда."""
     return logging.handlers.TimedRotatingFileHandler(
         path,
         when="midnight",
@@ -210,11 +209,11 @@ def _rotating(path: Path, *, keep: int) -> logging.handlers.TimedRotatingFileHan
 
 
 def _prepare(directory: Path | None) -> Path | None:
-    """Make the log directory, or answer ``None`` and keep going on stdout.
+    """Создать каталог журнала или ответить ``None`` и продолжить в stdout.
 
-    A tree that cannot be written to is not a reason to refuse to serve players:
-    the container runs as a user that owns nothing under ``/app``, and there the
-    log belongs to the daemon collecting stdout anyway.
+    Дерево, в которое нельзя писать, - не повод отказаться обслуживать игроков: в
+    контейнере бот работает от пользователя, которому под ``/app`` не принадлежит
+    ничего, да и журнал там принадлежит демону, собирающему stdout.
     """
     if directory is None:
         return None
@@ -227,10 +226,11 @@ def _prepare(directory: Path | None) -> Path | None:
 
 
 def _drop_our_handlers(root: logging.Logger) -> None:
-    """Undo a previous configuration, closing the files it had open.
+    """Отменить прежнюю настройку, закрыв открытые ею файлы.
 
-    Configuring twice happens in tests and in a reload; on Windows a file left
-    open cannot be rotated or deleted by the run that comes after.
+    Настроить дважды случается в тестах и при перезагрузке; на Windows оставленный
+    открытым файл нельзя ни перевернуть, ни удалить тому запуску, который придёт
+    следом.
     """
     for handler in list(root.handlers):
         root.removeHandler(handler)

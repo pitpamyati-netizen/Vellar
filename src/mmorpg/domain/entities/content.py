@@ -1,10 +1,10 @@
-"""Static game content as immutable in-memory objects.
+"""Неизменное содержимое игры как объекты в памяти.
 
-Everything here is loaded once at startup from ``content/*.toml`` and never
-changes at runtime, so every object is ``frozen`` and ``slots``. Lookups go
-through the dict indexes on :class:`GameContent`, which are O(1).
+Всё здесь загружается один раз на старте из ``content/*.toml`` и на ходу не
+меняется, поэтому каждый объект - ``frozen`` и ``slots``. Поиск идёт через
+словарные указатели :class:`GameContent`, а это O(1).
 
-This module is pure data plus lookups - no I/O, no parsing. Parsing lives in
+Модуль - чистые данные плюс поиск: ни ввода-вывода, ни разбора. Разбор живёт в
 ``mmorpg.infrastructure.content.loader``.
 """
 
@@ -88,14 +88,14 @@ class EdgeEffect:
 
 @dataclass(frozen=True, slots=True)
 class SkillEdge:
-    """One of the two rank-3 modifications of a skill.
+    """Одна из двух правок умения, открывающихся на третьем ранге.
 
-    An edge changes how a skill behaves; it never adds a button.
+    Грань меняет то, как умение себя ведёт, и никогда не добавляет кнопку.
 
-    ``effect`` is what it changes, declared in ``skills.toml`` and executed by
-    ``domain/rules/edges.py``. It is what makes ``text`` true: for a long while
-    both edges of every skill described their own behaviour in words while the
-    engine gave all of them the same twenty percent of power or the same discount.
+    ``effect`` - то, что она меняет; объявляется в ``skills.toml`` и исполняется
+    ``domain/rules/edges.py``. Именно он делает ``text`` правдой: долгое время обе
+    грани каждого умения описывали словами собственное поведение, а движок выдавал
+    всем одни и те же двадцать процентов силы или одну и ту же скидку.
     """
 
     code: str
@@ -121,9 +121,9 @@ class Skill:
     target: str = "self"
     scaling: StatCode | None = None
     rank_step: float = 0.15
-    #: The trace this skill leaves. Left out, it is read off the effect by
-    #: ``skill_effects.tag_of``; content names it where the effect would say the
-    #: wrong thing, and where a class would otherwise never see all three tags.
+    #: След, который оставляет это умение. Не назван - выводится из эффекта через
+    #: ``skill_effects.tag_of``; содержимое называет его там, где эффект соврал бы, и
+    #: там, где класс иначе никогда не увидел бы все три тега.
     tag: ActionTag | None = None
     #: Рода оружия, с которыми умение работает. Пусто - работает с любым и без
     #: оружия вовсе; выстрел без лука и удар в спину без кинжала - нет.
@@ -141,7 +141,7 @@ class Skill:
         return self.kind is SkillKind.ACTIVE
 
     def power_at_rank(self, rank: int) -> float:
-        """Power grows linearly with rank; rank 1 is the printed value."""
+        """Сила растёт с рангом линейно; ранг 1 - это написанное значение."""
         return self.power * (1.0 + self.rank_step * (rank - 1))
 
     def edge(self, code: str) -> SkillEdge:
@@ -182,7 +182,7 @@ class Race:
 
 @dataclass(frozen=True, slots=True)
 class ClassResource:
-    """The class resource pool - valor, rage, mana and so on."""
+    """Ресурс класса - доблесть, ярость, мана и так далее."""
 
     id: str
     name: str
@@ -229,7 +229,7 @@ class CharacterClass:
 
 @dataclass(frozen=True, slots=True)
 class Trait:
-    """A modifier-only character trait. Traits never grant skills or buttons."""
+    """Черта персонажа, которая только прибавляет. Черта не даёт ни умений, ни кнопок."""
 
     id: str
     name: str
@@ -500,8 +500,8 @@ class Location:
     level_min: int
     level_max: int
     city_id: str
-    # Whether players may attack each other here. Off everywhere by default: a
-    # place where somebody can take your gold has to say so before you walk in
+    # Можно ли здесь нападать друг на друга. По умолчанию нельзя нигде: место, где у
+    # тебя могут забрать золото, обязано сказать об этом до того, как ты туда вошёл
     # (``domain/rules/pvp.py``).
     pvp: bool = False
 
@@ -534,17 +534,17 @@ class City:
 
     @property
     def biomes(self) -> frozenset[str]:
-        """What kind of ground lies around this city.
+        """Какая земля лежит вокруг этого города.
 
-        The city itself has no biome - what it has is five locations, and their
-        biomes are what a gathering craft can work here (``domain/rules/crafts``).
+        У самого города биома нет: у него есть пять локаций, и биомы этих локаций
+        решают, какое собирающее ремесло здесь работает (``domain/rules/crafts``).
         """
         return frozenset(location.biome for location in self.locations)
 
 
 @dataclass(frozen=True, slots=True)
 class ProgressionRules:
-    """Structural numbers shared by content and rules."""
+    """Опорные числа, общие для содержимого и правил."""
 
     max_character_level: int
     base_stat_value: int
@@ -562,7 +562,7 @@ class ProgressionRules:
 
 @dataclass(frozen=True, slots=True)
 class GameContent:
-    """Everything static, indexed for O(1) access."""
+    """Всё неизменное, разложенное по указателям для доступа за O(1)."""
 
     races: tuple[Race, ...]
     classes: tuple[CharacterClass, ...]
@@ -639,7 +639,7 @@ class GameContent:
         turnings: Sequence[Turning] = (),
         open_turning_id: str = "",
     ) -> GameContent:
-        """Build the registry and its indexes."""
+        """Собрать реестр и его указатели."""
         by_owner: dict[str, list[Skill]] = {}
         for skill in skills:
             by_owner.setdefault(skill.owner, []).append(skill)
@@ -691,7 +691,7 @@ class GameContent:
             _turnings_by_id=MappingProxyType({turning.id: turning for turning in turnings}),
         )
 
-    # --- lookups -----------------------------------------------------
+    # --- указатели ---------------------------------------------------
 
     def race(self, race_id: str) -> Race:
         return self._races_by_id[race_id]
@@ -757,7 +757,7 @@ class GameContent:
         return quest_id in self._quests_by_id
 
     def quests_in(self, city_id: str) -> tuple[Quest, ...]:
-        """Contracts a city hands out, easiest first."""
+        """Задания, которые выдаёт город, от простых к сложным."""
         return tuple(
             sorted(
                 (quest for quest in self.quests if quest.city_id == city_id),
@@ -817,7 +817,7 @@ class GameContent:
         return tuple(craft for craft in self.crafts if craft.kind is kind)
 
     def recipes_of(self, craft_id: str) -> tuple[Recipe, ...]:
-        """Recipes a craft knows, easiest first - the order the screen lists them."""
+        """Рецепты ремесла, от простых к сложным - в том порядке, в каком их перечисляет экран."""
         return tuple(
             sorted(
                 (recipe for recipe in self.recipes if recipe.craft_id == craft_id),
@@ -829,14 +829,14 @@ class GameContent:
         return code in self._skills_by_code
 
     def skills_of(self, owner: str, kind: SkillKind | None = None) -> tuple[Skill, ...]:
-        """Skills belonging to ``class:<id>`` or ``race:<id>``."""
+        """Умения, принадлежащие ``class:<id>`` или ``race:<id>``."""
         found = self._skills_by_owner.get(owner, ())
         if kind is None:
             return found
         return tuple(skill for skill in found if skill.kind is kind)
 
     def class_skills_up_to(self, class_id: str, level: int, kind: SkillKind) -> tuple[Skill, ...]:
-        """Class skills the character has unlocked at ``level``."""
+        """Умения класса, открытые персонажу на уровне ``level``."""
         return tuple(
             skill
             for skill in self.skills_of(f"{OwnerKind.CLASS.value}:{class_id}", kind)
@@ -860,10 +860,11 @@ class GameContent:
         return tuple(city for city in self.cities if city.unlock_level <= level)
 
     def is_bonus(self, modifier_key: str, value: float) -> bool:
-        """Whether ``value`` helps the character for this modifier key.
+        """Помогает ли персонажу ``value`` по этому ключу прибавки.
 
-        Most keys are "higher is better", but a handful - shop prices, damage taken -
-        are the other way round. Screens and balance tests both need to know which.
+        Большинство ключей - «чем больше, тем лучше», но горстка (цены в лавке,
+        полученный урон) наоборот. Знать, какой из них какой, нужно и экранам, и
+        тестам баланса.
         """
         if modifier_key in self.inverted_modifiers:
             return value < 0

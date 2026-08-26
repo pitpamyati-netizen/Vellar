@@ -1,15 +1,16 @@
-"""Contract screens: the board, the conversation, and the ledger.
+"""Экраны заданий: доска, разговор и журнал.
 
-A contract is a conversation with a person who names a price: the giver speaks
-first, the terms come second, and refusing is one of the buttons - it always is
-(``Narrative.md``, section 4).
+Задание — это разговор с человеком, который называет цену: сначала говорит тот,
+кто его даёт, потом идут условия, а отказ — одна из кнопок, и он ею остаётся
+всегда (``Narrative.md``, раздел 4).
 
-Everything else on these screens exists because of one play test. The first
-contract said "Счёт: разобраться с местами без боя, всего 3" and players did not
-know what that meant, where to go, or what to press. So a contract now spells out
-three things in the player's own words: **что делать**, **куда идти** and **как
-это засчитывается** - and the board keeps showing a contract after it is taken,
-with its counter, instead of making it vanish the moment you agree to it.
+Всё остальное на этих экранах появилось из-за одного живого прохода. Первое
+задание говорило «Счёт: разобраться с местами без боя, всего 3», и игроки не
+понимали ни что это значит, ни куда идти, ни что нажимать. Поэтому задание теперь
+выписывает три вещи словами самого игрока: **что делать**, **куда идти** и **как
+это засчитывается**, — а доска продолжает показывать задание после того, как его
+взяли, вместе со счётчиком, вместо того чтобы оно исчезало в ту минуту, когда ты
+на него согласился.
 """
 
 from __future__ import annotations
@@ -190,7 +191,7 @@ def offer_screen(
     character: Character | None = None,
     notice: str = "",
 ) -> Screen:
-    """The conversation itself. Three answers, one of them is leaving."""
+    """Сам разговор. Три ответа, и один из них - уйти."""
     progress = character.quests.progress(quest.id) if character is not None else 0
     is_taken = character is not None and character.quests.is_taken(quest.id)
 
@@ -222,7 +223,7 @@ def journal_screen(
     character: Character,
     notice: str = "",
 ) -> Screen:
-    """The ledger: what is taken, how far it has got, and where to hand it in."""
+    """Журнал: что взято, как далеко зашло и куда это сдавать."""
     steps = quest_rules.taken(content, character)
     lines = list(head(f"Задания. Взято: {len(steps)}.", notice))
     if not steps:

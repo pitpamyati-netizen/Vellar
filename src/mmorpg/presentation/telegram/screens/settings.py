@@ -38,7 +38,7 @@ def settings_screen(settings: AccessibilitySettings, notice: str = "") -> Screen
 
 
 def toggled(settings: AccessibilitySettings, pressed: str) -> tuple[AccessibilitySettings, str]:
-    """Apply a switch. Returns the new settings and the sentence to read back."""
+    """Применить переключатель. Возвращает новые настройки и фразу, которую прочитают в ответ."""
     from dataclasses import replace
 
     if TOGGLE_EMOJI.matches(pressed):

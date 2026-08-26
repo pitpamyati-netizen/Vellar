@@ -1,6 +1,6 @@
-"""The dependency rule is enforced mechanically, not by convention.
+"""Правило зависимостей соблюдается механически, а не по договорённости.
 
-See docs/architecture.md, "Layers".
+См. docs/architecture.md, «Слои».
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from tests.conftest import SOURCE_ROOT
 DOMAIN_ROOT = SOURCE_ROOT / "domain"
 APPLICATION_ROOT = SOURCE_ROOT / "application"
 
-# Third-party packages the domain must never reach for.
+# Сторонние пакеты, за которыми домен не тянется никогда.
 FORBIDDEN_THIRD_PARTY = frozenset(
     {
         "aiogram",
@@ -30,7 +30,7 @@ FORBIDDEN_THIRD_PARTY = frozenset(
     }
 )
 
-# Inner layers must not import outer ones.
+# Внутренние слои не импортируют внешние.
 FORBIDDEN_FOR_DOMAIN = frozenset(
     {"mmorpg.application", "mmorpg.infrastructure", "mmorpg.presentation"}
 )
@@ -71,17 +71,17 @@ def test_application_does_not_import_outer_layers(path: Path) -> None:
 
 
 def _rules_and_entities() -> list[Path]:
-    """Domain modules that must be synchronous - everything except the ports.
+    """Модули домена, обязанные быть синхронными, - все, кроме портов.
 
-    Ports describe the boundary to the outside world, which is asynchronous by
-    nature; the logic behind them is not.
+    Порты описывают границу с внешним миром, а он асинхронен по своей природе;
+    логика за ними - нет.
     """
     return [path for path in _python_files(DOMAIN_ROOT) if path.parent.name != "ports"]
 
 
 @pytest.mark.parametrize("path", _rules_and_entities(), ids=lambda p: p.name)
 def test_domain_has_no_coroutines(path: Path) -> None:
-    """The domain is synchronous: no awaits, no async def, nothing to schedule."""
+    """Домен синхронен: ни одного await, ни одного async def, нечего откладывать."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     offenders = [node.name for node in ast.walk(tree) if isinstance(node, ast.AsyncFunctionDef)]
     assert not offenders, f"{path.name} declares async functions: {offenders}"

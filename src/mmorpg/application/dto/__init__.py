@@ -1,1 +1,1 @@
-"""mmorpg.application.dto layer package."""
+"""Слой mmorpg.application.dto."""

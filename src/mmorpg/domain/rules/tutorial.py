@@ -1,14 +1,14 @@
-"""The short introduction: six things a new player does once.
+"""Короткое вступление: шесть дел, которые новый игрок делает один раз.
 
-Not a script and not a cage. The tasks are the ordinary actions of the game -
-look at your stats, put a skill in a slot, take a contract, win a fight, use the
-shop, hand the contract in - and each is marked done the moment it happens,
-whether the player went looking for it or stumbled into it.
+Не сценарий и не клетка. Задачи - это обычные действия игры: посмотреть свои
+характеристики, положить умение в слот, взять задание, выиграть бой, зайти в
+лавку, сдать задание, - и каждая отмечается сделанной в ту минуту, когда
+случилась, искал её игрок или наткнулся на неё сам.
 
-The domain knows the tasks and the one number that records them; which screen a
-task is done on is a question for ``presentation``. Progress is a bitmask on the
-character, so a task cannot be counted twice and the order can change later
-without rewriting anybody's save.
+Домен знает задачи и одно число, которое их записывает; на каком экране задача
+делается - вопрос к ``presentation``. Ход дела - битовая маска на персонаже,
+поэтому задачу нельзя засчитать дважды, а порядок можно поменять позже, ничего
+никому не переписывая.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from mmorpg.domain.entities.character import Character
 
 
 class TutorialTask(StrEnum):
-    """One thing to do. The order here is the order the player is offered them."""
+    """Одно дело. Порядок здесь - тот, в каком их предлагают игроку."""
 
     STATS = "stats"
     SKILL_SLOT = "skill_slot"
@@ -53,12 +53,12 @@ def done_count(character: Character) -> int:
 
 
 def finished(character: Character) -> bool:
-    """Whether every task is behind them. Then the screen stops being offered."""
+    """Всё ли позади. Тогда экран перестают предлагать."""
     return done_count(character) == len(ORDER)
 
 
 def next_task(character: Character) -> TutorialTask | None:
-    """The first task still open, or ``None`` when the introduction is over."""
+    """Первое ещё не сделанное дело или ``None``, когда вступление окончено."""
     for task in ORDER:
         if not is_done(character, task):
             return task
@@ -66,11 +66,10 @@ def next_task(character: Character) -> TutorialTask | None:
 
 
 def complete(character: Character, task: TutorialTask) -> Character | None:
-    """Mark a task done. ``None`` when it already was, so nothing is stored twice.
+    """Отметить дело сделанным. ``None``, когда оно уже было, - чтобы ничего не сохранять дважды.
 
-    Callers use the ``None`` to decide whether there is anything worth saying:
-    a player who has bought things for a week does not need to be congratulated
-    on visiting a shop.
+    По этому ``None`` вызывающие решают, есть ли что говорить: игрока, который
+    неделю покупал вещи, не нужно поздравлять с посещением лавки.
     """
     if is_done(character, task):
         return None

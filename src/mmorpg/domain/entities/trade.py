@@ -1,18 +1,19 @@
-"""A trade between two players: who offered what, and what became of it.
+"""Сделка между двумя игроками: кто что предложил и чем это кончилось.
 
-These are the nouns of the group economy. The verbs - who may answer, what may
-settle - live in ``domain/rules/group_offers.py``; the checks there read these
-objects and never change them.
+Это существительные групповой экономики. Глаголы - кто вправе ответить, что
+вправе закрыться - живут в ``domain/rules/group_offers.py``; тамошние проверки
+читают эти объекты и никогда их не меняют.
 
-An :class:`Offer` is what one player proposes. A :class:`TradeRecord` is that
-offer as the database holds it: the same proposal plus what happened to it. The
-record exists because an offer now **holds real value** - the side that proposed
-it has already parted with the stake (Roadmap 2.3), so a lost offer would be a
-lost item, and losing it in a cache that expires on its own is not acceptable.
+:class:`Offer` - то, что предлагает один игрок. :class:`TradeRecord` - то же
+предложение в том виде, в каком его держит база: то же самое плюс то, что с ним
+случилось. Запись существует потому, что за предложением теперь стоит
+**настоящая ценность**: предложившая сторона уже рассталась со ставкой
+(Roadmap 2.3), поэтому потерянное предложение - это потерянная вещь, а терять
+её в хранилище, которое само истекает, недопустимо.
 
-Times here are unix seconds, not ``datetime``: the domain has no clock, ``now``
-arrives as an argument (``Claude.md``, rule 1), and expiry must mean the same
-thing to PostgreSQL and to the in-memory adapter.
+Время здесь - unix-секунды, а не ``datetime``: у домена нет часов, ``now``
+приходит аргументом (``Claude.md``, правило 1), и срок обязан значить одно и то
+же для PostgreSQL и для адаптера в памяти.
 """
 
 from __future__ import annotations
@@ -22,10 +23,10 @@ from enum import StrEnum
 
 
 class OfferKind(StrEnum):
-    """Which side parts with the item.
+    """Какая сторона расстаётся с вещью.
 
-    ``SELL`` - the author offers their own item and the target pays.
-    ``BUY``  - the author offers gold for the target's item.
+    ``SELL`` - автор предлагает свою вещь, а платит тот, кому предложили.
+    ``BUY``  - автор предлагает золото за чужую вещь.
     """
 
     SELL = "sell"
@@ -33,11 +34,11 @@ class OfferKind(StrEnum):
 
 
 class TradeStatus(StrEnum):
-    """Where a trade ended up. Only ``PENDING`` holds anything in escrow.
+    """Чем кончилась сделка. Только ``PENDING`` держит что-то в эскроу.
 
-    ``REVERTED`` is a settled trade a keeper undid (``docs/keeper.md``). It is a
-    status of its own rather than a return to ``PENDING``: what happened did
-    happen, and the journal has to keep saying so.
+    ``REVERTED`` - закрытая сделка, которую откатил смотритель (``docs/keeper.md``).
+    Это отдельное состояние, а не возврат в ``PENDING``: случившееся случилось, и
+    журнал обязан продолжать это говорить.
     """
 
     PENDING = "pending"
@@ -49,7 +50,7 @@ class TradeStatus(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Party:
-    """One side of an offer: the Telegram account and the character behind it."""
+    """Одна сторона предложения: аккаунт Telegram и персонаж за ним."""
 
     user_id: int
     character_id: int
@@ -58,7 +59,7 @@ class Party:
 
 @dataclass(frozen=True, slots=True)
 class Offer:
-    """A published proposal, waiting for exactly one person to answer it."""
+    """Объявленное предложение, ждущее ответа ровно одного человека."""
 
     number: int
     kind: OfferKind
@@ -72,27 +73,29 @@ class Offer:
 
     @property
     def giver(self) -> Party:
-        """The side that parts with the item."""
+        """Сторона, которая расстаётся с вещью."""
         return self.author if self.kind is OfferKind.SELL else self.target
 
     @property
     def payer(self) -> Party:
-        """The side that parts with the gold."""
+        """Сторона, которая расстаётся с золотом."""
         return self.target if self.kind is OfferKind.SELL else self.author
 
 
 @dataclass(frozen=True, slots=True)
 class TradeRecord:
-    """One row of the trade journal.
+    """Одна строка журнала сделок.
 
-    ``scope`` is the group the offer was made in, so two groups never collide on
-    the short numbers players type. ``tax`` is filled in when the trade settles -
-    a trade that never settled cost nobody anything.
+    ``scope`` - группа, в которой сделано предложение, чтобы две группы никогда не
+    столкнулись на коротких номерах, которые набирают игроки. ``tax``
+    проставляется, когда сделка закрылась: сделка, которая не закрылась, никому
+    ничего не стоила.
 
-    ``id`` is what the journal calls this row and nothing else does: the short
-    number players type is reused as soon as an offer closes, so it names a
-    standing offer and cannot name a settled one. A keeper undoing a trade is
-    pointing at a settled one, which is why the identity exists.
+    ``id`` - то, как эту строку называет журнал, и больше её так не называет никто:
+    короткий номер, который набирают игроки, переиспользуется, как только
+    предложение закрылось, поэтому он называет стоящее предложение и не может
+    назвать закрытое. Смотритель, откатывающий сделку, показывает как раз на
+    закрытую - ради этого личность и заведена.
     """
 
     offer: Offer
@@ -112,5 +115,5 @@ class TradeRecord:
 
     @property
     def is_settled(self) -> bool:
-        """Whether this trade actually moved anything, and so can be undone."""
+        """Двинула ли эта сделка хоть что-нибудь, а значит, можно ли её откатить."""
         return self.status is TradeStatus.ACCEPTED

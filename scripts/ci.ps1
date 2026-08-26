@@ -1,5 +1,7 @@
-# Full local quality gate: lint, format check, type check, tests with coverage.
-# Usage: pwsh -File scripts/ci.ps1
+# Полный местный гейт качества: линтер, проверка форматирования, проверка типов,
+# тесты с покрытием.
+#
+# Как запускать: pwsh -File scripts/ci.ps1
 $ErrorActionPreference = "Stop"
 
 Write-Host "==> ruff check" -ForegroundColor Cyan
@@ -18,8 +20,8 @@ Write-Host "==> pytest" -ForegroundColor Cyan
 uv run pytest --cov --cov-report=term-missing
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-# The domain carries the game rules and is testable without any infrastructure,
-# so it is held to a higher bar than the rest of the tree.
+# Домен несёт правила игры и проверяется без всякой инфраструктуры, поэтому спрос с него
+# выше, чем с остального дерева.
 Write-Host "==> domain coverage (>= 90%)" -ForegroundColor Cyan
 uv run pytest --cov=src/mmorpg/domain --cov-report=term --cov-fail-under=90 -q
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

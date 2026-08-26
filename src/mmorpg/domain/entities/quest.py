@@ -1,12 +1,12 @@
-"""Contracts: what a city asks for, and how far a character has got with it.
+"""Задания: чего просит город и как далеко зашёл персонаж.
 
-A contract in Vellar is a paid job, not a calling: somebody names a price, the
-player either takes it or does not (``Narrative.md``, section 4). The definition
-comes from ``content/quests.toml``; the progress lives on the character, because
-two characters of the same player keep their own ledgers.
+Задание в Vellar - оплаченная работа, а не призвание: кто-то называет цену, а
+игрок берётся или нет (``Narrative.md``, раздел 4). Описание приходит из
+``content/quests.toml``; ход дела лежит на персонаже, потому что два персонажа
+одного игрока ведут свои счета порознь.
 
-Only the counter is stored. What a counter *means* - five beasts, three searched
-caches - is content, and is looked up again every time it is shown.
+Хранится только счётчик. Что счётчик *значит* - пять зверей, три обысканных
+тайника - это содержимое, и его смотрят заново каждый раз, когда показывают.
 """
 
 from __future__ import annotations
@@ -18,13 +18,13 @@ from types import MappingProxyType
 
 
 class ObjectiveKind(StrEnum):
-    """What the contract counts.
+    """Что считает задание.
 
-    ``KILL`` counts defeated opponents, optionally of one kind; ``ELITE`` counts
-    the strong ones only; ``SEARCH`` counts nodes worked through without a fight -
-    gathering, caches and shrines. ``CRAFT`` counts things made with your own
-    hands, narrowed by ``target_kind`` to one item id: somebody in the city needs
-    a thing, and a craft is how it gets made (Roadmap, "Риски").
+    ``KILL`` считает побеждённых противников, при желании одной породы; ``ELITE``
+    считает только сильных; ``SEARCH`` считает узлы, отработанные без боя, — сбор,
+    тайники и святилища. ``CRAFT`` считает сделанное своими руками, суженное через
+    ``target_kind`` до одной вещи: кому-то в городе нужна вещь, а ремесло — это то,
+    как её делают.
     """
 
     KILL = "kill"
@@ -35,10 +35,10 @@ class ObjectiveKind(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Quest:
-    """One contract, as written in content.
+    """Одно задание в том виде, в каком оно записано в содержимом.
 
-    ``follows`` chains the act together: a contract with a predecessor stays off
-    the board until that one is paid out.
+    ``follows`` сшивает акт: задание с предшественником не появляется на доске,
+    пока тот не оплачен.
     """
 
     id: str
@@ -65,17 +65,17 @@ class Quest:
 
     @property
     def summary(self) -> str:
-        """One line for a list entry: what is counted and how much it pays."""
+        """Одна строка списка: что считается и сколько за это платят."""
         return f"{self.name}, {self.target_count} по счёту, плата {self.reward_gold}"
 
 
 @dataclass(frozen=True, slots=True)
 class QuestLog:
-    """Contracts a character took, and the ones they already closed.
+    """Задания, которые персонаж взял, и те, что он уже закрыл.
 
-    ``taken`` maps a contract id to its counter. A contract disappears from
-    ``taken`` when it is paid out and its id moves to ``done`` - so a paid
-    contract can never be handed in twice.
+    ``taken`` сопоставляет заданию его счётчик. Из ``taken`` задание исчезает,
+    когда за него заплатили, а идентификатор переезжает в ``done``, - и оплаченное
+    задание нельзя сдать дважды.
     """
 
     taken: Mapping[str, int] = field(default_factory=dict)
@@ -96,7 +96,7 @@ class QuestLog:
         return replace(self, taken=MappingProxyType({**self.taken, quest_id: 0}))
 
     def advanced(self, quest_id: str, amount: int = 1) -> QuestLog:
-        """Move one counter. Unknown contracts are ignored, not created."""
+        """Сдвинуть один счётчик. Неизвестные задания пропускаются, а не заводятся."""
         if quest_id not in self.taken:
             return self
         counted = {**self.taken, quest_id: self.taken[quest_id] + amount}
@@ -109,7 +109,7 @@ class QuestLog:
         return QuestLog(taken=MappingProxyType(remaining), done=(*self.done, quest_id))
 
     def abandon(self, quest_id: str) -> QuestLog:
-        """Give a contract back. The counter is lost, the contract is not."""
+        """Вернуть задание. Счётчик теряется, задание - нет."""
         if quest_id not in self.taken:
             return self
         remaining = {key: value for key, value in self.taken.items() if key != quest_id}

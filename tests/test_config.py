@@ -1,4 +1,4 @@
-"""Configuration behaviour."""
+"""Как ведут себя настройки."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def test_dev_and_prod_use_external_storage() -> None:
 
 
 def test_solo_keeps_the_world_and_drops_redis() -> None:
-    """The world is worth a database of its own; a session is not (ADR 0010)."""
+    """Мир стоит собственной базы, а сессия - нет (ADR 0010)."""
     settings = _settings(app_env="solo")
     assert settings.uses_postgres is True
     assert settings.uses_redis is False
@@ -49,7 +49,7 @@ def test_shop_rotation_seconds_must_be_positive() -> None:
 
 
 def test_the_build_stamp_defaults_to_unknown() -> None:
-    """Set by Start.bat; a hand-run process simply has no answer."""
+    """Ставит Start.bat; у запущенного руками процесса ответа просто нет."""
     assert _settings().vellar_build == "unknown"
     assert _settings(vellar_build="6139bf8-dirty").vellar_build == "6139bf8-dirty"
 
@@ -72,14 +72,14 @@ def test_webhook_url_joins_base_and_path() -> None:
 
 
 def test_the_concurrency_ceiling_is_translated_for_aiogram() -> None:
-    """aiogram spells "no limit" as None; the setting spells it 0."""
+    """aiogram пишет «без потолка» как None, а настройка пишет это нулём."""
     assert _settings().concurrency_limit == 100
     assert _settings(update_concurrency_limit=250).concurrency_limit == 250
     assert _settings(update_concurrency_limit=0).concurrency_limit is None
 
 
 def test_the_heartbeat_tolerates_two_missed_beats() -> None:
-    """One missed beat is a busy host; three in a row is a wedged loop."""
+    """Один пропущенный удар - занятая машина; три подряд - вставший цикл."""
     assert _settings(heartbeat_seconds=10.0).heartbeat_stale_after == 30.0
 
 

@@ -1,8 +1,8 @@
-"""Prices, and the duty the Salt Watch takes from a deal between players.
+"""Цены и пошлина, которую Соляная стража берёт со сделки между игроками.
 
-The duty is the only outflow of gold in the game, so what matters is that it
-cannot be dodged by splitting a trade into small ones, and that what the seller
-is promised is exactly what the seller gets.
+Пошлина - единственный отток золота в игре, поэтому важно, что её нельзя обойти,
+разбив сделку на мелкие, и что обещанное продавцу - ровно то, что продавец и
+получит.
 """
 
 from __future__ import annotations
@@ -18,13 +18,13 @@ def test_the_duty_is_a_share_of_the_price() -> None:
 
 
 def test_a_priced_trade_always_costs_at_least_one_gold() -> None:
-    """Otherwise a thousand one-coin sales would move a fortune untaxed."""
+    """Иначе тысяча продаж по монете провела бы состояние мимо пошлины."""
     assert trade_tax(1) == 1
     assert trade_tax(10) == 1
 
 
 def test_a_free_offer_is_not_taxed() -> None:
-    """Price zero is a hand-over wearing an offer's clothes; there is nothing to take."""
+    """Цена в ноль - это передача в одежде предложения; брать здесь нечего."""
     assert trade_tax(0) == 0
     assert payout(0) == 0
 
@@ -36,6 +36,6 @@ def test_what_the_seller_is_promised_is_the_price_less_the_duty() -> None:
 
 @pytest.mark.parametrize("price", [1, 7, 13, 99, 100, 4_321, 1_000_000])
 def test_nothing_is_ever_created_by_rounding(price: int) -> None:
-    """Whatever the buyer pays is either received or burned - never invented."""
+    """Всё, что платит покупатель, либо получено, либо сожжено, но не выдумано."""
     assert payout(price) + trade_tax(price) == price
     assert 0 <= payout(price) <= price

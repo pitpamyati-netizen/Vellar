@@ -1,21 +1,21 @@
-# Items: gear, consumables and materials.
+# Вещи: снаряжение, расходники и сырьё.
 #
-# HARD RULE: equipment never grants an active skill. It grants numbers - damage,
-# armour, stats - and nothing that adds a button. See docs/skills.md.
+# ЖЁСТКОЕ ПРАВИЛО: снаряжение не даёт боевых умений. Оно даёт числа - урон, броню,
+# характеристики - и ничего, что добавляет кнопку. См. docs/skills.md.
 #
-# HARD RULE: an item has no description. Items are generated in their thousands;
-# what a thing is, its kind, its grade and its numbers answer.
+# ЖЁСТКОЕ ПРАВИЛО: у вещи нет описания. Вещей собираются тысячи; что вещь такое,
+# отвечают её род, ступень и числа.
 #
-# GEAR IS NOT WRITTEN HERE, ONLY ITS KINDS. A sword exists on twelve grades in
-# five rarities, and so does every other kind: writing them out would be about two
-# thousand entries nobody would ever edit. What is written is the *kind*, and the
-# thing is assembled from kind, grade and rarity the same way an opponent is
-# assembled from an archetype and a level (domain/procgen/items.py, ADR 0015).
+# СНАРЯЖЕНИЕ ЗДЕСЬ НЕ ПИШУТ, ПИШУТ ТОЛЬКО ЕГО ВИДЫ. Меч существует на двенадцати
+# ступенях в пяти редкостях, и так же - любой другой вид: выписать их значило бы
+# завести около двух тысяч записей, которые никто никогда не станет править.
+# Пишется *вид*, а вещь собирается из вида, ступени и редкости так же, как
+# противник собирается из породы и уровня (domain/procgen/items.py, ADR 0015).
 #
-# Consumables and materials are still written by hand: there are few of them and
-# each is its own thing.
-# Modifier keys share the vocabulary declared in traits.toml [meta].modifier_keys,
-# and only keys the engine actually reads.
+# Расходники и сырьё по-прежнему пишут руками: их немного, и каждое - само по себе.
+#
+# Ключи прибавок берутся из общего словаря, объявленного в traits.toml
+# [meta].modifier_keys, и только те, которые движок действительно читает.
 
 [meta]
 

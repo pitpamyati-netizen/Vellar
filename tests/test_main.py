@@ -1,4 +1,4 @@
-"""The composition root assembles a working bot without touching the network."""
+"""Корень композиции собирает работающего бота, не трогая сети."""
 
 from __future__ import annotations
 
@@ -32,17 +32,17 @@ async def app():
 
 
 async def test_local_mode_needs_no_database_or_redis(app) -> None:
-    """The whole point of APP_ENV=local: a bot token is the only requirement."""
+    """Весь смысл APP_ENV=local: нужен один лишь токен бота."""
     assert app.settings.uses_postgres is False
     assert app.settings.uses_redis is False
     assert app.content.races
 
 
 async def test_solo_keeps_the_session_in_the_process() -> None:
-    """APP_ENV=solo installs one service, not two: nothing reaches for Redis.
+    """APP_ENV=solo ставит одну службу, а не две: до Redis не тянется ничто.
 
-    The world still goes to PostgreSQL, which is why only the session half is
-    built here - see ``docs/adr/0010-a-machine-without-containers.md``.
+    Мир по-прежнему уходит в PostgreSQL, поэтому здесь собирается только сессионная
+    половина - см. ``docs/adr/0010-a-machine-without-containers.md``.
     """
     from contextlib import AsyncExitStack
 
@@ -83,11 +83,11 @@ async def test_routers_are_registered(app) -> None:
 
 
 async def test_the_screens_and_the_group_never_share_a_chat(app) -> None:
-    """A private router firing in the group would answer a room with a keyboard.
+    """Личный роутер, сработавший в группе, ответил бы комнате клавиатурой.
 
-    Character creation is the dangerous one: ``/start`` has no state filter, so
-    without this the first ``/start`` in the group would drag someone into
-    creation in public.
+    Опаснее всего создание персонажа: у ``/start`` нет фильтра по состоянию, поэтому
+    без этого первый же ``/start`` в группе втянул бы кого-нибудь в создание
+    персонажа у всех на глазах.
     """
     from aiogram.enums import ChatType
     from aiogram.types import Chat
@@ -103,7 +103,7 @@ async def test_the_screens_and_the_group_never_share_a_chat(app) -> None:
 
 
 async def _accepts(router, chat) -> bool:
-    """Whether the router's own filters let a message from this chat through."""
+    """Пропускают ли собственные фильтры роутера сообщение из этого чата."""
     from aiogram.types import Message
 
     probe = Message(message_id=1, date=datetime.now(UTC), chat=chat, text="/start")
@@ -112,19 +112,19 @@ async def _accepts(router, chat) -> bool:
 
 
 async def test_middlewares_are_installed_in_order(app) -> None:
-    """Duplicates are dropped before anything else touches the update."""
+    """Повторы отбрасываются раньше, чем обновления коснётся что-либо ещё."""
     outer = app.dispatcher.update.outer_middleware
     installed = [type(middleware) for middleware in outer]
     assert installed.index(IdempotencyMiddleware) < installed.index(DependencyMiddleware)
 
 
 async def test_markdown_is_never_the_default_parse_mode(app) -> None:
-    """Asterisks and underscores are spoken aloud by screen readers."""
+    """Звёздочки и подчёркивания экранный диктор произносит вслух."""
     assert app.bot.default.parse_mode is None
 
 
 async def test_broken_content_stops_startup(tmp_path) -> None:
-    """A content typo must fail loudly at boot, not silently mid-game."""
+    """Опечатка в содержимом обязана громко падать на старте, а не тихо посреди игры."""
     from mmorpg.infrastructure.content import ContentError
 
     empty = tmp_path / "content"

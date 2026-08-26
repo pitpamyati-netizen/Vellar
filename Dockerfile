@@ -1,4 +1,4 @@
-# uvloop is deliberately absent: see docs/adr/0004-no-uvloop.md
+# uvloop отсутствует нарочно: см. docs/adr/0004-no-uvloop.md
 FROM python:3.14-slim AS base
 
 ENV PYTHONUNBUFFERED=1 \
@@ -11,9 +11,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-# Dependency layer: cached until the lock file changes. --locked, not --frozen:
-# a dependency added to pyproject.toml without re-locking is a build error here
-# rather than an ImportError in front of players.
+# Слой зависимостей: кэшируется, пока не изменился файл блокировки. --locked, а не
+# --frozen: зависимость, добавленная в pyproject.toml без пересборки блокировки, — это
+# ошибка сборки здесь, а не ImportError на глазах у игроков.
 COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project
 
@@ -21,31 +21,31 @@ COPY src/ ./src/
 COPY content/ ./content/
 COPY migrations/ ./migrations/
 COPY scripts/healthcheck.py ./scripts/
-# alembic.ini for the migration run; README.md because pyproject.toml names it as
-# the package readme and hatchling refuses to build the project without it.
+# alembic.ini нужен для прогона миграций; README.md — потому что pyproject.toml называет
+# его readme пакета, и без него hatchling отказывается собирать проект.
 COPY alembic.ini README.md ./
 RUN uv sync --locked --no-dev
 
 ENV PATH="/opt/venv/bin:${PATH}"
 
-# Nothing the bot does needs root, and it never writes to its own source tree.
-# The heartbeat goes to /tmp, which this user does own.
+# Ничему, что делает бот, root не нужен, и в собственное дерево исходников он не пишет
+# никогда. Сердцебиение уходит в /tmp, а он этому пользователю принадлежит.
 RUN useradd --create-home --uid 10001 vellar
 USER vellar
 
-# A process that dies is handled by the restart policy. A process whose event
-# loop is wedged is only visible here - see src/mmorpg/health.py. The start
-# period covers content validation and the first Telegram call.
+# С умершим процессом разбирается политика перезапуска. Процесс, у которого встал цикл
+# событий, виден только здесь — см. src/mmorpg/health.py. Начальный срок покрывает
+# проверку содержимого и первый вызов Telegram.
 HEALTHCHECK --interval=15s --timeout=10s --start-period=45s --retries=3 \
     CMD ["python", "scripts/healthcheck.py"]
 
-# Explicit because the shutdown path depends on it: polling drains through
-# aiogram's handler, the webhook through the stop event in mmorpg.main.
+# Указано явно, потому что от этого зависит путь остановки: опрос доигрывает через
+# обработчик aiogram, вебхук — через событие остановки в mmorpg.main.
 STOPSIGNAL SIGTERM
 
-# Which working tree this image was built from - stamped by Start.bat, logged on
-# startup, and printed back by "Start.bat status". Last layer on purpose: a new
-# value rebuilds this line and nothing else.
+# Из какого рабочего дерева собран этот образ: штампует Start.bat, пишется в журнал на
+# старте и печатается обратно через «Start.bat status». Последним слоем нарочно: новое
+# значение пересобирает эту строку и больше ничего.
 ARG VELLAR_BUILD="unknown"
 ENV VELLAR_BUILD=${VELLAR_BUILD}
 LABEL org.opencontainers.image.revision=${VELLAR_BUILD}

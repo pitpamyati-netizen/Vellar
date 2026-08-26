@@ -1,4 +1,4 @@
-"""mmorpg.domain.entities layer package."""
+"""Слой mmorpg.domain.entities."""
 
 from mmorpg.domain.entities.character import (
     Character,

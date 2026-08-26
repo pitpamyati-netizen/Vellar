@@ -1,23 +1,22 @@
 @echo off
 rem ============================================================================
-rem  Shared routines for Start.bat and stop.bat.
+rem Общие подпрограммы для Start.bat и stop.bat.
 rem
-rem    call scripts\vellar-tools.bat stamp    set VELLAR_BUILD from the git tree
-rem    call scripts\vellar-tools.bat report   say which build is actually running
-rem    call scripts\vellar-tools.bat flush    force Redis to write its state out
-rem    call scripts\vellar-tools.bat backup   pg_dump into backups\, keep 20
-rem    call scripts\vellar-tools.bat running  errorlevel 0 if the stack is up
-rem    call scripts\vellar-tools.bat pgtools  put a local psql/pg_dump on PATH
-rem    call scripts\vellar-tools.bat envvar X read X out of .env into ENV_VALUE
+rem call scripts\vellar-tools.bat stamp    поставить VELLAR_BUILD из дерева git
+rem call scripts\vellar-tools.bat report   сказать, какая сборка работает сейчас
+rem call scripts\vellar-tools.bat flush    заставить Redis выписать своё состояние
+rem call scripts\vellar-tools.bat backup   pg_dump в backups\, держать 20 копий
+rem call scripts\vellar-tools.bat running  errorlevel 0, если стек поднят
+rem call scripts\vellar-tools.bat pgtools  добавить местные psql/pg_dump в PATH
+rem call scripts\vellar-tools.bat envvar X прочитать X из .env в ENV_VALUE
 rem
-rem  backup works both ways round: through the container while the Docker stack
-rem  is up, and through a PostgreSQL installed on this machine when there is no
-rem  stack at all (docs/adr/0010-a-machine-without-containers.md). The file it
-rem  writes is the same either way, which is what lets one be restored into the
-rem  other.
+rem backup работает в обе стороны: через контейнер, пока поднят стек Docker, и через
+rem PostgreSQL, установленный на этой машине, когда стека нет вовсе
+rem (docs/adr/0010-a-machine-without-containers.md). Файл выходит один и тот же, и
+rem именно это позволяет развернуть одно в другое.
 rem
-rem  Deliberately no setlocal: the caller needs VELLAR_BUILD and BACKUP_FILE back.
-rem  The caller is expected to have cd'd to the repository root already.
+rem Нарочно без setlocal: вызывающему нужны обратно VELLAR_BUILD и BACKUP_FILE.
+rem Предполагается, что вызывающий уже перешёл в корень репозитория.
 rem ============================================================================
 if "%~1"=="stamp"   goto :stamp
 if "%~1"=="report"  goto :report
@@ -30,8 +29,8 @@ echo [Vellar] vellar-tools: unknown routine "%~1".
 exit /b 2
 
 rem ---------------------------------------------------------------------------
-rem  Which working tree a build would come from. "-dirty" covers uncommitted and
-rem  untracked files alike, because both end up inside the image.
+rem Из какого рабочего дерева вышла бы сборка. «-dirty» покрывает и незакоммиченные,
+rem и неотслеживаемые файлы: и те и другие оказываются внутри образа.
 rem ---------------------------------------------------------------------------
 :stamp
 set "VELLAR_BUILD=unknown"
@@ -44,8 +43,8 @@ if defined VELLAR_DIRTY set "VELLAR_BUILD=%VELLAR_BUILD%-dirty"
 exit /b 0
 
 rem ---------------------------------------------------------------------------
-rem  Read the stamp back out of the container that is serving right now, and
-rem  prove it is the image that was just built rather than a leftover.
+rem Прочитать штамп обратно из контейнера, который обслуживает прямо сейчас, и
+rem убедиться, что это тот образ, который только что собрали, а не остаток.
 rem ---------------------------------------------------------------------------
 :report
 set "RUNNING_BUILD="
@@ -67,9 +66,9 @@ if not "%IMAGE_ID%"=="%CONTAINER_IMAGE_ID%" (
 exit /b 0
 
 rem ---------------------------------------------------------------------------
-rem  Redis holds where every player is standing and every fight in progress. The
-rem  append-only log is flushed every second and again on shutdown; SAVE writes a
-rem  snapshot on top of it, so the last second cannot be the one that is lost.
+rem Redis держит, где стоит каждый игрок и какой бой идёт. Журнал дописывания
+rem сбрасывается раз в секунду и ещё раз при остановке; SAVE пишет снимок поверх
+rem него, чтобы потерянной не оказалась именно последняя секунда.
 rem ---------------------------------------------------------------------------
 :flush
 docker compose exec -T redis redis-cli SAVE >nul 2>&1
@@ -81,7 +80,7 @@ echo [Vellar] Redis state written to disk: screens, fights and offers in flight.
 exit /b 0
 
 rem ---------------------------------------------------------------------------
-rem  A dump of everything permanent, before anything is stopped or replaced.
+rem Дамп всего постоянного, до того как что-либо остановлено или заменено.
 rem ---------------------------------------------------------------------------
 :backup
 set "BACKUP_FILE="
@@ -89,9 +88,9 @@ if not exist "backups" mkdir "backups"
 for /f "usebackq delims=" %%t in (`powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd_HHmmss"`) do set "STAMP=%%t"
 set "BACKUP_FILE=backups\vellar-%STAMP%.sql"
 
-rem The container holds the database while the stack is up; a PostgreSQL on this
-rem machine holds it when there is no stack. Which one is asked is decided here
-rem rather than by the caller, so stop.bat reads the same either way.
+rem Базу держит контейнер, пока поднят стек, и PostgreSQL этой машины, когда стека нет.
+rem Кого спрашивать, решается здесь, а не вызывающим, поэтому stop.bat читает одно и то
+rem же в обоих случаях.
 call :running
 if errorlevel 1 goto :backup_here
 
@@ -109,7 +108,7 @@ echo [Vellar] Saved %CHARACTERS% character(s) to %BACKUP_FILE%.
 goto :prune
 
 rem ---------------------------------------------------------------------------
-rem  The same dump, taken from a PostgreSQL installed on this machine instead.
+rem Тот же дамп, но снятый с PostgreSQL, установленного на этой машине.
 rem ---------------------------------------------------------------------------
 :backup_here
 call :pgtools
@@ -123,7 +122,7 @@ if errorlevel 1 (
 call :envvar POSTGRES_DSN
 if not defined ENV_VALUE set "ENV_VALUE=postgresql://vellar:vellar@localhost:5432/vellar"
 set "VELLAR_DSN=%ENV_VALUE%"
-rem Never sit waiting on a database that is not there: this runs inside a stop.
+rem Никогда не сидеть в ожидании базы, которой нет: это выполняется внутри остановки.
 set "PGCONNECT_TIMEOUT=5"
 
 pg_dump "%VELLAR_DSN%" --clean --if-exists --no-owner > "%BACKUP_FILE%" 2>nul
@@ -139,7 +138,8 @@ for /f "usebackq delims=" %%n in (`psql "%VELLAR_DSN%" -tAc "select count(*) fro
 echo [Vellar] Saved %CHARACTERS% character(s) to %BACKUP_FILE%.
 
 :prune
-rem Twenty is a month of daily stops and about as much disk as this deserves.
+rem Двадцать — это месяц ежедневных остановок и примерно столько диска, сколько это
+rem заслуживает.
 set /a KEPT=0
 for /f "usebackq delims=" %%f in (`dir /b /a-d /o-d "backups\vellar-*.sql" 2^>nul`) do (
     set /a KEPT+=1
@@ -147,15 +147,15 @@ for /f "usebackq delims=" %%f in (`dir /b /a-d /o-d "backups\vellar-*.sql" 2^>nu
 )
 exit /b 0
 
-rem Called, not inlined: inside the loop above %KEPT% would expand once, at parse
-rem time, and every file would be judged by the count before the first one.
+rem Вызовом, а не встроенным кодом: внутри цикла выше %KEPT% раскрылось бы один раз, при
+rem разборе, и каждый файл судили бы по счёту до первого из них.
 :prune_one
 if %KEPT% gtr 20 del /q "backups\%~1" 2>nul
 exit /b 0
 
 rem ---------------------------------------------------------------------------
-rem  Whether the stack is up at all. Used to tell "nothing to do" apart from
-rem  "something went wrong".
+rem Поднят ли стек вообще. Нужно, чтобы отличить «делать нечего» от «что-то пошло не
+rem так».
 rem ---------------------------------------------------------------------------
 :running
 set "RUNNING_IDS="
@@ -164,10 +164,10 @@ if not defined RUNNING_IDS exit /b 1
 exit /b 0
 
 rem ---------------------------------------------------------------------------
-rem  A PostgreSQL installed on this machine rather than pulled as an image. The
-rem  Windows installer leaves its bin directory off PATH, so the newest one under
-rem  Program Files is added for this process only - nothing on the machine is
-rem  changed by running a batch file.
+rem PostgreSQL, установленный на этой машине, а не притянутый образом. Установщик
+rem Windows оставляет свой каталог bin вне PATH, поэтому самый свежий из тех, что под
+rem Program Files, добавляется только для этого процесса: запуск .bat не меняет на
+rem машине ничего.
 rem ---------------------------------------------------------------------------
 :pgtools
 where psql >nul 2>&1
@@ -181,9 +181,9 @@ for /f "delims=" %%d in ('dir /b /ad /o-n "%ProgramFiles%\PostgreSQL" 2^>nul') d
 exit /b 1
 
 rem ---------------------------------------------------------------------------
-rem  One value out of .env, handed back in ENV_VALUE. The game itself never reads
-rem  the environment except through Settings; this is for the scripts around it,
-rem  which have to know where the database is before there is a process to ask.
+rem Одно значение из .env, отданное обратно в ENV_VALUE. Сама игра читает окружение
+rem только через Settings; это для скриптов вокруг неё, которым надо знать, где база,
+rem раньше, чем появится процесс, у которого можно спросить.
 rem ---------------------------------------------------------------------------
 :envvar_entry
 call :envvar "%~2"

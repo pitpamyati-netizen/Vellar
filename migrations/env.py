@@ -1,9 +1,9 @@
-"""Alembic environment.
+"""Окружение Alembic.
 
-No ORM metadata: migrations are explicit SQL, so autogenerate is deliberately not
-wired up (docs/adr/0001-no-orm.md). The connection URL comes from POSTGRES_DSN and
-is rewritten to the asyncpg dialect so the same DSN works for the app and for
-migrations.
+Метаданных ORM нет: миграции - это явный SQL, поэтому автогенерация нарочно не
+подключена (docs/adr/0001-no-orm.md). Адрес соединения приходит из POSTGRES_DSN и
+переписывается на диалект asyncpg, чтобы один и тот же адрес работал и для
+приложения, и для миграций.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ target_metadata = None
 
 
 def run_migrations_offline() -> None:
-    """Emit SQL to stdout instead of talking to a database."""
+    """Выдать SQL в stdout вместо разговора с базой."""
     context.configure(
         url=config.get_main_option("sqlalchemy.url"),
         target_metadata=target_metadata,

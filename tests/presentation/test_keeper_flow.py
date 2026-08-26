@@ -1,8 +1,9 @@
-"""The keeper screen: who sees it, what it does, and who it stops.
+"""Экран смотрителя: кто его видит, что он делает и кого он останавливает.
 
-The right comes from ``ADMIN_IDS`` or from an account that was handed it; the
-character column only mirrors the two. Every half is tested here, because a
-service door that opens for a player is the one bug this feature can have.
+Право идёт из ``ADMIN_IDS`` или от аккаунта, которому его выдали; колонка на
+персонаже лишь отражает оба источника. Проверяется каждая половина, потому что
+служебная дверь, открывшаяся игроку, - единственная ошибка, какая у этой части
+вообще может быть.
 """
 
 from __future__ import annotations
@@ -57,7 +58,7 @@ def buttons(content: GameContent, who: Character, state: PlayState) -> list[str]
     return [text for row in screen.button_texts() for text in row]
 
 
-# --- who sees the door ------------------------------------------------
+# --- кто видит дверь --------------------------------------------------
 
 
 def test_a_player_never_sees_the_keeper_button(content: GameContent, player: Character) -> None:
@@ -69,7 +70,7 @@ def test_a_keeper_sees_it_in_the_main_menu(content: GameContent, keeper: Charact
 
 
 def test_a_player_typing_the_label_is_not_let_in(content: GameContent, player: Character) -> None:
-    """The label is text, and text can be typed by anybody."""
+    """Надпись - это текст, а текст может набрать кто угодно."""
     pressed = step(content, player, begin(player), labels.KEEPER.text)
     assert pressed.screen is ScreenId.MAIN_MENU
     assert pressed.notice
@@ -84,7 +85,7 @@ def test_a_keeper_opens_the_screen(content: GameContent, keeper: Character) -> N
 def test_the_right_can_be_taken_away_between_two_presses(
     content: GameContent, keeper: Character, player: Character
 ) -> None:
-    """ADMIN_IDS changed and the character was reloaded without the flag."""
+    """ADMIN_IDS изменился, и персонажа перезагрузили без флага."""
     opened = step(content, keeper, begin(keeper), labels.KEEPER.text)
     refused = step(content, player, opened, labels.KEEPER_GOLD.text)
 
@@ -93,7 +94,7 @@ def test_the_right_can_be_taken_away_between_two_presses(
     assert render(content, player, refused, world_seed=WORLD_SEED).id is ScreenId.MAIN_MENU
 
 
-# --- what the buttons do ----------------------------------------------
+# --- что делают кнопки ------------------------------------------------
 
 
 @pytest.fixture
@@ -149,7 +150,7 @@ def test_the_service_row_still_works_here(
     assert step(content, keeper, at_keeper, "Назад").screen is ScreenId.MAIN_MENU
 
 
-# --- the road is open -------------------------------------------------
+# --- дорога открыта ---------------------------------------------------
 
 
 def test_a_keeper_walks_into_a_city_a_player_could_not(
@@ -163,7 +164,7 @@ def test_a_keeper_walks_into_a_city_a_player_could_not(
     assert walked.city_id == locked.id
 
 
-# --- the flag mirrors the setting -------------------------------------
+# --- флаг отражает настройку ------------------------------------------
 
 
 async def test_the_flag_is_written_when_the_setting_names_the_player(player: Character) -> None:
@@ -208,7 +209,7 @@ def test_a_malformed_admin_ids_names_nobody() -> None:
     assert settings.is_admin(PLAYER) is False
 
 
-# --- the right handed out from inside the game -------------------------
+# --- право, выданное изнутри игры -------------------------------------
 
 
 async def test_a_granted_account_gets_the_flag_without_the_setting(player: Character) -> None:

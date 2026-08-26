@@ -1,9 +1,9 @@
-"""Duplicate update filter.
+"""Отсев повторных обновлений.
 
-Telegram redelivers updates when an answer is slow or a connection drops. Without
-this middleware a redelivered update would resolve a second combat turn or buy an
-item twice. The store is keyed by ``update_id`` with a short TTL, and the check is
-atomic in Redis (``SET NX``).
+Telegram доставляет обновление заново, когда ответ медленный или оборвалась
+связь. Без этой мидлвари доставленное заново обновление разыграло бы второй ход
+боя или купило бы вещь дважды. Хранилище ведётся по ``update_id`` с коротким
+сроком, а проверка в Redis неделима (``SET NX``).
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ DUPLICATE = "duplicate"
 
 
 class IdempotencyMiddleware(BaseMiddleware):
-    """Drops an update that was already handled."""
+    """Отбрасывает обновление, которое уже обработано."""
 
     def __init__(self, store: IdempotencyStore, ttl: int = DEFAULT_TTL) -> None:
         self._store = store

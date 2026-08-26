@@ -1,4 +1,4 @@
-"""Waiting for a service that is not there yet."""
+"""Ожидание службы, которой пока нет."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ def down(error: BaseException) -> bool:
 
 
 async def test_startup_waits_for_a_service_that_comes_up_late() -> None:
-    """The container may well be ahead of PostgreSQL; that is not a failure."""
+    """Контейнер вполне может опередить PostgreSQL, и это не отказ."""
     tries = 0
 
     async def connect() -> str:
@@ -38,7 +38,7 @@ async def test_waiting_stops_when_the_patience_runs_out() -> None:
 
 
 async def test_what_cannot_be_waited_out_is_raised_at_once() -> None:
-    """A wrong password does not become right by asking again."""
+    """Неверный пароль не станет верным оттого, что спросили ещё раз."""
     tries = 0
 
     async def connect() -> str:

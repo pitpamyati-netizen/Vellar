@@ -1,27 +1,30 @@
-# Contracts: paid jobs the cities hand out. Act I, "Подорожная" (levels 1-30).
+# Задания: оплаченная работа, которую выдают города. Акт I, «Подорожная»
+# (уровни 1-30).
 #
-# A contract is a deal, not a calling: the giver names the price in the first two
-# sentences, refusing is always allowed and never closes the job forever
-# (Narrative.md, section 4).
+# Задание - это сделка, а не призвание: тот, кто его даёт, называет цену в первых
+# двух фразах, отказаться можно всегда, и отказ никогда не закрывает работу
+# насовсем (Narrative.md, раздел 4).
 #
 # objective:
-#   kill   - defeat N opponents; target_kind narrows it to one enemy kind
-#   elite  - defeat N strong opponents (an elite node)
-#   search - work through N nodes without a fight; target_kind narrows it to one
-#            node kind: gather, cache, shrine, event
-#   craft  - make N things with your own hands; target_kind is the item id from
-#            items.toml. The counter moves when the batch comes out of the work,
-#            so a craft is a way of taking a job and not only a way of selling
+#   kill   - победить N противников; target_kind сужает до одной породы
+#   elite  - победить N сильных противников (узел с сильным противником)
+#   search - отработать N узлов без боя; target_kind сужает до одного вида узла:
+#            gather, cache, shrine, event
+#   craft  - сделать N вещей своими руками; target_kind - идентификатор вещи из
+#            items.toml. Счётчик двигается, когда партия выходит из работы, поэтому
+#            ремесло становится способом взять работу, а не только способом продать
 #
-# location: which location of the same city the job is done in, by slot. Optional,
-# and never set on a craft - a craft happens at the workbench, not on the road.
-# Without it the contract screen can only say "обойдите три места", which is the
-# single loudest complaint the first act ever got: players did not know where to
-# go. Validated against world.toml by the loader.
+# location: в какой локации того же города делается работа, по месту.
+# Необязательно, и никогда не ставится на craft - ремесло случается за верстаком, а
+# не в дороге. Без него экран заданий может сказать только «обойдите три места», а
+# это самая громкая жалоба, которую получил первый акт: игроки не знали, куда идти.
+# Проверяется загрузчиком по world.toml.
 #
-# follows chains the act: a contract with a predecessor stays off the board until
-# that one is paid out. Ids are frozen keys - they live in the character's ledger.
-# Validated by tests/content/test_quests.py.
+# follows сшивает акт: задание с предшественником не появляется на доске, пока тот
+# не оплачен.
+#
+# Идентификаторы - замороженные ключи: они лежат в журнале персонажа. Проверяет
+# tests/content/test_quests.py.
 
 # --- Дубно: сводки застав не сходятся ---
 

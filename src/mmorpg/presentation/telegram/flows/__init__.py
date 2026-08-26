@@ -1,1 +1,1 @@
-"""mmorpg.presentation.telegram.flows layer package."""
+"""Слой mmorpg.presentation.telegram.flows."""

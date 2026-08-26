@@ -1,25 +1,24 @@
-"""Where gold comes into the game and where it goes out of it.
+"""Откуда золото приходит в игру и куда уходит из неё.
 
-Three of the numbers this game is balanced on cannot be decided at a desk: the
-duty on a trade between players, the stake and the payout of the arena, and
-what a fight is worth (Roadmap, "Риски"). All three were written down as guesses
-to be corrected "по первым суткам ОБТ" - and there was nothing in the game that
-would make those first twenty-four hours legible. A number nobody can measure is
-not tuned, it is re-guessed.
+Три числа, на которых стоит баланс этой игры, за столом не решаются: пошлина со
+сделки между игроками, ставка и выплата арены и то, чего стоит бой. Все три были
+записаны догадками, которые надо поправить «по первым суткам ОБТ», — и в игре не
+было ничего, что сделало бы те двадцать четыре часа читаемыми. Число, которое
+некому измерить, не настраивают, его переугадывают.
 
-So every movement of gold that is not one player handing another player a coin
-writes one line:
+Поэтому каждое движение золота, кроме передачи монеты из рук в руки, пишет одну
+строку:
 
     gold_flow flow=fight amount=124 character_id=17
 
-``flow`` is what happened, ``amount`` is signed - positive is gold entering this
-character's purse, negative is gold leaving it. Summed over a day by flow, that
-is the whole economy: what the world pays out, what the cities take back, what
-the duty removes, and whether the arena is a hole or a fountain.
+``flow`` — что случилось, ``amount`` — со знаком: плюс, когда золото приходит в
+кошелёк этого персонажа, минус, когда уходит. Сложенное за сутки по видам, это и
+есть вся экономика: что мир выплачивает, что города забирают обратно, что убирает
+пошлина и дыра арена или фонтан.
 
-This is a log and nothing else. Nothing reads it back, no screen shows it, and no
-rule depends on it - it exists so that the first correction to those constants is
-made against numbers instead of against a feeling.
+Это журнал и больше ничего. Его никто не читает обратно, ни один экран его не
+показывает и ни одно правило от него не зависит — он существует, чтобы первая
+правка тех постоянных делалась против чисел, а не против ощущения.
 """
 
 from __future__ import annotations
@@ -28,26 +27,26 @@ from mmorpg.logging import get_logger
 
 logger = get_logger(__name__)
 
-# The flows worth telling apart. Anything not here is not measured, which is a
-# decision to make on purpose rather than by forgetting.
-FIGHT = "fight"  # what an opponent carried
-SEARCH = "search"  # a cache, a shrine, a quiet node
-DESCENT = "descent"  # the bottom of a dungeon run
-QUEST = "quest"  # a contract paid out
-DEFEAT = "defeat"  # a tenth of the purse, left where the fight was lost
-DUEL = "duel"  # taken from another player, or lost to one
-ARENA_STAKE = "arena_stake"  # into the arena
-ARENA_PAYOUT = "arena_payout"  # back out of it
-TRADE_PRICE = "trade_price"  # what one player paid another
-TRADE_DUTY = "trade_duty"  # what the duty took out of the game
-TRADE_ROLLBACK = "trade_rollback"  # a settled trade a keeper undid
-SHOP = "shop"  # bought from or sold to a city
-SERVICE = "service"  # a bed, a teacher, anything a city charges for
-KEEPER = "keeper"  # granted by a keeper, and therefore not economy at all
+# Потоки, которые стоит различать. Чего здесь нет, то не измеряется, а это решение
+# принимают нарочно, а не по забывчивости.
+FIGHT = "fight"  # что нёс противник
+SEARCH = "search"  # тайник, святилище, тихий узел
+DESCENT = "descent"  # дно вылазки
+QUEST = "quest"  # плата по заданию
+DEFEAT = "defeat"  # десятая часть кошелька, оставшаяся там, где бой проигран
+DUEL = "duel"  # взято у другого игрока или потеряно ему
+ARENA_STAKE = "arena_stake"  # на арену
+ARENA_PAYOUT = "arena_payout"  # и обратно с неё
+TRADE_PRICE = "trade_price"  # что один игрок заплатил другому
+TRADE_DUTY = "trade_duty"  # что пошлина вынула из игры
+TRADE_ROLLBACK = "trade_rollback"  # закрытая сделка, которую откатил смотритель
+SHOP = "shop"  # куплено у города или продано ему
+SERVICE = "service"  # ночлег, учитель, всё, за что берёт город
+KEEPER = "keeper"  # выдано смотрителем, а потому вовсе не экономика
 
 
 def record(flow: str, amount: int, *, character_id: int, detail: str = "") -> None:
-    """Write down one movement of gold. Zero is not a movement."""
+    """Записать одно движение золота. Ноль движением не считается."""
     if not amount:
         return
     logger.info(

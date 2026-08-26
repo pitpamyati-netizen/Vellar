@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Point git at the versioned hooks in .githooks/.
+# Указать git на версионируемые хуки в .githooks/.
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"

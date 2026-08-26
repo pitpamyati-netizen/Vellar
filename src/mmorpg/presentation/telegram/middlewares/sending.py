@@ -40,7 +40,7 @@ from aiogram.methods.base import TelegramMethod, TelegramType
 
 from mmorpg.logging import get_logger
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:  # pragma: no cover - только для типов
     from aiogram import Bot
     from aiogram.methods import Response
 

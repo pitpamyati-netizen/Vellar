@@ -1,20 +1,22 @@
-"""Post one broadcast to the game channel from the command line.
+"""Опубликовать один пост в канал игры из командной строки.
 
-This is the tool that proves the channel works end to end - token, admin rights,
-chat id - without waiting for a player to do something newsworthy:
+Это тот инструмент, который доказывает, что канал работает от начала до конца —
+токен, права администратора, id чата, — не дожидаясь, пока игрок сделает
+что-нибудь достойное новости:
 
     uv run python scripts/broadcast.py --kind service --headline "Проверка связи." --dry-run
     uv run python scripts/broadcast.py --kind service --headline "Проверка связи."
 
-An update is not typed here: it is written in ``content/changelog.toml`` and
-posted from there, so what players read is what the file says.
+Обновление здесь не набирают: его пишут в ``content/changelog.toml`` и оттуда же
+публикуют, чтобы игроки прочитали именно то, что сказано в файле.
 
     uv run python scripts/broadcast.py --changelog latest --dry-run
     uv run python scripts/broadcast.py --changelog 0.2
 
-``--dry-run`` renders and validates the post and sends nothing, so it is safe to
-run against a live channel. Without it the post is public and permanent - the
-channel is the game's log, and a deleted post is still a post players saw.
+``--dry-run`` рисует и проверяет пост и не отправляет ничего, поэтому его
+безопасно запускать и против живого канала. Без него пост публичен и постоянен:
+канал — это летопись игры, а удалённый пост всё равно остаётся постом, который
+игроки видели.
 """
 
 from __future__ import annotations
@@ -40,7 +42,7 @@ from mmorpg.presentation.telegram.broadcast import (
 
 
 def use_utf8_console() -> None:
-    """The Windows console defaults to cp1251, which cannot print the post."""
+    """Консоль Windows по умолчанию в cp1251, а она такой пост не напечатает."""
     for stream in (sys.stdout, sys.stderr):
         if isinstance(stream, io.TextIOWrapper):
             stream.reconfigure(encoding="utf-8", errors="replace")
@@ -72,7 +74,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def build_event(args: argparse.Namespace, settings: Settings) -> BroadcastEvent:
-    """Turn the arguments into the one post this run will make."""
+    """Превратить аргументы в тот единственный пост, который сделает этот запуск."""
     if args.changelog:
         release = select_release(load_changelog(settings.content_dir), args.changelog)
         return changelog(
@@ -94,8 +96,8 @@ async def _send(args: argparse.Namespace) -> int:
     try:
         event = build_event(args, settings)
         text = render_broadcast(event, emoji=not args.no_emoji)
-    # A wrong version or a post written for the team is an author's mistake, not
-    # a crash: say what is wrong and stop before Telegram is involved.
+    # Неверная версия или пост, написанный для своих, - ошибка автора, а не падение:
+    # сказать, что не так, и остановиться до того, как дело дойдёт до Telegram.
     except (ContentError, ValueError) as error:
         print(error, file=sys.stderr)
         return 1

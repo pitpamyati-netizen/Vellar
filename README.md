@@ -1,149 +1,148 @@
 # Vellar
 
-An accessible text MMORPG for Telegram. The game is designed **screen-reader first**:
-reply keyboards only, no inline buttons, no message edits, every message readable on
-its own. See [docs/accessibility.md](docs/accessibility.md) - those rules are a
-specification, not a preference.
+Доступная текстовая MMORPG для Telegram. Игра написана **от экранного диктора**:
+только reply-клавиатуры, никаких inline-кнопок, никаких правок сообщений, каждое
+сообщение читается само по себе. См. [docs/accessibility.md](docs/accessibility.md) —
+это спецификация, а не пожелание.
 
-- 15 cities x 5 locations, character levels 1-300
-- Permanent maps; what stands in their nodes arrives in waves, shared by everyone
-  in the location and back three minutes after the node is cleared
-- 16 races, 8 classes, 5 crafts, 60+ traits, all defined in TOML under [`content/`](content/)
-- Fixed skill panel: 6 active slots and 1 racial, at every level; a learned passive
-  takes no slot and is always on
-- Endgame at level 300: pledge a thing or a skill edge for a Seal of the Chamber,
-  which opens access - never stats - and weighs your voice in the cycle's question
+- 15 городов × 5 локаций, уровни персонажа 1–300
+- Карты постоянны; то, что стоит в их узлах, приходит волнами, общими для всех, кто
+  в локации, и встаёт заново через три минуты после того, как узел вычистили
+- 16 рас, 8 классов, 5 ремёсел, 60+ черт — всё объявлено в TOML под [`content/`](content/)
+- Панель умений постоянна: 6 боевых слотов и 1 расовый на любом уровне; изученное
+  пассивное умение слота не занимает и работает всегда
+- Конец пути на 300-м: заложить вещь или грань умения за Печать Палаты, а Печать
+  открывает доступы — никогда не силу — и весит голос в вопросе цикла
 
-## Run it
+## Запуск
 
-Put your bot token in `.env` first - copy `.env.example` if the file is not there
-yet, and get a token from [@BotFather](https://t.me/BotFather).
+Сначала положите токен бота в `.env` — скопируйте `.env.example`, если файла ещё
+нет, а токен возьмите у [@BotFather](https://t.me/BotFather).
 
-On Windows, install [PostgreSQL](https://www.postgresql.org/download/windows/) and
-create the role once with `Start.bat setup-db`. After that:
+На Windows поставьте [PostgreSQL](https://www.postgresql.org/download/windows/) и
+один раз заведите роль через `Start.bat setup-db`. После этого:
 
 ```
 Start.bat
 ```
 
-This runs the bot as one process against a PostgreSQL installed on this machine -
-no Docker and no Redis - brings the schema up to date first, and stamps the build
-with the commit it came from so "am I on my latest change" is answered rather
-than assumed. Ctrl+C stops it.
+Игра работает одним процессом против PostgreSQL этой машины — без Docker и без
+Redis, — сначала накатывает схему и штампует сборку тем коммитом, из которого она
+вышла, чтобы на «моя ли последняя правка сейчас крутится» был ответ, а не догадка.
+Останавливает Ctrl+C.
 
-The world is kept: characters, gold, bags and quests are in the database. The
-session is not: a restart puts everyone back in the main menu and ends a fight in
-progress (`docs/adr/0010-a-machine-without-containers.md`).
+Мир сохраняется: персонажи, золото, сумки и задания лежат в базе. Сессия — нет:
+перезапуск возвращает всех в главное меню и обрывает начатый бой
+(`docs/adr/0010-a-machine-without-containers.md`).
 
 | | |
 | --- | --- |
-| `Start.bat` | the game, against PostgreSQL on this machine (same as `Start.bat solo`) |
-| `Start.bat setup-db` | create the `vellar` role and database. Once, before the first run |
-| `Start.bat local` | one in-memory process, nothing saved - for trying a change, never for players |
-| `Start.bat docker` | the full stack in containers; run again to rebuild and swap the bot without stopping the world |
-| `stop.bat` | dump the database to `backups\`; with a stack up, flush Redis and stop it too. Nothing is deleted |
-| `stop.bat purge` | stop and delete every character. Asks first |
+| `Start.bat` | игра против PostgreSQL этой машины (то же, что `Start.bat solo`) |
+| `Start.bat setup-db` | завести роль и базу `vellar`. Один раз, до первого запуска |
+| `Start.bat local` | один процесс в памяти, ничего не сохраняется — попробовать правку, но не для игроков |
+| `Start.bat docker` | полный стек в контейнерах; повторный запуск пересобирает и подменяет бота, не останавливая мир |
+| `stop.bat` | дамп базы в `backups\`; при поднятом стеке — сбросить Redis и остановить его тоже. Не удаляется ничто |
+| `stop.bat purge` | остановить и удалить всех персонажей. Спрашивает подтверждение |
 
-Updating a solo game is Ctrl+C and `Start.bat` again: the migrations run before
-the bot does, and PostgreSQL is never stopped, so characters carry straight over.
+Обновить solo-игру — это Ctrl+C и снова `Start.bat`: миграции идут раньше бота,
+PostgreSQL не останавливается, и персонажи переезжают как есть.
 
-By hand, anywhere - all you need is [uv](https://docs.astral.sh/uv/) and Python
-3.14. `APP_ENV=local` uses in-memory adapters, so a token is the only
-prerequisite; `APP_ENV=solo` keeps the world in the PostgreSQL named by
-`POSTGRES_DSN` and still needs no Redis:
+Руками, где угодно: нужны только [uv](https://docs.astral.sh/uv/) и Python 3.14.
+`APP_ENV=local` берёт адаптеры в памяти, и токен — единственное условие;
+`APP_ENV=solo` держит мир в PostgreSQL по адресу из `POSTGRES_DSN` и Redis
+по-прежнему не требует:
 
 ```bash
 uv sync && uv run alembic upgrade head && uv run python -m mmorpg.main
 ```
 
-Or as containers, which is what a server runs:
+Или контейнерами — так это работает на сервере:
 
 ```bash
 docker compose up -d && docker compose logs -f bot
 ```
 
-`docs/deployment.md` covers the whole picture: what the stack is sized for, webhook
-mode, and how it stays up.
+`docs/deployment.md` описывает всю картину: под какую нагрузку рассчитан стек,
+режим вебхука и то, как всё это держится.
 
-## Quality gate
+## Гейт качества
 
 ```bash
 pwsh -File scripts/ci.ps1
 ```
 
-(or `./scripts/ci.sh` on Linux and macOS). This runs `ruff check`, `ruff format
---check`, `mypy --strict` and `pytest` with coverage. The `domain/` package is held
-at 90% coverage or better.
+(или `./scripts/ci.sh` на Linux и macOS). Прогоняет `ruff check`, `ruff format
+--check`, `mypy --strict` и `pytest` с покрытием. Пакет `domain/` держится на 90 %
+покрытия и выше.
 
-The same gate runs on every commit, and fixes itself where it can:
-`.githooks/pre-commit` applies `ruff format` and `ruff check --fix` to the staged
-files, stages the result, and only then runs `mypy` and the tests. `Start.bat`
-installs it; `pwsh -File scripts/install-hooks.ps1` (or `./scripts/install-hooks.sh`)
-does it on its own. `VELLAR_SKIP_TESTS=1` skips the slow part, and
-`git commit --no-verify` skips the hook entirely.
+Тот же гейт стоит на каждом коммите и чинит, что может: `.githooks/pre-commit`
+применяет `ruff format` и `ruff check --fix` к добавленным файлам, добавляет
+результат и только потом зовёт `mypy` и тесты. Ставит его `Start.bat`; отдельно —
+`pwsh -File scripts/install-hooks.ps1` (или `./scripts/install-hooks.sh`).
+`VELLAR_SKIP_TESTS=1` пропускает медленную часть, `git commit --no-verify` —
+хук целиком.
 
-## Layout
+## Что где лежит
 
 ```
 src/mmorpg/
-  domain/          pure game logic - no aiogram, asyncpg or redis imports
-  application/     use cases orchestrating the domain
-  infrastructure/  asyncpg repositories, Redis cache, TOML content loader
-  presentation/    aiogram routers, reply keyboards, screen renderers, FSM
-content/           world, races, classes, crafts, traits, skills, items (TOML)
-docs/              architecture, accessibility, procgen, content guide, ADRs
+  domain/          чистая логика игры — без импортов aiogram, asyncpg и redis
+  application/     сценарии, связывающие домен
+  infrastructure/  хранилища на asyncpg, кэш Redis, загрузчик содержимого TOML
+  presentation/    роутеры aiogram, reply-клавиатуры, отрисовка экранов, автомат
+content/           мир, расы, классы, ремёсла, черты, умения, вещи (TOML)
+docs/              архитектура, доступность, procgen, руководство по содержимому, ADR
 tests/
 ```
 
-## What is playable
+## Во что уже играют
 
-What a player can do right now, rather than what is planned:
+Что игрок может делать прямо сейчас, а не что запланировано:
 
 | | |
 | --- | --- |
-| Creation | name, race, class, two traits, free points, confirmation, and six tutorial steps |
-| The road | main menu, world, the cities as they unlock, five locations each, node-by-node movement, waves of enemies and finds shared with everyone standing there |
-| Combat | turn-based, six skill slots and a racial one, two sides in one queue - alone or in a party, against the world or against other players - intent / trace / breach, no timers anywhere |
-| A city | shop, tavern with a quest board, mentor, bank, descent, arena, the Chamber, and whoever lives there |
-| Things | inventory, an item card that compares against what is worn, gear assembled from kind, grade and rarity |
-| Crafts | gathering by biome, recipes, batch quality, contracts for made goods |
-| Other players | a live duel on a free location (both sides get the panel and take turns), a party of up to four, the arena, trades in the game group |
-| Endgame | rebirth at 300, the Seal of the Chamber, the cycle's vote |
-| The keeper | a panel that edits the world from Telegram, plus players, statistics, bans and a rolled-back trade |
-| Settings | emoji, verbose descriptions, repeat the current screen |
+| Создание | имя, раса, класс, две черты, свободные очки, подтверждение и шесть шагов обучения |
+| Дорога | главное меню, мир, города по мере открытия, по пять локаций, ход от узла к узлу, волны противников и находок, общие со всеми, кто рядом |
+| Бой | пошаговый, шесть слотов умений и расовый, две стороны в одной очереди — в одиночку или отрядом, против мира или против живых, — намерение / след / брешь, никаких таймеров нигде |
+| Город | лавка, таверна с доской заданий, наставник, банк, спуск, арена, Палата и те, кто там живёт |
+| Вещи | сумка, карточка вещи со сравнением с надетым, снаряжение, собранное из рода, ступени и редкости |
+| Ремёсла | сбор по биомам, рецепты, качество партии, задания на сделанные вещи |
+| Другие игроки | живой поединок на вольной локации (панель у обоих, ходят оба), отряд до четырёх, арена, сделки в игровой группе |
+| Конец пути | перерождение на 300-м, Печать Палаты, голосование цикла |
+| Смотритель | панель, правящая мир прямо из Telegram, плюс игроки, статистика, блокировки и откат сделки |
+| Настройки | значки, подробные описания, повторить текущий экран |
 
-What is **not** there: guilds, and a party that outlives the trip it was
-gathered for. One descent per city - a Seal adds a fight below its floor, but the way
-down is the same one. Race passives are still only text: `races.toml` declares
-them and nothing counts them, along with ten trait keys (`Roadmap.md`, day 4).
+Чего **нет**: гильдий и отряда, который переживает вылазку, ради которой собран.
+Спуск в городе один — Печать добавляет бой ниже прежнего дна, но дорога вниз та
+же. Полный список — `Roadmap.md`.
 
-One stub screen is left, for a service the city standing in `world.toml` does not
-offer - the button can still arrive from an older keyboard. It is a real screen
-that says so, with a working "Назад", never silence.
+Остался один экран-заглушка — для службы, которой стоящий в `world.toml` город не
+предлагает; кнопка всё ещё может прийти со старой клавиатуры. Это настоящий экран,
+который так и говорит, с работающим «Назад» и никогда не молчанием.
 
-## Documentation
+## Документация
 
-| Document | Contents |
+| Документ | О чём |
 | --- | --- |
-| [Claude.md](Claude.md) | File map and the development rules (Russian) |
-| [Roadmap.md](Roadmap.md) | The three days to open beta, with status flags (Russian) |
-| [Narrative.md](Narrative.md) | World, naming, dialogue and broadcast tone (Russian) |
-| [docs/architecture.md](docs/architecture.md) | Layers, dependency rule, flows, data schema, latency budget |
-| [docs/accessibility.md](docs/accessibility.md) | Screen-reader rules and the review checklist |
-| [docs/procgen.md](docs/procgen.md) | Seeds, waves, generation invariants |
-| [docs/content-guide.md](docs/content-guide.md) | Adding a race, class, craft, trait or city without touching code |
-| [docs/skills.md](docs/skills.md) | Skill panel, ranks, edges, anti-bloat rules |
-| [docs/crafts.md](docs/crafts.md) | Crafts: ranks, gathering, recipes and batch quality |
-| [docs/endgame.md](docs/endgame.md) | Rebirth at 300, the Seal, and the cycle's vote (Russian) |
-| [docs/release-checklist.md](docs/release-checklist.md) | What to verify before shipping |
-| [docs/adr/](docs/adr/) | One architecture decision per file |
+| [Claude.md](Claude.md) | Карта файлов и правила разработки |
+| [Roadmap.md](Roadmap.md) | Задачи до открытого теста, со статусами |
+| [Narrative.md](Narrative.md) | Мир, имена, диалоги и тон объявлений |
+| [docs/architecture.md](docs/architecture.md) | Слои, правило зависимостей, потоки, схема данных, бюджет задержки |
+| [docs/accessibility.md](docs/accessibility.md) | Правила экранного диктора и лист проверки |
+| [docs/procgen.md](docs/procgen.md) | Сиды, волны, инварианты сборки |
+| [docs/content-guide.md](docs/content-guide.md) | Как добавить расу, класс, ремесло, черту или город, не трогая кода |
+| [docs/skills.md](docs/skills.md) | Панель умений, ранги, грани, правила против разрастания |
+| [docs/crafts.md](docs/crafts.md) | Ремёсла: ранги, сбор, рецепты и качество партии |
+| [docs/endgame.md](docs/endgame.md) | Перерождение на 300-м, Печать и голосование цикла |
+| [docs/release-checklist.md](docs/release-checklist.md) | Что проверить перед выпуском |
+| [docs/adr/](docs/adr/) | По одному архитектурному решению на файл |
 
-## Content at a glance
+## Содержимое одним взглядом
 
-16 races · 8 classes · 64 traits · 496 skills (480 class - 20 active and 40 passive
-each - plus 16 racial, every one with two rank-3 edges) · 16 kinds of damage, four
-of them physical · 20 statuses · 5 crafts with 12 recipes · 26 enemy archetypes ·
-10 contracts of act I · 30 kinds of gear on 12 grades in 5 rarities · 15 cities × 5
-locations covering levels 1-300 · 3 endgame questions the Chamber counts.
-All of it lives in [`content/`](content/) as TOML and is validated at startup - the
-bot refuses to boot on broken content and reports every problem at once.
+16 рас · 8 классов · 64 черты · 496 умений (480 классовых — по 20 боевых и 40
+пассивных — плюс 16 расовых, и у каждого две грани третьего ранга) · 15 родов
+урона, четыре из них физические · 20 состояний · 5 ремёсел с 12 рецептами · 26
+пород противников · 10 заданий акта I · 30 видов снаряжения на 12 ступенях в 5
+редкостях · 15 городов × 5 локаций на уровни 1–300 · 3 вопроса конца пути, которые
+считает Палата. Всё это лежит в [`content/`](content/) как TOML и проверяется на
+старте: на испорченном содержимом бот не поднимается и называет все беды разом.

@@ -1,9 +1,10 @@
-"""Load ``content/*.toml`` into immutable domain objects.
+"""Чтение ``content/*.toml`` в неизменные объекты домена.
 
-Called exactly once, at startup, before the bot starts polling. Reading files
-here is synchronous on purpose: it happens before the event loop serves anything.
-Every validation problem is collected and reported together, so a content author
-sees the whole list instead of fixing one typo per restart.
+Зовётся ровно один раз, на старте, до того как бот начнёт опрашивать Telegram.
+Файлы читаются синхронно нарочно: это происходит раньше, чем цикл событий
+начинает что-либо обслуживать. Все беды проверки собираются и называются вместе,
+чтобы автор содержимого увидел весь список, а не чинил по одной опечатке за
+перезапуск.
 """
 
 from __future__ import annotations
@@ -76,8 +77,8 @@ CONTENT_FILES = (
     "turnings.toml",
 )
 
-# Node kinds a "search" contract may ask for. Kept as strings rather than as an
-# import of NodeKind, because content speaks the content vocabulary.
+# Виды узлов, которые может попросить задание на поиск. Держатся строками, а не импортом
+# NodeKind, потому что содержимое говорит на языке содержимого.
 SEARCHABLE_NODES = frozenset({"gather", "cache", "shrine", "event"})
 
 MINIMUM_CRAFTS = 4
@@ -95,7 +96,7 @@ RACE_STAT_BUDGET = 3
 
 
 class ContentError(RuntimeError):
-    """Raised when the content directory fails validation."""
+    """Бросается, когда каталог содержимого не прошёл проверку."""
 
     def __init__(self, problems: Sequence[str]) -> None:
         self.problems = tuple(problems)
@@ -106,10 +107,10 @@ class ContentError(RuntimeError):
 
 
 def load_content(content_dir: Path) -> GameContent:
-    """Parse and validate the whole content directory.
+    """Разобрать и проверить весь каталог содержимого.
 
-    Raises:
-        ContentError: if any file is missing, malformed or inconsistent.
+    Бросает:
+        ContentError: если какого-то файла нет, он испорчен или противоречив.
     """
     problems: list[str] = []
 
@@ -205,7 +206,7 @@ def _read_toml(path: Path) -> dict[str, Any]:
     try:
         with path.open("rb") as handle:
             return tomllib.load(handle)
-    except tomllib.TOMLDecodeError as error:  # pragma: no cover - depends on broken input
+    except tomllib.TOMLDecodeError as error:  # pragma: no cover - зависит от испорченного ввода
         raise ContentError([f"{path.name}: cannot parse TOML: {error}"]) from error
 
 
@@ -538,7 +539,7 @@ def _validate_races(races: Sequence[Race], problems: list[str]) -> None:
             problems.append(f"races.toml: {race.id} has no passive ability")
 
 
-# --- classes ---------------------------------------------------------
+# --- классы ---------------------------------------------------------
 
 
 def _parse_classes(
@@ -1055,7 +1056,7 @@ def _parse_items(
     )
 
 
-# --- enemies ---------------------------------------------------------
+# --- противники -----------------------------------------------------
 
 
 def _parse_enemies(
@@ -1159,10 +1160,10 @@ def _parse_quests(
     enemy_ids: set[str],
     problems: list[str],
 ) -> tuple[Quest, ...]:
-    """Contracts. A broken contract is a dead end for a player, so it is refused.
+    """Задания. Сломанное задание - тупик для игрока, поэтому его не пропускают.
 
-    Everything a contract points at has to exist before the game starts: the city
-    that hands it out, the item it pays with, and the contract it follows.
+    Всё, на что задание показывает, обязано существовать до старта игры: город,
+    который его выдаёт, вещь, которой оно платит, и задание, за которым оно идёт.
     """
     known_cities = {city.id for city in cities}
     slots_by_city = {city.id: {location.slot for location in city.locations} for city in cities}
@@ -1189,8 +1190,8 @@ def _parse_quests(
                 case ObjectiveKind.SEARCH:
                     allowed = SEARCHABLE_NODES
                 case ObjectiveKind.CRAFT:
-                    # A contract for made goods names the thing itself, because
-                    # that is what the person asking for it would name.
+                    # Задание на сделанные вещи называет саму вещь, потому что именно
+                    # так назвал бы её тот, кто её просит.
                     allowed = frozenset(item_ids)
                 case _:
                     # Порода целиком - или один названный противник: «пятеро
@@ -1435,8 +1436,8 @@ def _parse_crafts(
                 CraftYield(
                     item_id=item_id,
                     level=int(produced.get("level", 1)),
-                    # Where it is in the ground. No biomes means everywhere, which
-                    # is what keeps a craft workable in a city of gardens and sky.
+                    # Где оно лежит в земле. Нет биомов - значит, везде, и это то, что
+                    # позволяет ремеслу работать в городе садов и неба.
                     biomes=tuple(str(biome) for biome in produced.get("biomes", ())),
                 )
             )
@@ -1528,7 +1529,7 @@ def _validate_crafts(
             problems.append(f"crafts.toml: making craft {craft.id} has no recipes")
 
 
-# --- helpers ---------------------------------------------------------
+# --- вспомогательное ------------------------------------------------
 
 
 def _check_unique(values: Any, source: str, problems: list[str]) -> None:

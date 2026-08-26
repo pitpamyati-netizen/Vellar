@@ -1,28 +1,27 @@
 @echo off
 rem ============================================================================
-rem  Stop the Vellar stack.
+rem Остановить стек Vellar.
 rem
-rem    stop.bat            save everything, then stop; the world is kept
-rem    stop.bat purge      stop AND delete every character, item and fight
+rem stop.bat            сохранить всё, потом остановить; мир остаётся
+rem stop.bat purge      остановить И удалить всех персонажей, вещи и бои
 rem
-rem  A plain stop keeps three things, in this order:
+rem Обычная остановка сохраняет три вещи, и в таком порядке:
 rem
-rem    1. the temporary state - where every player is standing, the fight they
-rem       are in the middle of, the offers waiting in the group. Redis writes it
-rem       out before the container is asked to stop.
-rem    2. the permanent state - characters, gold, bags, contracts, craft work -
-rem       dumped to backups\ as it stands at this moment, changes included.
-rem    3. the containers themselves, stopped with their grace period, so an
-rem       update already in flight is finished rather than severed.
+rem 1. временное состояние — где стоит каждый игрок, бой, который он ведёт,
+rem    предложения, ждущие в группе. Redis выписывает это до того, как контейнер
+rem    просят остановиться.
+rem 2. постоянное состояние — персонажи, золото, сумки, задания, работа в ремёслах —
+rem    выгружается в backups\ таким, каким оно на эту минуту, вместе с изменениями.
+rem 3. сами контейнеры, остановленные со своей отсрочкой, чтобы обновление, уже
+rem    бывшее в полёте, доработало, а не оборвалось.
 rem
-rem  Nothing here deletes a volume, so Start.bat brings the world back exactly as
-rem  it was. Purge is the one exception, and it asks first.
+rem Здесь не удаляется ни один том, поэтому Start.bat возвращает мир ровно таким, каким
+rem он был. Purge — единственное исключение, и он спрашивает.
 rem
-rem  Without a stack there is nothing here to stop: a game started with
-rem  "Start.bat solo" or "Start.bat local" is a process in its own window, and
-rem  Ctrl+C there is what stops it. This still runs, though, and takes the dump -
-rem  a solo world is in a PostgreSQL on this machine and can be copied out of it
-rem  exactly like the container's one.
+rem Без стека останавливать здесь нечего: игра, запущенная через «Start.bat solo»
+rem или «Start.bat local», — это процесс в собственном окне, и останавливает его
+rem Ctrl+C там. Этот скрипт всё равно отрабатывает и делает дамп: мир solo лежит в
+rem PostgreSQL этой машины, и скопировать его оттуда можно ровно как контейнерный.
 rem ============================================================================
 setlocal EnableExtensions
 cd /d "%~dp0"
@@ -55,8 +54,8 @@ if errorlevel 1 (
 
 echo.
 echo [Vellar] Stopping the stack...
-rem The containers get their stop_grace_period to finish updates already in
-rem flight before they are killed.
+rem Контейнерам достаётся их stop_grace_period, чтобы доработать обновления, бывшие в
+rem полёте, прежде чем их убьют.
 docker compose down
 if errorlevel 1 exit /b 1
 
@@ -66,10 +65,10 @@ echo [Vellar] The dump above is a second copy: the database volume is untouched.
 exit /b 0
 
 rem ---------------------------------------------------------------------------
-rem  No containers are running. Either nothing is, or the game is the process in
-rem  its own window. Nothing here can stop that process - and nothing needs to,
-rem  because in solo mode the world is written to PostgreSQL as it happens. The
-rem  dump is taken anyway: it is the copy that can be carried elsewhere.
+rem Ни один контейнер не работает. Либо не работает ничто, либо игра — это процесс в
+rem собственном окне. Остановить тот процесс отсюда нельзя, да и не нужно: в режиме
+rem solo мир пишется в PostgreSQL по ходу дела. Дамп всё равно снимается — это та
+rem копия, которую можно унести.
 rem ---------------------------------------------------------------------------
 :no_stack
 echo [Vellar] No stack is running in Docker.
@@ -78,8 +77,8 @@ echo [Vellar] process in its own window: Ctrl+C there stops it, and a solo world
 echo [Vellar] is already on disk the moment each action happens.
 echo.
 call scripts\vellar-tools.bat backup
-rem A missing database here means nothing was set up to save, which is not a
-rem failure of stopping - it is the answer to "is there anything to keep".
+rem Отсутствие базы здесь значит, что сохранять было нечего, а это не отказ остановки —
+rem это ответ на вопрос «есть ли что сохранять».
 exit /b 0
 
 :purge

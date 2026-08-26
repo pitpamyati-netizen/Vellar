@@ -1,10 +1,10 @@
-"""Who keeps the game.
+"""Кто держит игру.
 
-``is_admin`` mirrors the ``ADMIN_IDS`` setting onto the character, so the screens
-can ask the character instead of the settings object. The environment stays the
-source of truth: the column is rewritten from it on every ``/start``, and nobody
-can grant it to themselves from inside the game. Every character created before
-this migration is an ordinary player, which is what the default says.
+``is_admin`` отражает настройку ``ADMIN_IDS`` на персонаже, чтобы экраны
+спрашивали персонажа, а не объект настроек. Источником истины остаётся
+окружение: колонка переписывается из него на каждом ``/start``, и выдать её себе
+изнутри игры не может никто. Каждый персонаж, созданный до этой миграции, -
+обычный игрок, об этом и говорит значение по умолчанию.
 
 Revision ID: 0006
 Revises: 0005

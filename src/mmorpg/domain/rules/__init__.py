@@ -1,4 +1,4 @@
-"""mmorpg.domain.rules layer package."""
+"""Слой mmorpg.domain.rules."""
 
 from mmorpg.domain.rules.progression import (
     MAX_LEVEL,

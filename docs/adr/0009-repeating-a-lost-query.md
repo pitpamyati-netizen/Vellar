@@ -1,70 +1,67 @@
-# ADR 0009 - Repeating a call that lost its connection
+# ADR 0009 — Повтор вызова, потерявшего соединение
 
-Status: accepted (2026-08-16)
+Статус: принято (2026-08-16)
 
-## Context
+## Обстоятельства
 
-PostgreSQL restarts, Redis is restarted by an update, a network hiccup drops a
-socket. The pools handle the *connection* part on their own: asyncpg throws away a
-dead connection on the next `acquire` and opens a fresh one, redis-py does the
-same. What neither does is run the call that was in flight when the link went
-down, so a database that was unreachable for a second and a half cost every player
-who pressed a button in that second an action, and gave them «Что-то пошло не
-так» about a game that is already healthy again.
+PostgreSQL перезапускается, Redis перезапускает обновление, сеть икает и роняет сокет.
+С самим *соединением* пулы разбираются сами: asyncpg выбрасывает мёртвое соединение на
+следующем `acquire` и открывает свежее, redis-py делает то же самое. Чего не делает ни
+один из них — не выполняет тот вызов, который был в полёте, когда связь пропала.
+Поэтому база, недоступная полторы секунды, стоила действия каждому игроку, нажавшему
+кнопку в эту секунду, и выдавала им «Что-то пошло не так» об игре, которая уже здорова.
 
-Repeating a call is not free of consequences. A statement can die in two places,
-and they are not the same place:
+Повтор вызова не бесплатен по последствиям. Запрос умирает в двух местах, и это не одно
+и то же место:
 
-- before it was sent - PostgreSQL never heard of it;
-- after it was sent - PostgreSQL may have committed it and lost only the answer
-  on the way back.
+- до того как он отправлен — PostgreSQL о нём не слышал;
+- после того как отправлен — PostgreSQL мог его закрепить и потерять только ответ на
+  обратном пути.
 
-The second case is invisible from the client: asyncpg raises the same
-`ConnectionDoesNotExistError` either way.
+Второй случай с клиента не виден: asyncpg бросает один и тот же
+`ConnectionDoesNotExistError` в обоих.
 
-## Decision
+## Решение
 
-Every call goes through a wrapper that repeats it, and the line between "repeat"
-and "report" is drawn by what is *certain*, not by what is likely.
+Каждый вызов идёт через обёртку, которая его повторяет, а черту между «повторить» и
+«сообщить» проводит то, что *точно известно*, а не то, что вероятно.
 
-**PostgreSQL** (`infrastructure/persistence/reconnect.py`). The wrapper acquires
-the connection itself, which splits the two cases apart:
+**PostgreSQL** (`infrastructure/persistence/reconnect.py`). Обёртка сама берёт
+соединение, и это разводит два случая:
 
-- the connection was never obtained - nothing was sent, so anything is repeated,
-  a write included;
-- the connection was obtained and the statement failed on it - a `SELECT` is
-  repeated, because reading twice reads the same thing; anything else is not.
+- соединение не было получено — не отправлено ничего, поэтому повторяется что угодно,
+  запись в том числе;
+- соединение получено и запрос упал на нём — `SELECT` повторяется, потому что прочитать
+  дважды значит прочитать то же самое; всё прочее — нет.
 
-A lost `UPDATE ... WHERE gold >= $2` is therefore reported and never re-run. The
-player is told the action failed, which is recoverable, instead of silently
-paying twice, which is not.
+Потерянный `UPDATE ... WHERE gold >= $2` поэтому сообщается и не выполняется заново.
+Игроку говорят, что действие не состоялось, а это поправимо, — вместо того чтобы тихо
+списать дважды, а это нет.
 
-**Redis.** redis-py reconnects and re-sends the command itself; it is configured
-to (`create_redis_client`) rather than left on its defaults. Repeating is safe for
-everything the game keeps there - a screen, a fight, a location, a shop roll are
-all written whole.
+**Redis.** redis-py переподключается и посылает команду заново сам; ему это велят
+(`create_redis_client`), а не оставляют на значениях по умолчанию. Повторять безопасно
+для всего, что игра там держит: экран, бой, локация и прилавок пишутся целиком.
 
-**Telegram** (`presentation/telegram/middlewares/retry.py`). A request that died
-on a broken socket is made again; anything Telegram *answered* - a bad request, a
-player who blocked the bot - is not. `getUpdates` is left alone: aiogram's polling
-loop already has an endless backoff around it.
+**Telegram** (`presentation/telegram/middlewares/retry.py`). Запрос, умерший на
+оборванном сокете, делается заново; всё, на что Telegram *ответил* — неверный запрос,
+игрок, заблокировавший бота, — нет. `getUpdates` оставлен в покое: у цикла опроса
+aiogram и так есть собственное бесконечное отступление.
 
-**Startup** waits for all three (`startup_wait_seconds`) instead of exiting: a
-stack that comes up together does not come up in order.
+**Старт** ждёт всех троих (`startup_wait_seconds`), а не выходит: стек, поднимающийся
+разом, поднимается не по порядку.
 
-## Consequences
+## Последствия
 
-- A restart of PostgreSQL or Redis under a running game is invisible to players
-  who are reading, and costs at most one action to players who were writing at
-  that exact moment.
-- The asymmetry has to be remembered when writing SQL: a statement that both
-  reads and writes (`UPDATE ... RETURNING`) is a write here, because it is one.
-- A Telegram request that reached the servers and lost only its reply is sent
-  twice, so a player can see one screen twice. For a screen reader user a
-  repeated screen is noise and a missing screen is a dead end, so this trade is
-  taken deliberately.
-- A transaction is not repeated at all: `acquire()` is handed out bare, because
-  the wrapper cannot know where the transaction began.
-- Held by `tests/infrastructure/test_reconnect.py`,
-  `tests/presentation/test_retry_middleware.py` and `tests/test_retry.py`; the
-  integration suite runs its SQL through the same wrapper.
+- Перезапуск PostgreSQL или Redis под работающей игрой невидим тем, кто читает, и стоит
+  не больше одного действия тем, кто в это самое мгновение писал.
+- Про асимметрию приходится помнить, когда пишешь SQL: запрос, который и читает, и пишет
+  (`UPDATE ... RETURNING`), здесь считается записью, потому что он ею и является.
+- Запрос к Telegram, дошедший до серверов и потерявший только ответ, отправляется
+  дважды, поэтому игрок может увидеть один экран дважды. Для того, кто слушает экранный
+  диктор, повторённый экран — шум, а пропавший экран — тупик, поэтому такой размен взят
+  нарочно.
+- Транзакция не повторяется вовсе: `acquire()` выдаётся голым, потому что обёртка не
+  знает, где транзакция началась.
+- Держат `tests/infrastructure/test_reconnect.py`,
+  `tests/presentation/test_retry_middleware.py` и `tests/test_retry.py`; интеграционный
+  набор гоняет свой SQL через ту же обёртку.

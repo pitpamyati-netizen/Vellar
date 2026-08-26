@@ -1,8 +1,8 @@
-"""An answer that died on the way to Telegram is sent again, not swallowed.
+"""Ответ, умерший по дороге в Telegram, отправляется заново, а не проглатывается.
 
-Silence is the one thing a screen reader user cannot read, so the rule here is
-the opposite of the database one: a repeated screen is noise, a missing screen is
-a dead end.
+Тишина - единственное, чего не прочитает тот, кто слушает экранный диктор,
+поэтому правило здесь обратно правилу для базы: повторённый экран - шум, а
+пропавший экран - тупик.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ SCREEN = SendMessage(chat_id=1, text="Вы в городе Дубно.")
 
 
 def sending(*outcomes: object):
-    """A request that answers with each outcome in turn; exceptions are raised."""
+    """Запрос, отвечающий каждым исходом по очереди; исключения бросаются."""
     made: list[object] = []
 
     async def make_request(bot: object, method: object) -> object:
@@ -62,7 +62,7 @@ async def test_repeats_are_bounded() -> None:
     with pytest.raises(TelegramNetworkError):
         await RetryRequestMiddleware(QUICK)(make_request, None, SCREEN)
 
-    assert len(made) == 4  # the first send and three repeats
+    assert len(made) == 4  # первая отправка и три повтора
 
 
 @pytest.mark.parametrize(
@@ -73,7 +73,7 @@ async def test_repeats_are_bounded() -> None:
     ],
 )
 async def test_what_telegram_refused_is_not_sent_again(refusal: Exception) -> None:
-    """A refusal is an answer, and it will be the same answer next time."""
+    """Отказ - это ответ, и в следующий раз он будет тем же самым."""
     make_request, made = sending(refusal)
 
     with pytest.raises(type(refusal)):
@@ -93,7 +93,7 @@ async def test_a_short_flood_wait_is_absorbed() -> None:
 
 
 async def test_a_long_flood_wait_is_reported_instead_of_slept_through() -> None:
-    """A player is waiting on the other end; a minute of silence is not an answer."""
+    """На том конце ждёт игрок; минута тишины ответом не является."""
     make_request, made = sending(TelegramRetryAfter(method=SCREEN, message="flood", retry_after=60))
 
     with pytest.raises(TelegramRetryAfter):
@@ -103,7 +103,7 @@ async def test_a_long_flood_wait_is_reported_instead_of_slept_through() -> None:
 
 
 async def test_fetching_updates_is_left_to_aiogram() -> None:
-    """The polling loop has its own endless backoff; two of them only add delay."""
+    """У цикла опроса своё бесконечное отступление; два таких лишь добавят задержки."""
     updates = GetUpdates()
     make_request, made = sending(TelegramNetworkError(method=updates, message="down"))
 

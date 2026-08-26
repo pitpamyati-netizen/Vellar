@@ -1,16 +1,16 @@
-"""Wounds that outlive a fight, a strongbox, and the contract ledger.
+"""Раны, переживающие бой, сундук и журнал заданий.
 
-Three things a character now carries between sessions (Roadmap 1.3, 1.5):
+Три вещи, которые персонаж теперь носит между заходами в игру (Roadmap 1.3, 1.5):
 
-``health``    - what is left after the last fight. Zero means "as good as new",
-                which is what every character created before this migration was,
-                so the default needs no backfill.
-``bank_gold`` - gold in the city strongbox. A lost fight takes a share of what is
-                on the character, and never touches this.
-``quests``    - the contract ledger: taken contracts with their counters, and the
-                ids of the ones already paid out. It is a document, not a
-                relation: it is only ever read and written whole, for one
-                character at a time, so a table would buy nothing.
+``health``    - что осталось после последнего боя. Ноль значит «как новенький»,
+                а именно таким был каждый персонаж, созданный до этой миграции,
+                поэтому значению по умолчанию не нужна доливка.
+``bank_gold`` - золото в городском сундуке. Проигранный бой берёт долю того, что
+                при персонаже, и этого не трогает никогда.
+``quests``    - журнал заданий: взятые задания со счётчиками и идентификаторы
+                тех, за которые уже заплатили. Это документ, а не отношение: он
+                читается и пишется только целиком и только для одного персонажа
+                за раз, поэтому таблица не дала бы ничего.
 
 Revision ID: 0004
 Revises: 0003
@@ -29,8 +29,8 @@ depends_on = None
 
 def upgrade() -> None:
     op.execute("ALTER TABLE characters ADD COLUMN health INTEGER NOT NULL DEFAULT 0")
-    # The vault can never go negative: the promise that a lost fight cannot reach
-    # it is only worth keeping if the column itself refuses to be overdrawn.
+    # Сундук не уходит в минус никогда: обещание, что проигранный бой до него не
+    # дотянется, стоит чего-то, только если сама колонка отказывается уходить за ноль.
     op.execute(
         "ALTER TABLE characters ADD COLUMN bank_gold BIGINT NOT NULL DEFAULT 0"
         " CONSTRAINT characters_bank_gold_non_negative CHECK (bank_gold >= 0)"

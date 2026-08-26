@@ -1,15 +1,15 @@
-"""Trades: the escrow that holds a pending offer, and the journal of settled ones.
+"""Сделки: эскроу, держащий стоящее предложение, и журнал закрытых.
 
-Until now an offer lived only in Redis and moved nothing until it was answered.
-It now holds the author's item or gold from the moment it is published, and value
-a player has parted with may not depend on a cache that expires on its own - so
-trades get a table (Roadmap 2.3).
+До сих пор предложение жило только в Redis и не двигало ничего, пока на него не
+ответят. Теперь оно держит вещь или золото автора с той минуты, как объявлено, а
+ценность, с которой игрок расстался, не вправе зависеть от кэша, истекающего
+самого по себе, - поэтому у сделок появилась таблица (Roadmap 2.3).
 
-The time columns are unix seconds rather than TIMESTAMPTZ. The rules take ``now``
-as an argument and know nothing about clocks (Claude.md, rule 1), and expiry has
-to mean exactly the same thing here and in the in-memory adapter. ``logged_at``
-is the one wall-clock column, and it exists for whoever reads this journal after
-a dispute - it is never read by the game.
+Колонки времени - unix-секунды, а не TIMESTAMPTZ. Правила принимают ``now``
+аргументом и ничего не знают о часах (Claude.md, правило 1), а срок обязан
+значить ровно одно и то же здесь и в адаптере в памяти. ``logged_at`` -
+единственная колонка живого времени, и она существует для того, кто читает этот
+журнал после спора; игра её не читает никогда.
 
 Revision ID: 0002
 Revises: 0001
@@ -64,15 +64,15 @@ def upgrade() -> None:
         """
     )
 
-    # One offer per number at a time, and no more: this index is what turns a
-    # race between two proposals into a rejected insert instead of two live
-    # offers a player cannot tell apart. Closed rows keep their number for the
-    # journal, which is why the index is partial.
+    # Разом одно предложение на номер, и не больше: этот указатель и превращает гонку
+    # двух предложений в отвергнутую вставку вместо двух живых предложений, которые
+    # игрок не отличит. Закрытые строки держат свой номер ради журнала, поэтому
+    # указатель частичный.
     op.execute(
         "CREATE UNIQUE INDEX trades_pending_number_key ON trades (scope, number)"
         " WHERE status = 'pending'"
     )
-    # The sweep that returns stakes reads only pending rows, oldest first.
+    # Уборка, возвращающая ставки, читает только стоящие строки, старые сверху.
     op.execute(
         "CREATE INDEX trades_pending_age_idx ON trades (scope, created_at) WHERE status = 'pending'"
     )

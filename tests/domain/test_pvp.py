@@ -31,7 +31,7 @@ def test_a_peaceful_location_refuses_every_attack(veteran: Character) -> None:
 
 
 def test_newcomers_are_not_touched_on_either_side(veteran: Character) -> None:
-    """Somebody who has not filled their panel yet has nothing to defend with."""
+    """Тому, кто ещё не заполнил панель, нечем защищаться."""
     young = replace(veteran, level=pvp.SAFE_LEVEL - 1)
     assert pvp.refusal(young, defender_name="Мерла", defender_level=20, location_allows=True), (
         "a character below the floor cannot attack"
@@ -77,7 +77,7 @@ def test_an_empty_purse_pays_nothing(veteran: Character) -> None:
 
 
 def test_the_bank_is_not_part_of_the_stake(veteran: Character) -> None:
-    """The bank exists precisely so that something cannot be taken from you."""
+    """Банк существует именно затем, чтобы что-то нельзя было у тебя отнять."""
     saver = replace(veteran, id=2, name="Мерла", gold=100, bank_gold=5000)
     _, beaten, spoils = pvp.settle(veteran, saver)
     assert spoils.gold == 10

@@ -1,21 +1,22 @@
-"""An answer that never left, sent again.
+"""Ответ, который не ушёл, отправленный заново.
 
-A player action produces exactly one message, and that message *is* the answer:
-a screen reader user who gets nothing has no way to tell a broken socket from a
-game that ignored them. So a request that died on the way to Telegram is made
-again once the link is back, instead of turning into silence and an apology.
+Действие игрока порождает ровно одно сообщение, и это сообщение *и есть* ответ:
+тот, кто слушает экранный диктор и не получил ничего, никак не отличит
+оборванный сокет от игры, которая его не заметила. Поэтому запрос, умерший по
+дороге в Telegram, делается заново, когда связь вернулась, а не превращается в
+тишину и извинение.
 
-Only a lost link is repeated. Anything Telegram answered - a bad request, a
-player who blocked the bot, a wrong token - is an answer and not a break, and
-repeating it would produce the same answer more slowly.
+Повторяется только пропавшая связь. Всё, на что Telegram ответил, - неверный
+запрос, игрок, заблокировавший бота, неверный токен - это ответ, а не обрыв, и
+повтор дал бы тот же ответ медленнее.
 
-The cost is honest and worth naming: a request that reached Telegram and lost
-only its reply on the way back is sent twice, so a player may see one screen
-twice. For a blind player a repeated screen is noise; silence is a dead end.
+Цена честная, и её стоит назвать: запрос, дошедший до Telegram и потерявший
+только ответ на обратном пути, отправляется дважды, поэтому игрок может увидеть
+один экран дважды. Для незрячего повторённый экран - шум, а тишина - тупик.
 
-``getUpdates`` is deliberately left alone: aiogram's polling loop has its own
-endless backoff around it, and two layers of waiting would only make the first
-answer after an outage slower.
+``getUpdates`` нарочно оставлен в покое: у цикла опроса aiogram есть собственное
+бесконечное отступление вокруг него, и два слоя ожидания лишь замедлили бы
+первый ответ после простоя.
 """
 
 from __future__ import annotations
@@ -39,7 +40,7 @@ from aiogram.methods.base import TelegramMethod, TelegramType
 from mmorpg.logging import get_logger
 from mmorpg.retry import RetryPolicy
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:  # pragma: no cover - только для типов
     from aiogram import Bot
     from aiogram.methods import Response
 
@@ -47,7 +48,7 @@ logger = get_logger(__name__)
 
 
 class RetryRequestMiddleware(BaseRequestMiddleware):
-    """Repeat a Telegram call that lost its connection."""
+    """Повторить вызов Telegram, потерявший соединение."""
 
     def __init__(self, policy: RetryPolicy) -> None:
         self._policy = policy
@@ -58,9 +59,9 @@ class RetryRequestMiddleware(BaseRequestMiddleware):
         bot: Bot,
         method: TelegramMethod[TelegramType],
     ) -> Response[TelegramType]:
-        # ``getUpdates`` is left to aiogram's own endless backoff, see the module
-        # docstring. Read as a flag rather than as an early exit: the request is
-        # still made here, it is only never made twice.
+        # ``getUpdates`` оставлен собственному бесконечному отступлению aiogram, см.
+        # докстринг модуля. Читается как признак, а не как ранний выход: запрос здесь
+        # всё равно делается, просто не делается дважды.
         polling = isinstance(method, GetUpdates)
         name = type(method).__name__
         repeats = 0
@@ -95,17 +96,17 @@ class RetryRequestMiddleware(BaseRequestMiddleware):
                 return answer
 
     def _wait_after(self, error: BaseException) -> float | None:
-        """How long to wait before repeating, or ``None`` for "do not repeat"."""
+        """Сколько ждать перед повтором или ``None`` - «не повторять»."""
         if isinstance(error, TelegramRetryAfter):
-            # Flood control is not a broken link, but it is a request that has to
-            # be made again. A short wait is absorbed here; a long one belongs to
-            # whoever is sending that much, so it is reported instead of slept
-            # through with a player waiting on the other end.
+            # Защита от наплыва - не обрыв связи, но это запрос, который придётся
+            # сделать заново. Короткое ожидание впитывается здесь; долгое - дело того,
+            # кто столько шлёт, поэтому о нём сообщают, а не пересыпают его, пока на том
+            # конце ждёт игрок.
             wait = float(error.retry_after)
             return wait if wait <= self._policy.max_delay else None
         if isinstance(error, TelegramEntityTooLarge):
-            # A subclass of the network error, but a permanent one: the message
-            # is too big and will be too big next time.
+            # Наследник сетевой ошибки, но постоянный: сообщение слишком велико и будет
+            # слишком велико и в следующий раз.
             return None
         if isinstance(error, TelegramNetworkError | TelegramServerError):
             return 0.0

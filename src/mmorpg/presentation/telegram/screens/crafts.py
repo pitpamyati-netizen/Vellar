@@ -1,13 +1,13 @@
-"""Craft screens: what the adventurer can make, and how far they have got.
+"""Экраны ремёсел: что приключенец умеет делать и как далеко зашёл.
 
-Two screens, and no more:
+Два экрана, и не больше:
 
-- **Ремёсла** - every craft, its rank and the work left to the next one;
-- **одно ремесло** - either the one gathering button, or the recipes, each of
-  which says on its face what it takes and what it gives (accessibility rule 5).
+- **Ремёсла** — все ремёсла, ранг каждого и работа, оставшаяся до следующего;
+- **одно ремесло** — либо единственная кнопка сбора, либо рецепты, каждый из
+  которых прямо на себе говорит, что берёт и что даёт (правило доступности 5).
 
-A recipe button never lies about being pressable: an unaffordable one stays in
-its place and answers with what is missing, by name and by count.
+Кнопка рецепта никогда не врёт о том, что её можно нажать: неоплатный рецепт
+остаётся на своём месте и отвечает тем, чего не хватает, — по имени и по числу.
 """
 
 from __future__ import annotations
@@ -21,12 +21,12 @@ from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import head
 
-# What the player owns, as the flow hands it in: item id to count in the bag.
+# Что есть у игрока в том виде, в каком это передаёт ветка: вещь - и сколько её в сумке.
 Owned = dict[str, int]
 
 
 def rank_line(content: GameContent, character: Character, craft: Craft) -> str:
-    """Rank first, then the work left - the two numbers a player asks for."""
+    """Сначала ранг, потом оставшаяся работа - два числа, о которых спрашивает игрок."""
     rules = content.craft_rules
     experience = character.crafts.progress(craft.id).experience
     rank = craft_rules.rank_of(rules, experience)
@@ -42,7 +42,7 @@ def craft_button(content: GameContent, character: Character, craft: Craft) -> La
 
 
 def crafts_screen(content: GameContent, character: Character, notice: str = "") -> Screen:
-    """The list of crafts. Everything on it is learnable by anybody."""
+    """Список ремёсел. Всё, что в нём есть, может выучить кто угодно."""
     lines = [
         *head("Ремёсла.", notice),
         "Сырьё собирают руками, из сырья делают вещи, вещи идут в дело или в лавку.",
@@ -54,7 +54,7 @@ def crafts_screen(content: GameContent, character: Character, notice: str = "") 
 
 
 def recipe_button(content: GameContent, recipe: Recipe) -> Label:
-    """A recipe says its price in materials before it is pressed."""
+    """Рецепт называет свою цену в сырье до того, как его нажали."""
     needs = ", ".join(f"{content.item(need.item_id).name} {need.count}" for need in recipe.inputs)
     return label(f"{content.item(recipe.output_id).name} — нужно: {needs}")
 
@@ -71,11 +71,11 @@ def craft_screen(
     place: str = "",
     notice: str = "",
 ) -> Screen:
-    """One craft: the gathering button, or the recipes it knows.
+    """Одно ремесло: кнопка сбора или рецепты, которые оно знает.
 
-    ``biomes`` and ``place`` are the ground around the city the player is
-    standing in and its name: what a gathering craft finds depends on where it
-    is worked (``domain/rules/crafts``).
+    ``biomes`` и ``place`` - земля вокруг города, в котором стоит игрок, и её имя:
+    что найдёт собирающее ремесло, зависит от того, где им работают
+    (``domain/rules/crafts``).
     """
     rank = craft_rules.character_rank(content, character, craft.id)
     lines = [
@@ -118,7 +118,7 @@ def craft_screen(
 
 
 def gathered_line(content: GameContent, result: craft_rules.GatherResult) -> str:
-    """What one gathering brought back, in one sentence."""
+    """Что принёс один сбор, одной фразой."""
     if not result.ok:
         return result.refused
     item = content.item(result.item_id)
@@ -126,7 +126,7 @@ def gathered_line(content: GameContent, result: craft_rules.GatherResult) -> str
 
 
 def made_line(content: GameContent, result: craft_rules.CraftResult) -> str:
-    """What came out of the batch, quality first, because it is the surprise."""
+    """Что вышло из партии, сначала качество, потому что оно и есть неожиданность."""
     if not result.ok:
         return result.refused
     item = content.item(result.item_id)

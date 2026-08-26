@@ -1,16 +1,16 @@
-"""The Screen abstraction.
+"""Понятие экрана.
 
-A screen is *text plus a keyboard layout*, nothing else. It knows no aiogram
-types, which is what lets the accessibility tests build every screen in the game
-and inspect it without a bot token.
+Экран - это *текст плюс раскладка клавиатуры*, и больше ничего. Он не знает
+типов aiogram, и это то, что позволяет тестам доступности собрать каждый экран
+игры и рассмотреть его без токена бота.
 
-Invariants enforced right here, at construction time:
+Что проверяется прямо здесь, в минуту сборки:
 
-- the service row ``Назад · Главное меню`` is appended to every screen
-  (accessibility rule 8);
-- button labels are unique within a screen, both with and without emoji, because
-  routing is by exact text (rule 9);
-- the body stays under the message limit (rule 11).
+- служебный ряд ``Назад · Главное меню`` дописывается к каждому экрану (правило
+  доступности 8);
+- надписи кнопок внутри экрана не повторяются - ни со значками, ни без них,
+  потому что маршрутизация идёт по точному тексту (правило 9);
+- тело умещается в предел сообщения (правило 11).
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from mmorpg.presentation.telegram.screens.format import (
 
 
 class ScreenId(StrEnum):
-    """Every screen in the game. Used for routing and for the FSM state map."""
+    """Каждый экран игры. Берётся для маршрутизации и для карты состояний автомата."""
 
     START = "start"
     MAIN_MENU = "main_menu"
@@ -92,7 +92,7 @@ class ScreenId(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Screen:
-    """One rendered screen: what to say and what can be pressed."""
+    """Один нарисованный экран: что сказать и что можно нажать."""
 
     id: ScreenId
     lines: tuple[str, ...]
@@ -105,9 +105,9 @@ class Screen:
         seen: set[str] = set()
         for row in self.all_rows():
             for item in row:
-                # Both renderings are checked: a player can press a button from an
-                # older keyboard drawn with the other emoji setting, and that text
-                # must still identify exactly one action.
+                # Проверяются обе записи: игрок может нажать кнопку старой клавиатуры,
+                # нарисованной при другой настройке значков, и этот текст обязан по-
+                # прежнему указывать ровно на одно действие.
                 renderings = {item.render(emoji=False), item.render(emoji=True)}
                 clash = renderings & seen
                 if clash:
@@ -119,14 +119,14 @@ class Screen:
                 seen |= renderings
 
     def all_rows(self) -> tuple[tuple[Label, ...], ...]:
-        """Action rows plus the service row."""
+        """Ряды действий плюс служебный ряд."""
         return (*self.rows, SERVICE_ROW) if self.service_row else self.rows
 
     def text(self) -> str:
         return "\n".join(line for line in self.lines if line is not None)
 
     def pages(self) -> tuple[str, ...]:
-        """The message body, split only if it genuinely cannot fit."""
+        """Тело сообщения, разрезанное только если оно и правда не влезает."""
         return paginate_text(self.text(), MESSAGE_LIMIT)
 
     def body(self) -> str:
@@ -141,14 +141,14 @@ class Screen:
         return paginate_text(self.text(), HARD_LIMIT)[0]
 
     def button_texts(self, *, emoji: bool = False) -> tuple[tuple[str, ...], ...]:
-        """The layout as plain strings, exactly as Telegram will show it."""
+        """Раскладка обычными строками, ровно такая, какой её покажет Telegram."""
         return tuple(tuple(item.render(emoji=emoji) for item in row) for row in self.all_rows())
 
     def labels(self) -> tuple[Label, ...]:
         return tuple(item for row in self.all_rows() for item in row)
 
     def find(self, pressed: str) -> Label | None:
-        """Match a pressed button back to its label, in either rendering."""
+        """Свести нажатую кнопку обратно к её надписи, в любой из двух записей."""
         for item in self.labels():
             if item.matches(pressed):
                 return item

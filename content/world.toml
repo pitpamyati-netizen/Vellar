@@ -1,21 +1,22 @@
-# World map: 15 cities, 5 locations each, levels 1-300.
+# Карта мира: 15 городов, по 5 локаций, уровни 1-300.
 #
-# Invariants enforced by tests/content/test_world.py:
-#   - exactly 15 cities, exactly 5 locations per city
-#   - every level from 1 to 300 is covered by at least one location
-#   - bounds increase monotonically inside a city, no gaps between locations
-#   - city bands overlap so there is always somewhere to farm and somewhere to push
+# Инварианты, которые проверяет tests/content/test_world.py:
+#   - ровно 15 городов, ровно 5 локаций на город
+#   - каждый уровень от 1 до 300 покрыт хотя бы одной локацией
+#   - внутри города границы растут монотонно, между локациями нет пробелов
+#   - полосы городов перекрываются, поэтому всегда есть и где подкопить, и куда
+#     рваться
 #
-# The fourth location of every city is a free one: players may attack each other
-# there ("pvp = true"), and the rules of that are in domain/rules/pvp.py. Every
-# other location on the road is peaceful, so there is always somewhere to work
-# without watching your back.
+# Четвёртая локация каждого города - вольная: там игроки могут нападать друг на
+# друга ("pvp = true"), а правила этого лежат в domain/rules/pvp.py. Всякая другая
+# локация на дороге мирная, поэтому всегда есть где работать, не оглядываясь.
 #
-# Ids are frozen keys: city_id feeds the procgen seed and is stored on characters,
-# so renaming one rewrites the world and orphans saved heroes. Player-facing names,
-# descriptions and biomes are free to change; see Narrative.md before touching them.
+# Идентификаторы - замороженные ключи: city_id кормит сид сборки и хранится на
+# персонажах, поэтому переименовать его значит переписать мир и осиротить
+# сохранённых героев. Видимые игроку имена, описания и биомы менять можно; загляните
+# в Narrative.md, прежде чем их трогать.
 #
-# See docs/content-guide.md before editing.
+# Перед правкой см. docs/content-guide.md.
 
 [meta]
 max_character_level = 300

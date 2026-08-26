@@ -1,32 +1,31 @@
-"""The arena: a fight you do not have to wait for.
+"""Арена: бой, которого не надо ждать.
 
-The arena used to be a queue with a sixty-second turn timer, which meant both
-players had to be at their phone at the same minute and the slower one lost to a
-clock. Nobody could play it, and a timer is exactly what this game promises not
-to have (``docs/accessibility.md``, rule 13).
+Арена когда-то была очередью с шестидесятисекундным таймером хода, а значит,
+обоим игрокам надо было оказаться у телефона в одну минуту, и тот, кто
+медленнее, проигрывал часам. Играть в это не мог никто, а таймер — ровно то,
+чего эта игра обещает не иметь (``docs/accessibility.md``, правило 13).
 
-So a round of the arena is fought against another player's character **played by
-the engine**: the same fighter the ordinary combat engine builds for anybody
-else, only nobody waits for their press (ADR 0021). They fight with their own
-weapon and their own skills; they are not summoned, not told to hurry, and lose
-nothing - the stake is between each fighter and the arena's own purse, not
-between the two of them.
+Поэтому круг арены дерётся против персонажа другого игрока, **которым играет
+движок**: тот же боец, какого обычный боевой движок собирает кому угодно, только
+его нажатия никто не ждёт (ADR 0021). Дерётся он своим оружием и своими
+умениями; его не вызывают, не торопят, и теряет он ничего — ставка стоит между
+каждым бойцом и собственным кошельком арены, а не между этими двумя.
 
-- the stake scales with level, so it stays worth something at 200 as at 20;
-- winning pays the stake back, and the same again out of what the arena is
-  already holding of yours;
-- the season table counts wins, and wins are the only thing it counts.
+- ставка растёт с уровнем, поэтому на 200-м она стоит того же, что на 20-м;
+- победа возвращает ставку и столько же сверху из того, что арена уже держит с
+  тебя;
+- таблица сезона считает победы, и больше она не считает ничего.
 
-**The arena does not mint gold.** It used to: a flat double payout meant that
-anybody winning more than half their rounds carried gold into the game out of
-nothing, and it was the one inflow that did not depend on beating anything the
-world put in front of them (Roadmap, "Риски"). Now the arena pays out of the
-debt it holds - the stakes it has taken from this character and not yet given
-back - so over a lifetime nobody takes more out of it than they put in. What is
-won there is the record, not an income.
+**Арена не печатает золото.** Печатала: постоянная двойная выплата означала, что
+всякий, кто выигрывает больше половины кругов, вносит в игру золото из ниоткуда,
+и это был единственный приток, не зависящий от победы над чем-либо, что мир
+поставил перед игроком. Теперь арена платит из долга, который держит, — из
+ставок, взятых с этого персонажа и ещё не возвращённых, — поэтому за всю жизнь
+никто не заберёт из неё больше, чем в неё положил. Выигрывают там счёт, а не
+доход.
 
-A newcomer is given the first round on credit (``WELCOME_ROUNDS``), because a
-first win that pays back exactly the stake reads as a bug rather than as a rule.
+Новичку первый круг выдают в долг (``WELCOME_ROUNDS``), потому что первая победа,
+платящая ровно ставку, читается ошибкой, а не правилом.
 """
 
 from __future__ import annotations
@@ -35,18 +34,18 @@ from dataclasses import dataclass
 
 from mmorpg.domain.entities.character import Character
 
-# What a round costs, by level. A tenth of what an hour of ordinary work pays,
-# roughly, so a losing streak is annoying rather than ruinous.
+# Сколько стоит круг, по уровням. Примерно десятая часть того, что платит час обычной
+# работы, чтобы полоса поражений раздражала, а не разоряла.
 STAKE_BASE = 20
 STAKE_PER_LEVEL = 8
-# The best the arena ever pays: the stake back and the same again.
+# Лучшее, что арена платит вообще: ставка обратно и столько же сверху.
 PAYOUT_FACTOR = 2
-# How many rounds' worth of stake the arena fronts somebody who has never
-# fought in it. One: enough that a first win pays like the sign says.
+# На сколько кругов вперёд арена выдаёт ставку тому, кто в ней не дрался. На один: ровно
+# столько, чтобы первая победа заплатила по вывеске.
 WELCOME_ROUNDS = 1
-# Nobody fights the arena before they have a panel to fight it with.
+# На арену не выходят раньше, чем появится панель, которой на ней драться.
 MIN_LEVEL = 10
-# How far apart two levels may be for the arena to call it a match.
+# Насколько далеко могут стоять два уровня, чтобы арена сочла это парой.
 LEVEL_WINDOW = 5
 
 
@@ -55,10 +54,11 @@ def stake_for(level: int) -> int:
 
 
 def held_for(character: Character) -> int:
-    """What the arena is holding of this character's, before this round's stake.
+    """Что арена держит с этого персонажа до ставки нынешнего круга.
 
-    Somebody who has never fought a round is holding the welcome instead: the
-    arena fronts them one stake so that a first win pays what the sign says.
+    Тот, кто не дрался ни разу, держит вместо этого приветствие: арена выдаёт ему
+    одну ставку вперёд, чтобы первая победа заплатила столько, сколько обещает
+    вывеска.
     """
     if not character.arena_wins and not character.arena_losses:
         return WELCOME_ROUNDS * stake_for(character.level)
@@ -66,34 +66,34 @@ def held_for(character: Character) -> int:
 
 
 def payout_of(stake: int, held: int) -> int:
-    """What a win pays: the stake back, plus as much of the hold as it doubles.
+    """Чем платит победа: ставка обратно плюс столько от залога, сколько её удваивает.
 
-    ``held`` is what the arena had of this character's *before* the round. The
-    top-up is capped at the stake, so the payout is never more than double - and
-    it is capped by the hold, so the arena never pays out what it never took in.
+    ``held`` - то, что арена держала с персонажа *до* круга. Добавка ограничена
+    ставкой, поэтому выплата никогда не больше двойной, и ограничена залогом, поэтому
+    арена никогда не выплачивает того, чего не приняла.
     """
     return stake + min(stake, max(0, held))
 
 
 def payout_for(character: Character) -> int:
-    """What a win would pay this character if they fought a round right now."""
+    """Чем заплатила бы победа этому персонажу, дерись он прямо сейчас."""
     return payout_of(stake_for(character.level), held_for(character))
 
 
 @dataclass(frozen=True, slots=True)
 class Round:
-    """What one settled round did to the character who fought it."""
+    """Что один закрытый круг сделал с тем, кто его дрался."""
 
     character: Character
     stake: int
     payout: int = 0
     won: bool = False
-    #: What the arena still holds of theirs once this round is settled.
+    #: Что арена держит с них, когда этот круг закрыт.
     held: int = 0
 
 
 def refusal(character: Character) -> str:
-    """Empty when a round may be fought, otherwise the reason it may not."""
+    """Пусто, когда круг драться можно, иначе - причина, по которой нельзя."""
     if character.level < MIN_LEVEL:
         return (
             f"На арену выходят с {MIN_LEVEL} уровня. Ваш уровень: {character.level}. "
@@ -106,10 +106,10 @@ def refusal(character: Character) -> str:
 
 
 def place_stake(character: Character) -> tuple[Character, int]:
-    """Take the stake before the fight: a round nobody paid for is not a round.
+    """Взять ставку до боя: круг, за который никто не заплатил, кругом не считается.
 
-    The stake goes into the arena's hold on this character, which is where a
-    win is paid from later.
+    Ставка уходит в залог арены на этом персонаже, и как раз из него потом платится
+    победа.
     """
     stake = stake_for(character.level)
     staked = character.with_gold(-stake).with_arena_credit(held_for(character) + stake)
@@ -117,14 +117,14 @@ def place_stake(character: Character) -> tuple[Character, int]:
 
 
 def settle(character: Character, *, won: bool) -> Round:
-    """Pay out a finished round. The stake is already in the arena's hold."""
+    """Расплатиться за законченный круг. Ставка уже в залоге арены."""
     stake = stake_for(character.level)
     counted = character.with_arena_result(won=won)
-    # The hold already includes this round's stake: ``place_stake`` put it there.
+    # Залог уже включает ставку этого круга: её положил туда ``place_stake``.
     held = max(0, counted.arena_credit - stake)
     if not won:
-        # The stake stays where it is: the arena keeps holding it, and that is
-        # what a later win is paid out of.
+        # Ставка остаётся где лежит: арена продолжает её держать, и как раз из неё
+        # платится будущая победа.
         return Round(character=counted, stake=stake, payout=0, won=False, held=counted.arena_credit)
 
     payout = payout_of(stake, held)

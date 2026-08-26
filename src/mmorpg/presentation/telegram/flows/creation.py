@@ -1,11 +1,11 @@
-"""The character creation flow as a pure state machine.
+"""Создание персонажа как чистый автомат.
 
-``advance`` takes the current state and one incoming message and returns the next
-state. It touches no database, no aiogram and no clock, so the whole flow -
-including every "back" path - is tested directly, without a bot token.
+``advance`` берёт нынешнее состояние и одно пришедшее сообщение и возвращает
+следующее состояние. Он не трогает ни базу, ни aiogram, ни часы, поэтому вся
+ветка - включая каждую дорогу «назад» - проверяется напрямую, без токена бота.
 
-The handler layer does exactly three things: load the state from FSM data, call
-``advance``, render and send the screen.
+Слой хендлеров делает ровно три дела: читает состояние из данных автомата, зовёт
+``advance``, рисует и отправляет экран.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ SELECTED_PREFIX = "Выбрано: "
 
 @dataclass(frozen=True, slots=True)
 class CreationState:
-    """Where the player is in creation, plus everything they have chosen."""
+    """Где игрок стоит в создании и всё, что он уже выбрал."""
 
     screen: ScreenId = ScreenId.CREATE_NAME
     draft: CharacterDraft = field(default_factory=CharacterDraft)
@@ -47,13 +47,13 @@ class CreationState:
     exited: bool = False
 
     def at(self, screen: ScreenId) -> CreationState:
-        """Move to a screen, remembering the step we came from."""
+        """Перейти на экран, запомнив шаг, с которого пришли."""
         return replace(self, screen=screen, stack=self.stack.push(screen), notice="")
 
     def with_notice(self, notice: str) -> CreationState:
         return replace(self, notice=notice)
 
-    # --- FSM data round trip ---------------------------------------
+    # --- обмен с данными автомата ---------------------------------
 
     def serialise(self) -> str:
         return json.dumps(
@@ -104,7 +104,7 @@ def begin() -> CreationState:
 
 
 def render(content: GameContent, state: CreationState) -> Screen:
-    """The screen for the current step."""
+    """Экран нынешнего шага."""
     match state.screen:
         case ScreenId.CREATE_NAME:
             return screens.name_screen(state.draft, state.notice)
@@ -133,7 +133,7 @@ def advance(
     *,
     name_taken: bool = False,
 ) -> CreationState:
-    """Apply one incoming message. Never raises, never returns silence."""
+    """Применить одно пришедшее сообщение. Никогда не падает и никогда не молчит."""
     screen = render(content, state)
     command = resolve(text, screen)
 
@@ -143,7 +143,7 @@ def advance(
         return _searched(state, text)
 
     if command.intent is Intent.LOOK:
-        # "Осмотреться" re-sends the current screen and changes nothing.
+        # «Осмотреться» присылает текущий экран заново и не меняет ничего.
         return replace(state, notice="")
     if command.intent is Intent.BACK:
         return _go_back(state)
@@ -170,7 +170,7 @@ def advance(
 
 
 def _go_back(state: CreationState) -> CreationState:
-    """One step back, keeping every choice. From the first step it leaves creation."""
+    """Шаг назад с сохранением всех выборов. С первого шага - выход из создания."""
     stack, previous = state.stack.pop()
     if previous is None:
         return replace(state, exited=True)
@@ -221,8 +221,8 @@ def _handle_race(content: GameContent, state: CreationState, command: Command) -
     for race in content.races:
         if race.name == command.argument:
             chosen = replace(state, draft=state.draft.with_race(race.id))
-            # Changing the race re-states its bonuses, so the effect of going
-            # back and switching is never a surprise (spec section 12).
+            # Смена расы заново проставляет её прибавки, поэтому итог возврата и замены
+            # никогда не бывает неожиданностью (спецификация, раздел 12).
             return chosen.with_notice(
                 f"Раса: {race.name}, {screens.describe_bonuses(race.bonuses)}. "
                 "Нажмите «Продолжить» или выберите другую расу."

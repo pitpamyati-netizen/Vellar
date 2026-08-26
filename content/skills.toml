@@ -102,7 +102,6 @@ active_effects = [
     "damage_aoe_bleed",
     "damage_aoe_bludgeoning",
     "damage_aoe_burn",
-    "damage_aoe_chaos",
     "damage_aoe_cold",
     "damage_aoe_execute",
     "damage_aoe_fear",
@@ -128,7 +127,6 @@ active_effects = [
     "damage_bludgeoning",
     "damage_burn",
     "damage_chain",
-    "damage_chaos",
     "damage_charm",
     "damage_cold",
     "damage_companion",
@@ -973,7 +971,7 @@ kind = "passive"
 level = 202
 effect = "resist_slashing_percent"
 power = 5
-text = "Сопротивление рубящий урону выше на 5 процентов."
+text = "Сопротивление рубящему урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, броня выше на 4 процента.", self_modifiers = { armor_percent = 4 } },
@@ -987,7 +985,7 @@ kind = "passive"
 level = 215
 effect = "resist_piercing_percent"
 power = 5
-text = "Сопротивление колющий урону выше на 5 процентов."
+text = "Сопротивление колющему урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, точность выше на 4 процента.", self_modifiers = { accuracy_percent = 4 } },
@@ -1001,7 +999,7 @@ kind = "passive"
 level = 221
 effect = "resist_bludgeoning_percent"
 power = 5
-text = "Сопротивление дробящий урону выше на 5 процентов."
+text = "Сопротивление дробящему урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, уклонение выше на 3 процента.", self_modifiers = { dodge_percent = 3 } },
@@ -1898,7 +1896,7 @@ kind = "passive"
 level = 202
 effect = "resist_rending_percent"
 power = 5
-text = "Сопротивление разрывающий урону выше на 5 процентов."
+text = "Сопротивление разрывающему урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, броня выше на 4 процента.", self_modifiers = { armor_percent = 4 } },
@@ -1912,7 +1910,7 @@ kind = "passive"
 level = 215
 effect = "resist_bludgeoning_percent"
 power = 5
-text = "Сопротивление дробящий урону выше на 5 процентов."
+text = "Сопротивление дробящему урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, точность выше на 4 процента.", self_modifiers = { accuracy_percent = 4 } },
@@ -1926,7 +1924,7 @@ kind = "passive"
 level = 221
 effect = "resist_fire_percent"
 power = 5
-text = "Сопротивление огненный урону выше на 5 процентов."
+text = "Сопротивление огненному урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, уклонение выше на 3 процента.", self_modifiers = { dodge_percent = 3 } },
@@ -2822,7 +2820,7 @@ kind = "passive"
 level = 202
 effect = "resist_holy_percent"
 power = 5
-text = "Сопротивление священный урону выше на 5 процентов."
+text = "Сопротивление священному урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, броня выше на 4 процента.", self_modifiers = { armor_percent = 4 } },
@@ -2836,21 +2834,21 @@ kind = "passive"
 level = 215
 effect = "resist_negative_percent"
 power = 5
-text = "Сопротивление оскверняющий урону выше на 5 процентов."
+text = "Сопротивление оскверняющему урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, точность выше на 4 процента.", self_modifiers = { accuracy_percent = 4 } },
 ]
 
 [[skill]]
-code = "paladin_protiv_khaosa"
-name = "Против хаоса"
+code = "paladin_protiv_durmana"
+name = "Против дурмана"
 owner = "class:paladin"
 kind = "passive"
 level = 221
-effect = "resist_chaos_percent"
+effect = "resist_mental_percent"
 power = 5
-text = "Сопротивление хаотический урону выше на 5 процентов."
+text = "Сопротивление дурманящему урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, уклонение выше на 3 процента.", self_modifiers = { dodge_percent = 3 } },
@@ -3756,7 +3754,7 @@ kind = "passive"
 level = 202
 effect = "resist_nature_percent"
 power = 5
-text = "Сопротивление природный урону выше на 5 процентов."
+text = "Сопротивление природному урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, броня выше на 4 процента.", self_modifiers = { armor_percent = 4 } },
@@ -3770,7 +3768,7 @@ kind = "passive"
 level = 215
 effect = "resist_poison_percent"
 power = 5
-text = "Сопротивление ядовитый урону выше на 5 процентов."
+text = "Сопротивление ядовитому урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, точность выше на 4 процента.", self_modifiers = { accuracy_percent = 4 } },
@@ -3784,7 +3782,7 @@ kind = "passive"
 level = 221
 effect = "resist_cold_percent"
 power = 5
-text = "Сопротивление ледяной урону выше на 5 процентов."
+text = "Сопротивление ледяному урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, уклонение выше на 3 процента.", self_modifiers = { dodge_percent = 3 } },
@@ -4682,7 +4680,7 @@ kind = "passive"
 level = 202
 effect = "resist_piercing_percent"
 power = 5
-text = "Сопротивление колющий урону выше на 5 процентов."
+text = "Сопротивление колющему урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, броня выше на 4 процента.", self_modifiers = { armor_percent = 4 } },
@@ -4696,7 +4694,7 @@ kind = "passive"
 level = 215
 effect = "resist_poison_percent"
 power = 5
-text = "Сопротивление ядовитый урону выше на 5 процентов."
+text = "Сопротивление ядовитому урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, точность выше на 4 процента.", self_modifiers = { accuracy_percent = 4 } },
@@ -4710,7 +4708,7 @@ kind = "passive"
 level = 221
 effect = "resist_mental_percent"
 power = 5
-text = "Сопротивление дурманящий урону выше на 5 процентов."
+text = "Сопротивление дурманящему урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, уклонение выше на 3 процента.", self_modifiers = { dodge_percent = 3 } },
@@ -5606,7 +5604,7 @@ kind = "passive"
 level = 202
 effect = "resist_arcane_percent"
 power = 5
-text = "Сопротивление чародейский урону выше на 5 процентов."
+text = "Сопротивление чародейскому урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, броня выше на 4 процента.", self_modifiers = { armor_percent = 4 } },
@@ -5620,7 +5618,7 @@ kind = "passive"
 level = 215
 effect = "resist_fire_percent"
 power = 5
-text = "Сопротивление огненный урону выше на 5 процентов."
+text = "Сопротивление огненному урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, точность выше на 4 процента.", self_modifiers = { accuracy_percent = 4 } },
@@ -5634,7 +5632,7 @@ kind = "passive"
 level = 221
 effect = "resist_cold_percent"
 power = 5
-text = "Сопротивление ледяной урону выше на 5 процентов."
+text = "Сопротивление ледяному урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, уклонение выше на 3 процента.", self_modifiers = { dodge_percent = 3 } },
@@ -6530,7 +6528,7 @@ kind = "passive"
 level = 202
 effect = "resist_holy_percent"
 power = 5
-text = "Сопротивление священный урону выше на 5 процентов."
+text = "Сопротивление священному урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, броня выше на 4 процента.", self_modifiers = { armor_percent = 4 } },
@@ -6544,7 +6542,7 @@ kind = "passive"
 level = 215
 effect = "resist_negative_percent"
 power = 5
-text = "Сопротивление оскверняющий урону выше на 5 процентов."
+text = "Сопротивление оскверняющему урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, точность выше на 4 процента.", self_modifiers = { accuracy_percent = 4 } },
@@ -6558,7 +6556,7 @@ kind = "passive"
 level = 221
 effect = "resist_mental_percent"
 power = 5
-text = "Сопротивление дурманящий урону выше на 5 процентов."
+text = "Сопротивление дурманящему урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, уклонение выше на 3 процента.", self_modifiers = { dodge_percent = 3 } },
@@ -7454,7 +7452,7 @@ kind = "passive"
 level = 202
 effect = "resist_nature_percent"
 power = 5
-text = "Сопротивление природный урону выше на 5 процентов."
+text = "Сопротивление природному урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, броня выше на 4 процента.", self_modifiers = { armor_percent = 4 } },
@@ -7468,7 +7466,7 @@ kind = "passive"
 level = 215
 effect = "resist_acid_percent"
 power = 5
-text = "Сопротивление кислотный урону выше на 5 процентов."
+text = "Сопротивление кислотному урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, точность выше на 4 процента.", self_modifiers = { accuracy_percent = 4 } },
@@ -7482,7 +7480,7 @@ kind = "passive"
 level = 221
 effect = "resist_air_percent"
 power = 5
-text = "Сопротивление воздушный урону выше на 5 процентов."
+text = "Сопротивление воздушному урону выше на 5 процентов."
 edges = [
     { name = "Углубление", text = "Прибавка выше на 40 процентов.", power = 40 },
     { name = "Побочная выгода", text = "Кроме того, уклонение выше на 3 процента.", self_modifiers = { dodge_percent = 3 } },

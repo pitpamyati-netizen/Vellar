@@ -1,4 +1,4 @@
-"""mmorpg.infrastructure.cache layer package."""
+"""Слой mmorpg.infrastructure.cache."""
 
 from mmorpg.infrastructure.cache.memory import (
     InMemoryIdempotencyStore,

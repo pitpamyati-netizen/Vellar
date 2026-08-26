@@ -1,6 +1,6 @@
-"""The seed chain.
+"""Цепочка сидов.
 
-Every generated thing in the game descends from one world seed through blake2b:
+Всё собираемое в игре происходит от одного мирового сида через blake2b:
 
     location_seed  = blake2b(world_seed, city_id, slot)
     node_seed(i)   = blake2b(location_seed, i)
@@ -8,17 +8,18 @@ Every generated thing in the game descends from one world seed through blake2b:
     enemy_seed     = blake2b(node_seed, attempt)
     shop_seed      = blake2b(world_seed, "shop", city_id, rotation)
 
-A location is a place, not a roll: its map has no generation counter at all, so
-the Meadows are the same Meadows tomorrow and the paths a player learned by ear
-stay where they were. What does change is what stands *in* the nodes - each node
-counts its own waves, and a wave that was worked through is replaced by the next
-one a few minutes later (``domain/rules/nodes.py``). The other thing counted in
-wall time is the shop, which turns over every half hour (``rotation``) - a shelf
-that never changed would make coming back pointless.
+Локация - это место, а не бросок: у её карты нет счётчика поколений вовсе,
+поэтому Луга завтра те же самые Луга, а тропы, выученные игроком на слух,
+остаются где были. Меняется то, что стоит *в* узлах: каждый узел считает свои
+волны, и отработанную волну через несколько минут сменяет следующая
+(``domain/rules/nodes.py``). Второе, что считается по живым часам, - лавка: она
+переворачивается каждые полчаса (``rotation``), потому что прилавок, который не
+меняется, лишает смысла возвращение.
 
-No global ``random`` anywhere: callers get an explicit ``random.Random`` instance
-built from a seed. This module knows nothing about the clock - the rotation index
-is always passed in, which is what keeps generation testable and pure.
+Никакого глобального ``random`` нигде: вызывающему выдаётся явный образец
+``random.Random``, собранный из сида. О часах модуль не знает ничего - номер
+переворота всегда приходит аргументом, и это то, что держит сборку чистой и
+проверяемой.
 """
 
 from __future__ import annotations
@@ -27,13 +28,13 @@ import random
 from hashlib import blake2b
 
 DIGEST_SIZE = 16
-# Half an hour. Short enough that a player who came for a weapon can wait for the
-# next shelf, long enough that the shop is not a slot machine.
+# Полчаса. Достаточно мало, чтобы игрок, пришедший за оружием, дождался следующего
+# прилавка, и достаточно много, чтобы лавка не была игровым автоматом.
 DEFAULT_SHOP_ROTATION_SECONDS = 1_800
 
 
 def rotation_index(unix_time: int, rotation_seconds: int = DEFAULT_SHOP_ROTATION_SECONDS) -> int:
-    """Which shop rotation a moment in time belongs to."""
+    """К какому перевороту лавки относится этот момент времени."""
     if rotation_seconds <= 0:
         msg = "rotation_seconds must be positive"
         raise ValueError(msg)
@@ -51,14 +52,14 @@ def rotation_ends_at(index: int, rotation_seconds: int = DEFAULT_SHOP_ROTATION_S
 def seconds_left_in_rotation(
     unix_time: int, rotation_seconds: int = DEFAULT_SHOP_ROTATION_SECONDS
 ) -> int:
-    """How long the current shelf still stands. Used for cache lifetimes."""
+    """Сколько ещё стоит нынешний прилавок. Идёт в сроки жизни кэша."""
     return (
         rotation_ends_at(rotation_index(unix_time, rotation_seconds), rotation_seconds) - unix_time
     )
 
 
 def derive(*parts: str | int | bytes) -> bytes:
-    """blake2b over the parts, joined with a separator that cannot appear in ids."""
+    """blake2b по частям, сшитым разделителем, которого не бывает в идентификаторах."""
     digest = blake2b(digest_size=DIGEST_SIZE)
     for part in parts:
         digest.update(part if isinstance(part, bytes) else str(part).encode("utf-8"))
@@ -67,7 +68,7 @@ def derive(*parts: str | int | bytes) -> bytes:
 
 
 def location_seed(world_seed: str, city_id: str, slot: int) -> bytes:
-    """The map of one location. It has no generation: the place is permanent."""
+    """Карта одной локации. Поколения у неё нет: место постоянно."""
     return derive(world_seed, city_id, slot)
 
 
@@ -76,10 +77,10 @@ def node_seed(parent: bytes, index: int) -> bytes:
 
 
 def wave_seed(parent: bytes, index: int, wave: int) -> bytes:
-    """What stands in one node during one of its waves.
+    """Что стоит в одном узле в одну из его волн.
 
-    The map does not move, so this is the only seed that changes with time: a new
-    wave is a new pack of opponents and a new handful of finds in the same place.
+    Карта не двигается, поэтому это единственный сид, который меняется со временем:
+    новая волна - это новая стая противников и новая горсть находок на том же месте.
     """
     return derive(parent, "wave", index, wave)
 
@@ -97,5 +98,5 @@ def to_int(seed: bytes) -> int:
 
 
 def rng(seed: bytes) -> random.Random:
-    """A private random source. Never use the module-level ``random`` functions."""
+    """Личный источник случайности. Функциями модуля ``random`` не пользоваться никогда."""
     return random.Random(to_int(seed))

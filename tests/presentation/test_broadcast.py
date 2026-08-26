@@ -1,8 +1,8 @@
-"""Channel posts.
+"""Посты в канал.
 
-The channel carries news about the game, never a feed of what players did, so
-these tests guard two things: the wording rules from ``Narrative.md`` ("Канал"),
-and the fact that a dead channel cannot break the caller.
+Канал несёт новости об игре, а не ленту того, что делали игроки, поэтому эти
+тесты стерегут две вещи: правила о словах из ``Narrative.md`` («Канал») и то, что
+мёртвый канал не может сломать вызывающего.
 """
 
 from __future__ import annotations
@@ -12,13 +12,13 @@ import pytest
 from mmorpg.presentation.telegram import broadcast as bc
 from tests.conftest import SOURCE_ROOT
 
-# Where gameplay lives. Nothing here may reach the channel: a level, a kill or a
-# trade concerns the people in the group, and only them (Roadmap 2.4).
+# Где живёт сама игра. Ничто отсюда не вправе дойти до канала: уровень, победа или
+# сделка касаются тех, кто в группе, и только их (Roadmap 2.4).
 GAMEPLAY_DIRS = ("handlers", "flows", "screens")
 
 
 class RecordingSink:
-    """A Telegram stand-in that remembers what it was asked to send."""
+    """Заменитель Telegram, который помнит, что его просили отправить."""
 
     def __init__(self, *, fail: bool = False) -> None:
         self.sent: list[tuple[int | str, str]] = []
@@ -33,7 +33,7 @@ class RecordingSink:
 
 
 def test_the_channel_posts_only_game_news() -> None:
-    """No per-player events. Adding one back should fail this test first."""
+    """Никаких событий об отдельном игроке: возвращённое уронит сначала этот тест."""
     assert {kind.value for kind in bc.BroadcastKind} == {"news", "changelog", "service"}
 
 
@@ -63,13 +63,13 @@ def test_a_changelog_reads_as_news_for_players() -> None:
     text = bc.render_broadcast(event, emoji=False)
 
     assert text.splitlines()[0] == "Обновление 0.2."
-    # Sections with no entries are dropped, not left as empty headings.
+    # Разделы без записей выбрасываются, а не остаются пустыми заголовками.
     assert "Изменилось:" not in text
     assert "Добавлено:" in text and "Исправлено:" in text
 
 
 def test_an_update_says_what_it_is_about_when_the_file_says_so() -> None:
-    """The headline is the whole post for a player who stops after one line."""
+    """Для игрока, остановившегося после первой строки, заголовок и есть весь пост."""
     event = bc.changelog(
         "0.2",
         headline="Обновление 0.2: на арене снова дерутся.",
@@ -108,14 +108,14 @@ def test_every_post_is_plain_short_text(event: bc.BroadcastEvent) -> None:
     text = bc.render_broadcast(event)
 
     assert len(text) <= bc.limit_for(event.kind)
-    # Markdown is spoken aloud by screen readers (accessibility rule 14).
+    # Разметку экранный диктор произносит вслух (правило доступности 14).
     assert not set(text) & set("*_`[]")
-    # No pseudo-graphics (rule 5).
+    # Никакой псевдографики (правило 5).
     assert "#" not in text and "|" not in text
 
 
 def test_no_gameplay_code_posts_to_the_channel() -> None:
-    """The guard for "player actions stay in the group" is mechanical, not a habit."""
+    """Стража «действия игроков остаются в группе» механическая, а не по привычке."""
     telegram = SOURCE_ROOT / "presentation" / "telegram"
     offenders = [
         path.name

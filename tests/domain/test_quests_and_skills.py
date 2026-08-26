@@ -1,7 +1,7 @@
-"""Contracts and skill points: what a city offers, and what a point buys.
+"""Задания и очки умений: что предлагает город и что покупает очко.
 
-Both are ledgers on the character, and both have the same failure mode - paying
-twice, or counting something that was never taken. That is what is pinned here.
+И то и другое - журналы на персонаже, и отказывают они одинаково: заплатить
+дважды или засчитать то, чего никто не брал. Это здесь и закреплено.
 """
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ def a_beast(*, elite: bool = False) -> Enemy:
     )
 
 
-# --- what the board shows ---------------------------------------------
+# --- что показывает доска ---------------------------------------------
 
 
 def test_the_first_contract_is_open_and_the_next_one_is_not(
@@ -86,7 +86,7 @@ def test_a_taken_contract_leaves_the_board(content: GameContent, newcomer: Chara
     assert quest_rules.available(content, took) == ()
 
 
-# --- counting ---------------------------------------------------------
+# --- счёт -------------------------------------------------------------
 
 
 def test_kills_only_count_for_the_kind_the_contract_asked_for(
@@ -137,14 +137,14 @@ def test_searching_counts_only_for_search_contracts(
 def test_a_made_thing_counts_for_the_contract_that_asked_for_it(
     content: GameContent, veteran: Character
 ) -> None:
-    """Contracts and crafts used to be two games in one bot (Roadmap, "Риски")."""
+    """Задания и ремёсла когда-то были двумя играми в одном боте."""
     ready = replace(veteran, quests=QuestLog(done=("farhold_tallies",)))
     took = quest_rules.take(content, ready, content.quest("farhold_whetstones"))
     log, steps = quest_rules.record_craft(content, took, "whetstone", 2)
     assert log.progress("farhold_whetstones") == 2
     assert steps and steps[0].progress == 2
 
-    # Something else out of the same workshop is still something else.
+    # Другая вещь из той же мастерской - всё равно другая вещь.
     other, _ = quest_rules.record_craft(content, took, "medium_head@6#common")
     assert other.progress("farhold_whetstones") == 0
 
@@ -167,7 +167,7 @@ def test_nothing_counts_for_a_contract_that_was_never_taken(
     assert steps == ()
 
 
-# --- paying out -------------------------------------------------------
+# --- выплата ----------------------------------------------------------
 
 
 def test_a_contract_pays_once_and_cannot_be_handed_in_twice(
@@ -198,7 +198,7 @@ def test_handing_in_can_raise_a_level(content: GameContent, newcomer: Character)
     assert payout.level_up.levels_gained > 0
 
 
-# --- skill points -----------------------------------------------------
+# --- очки умений ------------------------------------------------------
 
 
 def test_a_point_learns_a_skill_and_the_next_one_raises_its_rank(

@@ -1,8 +1,8 @@
-"""What a trip is worth: rewards, wounds, the price of losing, the price of a bed.
+"""Чего стоит вылазка: награды, раны, цена поражения, цена постели.
 
-The engine decides who wins. This is about what the win is *for* - and about the
-one rule the whole economy of the game leans on: a fight leaves marks that cost
-money to undo.
+Кто выиграл, решает движок. Здесь речь о том, *ради чего* эта победа, - и об
+одном правиле, на которое опирается вся экономика игры: бой оставляет следы, за
+сведение которых платят деньгами.
 """
 
 from __future__ import annotations
@@ -104,7 +104,7 @@ def a_node(kind: NodeKind, level: int = 5) -> LocationNode:
     return LocationNode(index=3, kind=kind, name="Тайник", level=level, links=(0,))
 
 
-# --- after a fight ----------------------------------------------------
+# --- после боя --------------------------------------------------------
 
 
 def test_a_won_fight_pays_and_can_raise_a_level(content: GameContent, hero: Character) -> None:
@@ -167,7 +167,7 @@ def test_losing_with_nothing_on_you_is_still_survivable(
     assert result.character.health >= 1
 
 
-# --- the quiet nodes --------------------------------------------------
+# --- тихие узлы -------------------------------------------------------
 
 
 def test_a_cache_pays_gold_and_is_deterministic(content: GameContent, hero: Character) -> None:
@@ -217,7 +217,7 @@ def test_searching_moves_a_search_contract(content: GameContent, hero: Character
     assert result.character.quests.progress("farhold_tallies") == 1
 
 
-# --- the city -------------------------------------------------------
+# --- город ----------------------------------------------------------
 
 
 def test_a_paid_bed_heals_everything_and_costs_by_level(
@@ -239,7 +239,7 @@ def test_straw_is_free_and_only_partial(content: GameContent, hero: Character) -
 
 
 def test_a_broke_character_is_never_stuck(content: GameContent, hero: Character) -> None:
-    """The free bed is the reason a player at one hit point always has a move."""
+    """Бесплатная постель - причина, по которой ход есть даже на одной единице здоровья."""
     penniless = replace(hero, gold=0, health=1)
     refused = adventure.rest(content, penniless, paid=True)
     assert refused.refused == "poor"
@@ -277,14 +277,15 @@ def test_the_city_charges_more_the_higher_you_climb() -> None:
     assert mentor_price(1) < mentor_price(50) < mentor_price(300)
 
 
-# --- the bottom of a descent ------------------------------------------
+# --- дно спуска -------------------------------------------------------
 
 
 def test_the_bottom_of_a_descent_pays_for_the_walk_down(
     content: GameContent, hero: Character
 ) -> None:
-    """Three fights in a row used to be worth exactly three fights (Roadmap,
-    "Риски"): the epic opponent was the only thing down there."""
+    """Три боя подряд когда-то стоили ровно трёх боёв: эпический противник
+    был единственным, что там, внизу, было.
+    """
     prize = adventure.descent_prize(content, hero, level=hero.level + 1, seed=b"bottom")
 
     assert prize.gold == adventure.descent_gold(hero.level + 1)
@@ -292,7 +293,7 @@ def test_the_bottom_of_a_descent_pays_for_the_walk_down(
     assert prize.experience > 0
     assert prize.character.gold == hero.gold + prize.gold
     assert prize.character.experience == hero.experience + prize.experience
-    # Something to carry out, and never a handful of herbs from under the floor.
+    # Что-то, что можно вынести, и никогда не горсть трав из-под пола.
     assert prize.item_id
     assert content.item(prize.item_id).kind is not ItemKind.MATERIAL
 
@@ -305,8 +306,9 @@ def test_a_deeper_descent_is_worth_more(content: GameContent, hero: Character) -
 
 
 def test_the_same_descent_pays_the_same_thing_twice(content: GameContent, hero: Character) -> None:
-    """Seeded, like everything else: the prize belongs to the run, not to the
-    instant the last blow landed."""
+    """Из сида, как и всё прочее: награда принадлежит вылазке, а не тому мгновению,
+    когда лёг последний удар.
+    """
     first = adventure.descent_prize(content, hero, level=8, seed=b"one-run")
     second = adventure.descent_prize(content, hero, level=8, seed=b"one-run")
     assert (first.gold, first.item_id) == (second.gold, second.item_id)

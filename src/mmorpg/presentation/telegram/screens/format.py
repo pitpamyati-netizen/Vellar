@@ -1,10 +1,11 @@
-"""Formatting helpers for screen text.
+"""Помощники для записи текста экранов.
 
-Two rules drive everything here (``docs/accessibility.md``):
+Всё здесь держится на двух правилах (``docs/accessibility.md``):
 
-- **no pseudo-graphics** - never ``[####----]``, always "42 из 120, 35 процентов";
-- **the key fact first** - the caller composes lines, these helpers keep each one
-  short and speakable.
+- **никакой псевдографики** — никогда ``[####----]``, всегда «42 из 120,
+  35 процентов»;
+- **главное первым** — строки складывает вызывающий, а эти помощники держат
+  каждую короткой и произносимой.
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ def head(title: str, notice: str = "") -> tuple[str, ...]:
 
 
 def amount(current: int, maximum: int, *, with_percent: bool = True) -> str:
-    """Render a bar-like value as speech: ``42 из 120, 35 процентов``."""
+    """Показать значение, похожее на полосу, речью: ``42 из 120, 35 процентов``."""
     if maximum <= 0:
         return f"{current}"
     if not with_percent:
@@ -114,10 +115,10 @@ def gold(value: int) -> str:
 
 
 def paginate_text(text: str, limit: int = MESSAGE_LIMIT) -> tuple[str, ...]:
-    """Split an over-long message on line boundaries.
+    """Разрезать слишком длинное сообщение по границам строк.
 
-    Used only for content that genuinely cannot be shortened; screens are expected
-    to page their data instead (accessibility rule 11).
+    Берётся только для того содержимого, которое и правда не сократить; от экранов
+    ждут, что они порежут свои данные на страницы (правило доступности 11).
     """
     if len(text) <= limit:
         return (text,)
@@ -138,5 +139,5 @@ def paginate_text(text: str, limit: int = MESSAGE_LIMIT) -> tuple[str, ...]:
 
 
 def join_lines(*lines: str) -> str:
-    """Drop empty entries and join with single newlines."""
+    """Выбросить пустые записи и сшить одиночными переводами строк."""
     return "\n".join(line for line in lines if line)

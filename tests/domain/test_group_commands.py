@@ -1,8 +1,8 @@
-"""The group command grammar (``Narrative.md``, section 9).
+"""Грамматика команд в группе (``Narrative.md``, раздел 9).
 
-Two properties matter more than any single case: a command a player typed loosely
-still works, and anything else is silence - the bot must never answer a
-conversation it was not addressed in.
+Два свойства важнее любого отдельного случая: небрежно набранная команда всё
+равно работает, а всё прочее - молчание: бот не должен отвечать разговору, в
+котором к нему не обращались.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ def test_profile_takes_no_arguments() -> None:
     assert parse_group_command("профиль") == parse_group_command("Профиль")
     parsed = parse_group_command("профиль")
     assert parsed is not None and parsed.intent is GroupIntent.PROFILE
-    # An argument means the player wanted something else entirely.
+    # Аргумент значит, что игрок хотел чего-то совсем другого.
     assert parse_group_command("профиль Аргуса") is None
 
 
@@ -86,7 +86,7 @@ def test_giving_gold_is_a_different_intent(text: str) -> None:
 
 
 def test_gold_is_not_capped_at_the_item_quantity() -> None:
-    """Items are counted in units, gold in thousands."""
+    """Вещи считают штуками, золото - тысячами."""
     parsed = parse_group_command("передать 50000 золота")
 
     assert parsed is not None and parsed.amount == 50_000
@@ -94,7 +94,7 @@ def test_gold_is_not_capped_at_the_item_quantity() -> None:
 
 
 def test_a_bare_number_never_moves_money() -> None:
-    """ "передать 100" is as likely a slip as an intention."""
+    """«передать 100» — с тем же успехом оговорка, что и намерение."""
     assert parse_group_command("передать 100") is None
 
 
@@ -130,10 +130,10 @@ def test_privacy_is_said_in_one_command(text: str, intent: GroupIntent) -> None:
 
 
 def test_only_answers_and_the_privacy_switch_need_no_target() -> None:
-    """Everything else names its target by being a reply to them.
+    """Всё остальное называет адресата тем, что отвечает ему.
 
-    Widening this set means the bot starts answering messages shouted into the
-    room, so it is spelled out here rather than left to the handler.
+    Расширить это множество значит, что бот начнёт отвечать на выкрикнутое в
+    комнату, поэтому оно выписано здесь, а не оставлено хендлеру.
     """
     assert set(UNADDRESSED) == {
         GroupIntent.ACCEPT,
@@ -149,16 +149,16 @@ def test_only_answers_and_the_privacy_switch_need_no_target() -> None:
         "",
         "   ",
         "привет всем",
-        "скрыть",  # half of a phrase is somebody's sentence
+        "скрыть",  # половина фразы - это чья-то реплика
         "открыть",
         "блок Аргуса",
         "снять",
-        "продать кожаная броня",  # no price
+        "продать кожаная броня",  # цены нет
         "продать 100",  # no item
-        "продать 0 кожаная броня",  # nothing is free
+        "продать 0 кожаная броня",  # даром не бывает
         "продать -5 кожаная броня",
         "продать 100р кожаная броня",
-        "продать 2000000 кожаная броня",  # above the ceiling
+        "продать 2000000 кожаная броня",  # выше потолка
         "принять",
         "принять двенадцать",
         "отказ 0",

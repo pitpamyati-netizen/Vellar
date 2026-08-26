@@ -1,9 +1,9 @@
-"""The Redis adapters against a real Redis.
+"""Адаптеры Redis против настоящего Redis.
 
-The in-memory equivalents are Python dicts and cannot disagree with themselves.
-These check the parts that only a real server decides: what `SET NX` returns, that
-a TTL is actually attached, and that an integer written by one call reads back as
-an integer in the next.
+Их близнецы в памяти - это словари Python, и разойтись сами с собой они не
+могут. Здесь проверяется то, что решает только настоящий сервер: что возвращает
+`SET NX`, что срок и правда проставлен и что целое число, записанное одним
+вызовом, читается целым числом в следующем.
 """
 
 from __future__ import annotations
@@ -23,14 +23,15 @@ from mmorpg.infrastructure.cache.redis_cache import (
 # (``conftest.py``), а привязаны они к тому циклу, в котором созданы.
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
-# A city id no content file uses, so these keys cannot collide with a running game.
+# Идентификатор города, которого нет ни в одном файле содержимого, чтобы эти ключи не
+# столкнулись с работающей игрой.
 TEST_CITY = "__test_city"
 TEST_CHARACTER = -999_002
 
 
 @pytest_asyncio.fixture(loop_scope="session", autouse=True)
 async def clean_keys(redis):
-    """Remove this test's keys before and after, and leave every other key alone."""
+    """Убрать ключи этого теста до и после, не тронув ни одного чужого."""
 
     async def purge() -> None:
         for pattern in (f"loc:{TEST_CITY}:*", "upd:-9990*", "__test_state:*"):
@@ -43,11 +44,11 @@ async def clean_keys(redis):
     await purge()
 
 
-# --- state cache -------------------------------------------------------------
+# --- кэш состояния ---------------------------------------------------------
 
 
 async def test_a_value_round_trips_as_text(redis) -> None:
-    """Redis hands back bytes; the port promises str."""
+    """Redis отдаёт байты; порт обещает str."""
     cache = RedisStateCache(redis)
     await cache.set("__test_state:screen", "город", ttl=60)
 
@@ -61,7 +62,7 @@ async def test_a_missing_key_is_none_not_an_error(redis) -> None:
 
 
 async def test_a_stored_value_carries_its_ttl(redis) -> None:
-    """Without the TTL these keys would accumulate for every player, forever."""
+    """Без срока эти ключи копились бы на каждого игрока вечно."""
     await RedisStateCache(redis).set("__test_state:ttl", "x", ttl=60)
     assert 0 < await redis.ttl("__test_state:ttl") <= 60
 
@@ -73,7 +74,7 @@ async def test_deleting_removes_the_key(redis) -> None:
     assert await cache.get("__test_state:gone") is None
 
 
-# --- the shared state of a location -----------------------------------------
+# --- общее состояние локации -----------------------------------------------
 
 
 async def test_what_is_taken_out_of_a_node_is_counted(redis) -> None:
@@ -85,7 +86,7 @@ async def test_what_is_taken_out_of_a_node_is_counted(redis) -> None:
 
     assert state.node(0).taken == 1
     assert state.node(3).taken == 1
-    # Written as text, read back as numbers, through a text protocol.
+    # Записано текстом, прочитано числами, и всё это через текстовый протокол.
     assert await locations.state(TEST_CITY, 1, now=1_000) == state
 
 
@@ -104,7 +105,7 @@ async def test_an_emptied_node_fills_up_again_three_minutes_later(redis) -> None
 
 
 async def test_a_press_from_an_older_wave_takes_nothing(redis) -> None:
-    """Two players emptying the last pack together must not empty it twice."""
+    """Двое, вычищающие последнюю стаю разом, не должны вычистить её дважды."""
     locations = RedisLocationStateCache(redis)
     await locations.take(TEST_CITY, 1, 1, wave=0, size=1, now=1_000, ttl=60)
     late = await locations.take(
@@ -134,11 +135,11 @@ async def test_a_stale_presence_is_forgotten(redis) -> None:
     assert await locations.others_at(TEST_CITY, 1, 2, exclude=0, now=1601, ttl=600) == ()
 
 
-# --- idempotency -------------------------------------------------------------
+# --- отсев повторов --------------------------------------------------------
 
 
 async def test_the_first_writer_wins_and_the_rest_are_duplicates(redis) -> None:
-    """A redelivered update must never apply an effect twice."""
+    """Повторно доставленное обновление не должно сработать дважды."""
     store = RedisIdempotencyStore(redis)
     assert await store.seen(-999_001, ttl=60) is False
     assert await store.seen(-999_001, ttl=60) is True

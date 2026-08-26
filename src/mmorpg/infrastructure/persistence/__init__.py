@@ -1,4 +1,4 @@
-"""mmorpg.infrastructure.persistence layer package."""
+"""Слой mmorpg.infrastructure.persistence."""
 
 from mmorpg.infrastructure.persistence.memory import (
     InMemoryCharacterRepository,

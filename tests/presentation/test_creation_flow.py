@@ -1,7 +1,7 @@
-"""Character creation: every step, and every way back out of it.
+"""Создание персонажа: каждый шаг и каждая дорога обратно.
 
-The flow is a pure function, so these tests walk the whole thing the way a player
-would - by sending button texts.
+Ветка - чистая функция, поэтому эти тесты проходят её целиком так, как прошёл бы
+игрок: отправляя тексты кнопок.
 """
 
 from __future__ import annotations
@@ -96,7 +96,7 @@ def test_a_taken_name_is_refused_politely(content: GameContent) -> None:
     assert "занято" in state.notice
 
 
-# --- the happy path ---------------------------------------------------
+# --- прямая дорога ----------------------------------------------------
 
 
 def test_full_walk_reaches_confirmation(content: GameContent, pointed: CreationState) -> None:
@@ -118,13 +118,14 @@ def test_the_draft_becomes_a_playable_character(
     assert character.class_id == "warrior"
     assert character.level == 1
     assert character.city_id == "farhold"
-    # The first class active and the racial active are slotted; nothing else is.
+    # Первое активное умение класса и активное умение расы лежат в панели; больше
+    # ничего.
     assert character.loadout.actives[0] == "warrior_sekushchiy_roscherk"
     assert character.loadout.actives[1:] == (None,) * 5
     assert character.loadout.racial == "race_dwarf_ancestral_stance"
 
 
-# --- back navigation (spec section 12) --------------------------------
+# --- возврат назад (спецификация, раздел 12) --------------------------
 
 
 def test_back_returns_exactly_one_step(content: GameContent, traited: CreationState) -> None:
@@ -157,7 +158,7 @@ def test_going_back_to_race_shows_the_current_race(
 def test_changing_the_race_restates_its_bonuses(
     content: GameContent, classed: CreationState
 ) -> None:
-    """Switching race after going back must not silently change the numbers."""
+    """Смена расы после возврата назад не должна молча менять числа."""
     at_race = _walk_back_to(content, classed, ScreenId.CREATE_RACE)
     switched = advance(content, at_race, "Высший эльф")
     assert switched.draft.race_id == "high_elf"
@@ -168,7 +169,7 @@ def test_changing_the_race_restates_its_bonuses(
 def test_races_beyond_the_first_page_are_reachable(
     content: GameContent, named: CreationState
 ) -> None:
-    """16 races over 8-entry pages: the later ones need the navigation row."""
+    """16 рас на страницах по 8 записей: поздним нужен ряд перемещения."""
     assert advance(content, named, "Орк").draft.race_id == "", "Орк is not on page 1"
     second_page = advance(content, named, "Следующая страница")
     assert second_page.race_page.page == 2
@@ -185,7 +186,7 @@ def test_back_from_the_first_step_leaves_creation(content: GameContent) -> None:
 def test_every_creation_screen_is_reachable_and_has_a_way_back(
     content: GameContent, pointed: CreationState
 ) -> None:
-    """Walk the whole flow backwards: no dead ends, no unreachable steps."""
+    """Пройти всю ветку задом наперёд: ни тупиков, ни недостижимых шагов."""
     visited = [pointed.screen]
     state = pointed
     while not state.exited:
@@ -253,20 +254,20 @@ def test_points_can_be_reset(content: GameContent, traited: CreationState) -> No
 def test_confirmation_is_blocked_until_points_are_spent(
     content: GameContent, traited: CreationState
 ) -> None:
-    """The Continue button stays on screen; the refusal is spoken (rule 7)."""
+    """Кнопка «Продолжить» остаётся на экране; отказ произносится вслух (правило 7)."""
     assert traited.screen is ScreenId.CREATE_POINTS
     blocked = advance(content, traited, "Продолжить")
     assert blocked.screen is ScreenId.CREATE_POINTS
     assert "распределите" in blocked.notice
 
 
-# --- accessibility behaviour ------------------------------------------
+# --- поведение доступности --------------------------------------------
 
 
 def test_look_repeats_the_screen_without_changing_state(
     content: GameContent, traited: CreationState
 ) -> None:
-    """ "Осмотреться" is the "say that again" button - it must change nothing."""
+    """«Осмотреться» — это кнопка «повтори ещё раз», и менять она не должна ничего."""
     looked = advance(content, traited, "Осмотреться")
     assert looked.screen is traited.screen
     assert looked.draft == traited.draft
@@ -297,7 +298,7 @@ def test_draft_records_allocation_per_stat() -> None:
     assert draft.spend_point(StatCode.AGI, budget=2) == draft
 
 
-# --- finding one trait among sixty ------------------------------------
+# --- найти одну черту среди шестидесяти -------------------------------
 
 
 def test_search_narrows_the_trait_list(content: GameContent, classed: CreationState) -> None:

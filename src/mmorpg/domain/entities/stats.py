@@ -1,7 +1,8 @@
-"""Primary character statistics.
+"""Основные характеристики персонажа.
 
-Seven primary stats feed every derived value. This module is pure data: it knows
-how stats add up, not where they come from.
+Семь основных характеристик кормят собой каждое производное число. Модуль -
+чистые данные: он знает, как характеристики складываются, а не откуда они
+берутся.
 """
 
 from __future__ import annotations
@@ -12,20 +13,20 @@ from enum import StrEnum
 
 
 class StatCode(StrEnum):
-    """The seven primary statistics."""
+    """Семь основных характеристик."""
 
-    STR = "STR"  # strength: physical damage, carry weight
-    AGI = "AGI"  # agility: accuracy, dodge, initiative
-    END = "END"  # endurance: health, armor, resistance
-    INT = "INT"  # intellect: magic damage, mana
-    WIS = "WIS"  # wisdom: healing, magic resistance, resource regeneration
-    CHA = "CHA"  # charisma: prices, quest rewards, influence
-    LCK = "LCK"  # luck: crit chance, loot rarity, random effects
+    STR = "STR"  # сила: физический урон, переносимый вес
+    AGI = "AGI"  # ловкость: точность, уклонение, инициатива
+    END = "END"  # выносливость: здоровье, броня, сопротивление
+    INT = "INT"  # интеллект: магический урон, мана
+    WIS = "WIS"  # мудрость: лечение, сопротивление магии, восстановление ресурса
+    CHA = "CHA"  # харизма: цены, плата по заданиям, влияние
+    LCK = "LCK"  # удача: шанс крита, редкость добычи, случайные эффекты
 
 
 @dataclass(frozen=True, slots=True)
 class StatBlock:
-    """An immutable set of stat values. Addition is component-wise."""
+    """Неизменный набор характеристик. Сложение идёт покомпонентно."""
 
     STR: int = 0
     AGI: int = 0
@@ -56,7 +57,7 @@ class StatBlock:
 
     @property
     def total(self) -> int:
-        """Net sum of all stat values, penalties included."""
+        """Чистая сумма всех значений, вместе со штрафами."""
         return sum(value for _, value in self)
 
     @property
@@ -65,11 +66,11 @@ class StatBlock:
 
     @property
     def penalty_total(self) -> int:
-        """Absolute sum of the negative values."""
+        """Сумма отрицательных значений по модулю."""
         return -sum(value for _, value in self if value < 0)
 
     def with_change(self, code: StatCode, delta: int) -> StatBlock:
-        """Return a copy with one stat shifted by ``delta``."""
+        """Вернуть копию, в которой одна характеристика сдвинута на ``delta``."""
         values = {name.value: value for name, value in self}
         values[code.value] += delta
         return StatBlock(**values)
@@ -79,12 +80,12 @@ class StatBlock:
 
     @classmethod
     def uniform(cls, value: int) -> StatBlock:
-        """A block with the same value in every stat."""
+        """Набор с одним и тем же значением в каждой характеристике."""
         return cls(STR=value, AGI=value, END=value, INT=value, WIS=value, CHA=value, LCK=value)
 
     @classmethod
     def from_mapping(cls, values: Mapping[str, int]) -> StatBlock:
-        """Build from a ``{"STR": 2, ...}`` mapping. Unknown keys raise KeyError."""
+        """Собрать из словаря ``{"STR": 2, ...}``. Незнакомый ключ - KeyError."""
         unknown = set(values) - {code.value for code in StatCode}
         if unknown:
             msg = f"unknown stat codes: {sorted(unknown)}"

@@ -1,14 +1,15 @@
-"""What craft work is worth.
+"""Чего стоит работа в ремесле.
 
-Pure, like every rule module: no clock, no global random, no I/O. The seed of a
-batch and the current moment arrive as arguments, so the same character working
-the same recipe always gets the same result and a test can name it.
+Чисто, как и всякий модуль правил: ни часов, ни глобальной случайности, ни
+ввода-вывода. Сид партии и нынешний момент приходят аргументами, поэтому один и
+тот же персонаж по одному и тому же рецепту всегда получает один и тот же
+результат, а тест может его назвать.
 
-Two shapes of work, and both answer the same question - what comes out:
+Два вида работы, и оба отвечают на один вопрос — что выйдет:
 
-- **сбор**: one gathering per craft per cooldown, and the amount grows with rank;
-- **изготовление**: materials in, an item out, and the quality of the batch
-  decides whether anything extra comes with it.
+- **сбор**: один сбор на ремесло за откат, и размер растёт с рангом;
+- **изготовление**: сырьё внутрь, вещь наружу, а качество партии решает, придёт
+  ли с ней что-то сверху.
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ SALVAGE_YIELD_KEY = "salvage_yield_percent"
 
 
 def rank_of(rules: CraftRules, experience: int) -> int:
-    """Rank one is where everybody starts; work is what moves it."""
+    """Первый ранг - там, где начинают все; двигает его работа."""
     earned = 1 + max(0, experience) // rules.experience_per_rank
     return min(rules.max_rank, earned)
 
@@ -48,10 +49,10 @@ def rank_name(rules: CraftRules, rank: int) -> str:
 
 
 def into_rank(rules: CraftRules, experience: int) -> tuple[int, int]:
-    """Work done inside the current rank, and how much the rank takes.
+    """Работа, сделанная внутри нынешнего ранга, и сколько ранг берёт.
 
-    At the last rank there is nothing left to fill, and the pair is ``(0, 0)`` -
-    the screen says "выше некуда" instead of showing a bar that never moves.
+    На последнем ранге заполнять нечего, и пара — это ``(0, 0)``: экран говорит «выше
+    некуда» вместо полосы, которая никогда не двигается.
     """
     if rank_of(rules, experience) >= rules.max_rank:
         return 0, 0
@@ -62,12 +63,12 @@ def character_rank(content: GameContent, character: Character, craft_id: str) ->
     return rank_of(content.craft_rules, character.crafts.progress(craft_id).experience)
 
 
-# --- gathering --------------------------------------------------------
+# --- сбор ------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
 class GatherResult:
-    """What one watch of gathering brought back."""
+    """Что принесла одна стража сбора."""
 
     item_id: str = ""
     count: int = 0
@@ -80,7 +81,7 @@ class GatherResult:
 
 
 def gather_ready_at(character: Character, craft: Craft, cooldown: int) -> int:
-    """The moment this character may gather this craft again."""
+    """Момент, когда этот персонаж снова может собирать в этом ремесле."""
     return character.crafts.progress(craft.id).gathered_at + max(0, cooldown)
 
 
@@ -93,11 +94,11 @@ def can_gather(
     cooldown: int,
     biomes: frozenset[str] = frozenset(),
 ) -> str:
-    """Empty when gathering is allowed now, otherwise the reason it is not.
+    """Пусто, когда собирать можно сейчас, иначе - причина, по которой нельзя.
 
-    ``biomes`` is the ground around the city the character is standing in. Empty
-    means "do not ask where they are" - the caller that has no map, such as a
-    test of the cooldown alone.
+    ``biomes`` - это земля вокруг города, в котором стоит персонаж. Пусто значит «не
+    спрашивать, где он»: так зовёт тот, у кого карты нет, - например, тест одного
+    только отката.
     """
     if not craft.gathers:
         return "Это ремесло ничего не собирает: из сырья делают вещи."
@@ -133,10 +134,10 @@ def gather(
     seed: bytes,
     biomes: frozenset[str] = frozenset(),
 ) -> tuple[Character, GatherResult]:
-    """Work a gathering craft once. The character comes back changed.
+    """Отработать один сбор в ремесле. Персонаж возвращается изменённым.
 
-    What comes back depends on where the work was done: the same button in Дубно
-    and in Мезень reaches into different ground.
+    Что вернётся, зависит от того, где работали: одна и та же кнопка в Дубно и в
+    Мезени тянется в разную землю.
     """
     refused = can_gather(content, character, craft, now=now, cooldown=cooldown, biomes=biomes)
     if refused:
@@ -164,11 +165,11 @@ def gather(
 
 
 def _reachable_yields(craft: Craft, level: int, biomes: frozenset[str]) -> list[CraftYield]:
-    """What this craft can bring back here, at this level.
+    """Что это ремесло может принести здесь и на этом уровне.
 
-    Without a map (an empty ``biomes``) the place is not asked about at all, so
-    the level alone decides - the behaviour every caller had before the ground
-    started mattering.
+    Без карты (пустой ``biomes``) о месте не спрашивают вовсе, и решает один лишь
+    уровень - ровно так вело себя всё, что зовёт эту функцию, до того как земля
+    начала иметь значение.
     """
     return [
         entry
@@ -182,7 +183,7 @@ def _reachable_yields(craft: Craft, level: int, biomes: frozenset[str]) -> list[
 
 @dataclass(frozen=True, slots=True)
 class CraftResult:
-    """What came out of one batch, and what it took."""
+    """Что вышло из одной партии и чего это стоило."""
 
     recipe_id: str = ""
     item_id: str = ""
@@ -203,7 +204,7 @@ def can_make(
     recipe: Recipe,
     owned: Mapping[str, int],
 ) -> str:
-    """Empty when the batch can be made, otherwise what is missing, by name."""
+    """Пусто, когда партию можно сделать, иначе - чего не хватает, по именам."""
     rank = character_rank(content, character, recipe.craft_id)
     if rank < recipe.rank:
         return f"Нужен ранг {recipe.rank}, у вас {rank}."
@@ -225,7 +226,7 @@ def make(
     *,
     seed: bytes,
 ) -> tuple[Character, CraftResult]:
-    """Spend the materials and produce the batch. Returns the changed character."""
+    """Истратить сырьё и сделать партию. Возвращает изменённого персонажа."""
     refused = can_make(content, character, recipe, owned)
     if refused:
         return character, CraftResult(recipe_id=recipe.id, refused=refused)
@@ -253,13 +254,13 @@ def make(
 
 
 def _spend(count: int, refund_percent: float) -> int:
-    """Materials actually used up. A refund never gives work away for free."""
+    """Сырьё, которое действительно ушло. Возврат никогда не отдаёт работу даром."""
     kept = int(count * max(0.0, refund_percent) // 100)
     return max(1, count - kept)
 
 
 def _roll_quality(rules: CraftRules, rank: int, bonus: float, seed: bytes) -> QualityTier:
-    """Best tier first: an excellent batch is also a good one, never both."""
+    """Сначала лучшая ступень: отличная партия она же и хорошая, но не обе разом."""
     roll = rng(seed).uniform(0, 100)
     fine = (rules.fine_chance_base + rules.fine_chance_per_rank * (rank - 1)) * bonus
     good = (rules.good_chance_base + rules.good_chance_per_rank * (rank - 1)) * bonus

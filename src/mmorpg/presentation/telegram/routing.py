@@ -1,14 +1,14 @@
-"""Routing: pressed button text and typed commands to intents.
+"""Маршрутизация: текст нажатой кнопки и набранные команды - в намерения.
 
-Two entry points lead to the same intents:
+К одним и тем же намерениям ведут два входа:
 
-- a **button**, matched by exact text against the current screen;
-- a **typed command**, so the game stays playable when the keyboard fails to
-  render at all (accessibility rule 10).
+- **кнопка**, сверенная по точному тексту с нынешним экраном;
+- **набранная команда**, чтобы в игру можно было играть, даже когда клавиатура
+  вовсе не нарисовалась (правило доступности 10).
 
-Anything that matches neither is a stale button from an older keyboard. That is
-not an error - it gets an explicit answer and the current keyboard back
-(accessibility rule 12). The game never stays silent and never raises.
+Всё, что не совпало ни с тем ни с другим, - устаревшая кнопка старой клавиатуры.
+Это не ошибка: на неё отвечают прямо и возвращают нынешнюю клавиатуру (правило
+доступности 12). Игра никогда не молчит и никогда не падает.
 """
 
 from __future__ import annotations
@@ -53,9 +53,9 @@ class Command:
     number: int | None = None
 
 
-# Typed duplicates for every action. Russian commands, because the interface is
-# Russian; Latin aliases are accepted so a player on a Latin-only keyboard is not
-# locked out.
+# Набираемые двойники каждого действия. Команды русские, потому что интерфейс русский;
+# латинские написания принимаются, чтобы игрок с одной лишь латинской раскладкой не
+# оказался заперт.
 SIMPLE_COMMANDS: dict[str, Intent] = {
     "/назад": Intent.BACK,
     "/back": Intent.BACK,
@@ -82,7 +82,7 @@ SIMPLE_COMMANDS: dict[str, Intent] = {
     "/filters": Intent.FILTERS,
     "/сбросить": Intent.RESET_FILTERS,
     "/reset": Intent.RESET_FILTERS,
-    # "/род" and "/народ" stay: both named this slot before "/раса" came back.
+    # «/род» и «/народ» остаются: оба называли этот шаг до того, как вернулось «/раса».
     "/раса": Intent.RACIAL,
     "/род": Intent.RACIAL,
     "/народ": Intent.RACIAL,
@@ -119,7 +119,7 @@ _PARTY_WORDS: dict[str, Intent] = {
 
 
 def parse_command(text: str) -> Command | None:
-    """Parse a typed command. Returns ``None`` when the text is not a command."""
+    """Разобрать набранную команду. ``None``, когда текст командой не является."""
     stripped = text.strip()
     if not stripped.startswith("/"):
         return None
@@ -170,10 +170,10 @@ _BUTTON_INTENTS: tuple[tuple[object, Intent], ...] = (
 
 
 def resolve(text: str, screen: Screen) -> Command:
-    """Turn an incoming message into an intent, in the context of a screen.
+    """Превратить пришедшее сообщение в намерение, в рамках экрана.
 
-    Typed commands win over buttons, so ``/меню`` works from anywhere even if some
-    screen ever labels a button the same way.
+    Набранные команды сильнее кнопок, поэтому ``/меню`` работает откуда угодно, даже
+    если когда-нибудь какой-то экран назовёт кнопку так же.
     """
     if (command := parse_command(text)) is not None:
         return command
@@ -190,5 +190,5 @@ def resolve(text: str, screen: Screen) -> Command:
 
 
 def stale_button_answer(screen_title: str) -> str:
-    """The answer to a button that belongs to a different screen (rule 12)."""
+    """Ответ на кнопку, принадлежащую другому экрану (правило 12)."""
     return f"Действие сейчас недоступно, вы находитесь в: {screen_title}. Ниже актуальные кнопки."

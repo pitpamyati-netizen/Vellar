@@ -1,28 +1,29 @@
-# ADR 0002 - Reply keyboards only, no message editing
+# ADR 0002 — Только reply-клавиатуры, никаких правок сообщений
 
-Status: accepted (2026-08-12)
+Статус: принято (2026-08-12)
 
-## Context
+## Обстоятельства
 
-The primary audience is blind players using screen readers. Inline keyboards attach
-buttons to a specific message, which forces the user to locate that message in the
-history before acting, and callback answers surface as toasts that are often not
-announced. Editing a message changes text that a screen reader has already read and
-will not re-read, so the player perceives a frozen game.
+Основная аудитория — незрячие игроки с экранными дикторами. Inline-клавиатуры цепляют
+кнопки к конкретному сообщению, а значит, заставляют человека сначала найти это
+сообщение в истории и только потом действовать, а ответы на колбэк всплывают
+подсказками, о которых диктор часто не объявляет. Правка сообщения меняет текст,
+который диктор уже прочитал и заново читать не станет, — и игрок ощущает это как
+зависшую игру.
 
-## Decision
+## Решение
 
-`ReplyKeyboardMarkup` is the only markup type in the project. `edit_message_*` is
-never called. Every state change produces a new message. Routing is by exact button
-text. Every screen ends with the same service row, and every action has a text
-command duplicate.
+`ReplyKeyboardMarkup` — единственный вид разметки в проекте. `edit_message_*` не
+зовётся никогда. Всякая смена состояния порождает новое сообщение. Маршрутизация идёт
+по точному тексту кнопки. Каждый экран кончается одним и тем же служебным рядом, и у
+каждого действия есть текстовая команда-двойник.
 
-## Consequences
+## Последствия
 
-- Button text is part of the routing contract: labels must be unique within a screen
-  and stable across releases; renaming a button is a routing change.
-- Old keyboards stay in the chat, so a stale-button resolver must answer every
-  unexpected text with the current screen instead of failing.
-- No progress bars, no live-updating messages, no timers.
-- Enforced mechanically by `tests/presentation/test_accessibility.py`; see
+- Текст кнопки — часть договора о маршрутизации: надписи не повторяются внутри экрана и
+  устойчивы между выпусками, а переименование кнопки есть изменение маршрута.
+- Старые клавиатуры остаются в чате, поэтому разборщик устаревших кнопок обязан
+  отвечать на любой неожиданный текст нынешним экраном, а не падать.
+- Никаких полос прогресса, никаких обновляющихся на месте сообщений, никаких таймеров.
+- Закреплено механически в `tests/presentation/test_accessibility.py`; см.
   `docs/accessibility.md`.

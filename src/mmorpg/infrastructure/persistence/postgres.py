@@ -1,8 +1,8 @@
-"""PostgreSQL repositories.
+"""Хранилища на PostgreSQL.
 
-Explicit SQL over asyncpg, no ORM (``docs/adr/0001-no-orm.md``). Every query here
-touches one or two rows by primary key or by a unique index, which is what keeps
-an update inside the 100 ms budget.
+Явный SQL поверх asyncpg, без ORM (``docs/adr/0001-no-orm.md``). Каждый запрос
+здесь трогает одну-две строки по первичному ключу или по уникальному указателю,
+и это то, что держит обновление внутри бюджета в 100 мс.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeRecord, T
 from mmorpg.domain.ports.repositories import AccessibilitySettings, Census, User
 from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:  # pragma: no cover - только для типов
     import asyncpg
 
 CHARACTER_COLUMNS = """
@@ -91,7 +91,7 @@ def _character_from_row(row: Any) -> Character:
 
 
 def _quests_from_json(raw: str | None) -> QuestLog:
-    """The contract ledger, read whole. An absent column is an empty ledger."""
+    """Журнал заданий, прочитанный целиком. Пустая колонка - пустой журнал."""
     data = json.loads(raw) if raw else {}
     taken = {str(key): int(value) for key, value in dict(data.get("taken", {})).items()}
     return QuestLog(taken=MappingProxyType(taken), done=tuple(data.get("done", ())))
@@ -102,7 +102,7 @@ def _quests_to_json(log: QuestLog) -> str:
 
 
 def _crafts_from_json(raw: str | None) -> CraftLog:
-    """Craft work done, read whole. An absent column means nothing learned yet."""
+    """Сделанная в ремёслах работа, прочитанная целиком. Пустая колонка - ничего не изучено."""
     data = json.loads(raw) if raw else {}
     entries = {
         str(craft_id): CraftProgress(
@@ -154,7 +154,8 @@ class PostgresUserRepository:
             username=row["username"] or "",
             settings=AccessibilitySettings(
                 emoji=row["emoji"],
-                # The column cannot be called "verbose"; PostgreSQL reserves it.
+                # Колонку нельзя назвать «verbose»: это зарезервированное слово
+                # PostgreSQL.
                 verbose=row["verbose_descriptions"],
                 page_size=row["page_size"],
             ),
@@ -299,11 +300,11 @@ class PostgresKeeperLogRepository:
 
 
 class PostgresPrivacyRepository:
-    """Profile visibility and black lists (Roadmap 2.5).
+    """Видимость карточки и чёрные списки (Roadmap 2.5).
 
-    Both are keyed by Telegram account, not by character. The visibility flag
-    lives on the ``users`` row that already exists for every player; the black
-    list is its own table, because it is a set that grows.
+    И то и другое лежит по аккаунту Telegram, а не по персонажу. Признак видимости
+    живёт в строке ``users``, которая и так есть у каждого игрока; чёрный список -
+    собственная таблица, потому что это растущее множество.
     """
 
     def __init__(self, pool: asyncpg.Pool) -> None:
@@ -313,7 +314,7 @@ class PostgresPrivacyRepository:
         row = await self._pool.fetchrow(
             "SELECT show_profile FROM users WHERE telegram_id = $1", telegram_id
         )
-        # No row means the player never opened the bot: nothing to hide anyway.
+        # Нет строки - значит, игрок ни разу не открывал бота: прятать всё равно нечего.
         return True if row is None else bool(row["show_profile"])
 
     async def set_profile_visible(self, telegram_id: int, visible: bool) -> None:
@@ -335,8 +336,8 @@ class PostgresPrivacyRepository:
         return row is not None
 
     async def block(self, telegram_id: int, other_id: int, *, at: int) -> bool:
-        # DO NOTHING returns no row when the pair is already listed, which is
-        # exactly the "they were already blocked" answer the caller needs.
+        # DO NOTHING не возвращает строки, когда пара уже в списке, - а это ровно тот
+        # ответ «он уже был заблокирован», который нужен вызывающему.
         row = await self._pool.fetchrow(
             """
             INSERT INTO blocks (owner_id, blocked_id, created_at) VALUES ($1, $2, $3)
@@ -484,10 +485,11 @@ class PostgresCharacterRepository:
         )
 
     async def spend_gold(self, character_id: int, amount: int) -> bool:
-        """One UPDATE decides both whether the gold is there and that it is gone.
+        """Один UPDATE решает и то, есть ли золото, и то, что его больше нет.
 
-        ``save`` writes a purse read some steps ago; this writes the difference,
-        so two settlements racing over the same purse cannot both succeed.
+        ``save`` пишет кошелёк, прочитанный несколько шагов назад; здесь пишется
+        разница, поэтому два закрытия, гоняющихся за одним кошельком, не могут удаться
+        оба.
         """
         if amount < 0:
             return False
@@ -515,10 +517,10 @@ class PostgresCharacterRepository:
         return row is not None
 
     async def arena_opponent(self, *, level: int, window: int, exclude_id: int) -> Character | None:
-        """One character of about this level, picked at random.
+        """Один персонаж примерно этого уровня, выбранный случайно.
 
-        Random rather than nearest: a fixed pairing would let two players farm
-        each other, and the arena pays from its own purse (``domain/rules/arena``).
+        Случайно, а не ближайший: закреплённая пара позволила бы двоим фармить друг
+        друга, а арена платит из своего кошелька (``domain/rules/arena``).
         """
         row = await self._pool.fetchrow(
             f"""
@@ -733,18 +735,18 @@ def _trade_from_row(row: Any) -> TradeRecord:
 
 
 class PostgresTradeRepository:
-    """The trade journal, and the escrow that hangs on its pending rows.
+    """Журнал сделок и эскроу, висящий на его стоящих строках.
 
-    Two statements carry the weight. ``open`` picks the lowest free number and
-    inserts it in one go, so no gap exists between choosing a number and taking
-    it; the partial unique index turns a lost race into a rejected insert, which
-    is retried rather than reported. ``close`` updates only a row that is still
-    pending and returns what it changed, which is what makes "accept" happen at
-    most once no matter how many taps arrive together.
+    Вес несут два запроса. ``open`` берёт наименьший свободный номер и вставляет его
+    одним шагом, поэтому между выбором номера и его занятием нет промежутка;
+    частичный уникальный указатель превращает проигранную гонку в отвергнутую
+    вставку, которую повторяют, а не показывают. ``close`` меняет только ту строку,
+    которая всё ещё стоит, и возвращает то, что изменил, - именно это и делает
+    «принять» случающимся не больше раза, сколько бы нажатий ни пришло разом.
     """
 
-    # A race needs two proposals in the same millisecond; three attempts is far
-    # more than the traffic of one group will ever need.
+    # Чтобы возникла гонка, нужны два предложения в одну миллисекунду; трёх попыток куда
+    # больше, чем когда-либо понадобится потоку одной группы.
     ATTEMPTS = 3
 
     def __init__(self, pool: asyncpg.Pool) -> None:
@@ -813,7 +815,7 @@ class PostgresTradeRepository:
         settled_at: int,
         tax: int = 0,
     ) -> TradeRecord | None:
-        """Close a pending trade. ``None`` means it was already closed."""
+        """Закрыть стоящую сделку. ``None`` значит, что она уже была закрыта."""
         row = await self._pool.fetchrow(
             f"""
             UPDATE trades SET status = $3, tax = $4, settled_at = $5
@@ -842,7 +844,7 @@ class PostgresTradeRepository:
         return tuple(_trade_from_row(row) for row in rows)
 
     async def revert(self, trade_id: int) -> TradeRecord | None:
-        """Undo a settled trade, once. ``None`` means it was never settled, or already undone."""
+        """Откатить закрытую сделку, один раз. ``None`` - она не закрывалась или уже откачена."""
         row = await self._pool.fetchrow(
             f"""
             UPDATE trades SET status = 'reverted'
@@ -892,7 +894,7 @@ class PostgresInventoryRepository:
         )
 
     async def remove(self, character_id: int, item_id: str, quantity: int = 1) -> bool:
-        """Atomic: the row is only touched when it holds enough."""
+        """Неделимо: строку трогают, только когда в ней хватает."""
         updated = await self._pool.fetchval(
             """
             UPDATE inventory SET quantity = quantity - $3

@@ -1,59 +1,58 @@
-# ADR 0006 - Depth in tags, not in timers or buttons
+# ADR 0006 — Глубина в тегах, а не в таймерах и кнопках
 
-Status: accepted (2026-08-14)
-Уточнён ADR 0021: правила тегов остались теми же, но бой стал двусторонним - у
+Статус: принято (2026-08-14)
+Уточнён ADR 0021: правила тегов остались теми же, но бой стал двусторонним — у
 каждого бойца свой след, брешь считает тот, кто тег выбирает, а перелом сбивает
 с ритма того, на ком размен сломался, а не всю сторону разом.
 
-## Context
+## Обстоятельства
 
-A turn-based fight with no clock and a frozen seven-button panel
-(`docs/skills.md`) risks one failure mode above all others: the best play is to
-press the strongest button until something dies. Every usual cure is closed to us.
+У пошагового боя без часов и с замороженной панелью из семи кнопок (`docs/skills.md`)
+есть один отказ опаснее всех прочих: лучшей игрой оказывается жать самую сильную
+кнопку, пока что-нибудь не умрёт. Все обычные лекарства нам закрыты.
 
-- **Reaction timers** are banned in PvE (`docs/accessibility.md`, rule 13). A
-  player using a screen reader hears the state after the sighted player has
-  already read it; a clock turns that into a permanent handicap.
-- **More buttons** contradict the whole skills design: the panel is fixed at
-  level 1 and at level 300, and positional memory is what makes it navigable.
-- **Positioning, facing, cover** need a spatial model the player cannot see.
+- **Таймеры реакции** запрещены в PvE (`docs/accessibility.md`, правило 13). Тот, кто
+  слушает экранный диктор, слышит состояние после того, как зрячий его уже прочитал;
+  часы превращают это в постоянную фору.
+- **Больше кнопок** противоречит всему замыслу умений: панель закреплена и на первом
+  уровне, и на трёхсотом, а проходимой её делает память о положении.
+- **Позиционирование, направление, укрытия** требуют пространственной модели, которой
+  игрок не видит.
 
-What is left is *information*: a fight can be a decision if the player knows
-something before choosing, and if the choice has a consequence they can hear.
+Остаётся *сведение*: бой становится решением, если игрок что-то знает до выбора и если
+у выбора есть последствие, которое можно услышать.
 
-## Decision
+## Решение
 
-Three tags - натиск, оборона, точность - in a closed circle of counters, carried
-by every action and by every enemy move.
+Три тега — натиск, оборона, точность — в замкнутом круге ответов, и их несёт каждое
+действие и каждый ход противника.
 
-- Enemies **announce** the tag of their next move before the player acts, and the
-  announcement is a pure function of the enemy and the turn (`enemy_intent`) - no
-  roll and no stored field. The screen and the engine therefore always name the
-  same intent, and the whole turn is settled up front (`TurnTempo`) so a promise
-  made before the player's blow is still kept after it.
-- The player's own tags are remembered three deep (`Trace`). A repeat is momentum;
-  three different tags in a row are a breakthrough and the enemies skip their
-  answer.
-- A tag countering the announced intent takes that enemy's armour out of the
-  count for the turn.
+- Противники **объявляют** тег своего следующего хода до того, как игрок сходит, и
+  объявление — чистая функция противника и хода (`enemy_intent`): ни броска, ни
+  сохранённого поля. Поэтому экран и движок всегда называют одно и то же намерение, а
+  весь ход разрешается заранее (`TurnTempo`), и обещание, данное до удара игрока,
+  держится и после него.
+- Собственные теги игрока помнятся три в глубину (`Trace`). Повтор — это разгон; три
+  разных тега подряд — перелом, и противники пропускают ответ.
+- Тег, отвечающий объявленному намерению, выносит броню этого противника из счёта на
+  этот ход.
 
-Every tag is a **word inside a label the player already has**, and the trace is
-one spoken line. No button was added.
+Каждый тег — это **слово внутри надписи, которая у игрока уже есть**, а след — одна
+произносимая строка. Ни одной кнопки не добавлено.
 
-## Consequences
+## Последствия
 
-- The fight has two lines of play - hammer one tag for damage, or cycle three for
-  tempo - and they exclude each other, which is the choice the panel could not
-  express before.
-- A breakthrough **spends** the trace. Without that, cycling press-guard-precision
-  forever would break every turn from the fourth on, and the enemies would never
-  act again. This is the single least obvious rule in the engine.
-- Deterministic intents mean a player can learn an enemy's rhythm. That is a
-  feature here, not a leak: learnable beats memorable-by-sight, and the wounded
-  enemy override keeps a fight from ending the way it started.
-- Balance now lives in six constants (`INTENT_ARMOR`, `INTENT_DAMAGE`,
-  `MOMENTUM_*`, `WOUNDED_RATIO`). Tests pin the thresholds so moving one is a
-  deliberate act; the first days of open beta will move them.
-- The arena (Roadmap 3.1) is the one place with a clock, and the tags work there
-  unchanged: an announced intent is exactly what an auto-action can be chosen
-  against.
+- У боя появились две линии игры — долбить один тег ради урона или крутить три ради
+  темпа, — и они исключают друг друга; именно этот выбор панель раньше выразить не
+  могла.
+- Перелом **тратит** след. Без этого вечное «натиск — оборона — точность» ломало бы
+  каждый ход с четвёртого, и противники не действовали бы больше никогда. Это самое
+  неочевидное правило движка.
+- Определённые намерения означают, что ритм противника можно выучить. Здесь это
+  свойство, а не утечка: выучиваемое лучше запоминаемого глазами, а поправка на
+  раненого противника не даёт бою кончиться так же, как он начался.
+- Баланс живёт теперь в шести постоянных (`INTENT_ARMOR`, `INTENT_DAMAGE`,
+  `MOMENTUM_*`, `WOUNDED_RATIO`). Тесты закрепляют пороги, поэтому сдвинуть один —
+  осознанное действие; первые дни открытого теста их сдвинут.
+- Арена играется теми же тегами и без единых часов: там нет ни очереди ожидания, ни
+  таймера — ставка, слепок противника и ответ (`Claude.md`, правило 3).

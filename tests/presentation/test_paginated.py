@@ -1,4 +1,4 @@
-"""The shared paginated list component."""
+"""Общая часть списка со страницами."""
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ def test_one_entry_per_row() -> None:
 
 
 def test_header_states_list_filters_count_and_page() -> None:
-    """A player who hears only this message knows exactly where they are."""
+    """Игрок, услышавший одно лишь это сообщение, точно знает, где он."""
     screen = render(20, page=2, category="Боевые")
     header = screen.text()
     assert header.startswith("Инвентарь.")
@@ -63,10 +63,10 @@ def test_header_states_list_filters_count_and_page() -> None:
 
 
 def test_a_single_page_list_is_only_its_entries() -> None:
-    """Nothing to page through and nothing to filter: the machinery stays away.
+    """Листать нечего и отбирать не из чего: механика не показывается.
 
-    The entries keep their positions - they are above everything that appears or
-    disappears - and a bag of three things opens straight onto the three things.
+    Записи держат свои места - они выше всего, что появляется и исчезает, - и сумка
+    из трёх вещей открывается прямо на эти три вещи.
     """
     single = render(3)
     assert [row[0].text for row in single.all_rows()[:3]] == [
@@ -74,7 +74,7 @@ def test_a_single_page_list_is_only_its_entries() -> None:
         "Запись 2",
         "Запись 3",
     ]
-    assert len(single.all_rows()) == 4  # three entries plus the service row
+    assert len(single.all_rows()) == 4  # три записи плюс служебный ряд
     assert all(PREVIOUS_PAGE not in row for row in single.all_rows())
 
     many = render(30, page=2)
@@ -89,7 +89,7 @@ def test_page_button_reports_the_position() -> None:
 
 
 def test_a_direction_that_leads_nowhere_is_not_offered() -> None:
-    """ "Следующая страница" on the last page was a press that did nothing."""
+    """«Следующая страница» на последней странице была нажатием, не делавшим ничего."""
     first = render(30, page=1).all_rows()[-3]
     assert PREVIOUS_PAGE not in first
     assert NEXT_PAGE in first
@@ -136,12 +136,12 @@ def test_empty_list_says_so() -> None:
     screen = render(0)
     assert "Здесь пока пусто." in screen.text()
     assert "Найдено 0" in screen.text()
-    # An empty list still answers, and the way out is the service row.
+    # Пустой список тоже отвечает, а дорога наружу - служебный ряд.
     assert [item.text for item in screen.all_rows()[-1]] == ["Назад", "Главное меню"]
 
 
 def test_a_filtered_short_list_keeps_the_filter_row() -> None:
-    """Whoever set a filter must be able to take it off without leaving."""
+    """Тот, кто поставил отбор, обязан иметь возможность снять его, не уходя с экрана."""
     screen = render(3, category="Боевые")
     assert screen.all_rows()[-2] == (SEARCH, RESET_FILTERS)
 

@@ -1,11 +1,11 @@
-"""Parsing what a player typed in the game group.
+"""Разбор того, что игрок набрал в игровой группе.
 
-The group has no screens and no state: a message either is a command aimed at
-another player or it is none of the bot's business. So the parser is strict and
-silent - it returns ``None`` for anything it does not recognise, and the handler
-says nothing at all rather than answering strangers' conversations.
+У группы нет ни экранов, ни состояния: сообщение либо является командой,
+направленной другому игроку, либо не касается бота вовсе. Поэтому разборщик строг
+и молчалив: он возвращает ``None`` на всё, чего не узнал, а хендлер не говорит
+ничего вместо того, чтобы отвечать на чужие разговоры.
 
-Grammar (``Narrative.md``, section 9), always as a reply to the target's message:
+Грамматика (``Narrative.md``, раздел 9), всегда ответом на сообщение адресата:
 
     профиль
     продать <цена> <предмет>
@@ -18,15 +18,15 @@ Grammar (``Narrative.md``, section 9), always as a reply to the target's message
     принять <номер>
     отказ    <номер>
 
-Two commands speak about the sender rather than about the person they answer, so
-they need no reply at all - they are the privacy switch (Roadmap 2.5):
+Две команды говорят об отправителе, а не о том, кому он отвечает, поэтому ответ
+им не нужен вовсе — это переключатель приватности (Roadmap 2.5):
 
     скрыть профиль
     открыть профиль
 
-The item is written the way a player says it, so matching is case-insensitive,
-ignores ``ё`` and collapses spaces. It is resolved against the speaker's inventory
-by the caller, not here: this module knows grammar, not goods.
+Вещь пишут так, как её называет игрок, поэтому сверка не различает регистр,
+не различает ``ё`` и схлопывает пробелы. Разрешается вещь по сумке говорящего
+вызывающим, а не здесь: этот модуль знает грамматику, а не товар.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ MAX_QUANTITY = 999
 
 
 class GroupIntent(StrEnum):
-    """What the player asked for."""
+    """Чего попросил игрок."""
 
     PROFILE = "profile"
     SELL = "sell"
@@ -55,8 +55,8 @@ class GroupIntent(StrEnum):
     SHOW_PROFILE = "show_profile"
 
 
-# Commands about the sender, not about whoever they replied to. They are the only
-# ones that mean something shouted into the room (``Narrative.md``, section 9).
+# Команды о самом отправителе, а не о том, кому он ответил. Только они и значат что-то,
+# выкрикнутые в комнату (``Narrative.md``, раздел 9).
 UNADDRESSED = frozenset(
     {GroupIntent.ACCEPT, GroupIntent.DECLINE, GroupIntent.HIDE_PROFILE, GroupIntent.SHOW_PROFILE}
 )
@@ -64,7 +64,7 @@ UNADDRESSED = frozenset(
 
 @dataclass(frozen=True, slots=True)
 class GroupCommand:
-    """A parsed command. ``amount`` is a price, a quantity or an offer number."""
+    """Разобранная команда. ``amount`` - это цена, число вещей или номер предложения."""
 
     intent: GroupIntent
     amount: int = 0
@@ -82,26 +82,26 @@ _VERBS: dict[str, GroupIntent] = {
     "блок": GroupIntent.BLOCK,
     "разблок": GroupIntent.UNBLOCK,
 }
-# Said in two words, and only in these two words: a phrase is matched whole, so
-# "скрыть" alone stays somebody's sentence rather than becoming a command.
+# Говорится двумя словами, и только этими двумя: фраза сверяется целиком, поэтому
+# «скрыть» в одиночку остаётся чьей-то репликой, а не становится командой.
 _PHRASES: dict[str, GroupIntent] = {
     "скрыть профиль": GroupIntent.HIDE_PROFILE,
     "открыть профиль": GroupIntent.SHOW_PROFILE,
     "снять блок": GroupIntent.UNBLOCK,
 }
-# Commands that take nothing after the verb.
+# Команды, после глагола которых не идёт ничего.
 _BARE = frozenset({GroupIntent.PROFILE, GroupIntent.BLOCK, GroupIntent.UNBLOCK})
 _GOLD_WORDS = frozenset({"золота", "золото", "золотых"})
 _SPACES = re.compile(r"\s+")
 
 
 def normalise(text: str) -> str:
-    """Lowercase, ``ё`` to ``е``, one space between words."""
+    """В нижний регистр, ``ё`` в ``е``, один пробел между словами."""
     return _SPACES.sub(" ", text.replace("ё", "е").replace("Ё", "Е").strip().lower())
 
 
 def parse_group_command(text: str) -> GroupCommand | None:
-    """Parse one group message, or ``None`` if it is not a command for the bot."""
+    """Разобрать одно сообщение в группе или ответить ``None``, если это не команда боту."""
     cleaned = normalise(text).removeprefix("/")
     if not cleaned:
         return None
@@ -115,8 +115,8 @@ def parse_group_command(text: str) -> GroupCommand | None:
     if intent is None:
         return None
     if intent in _BARE:
-        # "профиль" and nothing else: an argument means the player meant
-        # something the bot does not do, and guessing would be worse.
+        # «профиль» и больше ничего: аргумент значит, что игрок имел в виду то, чего бот
+        # не делает, а угадывать было бы хуже.
         return GroupCommand(intent=intent) if not tail else None
 
     match intent:
@@ -127,13 +127,13 @@ def parse_group_command(text: str) -> GroupCommand | None:
         case GroupIntent.ACCEPT | GroupIntent.DECLINE:
             return _parse_number_only(intent, tail)
         case _:
-            # Nothing else comes from a verb: gold is a shape of "передать", and
-            # the privacy switch is a phrase.
+            # Больше от глагола ничего не идёт: золото — это одна из форм «передать», а
+            # переключатель приватности — фраза.
             return None
 
 
 def _parse_offer(intent: GroupIntent, tail: str) -> GroupCommand | None:
-    """``продать 100 кожаная броня`` - price first, then the item."""
+    """``продать 100 кожаная броня`` - сначала цена, потом вещь."""
     price_text, _, item = tail.partition(" ")
     price = _as_int(price_text, ceiling=MAX_PRICE)
     if price is None or price <= 0 or not item.strip():
@@ -142,24 +142,25 @@ def _parse_offer(intent: GroupIntent, tail: str) -> GroupCommand | None:
 
 
 def _parse_give(tail: str) -> GroupCommand | None:
-    """``передать`` takes an item, a counted item, or gold."""
+    """``передать`` принимает вещь, вещь со счётом или золото."""
     first, _, rest = tail.partition(" ")
     if not first:
         return None
 
-    # Gold is counted in thousands, items in units, so the first number is read
-    # against the wider ceiling and narrowed once it is clear which it was.
+    # Золото считают тысячами, вещи - штуками, поэтому первое число читается по широкому
+    # потолку и сужается, когда стало ясно, чем оно было.
     count = _as_int(first, ceiling=MAX_PRICE)
     if count is None:
-        # No number at all: the whole tail is the item, one of it.
+        # Числа нет вовсе: весь хвост - это вещь, и она одна.
         return GroupCommand(intent=GroupIntent.GIVE_ITEM, amount=1, item_query=tail.strip())
     if count <= 0:
         return None
 
     item = rest.strip()
     if not item:
-        # A bare number is not gold: "передать 100" could as easily be a slip,
-        # and silently moving money on a slip is the one mistake worth avoiding.
+        # Голое число — это не золото: «передать 100» с тем же успехом может быть
+        # оговоркой, а тихо двигать деньги по оговорке — ровно та ошибка, которой стоит
+        # избежать.
         return None
     if item in _GOLD_WORDS:
         return GroupCommand(intent=GroupIntent.GIVE_GOLD, amount=count)
@@ -176,7 +177,7 @@ def _parse_number_only(intent: GroupIntent, tail: str) -> GroupCommand | None:
 
 
 def _as_int(text: str, *, ceiling: int) -> int | None:
-    """Digits only: ``100р``, ``1e3`` and ``-5`` are not numbers a player meant."""
+    """Только цифры: ``100р``, ``1e3`` и ``-5`` - не те числа, которые игрок имел в виду."""
     if not text.isdecimal():
         return None
     value = int(text)

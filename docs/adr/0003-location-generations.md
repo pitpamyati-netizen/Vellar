@@ -1,57 +1,54 @@
-# ADR 0003 - A location lives until it is cleared
+# ADR 0003 — Локация живёт, пока её не вычистят
 
-**Superseded by ADR 0013**, which keeps the map permanent and refills the nodes
-in waves instead. What stands below is why the six-hour world cycle went away;
-that part still holds.
+**Заменён ADR 0013**, который оставил карту постоянной и наполняет узлы волнами.
+Написанное ниже — о том, почему ушёл шестичасовой мировой цикл; эта часть верна и
+сейчас.
 
-## Context
+## Обстоятельства
 
-The world used to roll over on a shared clock: `cycle_index = unix_time // 21600`
-fed every seed, so all fifteen cities regenerated four times a day, together.
+Мир когда-то переворачивался по общим часам: `cycle_index = unix_time // 21600`
+кормил каждый сид, и все пятнадцать городов пересобирались четыре раза в сутки, разом.
 
-Two things were wrong with it in play. A location a player was working through
-could be five hours away from changing or five minutes, and there was no way to
-tell which - the map was on a timer nobody could see. And a game about walking a
-road felt like a game about waiting for one: the answer to "there is nothing to
-do here" was "come back in four hours", which for a session-based player means
-tomorrow.
+В игре это было плохо двумя вещами. До смены локации, которую игрок как раз проходил,
+могло быть пять часов, а могло пять минут, и узнать, что именно, было нельзя: карта
+стояла на таймере, которого никто не видит. И игра о том, как идут по дороге,
+ощущалась игрой о том, как ждут дорогу: ответом на «здесь нечего делать» было
+«возвращайся через четыре часа», а для того, кто играет сессиями, это значит «завтра».
 
-Six hours also had to mean something in the fiction, so the world grew a "watch"
-that players had to learn before they could understand why the shop was empty.
+Шесть часов к тому же обязаны были что-то значить в вымысле, поэтому в мире завелась
+«стража», которую игрокам приходилось выучить, прежде чем понять, почему пуста лавка.
 
-## Decision
+## Решение
 
-A location has a **generation**, not a cycle:
+У локации есть **поколение**, а не цикл:
 
 ```
 location_seed = blake2b(world_seed, city_id, slot, generation)
 ```
 
-The generation goes up when the location is **cleared out** - every node except
-the two doors worked through - and at no other time. Until then the same map
-stands, however long that takes.
+Поколение растёт, когда локацию **вычистили** — прошли все узлы, кроме двух дверей, — и
+больше никогда. До тех пор стоит та же карта, сколько бы это ни заняло.
 
-The state is shared. Everyone in a location sees the same map, the same emptied
-nodes and each other; it lives in Redis under `loc:{city}:{slot}` with a week's
-time to live, so a place nobody has visited for a week is re-rolled, which is
-indistinguishable from nobody having visited it.
+Состояние общее. Все в локации видят одну и ту же карту, одни и те же опустевшие узлы и
+друг друга; живёт это в Redis под `loc:{city}:{slot}` со сроком в неделю, поэтому место,
+куда неделю никто не заходил, бросается заново — что неотличимо от «туда никто не
+заходил».
 
-Two things stay on a clock, and both are short:
+По часам остаются две вещи, и обе короткие:
 
-- the **shop rotation**, half an hour (`SHOP_ROTATION_SECONDS`), because a shelf
-  that never changes gives nobody a reason to come back;
-- the **gathering cooldown**, a quarter of an hour (`GATHER_COOLDOWN_SECONDS`),
-  personal to each character rather than shared, so nobody waits out somebody
-  else's timer.
+- **переворот лавки**, полчаса (`SHOP_ROTATION_SECONDS`), потому что прилавок, который
+  не меняется, никому не даёт повода вернуться;
+- **откат сбора**, четверть часа (`GATHER_COOLDOWN_SECONDS`), личный для каждого
+  персонажа, а не общий, чтобы никто не пережидал чужой таймер.
 
-## Consequences
+## Последствия
 
-- The domain still does not know the time: the generation, the rotation and the
-  moment all arrive as arguments, and tests pass them explicitly.
-- Clearing a location is a real event with a visible result - the place changes -
-  instead of a mark that expired at an hour the player could not see.
-- A player who finishes the last node walks out into a new map. That is the
-  intended reward, not a bug.
-- Two players finishing the last node at the same instant roll the location over
-  once: `rotate` is a compare-and-set on the generation they both saw.
-- The word "стража" leaves the game entirely, fiction included.
+- Домен по-прежнему не знает времени: поколение, переворот и момент приходят
+  аргументами, а тесты передают их явно.
+- Вычистить локацию — настоящее событие с видимым результатом (место меняется), а не
+  отметка, истёкшая в час, которого игрок не видел.
+- Тот, кто прошёл последний узел, выходит на новую карту. Это задуманная награда, а не
+  ошибка.
+- Двое, прошедшие последний узел в одно мгновение, переворачивают локацию один раз:
+  `rotate` — это сравнение с записью по тому поколению, которое видели оба.
+- Слово «стража» уходит из игры целиком, из вымысла в том числе.

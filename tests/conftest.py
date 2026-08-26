@@ -1,4 +1,4 @@
-"""Shared test fixtures and helpers."""
+"""Общие приспособления и помощники тестов."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def content_root() -> Path:
 
 
 def iter_source_files(root: Path = SOURCE_ROOT) -> list[Path]:
-    """Every Python module shipped in the package."""
+    """Каждый модуль Python, который едет в пакете."""
     return sorted(root.rglob("*.py"))
 
 

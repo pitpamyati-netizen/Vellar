@@ -1,12 +1,13 @@
-# Individual traits. The player picks exactly two at character creation.
+# Черты. При создании персонажа игрок выбирает ровно две.
 #
-# HARD RULE: a trait never grants a button, an active skill or a new screen.
-# Traits are modifiers only. This is what keeps the interface small enough to be
-# playable by ear - see docs/skills.md, "Anti-bloat rules".
+# ЖЁСТКОЕ ПРАВИЛО: черта никогда не даёт ни кнопки, ни боевого умения, ни нового
+# экрана. Черты - это только прибавки. Именно это и держит интерфейс достаточно
+# маленьким, чтобы играть на слух, - см. docs/skills.md, «Правила против
+# разрастания».
 #
-# Every modifier key must be listed in [meta].modifier_keys; the loader rejects
-# unknown keys at startup. Categories are used by the filter on the selection
-# screen. "dark" traits pay for a strong bonus with a real penalty.
+# Каждый ключ прибавки обязан быть в [meta].modifier_keys; незнакомые ключи
+# загрузчик отвергает на старте. Категории берёт фильтр на экране выбора. Черты
+# категории "dark" платят за сильную выгоду настоящим штрафом.
 
 [meta]
 picks_at_creation = 2
@@ -36,7 +37,7 @@ modifier_keys = [
     "resist_bludgeoning_percent", "resist_rending_percent",
     "resist_arcane_percent", "resist_fire_percent", "resist_cold_percent",
     "resist_poison_percent", "resist_acid_percent", "resist_air_percent",
-    "resist_chaos_percent", "resist_holy_percent", "resist_light_percent",
+    "resist_holy_percent", "resist_light_percent",
     "resist_mental_percent", "resist_nature_percent", "resist_negative_percent",
     "exp_percent", "gold_percent", "shop_price_percent", "sell_price_percent",
     "drop_rate_percent", "rarity_percent", "quest_reward_percent", "event_reward_percent",
@@ -47,9 +48,9 @@ modifier_keys = [
     "elite_damage_percent", "beast_damage_percent",
     "undead_damage_percent", "humanoid_damage_percent", "reputation_percent",
 ]
-# Modifier keys where a lower value is the good outcome. The renderer needs this to
-# say "prices are 12 percent lower" instead of blindly printing a minus sign, and
-# the balance tests need it to tell a bonus from a penalty.
+# Ключи прибавок, у которых хорошим исходом является меньшее значение. Это нужно
+# отрисовке, чтобы сказать «цены ниже на 12 процентов» вместо слепо напечатанного
+# минуса, и тестам баланса, чтобы отличить выгоду от штрафа.
 lower_is_better = [
     "damage_taken_percent",
     "shop_price_percent",
@@ -467,7 +468,7 @@ tags = ["опыт"]
 modifiers = { exp_percent = 8, health_percent = -4 }
 text = "Опыта на 8 процентов больше, здоровья на 4 процента меньше."
 
-# --- Fate and luck ---
+# --- Судьба и удача ---
 
 [[trait]]
 id = "born_lucky"

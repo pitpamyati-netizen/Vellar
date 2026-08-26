@@ -1,8 +1,8 @@
-"""Shop assortment, prices, and the duty on a trade between players.
+"""Прилавок лавки, цены и пошлина со сделки между игроками.
 
-The assortment is a pure function of ``(city, rotation, reputation)`` - it is
-rolled from a seed, never stored, and the shelf turns over every half hour, which
-is the one reason left to come back to a city on a clock (``docs/procgen.md``).
+Прилавок - чистая функция от ``(город, переворот, репутация)``: он бросается из
+сида, не хранится нигде, и переворачивается каждые полчаса - единственная
+оставшаяся причина возвращаться в город по часам (``docs/procgen.md``).
 """
 
 from __future__ import annotations
@@ -30,10 +30,10 @@ CHARISMA_DISCOUNT_PER_POINT = 0.4
 MAX_CHARISMA_DISCOUNT = 15.0
 SELL_FRACTION = 0.35
 
-# The Treaty of Cities holds on duties, not on loyalty (``Narrative.md``, section
-# 1), and the Salt Watch takes its share of every deal struck between players.
-# The number is the whole reason gold does not pile up forever: it is the one
-# outflow that scales with how much the players actually trade.
+# Договор городов держится на пошлинах, а не на верности (``Narrative.md``, раздел 1), и
+# Соляная стража берёт свою долю с каждой сделки между игроками. Это число - вся
+# причина, по которой золото не копится вечно: единственный отток, который растёт вместе
+# с тем, сколько игроки на самом деле торгуют.
 TRADE_TAX_PERCENT = 5
 
 
@@ -46,9 +46,9 @@ def roll_assortment(
     character_level: int,
     reputation: float = 0.0,
 ) -> tuple[Item, ...]:
-    """What this city sells in this rotation of its shelf.
+    """Чем торгует этот город в этот переворот своего прилавка.
 
-    Higher reputation widens the shelf, so a regular customer sees more:
+    Чем выше репутация, тем шире прилавок, и постоянный покупатель видит больше:
     ``reputation`` приходит процентами ``reputation_percent`` со всего, что на
     персонаже надето и выбрано (``REPUTATION_PER_STEP``).
 
@@ -91,13 +91,13 @@ def buy_price(
     modifiers: dict[str, float] | None = None,
     charisma: int = 0,
 ) -> int:
-    """Shop price after rarity, charisma and trait discounts."""
+    """Цена в лавке после редкости, харизмы и скидок от черт."""
     rarity = content.rarity(item.rarity)
     price = item.price * rarity.price_factor
 
     discount = min(MAX_CHARISMA_DISCOUNT, charisma * CHARISMA_DISCOUNT_PER_POINT)
     if modifiers:
-        # shop_price_percent is negative when it helps, so it subtracts directly.
+        # shop_price_percent отрицателен, когда он помогает, поэтому вычитается прямо.
         discount += -modifiers.get("shop_price_percent", 0.0)
     return max(1, round(price * max(0.4, 1.0 - discount / 100.0)))
 
@@ -105,7 +105,7 @@ def buy_price(
 def sell_price(
     content: GameContent, item: Item, *, modifiers: dict[str, float] | None = None
 ) -> int:
-    """What a merchant pays for an item the player brings in."""
+    """Сколько торговец платит за вещь, которую игрок принёс."""
     rarity = content.rarity(item.rarity)
     price = item.price * rarity.price_factor * SELL_FRACTION
     bonus = 1.0 + (modifiers.get("sell_price_percent", 0.0) if modifiers else 0.0) / 100.0
@@ -113,16 +113,16 @@ def sell_price(
 
 
 def trade_tax(price: int, *, percent: int = TRADE_TAX_PERCENT) -> int:
-    """The duty on a settled trade between two players.
+    """Пошлина с закрытой сделки между двумя игроками.
 
-    Charged once, on the price, and it leaves the game entirely - nobody receives
-    it. A free hand-over (``передать``) is not a trade and is not taxed: taxing a
-    gift would only punish players for helping each other, and two hand-overs can
-    always replace a sale anyway. That is not a loophole to close but a trade
-    without the protection of a confirmation.
+    Берётся один раз, с цены, и уходит из игры целиком - её никто не получает.
+    Передача даром (``передать``) сделкой не считается и не облагается: облагать
+    подарок значило бы наказывать игроков за помощь друг другу, да и две передачи
+    всё равно заменяют продажу. Это не лазейка, которую надо закрыть, а сделка без
+    защиты подтверждением.
 
-    A priced trade always costs at least one gold, so a shower of one-coin sales
-    cannot launder value past the duty.
+    Сделка с ценой всегда стоит хотя бы одну золотую, поэтому ливень продаж по
+    монете не проведёт ценность мимо пошлины.
     """
     if price <= 0:
         return 0
@@ -130,28 +130,27 @@ def trade_tax(price: int, *, percent: int = TRADE_TAX_PERCENT) -> int:
 
 
 def payout(price: int, *, percent: int = TRADE_TAX_PERCENT) -> int:
-    """What the seller actually receives: the price, less the duty."""
+    """Что продавец получает на самом деле: цена за вычетом пошлины."""
     return max(0, price - trade_tax(price, percent=percent))
 
 
 def refund(price: int, tax: int) -> int:
-    """What comes back to the payer when a keeper undoes a settled trade.
+    """Что возвращается плательщику, когда смотритель откатывает закрытую сделку.
 
-    Exactly what the seller was handed, and not a coin more. The duty is gone -
-    it left the game when the trade settled, and nobody is holding it - so
-    returning the full price would mint that duty out of nothing, which is the
-    one thing no rule in this module is allowed to do (``Claude.md``, rule 8).
-    The keeper tells the players so; the difference is small and the alternative
-    is an economy that grows every time somebody is scammed.
+    Ровно то, что было выдано продавцу, и ни монетой больше. Пошлины нет - она ушла
+    из игры, когда сделка закрылась, и никто её не держит, - поэтому возврат полной
+    цены напечатал бы эту пошлину из ничего, а это единственное, чего ни одному
+    правилу в этом модуле делать нельзя (``Claude.md``, правило 8). Смотритель
+    говорит игрокам об этом; разница мала, а другой выход - экономика, растущая
+    каждый раз, когда кого-то обманули.
     """
     return max(0, price - max(0, tax))
 
 
-# --- what a city charges for its services ----------------------------
-#
-# A bed, a teacher and a strongbox are the three ways gold leaves a player
-# without another player receiving it. All three scale with level, because a
-# level 40 character earns in one watch what a level 4 character earns in ten.
+# --- за что берёт город ---------------------------------------------
+# Постель, учитель и сундук - три способа, которыми золото уходит от игрока, не
+# доставаясь другому игроку. Все три растут с уровнем, потому что персонаж сорокового
+# уровня зарабатывает за стражу столько, сколько персонаж четвёртого за десять.
 
 INN_PRICE_BASE = 5
 INN_PRICE_PER_LEVEL = 3
@@ -162,12 +161,12 @@ BANK_DEPOSIT_STEP = 50
 
 
 def inn_price(level: int) -> int:
-    """A night at the inn: full health, priced by what the guest can pay."""
+    """Ночь на постоялом дворе: полное здоровье по цене, которую гость потянет."""
     return max(1, INN_PRICE_BASE + INN_PRICE_PER_LEVEL * max(0, level - 1))
 
 
 def mentor_price(level: int) -> int:
-    """What a teacher charges to unpick a rank or an edge and hand the point back."""
+    """Сколько берёт учитель за то, чтобы распустить ранг или грань и вернуть очко."""
     return max(1, MENTOR_PRICE_BASE + MENTOR_PRICE_PER_LEVEL * max(0, level - 1))
 
 
@@ -176,7 +175,7 @@ def affordable(items: Sequence[Item], gold: int, prices: dict[str, int]) -> tupl
 
 
 def charisma_of(stats: object) -> int:
-    """Read charisma out of a stat block without the caller importing StatCode."""
+    """Прочитать харизму из набора характеристик, не импортируя StatCode у вызывающего."""
     from mmorpg.domain.entities.stats import StatBlock
 
     if isinstance(stats, StatBlock):

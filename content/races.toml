@@ -1,19 +1,19 @@
-# Sixteen playable races.
+# Шестнадцать играбельных рас.
 #
-# A race says what the adventurer is, never where they must live: Vellar is a
-# road, and everyone on it came from somewhere else (Narrative.md, section 2).
-# Ids are frozen - characters in the database point at them.
+# Раса говорит, кто такой приключенец, и никогда - где ему полагается жить: Vellar
+# это дорога, и всякий на ней пришёл откуда-то ещё (Narrative.md, раздел 2).
+# Идентификаторы заморожены: на них показывают персонажи в базе.
 #
-# Stat budget rule: the sum of positive bonuses may not exceed 3 plus the sum of
-# penalties taken, and the net total may not exceed +3. Verified by
+# Правило бюджета характеристик: сумма положительных прибавок не больше 3 плюс
+# сумма взятых штрафов, а чистая сумма не больше +3. Проверяет
 # tests/content/test_races.py.
 #
-# Stat codes: STR strength, AGI agility, END endurance, INT intellect,
-# WIS wisdom, CHA charisma, LCK luck.
+# Коды характеристик: STR сила, AGI ловкость, END выносливость, INT интеллект,
+# WIS мудрость, CHA харизма, LCK удача.
 #
-# Every race has exactly one passive and exactly one active ability. The active
-# one lives in skills.toml with owner = "race:<id>" and occupies the separate
-# racial slot, so it never competes with class skills.
+# У каждой расы ровно одна пассивная способность и ровно одно боевое умение. Боевое
+# живёт в skills.toml с owner = "race:<id>" и занимает отдельный расовый слот,
+# поэтому оно никогда не спорит с умениями класса.
 
 [[race]]
 id = "human"

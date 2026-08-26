@@ -1,23 +1,23 @@
-"""What the bot says in the group.
+"""Что бот говорит в группе.
 
-These are **not** :class:`Screen` objects, and that is deliberate. A screen is a
-place the player stands in, with the service row ``Назад · Главное меню`` at the
-bottom; the group is a conversation between people, where the bot
-answers a specific message and then gets out of the way. There is nothing to go
-back to, so offering a "Назад" would be a lie.
+Это **не** объекты :class:`Screen`, и это нарочно. Экран — место, в котором стоит
+игрок, со служебным рядом ``Назад · Главное меню`` внизу; группа — разговор между
+людьми, где бот отвечает на конкретное сообщение и уходит с дороги. Возвращаться
+там некуда, поэтому предлагать «Назад» значило бы соврать.
 
-Two constraints shape the wording:
+Слова здесь держат два ограничения:
 
-- **no verbs that agree with gender.** A character may be anyone, and Russian
-  past tense would force a guess, so every event is stated with nouns:
-  "Передача золота: 100 золотых. Отправитель: Аргус."
-- **no declension of names.** A player's name is theirs; bending it into the
-  dative would mangle half of them. Names always appear after a role word.
+- **никаких глаголов, согласующихся с родом.** Персонажем может быть кто угодно, а
+  русское прошедшее время заставило бы угадывать, поэтому всякое событие
+  называется существительными: «Передача золота: 100 золотых. Отправитель:
+  Аргус.»
+- **никакого склонения имён.** Имя игрока принадлежит ему; согнув его в дательный,
+  половину имён мы бы изуродовали. Имена всегда идут после слова роли.
 
-The result reads as a short record, which is also the easiest thing to follow by
-ear in a fast-moving group chat. The keyboard is only ever two buttons, and those
-buttons are literally the typed commands they duplicate (``Narrative.md``,
-section 9), so pressing one and typing it produce the same message.
+Выходит короткая запись, а её же и легче всего проследить на слух в быстро идущем
+групповом чате. Клавиатура — это всегда только две кнопки, и эти кнопки буквально
+равны тем командам, которые они дублируют (``Narrative.md``, раздел 9), поэтому
+нажать и набрать дают одно и то же сообщение.
 """
 
 from __future__ import annotations
@@ -38,10 +38,10 @@ DECLINE_WORD = "Отказ"
 
 @dataclass(frozen=True, slots=True)
 class GroupReply:
-    """One message the bot posts in the group.
+    """Одно сообщение, которое бот пишет в группу.
 
-    ``buttons`` is shown to the target alone (a ``selective`` keyboard), so a
-    bystander never sees a button that would refuse them anyway.
+    ``buttons`` показывается одному лишь адресату (клавиатура ``selective``),
+    поэтому посторонний никогда не увидит кнопку, которая всё равно бы ему отказала.
     """
 
     text: str
@@ -76,7 +76,7 @@ REFUSALS: dict[Refusal, str] = {
     Refusal.BLOCKED_TARGET: ("Игрок у вас в чёрном списке. Снять: ответьте ему словом «разблок»."),
 }
 
-# What publishing an offer takes from its author and holds until it is answered.
+# Что объявление предложения забирает у автора и держит, пока не ответят.
 ESCROW_WORDS: dict[OfferKind, str] = {
     OfferKind.SELL: "Вещь отложена до ответа.",
     OfferKind.BUY: "Золото отложено до ответа.",
@@ -89,7 +89,7 @@ KIND_WORDS: dict[OfferKind, str] = {
 
 
 def render(content: GameContent, outcome: GroupOutcome) -> GroupReply:
-    """Turn a service outcome into the message the group will see."""
+    """Превратить исход работы сервиса в сообщение, которое увидит группа."""
     match outcome.result:
         case GroupResult.PROFILE:
             if outcome.character is None or outcome.stats is None:  # pragma: no cover
@@ -151,15 +151,16 @@ def _offer_result(result: GroupResult, offer: Offer, tax: int) -> GroupReply:
         return offer_reply(offer, tax)
     if result is GroupResult.OFFER_ACCEPTED:
         return GroupReply(text=accepted_text(offer, tax))
-    # A declined offer gives the author back what the offer was holding.
+    # Отклонённое предложение возвращает автору то, что оно держало.
     return GroupReply(text=f"Предложение {offer.number} отклонено. Отложенное вернулось владельцу.")
 
 
 def profile_text(content: GameContent, character: Character, stats: DerivedStats) -> str:
-    """The target's character, in one message and without their purse.
+    """Персонаж адресата, одним сообщением и без его кошелька.
 
-    Gold and inventory are not shown: what a player carries is their business,
-    and a public profile that lists it turns the group into a target list.
+    Золото и сумка не показываются: что игрок носит при себе - его дело, а
+    общедоступная карточка, которая это перечисляет, превращает группу в список
+    целей.
     """
     lines = [
         f"{character.name}, уровень {character.level}, "
@@ -176,11 +177,11 @@ def profile_text(content: GameContent, character: Character, stats: DerivedStats
 
 
 def offer_reply(offer: Offer, tax: int = 0) -> GroupReply:
-    """A published offer, plus the two buttons only its target can see.
+    """Объявленное предложение и две кнопки, которые видит один его адресат.
 
-    The duty is quoted before anyone agrees to anything: a seller who reads
-    "получит 95" and then finds 95 in their purse has been told the truth, and
-    the same line explains where the missing five went.
+    Пошлина названа до того, как кто-нибудь на что-нибудь согласился: продавцу,
+    прочитавшему «получит 95» и нашедшему потом 95 в кошельке, сказали правду, и та
+    же строка объясняет, куда делись недостающие пять.
     """
     seller, buyer = offer.giver.name, offer.payer.name
     return GroupReply(
@@ -198,7 +199,7 @@ def offer_reply(offer: Offer, tax: int = 0) -> GroupReply:
 
 
 def answer_buttons(number: int) -> tuple[str, ...]:
-    """The button texts. Each one is exactly the command it stands for."""
+    """Тексты кнопок. Каждый из них - ровно та команда, за которую он стоит."""
     return (f"{ACCEPT_WORD} {number}", f"{DECLINE_WORD} {number}")
 
 
@@ -211,14 +212,14 @@ def accepted_text(offer: Offer, tax: int = 0) -> str:
 
 
 def _duty(price: int, tax: int) -> str:
-    """The Road Chamber takes its share of every deal (``Narrative.md``, section 1)."""
+    """Дорожная палата берёт свою долю с каждой сделки (``Narrative.md``, раздел 1)."""
     if tax <= 0:
         return ""
     return f"Пошлина Палаты: {gold(tax)}. Продавцу на руки: {gold(price - tax)}."
 
 
 def refusal_text(outcome: GroupOutcome) -> str:
-    """A refusal always says what was refused, then why."""
+    """Отказ всегда говорит, в чём отказано, а потом почему."""
     if outcome.refusal is None:  # pragma: no cover
         return REFUSALS[Refusal.UNKNOWN_OFFER]
     reason = REFUSALS[outcome.refusal]

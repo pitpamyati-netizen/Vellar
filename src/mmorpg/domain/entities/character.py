@@ -1,8 +1,9 @@
-"""The character entity and the parts that are actually stored.
+"""Персонаж и то, что у него действительно хранится.
 
-Only *raw* values live here: allocated stat points, level, experience, chosen
-traits, the skill loadout and equipment. Totals - health, armor, damage - are never
-stored; they are recomputed from these raw values by ``mmorpg.domain.rules.stats``.
+Здесь живут только *сырые* значения: розданные очки характеристик, уровень,
+опыт, выбранные черты, набор умений и снаряжение. Итоги - здоровье, броня, урон
+- не хранятся никогда: их пересчитывает из этих сырых значений
+``mmorpg.domain.rules.stats``.
 """
 
 from __future__ import annotations
@@ -20,10 +21,10 @@ ACTIVE_SLOTS = 6
 
 @dataclass(frozen=True, slots=True)
 class SkillLoadout:
-    """What the player put in the fixed panel.
+    """Что игрок положил в постоянную панель.
 
-    ``actives`` always has 6 entries; an empty slot is ``None`` and keeps its
-    number, so a skill never changes position.
+    ``actives`` всегда содержит 6 записей; пустой слот — это ``None``, и он держит
+    свой номер, поэтому умение не меняет положения.
 
     Постоянных слотов здесь нет. Постоянное умение нечем нажать, у него нет ни
     хода, ни цели, и «поместить его в слот» означало только одно: три из шести
@@ -40,10 +41,10 @@ class SkillLoadout:
         if len(self.actives) != ACTIVE_SLOTS:
             msg = f"the panel has exactly {ACTIVE_SLOTS} active slots"
             raise ValueError(msg)
-        # A skill lying in the panel is a skill the character knows. Without this
-        # the starting skill fought like rank one but the skills screen still
-        # offered to learn it for a point - the same skill, known and unknown at
-        # once. Normalising here fixes characters saved by older releases too.
+        # Умение, лежащее в панели, - это умение, которое персонаж знает. Без этого
+        # стартовое умение дралось как ранг первый, а экран умений всё предлагал изучить
+        # его за очко: одно и то же умение, разом изученное и нет. Приведение к норме
+        # здесь чинит и персонажей, сохранённых прежними выпусками.
         in_panel = self.equipped_actives()
         if self.racial is not None:
             in_panel = (*in_panel, self.racial)
@@ -55,7 +56,7 @@ class SkillLoadout:
             object.__setattr__(self, "ranks", MappingProxyType(ranks))
 
     def rank_of(self, skill_code: str) -> int:
-        """Rank of a skill; 1 once it is known at all."""
+        """Ранг умения; единица, как только умение вообще изучено."""
         return self.ranks.get(skill_code, 1)
 
     def edge_of(self, skill_code: str) -> str | None:
@@ -82,7 +83,7 @@ class SkillLoadout:
 
 @dataclass(frozen=True, slots=True)
 class Equipment:
-    """Item ids by slot. An empty slot is simply absent."""
+    """Идентификаторы вещей по слотам. Пустого слота просто нет."""
 
     items: Mapping[str, str] = field(default_factory=dict)
 
@@ -108,7 +109,7 @@ class InventoryEntry:
 
 @dataclass(frozen=True, slots=True)
 class Character:
-    """A player character. Everything here is persisted verbatim."""
+    """Персонаж игрока. Всё здесь сохраняется как есть."""
 
     id: int
     user_id: int
@@ -125,46 +126,44 @@ class Character:
     city_id: str = "farhold"
     unspent_stat_points: int = 0
     unspent_skill_points: int = 0
-    # Wounds outlive a fight: a player leaves a location as they left the last
-    # node, and pays somebody to be patched up. Zero means "as good as new",
-    # which is what a freshly created character is - see ``health_or``.
+    # Раны переживают бой: игрок уходит из локации таким, каким вышел из последнего
+    # узла, и платит за то, чтобы его залатали. Ноль значит «как новенький» - именно
+    # таков только что созданный персонаж, см. ``health_or``.
     health: int = 0
     bank_gold: int = 0
     quests: QuestLog = field(default_factory=QuestLog)
-    # Craft work already done. A rank is never stored - it is counted back from
-    # the experience here by ``mmorpg.domain.rules.crafts``.
+    # Работа, уже сделанная в ремесле. Ранг не хранится никогда - его отсчитывает
+    # обратно от этого опыта ``mmorpg.domain.rules.crafts``.
     crafts: CraftLog = field(default_factory=CraftLog)
-    # What the arena remembers: two counters for the season table, and the
-    # gold it is holding of yours. A win is paid out of that hold and never out
-    # of nowhere, which is what keeps the arena from minting gold
-    # (``domain/rules/arena.py``).
+    # Что помнит арена: два счётчика для таблицы сезона и золото, которое она с тебя
+    # держит. Победа платится из этого залога и никогда из ниоткуда - это и не даёт
+    # арене печатать золото (``domain/rules/arena.py``).
     arena_wins: int = 0
     arena_losses: int = 0
     arena_credit: int = 0
-    # The endgame, and the only thing in the game that is paid for with what a
-    # character already has (``domain/rules/turning.py``). ``seals`` is how many
-    # Turnings they have made; ``pledges`` is what went into them, so nothing is
-    # ever pledged twice; ``turning_cycle``/``turning_answer`` is the answer they
-    # gave to the question the Chamber has open, and which question it was.
+    # Конец пути и единственное в игре, за что платят тем, что у персонажа уже есть
+    # (``domain/rules/turning.py``). ``seals`` - сколько перерождений он совершил;
+    # ``pledges`` - что в них ушло, чтобы ничто не закладывалось дважды;
+    # ``turning_cycle``/``turning_answer`` - ответ, который он дал на открытый вопрос
+    # Палаты, и на какой именно вопрос.
     seals: int = 0
     pledges: tuple[str, ...] = ()
     turning_cycle: str = ""
     turning_answer: str = ""
-    # Which introduction tasks are behind them, as a bitmask
-    # (``mmorpg.domain.rules.tutorial``). Zero is a player who has just arrived.
+    # Какие шаги обучения уже позади, битовой маской (``mmorpg.domain.rules.tutorial``).
+    # Ноль - игрок, который только что пришёл.
     tutorial: int = 0
-    # A keeper of the game, not a stronger character: the flag only says that the
-    # keeper screen is theirs to open. Who is a keeper is decided by ADMIN_IDS in
-    # the environment; this column mirrors that decision so the screens can read
-    # it without the settings object.
+    # Смотритель игры, а не персонаж посильнее: флаг говорит лишь о том, что экран
+    # смотрителя открывается ему. Кто смотритель, решает ADMIN_IDS в окружении; эта
+    # колонка повторяет то решение, чтобы экраны читали его без объекта настроек.
     is_admin: bool = False
 
     def health_or(self, maximum: int) -> int:
-        """Current health, clamped into the range the totals allow right now.
+        """Текущее здоровье, зажатое в границы, которые допускают нынешние итоги.
 
-        Equipment and levels move the maximum around between fights, so the
-        stored number is only ever a claim: it is trusted up to the maximum and
-        never below one, because a character at zero would be unplayable.
+        Снаряжение и уровни двигают максимум между боями, поэтому сохранённое число -
+        всегда лишь заявка: ему верят до максимума и никогда ниже единицы, потому что
+        персонажем на нуле играть невозможно.
         """
         if self.health <= 0:
             return maximum
@@ -196,7 +195,7 @@ class Character:
         return replace(self, arena_losses=self.arena_losses + 1)
 
     def with_arena_credit(self, held: int) -> Character:
-        """Set what the arena holds of yours. Never below nothing."""
+        """Записать, сколько с тебя держит арена. Никогда не меньше нуля."""
         return replace(self, arena_credit=max(0, held))
 
     def with_seal(self, pledge: str) -> Character:

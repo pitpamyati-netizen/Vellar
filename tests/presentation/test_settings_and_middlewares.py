@@ -1,4 +1,4 @@
-"""Accessibility settings, duplicate updates and the latency guard rails."""
+"""Настройки доступности, повторные обновления и перила задержки."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ def step(
     )
 
 
-# --- settings screen --------------------------------------------------
+# --- экран настроек ---------------------------------------------------
 
 
 def test_emoji_are_off_by_default() -> None:
@@ -55,7 +55,7 @@ def test_emoji_are_off_by_default() -> None:
 
 
 def test_settings_state_their_current_value_in_words() -> None:
-    """A checkmark is invisible to a screen reader, so the value is a sentence."""
+    """Галочка экранному диктору не видна, поэтому значение здесь - фраза."""
     off = settings_screen(AccessibilitySettings(emoji=False)).text()
     on = settings_screen(AccessibilitySettings(emoji=True)).text()
     assert "Эмодзи: выключены" in off
@@ -96,7 +96,7 @@ def test_emoji_setting_changes_the_rendered_keyboard(content: GameContent, hero:
     plain = screen.button_texts(emoji=False)
     fancy = screen.button_texts(emoji=True)
     assert plain != fancy
-    # ...but the meaning is carried by the text either way.
+    # ...но смысл в любом случае несёт текст.
     assert all(
         plain_text in fancy_text
         for plain_row, fancy_row in zip(plain, fancy, strict=True)
@@ -104,7 +104,7 @@ def test_emoji_setting_changes_the_rendered_keyboard(content: GameContent, hero:
     )
 
 
-# --- idempotency ------------------------------------------------------
+# --- отсев повторов ---------------------------------------------------
 
 
 async def test_duplicate_updates_never_apply_twice() -> None:
@@ -140,7 +140,7 @@ async def test_distinct_updates_are_all_handled() -> None:
     assert calls == [1, 2, 3]
 
 
-# --- latency guard rails ----------------------------------------------
+# --- перила задержки --------------------------------------------------
 
 
 def test_slow_callback_detector_uses_the_configured_threshold() -> None:
@@ -155,7 +155,7 @@ def test_slow_callback_detector_uses_the_configured_threshold() -> None:
 
 
 def test_the_detector_can_be_switched_off_for_a_loaded_deployment() -> None:
-    """Debug mode timestamps every callback; that is not a price to pay in production."""
+    """Режим отладки проставляет время каждому колбэку; в бою это не та цена, которую платят."""
     loop = asyncio.new_event_loop()
     try:
         settings = Settings(_env_file=None, slow_callback_detector=False)  # type: ignore[call-arg]
@@ -171,7 +171,7 @@ def test_measure_does_not_raise_on_fast_work() -> None:
 
 
 def test_rendering_a_screen_stays_inside_the_budget(content: GameContent, hero: Character) -> None:
-    """A typical update renders one screen; that must be nowhere near 100 ms."""
+    """Обычное обновление рисует один экран; до 100 мс ему должно быть далеко."""
     import time
 
     state = begin(hero)
@@ -193,13 +193,13 @@ def test_keyboards_are_cached_by_layout(content: GameContent, hero: Character) -
 
 
 def test_content_is_loaded_once_and_shared(content: GameContent) -> None:
-    """Static content lives in memory; lookups are dict hits, not file reads."""
+    """Неизменное содержимое лежит в памяти; поиск - это попадание в словарь, а не чтение файла."""
     assert content.race("human") is content.race("human")
     assert content.skill("warrior_rassechenie") is content.skill("warrior_rassechenie")
 
 
 def test_no_blocking_calls_in_handlers_or_flows() -> None:
-    """time.sleep and synchronous file I/O would stall every other player."""
+    """time.sleep и синхронный файловый ввод-вывод затормозили бы всех остальных игроков."""
     from tests.conftest import SOURCE_ROOT
 
     watched = list((SOURCE_ROOT / "presentation").rglob("*.py"))
@@ -212,7 +212,7 @@ def test_no_blocking_calls_in_handlers_or_flows() -> None:
 
 
 def test_settings_survive_a_flow_round_trip(content: GameContent, hero: Character) -> None:
-    """The pending write is transient: it must not leak into stored FSM data."""
+    """Отложенная запись скоропортящаяся: протечь в сохранённые данные автомата она не вправе."""
     opened = step(content, hero, begin(hero), "Настройки")
     toggled = step(content, hero, opened, "Переключить эмодзи", AccessibilitySettings())
     restored = PlayState.deserialise(toggled.serialise())
@@ -234,7 +234,7 @@ def test_toggling_twice_returns_to_the_original(content: GameContent, hero: Char
     assert twice.pending.settings == replace(settings, emoji=False)
 
 
-# --- what the operator reads (mmorpg.metrics) --------------------------
+# --- что читает оператор (mmorpg.metrics) -----------------------------
 
 
 async def test_every_update_is_counted_and_timed() -> None:

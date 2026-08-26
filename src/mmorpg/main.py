@@ -1,21 +1,21 @@
-"""Composition root.
+"""Корень композиции.
 
-Everything is wired here and nowhere else: settings are read, content is loaded
-and validated, adapters are chosen for the environment, pools are opened,
-middlewares and routers are attached, and the bot starts.
+Всё связывается здесь и больше нигде: читаются настройки, загружается и
+проверяется содержимое, под окружение выбираются адаптеры, открываются пулы,
+подключаются мидлвари и роутеры, стартует бот.
 
-Four run modes (``docs/architecture.md``):
+Четыре режима запуска (``docs/architecture.md``):
 
-- ``APP_ENV=local`` - long polling with in-memory adapters, no PostgreSQL and no
-  Redis required, so the game is playable with just a bot token;
-- ``APP_ENV=solo``  - long polling against real PostgreSQL, with the short-lived
-  state kept in the process instead of in Redis: one machine, no containers
-  (``docs/adr/0010-a-machine-without-containers.md``);
-- ``APP_ENV=dev``   - long polling against real PostgreSQL and Redis;
-- ``APP_ENV=prod``  - aiohttp webhook against real PostgreSQL and Redis.
+- ``APP_ENV=local`` - long polling с адаптерами в памяти, ни PostgreSQL, ни
+  Redis не нужны, и игра играется с одним лишь токеном бота;
+- ``APP_ENV=solo``  - long polling против настоящего PostgreSQL, а
+  короткоживущее состояние держится в процессе вместо Redis: одна машина, без
+  контейнеров (``docs/adr/0010-a-machine-without-containers.md``);
+- ``APP_ENV=dev``   - long polling против настоящих PostgreSQL и Redis;
+- ``APP_ENV=prod``  - вебхук на aiohttp против настоящих PostgreSQL и Redis.
 
-The event loop is the stdlib ``asyncio.Runner``; uvloop is deliberately absent
-(``docs/adr/0004-no-uvloop.md``).
+Цикл событий - ``asyncio.Runner`` из стандартной библиотеки; uvloop отсутствует
+нарочно (``docs/adr/0004-no-uvloop.md``).
 """
 
 from __future__ import annotations
@@ -81,19 +81,19 @@ logger = get_logger(__name__)
 
 @dataclass(slots=True)
 class Application:
-    """The assembled bot, ready to run."""
+    """Собранный бот, готовый к запуску."""
 
     settings: Settings
     content: GameContent
     bot: Bot
     dispatcher: Dispatcher
     stack: AsyncExitStack
-    #: Counters of what has been served since the last report (``mmorpg.metrics``).
+    #: Счётчики того, что обслужено с прошлого отчёта (``mmorpg.metrics``).
     metrics: Metrics
 
 
 async def build_application(settings: Settings) -> Application:
-    """Load content, choose adapters, wire routers. Nothing runs yet."""
+    """Загрузить содержимое, выбрать адаптеры, связать роутеры. Ничего ещё не работает."""
     logger.info("build", ref=settings.vellar_build, env=settings.app_env.value)
     content = load_content(settings.content_dir)
     logger.info(
@@ -129,21 +129,21 @@ async def build_application(settings: Settings) -> Application:
 
     bot = Bot(
         token=settings.bot_token.get_secret_value(),
-        # parse_mode stays None: Markdown is read aloud by screen readers.
+        # parse_mode остаётся None: разметку экранный диктор читает вслух.
         default=DefaultBotProperties(parse_mode=None),
     )
-    # A screen that died on a broken socket is sent again rather than becoming
-    # silence: the player has no other way to tell the two apart.
+    # Экран, умерший на оборванном сокете, отправляется заново, а не превращается в
+    # тишину: отличить одно от другого игроку больше нечем.
     bot.session.middleware(RetryRequestMiddleware(RetryPolicy.from_settings(settings)))
-    # Below it, and therefore closer to the socket: the queue that keeps the bot
-    # inside Telegram's count of sends per second. Waiting a few milliseconds is
-    # cheaper than being told to wait a few seconds.
+    # Ниже неё, а значит ближе к сокету, - очередь, которая держит бота внутри счёта
+    # отправок в секунду. Подождать несколько миллисекунд дешевле, чем услышать «подожди
+    # несколько секунд».
     bot.session.middleware(SendRateMiddleware(SendWindow(limit=settings.telegram_sends_per_second)))
     dispatcher = Dispatcher(storage=storage)
 
-    # Order matters: time everything first, open the note the rest of the way
-    # down writes its outcome into, then drop duplicates, then inject, then catch
-    # failures around the handler itself.
+    # Порядок важен: сначала замерить всё, потом открыть запись, куда весь путь ниже
+    # проставит свой исход, потом отбросить повторы, потом подставить зависимости, потом
+    # ловить отказы уже вокруг хендлера.
     metrics = Metrics()
     dispatcher.update.outer_middleware(MetricsMiddleware(metrics))
     dispatcher.update.outer_middleware(AuditMiddleware())
@@ -155,14 +155,14 @@ async def build_application(settings: Settings) -> Application:
     dispatcher.message.outer_middleware(BanMiddleware())
 
     dispatcher.include_router(creation.build_router())
-    # The fight router goes first: it claims the two combat states, and the play
-    # router below filters on the whole Play group, which includes them.
+    # Роутер боя идёт первым: он забирает два боевых состояния, а роутер игры ниже
+    # фильтрует по всей группе Play, куда они входят.
     dispatcher.include_router(combat.build_router())
     dispatcher.include_router(play.build_router())
 
-    # The group router owns the deletion clock for what it posts there. Its tasks
-    # are cancelled with the rest of the stack, so a shutdown does not hang on
-    # five minutes of pending deletions.
+    # Роутер группы владеет часами удаления того, что он там пишет. Его задачи
+    # отменяются вместе со всем стеком, так что остановка не виснет на пяти минутах
+    # отложенных удалений.
     reaper = MessageReaper()
     stack.push_async_callback(reaper.aclose)
     dispatcher.include_router(group.build_router(reaper))
@@ -187,11 +187,11 @@ async def build_application(settings: Settings) -> Application:
 async def _build_adapters(
     settings: Settings, registry: ContentRegistry, stack: AsyncExitStack
 ) -> tuple[BaseStorage, Dependencies, IdempotencyStore]:
-    """In-memory for local, PostgreSQL from there up, Redis for dev and prod.
+    """В памяти - для local, PostgreSQL - дальше вверх, Redis - для dev и prod.
 
-    The two halves are chosen separately (ADR 0005, ADR 0010): what a world is
-    made of goes to PostgreSQL, what a session is made of goes to Redis, and
-    ``solo`` takes the first without the second.
+    Половины выбираются по отдельности (ADR 0005, ADR 0010): из чего сделан мир - в
+    PostgreSQL, из чего сделана сессия - в Redis, а ``solo`` берёт первое без
+    второго.
     """
     if not settings.uses_postgres:
         logger.warning(
@@ -210,8 +210,8 @@ async def _build_adapters(
             state_cache=InMemoryStateCache(),
             locations=InMemoryLocationStateCache(),
             overlays=InMemoryContentOverlayRepository(),
-            # The sink is attached once the Bot exists; until then, and whenever
-            # CHANNEL_ID is empty, announcing is a no-op.
+            # Приёмник подключается, как только появился Bot; до тех пор - и всегда,
+            # когда CHANNEL_ID пуст, - объявление ничего не делает.
             broadcasts=ChannelBroadcaster(sink=None, chat_id=settings.channel_id),
         )
         return MemoryStorage(), dependencies, InMemoryIdempotencyStore()
@@ -227,8 +227,8 @@ async def _build_adapters(
         PostgresUserRepository,
     )
 
-    # The wait is patient: a stack that comes up together does not come up in
-    # order, and a database that needs five more seconds is not a reason to exit.
+    # Ожидание терпеливое: стек, который поднимается разом, поднимается не по порядку, и
+    # база, которой нужно ещё пять секунд, - не повод выходить.
     pool = await create_postgres_pool(settings)
     stack.push_async_callback(pool.close)
     storage, state_cache, locations, idempotency = await _build_session_state(settings, stack)
@@ -261,14 +261,14 @@ async def _build_adapters(
 async def _build_session_state(
     settings: Settings, stack: AsyncExitStack
 ) -> tuple[BaseStorage, StateCache, LocationStateCache, IdempotencyStore]:
-    """Where the screen, the fight and the map of a location are kept.
+    """Где лежат экран, бой и карта локации.
 
-    Redis when there is one. Without it (``APP_ENV=solo``) the same four things
-    live in the process: they are all short-lived by design and all already
-    written to be lost safely - a screen that no longer exists puts the player
-    back in the main menu, and a location without a map is generated again from
-    its seed. What a restart does cost is real, though, and is said out loud
-    here: a fight in progress ends, and everyone is standing in the main menu.
+    В Redis, когда он есть. Без него (``APP_ENV=solo``) те же четыре вещи живут в
+    процессе: все они короткоживущие по замыслу и все написаны так, чтобы теряться
+    безопасно, - несуществующий экран возвращает игрока в главное меню, а локация
+    без карты собирается заново из своего сида. Но у перезапуска есть настоящая
+    цена, и здесь она сказана вслух: начатый бой кончается, и все стоят в главном
+    меню.
     """
     if not settings.uses_redis:
         logger.info(
@@ -303,10 +303,10 @@ async def _build_session_state(
 
 
 async def run_polling(app: Application) -> None:
-    """Long polling: the transport for local play and for the Docker stack.
+    """Long polling: транспорт локальной игры и стека Docker.
 
-    One process only. Telegram hands ``getUpdates`` to a single consumer, so a
-    second replica would fight the first for every update.
+    Только один процесс. Telegram отдаёт ``getUpdates`` одному потребителю, и
+    вторая копия дралась бы с первой за каждое обновление.
     """
     settings = app.settings
     logger.info(
@@ -319,8 +319,8 @@ async def run_polling(app: Application) -> None:
         try:
             await _greet_telegram(app)
             await app.bot.delete_webhook(drop_pending_updates=True)
-            # aiogram installs its own SIGINT/SIGTERM handlers here, so
-            # "docker stop" drains in-flight updates instead of severing them.
+            # Здесь aiogram ставит собственные обработчики SIGINT/SIGTERM, чтобы «docker
+            # stop» дал доработать обновлениям в полёте, а не оборвал их.
             await app.dispatcher.start_polling(
                 app.bot,
                 tasks_concurrency_limit=settings.concurrency_limit,
@@ -330,18 +330,18 @@ async def run_polling(app: Application) -> None:
 
 
 async def _wait_for_the_previous_copy(settings: Settings) -> None:
-    """Let a copy that is still running finish before asking Telegram for updates.
+    """Дать доиграть ещё живой копии, прежде чем просить у Telegram обновления.
 
-    Telegram hands ``getUpdates`` to one consumer, so a second process starting
-    while the first is still polling is answered with a ``TelegramConflictError``
-    for every attempt - a screenful of red at every start, on a game that is in
-    fact fine. The heartbeat already knows the answer: it is deleted by a clean
-    shutdown and goes stale ``heartbeat_stale_after`` seconds after a hard one, so
-    a fresh beat means somebody else is serving right now.
+    Telegram отдаёт ``getUpdates`` одному потребителю, поэтому второму процессу,
+    стартующему, пока первый ещё опрашивает, на каждую попытку отвечают
+    ``TelegramConflictError`` - экран красноты на каждом старте игры, с которой всё
+    в порядке. Ответ уже знает сердцебиение: чистая остановка его удаляет, а после
+    жёсткой оно протухает через ``heartbeat_stale_after`` секунд, и свежий удар
+    значит, что прямо сейчас обслуживает кто-то другой.
 
-    Waited out rather than refused. A window closed with the mouse leaves the file
-    behind, and "run it again in half a minute" is not an answer worth giving when
-    the game can simply wait that half minute itself.
+    Не отказ, а ожидание. Закрытое мышкой окно оставляет файл на месте, и
+    «запустите ещё раз через полминуты» - не тот ответ, который стоит давать, если
+    игра может подождать эти полминуты сама.
     """
     if not is_alive(settings):
         return
@@ -372,14 +372,14 @@ async def _wait_for_the_previous_copy(settings: Settings) -> None:
 
 
 async def _greet_telegram(app: Application) -> None:
-    """Fail fast and in plain language on a bad token.
+    """Упасть сразу и по-человечески на неверном токене.
 
-    Without this the first API call raises deep inside aiogram and the operator
-    gets a stack trace instead of "your token is wrong".
+    Без этого первый же вызов API падает где-то в глубине aiogram, и вместо «у вас
+    неверный токен» тот, кто запускал, получает трассировку.
 
-    A wrong token is the only thing that stops the bot here. Telegram being
-    unreachable is not: the start waits it out, the same way it waits for the
-    database, because a network that is down at boot is usually up a moment later.
+    Неверный токен - единственное, что здесь останавливает бота. Недоступный
+    Telegram - нет: старт его пережидает, ровно как ждёт базу, потому что сеть,
+    лежащая на старте, обычно поднимается мгновением позже.
     """
     from aiogram.exceptions import TelegramNetworkError, TelegramUnauthorizedError
 
@@ -401,23 +401,24 @@ async def _greet_telegram(app: Application) -> None:
 
 
 def _stop_event() -> asyncio.Event:
-    """An event set by SIGINT or SIGTERM.
+    """Событие, которое ставят SIGINT или SIGTERM.
 
-    Polling gets this from aiogram; the webhook runner has to ask for it, and
-    without it ``docker stop`` would sever open connections instead of letting
-    the exit stack close the pools.
+    Опросу его выдаёт aiogram; вебхуку приходится просить самому, а без него
+    ``docker stop`` рвал бы открытые соединения вместо того, чтобы дать стеку
+    выхода закрыть пулы.
     """
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        # Windows has no loop-level signal handlers; Ctrl+C still raises there.
+        # На Windows обработчиков сигналов у цикла нет; Ctrl+C там всё равно бросает
+        # исключение.
         with suppress(NotImplementedError):
             loop.add_signal_handler(sig, stop.set)
     return stop
 
 
 async def run_webhook(app: Application) -> None:
-    """Production transport: aiohttp serving the webhook."""
+    """Боевой транспорт: aiohttp, обслуживающий вебхук."""
     from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
     from aiohttp import web
 
@@ -450,7 +451,7 @@ async def run_webhook(app: Application) -> None:
             await stop.wait()
             logger.info("shutdown_requested")
         finally:
-            # aiohttp drains the in-flight requests before this returns.
+            # aiohttp даёт доработать запросам в полёте до того, как это вернётся.
             await runner.cleanup()
             await app.bot.session.close()
 
@@ -473,7 +474,7 @@ async def _amain() -> None:
 
 
 def main() -> None:
-    """Entry point. Stdlib runner, no uvloop (ADR 0004)."""
+    """Точка входа. Стандартный runner, без uvloop (ADR 0004)."""
     try:
         with asyncio.Runner() as runner:
             runner.run(_amain())

@@ -1,8 +1,8 @@
-"""The character draft: what the player has chosen so far.
+"""Черновик персонажа: что игрок выбрал к этой минуте.
 
-The draft is immutable and carries every step's choice, which is what makes
-"back" cheap - stepping back does not undo anything, it only changes which screen
-is shown (spec section 12).
+Черновик неизменен и несёт выбор каждого шага, и это то, что делает «назад»
+дешёвым: шаг назад ничего не отменяет, он лишь меняет, какой экран показан
+(спецификация, раздел 12).
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ class NameCheck:
 
 
 def validate_name(name: str) -> NameCheck:
-    """Names are spoken aloud, so they stay short and free of decoration."""
+    """Имена произносят вслух, поэтому они короткие и без украшений."""
     stripped = name.strip()
     if len(stripped) < NAME_MIN_LENGTH:
         return NameCheck(False, f"Имя должно быть не короче {NAME_MIN_LENGTH} символов.")
@@ -43,7 +43,7 @@ def validate_name(name: str) -> NameCheck:
 
 @dataclass(frozen=True, slots=True)
 class CharacterDraft:
-    """Everything chosen during creation. Nothing is lost by going back."""
+    """Всё, выбранное при создании. Шаг назад ничего не теряет."""
 
     name: str = ""
     race_id: str = ""
@@ -61,7 +61,7 @@ class CharacterDraft:
         return replace(self, class_id=class_id)
 
     def toggle_trait(self, trait_id: str, limit: int) -> CharacterDraft:
-        """Pick or unpick a trait, refusing to exceed the limit."""
+        """Выбрать черту или снять выбор, отказавшись превысить предел."""
         if trait_id in self.trait_ids:
             return replace(
                 self, trait_ids=tuple(item for item in self.trait_ids if item != trait_id)
@@ -96,12 +96,13 @@ class CharacterDraft:
         )
 
     def to_character(self, content: GameContent, user_id: int) -> Character:
-        """Turn the draft into a level 1 character with its starting loadout.
+        """Превратить черновик в персонажа первого уровня с его стартовым набором.
 
-        The first class active and the racial active are slotted *and known* -
-        given, not bought: a level 1 character has no skill points at all, and the
-        first fight must not be fought with an empty panel. Nothing else is
-        slotted, and a new skill is never auto-equipped later (docs/skills.md).
+        Первое активное умение класса и активное умение расы кладутся в панель *и
+        считаются изученными* - выданы, а не куплены: у персонажа первого уровня нет ни
+        одного очка умений, а первый бой не должен драться с пустой панелью. Больше в
+        панель не кладётся ничего, и новое умение никогда не встаёт в слот само
+        (docs/skills.md).
         """
         from mmorpg.domain.entities.character import SkillLoadout
         from mmorpg.domain.entities.content import SkillKind

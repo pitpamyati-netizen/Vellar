@@ -1,68 +1,68 @@
-# Skills: depth without buttons
+# Умения: глубина без кнопок
 
-The problem this design solves: more skills means more buttons, and past a certain
-count a keyboard stops being navigable by anyone - by ear it is unreadable, by eye
-it is a wall. The answer is to **grow the content and freeze the interface**.
+Задача, которую решает этот замысел: больше умений — больше кнопок, а после
+какого-то числа клавиатура перестаёт быть проходимой вообще для кого угодно — на слух
+она нечитаема, глазами это стена. Ответ — **растить содержимое и заморозить
+интерфейс**.
 
-## The panel is fixed forever
+## Панель постоянна навсегда
 
-A character always has exactly:
+У персонажа всегда ровно:
 
-- **6 active skill slots**
-- **1 separate racial slot** (the racial active never competes with class skills)
+- **6 слотов боевых умений**;
+- **1 отдельный расовый слот** (расовое умение никогда не спорит с классовыми).
 
-This never grows with level. The combat screen at level 1 and at level 300 has the
-same numbers in the same order - only their contents change.
+С уровнем это не растёт. Боевой экран первого уровня и трёхсотого несёт те же номера в
+том же порядке — меняется только то, что в них лежит.
 
-**Passive skills take no slot at all.** A passive has no button, no turn and no
-target: "putting it in a slot" only ever meant that three of six learned passives
-were switched off, and the points spent on them counted in no fight. A learned
-passive works (`modifiers.passive_modifiers`). What a passive costs is the skill
-point, and that is price enough.
+**Пассивные умения слота не занимают вовсе.** У пассивного нет ни кнопки, ни хода, ни
+цели: «положить его в слот» всегда значило лишь то, что три из шести изученных
+пассивных выключены, а потраченные на них очки не считались ни в одном бою. Изученное
+пассивное работает (`modifiers.passive_modifiers`). Стоит пассивное умение очка
+умений, и этой цены достаточно.
 
-## Where the content comes from
+## Откуда берётся содержимое
 
-| Source | Actives | Passives |
+| Источник | Боевые | Пассивные |
 | --- | --- | --- |
-| Class | 20, one every dozen-odd levels from 1 to 286 | 40, two between each pair of actives |
-| Race | 1 (racial slot) | 1, always on, occupies no slot |
+| Класс | 20, примерно раз в дюжину уровней с 1 до 286 | 40, по два между каждой парой боевых |
+| Раса | 1 (расовый слот) | 1, работает всегда, слота не занимает |
 
-Total content: 8 classes x 60 + 16 races x 2 = **512 abilities**. On screen at any
-moment: **at most 7 action buttons**, and only the ones that do something.
+Всего содержимого: 8 классов × 60 + 16 рас × 2 = **512 способностей**. На экране в
+любую минуту — **не больше 7 кнопок действия**, и только те, что что-то делают.
 
-**Progression is even.** Sixty skills over three hundred levels is one skill per
-five, and a skill point per level is exactly what sixty skills at five ranks cost:
-by level 300 everything is learned and everything is maxed, and nothing along the
-way is a forty-level wait for the next button. The unlock levels live in
-`classes.toml [meta]`; the step grows a little with level because the level does,
-but there is no gap anywhere - the old table jumped from 60 straight to 100 and
-then said nothing for two hundred levels.
+**Продвижение ровное.** Шестьдесят умений на триста уровней — это одно умение на пять,
+а очко умений за уровень — ровно то, во что обходятся шестьдесят умений по пять рангов:
+к трёхсотому изучено всё и всё прокачано, и нигде по дороге нет сорокауровневого
+ожидания следующей кнопки. Уровни открытия живут в `classes.toml [meta]`; шаг слегка
+растёт с уровнем, потому что растёт сам уровень, но пробелов нет нигде — старая таблица
+прыгала с 60 сразу на 100, а потом молчала двести уровней.
 
-The player equips **6 of 20** actives. That gap is the build - the interest is in
-choosing, not in accumulating. Passives are not part of that choice: every one
-learned is on, and there are twice as many of them as of actives on purpose. A
-button is the scarce thing; a bonus is not.
+Игрок ставит в панель **6 из 20** боевых. Этот зазор и есть сборка: интерес в том,
+чтобы выбирать, а не в том, чтобы копить. Пассивные в этот выбор не входят: каждое
+изученное работает, и их нарочно вдвое больше, чем боевых. Дефицитная вещь — кнопка, а
+не прибавка.
 
-Race passives live in `races.toml` rather than the panel: they are inherent, always
-active, and take no slot - the same rule class passives now follow.
+Расовые пассивные способности живут в `races.toml`, а не в панели: они врождённые,
+работают всегда и слота не занимают — то же правило, которому теперь следуют и
+классовые пассивные.
 
-## Depth: ranks and edges
+## Глубина: ранги и грани
 
-Every skill has **ranks 1 to 5**, bought with skill points (one per level). Each
-rank raises the skill's power by `rank_step` (15% by default) - `power_at_rank`.
+У каждого умения **ранги с 1 по 5**, покупаемые очками умений (по одному за уровень).
+Каждый ранг поднимает силу умения на `rank_step` (по умолчанию 15 %) — `power_at_rank`.
 
-**A rank always changes something.** Four skills are shaped as yes-or-no -
-«Исчезновение», «Юркость», «Отсрочка», «По памяти»: you either dodge the next
-blow or you do not, and there is no number in them to raise. A point spent on
-their rank bought nothing at all. For those the power lands in the **cooldown**
-instead (`EffectSpec.recharges`, `skill_effects.recharged`): rank 5 brings the
-skill back in two turns where rank 1 took five, and the button says so before it
-is pressed. For «Очищение», whose whole job is removing effects, the power is
-how many it removes (`cleansed_count`). Held by
-`tests/content/test_races_classes_skills.py`.
+**Ранг обязан что-то менять.** Четыре умения устроены как «да или нет» —
+«Исчезновение», «Юркость», «Отсрочка», «По памяти»: ты либо уклоняешься от следующего
+удара, либо нет, и числа, которое можно поднять, в них нет. Очко, вложенное в их ранг,
+не покупало ничего. Для них сила ложится в **откат**
+(`EffectSpec.recharges`, `skill_effects.recharged`): пятый ранг возвращает умение за два
+хода там, где первый брал пять, и кнопка говорит об этом до нажатия. У «Очищения», вся
+работа которого — снимать эффекты, сила — это сколько их снимается
+(`cleansed_count`). Держит `tests/content/test_races_classes_skills.py`.
 
-At **rank 3** the skill gains an **edge**: the player picks one of two
-modifications that change how it behaves, without adding a button.
+На **третьем ранге** умение получает **грань**: игрок выбирает одну из двух правок,
+меняющих его поведение, и кнопка при этом не добавляется.
 
 ```
 Секущий росчерк, ранг 3. Выберите грань:
@@ -70,191 +70,184 @@ modifications that change how it behaves, without adding a button.
 — Кровопускание: цель истекает кровью 3 хода.
 ```
 
-496 skills x 2 edges = 992 behaviours behind 7 buttons (a race passive has none:
-it is not in the panel and never bought with a point). Edges are re-picked at a
-city Mentor for gold, so a build is a decision, not a life sentence.
+496 умений × 2 грани = 992 поведения за 7 кнопками (у расовой пассивной способности
+граней нет: её нет в панели и её не покупают очком). Грани переигрываются у городского
+наставника за золото, поэтому сборка — это решение, а не приговор.
 
-Rank 3 is the default, not a constant: a **Seal of the Chamber** opens the edge
-one rank earlier for each Turning its owner has made, down to rank 1
-(`edge_rank_for`, `docs/endgame.md`). An edge pledged into a Turning is gone for
-good and cannot be picked again - that is what keeps a free choice from minting
-Seals.
+Третий ранг — это значение по умолчанию, а не постоянная: **Печать Палаты** открывает
+грань на ранг раньше за каждое совершённое владельцем перерождение, вплоть до первого
+(`edge_rank_for`, `docs/endgame.md`). Грань, заложенная в перерождение, уходит
+навсегда, и выбрать её снова нельзя — именно это и не даёт свободному выбору печатать
+Печати.
 
-**What an edge does mechanically** is declared by the edge itself, in
-`skills.toml`, using the vocabulary in `domain/rules/edges.py`: a percentage or a
-number of turns per key (`power`, `cost`, `cooldown`, `duration`, `dot_turns`,
-`stun_turns`, `hits`, `splash`, `aoe`, `pierce`, `crit`, `lifesteal`, `cleanse`,
-`heal`, `barrier`, `self_modifiers`, `target_modifiers`). `edges.applied` lays the
-declaration over the skill's effect; the loader refuses an edge that declares
-nothing at all.
+**Что грань делает механически**, объявляет она сама, в `skills.toml`, словарём из
+`domain/rules/edges.py`: процент или число ходов на ключ (`power`, `cost`, `cooldown`,
+`duration`, `dot_turns`, `stun_turns`, `hits`, `splash`, `aoe`, `pierce`, `crit`,
+`lifesteal`, `cleanse`, `heal`, `barrier`, `self_modifiers`, `target_modifiers`).
+`edges.applied` кладёт объявленное поверх эффекта умения; грань, которая не объявляет
+ничего, загрузчик не пропускает.
 
-It used to be uniform - the first edge hit 20% harder, the second cost 35% less -
-while content described a distinct behaviour for each of the 256. Every one of
-those descriptions was false, and for the 48 passive skills the chosen edge did
-nothing whatsoever: `passive_modifiers` never looked at it. An edge's text now
-says what its numbers do, because it is generated from them.
+Раньше это было единообразно — первая грань била на 20 % сильнее, вторая стоила на 35 %
+меньше, — пока содержимое описывало отдельное поведение у каждой из 256. Каждое из тех
+описаний было ложью, а для 48 пассивных умений выбранная грань не делала ровно ничего:
+`passive_modifiers` на неё не смотрел. Текст грани теперь говорит то, что делают её
+числа, потому что он из них и собран.
 
-An edge of a passive skill can only raise that passive's own modifier (`power`)
-and add modifiers of its own (`self_modifiers`) - a passive has no turn and no
-target for anything else to mean something.
+Грань пассивного умения может лишь поднять собственную прибавку этого умения (`power`)
+и добавить свои (`self_modifiers`): у пассивного нет ни хода, ни цели, чтобы что-то ещё
+имело смысл.
 
-## Spending a point, in the interface
+## Как тратят очко, в интерфейсе
 
-Three screens, and no more (`presentation/telegram/screens/skills.py`):
+Три экрана, и не больше (`presentation/telegram/screens/skills.py`):
 
-- **Умения** - every skill of the class unlocked by level, with its rank and what
-  one point would buy. Pressing one learns it, or raises it a rank; at rank 3 the
-  press opens the edge screen instead, and nothing else happens until it is
-  chosen - which is why the button says «сначала выберите грань» there rather
-  than promising a rank it will not buy.
-- **Слоты умений** - the six battle positions and the racial one, each button
-  carrying its number and its contents. A skill sits in exactly one slot: putting
-  it in a second one empties the first. The screen also reads out the passives
-  that are working, so "изучено - значит работает" is visible and not just true.
-- **Грань** - the two-way fork, once per skill.
+- **Умения** — все умения класса, открытые уровнем, с рангом и с тем, что купило бы
+  одно очко. Нажатие изучает умение или поднимает ранг; на третьем ранге нажатие
+  вместо этого открывает экран грани, и до её выбора не происходит ничего — поэтому
+  кнопка там говорит «сначала выберите грань», а не обещает ранг, которого не купит.
+- **Слоты умений** — шесть боевых мест и расовое, и каждая кнопка несёт свой номер и
+  своё содержимое. Умение лежит ровно в одном слоте: положить его во второй значит
+  опустошить первый. Экран заодно перечисляет работающие пассивные, чтобы «изучено —
+  значит работает» было видно, а не только верно.
+- **Грань** — развилка на две стороны, один раз на умение.
 
-A skill point is only ever handed back by the Mentor, who charges gold for it and
-takes the skill out of the panel along with its edge (`skills.forget`). He deals
-in class skills only: the racial one was never bought with a point and cannot be
-given up for one, and offering it was a button that took payment and changed
-nothing (`skills.forgettable`).
+Очко умений возвращает только наставник, берёт за это золото и вынимает умение из
+панели вместе с его гранью (`skills.forget`). Дело он имеет только с классовыми
+умениями: расовое очком не покупалось и за очко не сдаётся, а предлагать это было
+кнопкой, которая брала плату и не меняла ничего (`skills.forgettable`).
 
-## Anti-bloat rules (enforced, not just intended)
+## Правила против разрастания (закреплены, а не только задуманы)
 
-1. **Equipment never grants an active skill.** It grants modifiers, and may boost a
-   skill the character already has via `skill_modifiers` ("+20% to Рассечение").
-   *Test: every `skill_modifiers` key must reference an existing skill.*
-2. **Traits never grant an active skill.** Modifiers only.
-   *Test: a `Trait` has no field that could hold one.*
-3. **Consumables live in the combat Bag tab**, never in a skill slot.
-   *Test: every consumable has `slot = "none"`.*
-4. **The loadout changes only outside combat** - in a city or at a shrine. Inside a
-   fight the layout is frozen, so the buttons a player learned stay put.
-5. **A new skill is never auto-equipped.** The game announces it and leaves the
-   choice to the player:
-   > Доступно новое умение: Вихрь клинков. Меню - Умения - Набор.
-6. **A number belongs to a skill, an empty slot gets no button.** The third skill
-   is button "3." whether or not slots one and two are filled, so a panel learned
-   once stays learned - but "5. Пустой слот" is not drawn, because a button whose
-   whole answer is "there is nothing here" is a button that wasted a press to say
-   so. It used to waste a **turn**: the press resolved as a turn in which the
-   player did nothing and every enemy answered.
-7. **A weapon requirement narrows a skill, never widens the panel.** A skill may
-   name `weapons` (ids from `items.toml [meta].weapon_types`): a shot asks for a
-   bow, a backstab for a dagger. Without one the skill does not fire and costs
-   nothing - and the button says so *before* it is pressed, because a button that
-   promises what it will not do is a bug. The list may only be narrower than what
-   the class wields; the loader refuses a wider one (ADR 0014).
-   *Test: every `weapons` entry is a kind its owning class actually holds.*
+1. **Снаряжение не даёт боевых умений.** Оно даёт прибавки и может усилить умение,
+   которое у персонажа уже есть, через `skill_modifiers` («+20 % к Рассечению»).
+   *Тест: каждый ключ `skill_modifiers` показывает на существующее умение.*
+2. **Черты не дают боевых умений.** Только прибавки.
+   *Тест: у `Trait` нет поля, в котором умение могло бы лежать.*
+3. **Расходники живут во вкладке «Сумка» в бою**, а не в слоте умений.
+   *Тест: у каждого расходника `slot = "none"`.*
+4. **Набор меняют только вне боя** — в городе или у святилища. Внутри боя раскладка
+   заморожена, поэтому выученные кнопки стоят на местах.
+5. **Новое умение никогда не встаёт в слот само.** Игра объявляет о нём и оставляет
+   выбор игроку:
+   > Доступно новое умение: Вихрь клинков. Меню — Умения — Набор.
+6. **Номер принадлежит умению, а пустой слот кнопки не получает.** Третье умение — это
+   кнопка «3.», заполнены первый и второй слоты или нет, поэтому выученная однажды
+   панель остаётся выученной, — а «5. Пустой слот» не рисуется, потому что кнопка, весь
+   ответ которой «здесь ничего нет», тратит нажатие, чтобы это сказать. Раньше она
+   тратила **ход**: нажатие разыгрывалось как ход, в котором игрок не сделал ничего, а
+   все противники ответили.
+7. **Требование к оружию сужает умение и никогда не расширяет панель.** Умение может
+   назвать `weapons` (идентификаторы из `items.toml [meta].weapon_types`): выстрелу
+   нужен лук, удару в спину — кинжал. Без такого оружия умение не срабатывает и не
+   стоит ничего, и кнопка говорит об этом *до* нажатия, потому что кнопка, обещающая
+   то, чего не сделает, — это ошибка. Список вправе быть только уже того, что носит
+   класс; более широкий загрузчик отвергает (ADR 0014).
+   *Тест: каждая запись `weapons` — род, которым владеющий класс и правда держит.*
 
-## One scale for every number
+## Одна шкала для каждого числа
 
-A skill's `power` in content is a **percentage**, never an absolute:
+`power` умения в содержимом — это **процент**, никогда не абсолютное число:
 
-| category | percentage of | 100 means |
+| род | процент от чего | 100 значит |
 | --- | --- | --- |
-| damage | one roll of the weapon in hand | one plain "Атака" |
-| healing, barriers | maximum health | a full bar |
-| buffs, debuffs, statuses | the modifier itself | +100% to that stat |
+| урон | одного броска оружия в руке | одна простая «Атака» |
+| лечение, барьеры | максимума здоровья | полная полоса |
+| усиления, ослабления, состояния | самого модификатора | +100 % к этой характеристике |
 
-A damage skill may add dice of its own on top of the weapon roll:
+Умение с уроном может добавить собственные кости поверх броска оружия:
 
 ```toml
 weapons = ["dagger"]
-dice = "2d8"                   # rolled and added, and grows with rank
+dice = "2d8"                   # бросается и прибавляется, и растёт с рангом
 ```
 
-The blow is `weapon dice + 0.6 x scaling stat` - the **weapon** carries the curve
-of the whole 1-300 band, the stat carries the spread between characters of the
-same level (ADR 0015). So a skill written as 135 is worth a third again as much
-as an attack at level 1 *and* at level 300, and content never has to be re-tuned
-as the band grows - what the player upgrades is the thing in their hand.
+Удар — это `кости оружия + 0,6 × характеристика`: **оружие** несёт кривую всей полосы
+1–300, а характеристика — разброс между персонажами одного уровня (ADR 0015). Поэтому
+умение, написанное как 135, стоит на треть больше атаки и на первом уровне, *и* на
+трёхсотом, а содержимое не приходится перенастраивать по мере роста полосы: игрок
+улучшает то, что у него в руке.
 
-That is also why a damage skill is read out as a **range** - "урон от 34 до 96" -
-and never as one number: one number would promise a precision the dice do not
-have. Half of that range is not rolled at all: every weapon kind carries a flat
-part alongside its dice (`1d10+3`), so the range stays a range a player can plan
-against instead of a lottery (ADR 0017).
+Поэтому же умение с уроном читают **промежутком** — «урон от 34 до 96», — а не одним
+числом: одно число обещало бы точность, которой у костей нет. Половина этого
+промежутка вовсе не бросается: у каждого рода оружия есть плоская часть рядом с
+костями (`1d10+3`), и промежуток остаётся тем, подо что можно планировать, а не
+лотереей (ADR 0017).
 
-Before this, `power` was an absolute number while the plain attack grew with
-level; by level 30 every skill in the game was weaker than pressing "Атака", and
-the whole panel was decoration. See ADR 0007.
+До этого `power` был абсолютным числом, пока обычная атака росла с уровнем: к
+тридцатому уровню каждое умение в игре было слабее нажатия «Атака», а вся панель была
+украшением. См. ADR 0007.
 
-## The engine contract
+## Договор с движком
 
-`content/skills.toml` declares an `effect` string per active skill.
-`mmorpg/domain/rules/skill_effects.py` maps each one to an `EffectSpec` - damage
-scale, area, pierce, stun, modifiers applied and for how long, and so on. The
-combat engine executes specs; it has no per-skill code.
+`content/skills.toml` объявляет строку `effect` у каждого боевого умения.
+`mmorpg/domain/rules/skill_effects.py` сопоставляет каждой из них `EffectSpec` —
+множитель урона, площадь, пробивание, оглушение, накладываемые прибавки и их срок и так
+далее. Боевой движок исполняет спецификации; кода на отдельное умение у него нет.
 
-Two tests keep the two halves honest:
+Две половины держат честными два теста:
 
-- every effect used by content has a spec (otherwise a skill would silently do
-  nothing);
-- every spec is used by content (otherwise dead code drifts out of sync).
+- у каждого эффекта, которым пользуется содержимое, есть спецификация (иначе умение
+  тихо не делало бы ничего);
+- каждая спецификация используется содержимым (иначе мёртвый код расходится с игрой).
 
-Adding a skill needs **no code**. Adding a new *kind* of behaviour needs exactly
-one table entry.
+Добавить умение **не требует кода**. Добавить новый *род* поведения требует ровно одной
+записи в таблице.
 
-### A modifier the engine does not read is not a bonus
+### Прибавка, которую движок не читает, — не прибавка
 
-A passive skill and an edge both state their bonus as a key from the shared
-vocabulary. That vocabulary (`traits.toml [meta].modifier_keys`) is deliberately
-wider than what the engine computes - it holds keys for mechanics that do not
-exist yet. **Skills may only use keys that are computed**, listed in
-`domain/rules/modifiers.py::EFFECTIVE_KEYS` and pinned by two tests in
-`tests/content`. Fifteen class passives and four edges pointed at uncomputed keys
-for half a year: the player spent a skill point and got a line of text (ADR 0018).
+И пассивное умение, и грань называют свою прибавку ключом из общего словаря. Этот
+словарь (`traits.toml [meta].modifier_keys`) нарочно шире того, что движок считает: в
+нём есть ключи под механику, которой пока нет. **Умения вправе брать только считаемые
+ключи**, перечисленные в `domain/rules/modifiers.py::EFFECTIVE_KEYS` и закреплённые
+двумя тестами в `tests/content`. Пятнадцать классовых пассивных умений и четыре грани
+полгода показывали на несчитаемые ключи: игрок тратил очко умений и получал строку
+текста (ADR 0018).
 
-What the engine reads that is easy to miss:
+Что движок читает, а заметить легко не всё:
 
-- **situational damage** - by the target's kind (beast, undead, humanoid), by its
-  tier, by how wounded it is, by your own low health, by the first turn, by one
-  target or all, and by whether the blow is a spell or a hand (which the blow's
-  kind of damage decides - the four physical kinds are a hand, the twelve magical
-  ones are a spell);
-- **tempo** - initiative *is* the queue: the whole fight is ordered by it, and
-  that is what every "инициатива ниже на N процентов" in content buys (ADR 0021);
-- **barriers expire** (`EffectSpec.barrier_turns`), healing over time arrives once
-  a turn rather than all at once, and a counter and an undying stand are
-  self-modifiers under private keys the combat engine reads by name.
+- **урон по обстоятельствам** — по породе цели (зверь, нежить, гуманоид), по её
+  ступени, по тому, насколько она ранена, по собственному низкому здоровью, по первому
+  ходу, по одной цели или по всем и по тому, чара это или рука (что решает род урона:
+  четыре физических рода — рука, одиннадцать магических — чара);
+- **темп** — инициатива *и есть* очередь: по ней собирается весь бой, и именно это
+  покупает каждое «инициатива ниже на N процентов» в содержимом (ADR 0021);
+- **барьеры истекают** (`EffectSpec.barrier_turns`), лечение со сроком приходит раз в
+  ход, а не всё разом, а ответный удар и «не пасть» — это прибавки себе под служебными
+  ключами, которые боевой движок читает по имени.
 
-## Statuses
+## Состояния
 
-Twenty of them, and no more (`domain/entities/statuses.py`). A status is an
-effect with a name from that list, and the name decides the rest: whether it
-helps or harms, what it adds, whether it gnaws at its holder each turn and with
-what kind of damage, and whether it takes the turn away.
+Их двадцать, и не больше (`domain/entities/statuses.py`). Состояние — это эффект с
+именем из того списка, и имя решает всё остальное: помогает оно или вредит, что
+прибавляет, точит ли своего носителя каждый ход и каким родом урона и отнимает ли ход.
 
-| what they do | statuses |
+| что делают | состояния |
 | --- | --- |
-| gnaw each turn | горение, яд, кровотечение |
-| take the turn | оглушение, заморозка, страх |
-| take the choice | очарование, спутанность сознания, молчание |
-| bend the numbers | слабость, замедление, усиление, ускорение, берсерк |
-| forbid or hurry recovery | запрет лечения, запрет восстановления сил, ускоренное восстановление здоровья и сил |
-| absorb | барьер, неуязвимость |
+| точат каждый ход | горение, яд, кровотечение |
+| отнимают ход | оглушение, заморозка, страх |
+| отнимают выбор | очарование, спутанность сознания, молчание |
+| гнут числа | слабость, замедление, усиление, ускорение, берсерк |
+| запрещают или торопят восстановление | запрет лечения, запрет восстановления сил, ускоренное восстановление здоровья и сил |
+| поглощают | барьер, неуязвимость |
 
-Three rules make them a system rather than twenty special cases:
+Системой, а не двадцатью особыми случаями, их делают три правила:
 
-- **one key per status.** Burning from a wand and burning from an arrow are the
-  same burning: re-applying refreshes it and keeps the larger of the two sizes,
-  it never stacks a second copy.
-- **a status carries one number.** What it means is decided by the status:
-  percent of damage for weakness, damage per turn for burning, absorbed damage
-  for a barrier.
-- **the three that take a turn are three different things.** A stun is waited
-  out; a freeze is waited out and makes the next blow land harder; a fear is
-  shaken off by the first blow that lands. Charm and confusion do not take the
-  turn at all - they take the aim: the charmed fighter strikes their own side,
-  the confused one strikes whoever the dice pick.
+- **один ключ на состояние.** Горение от жезла и горение от стрелы — одно и то же
+  горение: повторное наложение обновляет его и оставляет большую из двух величин, но
+  вторую копию не кладёт никогда.
+- **у состояния одна величина.** Что она значит, решает само состояние: процент урона
+  для слабости, урон за ход для горения, поглощаемый урон для барьера.
+- **три состояния, отнимающих ход, — три разные вещи.** Оглушение пережидают; заморозку
+  пережидают, и следующий удар ложится тяжелее; страх стряхивает первый попавший удар.
+  Очарование и спутанность хода не отнимают вовсе — они отнимают прицел: очарованный
+  бьёт по своим, спутанный — по тому, кого выберут кости.
 
-Content never spells a status out by hand: a skill's effect declares which one it
-applies and for how many turns (`skill_effects.Inflict`), and the screen reads the
-Russian name off the status itself. That is why «щит» is now «барьер» everywhere:
-it was a number on the fighter with no name, and now it is a status like the rest.
+Содержимое не выписывает состояние руками: эффект умения объявляет, какое состояние он
+накладывает и на сколько ходов (`skill_effects.Inflict`), а русское имя экран читает с
+самого состояния. Поэтому «щит» теперь везде «барьер»: это было число на бойце без
+имени, а стало состоянием, как и все прочие.
 
-## Combat screen shape
+## Как выглядит боевой экран
 
 ```
 Бой. Круг 3.
@@ -276,90 +269,84 @@ it was a number on the fighter with no name, and now it is a status like the res
 [Назад] [Главное меню]
 ```
 
-The screen is drawn **for whoever is looking**: "вы" and a name are decided by
-the fighter's number, because in a fight of four there is no other way to hear
-who was hit. Where there is more than one opponent, the panel carries one more
-row - `[Цель 3. Волчица]` - and pressing it costs no turn: it changes where the
-game aims, and nothing else happens (ADR 0021). The player who is not on turn
-sees the same state with two buttons instead of the panel: `[Что там в бою]` and
-`[Сдаться]`.
+Экран рисуется **для того, кто смотрит**: «вы» и имя решает номер бойца, потому что в
+бою вчетвером иначе не расслышать, кого ударили. Там, где противник не один, панель
+несёт ещё один ряд — `[Цель 3. Волчица]`, — и его нажатие не стоит хода: оно меняет то,
+куда игра целится, и больше не происходит ничего (ADR 0021). Тот, чей ход не настал,
+видит то же состояние с двумя кнопками вместо панели: `[Что там в бою]` и `[Сдаться]`.
 
-Every button answers three questions without being pressed: **what it does**
-(a number, not a category), **what it costs**, and **when it comes back**. The
-cooldown is stated twice on purpose, because it is two different questions: while
-the skill is ready, "откат 3 хода" is the price of using it; while it is spent,
-"ещё 2 хода" is what is left. Availability is always words inside the button text -
-never colour, never an icon, never a missing button.
+Каждая кнопка отвечает на три вопроса до нажатия: **что она делает** (число, а не
+категория), **чего стоит** и **когда вернётся**. Откат назван дважды нарочно, потому
+что это два разных вопроса: пока умение готово, «откат 3 хода» — цена применения; пока
+оно потрачено, «ещё 2 хода» — то, что осталось. Доступность — это всегда слова внутри
+текста кнопки, и никогда цвет, значок или пропавшая кнопка.
 
-## Tempo: intent, trace, breach
+## Темп: намерение, след, брешь
 
-Depth without buttons applies to the fight itself. Every action carries one of
-three tags - **натиск**, **оборона**, **точность** - in a closed circle: a guard
-stops a press, precision finds the gap in a guard, a press is inside the reach
-before precision picks its spot (`counter_to`).
+Глубина без кнопок относится и к самому бою. У каждого действия один из трёх тегов —
+**натиск**, **оборона**, **точность** — в замкнутом круге: оборона останавливает
+натиск, точность находит брешь в обороне, натиск оказывается внутри досягаемости раньше,
+чем точность выберет место (`counter_to`).
 
-- **Намерение.** Each enemy announces the tag of its next move *before* the
-  player acts. The announcement is a pure function of the enemy and the turn
-  (`enemy_intent`) - no roll, no state, so the screen and the engine always name
-  the same one, and the promise cannot be taken back mid-turn. A press hits for
-  1.4x and leaves the enemy open (armour x0.75); a guard hits for half and
-  doubles its armour; precision hits normally and is not dodged. Below a quarter
-  of its health an enemy always guards.
-- **След.** The player's own tags are remembered, three deep. Repeating a tag is
-  **разгон**: +25% damage *per repeat*, so a third identical tag is worth +50%.
-  Three *different* tags in a row are a **перелом**: the enemies do not answer
-  that turn, and the trace is spent - so cycling the same three forever does not
-  work.
-- **Брешь.** A tag that counters the announced intent takes that enemy's armour
-  out of the count **and halves the blow it answers with**. Both halves matter:
-  the counter to a press is a guard, and a guard deals no damage, so an
-  armour-only reward was worth nothing against a third of all intents.
+- **Намерение.** Каждый противник объявляет тег своего следующего хода *до* того, как
+  игрок сходит. Объявление — чистая функция противника и хода (`enemy_intent`): ни
+  броска, ни состояния, поэтому экран и движок всегда называют одно и то же, а обещание
+  нельзя забрать посреди хода. Натиск бьёт в 1,4 раза сильнее и оставляет противника
+  открытым (броня ×0,75); оборона бьёт вполовину и удваивает свою броню; точность бьёт
+  обычно, и от неё не уклоняются. Ниже четверти здоровья противник всегда обороняется.
+- **След.** Собственные теги игрока помнятся, три в глубину. Повтор тега — это
+  **разгон**: +25 % урона *за каждый повтор*, поэтому третий одинаковый тег стоит уже
+  +50 %. Три *разных* тега подряд — **перелом**: противники в этот ход не отвечают, а
+  след тратится, — поэтому вечно крутить одни и те же три не выйдет.
+- **Брешь.** Тег, отвечающий объявленному намерению, выносит броню этого противника из
+  счёта **и вдвое уменьшает удар, которым он отвечает**. Важны обе половины: ответ на
+  натиск — оборона, а оборона урона не наносит, поэтому награда из одной лишь брони не
+  стоила ничего против трети всех намерений.
 
-A skill's tag is read off its effect (`tag_of`): a blow presses, a blow that is
-aimed - at armour, at a weak spot, at a mark - or that leaves the target hindered
-is precision, everything that mends or shields is a guard. Content may name it
-outright with `tag = "точность"` in `skills.toml`.
+Тег умения читается с его эффекта (`tag_of`): удар — это натиск; удар прицельный — в
+броню, в слабое место, в метку — или оставляющий цель в помехах — это точность; всё,
+что лечит и укрывает, — оборона. Содержимое вправе назвать тег прямо через
+`tag = "точность"` в `skills.toml`.
 
-**Every class can reach all three tags.** It has to: a перелом needs three
-different tags in a row, so a class with only two would be locked out of the rule
-arithmetically. The plain attack is always a press, so each class needs a guard
-and a precision of its own, and has both by level 14 - that is what the `tag`
-overrides in content buy.
+**Каждый класс дотягивается до всех трёх тегов.** Обязан: перелому нужны три разных
+тега подряд, поэтому класс с двумя был бы отрезан от правила арифметически. Обычная
+атака — всегда натиск, поэтому каждому классу нужны своя оборона и своя точность, и
+обе есть к четырнадцатому уровню — вот что покупают перекрытия `tag` в содержимом.
 
-An action that never happened - an empty slot, a cooldown, a cost the player
-cannot pay - leaves no trace, and neither does fleeing or a skipped turn.
+Действие, которого не произошло — пустой слот, откат, нехватка ресурса, — следа не
+оставляет, как не оставляют его бегство и пропущенный ход.
 
-## Combat rules
+## Правила боя
 
-- Strictly turn-based, no real-time timers anywhere. The state waits for the player
-  indefinitely (accessibility rule 13). *Test: the engine source contains no clock.*
-- One to three enemies per fight; area skills and the "second target" edges are the
-  reason the engine is written for groups from the start. A pack divides one
-  fight's budget between its members, so three opponents are one fight and not
-  three (`procgen/enemies.py`, `group_scale`).
-- **An ordinary fight is about three turns**, an epic one roughly twice that, a
-  boss twice again - and those are the only long fights in the game.
-  `tests/domain/test_combat_balance.py` measures it rather than trusting it, and
-  also checks that a player who reads the intent finishes sooner than one who only
-  presses "Атака".
-- Accuracy answers the **difference** in levels, never the absolute one: a fight at
-  your own level is even, and being out of your depth is what costs you.
-- Every roll comes from a seed passed in by the caller, so a fight replays exactly.
-- Resolution order per turn: intents and the player's tag are settled first, then
-  the player's action, then every living enemy - unless a перелом silenced them -
-  then upkeep (cooldowns tick, effects tick and expire, health and resource
-  regenerate).
-- Cooldowns are set to `cooldown + 1` when a skill fires, because the same turn's
-  upkeep ticks them down once - so "откат 2 хода" really means two more turns.
-- Pressing an empty slot, a skill on cooldown, a skill you cannot afford, or one
-  your hands cannot use always produces an event to say so, and **costs nothing**:
-  the turn counter stays put, the trace is untouched, cooldowns do not tick and no
-  enemy answers (`combat._refusal`). A refusal is the game declining to act, not
-  the player spending a turn on nothing. The game never stays silent and never
-  raises.
-- **A miss leaves nothing behind.** Bleeding, a hindrance, a stun and a splash all
-  follow the blow landing, not the button being pressed - otherwise missing paid
-  better than hitting. Skills that carry no attack roll at all (a plain hindrance,
-  a plain buff) are unaffected: there is no miss to have.
-- The last turn of a fight is read out on the screen that ends it. "Победа." with
-  nothing before it does not say who struck last or for how much.
+- Строго пошагово, никаких таймеров нигде. Состояние ждёт игрока сколько угодно
+  (правило доступности 13). *Тест: в исходнике движка нет часов.*
+- От одного до трёх противников в бою; умения по всем и грани «вторая цель» — причина,
+  по которой движок с самого начала написан на группы. Стая делит бюджет одного боя
+  между своими, поэтому трое противников — это один бой, а не три
+  (`procgen/enemies.py`, `group_scale`).
+- **Обычный бой — примерно три хода**, эпический вдвое дольше, босс вчетверо, и это
+  единственные долгие бои в игре. `tests/domain/test_combat_balance.py` это измеряет, а
+  не принимает на веру, и заодно проверяет, что игрок, читающий намерения, кончает бой
+  раньше того, кто только жмёт «Атака».
+- Точность отвечает **разнице** уровней, а не абсолютному: бой на своём уровне ровен, а
+  платят за то, что залезли выше головы.
+- Каждый бросок идёт из сида, переданного вызывающим, поэтому бой воспроизводится
+  дословно.
+- Порядок разрешения хода: сначала намерения и тег игрока, потом действие игрока, потом
+  каждый живой противник — если только их не заставил молчать перелом, — потом
+  содержание (тикают откаты, тикают и истекают эффекты, восстанавливаются здоровье и
+  ресурс).
+- Откат ставится в `cooldown + 1`, когда умение сработало, потому что содержание того
+  же хода тикнет его один раз, — и «откат 2 хода» и правда значит ещё два хода.
+- Нажатие на пустой слот, на умение в откате, на умение, которое нечем оплатить, или на
+  такое, которого не позволяют руки, всегда порождает событие, говорящее об этом, и
+  **не стоит ничего**: счётчик ходов стоит на месте, след не тронут, откаты не тикают и
+  ни один противник не отвечает (`combat._refusal`). Отказ — это игра, отказавшаяся
+  действовать, а не игрок, потративший ход впустую. Игра при этом никогда не молчит и
+  никогда не падает.
+- **Промах не оставляет за собой ничего.** Кровотечение, помеха, оглушение и разлёт —
+  всё идёт за попавшим ударом, а не за нажатой кнопкой, иначе промахиваться было бы
+  выгоднее, чем попадать. Умений, у которых броска на попадание нет вовсе (простая
+  помеха, простое усиление), это не касается: там нечему промахиваться.
+- Последний ход боя читается на том экране, который бой и кончает. «Победа.» без ничего
+  перед ней не говорит, кто ударил последним и на сколько.

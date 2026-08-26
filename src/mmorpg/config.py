@@ -1,8 +1,8 @@
-"""Application configuration.
+"""Настройки приложения.
 
-Settings are read once at startup from the environment (and from a local ``.env``
-file when present) and are then treated as immutable. Nothing in the codebase may
-read ``os.environ`` directly; everything goes through :class:`Settings`.
+Настройки читаются один раз на старте из окружения (и из локального файла
+``.env``, если он есть), после чего считаются неизменными. Ничто в коде не
+читает ``os.environ`` напрямую: всё идёт через :class:`Settings`.
 """
 
 from __future__ import annotations
@@ -17,23 +17,23 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONTENT_DIR = PROJECT_ROOT / "content"
-# The temporary directory, not the project tree: the container runs the bot as a
-# non-root user that owns nothing under /app.
+# Временный каталог, а не дерево проекта: в контейнере бот работает от пользователя,
+# которому под /app не принадлежит ничего.
 DEFAULT_HEARTBEAT_PATH = Path(tempfile.gettempdir()) / "vellar-heartbeat"
-#: ``GROUP_ID=*``: answer in any group the bot is a member of. See ``Settings``.
+#: ``GROUP_ID=*``: отвечать в любой группе, где бот состоит. См. ``Settings``.
 ANY_GROUP = "*"
 
 
 class AppEnv(StrEnum):
-    """Deployment environment.
+    """Где игра запущена.
 
-    ``LOCAL`` swaps PostgreSQL and Redis for in-memory adapters so the bot can be
-    run and played without any external services. See
+    ``LOCAL`` подменяет PostgreSQL и Redis адаптерами в памяти, и бота можно
+    запустить и играть без единой внешней службы. См.
     ``docs/adr/0005-in-memory-adapters.md``.
 
-    ``SOLO`` keeps PostgreSQL and drops only Redis: the world is on disk and
-    survives a restart, while the screen a player stands on lives in the process
-    that serves them. One machine, one process, no containers - see
+    ``SOLO`` оставляет PostgreSQL и убирает только Redis: мир лежит на диске и
+    переживает перезапуск, а экран, на котором стоит игрок, живёт в процессе,
+    который его обслуживает. Одна машина, один процесс, без контейнеров - см.
     ``docs/adr/0010-a-machine-without-containers.md``.
     """
 
@@ -44,7 +44,7 @@ class AppEnv(StrEnum):
 
 
 class Settings(BaseSettings):
-    """Root configuration object."""
+    """Корневой объект настроек."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -57,27 +57,27 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     log_json: bool = False
 
-    # --- What the game writes down about itself (``mmorpg.logging``) ---
-    # Where the log files go. Relative paths hang off the project root; empty
-    # means stdout only, which is what a container wants - there the log belongs
-    # to the daemon that collects it, and the process owns nothing it may write.
+    # --- Что игра записывает о себе (``mmorpg.logging``) ---
+    # Куда ложатся файлы журнала. Относительный путь считается от корня проекта, пустой
+    # означает только stdout - именно это нужно контейнеру: там журнал принадлежит
+    # демону, который его собирает, а процессу не принадлежит ничего, во что он вправе
+    # писать.
     log_dir: str = "logs"
-    # How long the everyday log is kept. A week is what a report from a player
-    # takes to arrive: "yesterday my gold vanished" is answerable, "back in the
-    # spring" is not, and a busy day of a hundred players is a few megabytes.
+    # Сколько держится повседневный журнал. Неделя - это срок, за который приходит
+    # жалоба игрока: на «вчера у меня пропало золото» ответить можно, на «где-то весной»
+    # - нет, а насыщенный день на сотню игроков - это несколько мегабайт.
     log_retention_days: int = Field(default=7, ge=1)
-    # And how long the important half is kept - failures, warnings, every
-    # movement of gold, every account turned away. ``0`` means "never delete":
-    # this is the file an argument about a lost purse is settled from, and it
-    # grows by kilobytes where the other grows by megabytes.
+    # И сколько держится важная половина - отказы, предупреждения, каждое движение
+    # золота, каждый закрытый аккаунт. ``0`` значит «не удалять никогда»: по этому файлу
+    # разбирают спор о пропавшем кошельке, и растёт он килобайтами там, где другой
+    # растёт мегабайтами.
     log_important_retention_days: int = Field(default=0, ge=0)
 
     bot_token: SecretStr = SecretStr("")
 
-    # Which working tree this is running from. Stamped by Start.bat - into the
-    # image for the stack, into the environment for a solo run - and logged on
-    # startup, so "is the bot running my latest change" has an answer that does
-    # not depend on memory.
+    # Из какого рабочего дерева всё это запущено. Штампует Start.bat - в образ для
+    # стека, в окружение для solo, - и пишется в журнал на старте, чтобы на вопрос
+    # «крутится ли бот с моей последней правкой» отвечала не память.
     vellar_build: str = "unknown"
 
     webhook_base_url: str = "https://example.com"
@@ -86,34 +86,32 @@ class Settings(BaseSettings):
     webhook_host: str = "0.0.0.0"
     webhook_port: int = 8080
 
-    # --- Community ---
-    # The public channel the game posts to, and the group players talk in. Both
-    # accept either a numeric chat id (-100...) or an @username. Empty means the
-    # feature is simply off: a local run has no channel and must still play.
+    # --- Сообщество ---
+    # Публичный канал, куда игра пишет, и группа, где разговаривают игроки. Оба
+    # принимают либо числовой id чата (-100...), либо @username. Пусто - значит, этой
+    # части просто нет: локальный запуск без канала обязан играться.
     channel_id: str = ""
-    # ``*`` means "whatever group the bot has been added to". That is a testing
-    # setting, not a production one: it exists so the group half of the game can
-    # be played the minute somebody adds the bot to a chat, without first hunting
-    # down a numeric id (Roadmap, "Риски"). With a real id set, every other chat
-    # is ignored exactly as before.
+    # ``*`` значит «в любой группе, куда бота добавили». Это настройка для проб, а не
+    # для боя: она существует, чтобы групповую половину игры можно было попробовать в ту
+    # минуту, когда бота добавили в чат, не разыскивая сперва числовой id. С настоящим
+    # id всё прочее по-прежнему пропускается мимо.
     group_id: str = ""
-    # Shown to players as "where to find the others"; empty hides the line.
+    # Показывается игроку как «где найти остальных»; пусто - строки нет.
     channel_url: str = ""
     group_url: str = ""
 
-    # --- Keepers ---
-    # Telegram ids the keeper right starts from, comma separated. Kept in the
-    # environment and not in the database on purpose: a right that outlives a
-    # wiped table, and one nobody can grant themselves from inside the game.
-    # Everybody else who holds the right holds it because one of these ids handed
-    # it to them, and it is stored on their account instead (``docs/keeper.md``).
+    # --- Смотрители ---
+    # Telegram-id, от которых начинается право смотрителя, через запятую. Держатся в
+    # окружении, а не в базе, нарочно: это право переживает стёртую таблицу, и выдать
+    # его себе изнутри игры нельзя. Все остальные держат право потому, что один из этих
+    # id им его выдал, и хранится оно уже на их аккаунте (``docs/keeper.md``).
     admin_ids: str = ""
 
     world_seed: str = "vellar-prime"
-    # The world no longer turns over on a clock: a location holds its map until it
-    # is cleared out. Two things are still timed, and both are short, because both
-    # exist to give a player a reason to come back rather than to make them wait:
-    # the shelf in a shop, and the cooldown on gathering raw stuff.
+    # Мир больше не переворачивается по часам: локация держит свою карту, пока её не
+    # вычистят. Со сроком остались две вещи, и обе короткие, потому что обе существуют,
+    # чтобы дать повод вернуться, а не заставить ждать: прилавок в лавке и откат на
+    # сборе сырья.
     shop_rotation_seconds: int = Field(default=1_800, gt=0)
     gather_cooldown_seconds: int = Field(default=900, gt=0)
 
@@ -123,49 +121,47 @@ class Settings(BaseSettings):
 
     redis_dsn: str = "redis://localhost:6379/0"
 
-    # --- A link that broke while the game was running (docs/architecture.md) ---
-    # A dropped connection is replaced by the pool itself; what these govern is
-    # the call that was in the air when it dropped. How many times it is repeated,
-    # and how long the waits between repeats are - the wait doubles up to the
-    # ceiling. Nothing that may have already changed the world is repeated, see
+    # --- Связь, оборвавшаяся на ходу (docs/architecture.md) ---
+    # Упавшее соединение пул заменит сам; здесь речь о вызове, который был в воздухе,
+    # когда оно упало. Сколько раз он повторяется и какие паузы между повторами - пауза
+    # удваивается до потолка. Ничто, что уже могло изменить мир, не повторяется, см.
     # docs/adr/0009-repeating-a-lost-query.md.
     reconnect_attempts: int = Field(default=5, ge=1)
     reconnect_delay_seconds: float = Field(default=0.2, gt=0.0)
     reconnect_max_delay_seconds: float = Field(default=5.0, gt=0.0)
-    # How long startup waits for PostgreSQL, Redis and Telegram to answer before
-    # giving up. A stack that comes up together does not come up in order.
+    # Сколько старт ждёт ответа от PostgreSQL, Redis и Telegram, прежде чем сдаться.
+    # Стек, который поднимается разом, поднимается не по порядку.
     startup_wait_seconds: float = Field(default=60.0, ge=0.0)
 
     content_dir: Path = DEFAULT_CONTENT_DIR
 
-    # Updates slower than this many seconds are reported by the slow callback
-    # detector; see docs/architecture.md, "Latency budget".
+    # Обновления медленнее этого числа секунд отмечает детектор медленных колбэков; см.
+    # docs/architecture.md, «Бюджет задержки».
     slow_callback_seconds: float = Field(default=0.1, gt=0.0)
-    # That detector needs asyncio debug mode, which timestamps every callback and
-    # keeps coroutine origins alive. It is a development tool, so it is off
-    # wherever real players are connected and the setting is left unset: the
-    # place it was forgotten in is always the place players are, and a guard
-    # rail that costs throughput must be asked for rather than inherited.
+    # Детектору нужен режим отладки asyncio, а он проставляет время каждому колбэку и
+    # держит живыми истоки корутин. Это инструмент разработки, поэтому он выключен там,
+    # где подключены живые игроки, и настройка оставлена пустой: место, где о ней
+    # забыли, - это всегда место, где сидят игроки, а перила ценой в пропускную
+    # способность просят, а не наследуют.
     slow_callback_detector: bool | None = None
 
-    # How often the game writes down what it served (``mmorpg.metrics``). One
-    # line a minute: often enough to see the ten bad minutes, rare enough that
-    # the log stays readable for a day of play.
+    # Как часто игра записывает, что успела сделать (``mmorpg.metrics``). Строка в
+    # минуту: достаточно часто, чтобы увидеть десять плохих минут, достаточно редко,
+    # чтобы журнал за день оставался читаемым.
     metrics_seconds: float = Field(default=60.0, gt=0.0)
 
-    # Sends per second the bot allows itself. Telegram counts about thirty, for
-    # the bot as a whole; going over is answered with "wait", which for a player
-    # listening to a screen reader is an answer that never came.
+    # Сколько отправок в секунду бот себе позволяет. Telegram считает около тридцати, и
+    # на бота целиком; за перебор отвечают «подожди», а для того, кто слушает экранного
+    # диктора, это ответ, который не пришёл.
     telegram_sends_per_second: int = Field(default=30, ge=1)
 
-    # Ceiling on updates handled at the same time. A burst of players cannot
-    # queue more concurrent work than the PostgreSQL pool can serve; 0 lifts the
-    # ceiling. See docs/architecture.md, "Capacity".
+    # Потолок одновременно обрабатываемых обновлений. Наплыв игроков не поставит в
+    # очередь больше одновременной работы, чем вывезет пул PostgreSQL; 0 снимает
+    # потолок. См. docs/architecture.md, «Ёмкость».
     update_concurrency_limit: int = Field(default=100, ge=0)
 
-    # Liveness heartbeat: the running event loop touches this file every
-    # ``heartbeat_seconds``, and the container healthcheck fails once the file
-    # goes stale. See ``mmorpg.health``.
+    # Сердцебиение: живой цикл событий трогает этот файл каждые ``heartbeat_seconds``, и
+    # проверка контейнера падает, как только файл протух. См. ``mmorpg.health``.
     heartbeat_path: Path = DEFAULT_HEARTBEAT_PATH
     heartbeat_seconds: float = Field(default=10.0, gt=0.0)
 
@@ -192,7 +188,7 @@ class Settings(BaseSettings):
 
     @property
     def log_path(self) -> Path | None:
-        """The directory the log files go into, or ``None`` for stdout only."""
+        """Куда ложатся файлы журнала, или ``None`` - только stdout."""
         stripped = self.log_dir.strip()
         if not stripped:
             return None
@@ -201,29 +197,29 @@ class Settings(BaseSettings):
 
     @property
     def watching_slow_callbacks(self) -> bool:
-        """Whether asyncio debug mode is on. Local by default, elsewhere on request."""
+        """Включён ли режим отладки asyncio. Локально - да, в остальном - по просьбе."""
         if self.slow_callback_detector is None:
             return self.app_env is AppEnv.LOCAL
         return self.slow_callback_detector
 
     @property
     def broadcasts_enabled(self) -> bool:
-        """Whether the game channel is configured. Broadcasts are a no-op if not."""
+        """Настроен ли канал игры. Без него бродкаст ничего не делает."""
         return bool(self.channel_id.strip())
 
     @property
     def group_chat_enabled(self) -> bool:
-        """Whether public group commands are answered."""
+        """Отвечает ли игра на команды в группах."""
         return bool(self.group_id.strip())
 
     @property
     def any_group_allowed(self) -> bool:
-        """Whether the bot answers in every group it has been added to."""
+        """Отвечает ли бот в любой группе, куда его добавили."""
         return self.group_id.strip() == ANY_GROUP
 
     @property
     def admins(self) -> frozenset[int]:
-        """Telegram ids the right comes from. Anything unparsable is simply not one."""
+        """Telegram-id, от которых идёт право. Всё неразобранное правом не считается."""
         ids: set[int] = set()
         for part in self.admin_ids.replace(";", ",").split(","):
             stripped = part.strip()
@@ -232,50 +228,49 @@ class Settings(BaseSettings):
         return frozenset(ids)
 
     def is_admin(self, telegram_id: int) -> bool:
-        """Whether this account's right comes from the environment rather than the game.
+        """Идёт ли право этого аккаунта из окружения, а не из игры.
 
-        Such an account is a keeper always, cannot be stripped of it from inside
-        the game, and is the only one that can hand the right to somebody else.
+        Такой аккаунт - смотритель всегда, права его изнутри игры не лишить, и только
+        он может выдать право кому-то ещё.
         """
         return telegram_id in self.admins
 
     @property
     def uses_postgres(self) -> bool:
-        """Whether the world is kept in PostgreSQL rather than in memory."""
+        """Лежит ли мир в PostgreSQL, а не в памяти."""
         return self.app_env is not AppEnv.LOCAL
 
     @property
     def uses_redis(self) -> bool:
-        """Whether the short-lived state is kept in Redis rather than in memory.
+        """Лежит ли короткоживущее состояние в Redis, а не в памяти.
 
-        ``SOLO`` says no: what Redis holds here is where a player is standing, the
-        fight they are in the middle of and the map of a location, and all three
-        are already written to be survivable losses (``Claude.md``, rule 8). One
-        process serving one machine can hold them itself, and that is one service
-        fewer to install.
+        ``SOLO`` говорит «нет»: Redis держит здесь место игрока, начатый бой и карту
+        локации, и все три написаны так, чтобы их потеря была безопасной
+        (``Claude.md``, правило 8). Один процесс, обслуживающий одну машину, удержит их
+        сам, а это на одну службу меньше.
         """
         return self.app_env in (AppEnv.DEV, AppEnv.PROD)
 
     @property
     def webhook_url(self) -> str:
-        """Public URL Telegram will deliver updates to."""
+        """Публичный адрес, на который Telegram будет слать обновления."""
         return f"{self.webhook_base_url.rstrip('/')}{self.webhook_path}"
 
     @property
     def heartbeat_stale_after(self) -> float:
-        """Heartbeat age that means the event loop is wedged.
+        """Возраст сердцебиения, после которого цикл событий считается вставшим.
 
-        Three beats: one missed beat is a slow disk or a busy host, three in a
-        row is not.
+        Три удара: один пропущенный - это медленный диск или занятая машина, три подряд
+        - уже нет.
         """
         return self.heartbeat_seconds * 3
 
     @property
     def concurrency_limit(self) -> int | None:
-        """The update ceiling in the form aiogram wants: ``None`` for no limit."""
+        """Потолок обновлений в том виде, в каком его хочет aiogram: ``None`` - без потолка."""
         return self.update_concurrency_limit or None
 
 
 def load_settings() -> Settings:
-    """Build the settings object. Call once, at startup."""
+    """Собрать настройки. Вызывается один раз, на старте."""
     return Settings()

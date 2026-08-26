@@ -69,7 +69,7 @@ def armor_softener(level: int) -> float:
 
 
 def armor_factor(armor: float, level: int) -> float:
-    """The share of a blow that survives armour, between 0 and 1."""
+    """Доля удара, пережившая броню, от 0 до 1."""
     softener = armor_softener(level)
     return softener / (softener + max(0.0, armor))
 

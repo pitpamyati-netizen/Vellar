@@ -1,13 +1,13 @@
-"""What the Debt Circle holds of a character.
+"""Что Круг долгов держит с персонажа.
 
-A win used to pay double out of nothing, which made the Circle the one place in
-the game where gold appeared without anybody beating anything (Roadmap, "Риски").
-Now the top-up above the returned stake comes out of the stakes the Circle has
-already taken from this character, and this column is that hold.
+Победа когда-то платила вдвое из ниоткуда, и это делало Круг единственным местом
+в игре, где золото появлялось без того, чтобы кто-то кого-то победил. Теперь
+добавка сверх возвращённой ставки идёт из ставок, которые Круг уже взял с этого
+персонажа, и эта колонка и есть тот залог.
 
-Existing characters start at zero: what they lost into the Circle before this
-migration was never held anywhere, and crediting it now would invent exactly the
-gold this change exists to stop inventing.
+Существующие персонажи начинают с нуля: то, что они проиграли Кругу до этой
+миграции, нигде не держалось, и зачесть это сейчас значило бы выдумать ровно то
+золото, ради невыдумывания которого эта правка и существует.
 
 Revision ID: 0010
 Revises: 0009

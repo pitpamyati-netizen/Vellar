@@ -1,1 +1,1 @@
-"""mmorpg.presentation.telegram layer package."""
+"""Слой mmorpg.presentation.telegram."""

@@ -1,5 +1,5 @@
-# The build context is uploaded to the daemon before the first layer runs, so
-# .venv and .git alone are worth hundreds of megabytes of nothing.
+# Контекст сборки уезжает демону раньше, чем отработает первый слой, а одни только .venv
+# и .git — это сотни мегабайт ничего.
 .git/
 .github/
 .venv/
@@ -17,7 +17,7 @@ dist/
 coverage.xml
 htmlcov/
 
-# Secrets are injected as environment variables, never baked into a layer.
+# Секреты подставляются переменными окружения и никогда не запекаются в слой.
 .env
 *.log
 
@@ -28,5 +28,6 @@ docs/
 tests/
 *.bat
 *.md
-# ...except the one pyproject.toml points at: the build reads it for metadata.
+# ...кроме того, на который показывает pyproject.toml: сборка читает его ради
+# метаданных.
 !README.md

@@ -1,11 +1,12 @@
-"""Button labels.
+"""Надписи на кнопках.
 
-A label is text plus an *optional* emoji. The text alone must always be
-unambiguous, because emoji are off by default and a screen reader user may never
-hear them (accessibility rule 6).
+Надпись - это текст плюс *необязательный* значок. Один текст обязан быть
+однозначным всегда, потому что значки выключены по умолчанию, и тот, кто слушает
+экранный диктор, может не услышать их никогда (правило доступности 6).
 
-Routing is by exact button text, so these strings are part of the contract: a
-renamed label is a routing change (``docs/adr/0002-reply-keyboards-only.md``).
+Маршрутизация идёт по точному тексту кнопки, поэтому эти строки - часть
+договора: переименованная надпись есть изменение маршрута
+(``docs/adr/0002-reply-keyboards-only.md``).
 """
 
 from __future__ import annotations
@@ -15,22 +16,22 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True, slots=True)
 class Label:
-    """One button label."""
+    """Одна надпись на кнопке."""
 
     text: str
     emoji: str = ""
 
     def render(self, *, emoji: bool = False) -> str:
-        """The exact string shown on the button."""
+        """Ровно та строка, что показана на кнопке."""
         if emoji and self.emoji:
             return f"{self.emoji} {self.text}"
         return self.text
 
     def matches(self, pressed: str) -> bool:
-        """Whether a pressed button text refers to this label.
+        """Относится ли нажатый текст кнопки к этой надписи.
 
-        Accepts both renderings, because the player may press a button from an
-        older keyboard rendered with the other emoji setting.
+        Принимаются обе записи, потому что игрок мог нажать кнопку старой клавиатуры,
+        собранной при другой настройке значков.
         """
         stripped = pressed.strip()
         return stripped in {self.text, f"{self.emoji} {self.text}".strip()}
@@ -40,20 +41,20 @@ def label(text: str, emoji: str = "") -> Label:
     return Label(text=text, emoji=emoji)
 
 
-# --- the service row, identical on every screen (accessibility rule 8) ---
+# --- служебный ряд, одинаковый на каждом экране (правило доступности 8) ---
 
 BACK = label("Назад", "◀️")
 MAIN_MENU = label("Главное меню", "🏠")
 SERVICE_ROW: tuple[Label, ...] = (BACK, MAIN_MENU)
 
-# "Осмотреться" is no longer a button: in Telegram nothing scrolls away, and the
-# last message is always there to be read again, so a third button on every single
-# screen was a button that cost attention and bought nothing. The label stays -
-# the command ``/осмотреться`` still works, and so does the button itself if a
-# player presses one left over on an older keyboard.
+# «Осмотреться» больше не кнопка: в Telegram ничто не уезжает безвозвратно, и последнее
+# сообщение всегда можно прочитать заново, поэтому третья кнопка на каждом без
+# исключения экране была кнопкой, которая стоила внимания и не покупала ничего. Надпись
+# осталась: команда ``/осмотреться`` работает, как работает и сама кнопка, если игрок
+# нажмёт её на старой клавиатуре.
 LOOK = label("Осмотреться", "🔁")
 
-# --- navigation ---
+# --- перемещение ---
 
 WORLD = label("Мир", "🗺")
 CITY = label("Город", "🏰")
@@ -74,7 +75,7 @@ QUESTS = label("Задания", "📜")
 SETTINGS = label("Настройки", "⚙️")
 TUTORIAL = label("Обучение", "🧭")
 
-# --- skills, quests and city services ---
+# --- умения, задания и городские службы ---
 
 SKILL_SLOTS = label("Слоты умений", "🧩")
 SKILL_LEARN = label("Изучить и улучшить", "📚")
@@ -99,7 +100,7 @@ DUNGEON_LEAVE = label("Выйти на воздух", "🚪")
 TURNING = label("Совершить перерождение", "🏵")
 TURNING_QUESTION = label("Голосование", "🧮")
 
-# --- keeper (ADMIN_IDS only; ordinary players never see this row) ---
+# --- смотритель (только ADMIN_IDS; обычные игроки этого ряда не видят) ---
 
 KEEPER = label("Смотритель", "🗝")
 KEEPER_GOLD = label("Выдать золото", "🪙")
@@ -107,13 +108,13 @@ KEEPER_LEVEL = label("Поднять уровень", "🔼")
 KEEPER_HEAL = label("Залечить раны", "🩹")
 KEEPER_POINTS = label("Выдать очки", "🎯")
 
-# The panel: four doors, and behind them everything the game is made of.
+# Панель: четыре двери, а за ними всё, из чего сделана игра.
 KEEPER_WORLD = label("Мир и содержимое", "🧱")
 KEEPER_PLAYERS = label("Игроки", "👥")
 KEEPER_STATS = label("Статистика", "📈")
 KEEPER_SERVICE = label("Обслуживание", "🧹")
 
-# Editing one entity: add, change, take back.
+# Правка одной сущности: добавить, изменить, отменить.
 KEEPER_ADD = label("Добавить", "➕")
 KEEPER_REMOVE = label("Убрать из игры", "🚫")
 KEEPER_RETURN = label("Вернуть в игру", "↩️")
@@ -121,7 +122,7 @@ KEEPER_FORGET = label("Снять правку", "🧽")
 KEEPER_CLEAR = label("Очистить поле", "␡")
 KEEPER_RELOAD = label("Перечитать правки", "🔄")
 
-# Players.
+# Игроки.
 KEEPER_FIND = label("Найти по имени", "🔤")
 KEEPER_MOVE = label("Перевести в город", "🧭")
 KEEPER_DELETE = label("Удалить персонажа", "🗑")
@@ -133,12 +134,12 @@ KEEPER_PROMOTE = label("Сделать смотрителем", "🗝")
 KEEPER_DEMOTE = label("Убрать из смотрителей", "🚷")
 KEEPER_TRADES = label("Сделки", "🤝")
 
-# Maintenance.
+# Обслуживание.
 KEEPER_SWEEP_DRAFTS = label("Убрать брошенных", "🧺")
 KEEPER_CHECK_BLOCKED = label("Проверить, кто заблокировал", "📮")
 KEEPER_DROP_BLOCKED = label("Убрать заблокировавших", "🚮")
 
-# --- residents of a city (only where somebody actually lives) ---
+# --- жители города (только там, где кто-то действительно живёт) ---
 
 NPCS = label("Жители", "🧑")
 
@@ -147,7 +148,7 @@ NPCS = label("Жители", "🧑")
 CRAFTS = label("Ремёсла", "🛠")
 GATHER = label("Собрать сырьё", "🌿")
 
-# --- creation ---
+# --- создание ---
 
 CREATE_CHARACTER = label("Создать персонажа", "✳️")
 CONTINUE = label("Продолжить", "▶️")
@@ -155,7 +156,7 @@ CONFIRM = label("Подтвердить", "✅")
 RACE_DETAILS = label("Подробно о расе", "❔")
 CLASS_DETAILS = label("Подробно о классе", "❔")
 
-# --- paginated lists (accessibility rule 8 and section 13 of the spec) ---
+# --- списки со страницами (правило доступности 8 и раздел 13 спецификации) ---
 
 PREVIOUS_PAGE = label("Предыдущая страница", "⬅️")
 NEXT_PAGE = label("Следующая страница", "➡️")

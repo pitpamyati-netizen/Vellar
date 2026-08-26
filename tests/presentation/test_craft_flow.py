@@ -1,4 +1,4 @@
-"""Ремёсла from the main menu: gather a watch, make a batch, keep the bag honest."""
+"""Ремёсла из главного меню: отработать стражу сбора, сделать партию, не соврать про сумку."""
 
 from __future__ import annotations
 
@@ -76,10 +76,10 @@ def button(
     prefix: str,
     goods: Goods | None = None,
 ) -> str:
-    """The exact text of the button that starts with ``prefix``.
+    """Точный текст кнопки, начинающейся с ``prefix``.
 
-    Craft buttons carry the rank and the work left in them, so a test that typed
-    them out by hand would break on every balance change and prove nothing.
+    Кнопки ремёсел несут в себе ранг и оставшуюся работу, поэтому тест, выписавший бы
+    их руками, ломался бы на каждой правке баланса и не доказывал бы ничего.
     """
     for row in screen(content, hero, state, goods).rows:
         for pressed in row:
@@ -91,13 +91,13 @@ def button(
 def pressable(
     content: GameContent, hero: Character, state: PlayState, goods: Goods | None = None
 ) -> str:
-    """Every button on the screen, as one string to look through."""
+    """Каждая кнопка экрана, собранная в одну строку для поиска."""
     return " | ".join(
         pressed.text for row in screen(content, hero, state, goods).rows for pressed in row
     )
 
 
-# --- getting there ----------------------------------------------------
+# --- как туда попасть -------------------------------------------------
 
 
 def test_the_menu_opens_the_craft_list(content: GameContent, hero: Character) -> None:
@@ -125,7 +125,7 @@ def test_back_walks_out_the_way_it_came(content: GameContent, hero: Character) -
     assert step(content, hero, state, "Назад").screen is ScreenId.MAIN_MENU
 
 
-# --- gathering --------------------------------------------------------
+# --- сбор -------------------------------------------------------------
 
 
 def test_gathering_puts_material_in_the_bag_and_records_the_work(
@@ -203,7 +203,7 @@ def test_recipes_above_the_rank_are_not_offered(
 
 
 def test_a_stale_craft_screen_falls_back_to_the_list(content: GameContent, hero: Character) -> None:
-    """A player can return to a craft that content no longer has; nothing raises."""
+    """Игрок может вернуться к ремеслу, которого в содержимом больше нет; падать при этом нечему."""
     stale = replace(begin(hero), screen=ScreenId.CRAFT, craft_id="basket_weaving")
     assert screen(content, hero, stale).id is ScreenId.CRAFTS
 

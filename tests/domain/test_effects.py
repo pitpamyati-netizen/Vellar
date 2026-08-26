@@ -1,4 +1,4 @@
-"""The effect stack: keyed by id, refreshed rather than stacked."""
+"""Стопка эффектов: ключ - идентификатор, и эффект обновляется, а не складывается."""
 
 from __future__ import annotations
 

@@ -1,29 +1,30 @@
-# ADR 0004 - Standard asyncio.Runner, no uvloop
+# ADR 0004 — Стандартный asyncio.Runner, без uvloop
 
-Status: accepted (2026-08-12)
+Статус: принято (2026-08-12)
 
-## Context
+## Обстоятельства
 
-The specification allows uvloop only if it is built for Python 3.14. Checked on
+Спецификация допускает uvloop, только если он собран под Python 3.14. Проверено
 2026-08-12:
 
-- uvloop 0.22.1 declares support up to Python 3.13; there is no 3.14 classifier and
-  no 3.14 wheel.
-- uvloop has never supported Windows, and the project is developed on Windows.
+- uvloop 0.22.1 объявляет поддержку до Python 3.13; ни классификатора 3.14, ни колеса
+  под 3.14 нет.
+- uvloop никогда не поддерживал Windows, а проект разрабатывают на Windows.
 
-The workload is also not one uvloop helps much with: handlers are dominated by
-PostgreSQL and Redis round trips and Telegram API calls, not by event loop
-scheduling overhead.
+Да и нагрузка не та, которой uvloop сильно помогает: в хендлерах преобладают походы в
+PostgreSQL и Redis и вызовы Telegram API, а не накладные расходы планировщика цикла
+событий.
 
-## Decision
+## Решение
 
-Use the stdlib `asyncio.Runner` on every platform. Do not add uvloop as a
-dependency, optional or otherwise.
+Брать `asyncio.Runner` из стандартной библиотеки на всех платформах. Не добавлять
+uvloop в зависимости — ни обязательные, ни необязательные.
 
-## Consequences
+## Последствия
 
-- One event loop implementation across development, CI and production; no
-  platform-specific behaviour differences to debug.
-- Revisit when a 3.14 uvloop wheel exists **and** profiling shows loop overhead
-  inside the latency budget. Until then the latency work is in pooling, caching and
-  keeping the loop unblocked (see `docs/architecture.md`, "Latency budget").
+- Одна реализация цикла событий в разработке, в CI и в бою; никакой разницы поведения
+  между платформами, которую пришлось бы отлаживать.
+- Вернуться к вопросу, когда появится колесо uvloop под 3.14 **и** профилирование
+  покажет, что расходы цикла заметны внутри бюджета задержки. До тех пор работа над
+  задержкой — это пулы, кэши и незаблокированный цикл (см. `docs/architecture.md`,
+  «Бюджет задержки»).

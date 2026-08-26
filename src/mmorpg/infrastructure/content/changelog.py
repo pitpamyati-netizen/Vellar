@@ -1,15 +1,16 @@
-"""Load ``content/changelog.toml`` - the update history players read.
+"""Чтение ``content/changelog.toml`` - истории обновлений, которую читают игроки.
 
-An update is content, not a commit log: every line says what a player can now do
-or will now see. It lives in TOML for the same reason the world does - writing an
-update means editing a file, not editing code (``Claude.md``, rule 6).
+Обновление - это содержимое, а не список коммитов: каждая строка говорит, что
+игрок теперь может сделать или увидеть. Живёт оно в TOML по той же причине, что и
+мир: написать обновление - значит поправить файл, а не поправить код
+(``Claude.md``, правило 6).
 
-Read on demand rather than at startup: nobody inside the game asks what changed
-in version 0.2, and the game must play with no channel configured at all. The
-reader is ``scripts/broadcast.py``, at the moment an update is announced.
+Читается по требованию, а не на старте: внутри игры никто не спрашивает, что
+изменилось в версии 0.2, а играть игра обязана и вовсе без настроенного канала.
+Читатель - ``scripts/broadcast.py``, в ту минуту, когда обновление объявляют.
 
-Validated here: the shape of the file. The wording is validated where every other
-channel rule is - ``presentation/telegram/broadcast.py``.
+Проверяется здесь форма файла. Слова проверяются там же, где все прочие правила
+канала, - в ``presentation/telegram/broadcast.py``.
 """
 
 from __future__ import annotations
@@ -23,22 +24,23 @@ from typing import Any
 from mmorpg.infrastructure.content.loader import ContentError
 
 CHANGELOG_FILE = "changelog.toml"
-# One entry is one line of a post read aloud: longer than this and it stops being
-# a line and becomes a paragraph nobody can hold in their head.
+# Одна запись - одна строка поста, читаемого вслух: длиннее, и она перестаёт быть
+# строкой и становится абзацем, который никто не удержит в голове.
 ENTRY_LIMIT = 200
 LATEST = "latest"
-# A headline stands alone, so it has to say which update this is: a player who
-# stops after the first line must still know what they just heard about.
+# Заголовок стоит отдельно, поэтому обязан назвать, о каком обновлении речь: игрок,
+# остановившийся после первой строки, всё равно должен знать, о чём он только что
+# услышал.
 HEADLINE_PREFIX = "Обновление"
 
 
 @dataclass(frozen=True, slots=True)
 class Release:
-    """One published version, in the three sections a player understands."""
+    """Одна вышедшая версия, в трёх разделах, понятных игроку."""
 
     version: str
-    # The first line of the post. Empty means the file did not write one, and the
-    # post falls back to the bare "Обновление 0.2.".
+    # Первая строка поста. Пусто — значит, файл её не написал, и пост откатывается к
+    # голому «Обновление 0.2».
     headline: str = ""
     added: tuple[str, ...] = ()
     changed: tuple[str, ...] = ()
@@ -50,16 +52,16 @@ class Release:
 
 
 def version_key(version: str) -> tuple[int, ...]:
-    """``"0.10"`` sorts after ``"0.9"``, which is why versions must be numeric."""
+    """``"0.10"`` идёт после ``"0.9"``, и поэтому версии обязаны быть числами."""
     return tuple(int(part) for part in version.split("."))
 
 
 def load_changelog(content_dir: Path) -> tuple[Release, ...]:
-    """Parse the changelog, oldest release first.
+    """Разобрать список обновлений, старые сверху.
 
-    Raises:
-        ContentError: if the file is missing, malformed or inconsistent. Every
-            problem is collected, so an author sees the whole list at once.
+    Бросает:
+        ContentError: если файла нет, он испорчен или противоречив. Все беды
+            собираются вместе, чтобы автор увидел весь список разом.
     """
     path = content_dir / CHANGELOG_FILE
     if not path.is_file():
@@ -67,7 +69,7 @@ def load_changelog(content_dir: Path) -> tuple[Release, ...]:
     try:
         with path.open("rb") as handle:
             raw: dict[str, Any] = tomllib.load(handle)
-    except tomllib.TOMLDecodeError as error:  # pragma: no cover - depends on broken input
+    except tomllib.TOMLDecodeError as error:  # pragma: no cover - зависит от испорченного ввода
         raise ContentError([f"{CHANGELOG_FILE}: cannot parse TOML: {error}"]) from error
 
     problems: list[str] = []
@@ -107,7 +109,7 @@ def load_changelog(content_dir: Path) -> tuple[Release, ...]:
 
 
 def select_release(releases: Sequence[Release], version: str = LATEST) -> Release:
-    """Pick one release by version, or the newest one for ``"latest"``."""
+    """Взять один выпуск по версии или самый свежий по слову ``"latest"``."""
     if not releases:
         raise ContentError([f"{CHANGELOG_FILE}: no releases"])
     if version == LATEST:
@@ -125,7 +127,7 @@ def _is_numeric(version: str) -> bool:
 
 
 def _headline(entry: Any, version: str, problems: list[str]) -> str:
-    """The line a player hears first, if the file writes one."""
+    """Строка, которую игрок слышит первой, если файл её пишет."""
     raw = entry.get("headline")
     if raw is None:
         return ""

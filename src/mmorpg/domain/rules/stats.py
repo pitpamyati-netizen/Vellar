@@ -1,13 +1,13 @@
-"""Total character statistics.
+"""Итоговые характеристики персонажа.
 
-Nothing here is stored. Given the raw character record and the content registry,
-these functions rebuild every number the game shows:
+Ничто здесь не хранится. По сырой записи персонажа и реестру содержимого эти
+функции собирают заново каждое число, которое игра показывает:
 
-    total = base + race + class + allocated + traits + equipment + active effects
+    итог = основа + раса + класс + розданное + черты + снаряжение + эффекты
 
-The functions are pure, so the same inputs always produce the same output, and
-applying the same modifier source twice is impossible - sources are collected, not
-accumulated over time.
+Функции чистые, поэтому одни и те же входные данные всегда дают один и тот же
+ответ, а применить один источник прибавок дважды нельзя: источники собираются, а
+не накапливаются со временем.
 """
 
 from __future__ import annotations
@@ -21,13 +21,12 @@ from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import modifiers as mods
 
-# Derived value coefficients. Kept here rather than in content: they are formula
-# constants, not balance knobs a content author edits per race.
-#
-# Выносливость держит броню, которая есть у всякого, - но только её. Всё
-# остальное приносит доспех, и приносит числом (``domain/rules/equipment.py``):
-# до этого надетое умело менять броню лишь процентами от полутора десятков, и
-# латы ощущались как стёганка.
+# Коэффициенты производных значений. Держатся здесь, а не в содержимом: это постоянные
+# формул, а не ручки баланса, которые автор содержимого правит на каждую расу.
+# Выносливость держит броню, которая есть у всякого, - но только её. Всё остальное
+# приносит доспех, и приносит числом (``domain/rules/equipment.py``): до этого надетое
+# умело менять броню лишь процентами от полутора десятков, и латы ощущались как
+# стёганка.
 ARMOR_PER_ENDURANCE = 1.6
 ACCURACY_BASE = 75.0
 ACCURACY_PER_AGILITY = 1.2
@@ -36,9 +35,9 @@ CRIT_CHANCE_BASE = 3.0
 CRIT_CHANCE_PER_LUCK = 0.45
 CRIT_DAMAGE_BASE = 150.0
 CRIT_DAMAGE_PER_LUCK = 0.45
-# Both halves of a critical hit are capped. Uncapped, luck multiplied chance by
-# damage and a luck build ended up hitting three times as hard as anyone else -
-# not a build, an exploit. Capped, it is worth about half again as much.
+# Обе половины крита ограничены. Без потолка удача умножала шанс на урон, и сборка на
+# удачу била втрое сильнее всех прочих - это не сборка, а дыра. С потолком она стоит
+# примерно в полтора раза больше.
 MAX_CRIT_CHANCE = 50.0
 MAX_CRIT_DAMAGE = 250.0
 MAX_DODGE = 75.0
@@ -55,7 +54,7 @@ RESOURCE_REGEN_PER_WISDOM = 0.4
 
 @dataclass(frozen=True, slots=True)
 class DerivedStats:
-    """Everything the combat engine and the screens need, already computed."""
+    """Всё, что нужно боевому движку и экранам, уже посчитанное."""
 
     max_health: int
     max_resource: int
@@ -75,7 +74,7 @@ def primary_stats(
     character: Character,
     effects: EffectStack | None = None,
 ) -> StatBlock:
-    """Base + race + class + allocated + flat stat modifiers."""
+    """Основа плюс раса, класс, розданное и плоские прибавки к характеристикам."""
     rules = content.rules
     race = content.race(character.race_id)
     klass = content.character_class(character.class_id)
@@ -95,7 +94,7 @@ def derived_stats(
     character: Character,
     effects: EffectStack | None = None,
 ) -> DerivedStats:
-    """Compute every derived value from the raw character record."""
+    """Посчитать все производные числа по сырой записи персонажа."""
     klass = content.character_class(character.class_id)
     modifiers = mods.collect_modifiers(content, character, effects)
     stats = primary_stats(content, character, effects)
@@ -158,11 +157,11 @@ def derived_stats(
 
 
 def stat_allowance(content: GameContent, level: int) -> int:
-    """Total stat points a character of this level has been given."""
+    """Сколько всего очков характеристик выдано персонажу этого уровня."""
     rules = content.rules
     return rules.free_points_at_creation + rules.stat_points_per_level * (level - 1)
 
 
 def skill_point_allowance(content: GameContent, level: int) -> int:
-    """Total skill points a character of this level has been given."""
+    """Сколько всего очков умений выдано персонажу этого уровня."""
     return content.rules.skill_point_per_level * (level - 1)

@@ -1,17 +1,18 @@
-"""What a keeper of the game may do to a character - their own or somebody else's.
+"""Что смотритель игры вправе сделать с персонажем - своим или чужим.
 
-A keeper is not a stronger player: everything here is a shortcut through work the
-game would otherwise ask for - gold that a contract would have paid, a level a
-fight would have brought, wounds a night at an inn would have closed. Nothing
-here invents a rule of its own: gold, levels and points arrive by the same
-functions the game uses, so a keeper's character stays a legal character.
+Смотритель - не игрок посильнее: всё здесь - обход работы, которую игра иначе
+попросила бы сделать: золото, которое заплатило бы задание, уровень, который
+принёс бы бой, раны, которые закрыла бы ночь на постоялом дворе. Ничто здесь не
+выдумывает собственных правил: золото, уровни и очки приходят теми же функциями,
+какими пользуется игра, поэтому персонаж смотрителя остаётся законным
+персонажем.
 
-The same shortcuts are what a keeper applies to a player who wrote to say
-something went wrong, which is why every function here takes the character it
-changes rather than assuming it is the keeper's own.
+Те же обходы смотритель применяет к игроку, написавшему, что что-то пошло не
+так, - поэтому каждая функция здесь принимает персонажа, которого меняет, а не
+считает его собственным персонажем смотрителя.
 
-Who is a keeper is decided outside the domain, by ``ADMIN_IDS``; this module only
-answers "and then what happens".
+Кто смотритель, решается вне домена, через ``ADMIN_IDS``; этот модуль отвечает
+только на вопрос «и что тогда происходит».
 """
 
 from __future__ import annotations
@@ -28,8 +29,8 @@ from mmorpg.domain.rules.progression import (
 )
 from mmorpg.domain.rules.stats import derived_stats
 
-# One step of each grant. Round numbers, because a keeper presses the button
-# again when they want more.
+# Один шаг каждой выдачи. Круглые числа, потому что смотритель нажмёт кнопку ещё раз,
+# если захочет больше.
 GOLD_STEP = 1000
 POINTS_STEP = 5
 
@@ -39,10 +40,10 @@ def grant_gold(character: Character, amount: int = GOLD_STEP) -> Character:
 
 
 def raise_level(content: GameContent, character: Character) -> tuple[Character, LevelUp]:
-    """Exactly one level, paid for with the experience it actually costs.
+    """Ровно один уровень, оплаченный тем опытом, которого он и правда стоит.
 
-    The experience is granted rather than the level set, so the points that come
-    with a level come from the one place that hands them out.
+    Выдаётся опыт, а не ставится уровень, поэтому очки, идущие с уровнем, приходят из
+    единственного места, где их раздают.
     """
     if character.level >= MAX_LEVEL:
         return character, LevelUp(
@@ -53,7 +54,7 @@ def raise_level(content: GameContent, character: Character) -> tuple[Character, 
 
 
 def heal(content: GameContent, character: Character) -> Character:
-    """Close every wound the character is carrying."""
+    """Закрыть все раны, которые несёт персонаж."""
     maximum = derived_stats(content, character).max_health
     return character.with_health(maximum, maximum)
 

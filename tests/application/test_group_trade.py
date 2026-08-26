@@ -1,8 +1,8 @@
-"""Trades between players, end to end through the repositories.
+"""Сделки между игроками, целиком, сквозь хранилища.
 
-Three properties are worth more than the rest: nothing is ever created by a
-trade, everything an offer holds comes back to its author when the offer dies,
-and the duty is the only way gold leaves the game.
+Три свойства стоят больше прочих: сделка не создаёт ничего, всё, что держит
+предложение, возвращается автору, когда предложение умирает, и пошлина -
+единственный способ, которым золото уходит из игры.
 """
 
 from __future__ import annotations
@@ -118,7 +118,7 @@ async def purse(characters: InMemoryCharacterRepository, character: Character) -
     return read.gold
 
 
-# --- profile ----------------------------------------------------------
+# --- карточка ---------------------------------------------------------
 
 
 async def test_a_profile_is_the_character_of_whoever_was_replied_to(
@@ -145,7 +145,7 @@ async def test_replying_to_someone_who_never_played(trade: GroupTrade, argus: Ch
     assert outcome.refusal is Refusal.TARGET_HAS_NO_CHARACTER
 
 
-# --- privacy ----------------------------------------------------------
+# --- приватность ------------------------------------------------------
 
 
 async def test_a_closed_profile_is_refused_rather_than_shown(
@@ -161,7 +161,7 @@ async def test_a_closed_profile_is_refused_rather_than_shown(
 async def test_closing_a_profile_hides_nothing_else(
     trade: GroupTrade, inventory: InMemoryInventoryRepository, argus: Character, merla: Character
 ) -> None:
-    """Privacy is about the card, not about trading: business goes on."""
+    """Приватность - о карточке, а не о торговле: дела идут дальше."""
     await run(trade, "скрыть профиль", author=MERLA_ACCOUNT, target=None)
     await inventory.add(argus.id, SWORD, 1)
 
@@ -184,14 +184,15 @@ async def test_a_block_stops_business_from_both_sides(
     assert blocked.result is GroupResult.BLOCK_ADDED
     assert from_them.refusal is Refusal.BLOCKED_BY_TARGET
     assert from_us.refusal is Refusal.BLOCKED_TARGET
-    # The refused sale never took the sword: an offer that cannot exist holds nothing.
+    # Отказанная продажа меча не взяла: предложение, которого не может быть, не держит
+    # ничего.
     assert await inventory.count(argus.id, SWORD) == 1
 
 
 async def test_blocking_twice_says_the_same_thing(
     trade: GroupTrade, argus: Character, merla: Character
 ) -> None:
-    """A player who lost the answer retypes the command; it must not surprise them."""
+    """Игрок, потерявший ответ, набирает команду заново; удивлять его этим нельзя."""
     first = await run(trade, "блок", author=MERLA_ACCOUNT, target=ARGUS_ACCOUNT)
     again = await run(trade, "блок", author=MERLA_ACCOUNT, target=ARGUS_ACCOUNT)
 
@@ -225,7 +226,7 @@ async def test_a_block_mid_offer_returns_the_stake(
     assert await inventory.count(merla.id, SWORD) == 0
 
 
-# --- hand-overs -------------------------------------------------------
+# --- передачи ---------------------------------------------------------
 
 
 async def test_gold_moves_immediately_and_nothing_is_created(
@@ -250,7 +251,7 @@ async def test_a_hand_over_pays_no_duty(
     argus: Character,
     merla: Character,
 ) -> None:
-    """A gift is not a trade: taxing it would only punish players for helping."""
+    """Подарок - не сделка: обложить его значило бы наказать игроков за помощь."""
     await run(trade, "передать 100 золота", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
 
     assert await purse(characters, merla) == 400
@@ -321,7 +322,7 @@ async def test_giving_to_yourself_is_refused(
     assert await inventory.count(argus.id, SWORD) == 1
 
 
-# --- publishing an offer takes the author's side --------------------
+# --- объявление предложения забирает сторону автора ------------------
 
 
 async def test_a_sale_holds_the_item_and_asks_the_target_for_nothing(
@@ -341,7 +342,7 @@ async def test_a_sale_holds_the_item_and_asks_the_target_for_nothing(
     assert outcome.offer is not None
     assert outcome.offer.kind is OfferKind.SELL
     assert outcome.offer.price == 100
-    # The seller's side is in escrow; the buyer has not been touched.
+    # Сторона продавца в эскроу; покупателя не тронули.
     assert await inventory.count(argus.id, SWORD) == 0
     assert await inventory.count(merla.id, SWORD) == 0
     assert await purse(characters, merla) == 300
@@ -362,7 +363,7 @@ async def test_a_purchase_holds_the_buyers_gold(
 
     assert outcome.result is GroupResult.OFFER_MADE
     assert await purse(characters, argus) == 400
-    # The target's item stays with them until they agree to part with it.
+    # Вещь адресата остаётся у него, пока он не согласится с ней расстаться.
     assert await inventory.count(merla.id, SWORD) == 1
 
 
@@ -373,7 +374,7 @@ async def test_offering_gold_you_do_not_have_is_refused_up_front(
     argus: Character,
     merla: Character,
 ) -> None:
-    """A buyer stakes their money when they offer it, so it has to be there."""
+    """Покупатель ставит деньги, когда предлагает, значит, они обязаны быть."""
     await inventory.add(merla.id, SWORD, 1)
 
     outcome = await run(
@@ -390,7 +391,7 @@ async def test_the_author_cannot_sell_the_same_item_twice(
     argus: Character,
     merla: Character,
 ) -> None:
-    """The first offer holds the sword, so the second has nothing to hold."""
+    """Первое предложение держит меч, поэтому второму держать уже нечего."""
     await inventory.add(argus.id, SWORD, 1)
 
     first = await run(
@@ -445,7 +446,7 @@ async def test_offers_get_distinct_numbers(
     assert first.offer.number != second.offer.number
 
 
-# --- settling ---------------------------------------------------------
+# --- закрытие ---------------------------------------------------------
 
 
 async def test_accepting_a_sale_swaps_goods_for_gold_less_the_duty(
@@ -465,7 +466,7 @@ async def test_accepting_a_sale_swaps_goods_for_gold_less_the_duty(
     assert accepted.tax == trade_tax(100) == 5
     assert await inventory.count(argus.id, SWORD) == 0
     assert await inventory.count(merla.id, SWORD) == 1
-    # The buyer pays 100, the seller receives 95, and five gold leave the game.
+    # Покупатель платит 100, продавец получает 95, и пять золотых уходят из игры.
     assert (await purse(characters, argus), await purse(characters, merla)) == (595, 200)
 
 
@@ -520,7 +521,7 @@ async def test_a_stranger_cannot_accept_someone_elses_offer(
     outcome = await run(trade, f"принять {made.offer.number}", author=STRANGER_ACCOUNT, target=None)
 
     assert outcome.refusal is Refusal.NOT_YOURS
-    # Refused, and the sword is still held by the offer, not by anyone.
+    # Отказано, и меч по-прежнему держит предложение, а не кто-то из них.
     assert await inventory.count(argus.id, SWORD) == 0
     assert await inventory.count(merla.id, SWORD) == 0
 
@@ -558,7 +559,7 @@ async def test_a_declined_offer_is_gone_for_good(
     assert again.refusal is Refusal.UNKNOWN_OFFER
 
 
-# --- what the escrow gives back ---------------------------------------
+# --- что возвращает эскроу --------------------------------------------
 
 
 async def test_a_declined_sale_returns_the_item(
@@ -622,7 +623,7 @@ async def test_a_stale_offer_is_swept_by_the_next_command_from_anyone(
     argus: Character,
     merla: Character,
 ) -> None:
-    """Nobody answers, and the group moves on: the gold still comes back."""
+    """Никто не ответил, и группа пошла дальше: золото всё равно возвращается."""
     await inventory.add(merla.id, SWORD, 1)
     made = await run(trade, f"купить 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
     assert made.offer is not None
@@ -648,7 +649,7 @@ async def test_a_stake_comes_back_exactly_once(
     argus: Character,
     merla: Character,
 ) -> None:
-    """Two sweeps and a late refusal must not mint a second refund."""
+    """Две уборки и запоздалый отказ не должны напечатать второй возврат."""
     await inventory.add(merla.id, SWORD, 1)
     made = await run(trade, f"купить 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
     assert made.offer is not None
@@ -671,11 +672,10 @@ async def test_a_quiet_group_does_not_hold_a_stake_hostage(
     argus: Character,
     merla: Character,
 ) -> None:
-    """An offer made in one group is swept by a command in another.
+    """Предложение, сделанное в одной группе, убирается командой в другой.
 
-    The number of an offer belongs to its group; the five minutes it lives do
-    not. A group that fell silent must not keep the item of somebody who is
-    playing elsewhere.
+    Номер предложения принадлежит группе, а пять минут его жизни - нет. Затихшая
+    группа не должна держать вещь того, кто играет где-то ещё.
     """
     await inventory.add(argus.id, SWORD, 1)
     made = await run(trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
@@ -710,7 +710,7 @@ async def test_a_restart_rolls_back_what_nobody_ever_answered(
     argus: Character,
     merla: Character,
 ) -> None:
-    """The last resort: a group nobody ever speaks in again still lets go."""
+    """Последний рубеж: группа, в которой больше никто не заговорит, всё равно отпускает."""
     await inventory.add(merla.id, SWORD, 1)
     made = await run(trade, f"купить 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
     assert made.offer is not None
@@ -723,7 +723,7 @@ async def test_a_restart_rolls_back_what_nobody_ever_answered(
 
     assert released == 1
     assert await purse(characters, argus) == 500
-    # Starting twice is not a way to print gold.
+    # Запуститься дважды - не способ напечатать золото.
     assert (
         await release_expired_offers(
             trades=trades, characters=characters, inventory=inventory, now=late
@@ -741,7 +741,7 @@ async def test_a_restart_leaves_an_offer_that_is_still_standing(
     argus: Character,
     merla: Character,
 ) -> None:
-    """An offer published a moment before the restart is still answerable after it."""
+    """Предложение, объявленное за миг до перезапуска, отвечаемо и после него."""
     await inventory.add(merla.id, SWORD, 1)
     made = await run(trade, f"купить 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
     assert made.offer is not None
@@ -758,7 +758,7 @@ async def test_a_restart_leaves_an_offer_that_is_still_standing(
     assert outcome.result is GroupResult.OFFER_ACCEPTED
 
 
-# --- the journal ------------------------------------------------------
+# --- журнал -----------------------------------------------------------
 
 
 async def test_every_trade_leaves_a_row_behind(
@@ -786,7 +786,7 @@ async def test_every_trade_leaves_a_row_behind(
     settled = journal[-1]
     assert settled.tax == trade_tax(100)
     assert settled.settled_at == NOW
-    # A trade that never happened cost nobody anything.
+    # Несостоявшаяся сделка никому ничего не стоила.
     assert journal[0].tax == 0
 
 
@@ -796,7 +796,7 @@ async def test_a_number_is_free_again_once_its_offer_closes(
     argus: Character,
     merla: Character,
 ) -> None:
-    """Numbers are short on purpose, so closed ones have to come back round."""
+    """Номера коротки нарочно, поэтому закрытые обязаны возвращаться по кругу."""
     await inventory.add(argus.id, SWORD, 1)
     first = await run(
         trade, f"продать 100 {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT
@@ -812,15 +812,15 @@ async def test_a_number_is_free_again_once_its_offer_closes(
     assert second.offer.number == first.offer.number
 
 
-# --- the gap between checking a purse and taking from it ---------------
+# --- зазор между проверкой кошелька и изъятием из него ---------------
 
 
 class RacingCharacters(InMemoryCharacterRepository):
-    """A repository where the purse empties between the check and the payment.
+    """Хранилище, в котором кошелёк пустеет между проверкой и оплатой.
 
-    Which is not a contrivance: the target of an offer is a player, and a player
-    is somewhere else in the bot buying a bed with the same gold. What the trade
-    read one await ago is a claim, not a fact.
+    И это не выдумка: адресат предложения - живой игрок, а живой игрок в это время
+    где-то в другом углу бота покупает постель на то же золото. То, что сделка
+    прочитала один ``await`` назад, - заявка, а не факт.
     """
 
     async def spend_gold(self, character_id: int, amount: int) -> bool:
@@ -833,9 +833,9 @@ async def test_a_settlement_pays_out_of_the_purse_at_that_instant(
     trades: InMemoryTradeRepository,
     privacy: InMemoryPrivacyRepository,
 ) -> None:
-    """The buyer's gold went elsewhere between "принять" and the payment.
+    """Золото покупателя ушло в другое место между «принять» и оплатой.
 
-    Nothing may move: not the sword out of escrow, not the price to the seller.
+    Двинуться не вправе ничто: ни меч из эскроу, ни цена продавцу.
     """
     characters = RacingCharacters()
     seller = await make(characters, ARGUS_ACCOUNT, "Аргус", gold=500)
@@ -853,7 +853,7 @@ async def test_a_settlement_pays_out_of_the_purse_at_that_instant(
     outcome = await run(trade, "принять 1", author=MERLA_ACCOUNT, target=None)
 
     assert outcome.refusal is Refusal.TARGET_LACKS_GOLD
-    # The sword is back with its owner, and nobody was paid for nothing.
+    # Меч вернулся к владельцу, и ни за что никому не заплатили.
     assert await inventory.count(seller.id, SWORD) == 1
     assert await inventory.count(buyer.id, SWORD) == 0
     assert await purse(characters, seller) == 500

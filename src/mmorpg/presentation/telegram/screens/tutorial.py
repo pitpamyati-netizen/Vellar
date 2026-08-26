@@ -1,12 +1,12 @@
-"""The introduction screen: what to do next, and one button that goes there.
+"""Экран вступления: что делать дальше и одна кнопка, которая туда ведёт.
 
-Six steps, each one sentence long, each ending where the game already is - there
-is no separate tutorial mode, no scripted corridor and nothing that has to be
-finished before the game will let go. The button «Перейти к шагу» opens the
-screen the step lives on, because "go to Персонаж, then Характеристики" is a
-route the player should not have to hold in their head.
+Шесть шагов, каждый длиной в предложение, и каждый кончается там, где игра и так
+находится: отдельного режима обучения нет, нет ни сценарного коридора, ни того,
+что надо закончить, прежде чем игра отпустит. Кнопка «Перейти к шагу» открывает
+тот экран, на котором шаг живёт, потому что «идите в Персонаж, потом в
+Характеристики» — это дорога, которую игрок не должен держать в голове.
 
-Which task is which screen is decided here; the domain only counts them
+Какая задача на каком экране, решается здесь; домен их только считает
 (``mmorpg.domain.rules.tutorial``).
 """
 
@@ -25,7 +25,7 @@ from mmorpg.presentation.telegram.screens.format import head
 
 @dataclass(frozen=True, slots=True)
 class TaskCard:
-    """One step as the player hears it."""
+    """Один шаг в том виде, в каком его слышит игрок."""
 
     task: TutorialTask
     title: str
@@ -102,7 +102,7 @@ def card_for(task: TutorialTask) -> TaskCard:
 
 
 def tutorial_screen(character: Character, notice: str = "") -> Screen:
-    """Where the introduction stands: what is done, what is next, one way there."""
+    """Где стоит вступление: что сделано, что дальше и одна дорога туда."""
     current = rules.next_task(character)
     done = rules.done_count(character)
     total = len(rules.ORDER)
@@ -127,7 +127,9 @@ def tutorial_screen(character: Character, notice: str = "") -> Screen:
 
 
 def completion_line(task: TutorialTask, character: Character) -> str:
-    """Said once, right after a task is finished, on whatever screen finished it."""
+    """Говорится один раз, сразу после того, как дело закончено, на том экране, который его
+    закончил.
+    """
     done = rules.done_count(character)
     total = len(rules.ORDER)
     if done >= total:

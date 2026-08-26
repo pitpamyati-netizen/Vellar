@@ -1,11 +1,11 @@
-"""Container liveness probe.
+"""Проверка живости контейнера.
 
-Exit 0 while the bot's event loop is still beating (``mmorpg.health``), 1 once the
-beat has gone stale. Docker turns a failing probe into an unhealthy container, and
-the restart policy turns that into a restart - which is the whole point: a wedged
-loop looks identical to a healthy one from the outside.
+Выход 0, пока сердцебиение цикла событий ещё бьётся (``mmorpg.health``), и 1,
+как только удары протухли. Docker превращает несостоявшуюся проверку в
+нездоровый контейнер, а политика перезапуска превращает это в перезапуск - в
+этом весь смысл: снаружи вставший цикл выглядит точно так же, как здоровый.
 
-Run by the image's ``HEALTHCHECK``; nothing in the application calls it.
+Зовётся из ``HEALTHCHECK`` образа; внутри приложения её не зовёт ничто.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
-"""A database that went away and came back, and what the game did meanwhile.
+"""База, которая пропала и вернулась, и что игра делала тем временем.
 
-The whole file is about one question: which calls are made a second time. Reads
-always; writes only while it is certain that nothing was sent.
+Весь файл об одном вопросе: какие вызовы делаются во второй раз. Чтения -
+всегда; записи - только пока ясно, что до базы ничего не ушло.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from mmorpg.retry import RetryPolicy
 SELECT = "SELECT gold FROM characters WHERE id = $1"
 UPDATE = "UPDATE characters SET gold = gold - $2 WHERE id = $1 AND gold >= $2"
 
-#: No real waiting in the tests; the arithmetic of the waits is checked on its own.
+#: Настоящего ожидания в тестах нет; арифметика пауз проверяется отдельно.
 QUICK = RetryPolicy(attempts=3, delay=0.0, max_delay=0.0)
 
 
@@ -30,7 +30,7 @@ def dropped() -> Exception:
 
 
 class FakePool:
-    """A pool that breaks where a real one breaks: on acquire, or on the query."""
+    """Пул, который ломается там же, где ломается настоящий: на выдаче соединения или на запросе."""
 
     def __init__(self, *, acquire_failures: int = 0, query_failures: int = 0) -> None:
         self._acquire_failures = acquire_failures
@@ -69,7 +69,7 @@ class FakePool:
 
 
 async def test_a_lost_connection_is_replaced_and_the_query_is_made_again() -> None:
-    """Two dead connections in the pool, and the player still gets their answer."""
+    """Два мёртвых соединения в пуле, а игрок всё равно получает свой ответ."""
     pool = FakePool(acquire_failures=2)
 
     result = await ReconnectingPool(pool, QUICK).fetchrow(SELECT, 1)
@@ -88,8 +88,9 @@ async def test_a_read_is_repeated_even_when_the_link_died_mid_query() -> None:
 
 
 async def test_a_write_that_may_have_landed_is_never_made_twice() -> None:
-    """The gold might already be gone: PostgreSQL could have committed and lost
-    only the answer on the way back. A second attempt would take it again."""
+    """Золота может уже не быть: PostgreSQL мог закрепить изменение и потерять
+    только ответ на обратном пути. Вторая попытка забрала бы его снова.
+    """
     pool = FakePool(query_failures=1)
 
     with pytest.raises(asyncpg.exceptions.ConnectionDoesNotExistError):
@@ -99,7 +100,7 @@ async def test_a_write_that_may_have_landed_is_never_made_twice() -> None:
 
 
 async def test_a_write_is_repeated_while_nothing_has_been_sent() -> None:
-    """No connection was obtained, so PostgreSQL never heard of the statement."""
+    """Соединение не получено, значит, PostgreSQL об этом запросе не слышал."""
     pool = FakePool(acquire_failures=2)
 
     await ReconnectingPool(pool, QUICK).execute(UPDATE, 1, 50)
@@ -109,7 +110,7 @@ async def test_a_write_is_repeated_while_nothing_has_been_sent() -> None:
 
 
 async def test_a_broken_query_is_not_repeated() -> None:
-    """A syntax error is an answer from the database, not a broken link."""
+    """Ошибка разбора - это ответ базы, а не обрыв связи."""
 
     class Rejecting(FakePool):
         async def _call(self, query: str) -> str:
@@ -124,7 +125,7 @@ async def test_a_broken_query_is_not_repeated() -> None:
 
 
 async def test_the_repeats_are_bounded() -> None:
-    """A database that is really down is reported, not waited for for ever."""
+    """О базе, которая и правда лежит, сообщают, а не ждут её вечно."""
     pool = FakePool(acquire_failures=99)
 
     with pytest.raises(asyncpg.exceptions.ConnectionDoesNotExistError):
@@ -160,9 +161,9 @@ def test_only_a_read_may_be_run_twice(query: str, twice_is_the_same: bool) -> No
 
 
 async def test_redis_is_told_to_reconnect_and_send_the_command_again() -> None:
-    """redis-py can do this itself; what matters is that it is asked to.
+    """redis-py умеет это сам; важно, что его об этом просят.
 
-    Building the client opens nothing, so this needs no Redis running.
+    Сборка клиента ничего не открывает, поэтому поднятый Redis для этого не нужен.
     """
     from mmorpg.config import AppEnv, Settings
     from mmorpg.infrastructure.persistence.pool import (

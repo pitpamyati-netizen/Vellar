@@ -1,4 +1,4 @@
-"""Enemy archetypes must cover every biome the world actually uses."""
+"""Породы противников обязаны покрыть каждый биом, который мир и правда использует."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ def test_archetypes_exist(content: GameContent) -> None:
 
 
 def test_every_biome_has_enough_candidates(content: GameContent) -> None:
-    """Otherwise a whole location would field the same enemy over and over."""
+    """Иначе целая локация выставляла бы одного и того же противника снова и снова."""
     biomes = {location.biome for city in content.cities for location in city.locations}
     for biome in sorted(biomes):
         pool = candidates(content.enemy_archetypes, biome)
@@ -22,7 +22,7 @@ def test_every_biome_has_enough_candidates(content: GameContent) -> None:
 
 
 def test_wildcard_archetypes_exist(content: GameContent) -> None:
-    """The fallback pool keeps an unknown biome playable instead of crashing."""
+    """Запасной набор оставляет незнакомый биом играбельным, а не роняет игру."""
     assert any("*" in archetype.biomes for archetype in content.enemy_archetypes)
     assert candidates(content.enemy_archetypes, "невиданный биом")
 

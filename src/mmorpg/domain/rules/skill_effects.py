@@ -196,14 +196,14 @@ def _debuff(*, duration: int = 2, **kwargs: object) -> EffectSpec:
     return EffectSpec(category=EffectCategory.DEBUFF, duration=duration, **kwargs)  # type: ignore[arg-type]
 
 
-def _elemental(*names: str, aoe: bool = False) -> dict[str, EffectSpec]:
+def _by_damage_type(*names: str, aoe: bool = False) -> dict[str, EffectSpec]:
     """Удар каждым названным родом урона - одиночный или по всем."""
     prefix = "damage_aoe_" if aoe else "damage_"
     return {f"{prefix}{name}": _damage(aoe=aoe, tags=(name,)) for name in names}
 
 
 #: Рода урона, которыми умение бьёт по объявлению. Физические четыре и
-#: магические двенадцать - один список, потому что для движка разницы нет:
+#: магические одиннадцать - один список, потому что для движка разницы нет:
 #: сопротивление считается по роду, а не по половине.
 DAMAGE_TAGS = tuple(one.value for one in DamageType)
 
@@ -389,11 +389,11 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
     "avoid_combat": EffectSpec(category=EffectCategory.SPECIAL, special="avoid_combat"),
 }
 
-# Удары каждым родом урона: шестнадцать одиночных и шестнадцать по всем. Пишутся
+# Удары каждым родом урона: пятнадцать одиночных и пятнадцать по всем. Пишутся
 # не руками по той же причине, по какой не пишется снаряжение, - это один и тот
 # же удар, отличающийся только объявленным родом.
-EFFECT_SPECS.update(_elemental(*DAMAGE_TAGS))
-EFFECT_SPECS.update(_elemental(*DAMAGE_TAGS, aoe=True))
+EFFECT_SPECS.update(_by_damage_type(*DAMAGE_TAGS))
+EFFECT_SPECS.update(_by_damage_type(*DAMAGE_TAGS, aoe=True))
 
 
 def tag_of(spec: EffectSpec) -> ActionTag:

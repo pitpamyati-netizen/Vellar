@@ -1,1 +1,1 @@
-"""mmorpg.presentation layer package."""
+"""Слой mmorpg.presentation."""

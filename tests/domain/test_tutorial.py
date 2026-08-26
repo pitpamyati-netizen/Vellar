@@ -1,4 +1,4 @@
-"""The introduction: six tasks, one bitmask, no way to count one twice."""
+"""Вступление: шесть дел, одна битовая маска, и засчитать одно дважды нельзя."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def test_completing_a_task_moves_to_the_next(newcomer: Character) -> None:
 
 
 def test_the_same_task_is_never_counted_twice(newcomer: Character) -> None:
-    """The caller reads the None to decide whether there is anything to say."""
+    """По этому None вызывающий решает, есть ли что говорить."""
     once = tutorial.complete(newcomer, TutorialTask.TRADE)
     assert once is not None
     assert tutorial.complete(once, TutorialTask.TRADE) is None
@@ -36,7 +36,7 @@ def test_the_same_task_is_never_counted_twice(newcomer: Character) -> None:
 
 
 def test_tasks_can_be_done_out_of_order(newcomer: Character) -> None:
-    """A player who fights before reading their stats is not sent back."""
+    """Игрока, который подрался раньше, чем прочитал свои характеристики, назад не отправляют."""
     fought = tutorial.complete(newcomer, TutorialTask.FIGHT)
     assert fought is not None
     assert tutorial.next_task(fought) is TutorialTask.STATS
@@ -55,7 +55,7 @@ def test_all_six_finish_the_introduction(newcomer: Character) -> None:
 
 
 def test_progress_is_one_number_that_survives_storage(newcomer: Character) -> None:
-    """The mask is what the column holds, so it must be plain and small."""
+    """Маска - это то, что лежит в колонке, поэтому она обязана быть простой и небольшой."""
     character = newcomer
     for task in (TutorialTask.STATS, TutorialTask.QUEST):
         marked = tutorial.complete(character, task)

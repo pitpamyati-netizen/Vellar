@@ -1,8 +1,9 @@
-"""The SQL adapters against a real PostgreSQL.
+"""Адаптеры на SQL против настоящего PostgreSQL.
 
-Every statement in ``mmorpg.infrastructure.persistence.postgres`` is executed here
-at least once. The in-memory adapters cannot catch a column PostgreSQL refuses to
-parse or a JSONB cast that does not round-trip; these tests can.
+Каждый запрос из ``mmorpg.infrastructure.persistence.postgres`` выполняется здесь
+хотя бы раз. Адаптеры в памяти не поймают ни колонку, которую PostgreSQL
+откажется разбирать, ни приведение к JSONB, не переживающее обратного пути; эти
+тесты - могут.
 """
 
 from __future__ import annotations
@@ -37,18 +38,18 @@ from mmorpg.infrastructure.persistence.postgres import (
 # (``conftest.py``), а привязаны они к тому циклу, в котором созданы.
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
-# Far outside the range Telegram issues, so a test can never collide with a real
-# player's row in a database someone is also playing on.
+# Далеко за пределами того, что выдаёт Telegram, чтобы тест никогда не столкнулся со
+# строкой живого игрока в базе, на которой ещё и играют.
 TEST_TELEGRAM_ID = -999_001
 OTHER_TELEGRAM_ID = -999_002
 
 
 @pytest_asyncio.fixture(loop_scope="session")
 async def clean_user(pool) -> AsyncIterator[int]:
-    """One user id, with everything it owns removed before and after."""
+    """Один идентификатор пользователя, у которого всё принадлежащее убирается до и после."""
 
     async def purge() -> None:
-        # characters and inventory cascade from the user row.
+        # персонажи и сумка уходят каскадом от строки пользователя.
         await pool.execute("DELETE FROM users WHERE telegram_id = $1", TEST_TELEGRAM_ID)
 
     await purge()
@@ -60,7 +61,7 @@ async def clean_user(pool) -> AsyncIterator[int]:
 
 @pytest_asyncio.fixture(loop_scope="session")
 async def clean_blocks(pool) -> AsyncIterator[tuple[int, int]]:
-    """Two account ids with no black list rows between them, before and after."""
+    """Два идентификатора аккаунтов, между которыми нет строк чёрного списка, - до и после."""
     pair = (TEST_TELEGRAM_ID, OTHER_TELEGRAM_ID)
 
     async def purge() -> None:
@@ -78,7 +79,7 @@ async def clean_blocks(pool) -> AsyncIterator[tuple[int, int]]:
 
 
 def a_character(user_id: int, name: str = "Тестовый") -> Character:
-    """A character with every optional field populated, so nothing is left untested."""
+    """Персонаж с заполненными необязательными полями, чтобы непроверенным не осталось ничего."""
     return Character(
         id=0,
         user_id=user_id,
@@ -136,7 +137,7 @@ async def test_a_user_survives_a_round_trip(pool, clean_user) -> None:
 
 
 async def test_accessibility_settings_are_saved_and_read_back(pool, clean_user) -> None:
-    """The column behind ``verbose`` cannot be named that; this proves it is read correctly."""
+    """Колонку за ``verbose`` нельзя так назвать; это доказывает, что читается она верно."""
     users = PostgresUserRepository(pool)
     await users.upsert(User(telegram_id=clean_user, username="tester"))
 
@@ -152,7 +153,7 @@ async def test_accessibility_settings_are_saved_and_read_back(pool, clean_user) 
 
 
 async def test_save_settings_creates_the_user_when_there_is_none(pool, clean_user) -> None:
-    """A player who changes a setting before creating a character still gets a row."""
+    """Игрок, поменявший настройку до создания персонажа, всё равно получает свою строку."""
     users = PostgresUserRepository(pool)
     await users.save_settings(
         clean_user, AccessibilitySettings(emoji=True, verbose=True, page_size=8)
@@ -161,7 +162,7 @@ async def test_save_settings_creates_the_user_when_there_is_none(pool, clean_use
 
 
 async def test_upsert_does_not_reset_settings(pool, clean_user) -> None:
-    """Every update upserts the user; that must not undo what the player chose."""
+    """Каждое обновление дописывает пользователя; отменять выбор игрока при этом нельзя."""
     users = PostgresUserRepository(pool)
     await users.upsert(User(telegram_id=clean_user, username="tester"))
     await users.save_settings(
@@ -195,7 +196,7 @@ async def test_the_keeper_right_is_stored_on_the_account_and_read_back(pool, cle
     assert read is not None and read.keeper is False
 
 
-# --- privacy -----------------------------------------------------------------
+# --- приватность -----------------------------------------------------------
 
 
 async def test_an_account_nobody_stored_anything_about_is_open(pool, clean_user) -> None:
@@ -237,7 +238,7 @@ async def test_a_block_is_written_once_and_lifted_once(pool, clean_blocks) -> No
 
     assert (first, again) == (True, False)
     assert await privacy.blocks(owner, other) is True
-    # A block is one direction: the other side is not listed by it.
+    # Блокировка одностороння: обратной стороны в ней не значится.
     assert await privacy.blocks(other, owner) is False
     assert await privacy.unblock(owner, other) is True
     assert await privacy.unblock(owner, other) is False
@@ -254,11 +255,11 @@ async def test_the_database_refuses_a_block_on_oneself(pool, clean_blocks) -> No
         await privacy.block(owner, owner, at=1000)
 
 
-# --- characters --------------------------------------------------------------
+# --- персонажи -------------------------------------------------------------
 
 
 async def test_a_character_survives_a_round_trip(pool, clean_user) -> None:
-    """Including the JSONB columns, which are the easiest thing here to get wrong."""
+    """Включая колонки JSONB - здесь их проще всего испортить."""
     await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user, username="tester"))
     characters = PostgresCharacterRepository(pool)
 
@@ -272,9 +273,9 @@ async def test_a_character_survives_a_round_trip(pool, clean_user) -> None:
     assert read.trait_ids == ("stoic", "keen_eye")
     assert read.loadout.actives[0] == "cleave"
     assert read.loadout.racial == "stonesense"
-    # Skills lying in the panel are known by definition, so the rank of the
-    # passive and of the racial comes back filled in even though the row stored
-    # only the one rank that was raised.
+    # Умения, лежащие в панели, изучены по определению, поэтому ранг пассивного и
+    # расового возвращается заполненным, хотя в строке хранился только тот один ранг,
+    # который поднимали.
     assert dict(read.loadout.ranks) == {"cleave": 3, "toughness": 1, "stonesense": 1}
     assert dict(read.loadout.edges) == {"cleave": "wide"}
     assert dict(read.equipment.items) == {"weapon": "iron_axe"}
@@ -287,10 +288,10 @@ async def test_a_character_survives_a_round_trip(pool, clean_user) -> None:
     )
     assert read.unspent_stat_points == 5
     assert read.is_admin is True
-    # The vault is a column of its own: the purse must never absorb it.
+    # Сундук - отдельная колонка: кошелёк не вправе его поглотить.
     assert (read.gold, read.bank_gold) == (250, 900)
-    # What the Circle holds is stored gold too: without it, a win would have
-    # nothing to be paid out of after a restart (``domain/rules/arena.py``).
+    # То, что держит Круг, - тоже сохранённое золото: без него победе после перезапуска
+    # не из чего было бы платиться (``domain/rules/arena.py``).
     assert (read.arena_wins, read.arena_losses, read.arena_credit) == (3, 1, 120)
     # Печати и заклады тоже хранятся: без списка закладов грань, отданную в
     # перерождение, можно было бы выбрать заново (``domain/rules/turning.py``).
@@ -385,11 +386,11 @@ async def test_the_tally_counts_seals_and_only_of_this_cycle(pool, clean_user) -
 
 
 async def test_gold_is_spent_in_one_step_or_not_at_all(pool, clean_user) -> None:
-    """The hole this closes: a purse read, then written back a few awaits later.
+    """Дыра, которую это закрывает: кошелёк прочитан, а записан обратно несколькими await позже.
 
-    A trade settles against gold its owner may be spending in that very instant
-    (Roadmap, "Риски"), so the check and the subtraction have to be the same
-    statement. Two settlements racing over one purse: exactly one may win.
+    Сделка закрывается против золота, которое его владелец в это самое мгновение,
+    возможно, тратит, поэтому проверка и вычитание обязаны быть одним запросом. Два
+    закрытия, гоняющихся за одним кошельком: выиграть вправе ровно одно.
     """
     await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user, username="tester"))
     characters = PostgresCharacterRepository(pool)
@@ -425,7 +426,7 @@ async def test_the_active_character_is_the_first_one(pool, clean_user) -> None:
 
 
 async def test_names_are_taken_case_insensitively(pool, clean_user) -> None:
-    """The unique index is on lower(name); the check has to agree with it."""
+    """Уникальный указатель стоит на lower(name); проверка обязана с ним сходиться."""
     await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user, username="tester"))
     characters = PostgresCharacterRepository(pool)
     await characters.create(a_character(clean_user, name="Уникум"))
@@ -436,7 +437,7 @@ async def test_names_are_taken_case_insensitively(pool, clean_user) -> None:
 
 
 async def test_the_level_range_is_enforced_by_the_database(pool, clean_user) -> None:
-    """The rules cap levels at 300; so does the schema, as the last line of defence."""
+    """Правила держат потолок в 300 уровней; схема тоже - как последний рубеж."""
     import asyncpg
 
     await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user, username="tester"))
@@ -447,7 +448,7 @@ async def test_the_level_range_is_enforced_by_the_database(pool, clean_user) -> 
         await characters.create(too_high)
 
 
-# --- inventory ---------------------------------------------------------------
+# --- сумка -----------------------------------------------------------------
 
 
 async def test_inventory_adds_stack_and_removals_are_atomic(pool, clean_user) -> None:
@@ -462,7 +463,7 @@ async def test_inventory_adds_stack_and_removals_are_atomic(pool, clean_user) ->
     assert await inventory.remove(character.id, "health_potion", 4) is True
     assert await inventory.count(character.id, "health_potion") == 1
 
-    # Not enough left: the row must be untouched, not driven negative.
+    # Не хватило: строку обязаны не тронуть, а не увести в минус.
     assert await inventory.remove(character.id, "health_potion", 2) is False
     assert await inventory.count(character.id, "health_potion") == 1
 
@@ -491,14 +492,15 @@ async def test_counting_an_item_the_character_never_had_is_zero(pool, clean_user
 
 # --- trades ------------------------------------------------------------------
 
-# One group of its own, so a test never sees an offer left by a real player.
+# Своя отдельная группа, чтобы тест никогда не увидел предложение, оставленное живым
+# игроком.
 TEST_SCOPE = "test-group"
 NOW = 1_700_000_000
 
 
 @pytest_asyncio.fixture(loop_scope="session")
 async def two_parties(pool, clean_user) -> tuple[Party, Party]:
-    """Two characters to trade with each other, cascading away with the user."""
+    """Два персонажа, чтобы торговать друг с другом, уходящие каскадом вместе с пользователем."""
     await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user, username="tester"))
     characters = PostgresCharacterRepository(pool)
     first = await characters.create(a_character(clean_user, name="Продавец"))
@@ -571,7 +573,7 @@ async def test_a_number_comes_back_round_once_its_offer_closes(pool, two_parties
 
 
 async def test_a_trade_can_only_be_closed_once(pool, two_parties) -> None:
-    """This is what makes two taps on "Принять" settle exactly one trade."""
+    """Именно это и делает так, что два нажатия «Принять» закрывают ровно одну сделку."""
     author, target = two_parties
     trades = PostgresTradeRepository(pool)
     opened = await trades.open(an_offer(author, target), scope=TEST_SCOPE)
@@ -592,7 +594,7 @@ async def test_a_trade_can_only_be_closed_once(pool, two_parties) -> None:
 
 
 async def test_the_index_refuses_a_second_pending_offer_on_one_number(pool, two_parties) -> None:
-    """The partial unique index is the last line of defence against a race."""
+    """Частичный уникальный указатель - последний рубеж против гонки."""
     import asyncpg
 
     author, target = two_parties
@@ -633,12 +635,12 @@ async def test_expiry_hands_back_each_stale_offer_exactly_once(pool, two_parties
     assert [record.number for record in first_sweep] == [stale.number]
     assert first_sweep[0].status is TradeStatus.EXPIRED
     assert second_sweep == ()
-    # The offer that is still young was not touched.
+    # Предложение, которое ещё молодо, не тронули.
     assert await trades.pending(fresh.number, scope=TEST_SCOPE) is not None
 
 
 async def test_a_sweep_without_a_scope_reaches_every_group(pool, two_parties) -> None:
-    """A stake left in a group that went quiet is freed by whoever speaks next."""
+    """Ставку, оставшуюся в затихшей группе, освобождает тот, кто заговорит следующим."""
     author, target = two_parties
     trades = PostgresTradeRepository(pool)
     here = await trades.open(an_offer(author, target, created_at=NOW), scope=TEST_SCOPE)

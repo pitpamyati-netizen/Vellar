@@ -1,14 +1,14 @@
-"""Location generation.
+"""Сборка локации.
 
-A location is 8 to 14 nodes joined into a connected graph with the entrance at
-index 0 and the exit at the last index. Connectivity and exit reachability are
-guaranteed by construction: every node is linked to an earlier node before any
-extra shortcuts are added, so the graph is a spanning tree plus edges.
+Локация - это от 8 до 14 узлов, сшитых в связный граф, где вход стоит под
+номером 0, а выход - последним. Связность и достижимость выхода обеспечены самой
+постройкой: каждый узел привязывается к более раннему до того, как добавляются
+короткие тропы, поэтому граф - это остовное дерево плюс рёбра.
 
-The generator knows nothing about time or storage: it is a pure function of the
-place, and the result is thrown away after rendering. The map never rolls over -
-a location is a location, not a roll of the dice that lasts until somebody
-finishes it. What refills is the contents of its nodes (``domain/rules/nodes.py``).
+Сборщик не знает ни о времени, ни о хранении: это чистая функция от места, а
+результат выбрасывается сразу после отрисовки. Карта не переворачивается никогда
+- локация это локация, а не бросок костей, который держится, пока кто-нибудь его
+не пройдёт. Наполняется же содержимое её узлов (``domain/rules/nodes.py``).
 """
 
 from __future__ import annotations
@@ -22,8 +22,8 @@ MIN_NODES = 8
 MAX_NODES = 14
 EXTRA_LINK_RATIO = 0.35
 
-# Node kinds a middle node can take, with their relative weights. The entrance and
-# the exit are fixed, so these only apply between them.
+# Виды узлов, которыми может быть средний узел, с их весами. Вход и выход закреплены,
+# поэтому это касается только того, что между ними.
 INTERIOR_KINDS: tuple[tuple[NodeKind, int], ...] = (
     (NodeKind.BATTLE, 42),
     (NodeKind.GATHER, 16),
@@ -58,7 +58,7 @@ def generate_location(
     level_min: int,
     level_max: int,
 ) -> GeneratedLocation:
-    """Build the location standing in one city slot. Always the same one."""
+    """Собрать локацию, стоящую в одном месте города. Всегда одну и ту же."""
     seed = location_seed(world_seed, city_id, slot)
     source = rng(seed)
 
@@ -89,12 +89,12 @@ def generate_location(
 
 
 def _pick_kinds(source: random.Random, count: int) -> tuple[NodeKind, ...]:
-    """Entrance first, exit last, weighted kinds in between.
+    """Вход первым, выход последним, между ними - взвешенные виды узлов.
 
-    The deepest interior node - the one at the top of the level band - always holds
-    the boss, so every location has exactly one and it is always the same distance
-    in. It is not on the way out: the graph has shortcuts, so fighting it is a
-    decision, not a toll.
+    Самый глубокий внутренний узел - тот, что стоит на верху полосы уровней, - всегда
+    держит босса, поэтому у каждой локации босс ровно один и всегда на одном и том же
+    удалении. По дороге к выходу он не стоит: в графе есть короткие тропы, поэтому
+    драться с ним - решение, а не пошлина.
     """
     population = [kind for kind, _ in INTERIOR_KINDS]
     weights = [weight for _, weight in INTERIOR_KINDS]
@@ -104,11 +104,11 @@ def _pick_kinds(source: random.Random, count: int) -> tuple[NodeKind, ...]:
 
 
 def _build_links(source: random.Random, count: int) -> list[set[int]]:
-    """A spanning tree rooted at the entrance, plus a few shortcuts.
+    """Остовное дерево, растущее от входа, плюс несколько коротких троп.
 
-    Because node ``i`` always attaches to some node ``j < i``, every node is
-    reachable from index 0 - including the exit. Adding undirected shortcuts on top
-    cannot break that.
+    Раз узел ``i`` всегда цепляется к какому-то узлу ``j < i``, каждый узел
+    достижим от нулевого - выход в том числе. Ненаправленные тропы, добавленные
+    сверху, сломать это не могут.
     """
     links: list[set[int]] = [set() for _ in range(count)]
     for index in range(1, count):
@@ -132,7 +132,7 @@ def _name_for(seed: bytes, kind: NodeKind) -> str:
 
 
 def _level_for(index: int, count: int, level_min: int, level_max: int) -> int:
-    """Nodes get harder the deeper they sit; the exit sits at the top of the band."""
+    """Чем глубже узел, тем он тяжелее; выход стоит на верху полосы."""
     if count <= 1 or level_max <= level_min:
         return level_min
     step = (level_max - level_min) * index / (count - 1)

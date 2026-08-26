@@ -1,4 +1,4 @@
-"""Experience curve and level-up arithmetic."""
+"""Кривая опыта и арифметика взятого уровня."""
 
 from __future__ import annotations
 
@@ -103,7 +103,7 @@ def test_reward_shrinks_for_low_level_enemies() -> None:
 
 
 def test_reward_is_not_inflated_by_over_levelled_enemies() -> None:
-    """Fighting above your level pays the enemy's rate, not a bonus multiplier."""
+    """Драться выше своего уровня платит по ставке противника, а не множителем сверху."""
     assert experience_reward(enemy_level=30, character_level=10) == experience_reward(
         enemy_level=30, character_level=30
     )

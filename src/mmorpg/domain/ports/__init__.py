@@ -1,4 +1,4 @@
-"""mmorpg.domain.ports layer package."""
+"""Слой mmorpg.domain.ports."""
 
 from mmorpg.domain.ports.repositories import (
     AccessibilitySettings,

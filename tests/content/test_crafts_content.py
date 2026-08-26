@@ -1,4 +1,4 @@
-"""``content/crafts.toml``: what the world can make, and out of what."""
+"""``content/crafts.toml``: что мир умеет делать и из чего."""
 
 from __future__ import annotations
 
@@ -17,17 +17,19 @@ def test_gathering_crafts_bring_back_materials_that_exist(content: GameContent) 
 
 
 def test_every_gathering_craft_pays_from_the_first_level(content: GameContent) -> None:
-    """Nobody arrives in Vellar too junior to work: rank one always has something."""
+    """В Vellar никто не приходит слишком младшим для работы: у первого ранга всегда есть чем
+    заняться.
+    """
     for craft in content.crafts_of_kind(CraftKind.GATHERING):
         assert min(produced.level for produced in craft.yields) == 1, craft.id
 
 
 def test_gathering_is_tied_to_the_ground_it_is_done_on(content: GameContent) -> None:
-    """One button used to give the same thing in all fifteen cities.
+    """Одна кнопка когда-то давала одно и то же во всех пятнадцати городах.
 
-    Now a material names the biomes it lies in, so what Дубно gives and what
-    Мезень gives are two different lists (Roadmap, "Риски"). At least one
-    material has to be picky, or the map is decoration again.
+    Теперь сырьё называет биомы, в которых оно лежит, поэтому то, что даёт Дубно, и
+    то, что даёт Мезень, — два разных списка. Хотя бы одно сырьё обязано быть
+    разборчивым, иначе карта снова украшение.
     """
     picky = [
         produced
@@ -45,7 +47,7 @@ def test_gathering_is_tied_to_the_ground_it_is_done_on(content: GameContent) -> 
 
 
 def test_every_city_has_something_to_work(content: GameContent) -> None:
-    """Standing somewhere no craft can work at all is a dead end, not a choice."""
+    """Стоять там, где не работает ни одно ремесло, - это тупик, а не выбор."""
     for city in content.cities:
         reachable = [
             produced
@@ -66,7 +68,7 @@ def test_recipes_open_from_rank_one_upwards(content: GameContent) -> None:
 
 
 def test_a_recipe_pays_for_itself(content: GameContent) -> None:
-    """Making a thing must beat selling its materials, or the craft is a trap."""
+    """Сделать вещь должно быть выгоднее, чем продать её сырьё, иначе ремесло - ловушка."""
     for recipe in content.recipes:
         materials = sum(content.item(need.item_id).price * need.count for need in recipe.inputs)
         made = content.item(recipe.output_id).price * recipe.output_count

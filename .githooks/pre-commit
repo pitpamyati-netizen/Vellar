@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Apply what a tool can fix, then verify what it cannot.
+# Применить то, что инструмент может починить, и проверить то, чего не может.
 #
-# Formatting and the mechanical lint fixes are applied to the staged files and
-# staged again, so no commit ever fails over something ruff was willing to fix
-# by itself. Everything after that only reports: ruff, mypy and the test suite
-# decide whether the commit happens.
+# Форматирование и механические правки линтера применяются к добавленным файлам и
+# добавляются снова, поэтому ни один коммит не падает из-за того, что ruff починил
+# бы сам. Всё, что дальше, только сообщает: ruff, mypy и набор тестов решают,
+# случится коммит или нет.
 #
-# Installed by scripts/install-hooks.ps1 (or .sh), which points core.hooksPath
-# at this directory. Nothing here is machine-specific, so the hook is versioned
-# alongside the code it checks.
+# Ставится через scripts/install-hooks.ps1 (или .sh), который направляет
+# core.hooksPath на этот каталог. Ничего машинно-специфичного здесь нет, поэтому хук
+# версионируется рядом с кодом, который он проверяет.
 #
-# Escape hatches:
-#   VELLAR_SKIP_HOOK=1    skip the hook entirely (git commit --no-verify also works)
-#   VELLAR_SKIP_TESTS=1   apply fixes and type check, but do not run pytest
+# Пути обхода:
+# VELLAR_SKIP_HOOK=1    пропустить хук целиком (git commit --no-verify тоже работает)
+# VELLAR_SKIP_TESTS=1   применить правки и проверить типы, но не запускать pytest
 set -euo pipefail
 
 if [ "${VELLAR_SKIP_HOOK:-0}" = "1" ]; then
@@ -30,7 +30,7 @@ fi
 say() { printf '\033[36m==> %s\033[0m\n' "$1"; }
 fail() { printf '\033[31m%s\033[0m\n' "$1" >&2; }
 
-# --- What is being committed -------------------------------------------------
+# --- Что именно коммитят -----------------------------------------------------
 
 staged=()
 while IFS= read -r line; do
@@ -40,17 +40,18 @@ done < <(git diff --cached --name-only --diff-filter=ACMR -- '*.py')
 if [ ${#staged[@]} -eq 0 ]; then
     say "no Python files staged, nothing to fix"
 else
-    # A file staged in one state and edited in another cannot be re-staged
-    # wholesale - that would sweep the unstaged edits into the commit. Those are
-    # fixed on disk and left for the author to stage deliberately.
+    # Файл, добавленный в одном состоянии и отредактированный в другом, нельзя добавить
+    # целиком: это затянуло бы в коммит недобавленные правки. Такие чинятся на диске и
+    # оставляются автору, чтобы он добавил их осознанно.
     partial=""
     while IFS= read -r line; do
         [ -n "$line" ] && partial="${partial}${line}"$'\n'
     done < <(git diff --name-only -- "${staged[@]}")
 
-    # --- Auto-apply ----------------------------------------------------------
-    # Failures are not fatal here: whatever ruff did fix still gets staged, and
-    # the verification pass below reports what is left.
+    # --- Автоматические правки ----------------------------------------------------
+    # Отказы здесь не смертельны: то, что ruff всё-таки починил, всё равно добавляется,
+    # а
+    # проверяющий проход ниже сообщит, что осталось.
 
     say "ruff format (applying)"
     uv run ruff format "${staged[@]}" || true
@@ -63,11 +64,11 @@ else
     restaged=0
     blocked=""
     for file in "${staged[@]}"; do
-        # Deleted or renamed away since staging: nothing to add back.
+        # Удалён или переименован после добавления: возвращать нечего.
         if [ ! -f "$file" ]; then
             continue
         fi
-        # Untouched by the fixers: nothing to do.
+        # Не тронут теми, кто чинит: делать нечего.
         if git diff --quiet -- "$file"; then
             continue
         fi

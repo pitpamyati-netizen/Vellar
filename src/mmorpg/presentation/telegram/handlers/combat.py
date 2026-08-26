@@ -96,7 +96,7 @@ REFUSALS = frozenset(
 
 
 def build_router() -> Router:
-    """A fresh router per application - see handlers.creation.build_router."""
+    """Свежий роутер на приложение - см. handlers.creation.build_router."""
     router = Router(name="combat")
     router.message.filter(F.chat.type == ChatType.PRIVATE)
     router.message.register(fight, StateFilter(Play.combat, Play.combat_bag))

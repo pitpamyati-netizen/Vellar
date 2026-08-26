@@ -1,9 +1,11 @@
-"""Род урона: четыре физических, двенадцать магических и ни одного «стихийного».
+"""Род урона: четыре физических, одиннадцать магических и ни одного пустого.
 
 До этого у удара было два состояния - железо и чары, - а между ними стоял тег
-``elemental``, который не значил ни того, ни другого. Здесь проверяется, что род
-урона есть у каждого оружия и у каждой породы, что сопротивление считается по
-нему и что «стихийного урона» в игре больше нет.
+``elemental``, который не значил ни того, ни другого; рядом с ним жил ``chaos``,
+у которого нет ни оружия, ни породы, ни источника. Убраны оба. Здесь
+проверяется, что род урона есть у каждого оружия и у каждой породы, что
+сопротивление считается по нему и что ни «стихийного», ни «хаотического» урона
+в игре больше нет.
 """
 
 from __future__ import annotations
@@ -28,15 +30,18 @@ def test_the_two_halves_cover_every_kind() -> None:
     assert set(DamageType) == PHYSICAL_TYPES | MAGIC_TYPES
     assert not PHYSICAL_TYPES & MAGIC_TYPES
     assert len(PHYSICAL_TYPES) == 4
+    assert len(MAGIC_TYPES) == 11
     for one in PHYSICAL_TYPES:
         assert one.is_physical and not one.is_magic
     for one in MAGIC_TYPES:
         assert one.is_magic and not one.is_physical
 
 
-def test_no_kind_is_called_elemental() -> None:
-    """«Стихийный урон» был словом без стихии; такого рода больше нет."""
-    assert "elemental" not in {one.value for one in DamageType}
+def test_no_kind_is_called_elemental_or_chaos() -> None:
+    """«Стихия» без стихии и «хаос» без источника - слова, а не рода урона."""
+    values = {one.value for one in DamageType}
+    assert "elemental" not in values
+    assert "chaos" not in values
 
 
 def test_every_kind_is_named_in_russian() -> None:

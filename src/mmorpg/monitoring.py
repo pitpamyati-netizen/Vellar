@@ -1,8 +1,8 @@
-"""Latency guard rails.
+"""Перила задержки.
 
-The bot has a p95 budget of 100 ms per update. Anything that blocks the event
-loop - a synchronous HTTP call, file I/O at runtime, a heavy loop - shows up here
-as a slow callback warning rather than as a player waiting in silence.
+У бота бюджет p95 - 100 мс на обновление. Всё, что блокирует цикл событий:
+синхронный HTTP-вызов, файловый ввод-вывод на ходу, тяжёлый цикл, - всплывает
+здесь предупреждением о медленном колбэке, а не игроком, ждущим в тишине.
 """
 
 from __future__ import annotations
@@ -19,14 +19,14 @@ logger = get_logger(__name__)
 
 
 def install_slow_callback_detector(loop: asyncio.AbstractEventLoop, settings: Settings) -> None:
-    """Ask asyncio to complain about callbacks that hog the loop.
+    """Попросить asyncio жаловаться на колбэки, занимающие цикл.
 
-    ``slow_callback_duration`` only takes effect in debug mode, so both are set
-    together. Debug mode also timestamps every callback and keeps coroutine
-    origins alive, which is a fine price while one developer is playing and the
-    wrong price with a hundred players connected - hence the switch, and hence
-    its default: on where the game is being written, off where it is being
-    played (``Settings.watching_slow_callbacks``).
+    ``slow_callback_duration`` работает только в режиме отладки, поэтому ставятся
+    оба сразу. Режим отладки к тому же проставляет время каждому колбэку и держит
+    живыми истоки корутин, а это уместная цена, пока играет один разработчик, и
+    неуместная - при сотне подключённых игроков. Отсюда и переключатель, и его
+    значение по умолчанию: включено там, где игру пишут, выключено там, где в неё
+    играют (``Settings.watching_slow_callbacks``).
     """
     if not settings.watching_slow_callbacks:
         logger.info("slow_callback_detector_disabled", env=settings.app_env.value)
@@ -49,7 +49,7 @@ def install_slow_callback_detector(loop: asyncio.AbstractEventLoop, settings: Se
 
 @contextmanager
 def measure(operation: str, budget_seconds: float = 0.1) -> Iterator[None]:
-    """Log any operation that overruns its budget."""
+    """Записать в журнал любое дело, вышедшее за свой бюджет."""
     started = time.perf_counter()
     try:
         yield
@@ -67,7 +67,7 @@ def measure(operation: str, budget_seconds: float = 0.1) -> Iterator[None]:
 def timed(
     operation: str, budget_seconds: float = 0.1
 ) -> Callable[[Callable[..., object]], Callable[..., object]]:
-    """Decorator form of :func:`measure` for synchronous work."""
+    """Тот же :func:`measure`, но декоратором и для синхронной работы."""
 
     def decorate(function: Callable[..., object]) -> Callable[..., object]:
         def wrapper(*args: object, **kwargs: object) -> object:

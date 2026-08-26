@@ -1,17 +1,17 @@
-"""Handlers for menu, world, city, services and location navigation.
+"""Хендлеры меню, мира, города, служб и хождения по локации.
 
-Thin by design: load state, call the pure flow, store what the flow decided,
-render, send one message. The clock lives here - the flow receives the moment,
-the shop rotation and what is left in the nodes as values, which is what keeps
-generation reproducible (``docs/procgen.md``).
+Тонкие по замыслу: прочитать состояние, позвать чистую ветку, сохранить то, что
+ветка решила, нарисовать, отправить одно сообщение. Часы живут здесь: ветка
+получает момент, переворот лавки и то, что осталось в узлах, значениями, и это
+то, что делает сборку воспроизводимой (``docs/procgen.md``).
 
-The shared state of a location lives here too: this is the only place that reads
-who is standing where and takes out of a node what a step took - the map itself
-is permanent and is never stored (``domain/rules/nodes.py``).
+Общее состояние локации живёт тоже здесь: только это место читает, кто где
+стоит, и вынимает из узла то, что вынул шаг, - сама карта постоянна и не
+хранится никогда (``domain/rules/nodes.py``).
 
-The flow never writes. Everything it decided to change arrives in
-``PlayState.pending`` and is applied here, in one place, so there is exactly one
-answer to "where does the game store things".
+Ветка не пишет никогда. Всё, что она решила изменить, приходит в
+``PlayState.pending`` и применяется здесь, в одном месте, чтобы на вопрос «где
+игра сохраняет» был ровно один ответ.
 """
 
 from __future__ import annotations
@@ -101,19 +101,18 @@ PLAYERS_SHOWN = 24
 DAY = 24 * 60 * 60
 WEEK = 7 * DAY
 
-# What a location remembers about its nodes lives a week; forgetting that is the
-# same thing as everything in it having refilled long ago. Presence is much
-# shorter: a player who has not pressed anything for ten minutes has walked off,
-# whatever their last screen says.
+# То, что локация помнит о своих узлах, живёт неделю; забыть это - то же самое, что «всё
+# в ней давно наполнилось заново». Присутствие живёт куда меньше: игрок, не нажимавший
+# ничего десять минут, ушёл, что бы ни говорил его последний экран.
 LOCATION_TTL = 7 * 24 * 60 * 60
 PRESENCE_TTL = 10 * 60
 
 
 def build_router() -> Router:
-    """A fresh router per application - see handlers.creation.build_router."""
+    """Свежий роутер на приложение - см. handlers.creation.build_router."""
     router = Router(name="play")
-    # The screens are a private conversation: one player, one keyboard, one
-    # message at a time. The group has its own router and its own rules.
+    # Экраны - это личный разговор: один игрок, одна клавиатура, одно сообщение за раз.
+    # У группы свой роутер и свои правила.
     router.message.filter(F.chat.type == ChatType.PRIVATE)
     router.message.register(play, StateFilter(Play))
     return router
@@ -259,8 +258,8 @@ async def play(
         )
         return
 
-    # The screen the step landed on is not the screen it started from, and the
-    # bag may have changed on the way, so what it shows is read again.
+    # Экран, на котором кончился шаг, - не тот, с которого он начался, и сумка по дороге
+    # могла измениться, поэтому то, что он показывает, читается заново.
     shelf = await _goods(content, character, updated, inventory, settings, clock.shop_rotation)
     company = await _company(updated, character, locations, now)
     counted = await _tally(content, updated, characters)
@@ -311,7 +310,7 @@ async def render_play(
     keeper: KeeperView | None = None,
     location_state: LocationState | None = None,
 ) -> Screen:
-    """Draw one play screen, and return it. Used here and by the fight handler.
+    """Нарисовать один игровой экран и вернуть его. Берётся здесь и боевым хендлером.
 
     Возвращается тот же экран, что и отправлен: сообщение про новый уровень
     идёт следом и несёт ту же клавиатуру, чтобы игрок остался там же, где стоял.
@@ -353,7 +352,7 @@ async def _company(
     locations: LocationStateCache,
     now: int,
 ) -> tuple[Presence, ...]:
-    """Who else is standing on this node. Empty everywhere but in a location."""
+    """Кто ещё стоит на этом узле. Везде, кроме локации, - пусто."""
     if flow.screen is not ScreenId.LOCATION or not flow.session.active:
         return ()
     return await locations.others_at(
@@ -374,10 +373,10 @@ async def _goods(
     settings: Settings,
     rotation: int,
 ) -> Goods:
-    """What the bag holds and what the shelf offers, for the screens that need it.
+    """Что лежит в сумке и что предлагает прилавок - для тех экранов, которым это нужно.
 
-    The assortment is rolled, never stored: same city, same rotation, same shelf
-    (``docs/procgen.md``).
+    Прилавок бросается, а не хранится: тот же город, тот же переворот - тот же
+    прилавок (``docs/procgen.md``).
     """
     held = await inventory.list_items(character.id)
     owned = tuple(
@@ -676,7 +675,7 @@ async def _apply(
     inventory: InventoryRepository,
     users: UserRepository,
 ) -> Character:
-    """Store everything one step decided to change. The only writer in the flow."""
+    """Сохранить всё, что шаг решил изменить. Единственный, кто в ветке пишет."""
     if write.empty:
         return character
 
@@ -691,8 +690,8 @@ async def _apply(
 
     if write.character is not None:
         if write.gold_flow:
-            # Signed, and counting the strongbox: gold moved into the bank has not
-            # left the game, so a deposit is not an outflow (``mmorpg.economy_log``).
+            # Со знаком и с учётом сундука: золото, ушедшее в банк, из игры не ушло,
+            # поэтому вклад оттоком не считается (``mmorpg.economy_log``).
             moved = (write.character.gold + write.character.bank_gold) - (
                 character.gold + character.bank_gold
             )
@@ -723,13 +722,12 @@ async def sync_location(
     now: int,
     settings: Settings,
 ) -> tuple[PlayState, LocationState]:
-    """Put the visit and the shared location back in step with each other.
+    """Свести вылазку и общую локацию обратно в шаг.
 
-    A location belongs to everybody standing in it: the map is the same map for
-    everyone and needs no storage at all, but what is *left* in its nodes is
-    shared and does. This is where a step takes its one thing out of a node, and
-    where this player is put on the map so the others can see them. Nothing here
-    ever reaches PostgreSQL.
+    Локация принадлежит всем, кто в ней стоит: карта у всех одна и хранения не
+    требует вовсе, а вот то, что *осталось* в её узлах, общее и хранения требует.
+    Здесь шаг вынимает из узла своё одно, и здесь этого игрока ставят на карту,
+    чтобы остальные его видели. До PostgreSQL отсюда не доходит ничто.
     """
     session = updated.session
     if not session.active:

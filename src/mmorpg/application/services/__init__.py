@@ -1,8 +1,9 @@
-"""mmorpg.application.services layer package.
+"""Слой mmorpg.application.services.
 
-A service is where a use case is orchestrated: it reads through the repository
-ports, calls the pure rules in ``domain``, writes back, and returns a result the
-presentation layer can word. Services know no aiogram types and no SQL.
+Сервис - место, где связывается сценарий: он читает через порты хранилищ, зовёт
+чистые правила из ``domain``, пишет обратно и возвращает результат, который слой
+представления сможет высказать словами. Сервисы не знают ни типов aiogram, ни
+SQL.
 """
 
 from mmorpg.application.services.group_trade import GroupOutcome, GroupResult, GroupTrade

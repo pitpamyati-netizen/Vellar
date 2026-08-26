@@ -78,7 +78,8 @@ show_error_codes = true
 module = ["tests.*"]
 disallow_untyped_defs = false
 
-# asyncpg ships no py.typed marker; the repositories annotate their own signatures.
+# asyncpg не везёт с собой пометку py.typed; хранилища объявляют типы своих подписей
+# сами.
 [[tool.mypy.overrides]]
 module = ["asyncpg.*"]
 ignore_missing_imports = true
@@ -103,8 +104,8 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
     "@overload",
-    # Protocol declarations are signatures, not code: their bodies are literally
-    # "..." and are implemented by the adapters, which are tested directly.
+    # Объявления Protocol — это подписи, а не код: их тела буквально «...», а реализуют
+    # их адаптеры, которые проверяются напрямую.
     "class .*\\(Protocol\\):",
     "^\\s*\\.\\.\\.$",
 ]

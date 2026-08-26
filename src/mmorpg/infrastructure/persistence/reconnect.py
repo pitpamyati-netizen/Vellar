@@ -1,25 +1,25 @@
-"""The query that was in the air when the link went down.
+"""Запрос, который был в воздухе, когда пропала связь.
 
-asyncpg's pool already reconnects on its own: a connection it kept and that died
-while idle is thrown away on the next ``acquire`` and a fresh one is opened in
-its place. What the pool does *not* do is run the query again, so a PostgreSQL
-that restarted between two updates costs one player their action - they read
-«Что-то пошло не так» about a database that has been healthy for a second.
+Пул asyncpg переподключается сам: соединение, которое он держал и которое умерло
+в простое, выбрасывается на следующем ``acquire``, а на его место открывается
+свежее. Чего пул *не* делает — не выполняет запрос заново, поэтому PostgreSQL,
+перезапустившийся между двумя обновлениями, стоил одному игроку действия: тот
+читал «Что-то пошло не так» о базе, которая здорова уже секунду.
 
-:class:`ReconnectingPool` sits between the repositories and the pool and repeats
-that call. Where it stops repeating is the whole point of the module, and the
-line is drawn where certainty ends (``docs/adr/0009-repeating-a-lost-query.md``):
+:class:`ReconnectingPool` стоит между хранилищами и пулом и этот вызов
+повторяет. Где он повторять перестаёт — весь смысл модуля, и черта проведена там,
+где кончается уверенность (``docs/adr/0009-repeating-a-lost-query.md``):
 
-- **no connection was obtained** - nothing was sent, PostgreSQL never heard of
-  the statement, so anything may be repeated, a write included;
-- **a connection was obtained and the statement failed on it** - a ``SELECT`` is
-  run again, because reading twice reads the same thing, while an ``UPDATE`` is
-  not: the server may have committed it and lost only the answer on the way
-  back, and a repeat would take the gold twice.
+- **соединение не было получено** — не отправлено ничего, PostgreSQL о запросе не
+  слышал, поэтому повторить можно что угодно, запись в том числе;
+- **соединение получено, и запрос упал на нём** — ``SELECT`` выполняется заново,
+  потому что прочитать дважды значит прочитать то же самое, а ``UPDATE`` — нет:
+  сервер мог его закрепить и потерять только ответ на обратном пути, и повтор
+  забрал бы золото дважды.
 
-The pool is wrapped, not subclassed: the repositories keep calling ``fetch``,
-``fetchrow``, ``fetchval`` and ``execute`` exactly as before and know nothing
-about any of this.
+Пул обёрнут, а не унаследован: хранилища по-прежнему зовут ``fetch``,
+``fetchrow``, ``fetchval`` и ``execute`` ровно как раньше и обо всём этом не
+знают ничего.
 """
 
 from __future__ import annotations
@@ -30,17 +30,17 @@ from typing import TYPE_CHECKING, Any
 from mmorpg.logging import get_logger
 from mmorpg.retry import RetryPolicy
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:  # pragma: no cover - только для типов
     import asyncpg
 
 logger = get_logger(__name__)
 
 
 def lost_connection(error: BaseException) -> bool:
-    """Whether this error is a broken link rather than a broken query.
+    """Обрыв ли это связи, а не сломанный запрос.
 
-    A syntax error or a violated constraint is an answer from PostgreSQL and
-    repeating it would only produce the same answer more slowly.
+    Ошибка разбора или нарушенное ограничение - это ответ PostgreSQL, и повтор дал бы
+    тот же ответ, только медленнее.
     """
     import asyncpg
 
@@ -54,16 +54,16 @@ def lost_connection(error: BaseException) -> bool:
     ):
         return True
     if isinstance(error, asyncpg.exceptions.InterfaceError):
-        # The same class covers plain misuse ("wrong number of arguments"), which
-        # is a bug in the query and must surface at once.
+        # Тот же класс покрывает и обычное неверное обращение («не столько аргументов»),
+        # а это ошибка в запросе, и всплыть она обязана сразу.
         return "closed" in str(error).lower()
-    # ConnectionResetError and friends are OSError; a command timeout is
-    # TimeoutError. Both mean the answer did not arrive.
+    # ConnectionResetError и его родня - это OSError, а вышедший срок команды -
+    # TimeoutError. И то и другое значит, что ответ не пришёл.
     return isinstance(error, OSError | TimeoutError)
 
 
 def repeatable(query: str) -> bool:
-    """Whether running this statement twice is the same as running it once."""
+    """Одно ли и то же - выполнить этот запрос дважды и выполнить его один раз."""
     head = query.lstrip()
     while head.startswith("--"):
         _, _, head = head.partition("\n")
@@ -72,12 +72,12 @@ def repeatable(query: str) -> bool:
 
 
 def _head(query: str) -> str:
-    """The first line of a statement - enough to recognise it in the log."""
+    """Первая строка запроса - достаточно, чтобы узнать его в журнале."""
     return " ".join(query.split())[:60]
 
 
 class ReconnectingPool:
-    """The asyncpg pool with one habit added: it runs a lost call again."""
+    """Пул asyncpg с одной добавленной привычкой: он делает пропавший вызов заново."""
 
     __slots__ = ("_policy", "_pool")
 
@@ -98,10 +98,10 @@ class ReconnectingPool:
         return await self._run("execute", query, args, kwargs)
 
     def acquire(self, *args: Any, **kwargs: Any) -> Any:
-        """A connection of one's own, for a caller who runs its own transaction.
+        """Собственное соединение - тому, кто ведёт свою транзакцию.
 
-        Handed out bare: a transaction is repeated as a whole or not at all, and
-        this wrapper cannot know where it began.
+        Выдаётся голым: транзакцию повторяют целиком или не повторяют вовсе, а эта
+        обёртка не знает, где она началась.
         """
         return self._pool.acquire(*args, **kwargs)
 
@@ -121,8 +121,8 @@ class ReconnectingPool:
             except Exception as error:
                 if not lost_connection(error):
                     raise
-                # Before the connection was obtained nothing was sent, so even a
-                # write is safe to repeat; after it, only a read is.
+                # До того как соединение получено, не отправлено ничего, поэтому
+                # безопасно повторить даже запись; после - только чтение.
                 may_repeat = not connected or repeatable(query)
                 if not may_repeat or repeats >= self._policy.attempts:
                     logger.error(

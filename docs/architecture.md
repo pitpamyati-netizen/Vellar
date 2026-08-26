@@ -1,312 +1,305 @@
-# Architecture
+# Архитектура
 
-## Layers
+## Слои
 
-Hexagonal, three layers, one direction of dependency:
+Гексагональная, три слоя, одно направление зависимостей:
 
 ```
 presentation  ->  application  ->  domain
         \             |              ^
          \            v              |
-          `------> infrastructure ---'   (implements domain ports)
+          `------> infrastructure ---'   (реализует порты домена)
 ```
 
-| Layer | Package | May import |
+| Слой | Пакет | Что может импортировать |
 | --- | --- | --- |
-| Domain | `mmorpg.domain` | stdlib only |
-| Application | `mmorpg.application` | domain, stdlib |
-| Infrastructure | `mmorpg.infrastructure` | domain, application, asyncpg, redis, stdlib |
-| Presentation | `mmorpg.presentation` | application, domain, aiogram, stdlib |
+| Домен | `mmorpg.domain` | только стандартную библиотеку |
+| Приложение | `mmorpg.application` | домен, стандартную библиотеку |
+| Инфраструктура | `mmorpg.infrastructure` | домен, приложение, asyncpg, redis, стандартную библиотеку |
+| Представление | `mmorpg.presentation` | приложение, домен, aiogram, стандартную библиотеку |
 
-**The domain is synchronous and side-effect free.** No `async def`, no I/O, no
-imports of `aiogram`, `asyncpg`, `redis`, `pydantic` or `datetime.now`. Everything
-it needs - what is left in a location's nodes, random seeds, the clock - is
-passed in as an
-argument. That makes it testable without a database, a bot token or a network.
+**Домен синхронен и без побочных действий.** Ни `async def`, ни ввода-вывода, ни
+импортов `aiogram`, `asyncpg`, `redis`, `pydantic` и `datetime.now`. Всё, что ему
+нужно — что осталось в узлах локации, сиды, время, — приходит аргументом. Благодаря
+этому его проверяют без базы, без токена бота и без сети.
 
-*Enforced by:* `tests/domain/test_layering.py`, which walks the AST of every module
-under `src/mmorpg/domain/` and fails on a forbidden import.
+*Проверяет:* `tests/domain/test_layering.py` — он обходит синтаксическое дерево
+каждого модуля под `src/mmorpg/domain/` и падает на запрещённом импорте.
 
-Anything reaching the outside world goes through a port: a `typing.Protocol` in
-`mmorpg/domain/ports/`, implemented in `mmorpg/infrastructure/`.
+Всё, что тянется во внешний мир, идёт через порт: `typing.Protocol` в
+`mmorpg/domain/ports/`, реализованный в `mmorpg/infrastructure/`.
 
-**No business logic in handlers.** A handler does exactly three things: parse the
-incoming button text, call an application service, render the resulting screen.
+**Логика — не в хендлерах.** Хендлер делает ровно три дела: разбирает пришедший текст
+кнопки, зовёт сервис приложения, рисует получившийся экран.
 
-## Packages
+## Пакеты
 
 ```
 src/mmorpg/
   domain/
     entities/   Character, Stats, Item, Location, Enemy, Skill
-    rules/      damage, progression, economy formulas
-    procgen/    deterministic generators
-    ports/      repository protocols
+    rules/      урон, прогрессия, формулы экономики
+    procgen/    определённые сборщики
+    ports/      протоколы хранилищ
   application/
-    services/   CreateCharacter, EnterLocation, ResolveCombatTurn
-    dto/        boundary data objects
+    services/   создание персонажа, вход в локацию, ход боя
+    dto/        объекты на границе
   infrastructure/
-    persistence/  asyncpg repositories + explicit SQL, in-memory adapters
-    cache/        Redis, in-memory adapter
-    content/      TOML -> frozen dataclasses loader
+    persistence/  хранилища на asyncpg с явным SQL, адаптеры в памяти
+    cache/        Redis, адаптер в памяти
+    content/      загрузчик TOML -> замороженные dataclass
   presentation/
     telegram/
-      handlers/     aiogram routers, one per screen family
-      flows/        pure state machines: advance(state, message) -> state
-      keyboards/    ReplyKeyboardMarkup builders only
-      screens/      screen text renderers
-      states/       FSM states and the navigation stack
-      middlewares/  idempotency, dependency injection, error handling
-      routing.py    button text and typed commands -> intents
-  main.py       composition root
+      handlers/     роутеры aiogram, по одному на семью экранов
+      flows/        чистые автоматы: advance(state, message) -> state
+      keyboards/    сборщики только ReplyKeyboardMarkup
+      screens/      отрисовка текста экранов
+      states/       состояния автомата и стопка возврата
+      middlewares/  отсев повторов, подстановка зависимостей, границы отказа
+      routing.py    текст кнопки и набранные команды -> намерения
+  main.py       корень композиции
 ```
 
-## Flows: why the interface is testable
+## Ветки: почему интерфейс проверяем
 
-Each screen family has a **flow**: a pure function
-`advance(content, state, message) -> state`, with `render(content, state) -> Screen`
-beside it. No I/O, no aiogram, no clock - what stands in the nodes and the goods
-arrive as arguments.
+У каждой семьи экранов есть **ветка**: чистая функция
+`advance(content, state, message) -> state`, а рядом с ней `render(content, state)
+-> Screen`. Ни ввода-вывода, ни aiogram, ни часов — то, что стоит в узлах, и товары
+приходят аргументами.
 
-That is what makes the whole interface testable without a bot token: the tests
-press buttons by sending their exact text and assert on the resulting state and
-screen. A handler is then only four lines: load state, call `advance`, render,
-send one message.
+Именно это и делает весь интерфейс проверяемым без токена бота: тесты жмут кнопки,
+отправляя их точный текст, и проверяют получившиеся состояние и экран. Хендлер тогда
+занимает четыре строки: прочитать состояние, позвать `advance`, нарисовать, отправить
+одно сообщение.
 
-Anything that writes to a database is *recorded as an intent* on the state - one
-`PendingWrite` holding the new character, the new settings and the changes to the
-bag - and executed by the handler, so the flow stays pure and every write in the
-game goes through a single function (`handlers/play.py::_apply`). The keeper panel
-uses the same intent for the things only it can do - an edit to the world, another
-player's character, a sweep - and those are carried out beside it, in `_serve`.
+Всё, что пишет в базу, *записывается намерением* на состоянии — один `PendingWrite` с
+новым персонажем, новыми настройками и изменениями сумки, — и исполняется хендлером,
+поэтому ветка остаётся чистой, а каждая запись в игре идёт через одну функцию
+(`handlers/play.py::_apply`). Панель смотрителя пользуется тем же намерением для
+того, что доступно только ей — правка мира, чужой персонаж, уборка, — и это
+исполняется рядом, в `_serve`.
 
-## Content that can change while the game runs
+## Содержимое, которое меняется на ходу
 
-`GameContent` is still read once from `content/` and still immutable. What changed
-is that handlers no longer receive it as a value captured at startup: they receive
-whatever `ContentRegistry.current` holds right now
-(`application/services/content.py`). The registry keeps two builds - the one parsed
-from TOML, which never changes, and that same one with the keeper's edits applied
-on top (`domain/rules/overlay.py`). An edit is therefore visible on the next press
-without a restart, and dropping it rebuilds the world from the untouched original
-rather than undoing anything. See `docs/keeper.md`.
+`GameContent` по-прежнему читается из `content/` один раз и по-прежнему неизменен.
+Изменилось то, что хендлеры больше не получают его значением, снятым на старте: они
+получают то, что прямо сейчас держит `ContentRegistry.current`
+(`application/services/content.py`). Реестр держит две сборки: разобранную из TOML,
+которая не меняется никогда, и её же с наложенными правками смотрителя
+(`domain/rules/overlay.py`). Поэтому правка видна на следующем нажатии без
+перезапуска, а отмена правки собирает мир из нетронутого оригинала, а не откатывает
+что-либо. См. `docs/keeper.md`.
 
-A fight is the one thing the play flow hands over rather than resolves: pressing
-"Вступить в бой" sets `PlayState.fight`, and the fight handler builds the sides,
-generates the opponents from the node seed and pays out the result
-(`handlers/combat.py`). It is registered **before** the play router, because the
-play router filters on the whole `Play` state group.
+Бой — единственное, что игровая ветка передаёт другому, а не разрешает сама: нажатие
+«Вступить в бой» ставит `PlayState.fight`, а боевой хендлер собирает стороны, делает
+противников из сида узла и расплачивается за исход (`handlers/combat.py`). Он
+подключается **раньше** игрового роутера, потому что игровой фильтрует по всей группе
+состояний `Play`.
 
-The fight itself is **one record shared by everybody in it**
-(`application/services/battle.py`), not a copy in each player's FSM data: a duel
-between two people cannot have two truths about whose health is whose
-(ADR 0021). FSM data holds only the battle's id; the record holds the sides, the
-queue and every fighter. The same record carries "this character is busy", which
-is what keeps anyone from being pulled into a second fight.
+Сам бой — **одна запись, общая для всех, кто в нём**
+(`application/services/battle.py`), а не копия в данных автомата у каждого: у
+поединка двоих не может быть двух правд о том, чьё здоровье чьё (ADR 0021). В данных
+автомата лежит только идентификатор боя; в записи — стороны, очередь и все бойцы. Та
+же запись несёт «этот персонаж занят», и это не даёт втянуть кого-нибудь во второй
+бой.
 
-One engine runs all of it (`domain/rules/combat.py`): a fight is two sides and a
-queue ordered by initiative, and the difference between a wolf, a live player and
-a character the engine plays for (the arena's opponent) is two flags on
-`Combatant`. One call to `act` resolves the turn of whoever is next and then
-plays out everyone the engine speaks for, stopping when the queue reaches a live
-player. That player is waited on indefinitely - there are no timers anywhere -
-and the way out of a fight nobody answers is the «Сдаться» button, which hands
-the fight over.
+Всё это крутит один движок (`domain/rules/combat.py`): бой — это две стороны и
+очередь по инициативе, а разница между волком, живым игроком и персонажем, за
+которого играет движок (противник на арене), — два признака на `Combatant`. Один
+вызов `act` разыгрывает ход того, чья очередь, и следом отыгрывает всех, за кого
+говорит движок, останавливаясь, когда очередь дошла до живого игрока. Этого игрока
+ждут сколько угодно — таймеров нет нигде, — а дорога из боя, на который никто не
+отвечает, это кнопка «Сдаться»: она отдаёт бой противнику.
 
-## Storage split
+## Что где лежит
 
-| Where | What |
+| Где | Что |
 | --- | --- |
-| PostgreSQL | users, characters (raw stats, level, experience, gold, vault gold, what the arena holds), inventory, equipment, skill loadout with ranks and edges, chosen traits, city, quest and craft progress, accessibility settings, world seed, trades (pending escrow and the settled journal), privacy (profile visibility on the user row, black lists in `blocks`) |
-| Redis | FSM state (no TTL, deliberately), and with a TTL: current screen, the active fight and who is in it, parties and their calls, the shared state of every location and who is standing in it, update deduplication, shop assortment cache |
-| Nowhere - recomputed | location layout, nodes, enemies, loot, total character stats, shop assortment (all pure functions of seed, wave and rotation) |
+| PostgreSQL | пользователи, персонажи (сырые характеристики, уровень, опыт, золото, золото в сундуке, залог арены), сумка, снаряжение, набор умений с рангами и гранями, выбранные черты, город, ход заданий и ремёсел, настройки доступности, сид мира, сделки (стоящий эскроу и журнал закрытых), приватность (видимость карточки в строке пользователя, чёрные списки в `blocks`) |
+| Redis | состояние автомата (нарочно без срока) и со сроком: текущий экран, начатый бой и кто в нём, отряды и зовы, общее состояние каждой локации и кто в ней стоит, отсев повторных обновлений, кэш прилавка лавки |
+| Нигде — считается заново | карта локации, узлы, противники, добыча, итоговые характеристики, прилавок (всё это чистые функции от сида, волны и переворота) |
 
-Redis keys:
+Ключи Redis:
 
-| Key | Value | TTL |
+| Ключ | Значение | Срок |
 | --- | --- | --- |
-| `loc:{city}:{slot}` | what is left of each node's wave | a week |
-| `loc:{city}:{slot}:who` | who stands on which node | ten minutes |
-| `upd:{update_id}` | idempotency marker | 300 s |
-| `shop:{city}:{rotation}` | rolled assortment | until the shelf turns over |
-| `battle:{id}` | one fight, shared by every participant | an hour |
-| `battle-of:{character}` | which fight this character stands in | an hour |
-| `party:{leader}` / `party-of:{character}` | who walks together | two hours |
-| `party-call:{character}` | an unanswered call into a party | five minutes |
-| `fsm:*` | aiogram `RedisStorage` | none - see below |
+| `loc:{city}:{slot}` | что осталось от волны каждого узла | неделя |
+| `loc:{city}:{slot}:who` | кто на каком узле стоит | десять минут |
+| `upd:{update_id}` | отметка отсева повторов | 300 с |
+| `shop:{city}:{rotation}` | брошенный прилавок | до переворота прилавка |
+| `battle:{id}` | один бой, общий для всех участников | час |
+| `battle-of:{character}` | в каком бою стоит этот персонаж | час |
+| `party:{leader}` / `party-of:{character}` | кто ходит вместе | два часа |
+| `party-call:{character}` | неотвеченный зов в отряд | пять минут |
+| `fsm:*` | `RedisStorage` из aiogram | нет — см. ниже |
 
-The FSM keys are the exception to "every key expires", and the eviction policy is
-why: Redis runs `volatile-lru`, which may only evict keys that carry a TTL. A
-player's position is what must never be forgotten under memory pressure, so it is
-stored without one and `RedisStorage` is left at its defaults.
+Ключи автомата — исключение из «у каждого ключа есть срок», и причина в политике
+вытеснения: Redis работает на `volatile-lru`, а она вправе вытеснять только те ключи,
+у которых срок есть. Забывать место игрока под нехваткой памяти нельзя, поэтому оно
+хранится без срока, а `RedisStorage` оставлен на значениях по умолчанию.
 
-`APP_ENV=local` substitutes in-memory implementations of every port, so the bot
-runs with no external services at all. See `docs/adr/0005-in-memory-adapters.md`.
-`APP_ENV=solo` substitutes only the right-hand column: PostgreSQL keeps the
-world, and everything with a TTL above is held by the one process serving it,
-which is one service fewer to install and a session lost on restart
-(`docs/adr/0010-a-machine-without-containers.md`).
+`APP_ENV=local` подставляет реализации в памяти для каждого порта, и бот работает без
+единой внешней службы. См. `docs/adr/0005-in-memory-adapters.md`. `APP_ENV=solo`
+подставляет только правый столбец: мир держит PostgreSQL, а всё со сроком из таблицы
+выше держит один обслуживающий процесс — это на одну службу меньше и потерянная при
+перезапуске сессия (`docs/adr/0010-a-machine-without-containers.md`).
 
-A pending offer is the one short-lived thing that is *not* in Redis. Publishing
-one takes the author's item or gold into escrow, so the row now holds real value:
-a store that expires by itself would swallow it. `trades` is closed by a single
-`UPDATE ... WHERE status = 'pending' RETURNING`, which is what makes two taps on
-"Принять" settle exactly once, and a partial unique index on `(scope, number)`
-keeps two live offers from sharing a number. Stakes of offers nobody answered are
-returned by a sweep that runs at the start of the next group command and once
-when the game starts - there is no background timer. The sweep is not limited to
-the group it was triggered from: the number of an offer belongs to a group, the
-five minutes it lives do not, and a group that fell silent must not hold the item
-of somebody who is playing elsewhere.
+Стоящее предложение — единственное короткоживущее, чего в Redis *нет*. Объявление
+забирает вещь или золото автора в эскроу, поэтому за строкой стоит настоящая
+ценность: хранилище, истекающее само, её бы проглотило. `trades` закрывается одним
+`UPDATE ... WHERE status = 'pending' RETURNING` — это и делает так, что два нажатия
+«Принять» закрывают сделку ровно один раз, — а частичный уникальный указатель на
+`(scope, number)` не даёт двум живым предложениям делить номер. Ставки предложений,
+на которые никто не ответил, возвращает уборка в начале следующей команды в группе и
+один раз при старте игры: фонового таймера нет. Уборка не ограничена той группой, из
+которой её вызвали: номер предложения принадлежит группе, а пять минут его жизни —
+нет, и затихшая группа не должна держать вещь того, кто играет где-то ещё.
 
-Gold moves the same way, and for the same reason. `save` writes back a character
-that was read several `await`s ago, so a purse checked in one step and written in
-another can swallow whatever its owner did in between - and the owner of a purse
-in a group trade is a player who may be buying a bed in their private chat at
-that exact moment. Every purse the group touches moves by `spend_gold` (one
-conditional `UPDATE ... WHERE gold >= $2 RETURNING`) or `grant_gold` (one
-increment). Every movement of gold that is not one player handing another a coin
-also writes a `gold_flow` line (`mmorpg.economy_log`): the duty, the stake of the
-arena and what a fight pays are all numbers to be corrected against a day of
-real play, and a number nobody can measure is only ever re-guessed.
+Золото двигается так же и по той же причине. `save` пишет обратно персонажа,
+прочитанного несколько `await` назад, поэтому кошелёк, проверенный на одном шаге и
+записанный на другом, проглатывает всё, что владелец успел сделать между ними, — а
+владелец кошелька в групповой сделке это игрок, который в ту же минуту, возможно,
+покупает постель у себя в личной переписке. Каждый кошелёк, которого касается группа,
+двигается через `spend_gold` (один условный `UPDATE ... WHERE gold >= $2 RETURNING`)
+или `grant_gold` (одно приращение). Каждое движение золота, кроме передачи из рук в
+руки, пишет ещё и строку `gold_flow` (`mmorpg.economy_log`): пошлина, ставка арены и
+плата за бой — числа, которые правят по дню настоящей игры, а число, которое некому
+измерить, только переугадывают.
 
-## Latency budget
+## Бюджет задержки
 
-Target: p95 update handling under 100 ms, p99 under 250 ms.
+Цель: p95 обработки обновления меньше 100 мс, p99 меньше 250 мс.
 
-- Nothing blocks the event loop. `time.sleep`, synchronous HTTP clients and runtime
-  file I/O are forbidden; `asyncio` debug mode plus `loop.slow_callback_duration`
-  logs any violation. That detector costs a timestamp per callback, so it is a
-  switch (`SLOW_CALLBACK_DETECTOR`) that is off by default wherever players are
-  connected - see `docs/deployment.md`.
-- Whether the budget is actually met is written down rather than assumed: one
-  `metrics` line a minute carries how many updates were served, how many failed,
-  and the median and 95th percentile of how long they took (`mmorpg.metrics`).
-  The percentiles are bucket edges, not exact numbers - a hundred players for a
-  day is millions of samples, and the question asked of them is always "which
-  bucket".
-- All static content is loaded once at startup into `@dataclass(frozen=True,
-  slots=True)` objects held in memory and indexed by dict for O(1) access.
-- Keyboards are cached with `functools.lru_cache` keyed by screen plus state, so
-  markup is not rebuilt per update.
-- Connection pools (asyncpg min 5 / max 20, Redis pool) are created at startup, not
-  per request.
-- Heavy work runs in background tasks via `asyncio.TaskGroup`; the player gets an
-  answer immediately.
-- One player action produces exactly one new message.
-- An idempotency middleware drops duplicate `update_id` values, so a redelivered
-  update never applies an effect twice.
-- Outgoing messages pass a queue holding the bot inside Telegram's count of about
-  thirty sends a second (`middlewares/sending.py`). A few milliseconds of waiting
-  is cheaper than a `429`, which for a player listening to a screen reader is an
-  answer that never arrived.
+- Цикл событий не блокирует ничто. `time.sleep`, синхронные HTTP-клиенты и файловый
+  ввод-вывод на ходу запрещены; режим отладки `asyncio` вместе с
+  `loop.slow_callback_duration` пишет в журнал любое нарушение. Детектор стоит отметки
+  времени на каждый колбэк, поэтому это переключатель (`SLOW_CALLBACK_DETECTOR`), и по
+  умолчанию он выключен везде, где подключены игроки, — см. `docs/deployment.md`.
+- Соблюдается ли бюджет на самом деле, записывают, а не предполагают: строка `metrics`
+  раз в минуту несёт, сколько обновлений обслужено, сколько отказало, а также медиану и
+  девяносто пятый процентиль их длительности (`mmorpg.metrics`). Проценты — это края
+  корзин, а не точные числа: сотня игроков за день даёт миллионы замеров, а спрашивают
+  у них всегда «в какую корзину».
+- Всё неизменное содержимое загружается один раз на старте в объекты
+  `@dataclass(frozen=True, slots=True)`, лежит в памяти и разложено по словарям для
+  доступа за O(1).
+- Клавиатуры кэшируются через `functools.lru_cache` по экрану и состоянию, поэтому
+  разметка не собирается на каждое обновление.
+- Пулы соединений (asyncpg min 5 / max 20, пул Redis) создаются на старте, а не на
+  запрос.
+- Тяжёлая работа уходит в фоновые задачи через `asyncio.TaskGroup`; игрок получает
+  ответ сразу.
+- Одно действие игрока порождает ровно одно новое сообщение.
+- Мидлварь отсева выбрасывает повторные `update_id`, поэтому доставленное заново
+  обновление не срабатывает дважды.
+- Исходящие сообщения проходят очередь, которая держит бота внутри счёта Telegram —
+  около тридцати отправок в секунду (`middlewares/sending.py`). Несколько миллисекунд
+  ожидания дешевле `429`, а для того, кто слушает экранный диктор, `429` — это ответ,
+  который не пришёл.
 
-## Capacity
+## Ёмкость
 
-Sized for a hundred players online: about ten updates a second, with bursts several
-times that. Two limits keep a burst from becoming a queue everyone waits in.
+Рассчитано на сотню игроков онлайн: около десяти обновлений в секунду, с всплесками в
+несколько раз выше. Два предела не дают всплеску превратиться в очередь, в которой
+стоят все.
 
-- `UPDATE_CONCURRENCY_LIMIT` caps updates handled at the same time. Excess updates
-  wait at the door rather than all contending for the connection pool at once, so
-  the players already being served keep their latency.
-- `POSTGRES_POOL_MAX` caps concurrent queries. Raising the first without the second
-  only moves the queue.
+- `UPDATE_CONCURRENCY_LIMIT` ограничивает число одновременно обрабатываемых
+  обновлений. Лишние ждут у двери, а не дерутся все разом за пул соединений, и те, кого
+  уже обслуживают, сохраняют свою задержку.
+- `POSTGRES_POOL_MAX` ограничивает число одновременных запросов. Поднять первое без
+  второго значит просто передвинуть очередь.
 
-Telegram's own rate limit - roughly 30 messages a second per bot - binds before
-this stack does. `docs/deployment.md` has the full sizing argument and what to
-change first when the player count grows.
+Собственный предел Telegram — примерно 30 сообщений в секунду на бота — упирается
+раньше, чем этот стек. Полный разбор размеров и то, что менять первым при росте числа
+игроков, — в `docs/deployment.md`.
 
-## A link that breaks while the game is running
+## Связь, оборвавшаяся на ходу
 
-PostgreSQL, Redis and Telegram all break the same way: the connection is replaced
-in a moment, and the call that was in the air when it dropped is lost. The pools
-do the first half by themselves; the second half is `mmorpg/retry.py` plus one
-wrapper per link.
+PostgreSQL, Redis и Telegram рвутся одинаково: соединение заменяется мгновенно, а
+вызов, бывший в воздухе, теряется. Первую половину пулы делают сами; вторая — это
+`mmorpg/retry.py` плюс по одной обёртке на связь.
 
-| Link | Reconnects | Repeats the call |
+| Связь | Переподключается | Повторяет вызов |
 | --- | --- | --- |
-| PostgreSQL | asyncpg pool | `ReconnectingPool` - reads always, writes only while nothing was sent |
-| Redis | redis-py | redis-py, configured in `create_redis_client` |
-| Telegram | aiohttp session | `RetryRequestMiddleware` on the bot session |
+| PostgreSQL | пул asyncpg | `ReconnectingPool` — чтения всегда, записи только пока ничего не отправлено |
+| Redis | redis-py | redis-py, настроенный в `create_redis_client` |
+| Telegram | сессия aiohttp | `RetryRequestMiddleware` на сессии бота |
 
-A write that may already have landed is **never** repeated: PostgreSQL can commit
-a statement and lose only the answer on the way back, and running
-`UPDATE ... WHERE gold >= $2` again would take the gold twice. The full argument
-is `docs/adr/0009-repeating-a-lost-query.md`.
+Запись, которая могла уже лечь, не повторяется **никогда**: PostgreSQL умеет закрепить
+запрос и потерять только ответ на обратном пути, и второй `UPDATE ... WHERE gold >= $2`
+забрал бы золото дважды. Полный разбор — `docs/adr/0009-repeating-a-lost-query.md`.
 
-Startup is patient for the same reason: `STARTUP_WAIT_SECONDS` is how long the
-bot waits for PostgreSQL, Redis and Telegram to answer before giving up, because
-a stack that comes up together does not come up in order. `RECONNECT_ATTEMPTS`
-and the two delays govern the repeats under a running game, where a player is
-waiting on the other end and a minute of silence is not an answer.
+Старт терпелив по той же причине: `STARTUP_WAIT_SECONDS` — это сколько бот ждёт ответа
+от PostgreSQL, Redis и Telegram, прежде чем сдаться, потому что стек, поднимающийся
+разом, поднимается не по порядку. `RECONNECT_ATTEMPTS` и две паузы управляют повторами
+под работающей игрой, где на том конце ждёт игрок, а минута тишины ответом не является.
 
-## Runtime
+## Режимы работы
 
-| Mode | Transport | Storage |
+| Режим | Транспорт | Хранение |
 | --- | --- | --- |
-| `APP_ENV=local` | long polling | in-memory |
-| `APP_ENV=solo` | long polling | PostgreSQL, session in-memory |
+| `APP_ENV=local` | long polling | в памяти |
+| `APP_ENV=solo` | long polling | PostgreSQL, сессия в памяти |
 | `APP_ENV=dev` | long polling | PostgreSQL + Redis |
-| `APP_ENV=prod` | aiohttp webhook | PostgreSQL + Redis |
+| `APP_ENV=prod` | вебхук на aiohttp | PostgreSQL + Redis |
 
-The event loop is the stdlib `asyncio.Runner`; uvloop is not used
+Цикл событий — `asyncio.Runner` из стандартной библиотеки; uvloop не используется
 (`docs/adr/0004-no-uvloop.md`).
 
-Polling runs in exactly one process: Telegram gives `getUpdates` to a single
-consumer, so a second replica would only lose races with the first. Webhook mode is
-what allows more than one instance.
+Опрос работает ровно в одном процессе: Telegram отдаёт `getUpdates` одному
+потребителю, и вторая копия только проигрывала бы первой гонки. Больше одного образца
+позволяет держать режим вебхука.
 
-The loop touches a heartbeat file every ten seconds (`mmorpg.health`). A process
-that dies is caught by the restart policy; a process whose loop is wedged is caught
-only by that file going stale, which is what the container healthcheck reads.
-Shutdown is graceful on `SIGTERM` in both transports.
+Цикл трогает файл сердцебиения каждые десять секунд (`mmorpg.health`). Умерший процесс
+ловит политика перезапуска; процесс, у которого встал цикл, ловит только протухший
+файл — его и читает проверка здоровья контейнера. Остановка по `SIGTERM` мягкая в
+обоих транспортах.
 
-## The journal
+## Журнал
 
-Everything is written to stdout, and - unless `LOG_DIR` is empty - to two files
-beside it (`src/mmorpg/logging.py`). One line per served update says who did what
-and how it ended:
+Всё пишется в stdout и — пока `LOG_DIR` не пуст — в два файла рядом
+(`src/mmorpg/logging.py`). По строке на обслуженное обновление говорит, кто что сделал
+и чем это кончилось:
 
 ```text
 action who=4242 chat=private did=Атака result=ok ms=14
 ```
 
-`result` is `ok`, `failed`, `duplicate`, `banned` or `ignored`. The outcome is not
-decided by the middleware that writes the line: it opens a note on the update
-(`middlewares/audit.py`) and whoever cuts the path short - the duplicate filter,
-the ban gate, the error boundary - marks it there, so one press is one line
-instead of three. In a group only `failed` and `banned` are written down: the bot
-is silent on anything not addressed to it, and what players say to each other is
-not the business of the game.
+`result` бывает `ok`, `failed`, `duplicate`, `banned` или `ignored`. Исход решает не та
+мидлварь, что пишет строку: она открывает запись об обновлении
+(`middlewares/audit.py`), а тот, кто обрывает путь — отсев повторов, дверь для
+заблокированных, граница отказа, — проставляет исход туда, и одно нажатие даёт одну
+строку вместо трёх. В группе записываются только `failed` и `banned`: бот молчит на
+всё, что не обращено к нему, а что игроки говорят друг другу — не дело игры.
 
-`vellar.log` holds all of it and is swept after `LOG_RETENTION_DAYS` days.
-`important.log` holds what the sweep must never take - warnings, errors and
-tracebacks, every `gold_flow` line, every failed or turned-away action, every
-start and stop - and `LOG_IMPORTANT_RETENTION_DAYS=0`, the default, means it is
-never deleted. Deciding importance once, at the sink, is what lets the cleanup be
-automatic: a sweep that cannot tell chatter from evidence eventually erases the
-evidence.
+`vellar.log` держит всё и убирается через `LOG_RETENTION_DAYS` дней. `important.log`
+держит то, чего уборке трогать нельзя: предупреждения, отказы и трассировки, каждую
+строку `gold_flow`, каждое несостоявшееся или отвергнутое действие, каждый старт и
+каждую остановку, — а `LOG_IMPORTANT_RETENTION_DAYS=0`, значение по умолчанию, значит,
+что он не удаляется никогда. Решить важность один раз, на приёмнике, — это и позволяет
+уборке быть автоматической: уборка, не отличающая болтовню от улики, рано или поздно
+стирает улику.
 
-## Character maths
+## Арифметика персонажа
 
-Nothing derived is ever stored. The character record holds raw values only -
-allocated stat points, level, experience, chosen traits, the skill loadout and
-equipment - and `mmorpg.domain.rules.stats` rebuilds the rest on demand:
+Ничего производного не хранится никогда. В записи персонажа лежат только сырые
+значения — розданные очки характеристик, уровень, опыт, выбранные черты, набор умений
+и снаряжение, — а остальное собирает по требованию `mmorpg.domain.rules.stats`:
 
 ```
-total = base + race + class + allocated + traits + learned passives + equipment + active effects
+итог = основа + раса + класс + розданное + черты + изученные пассивные + снаряжение + эффекты
 ```
 
-Percentages from every source are summed first and applied once, so ordering
-cannot change the result. Active effects are keyed by id in an `EffectStack`:
-re-applying an effect refreshes its duration and never adds its modifiers twice
+Проценты из всех источников сначала складываются и применяются один раз, поэтому
+порядок не может изменить итог. Действующие эффекты лежат в `EffectStack` по ключу:
+повторное применение обновляет срок и никогда не добавляет прибавки дважды
 (`tests/domain/test_effects.py`).
 
-Derived values: max health, max resource, armour, accuracy, dodge, crit chance,
-crit damage, initiative, resource regeneration and health regeneration. Dodge is
-capped at 75 percent, crit chance at 50 and crit damage at 250, so no build turns
-combat into a coin that never lands - uncapped, luck multiplied chance by damage
-and hit three times as hard as anything else.
+Производные значения: максимум здоровья, максимум ресурса, броня, точность, уклонение,
+шанс крита, урон крита, инициатива, восстановление ресурса и восстановление здоровья.
+Уклонение ограничено 75 процентами, шанс крита — 50, урон крита — 250, поэтому ни одна
+сборка не превращает бой в монету, которая не падает: без потолка удача умножала шанс
+на урон и била втрое сильнее всего прочего.
 
-The experience curve is precomputed once at import for levels 1-300, so finding a
-level from an experience total is a binary search, not a loop.
+Кривая опыта считается один раз при импорте для уровней 1–300, поэтому найти уровень
+по общему опыту — это двоичный поиск, а не проход по уровням.

@@ -1,4 +1,4 @@
-"""Traits, items and loader failure behaviour."""
+"""Черты, вещи и то, как ведёт себя загрузчик при отказе."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ def test_traits_cover_every_category(content: GameContent) -> None:
 
 
 def test_traits_never_grant_skills(content: GameContent) -> None:
-    """The anti-bloat rule, enforced structurally: a Trait has modifiers only."""
+    """Правило против разрастания, закреплённое самой постройкой: у черты есть только прибавки."""
     trait_fields = (
         set(vars(content.traits[0]).keys()) if hasattr(content.traits[0], "__dict__") else set()
     )
@@ -38,7 +38,9 @@ def test_traits_never_grant_skills(content: GameContent) -> None:
 
 
 def test_dark_traits_have_a_real_penalty(content: GameContent) -> None:
-    """A dark trait must pay for its upside; "lower is better" keys count inverted."""
+    """Тёмная черта обязана заплатить за свою выгоду; ключи «чем меньше, тем лучше» считаются
+    наоборот.
+    """
     for trait in content.traits_in_category("dark"):
         verdicts = [content.is_bonus(key, value) for key, value in trait.modifiers.items()]
         assert any(verdicts), f"{trait.id} has no upside"
@@ -58,7 +60,7 @@ def test_trait_ids_and_names_are_unique(content: GameContent) -> None:
 
 
 def test_equipment_never_grants_active_skills(content: GameContent) -> None:
-    """Equipment only modifies skills the character already has."""
+    """Снаряжение правит только те умения, которые у персонажа уже есть."""
     for item in content.items:
         for skill_code in item.skill_modifiers:
             assert content.has_skill(skill_code), f"{item.id} -> {skill_code}"
@@ -169,7 +171,7 @@ def test_lookups_are_indexed(content: GameContent) -> None:
         content.race("no_such_race")
 
 
-# --- loader failure modes -------------------------------------------
+# --- как загрузчик отказывает ---------------------------------------
 
 
 def _copy_content(tmp_path: Path) -> Path:
@@ -308,7 +310,7 @@ def test_world_gap_is_reported(tmp_path: Path) -> None:
     directory = _copy_content(tmp_path)
     path = directory / "world.toml"
     text = path.read_text(encoding="utf-8")
-    # Break the very first location so levels 2-4 stop being covered.
+    # Сломать самую первую локацию, чтобы уровни 2-4 перестали быть покрытыми.
     text = text.replace(
         'name = "Луга у Заставы"\nbiome = "луга"\nlevel_min = 1\nlevel_max = 4',
         'name = "Луга у Заставы"\nbiome = "луга"\nlevel_min = 1\nlevel_max = 1',

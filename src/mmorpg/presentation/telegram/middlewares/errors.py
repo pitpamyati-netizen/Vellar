@@ -1,12 +1,12 @@
-"""Error boundary.
+"""Граница отказа.
 
-A crash must never turn into silence: the player is blind to a missing answer, so
-an unhandled exception is logged and answered with a plain sentence and a working
-keyboard (accessibility rule 12).
+Падение не должно превращаться в тишину: пропавшего ответа игрок не видит,
+поэтому необработанное исключение пишется в журнал, а игроку отвечают простой
+фразой и работающей клавиатурой (правило доступности 12).
 
-A caught failure is also counted (``mmorpg.metrics``) and written into the note
-of the update (``middlewares.audit``): an apology the player reads and nobody else
-sees is a failure the operator never learns about.
+Пойманный отказ ещё и считается (``mmorpg.metrics``) и пишется в запись об
+обновлении (``middlewares.audit``): извинение, которое читает игрок и не видит
+никто больше, - это отказ, о котором оператор так и не узнал.
 """
 
 from __future__ import annotations

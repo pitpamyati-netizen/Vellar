@@ -1,8 +1,9 @@
-"""Screens for the game itself: menu, world, city, locations.
+"""Экраны самой игры: меню, мир, город, локации.
 
-Each one opens with where the player is, then the detail, then what can be done -
-in that order, because a player hears the message top to bottom and should be able
-to stop listening as soon as they know enough (accessibility rule 4).
+Каждый начинается с того, где игрок, потом идут подробности, потом - что можно
+сделать, и в таком порядке, потому что игрок слышит сообщение сверху вниз и
+должен иметь возможность перестать слушать, как только узнал достаточно
+(правило доступности 4).
 """
 
 from __future__ import annotations
@@ -40,8 +41,8 @@ from mmorpg.presentation.telegram.screens.paginated import (
     paginated_screen,
 )
 
-# Actions offered at a node, by node kind. The wording says what will happen, so
-# nothing depends on an icon or a colour.
+# Действия, предлагаемые в узле, по виду узла. Слова говорят, что произойдёт, поэтому
+# ничто не зависит ни от значка, ни от цвета.
 NODE_ACTIONS: dict[NodeKind, str] = {
     NodeKind.ENTRANCE: "Осмотреть вход",
     NodeKind.BATTLE: "Вступить в бой",
@@ -53,8 +54,8 @@ NODE_ACTIONS: dict[NodeKind, str] = {
     NodeKind.EVENT: "Разобраться с событием",
     NodeKind.CACHE: "Обыскать тайник",
     NodeKind.SHRINE: "Передохнуть у святилища",
-    # Distinct from the always-present "Покинуть локацию" button below it: two
-    # buttons on one screen may never share a label, since routing is by text.
+    # Отличается от кнопки «Покинуть локацию», которая стоит всегда и ниже: две кнопки
+    # одного экрана не вправе делить надпись, потому что маршрутизация идёт по тексту.
     NodeKind.EXIT: "Выйти через узел",
 }
 
@@ -72,8 +73,8 @@ NODE_DESCRIPTIONS: dict[NodeKind, str] = {
     NodeKind.EXIT: "отсюда можно уйти",
 }
 
-# What a node counts, said in the words of the thing itself: "Противников: 2 из 3"
-# reads as a place with something in it, "осталось 2" reads as a leftover.
+# Что считает узел, сказанное словами самой вещи: «Противников: 2 из 3» читается как
+# место, в котором что-то есть, а «осталось 2» — как остаток.
 NODE_COUNT_WORDS: dict[NodeKind, str] = {
     NodeKind.BATTLE: "Противников",
     NodeKind.ELITE_BATTLE: "Эпических противников",
@@ -95,7 +96,7 @@ def unequip_label(slot_name: str) -> Label:
 
 
 def node_button(node: LocationNode) -> Label:
-    """Node buttons carry their index, so two "Стычка" nodes stay distinguishable."""
+    """Кнопки узлов несут свой номер, поэтому две «Стычки» остаются различимыми."""
     return label(f"Узел {node.index}: {node.name}")
 
 
@@ -143,9 +144,9 @@ def main_menu_screen(
         (labels.SKILLS, labels.QUESTS),
         (labels.CRAFTS, labels.SETTINGS),
     ]
-    # The introduction is offered while it has something left to say, and then it
-    # goes away for good - a permanent "tutorial" button on a played character is
-    # a button that answers a question nobody is asking any more.
+    # Вступление предлагают, пока ему есть что сказать, а потом оно уходит навсегда:
+    # вечная кнопка «обучение» на разыгранном персонаже - это кнопка, отвечающая на
+    # вопрос, которого больше никто не задаёт.
     from mmorpg.domain.rules import tutorial as tutorial_rules
 
     if not tutorial_rules.finished(character):
@@ -155,8 +156,8 @@ def main_menu_screen(
 
             lines.append(f"Обучение: {CARDS[next_task].title.lower()}.")
         rows.append((labels.TUTORIAL,))
-    # The service door, and only for whoever keeps the game: an ordinary player
-    # never hears this row at all.
+    # Служебная дверь, и только для того, кто держит игру: обычный игрок этого ряда не
+    # слышит вовсе.
     if character.is_admin:
         rows.append((labels.KEEPER,))
     # Служебного ряда здесь нет, и это единственный экран, где его нет: «Назад»
@@ -169,7 +170,7 @@ def main_menu_screen(
 def world_screen(
     content: GameContent, character: Character, state: PageState, notice: str = ""
 ) -> Screen:
-    # A keeper walks the whole road: the level gate is a rule for players.
+    # Смотритель ходит по всей дороге: запрет по уровню - правило для игроков.
     open_cities = (
         content.cities if character.is_admin else content.cities_available_at(character.level)
     )
@@ -184,8 +185,8 @@ def world_screen(
         )
         for city in open_cities
     ]
-    # Cities stand along one road in one order, and each one opens at a level.
-    # Naming the next one turns "closed: 12" into something to aim at.
+    # Города стоят вдоль одной дороги в одном порядке, и каждый открывается на своём
+    # уровне. Названный следующий превращает «закрыт: 12» в то, к чему можно стремиться.
     ahead = [city for city in content.cities if city.unlock_level > character.level]
     next_city = min(ahead, key=lambda city: city.unlock_level) if ahead else None
     lead = [
@@ -210,9 +211,9 @@ def world_screen(
     )
 
 
-# Which button opens which declared service. A city that does not declare one
-# does not show its button - and says so if the button arrives from an old
-# keyboard (accessibility rule 12).
+# Какая кнопка открывает какую объявленную службу. Город, который её не объявил, кнопки
+# не показывает - и говорит об этом, если кнопка пришла со старой клавиатуры (правило
+# доступности 12).
 CITY_SERVICES: tuple[tuple[str, Label], ...] = (
     ("locations", labels.LOCATIONS),
     ("shop", labels.SHOP),
@@ -279,7 +280,7 @@ def location_list_screen(
 
 
 def _location_fit(location: Location, level: int) -> str:
-    """Whether this place is worth the walk right now, in one phrase."""
+    """Стоит ли это место дороги прямо сейчас, одной фразой."""
     band = f"уровни с {location.level_min} по {location.level_max}"
     if location.pvp:
         band = f"{band}, вольная: здесь нападают друг на друга"
@@ -291,10 +292,10 @@ def _location_fit(location: Location, level: int) -> str:
 
 
 def risk_line(node: LocationNode, character_level: int) -> str:
-    """How this fight is likely to go, said before it is picked.
+    """Как, скорее всего, пойдёт этот бой, - сказанное до того, как его выбрали.
 
-    A level number alone tells a player nothing until they have lost to it once.
-    The gap is what matters, so the gap is what the screen names.
+    Один номер уровня не говорит игроку ничего, пока он ему однажды не проиграет.
+    Важна разница, поэтому именно разницу экран и называет.
     """
     if not node.kind.is_combat:
         return ""
@@ -363,8 +364,8 @@ def location_screen(
         return standing.get(index, EMPTY_NODE)
 
     here = left_at(node.index)
-    # The doors are never counted: they hold nothing, and counting them would make
-    # a location look half empty the moment you walked in.
+    # Двери не считают никогда: в них ничего не лежит, а счёт заставил бы локацию
+    # выглядеть наполовину пустой в ту минуту, как в неё вошли.
     worth_doing = tuple(
         item for item in location.nodes if item.kind not in {NodeKind.ENTRANCE, NodeKind.EXIT}
     )
@@ -388,7 +389,7 @@ def location_screen(
 
     lines.append(f"Узлов, где ещё что-то есть: {busy} из {len(worth_doing)}.")
     if busy == len(worth_doing):
-        # Said once, at the start of a visit: what this place is and how it works.
+        # Говорится один раз, в начале вылазки: что это за место и как оно устроено.
         lines.append(
             "Узлы связаны тропами: чем дальше от входа, тем выше уровень и тем "
             "больше платят. Обходить можно что угодно, идти до конца не обязательно."
@@ -413,8 +414,8 @@ def location_screen(
             f"Узел {neighbour.index}: {neighbour.name}, {NODE_DESCRIPTIONS[neighbour.kind]}{mark}."
         )
 
-    # Who else is here comes after the way out and before the neighbours: it is
-    # news, not navigation, and on a free location it is the news that matters.
+    # Кто здесь ещё, идёт после выхода и перед соседями: это новость, а не перемещение,
+    # и на вольной локации это как раз та новость, которая важна.
     if others:
         lines.append("Здесь же:")
         lines.extend(f"{person.name}, уровень {person.level}." for person in others)
@@ -564,17 +565,17 @@ def spend_label(stat_name: str) -> Label:
 
 
 def stat_effect_lines(content: GameContent, character: Character) -> tuple[str, ...]:
-    """What one point in each stat actually does, in this character's numbers.
+    """Что на самом деле даёт одно очко в каждой характеристике, в числах этого персонажа.
 
-    Every number here is read from the rule constants rather than typed out, so a
-    balance change cannot leave the explanation lying. What has no constant behind
-    it is not written at all: the old list promised carried weight, resistances,
-    loot rarity and stronger healing, and the engine counted none of the four.
+    Каждое число здесь читается из постоянных правил, а не выписано руками, поэтому
+    правка баланса не может оставить объяснение лгать. Чего не стоит за постоянной,
+    того не пишут вовсе: прежний список обещал переносимый вес, сопротивления,
+    редкость добычи и усиленное лечение, и движок не считал ни одного из четырёх.
 
-    Two lines carry the whole answer to "куда вкладывать": what this class strikes
-    from, and what its reserve is filled from. Both are read off the class, so a
-    warrior and a mage get different sentences and neither gets the circular one
-    that stood here before - "Сила: урон в бою, когда класс дерётся силой."
+    Две строки несут весь ответ на «куда вкладывать»: от чего этот класс бьёт и чем
+    наполняется его запас. Обе читаются с класса, поэтому воин и маг получают разные
+    фразы, и ни один не получает ту круговую, что стояла здесь раньше: «Сила: урон в
+    бою, когда класс дерётся силой».
     """
     from mmorpg.domain.entities.stats import StatCode
     from mmorpg.domain.rules import economy
@@ -634,13 +635,13 @@ def stats_screen(
     *,
     verbose: bool = True,
 ) -> Screen:
-    """Every primary stat: what it is now, what it does, and where a point goes.
+    """Каждая основная характеристика: сколько она сейчас, что даёт и куда пойдёт очко.
 
-    ``verbose`` is the «Подробные описания» switch from the settings screen. It
-    was stored, toggled and read back aloud for months while no screen in the game
-    ever looked at it - a switch that answers nothing is the same bug as a button
-    that does nothing (``Claude.md``, правило 9). Here it decides whether the seven
-    explanations come with the seven numbers.
+    ``verbose`` — переключатель «Подробные описания» с экрана настроек. Его месяцами
+    хранили, переключали и зачитывали вслух, пока ни один экран игры на него не
+    смотрел, — а переключатель, который ни на что не отвечает, это та же ошибка, что
+    и кнопка, которая ничего не делает (``Claude.md``, правило 9). Здесь он решает,
+    идут ли семь объяснений вместе с семью числами.
     """
     from mmorpg.domain.rules.stats import primary_stats
     from mmorpg.presentation.telegram.screens.creation import STAT_NAMES
@@ -679,10 +680,10 @@ def stats_screen(
 
 
 def stub_screen(title: str, notice: str = "") -> Screen:
-    """A not-yet-built feature.
+    """То, чего ещё не сделали.
 
-    A stub is a real screen with a working "Назад", never silence - see the
-    accessibility rules: the game must always answer.
+    Заглушка — это настоящий экран с работающим «Назад», и никогда не молчание: см.
+    правила доступности, игра обязана отвечать всегда.
     """
     return Screen(
         id=ScreenId.STUB,

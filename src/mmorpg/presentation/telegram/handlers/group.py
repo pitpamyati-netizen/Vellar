@@ -1,23 +1,24 @@
-"""The one handler that runs in the game group.
+"""Единственный хендлер, работающий в игровой группе.
 
-Everything here is about deciding whether the bot should speak at all. The group
-is a room full of people talking to each other, and the default is silence: a
-message is answered only when all of these hold (``Narrative.md``, section 9):
+Всё здесь о том, стоит ли боту говорить вообще. Группа — это комната, полная
+людей, разговаривающих друг с другом, и по умолчанию там молчат: на сообщение
+отвечают, только когда верно всё сразу (``Narrative.md``, раздел 9):
 
-- it arrives in the configured group, not in some chat the bot was added to;
-- it parses as a command, whole and unambiguous;
-- it is a reply to another player's message - that reply *is* how the target is
-  named, so a command shouted into the room addresses nobody and is ignored;
-- the sender has not just flooded the chat.
+- оно пришло в настроенную группу, а не в какой-то чат, куда бота добавили;
+- оно разбирается как команда, целиком и однозначно;
+- оно ответ на сообщение другого игрока — этот ответ *и есть* то, как назван
+  адресат, поэтому команда, выкрикнутая в комнату, не обращена ни к кому и
+  пропускается;
+- отправитель только что не залил чат.
 
-Two kinds of message are exempt from the reply rule, and both name nobody else.
-"принять 12" carries its target in the number, and asking a player to find the
-original message before they may say yes would be cruel with a screen reader;
-"скрыть профиль" is about the speaker alone (``UNADDRESSED``).
+Два вида сообщений из правила об ответе исключены, и оба не называют никого
+другого. «принять 12» несёт адресата в номере, а просить игрока найти исходное
+сообщение, прежде чем он вправе сказать «да», было бы жестоко при экранном
+дикторе; «скрыть профиль» касается одного говорящего (``UNADDRESSED``).
 
-Nothing is decided here beyond that. The command is parsed by the domain, carried
-out by ``application.services.group_trade`` and worded by ``screens.group``; this
-module joins the three and schedules the deletion of what it said.
+Больше здесь не решается ничего. Команду разбирает домен, исполняет
+``application.services.group_trade``, а высказывает ``screens.group``; этот
+модуль сводит их троих и откладывает удаление сказанного.
 """
 
 from __future__ import annotations
@@ -48,22 +49,21 @@ from mmorpg.presentation.telegram.throttle import RateLimiter
 
 logger = get_logger(__name__)
 
-# Groups already written down by ``announce_chat_id``. Per process, and only ever
-# chat ids - it is a note to whoever is reading the log, not state the game uses.
+# Группы, уже записанные через ``announce_chat_id``. На процесс и только идентификаторы
+# чатов - это записка тому, кто читает журнал, а не состояние, которым игра пользуется.
 _SEEN_CHATS: set[int] = set()
 
-# Answers that close an offer, and so take the two buttons back.
+# Ответы, закрывающие предложение, а значит, забирающие обе кнопки.
 ANSWERS = (GroupIntent.ACCEPT, GroupIntent.DECLINE)
-# Results that leave nothing pending, whoever they belong to.
+# Итоги, после которых не остаётся ничего висящего, чьи бы они ни были.
 CLOSED = (GroupResult.OFFER_ACCEPTED, GroupResult.OFFER_DECLINED, GroupResult.REFUSED)
 
 
 def build_router(reaper: MessageReaper, limiter: RateLimiter | None = None) -> Router:
-    """A fresh router per application - see ``handlers.creation.build_router``.
+    """Свежий роутер на приложение - см. ``handlers.creation.build_router``.
 
-    The rate limiter is owned by the router rather than by the dependency
-    container: it is per-process state about behaviour, not a service anyone else
-    has a use for.
+    Ограничитель принадлежит роутеру, а не хранилищу зависимостей: это состояние о
+    поведении внутри процесса, а не служба, которая ещё кому-то нужна.
     """
     router = Router(name="group")
     router.message.filter(F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP}))
@@ -97,10 +97,10 @@ def build_router(reaper: MessageReaper, limiter: RateLimiter | None = None) -> R
 
 
 def is_game_group(chat: Chat, configured: str) -> bool:
-    """Whether this chat is *the* group. Accepts a numeric id or an @username.
+    """*Та* ли это группа. Принимается числовой id или @username.
 
-    ``*`` accepts any group. Somebody has to be able to try the group half of the
-    game before they know the id of the group they are standing in.
+    ``*`` принимает любую группу. Кто-то должен иметь возможность попробовать
+    групповую половину игры до того, как узнает id той группы, в которой стоит.
     """
     if configured.strip() == ANY_GROUP:
         return True
@@ -111,12 +111,11 @@ def is_game_group(chat: Chat, configured: str) -> bool:
 
 
 def announce_chat_id(chat: Chat, configured: str) -> None:
-    """Write down the id of a group the bot is in but does not answer in.
+    """Записать id группы, в которой бот состоит, но не отвечает.
 
-    The one thing missing to test the group commands used to be a number nobody
-    could see: the id is not in the client's interface, and the bot knew it and
-    said nothing (Roadmap, "Риски"). Once per chat per run, so a busy group does
-    not fill the log with the same line.
+    Единственным, чего не хватало для проверки команд в группе, был номер, которого
+    никто не видит: id нет в интерфейсе клиента, а бот его знал и молчал. Один раз на
+    чат за запуск, чтобы оживлённая группа не забила журнал одной и той же строкой.
     """
     if chat.id in _SEEN_CHATS:
         return
@@ -144,7 +143,7 @@ async def handle_group_message(
     reaper: MessageReaper,
     now: int | None = None,
 ) -> int | None:
-    """Answer one group message, or stay quiet. Returns the id of what was sent."""
+    """Ответить на одно сообщение в группе или промолчать. Возвращает id отправленного."""
     author = message.from_user
     if message.text is None or author is None or author.is_bot:
         return None
@@ -162,7 +161,7 @@ async def handle_group_message(
     if command.intent not in UNADDRESSED and (
         target is None or target_user is None or target_user.is_bot
     ):
-        # Not addressed to a player. The bot has no business in this sentence.
+        # Обращено не к игроку. Боту в этой фразе делать нечего.
         return None
 
     if not limiter.allow(author.id):
@@ -192,8 +191,8 @@ async def handle_group_message(
     )
     reply = render(content, outcome)
 
-    # An offer is anchored to the target's message so that only they see the
-    # buttons; everything else answers the person who spoke.
+    # Предложение привязано к сообщению того, кому предложили, чтобы кнопки видел только
+    # он; всё остальное отвечает тому, кто заговорил.
     anchor = message.message_id
     if reply.awaits_answer and target is not None:
         anchor = target.message_id
@@ -217,7 +216,7 @@ async def _say(
     reaper: MessageReaper,
     dismiss: bool = False,
 ) -> int:
-    """Post the answer and put it on the clock (``cleanup.MessageReaper``)."""
+    """Написать ответ и поставить его на часы (``cleanup.MessageReaper``)."""
     sent = await send_group_reply(
         bot,
         chat_id=message.chat.id,
@@ -230,7 +229,7 @@ async def _say(
 
 
 def _deleter(bot: Bot) -> Deleter:
-    """The single call the reaper makes, bound to this bot."""
+    """Единственный вызов, который делает уборщик, привязанный к этому боту."""
 
     async def delete(chat_id: int, message_id: int) -> None:
         await bot.delete_message(chat_id=chat_id, message_id=message_id)

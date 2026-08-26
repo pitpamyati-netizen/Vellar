@@ -1,1 +1,1 @@
-"""mmorpg.infrastructure layer package."""
+"""Слой mmorpg.infrastructure."""

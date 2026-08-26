@@ -1,7 +1,7 @@
-"""Procedural generation: deterministic, connected, always finishable.
+"""Процедурная сборка: определённая, связная, всегда проходимая.
 
-The property tests here are the specification of the generator. If any of them
-fails, players can end up in a location they cannot leave.
+Тесты свойств здесь и есть спецификация сборщика. Стоит любому из них упасть, и
+игроки окажутся в локации, из которой не выйти.
 """
 
 from __future__ import annotations
@@ -43,11 +43,11 @@ def build(city_id: str = "farhold", slot: int = 1, seed: str = WORLD_SEED):
     )
 
 
-# --- the one thing still on a clock ----------------------------------
+# --- то единственное, что ещё на часах -------------------------------
 
 
 def test_the_shop_rotates_every_half_hour() -> None:
-    """The world no longer turns over on a watch; only the shelf does."""
+    """Мир больше не переворачивается по страже; переворачивается только прилавок."""
     assert DEFAULT_SHOP_ROTATION_SECONDS == 1_800
     assert rotation_index(0) == 0
     assert rotation_index(1_799) == 0
@@ -62,17 +62,17 @@ def test_seconds_left_in_rotation_is_a_valid_ttl() -> None:
         assert moment + left == rotation_ends_at(rotation_index(moment))
 
 
-# --- determinism -----------------------------------------------------
+# --- определённость --------------------------------------------------
 
 
 def test_ten_thousand_runs_are_byte_identical() -> None:
-    """Determinism is the whole contract: no global random, ever."""
+    """Определённость - весь договор: никакого глобального random, никогда."""
     reference = location_seed(WORLD_SEED, "farhold", 1)
     assert all(location_seed(WORLD_SEED, "farhold", 1) == reference for _ in range(10_000))
 
 
 def test_the_map_is_permanent() -> None:
-    """A location is a place, and a place does not roll over: same map, always."""
+    """Локация - это место, а место не переворачивается: карта всегда одна и та же."""
     assert build() == build()
 
 
@@ -85,7 +85,7 @@ def test_a_different_world_seed_changes_everything() -> None:
     assert build(seed="one") != build(seed="another")
 
 
-# --- structure -------------------------------------------------------
+# --- строение --------------------------------------------------------
 
 
 @given(slot=st.integers(min_value=1, max_value=5))
@@ -139,11 +139,11 @@ def test_node_levels_increase_with_depth() -> None:
     assert levels == sorted(levels)
 
 
-# --- what stands in a node, and when it comes back -------------------
+# --- что стоит в узле и когда оно возвращается -----------------------
 
 
 def test_every_node_holds_a_wave_of_its_own_size() -> None:
-    """The old model was a switch: one press and the node was done for ever."""
+    """Прежняя модель была рубильником: одно нажатие, и узел кончился навсегда."""
     seed = location_seed(WORLD_SEED, "farhold", 1)
     location = build()
     for node in location.nodes:
@@ -178,13 +178,13 @@ def test_the_refill_waits_three_minutes() -> None:
 
 
 def test_a_new_wave_is_seeded_differently() -> None:
-    """The same node, refilled, is not the same three wolves over again."""
+    """Тот же узел, наполненный заново, - это не те же три волка снова."""
     seed = location_seed(WORLD_SEED, "farhold", 1)
     assert wave_seed(seed, 3, 0) != wave_seed(seed, 3, 1)
     assert wave_seed(seed, 3, 0) != wave_seed(seed, 4, 0)
 
 
-# --- enemies ---------------------------------------------------------
+# --- противники ------------------------------------------------------
 
 
 def test_enemy_generation_is_deterministic(content: GameContent) -> None:
@@ -246,7 +246,7 @@ def test_groups_hold_between_one_and_three_enemies(content: GameContent) -> None
 
 
 def test_generation_never_touches_the_global_random(content: GameContent) -> None:
-    """A stray ``random.random()`` would make the world irreproducible."""
+    """Забредший ``random.random()`` сделал бы мир невоспроизводимым."""
     import random
 
     random.seed(1)

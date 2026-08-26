@@ -1,9 +1,9 @@
-"""How far into the introduction a character has got.
+"""Как далеко персонаж зашёл во вступлении.
 
-One integer, read as a bitmask by ``mmorpg.domain.rules.tutorial``. Characters
-created before this migration start the introduction from the beginning, which is
-what the default says; nothing they have already done is lost, because every task
-is marked the moment it happens again.
+Одно целое число, которое ``mmorpg.domain.rules.tutorial`` читает битовой
+маской. Персонажи, созданные до этой миграции, начинают вступление сначала - об
+этом и говорит значение по умолчанию; ничто из уже сделанного не теряется,
+потому что каждое дело отмечается в ту минуту, когда случается снова.
 
 Revision ID: 0007
 Revises: 0006

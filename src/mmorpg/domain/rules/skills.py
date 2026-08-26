@@ -1,12 +1,13 @@
-"""Learning skills, raising their ranks, choosing an edge, filling the panel.
+"""Изучение умений, поднятие рангов, выбор грани, заполнение панели.
 
-The panel never grows: six active slots and one racial, forever. Пассивные
-умения слотов не занимают вовсе - изученное работает (``docs/skills.md``). All
-depth comes from ranks one to five and from the single edge chosen at rank three.
-This module is the only place that decides what a skill point may be spent on.
+Панель не растёт никогда: шесть боевых слотов и один расовый, навсегда. Пассивные
+умения слотов не занимают вовсе - изученное работает (``docs/skills.md``). Вся
+глубина идёт из рангов с первого по пятый и из единственной грани, выбираемой на
+третьем ранге. Этот модуль — единственное место, где решается, на что можно
+потратить очко умений.
 
-Everything is pure: each function returns a new character or ``None`` when the
-move is not allowed, and the caller explains the refusal in words.
+Всё чисто: каждая функция возвращает нового персонажа или ``None``, когда так
+делать нельзя, а объясняет отказ словами вызывающий.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ from mmorpg.domain.rules import edges as edge_rules
 
 
 def known_codes(character: Character) -> frozenset[str]:
-    """Skills the character has actually learned, at any rank."""
+    """Умения, которые персонаж действительно изучил, любого ранга."""
     return frozenset(character.loadout.ranks)
 
 
@@ -44,10 +45,10 @@ def _class_pool(content: GameContent, character: Character, kind: SkillKind) -> 
 
 
 def teachable(content: GameContent, character: Character) -> tuple[Skill, ...]:
-    """Every skill of the character's class unlocked by their level, learned or not.
+    """Все умения класса персонажа, открытые его уровнем, изученные или нет.
 
-    The list is stable: a skill keeps its place once it appears, so a player can
-    remember "the fourth one" between sessions.
+    Список устойчив: умение, однажды появившись, держит своё место, поэтому игрок
+    может запомнить «четвёртое» между заходами в игру.
     """
     actives = _class_pool(content, character, SkillKind.ACTIVE)
     passives = _class_pool(content, character, SkillKind.PASSIVE)
@@ -56,7 +57,7 @@ def teachable(content: GameContent, character: Character) -> tuple[Skill, ...]:
 
 
 def cost_to_learn(content: GameContent, character: Character, skill: Skill) -> int:
-    """One point to learn, one point per rank after that. Zero when maxed out."""
+    """Очко на изучение и по очку за каждый следующий ранг. Ноль, когда ранг предельный."""
     if not is_known(character, skill.code):
         return 1
     if character.loadout.rank_of(skill.code) >= content.rules.max_rank:
@@ -75,7 +76,7 @@ def edge_rank_for(content: GameContent, character: Character) -> int:
 
 
 def needs_edge(content: GameContent, character: Character, skill: Skill) -> bool:
-    """Whether this skill is sitting at the rank where an edge must be picked."""
+    """Стоит ли это умение на ранге, где нужно выбрать грань."""
     if not is_known(character, skill.code):
         return False
     if character.loadout.edge_of(skill.code) is not None:
@@ -84,7 +85,7 @@ def needs_edge(content: GameContent, character: Character, skill: Skill) -> bool
 
 
 def learn(content: GameContent, character: Character, skill: Skill) -> Character | None:
-    """Learn a skill, or raise it one rank. ``None`` when it cannot be paid for."""
+    """Изучить умение или поднять его на ранг. ``None``, когда платить нечем."""
     if character.unspent_skill_points < 1:
         return None
     loadout = character.loadout
@@ -103,7 +104,7 @@ def learn(content: GameContent, character: Character, skill: Skill) -> Character
 
 
 def choose_edge(character: Character, skill: Skill, edge_code: str) -> Character | None:
-    """Fix the rank-three choice. It is free, and it is not taken back for free."""
+    """Закрепить выбор третьего ранга. Он бесплатен, и обратно его бесплатно не берут."""
     if not is_known(character, skill.code):
         return None
     if character.loadout.edge_of(skill.code) is not None:
@@ -114,16 +115,16 @@ def choose_edge(character: Character, skill: Skill, edge_code: str) -> Character
 
 
 def clear_edge(character: Character, skill: Skill) -> Character:
-    """Unpick an edge. The mentor charges for this; the rule itself is free."""
+    """Распустить грань. Наставник за это берёт; само правило бесплатно."""
     edges = {key: value for key, value in character.loadout.edges.items() if key != skill.code}
     return replace(character, loadout=replace(character.loadout, edges=edges))
 
 
 def forget(content: GameContent, character: Character, skill: Skill) -> Character | None:
-    """Unlearn a skill entirely and hand its points back.
+    """Забыть умение целиком и вернуть вложенные в него очки.
 
-    Used by the mentor. The skill leaves the panel with it, because a slot
-    holding a skill nobody knows would be a button that does nothing.
+    Берётся наставником. Умение уходит из панели вместе с очками, потому что слот с
+    умением, которого никто не знает, был бы кнопкой, не делающей ничего.
 
     Расовое умение не разбирается: его не выбирали и очков за него не платили.
     Наставник брал за него деньги, возвращал очко - и умение оставалось на месте,
@@ -201,7 +202,7 @@ def reclaim_lost(content: GameContent, character: Character) -> Character | None
 
 
 def equippable(content: GameContent, character: Character) -> tuple[Skill, ...]:
-    """Known battle skills that are not already in a slot.
+    """Изученные боевые умения, которых ещё нет ни в одном слоте.
 
     Только боевые: пассивному умению слот не нужен, и предлагать его к укладке
     значило бы обещать, что без укладки оно не работает.
@@ -229,7 +230,7 @@ def known_passives(content: GameContent, character: Character) -> tuple[Skill, .
 def put_in_slot(
     content: GameContent, character: Character, slot: int, code: str | None
 ) -> Character | None:
-    """Place a known battle skill into a panel slot, or empty it with ``None``."""
+    """Положить изученное боевое умение в слот панели или очистить слот через ``None``."""
     if not 0 <= slot < content.rules.active_slots:
         return None
     if code is not None and not is_known(character, code):
@@ -240,8 +241,8 @@ def put_in_slot(
         return None
     loadout = character.loadout
     if code is not None:
-        # A skill sits in one slot at a time: putting it in a second one would
-        # give it two buttons.
+        # Умение лежит разом в одном слоте: положить его во второй значило бы дать ему
+        # две кнопки.
         loadout = replace(
             loadout, actives=tuple(None if item == code else item for item in loadout.actives)
         )
@@ -261,10 +262,10 @@ def chosen_edge(character: Character, skill: Skill) -> EdgeEffect | None:
 
 
 def power_factor(character: Character, skill: Skill) -> float:
-    """The multiplier the chosen edge puts on a skill's power."""
+    """Множитель, который выбранная грань кладёт на силу умения."""
     return edge_rules.power_factor(chosen_edge(character, skill))
 
 
 def cost_factor(character: Character, skill: Skill) -> float:
-    """The multiplier the chosen edge puts on a skill's cost."""
+    """Множитель, который выбранная грань кладёт на цену умения."""
     return edge_rules.cost_factor(chosen_edge(character, skill))

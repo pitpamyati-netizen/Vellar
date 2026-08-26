@@ -1,8 +1,8 @@
-"""Generated location structures.
+"""Собранные строения локации.
 
-Nothing in this module is stored. A location is a pure function of its seed, so
-the same seed always rebuilds the same graph, the same nodes and the same enemies.
-See ``docs/procgen.md``.
+Ничто в этом модуле не хранится. Локация - чистая функция от своего сида,
+поэтому один и тот же сид всегда собирает тот же граф, те же узлы и тех же
+противников. См. ``docs/procgen.md``.
 """
 
 from __future__ import annotations
@@ -17,11 +17,11 @@ from mmorpg.domain.entities.damage import DamageType
 
 
 class EnemyRank(StrEnum):
-    """How long an opponent is meant to hold out.
+    """Сколько противник должен продержаться.
 
-    The whole point of the tier is fight length: an ordinary opponent falls in
-    about three turns, an epic one takes twice that, a boss twice again. Nothing
-    else about the tiers differs - same tags, same intents, same panel.
+    Весь смысл ступени - длина боя: обычный противник падает ходов за три, эпический
+    держится вдвое дольше, босс - вчетверо. Больше ступени не отличаются ничем: те
+    же теги, те же намерения, та же панель.
     """
 
     NORMAL = "normal"
@@ -34,7 +34,7 @@ class EnemyRank(StrEnum):
 
 
 class NodeKind(StrEnum):
-    """What a player finds at a node."""
+    """Что игрок находит в узле."""
 
     ENTRANCE = "entrance"
     BATTLE = "battle"
@@ -52,7 +52,7 @@ class NodeKind(StrEnum):
 
     @property
     def rank(self) -> EnemyRank:
-        """Which tier of opponent waits here. Only meaningful for combat nodes."""
+        """Противник какой ступени ждёт здесь. Имеет смысл только для боевых узлов."""
         match self:
             case NodeKind.ELITE_BATTLE:
                 return EnemyRank.ELITE
@@ -85,7 +85,7 @@ DEFAULT_DAMAGE_TYPES: dict[EnemyKind, DamageType] = {
 
 @dataclass(frozen=True, slots=True)
 class EnemyArchetype:
-    """Content-defined template an enemy is generated from."""
+    """Порода, объявленная в содержимом, из которой собирается противник."""
 
     id: str
     name: str
@@ -107,7 +107,7 @@ class EnemyArchetype:
 
 @dataclass(frozen=True, slots=True)
 class Enemy:
-    """A concrete opponent, generated for one encounter."""
+    """Конкретный противник, собранный для одной встречи."""
 
     archetype_id: str
     name: str
@@ -124,19 +124,19 @@ class Enemy:
 
     @property
     def is_elite(self) -> bool:
-        """Kept as a word because content and traits speak of elites, not ranks."""
+        """Держится словом, потому что содержимое и черты говорят об эпических, а не о ступенях."""
         return self.rank is not EnemyRank.NORMAL
 
 
 @dataclass(frozen=True, slots=True)
 class NodeState:
-    """What everybody standing at one node shares: the wave and what is left of it.
+    """Что делят все, кто стоит на одном узле: волна и то, что от неё осталось.
 
-    A node is not a switch that flips to "пройден" for ever. It holds a wave of
-    things - a few packs of opponents, a few handfuls of ore - and ``taken`` says
-    how many of them are already gone. When the last one goes, ``emptied_at``
-    stamps the moment, and a few minutes later the node fills up with the next
-    wave (``domain/rules/nodes.py``).
+    Узел — не рубильник, переключающийся в «пройден» навсегда. В нём стоит волна из
+    нескольких вещей — несколько стай противников, несколько горстей руды, — а
+    ``taken`` говорит, сколько из них уже ушло. Когда уходит последняя,
+    ``emptied_at`` отмечает минуту, и несколькими минутами позже узел наполняется
+    следующей волной (``domain/rules/nodes.py``).
     """
 
     wave: int = 0
@@ -150,12 +150,12 @@ class NodeState:
 
 @dataclass(frozen=True, slots=True)
 class LocationState:
-    """What everybody standing in one location shares.
+    """Что делят все, кто стоит в одной локации.
 
-    The map itself is permanent and is not here: it is a pure function of the
-    place. What is shared is the state of every node - which wave stands there and
-    how much of it is left. A pack another player killed is gone for you too, and
-    what neither of you touched is still waiting.
+    Сама карта постоянна и лежит не здесь: она чистая функция от места. Общим
+    остаётся состояние каждого узла - какая волна там стоит и сколько от неё
+    осталось. Стая, которую убил другой игрок, для тебя тоже мертва, а то, чего не
+    тронул никто, всё ещё ждёт.
     """
 
     nodes: Mapping[int, NodeState] = field(default_factory=dict)
@@ -169,7 +169,7 @@ class LocationState:
 
 @dataclass(frozen=True, slots=True)
 class Presence:
-    """One player seen standing in a location, as others see them."""
+    """Один игрок, стоящий в локации, - таким его видят остальные."""
 
     character_id: int
     name: str
@@ -179,7 +179,7 @@ class Presence:
 
 @dataclass(frozen=True, slots=True)
 class LocationNode:
-    """One point of interest inside a location."""
+    """Одно приметное место внутри локации."""
 
     index: int
     kind: NodeKind
@@ -194,12 +194,11 @@ class LocationNode:
 
 @dataclass(frozen=True, slots=True)
 class GeneratedLocation:
-    """A location as it always is.
+    """Локация в том виде, в каком она есть всегда.
 
-    The map has no generation and never rolls over: the Meadows keep their nodes,
-    their names and their paths for good, and a player who learned the way there
-    by ear keeps knowing it. What changes is what stands in the nodes
-    (``domain/rules/nodes.py``).
+    У карты нет поколений и она не переворачивается: Луга держат свои узлы, свои
+    имена и свои тропы навсегда, и игрок, выучивший дорогу на слух, продолжает её
+    знать. Меняется то, что стоит в узлах (``domain/rules/nodes.py``).
     """
 
     city_id: str
@@ -219,7 +218,7 @@ class GeneratedLocation:
         for node in self.nodes:
             if node.is_exit:
                 return node
-        msg = "a generated location always has an exit"  # pragma: no cover - invariant
+        msg = "a generated location always has an exit"  # pragma: no cover - инвариант
         raise LookupError(msg)  # pragma: no cover
 
     def node(self, index: int) -> LocationNode:
@@ -232,7 +231,7 @@ class GeneratedLocation:
         return {node.index: node.links for node in self.nodes}
 
     def reachable_from(self, start: int = 0) -> frozenset[int]:
-        """Breadth-first walk over the undirected graph."""
+        """Обход неориентированного графа в ширину."""
         seen = {start}
         queue = deque([start])
         while queue:

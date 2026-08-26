@@ -1,8 +1,8 @@
-"""Character creation handlers.
+"""Хендлеры создания персонажа.
 
-The handler is deliberately thin: load state, call the pure flow, render, send.
-All the rules live in ``flows.creation``; none of them live here
-(``docs/architecture.md``, "No business logic in handlers").
+Хендлер тонкий нарочно: прочитать состояние, позвать чистую ветку, нарисовать,
+отправить. Все правила живут в ``flows.creation``, и ни одно из них не живёт
+здесь (``docs/architecture.md``, «Логика - не в хендлерах»).
 """
 
 from __future__ import annotations
@@ -33,21 +33,21 @@ STATE_KEY = "creation"
 
 
 def build_router() -> Router:
-    """A fresh router per application.
+    """Свежий роутер на приложение.
 
-    Routers are single-use in aiogram: one can only ever be attached to one
-    dispatcher, so handing out a module-level singleton would make building the
-    application twice in one process - as the tests do - fail.
+    Роутеры в aiogram одноразовые: подключить один можно только к одному
+    диспетчеру, поэтому раздача общего образца на уровне модуля ломала бы сборку
+    приложения дважды в одном процессе - а именно так делают тесты.
     """
     router = Router(name="creation")
-    # Private chats only. The same ``/start`` in the group would otherwise drag a
-    # player into character creation in front of everybody.
+    # Только личные переписки. Тот же ``/start`` в группе иначе втянул бы игрока в
+    # создание персонажа у всех на глазах.
     router.message.filter(F.chat.type == ChatType.PRIVATE)
     router.message.register(start, CommandStart())
     router.message.register(step, StateFilter(Creation))
-    # Last, and it catches everything left: a private message that belongs to no
-    # screen at all. Without it such a message reaches no handler and the player
-    # gets silence, which is the one answer the game may never give
+    # Последний, и он ловит всё оставшееся: личное сообщение, не принадлежащее ни одному
+    # экрану. Без него такое сообщение не доходит ни до одного хендлера, и игрок
+    # получает тишину — единственный ответ, которого игра давать не вправе
     # (``docs/accessibility.md``, правило 12).
     router.message.register(resume, StateFilter(None))
     return router
@@ -92,8 +92,8 @@ async def start(
     users: UserRepository,
     characters: CharacterRepository,
 ) -> None:
-    """Entry point. An existing character skips creation entirely."""
-    if message.from_user is None:  # pragma: no cover - Telegram always sets it
+    """Точка входа. Существующий персонаж пропускает создание целиком."""
+    if message.from_user is None:  # pragma: no cover - Telegram ставит это всегда
         return
     account = await users.upsert(
         User(telegram_id=message.from_user.id, username=message.from_user.username or "")
@@ -101,9 +101,9 @@ async def start(
 
     existing = await characters.get_active(message.from_user.id)
     if existing is not None:
-        # ``/start`` is the one moment every player passes through, so it is where
-        # the keeper flag is reconciled with the setting and with what the account
-        # was handed from inside the game.
+        # ``/start`` - единственная минута, через которую проходит каждый игрок, поэтому
+        # именно здесь флаг смотрителя сверяется с настройкой и с тем, что аккаунту
+        # выдали изнутри игры.
         existing = await sync_keeper(
             existing, message.from_user.id, settings, characters, granted=account.keeper
         )
@@ -139,7 +139,7 @@ async def resume(
     здесь быть не может: для того, кто слушает экран, оно неотличимо от сломанной
     игры.
     """
-    if message.from_user is None:  # pragma: no cover - Telegram always sets it
+    if message.from_user is None:  # pragma: no cover - Telegram ставит это всегда
         return
     character = await characters.get_active(message.from_user.id)
     if character is None:
@@ -176,14 +176,14 @@ async def step(
     settings: Settings,
     characters: CharacterRepository,
 ) -> None:
-    """One creation step per incoming message."""
+    """Один шаг создания на одно пришедшее сообщение."""
     if message.from_user is None or message.text is None:
         return
 
     data = await state.get_data()
     flow = CreationState.deserialise(data.get(STATE_KEY, "")) if data.get(STATE_KEY) else begin()
 
-    # The only piece of state the pure flow cannot know by itself.
+    # Единственная часть состояния, которую чистая ветка сама знать не может.
     name_taken = False
     if flow.screen is ScreenId.CREATE_NAME and not message.text.startswith("/"):
         name_taken = await characters.name_taken(message.text.strip())

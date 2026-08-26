@@ -1,8 +1,8 @@
-"""Dependency injection for handlers.
+"""Подстановка зависимостей хендлерам.
 
-Handlers declare what they need as parameters; this middleware supplies it. The
-objects themselves are built once at startup in the composition root, so nothing
-here allocates per update.
+Хендлер объявляет параметрами, что ему нужно, а эта мидлварь это выдаёт. Сами
+объекты собираются один раз на старте, в корне композиции, поэтому здесь ничего
+не создаётся на каждое обновление.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from mmorpg.presentation.telegram.broadcast import ChannelBroadcaster
 
 @dataclass(frozen=True, slots=True)
 class Dependencies:
-    """Everything a handler can ask for."""
+    """Всё, что хендлер вправе попросить."""
 
     settings: Settings
     registry: ContentRegistry

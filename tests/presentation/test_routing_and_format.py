@@ -1,4 +1,4 @@
-"""Routing, text commands, navigation stack and speakable formatting."""
+"""Маршрутизация, текстовые команды, стопка возврата и произносимая запись."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def screen() -> Screen:
     )
 
 
-# --- text commands (rule 10) -----------------------------------------
+# --- текстовые команды (правило 10) ----------------------------------
 
 
 @pytest.mark.parametrize(
@@ -85,7 +85,7 @@ def test_unknown_command_is_answered_not_ignored() -> None:
     assert parsed.intent is Intent.UNKNOWN
 
 
-# --- button routing ---------------------------------------------------
+# --- маршрутизация кнопок ---------------------------------------------
 
 
 def test_service_buttons_route_from_any_screen(screen: Screen) -> None:
@@ -95,7 +95,7 @@ def test_service_buttons_route_from_any_screen(screen: Screen) -> None:
 
 
 def test_service_buttons_route_with_emoji_too(screen: Screen) -> None:
-    """An old keyboard may have been rendered with the other emoji setting."""
+    """Старая клавиатура могла быть нарисована при другой настройке значков."""
     assert resolve("◀️ Назад", screen).intent is Intent.BACK
     assert resolve("🔁 Осмотреться", screen).intent is Intent.LOOK
 
@@ -107,7 +107,7 @@ def test_screen_buttons_resolve_to_a_selection(screen: Screen) -> None:
 
 
 def test_a_stale_button_is_reported_not_swallowed(screen: Screen) -> None:
-    """Rule 12: never stay silent, never raise."""
+    """Правило 12: никогда не молчать и никогда не падать."""
     command = resolve("Вихрь клинков", screen)
     assert command.intent is Intent.UNKNOWN
     answer = stale_button_answer("Город Дубно")
@@ -115,7 +115,7 @@ def test_a_stale_button_is_reported_not_swallowed(screen: Screen) -> None:
     assert "Город Дубно" in answer
 
 
-# --- navigation stack (spec section 12) ------------------------------
+# --- стопка возврата (спецификация, раздел 12) -----------------------
 
 
 def test_back_walks_one_step_at_a_time() -> None:
@@ -150,7 +150,7 @@ def test_stack_survives_serialisation() -> None:
 
 
 def test_every_screen_has_a_state_and_a_back_target() -> None:
-    """No dead ends: every screen knows where it is and where back leads."""
+    """Никаких тупиков: каждый экран знает, где он и куда ведёт «назад»."""
     for screen_id in ScreenId:
         if screen_id is ScreenId.START:
             continue
@@ -169,7 +169,7 @@ def test_back_targets_never_dangle_and_always_terminate() -> None:
             current = BACK_TARGET[current]
 
 
-# --- formatting (rules 4 and 5) --------------------------------------
+# --- запись (правила 4 и 5) -----------------------------------------
 
 
 def test_amount_is_spoken_not_drawn() -> None:

@@ -1,8 +1,8 @@
-"""Inventory and shop, both built on the shared paginated list.
+"""Сумка и лавка, обе собраны на общем списке со страницами.
 
-They look and behave identically to every other long list in the game: eight
-entries per page, one per row, the same header wording and the same navigation
-row in the same place (spec section 13).
+Выглядят и ведут себя ровно как всякий другой длинный список в игре: восемь
+записей на страницу, по одной в ряду, те же слова в заголовке и тот же ряд
+перемещения на том же месте (спецификация, раздел 13).
 """
 
 from __future__ import annotations
@@ -26,9 +26,9 @@ USE_SUFFIX = "использовать"
 EQUIP_SUFFIX = "надеть"
 SELL_SUFFIX = "продать"
 
-# What a player can do with a thing, by its kind. Pressing a row no longer does
-# it, though: it opens the thing's card, where the verb is a button and the
-# numbers are spelled out (``screens/items.py``).
+# Что игрок может сделать с вещью, по её роду. Нажатие на строку, впрочем, этого больше
+# не делает: оно открывает карточку вещи, где глагол стоит кнопкой, а числа названы
+# прямо (``screens/items.py``).
 ITEM_VERBS: dict[str, str] = {
     "equipment": EQUIP_SUFFIX,
     "consumable": USE_SUFFIX,
@@ -115,7 +115,7 @@ def inventory_screen(
 
 
 def inventory_text(item: Item, quantity: int) -> str:
-    """The button text of one bag row: the thing, how many, and what it can do."""
+    """Текст кнопки одной строки сумки: вещь, сколько её и что с ней можно сделать."""
     verb = ITEM_VERBS.get(item.kind.value, "")
     tail = f" — {verb}" if verb else ""
     return f"{item.name}, штук {quantity}{tail}"
@@ -131,10 +131,10 @@ def sell_screen(
     city_name: str,
     notice: str = "",
 ) -> Screen:
-    """What the merchant pays for what is in the bag.
+    """Сколько торговец платит за то, что лежит в сумке.
 
-    Equipment that is worn is not here: it is not in the bag, and selling the
-    boots off your own feet by a mis-press is exactly the accident to prevent.
+    Надетого снаряжения здесь нет: оно не в сумке, а продать сапоги с собственных
+    ног случайным нажатием - ровно та беда, которую и предотвращают.
     """
     entries = [
         ListEntry(
@@ -208,7 +208,7 @@ def buy_label(item: Item, price: int) -> Label:
 
 
 def item_from_button(content: GameContent, text: str, stock: Sequence[Item]) -> Item | None:
-    """Match a pressed shop button back to its item."""
+    """Свести нажатую кнопку лавки обратно к её вещи."""
     for item in stock:
         if text.startswith(f"{item.name} — ") and text.endswith(BUY_SUFFIX):
             return item
@@ -224,7 +224,7 @@ def owned_from_button(content: GameContent, text: str, owned: Sequence[OwnedItem
 
 
 def sold_from_button(content: GameContent, text: str, owned: Sequence[OwnedItem]) -> Item | None:
-    """Match a pressed skup button back to its item."""
+    """Свести нажатую кнопку скупки обратно к её вещи."""
     for held in owned:
         item = content.item(held.item_id)
         if text.startswith(f"{item.name} — ") and text.endswith(SELL_SUFFIX):

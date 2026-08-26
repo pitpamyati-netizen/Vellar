@@ -1,4 +1,4 @@
-"""Races, classes and the skill catalogue."""
+"""Расы, классы и справочник умений."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def test_sixteen_races(content: GameContent) -> None:
 
 
 def test_race_stat_budget(content: GameContent) -> None:
-    """Positive points are capped at 3, plus one extra per point of penalty."""
+    """Положительных очков не больше 3, плюс по одному за каждое очко штрафа."""
     for race in content.races:
         allowance = RACE_STAT_BUDGET + race.bonuses.penalty_total
         assert race.bonuses.positive_total <= allowance, race.id
@@ -36,7 +36,8 @@ def test_every_race_has_one_passive_and_one_active(content: GameContent) -> None
         active = content.racial_active(race.id)
         assert active.kind is SkillKind.ACTIVE
         assert active.owner == f"race:{race.id}"
-        # Exactly one active per race, so the single racial slot is never ambiguous.
+        # Ровно одно активное умение на расу, чтобы единственный расовый слот никогда не
+        # был двусмысленным.
         assert len(content.skills_of(f"race:{race.id}", SkillKind.ACTIVE)) == 1
 
 
@@ -103,7 +104,7 @@ def test_class_unlock_levels_match_the_rules(content: GameContent) -> None:
 
 
 def test_panel_size_is_fixed(content: GameContent) -> None:
-    """The panel never grows: 6 active and 1 racial. See docs/skills.md.
+    """Панель не растёт никогда: 6 боевых и 1 расовый. См. docs/skills.md.
 
     Пассивных слотов нет вовсе: изученное пассивное умение работает, и выбор
     делается только из боевых.
@@ -126,7 +127,7 @@ def test_every_skill_has_exactly_two_edges(content: GameContent) -> None:
 def test_skill_codes_and_names_are_unique(content: GameContent) -> None:
     codes = [skill.code for skill in content.skills]
     assert len(codes) == len(set(codes))
-    # Names must be unique per owner: the combat screen routes by button text.
+    # Имена не повторяются внутри владельца: боевой экран ведёт по тексту кнопки.
     for owner in {skill.owner for skill in content.skills}:
         names = [skill.name for skill in content.skills_of(owner)]
         assert len(names) == len(set(names)), owner

@@ -1,8 +1,8 @@
-"""The Debt Circle: what a character has won and lost in it.
+"""Круг долгов: что персонаж в нём выиграл и проиграл.
 
-Two counters, nothing else. The arena pays in gold at the moment of the fight, so
-there is no balance to carry; these columns exist for the season table and for the
-line the arena screen shows a player about themselves.
+Два счётчика, и больше ничего. Арена платит золотом в минуту боя, поэтому нести
+через время нечего; эти колонки существуют ради таблицы сезона и ради той
+строки, которую экран арены показывает игроку о нём самом.
 
 Revision ID: 0008
 Revises: 0007
@@ -22,7 +22,7 @@ depends_on = None
 def upgrade() -> None:
     op.execute("ALTER TABLE characters ADD COLUMN arena_wins INTEGER NOT NULL DEFAULT 0")
     op.execute("ALTER TABLE characters ADD COLUMN arena_losses INTEGER NOT NULL DEFAULT 0")
-    # The season table asks one question - who has won most - and asks it often.
+    # Таблица сезона задаёт один вопрос - у кого больше побед - и задаёт его часто.
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_characters_arena_wins"
         " ON characters (arena_wins DESC, level DESC)"

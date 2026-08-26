@@ -1,8 +1,8 @@
-"""Screens for character creation.
+"""Экраны создания персонажа.
 
-Every step states, in this order: where the player is, what has already been
-chosen, and what can be done now (accessibility rule 4). Choices already made are
-repeated on every step, so coming back never leaves the player guessing.
+Каждый шаг говорит, и в таком порядке: где игрок, что уже выбрано и что можно
+сделать сейчас (правило доступности 4). Уже сделанные выборы повторяются на
+каждом шаге, поэтому возврат назад никогда не оставляет игрока гадать.
 """
 
 from __future__ import annotations
@@ -38,8 +38,9 @@ STAT_NAMES: dict[StatCode, str] = {
     StatCode.LCK: "Удача",
 }
 
-# Dative case, for "плюс 2 к ловкости". The screen reader speaks these, so the
-# grammar has to be right - lowercasing the nominative gives "плюс 2 к ловкость".
+# Дательный падеж, для «плюс 2 к ловкости». Экранный диктор это произносит, поэтому
+# грамматика обязана быть верной: именительный в нижнем регистре даёт «плюс 2 к
+# ловкость».
 STAT_DATIVE: dict[StatCode, str] = {
     StatCode.STR: "силе",
     StatCode.AGI: "ловкости",
@@ -90,7 +91,7 @@ def describe_bonuses(bonuses: StatBlock) -> str:
 
 
 def chosen_so_far(content: GameContent, draft: CharacterDraft) -> str:
-    """One line repeating every decision made so far."""
+    """Одна строка, повторяющая каждое решение, принятое к этой минуте."""
     parts: list[str] = []
     if draft.name:
         parts.append(f"имя {draft.name}")
@@ -105,9 +106,9 @@ def chosen_so_far(content: GameContent, draft: CharacterDraft) -> str:
 
 
 def name_screen(draft: CharacterDraft, notice: str = "") -> Screen:
-    # Every creation screen keeps the same rows in the same positions, whether the
-    # step is finished or not: an unavailable action states its reason in the body
-    # and stays where the player left it (accessibility rule 7).
+    # Каждый экран создания держит те же ряды на тех же местах, закончен шаг или нет:
+    # недоступное действие называет причину в теле и остаётся там, где игрок его оставил
+    # (правило доступности 7).
     return Screen(
         id=ScreenId.CREATE_NAME,
         lines=(
@@ -331,7 +332,7 @@ def confirm_screen(content: GameContent, draft: CharacterDraft) -> Screen:
 
 
 def trait_summary(content: GameContent, trait_id: str) -> str:
-    """Used by the notice line after a pick."""
+    """Берётся строкой-вестью после выбора."""
     trait = content.trait(trait_id)
     effects = ", ".join(
         f"{key.replace('_percent', '')} {percent(value)}" for key, value in trait.modifiers.items()

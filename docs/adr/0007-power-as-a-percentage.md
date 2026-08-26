@@ -1,66 +1,71 @@
-# ADR 0007 - Every magnitude is a percentage of something that grows
+# ADR 0007 — Всякая величина — процент от того, что растёт само
 
-Status: accepted (2026-08-14)
+Статус: принято (2026-08-14)
+Уточнён ADR 0015 и ADR 0017: кривую всей полосы 1–300 несёт теперь не «обычный
+удар», выведенный из уровня, а **бросок оружия** в руке. Правило «в содержимом нет
+абсолютных чисел» осталось тем же.
 
-## Context
+## Обстоятельства
 
-Content stated a skill's power as an absolute number: Рассечение 14 at level 1,
-Пробой строя 70 at level 60, Сингулярность 140 at level 100. The plain attack,
-meanwhile, was `8 + 1.5 x level` in code.
+Содержимое называло силу умения абсолютным числом: Рассечение 14 на первом уровне,
+Пробой строя 70 на шестидесятом, Сингулярность 140 на сотом. Обычная атака при этом в
+коде была `8 + 1.5 × уровень`.
 
-The two curves crossed at about level 30. Past it, every skill in the game did
-less than pressing "Атака", and the six-button panel the whole design is built
-around became decoration: the correct play at level 100 was to press the same
-button until something died. A simulation over all eight classes and eight levels
-confirmed it - a "clever" player and a player who only attacked finished in the
-same number of turns.
+Две кривые пересекались примерно на тридцатом уровне. После него каждое умение в игре
+делало меньше нажатия «Атака», а панель из шести кнопок, вокруг которой построен весь
+замысел, становилась украшением: верной игрой на сотом уровне было жать одну и ту же
+кнопку, пока что-нибудь не умрёт. Разыгранная модель по всем восьми классам и восьми
+уровням это подтвердила: «умный» игрок и игрок, который только атаковал, заканчивали за
+одно и то же число ходов.
 
-Three more faults were found in the same measurement, and they share the shape:
+Тем же замером нашлись ещё три беды одной формы:
 
-- **Armour** was softened by a constant 100 while armour itself grew linearly with
-  level, so a level-300 blow landed for a quarter of itself.
-- **Accuracy** was `accuracy - enemy.level x 0.5` - an absolute level, not a gap.
-  At level 300 the hero missed three blows in five while enemies, whose accuracy
-  *rose* with their absolute level, never missed at all.
-- **Criticals** multiplied an uncapped chance by an uncapped multiplier, so a luck
-  build hit three times as hard as anyone else - not a build, an exploit.
+- **Броня** смягчалась постоянной сотней, пока сама броня росла с уровнем линейно, —
+  и удар трёхсотого уровня доходил четвертью себя.
+- **Точность** считалась как `точность − уровень противника × 0.5`, то есть по
+  абсолютному уровню, а не по разнице. На трёхсотом герой промахивался тремя ударами из
+  пяти, а противники, у которых точность *росла* с их абсолютным уровнем, не
+  промахивались вовсе.
+- **Криты** умножали неограниченный шанс на неограниченный множитель, и сборка на удачу
+  била втрое сильнее всех прочих — это не сборка, а дыра.
 
-## Decision
+## Решение
 
-Nothing in content is an absolute number. Every magnitude is a percentage of
-something that already grows on its own.
+В содержимом нет абсолютных чисел. Всякая величина — процент от того, что и так растёт
+само.
 
-- **Damage** is a percentage of the character's *standard blow*,
-  `6 + 2.2 x level + 0.6 x scaling stat`, where the plain attack is 100. Level
-  carries the curve and the stat carries the spread - if the stat carried it
-  alone, a class with one key stat would pour every point into it and hit twice
-  as hard as a class with two.
-- **Healing and shields** are percentages of maximum health, which grows about
-  five times faster than a blow does. `heal_percent` as a separate effect is gone;
-  every heal is a percentage now.
-- **Buffs and debuffs** were already percentages of the modifier they move.
-- **Armour** is softened against the defender's level, so it eats a steady fifth
-  to a quarter of a blow at every level.
-- **Accuracy** answers the difference in levels. A fight at your own level is even.
-- **Criticals** are capped at 50% chance and 250% damage.
+- **Урон** — процент от *обычного удара* персонажа, `6 + 2.2 × уровень + 0.6 ×
+  характеристика`, где простая атака — это 100. Кривую несёт уровень, а разброс
+  характеристика: неси её характеристика одна, класс с одной ключевой характеристикой
+  вливал бы в неё каждое очко и бил бы вдвое сильнее класса с двумя. (С ADR 0015 кривую
+  несёт бросок оружия, а `0.6 × характеристика` осталось разбросом.)
+- **Лечение и барьеры** — проценты от максимума здоровья, который растёт примерно
+  впятеро быстрее удара. Отдельного эффекта `heal_percent` больше нет: всякое лечение
+  теперь процент.
+- **Усиления и ослабления** и раньше были процентами от того модификатора, который они
+  двигают.
+- **Броня** смягчается по уровню защищающегося и потому съедает устойчивую пятую-четвёртую
+  часть удара на любом уровне.
+- **Точность** отвечает разнице уровней. Бой на своём уровне ровен.
+- **Криты** ограничены 50 % шанса и 250 % урона.
 
-Enemy health is set against the standard blow and enemy damage against the health
-pool, so an ordinary fight is about three turns at level 3 and at level 300.
+Здоровье противника выставлено против обычного удара, а его урон — против запаса
+здоровья, поэтому обычный бой — примерно три хода и на третьем уровне, и на трёхсотом.
 
-## Consequences
+## Последствия
 
-- Adding a skill still needs no code, and now it needs no re-tuning either: a
-  number written once is correct across the whole 1-300 band.
-- The 52 damage, healing and shield skills in `skills.toml` were rewritten onto
-  the new scale in one pass. Their *relative* strengths are a deliberate table
-  now (opener 130, cooldown blow 170-200, area 110-150, capstone 210-275), not an
-  accident of when each was written.
-- A skill button can finally state what it will do - "урон 34", "лечит 24" - which
-  is what makes the panel legible without sight. That is not a side effect; it is
-  half the reason for the change.
-- Balance moved from "read the code and hope" to
-  `tests/domain/test_combat_balance.py`, which simulates whole fights and fails if
-  an ordinary one stops being about three turns. The constants will still move in
-  the first days of open beta - but a move will be visible.
-- Old saved characters are unaffected: nothing derived is stored, so every number
-  is recomputed from the level and the allocated points (rule 7).
+- Добавить умение по-прежнему не требует кода, а теперь не требует и перенастройки:
+  число, написанное один раз, верно по всей полосе 1–300.
+- 52 умения с уроном, лечением и щитом в `skills.toml` переписаны на новую шкалу одним
+  проходом. Их *относительная* сила стала осознанной таблицей (открывающий 130, удар с
+  откатом 170–200, по всем 110–150, венчающее 210–275), а не случайностью того, когда
+  какое писали.
+- Кнопка умения наконец может сказать, что она сделает: «урон 34», «лечит 24». Именно
+  это и делает панель читаемой без зрения — не побочное следствие, а половина причины
+  всей правки.
+- Баланс переехал из «прочитай код и надейся» в `tests/domain/test_combat_balance.py`,
+  который разыгрывает бои целиком и падает, если обычный перестал быть примерно
+  трёхходовым. Постоянные ещё сдвинутся в первые дни открытого теста — но сдвиг будет
+  виден.
+- Старых сохранённых персонажей это не касается: ничего производного не хранится, и
+  каждое число пересчитывается из уровня и розданных очков (правило 7).

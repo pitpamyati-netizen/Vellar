@@ -1,9 +1,9 @@
-"""Gear, the skup, the mentor and the descent, at the level of the pure flow.
+"""Снаряжение, скупка, наставник и спуск на уровне чистой ветки.
 
-The flow decides and hands the handler a :class:`PendingWrite`; nothing here
-touches a repository. What is checked is that every button leads somewhere, that
-a refusal explains itself, and that nothing is ever lost on the way - an item
-taken off goes back into the bag, an item bought is paid for exactly once.
+Ветка решает и передаёт хендлеру :class:`PendingWrite`; здесь не трогают ни
+одного хранилища. Проверяется, что каждая кнопка куда-то ведёт, что отказ
+объясняет себя и что по дороге ничего не теряется: снятая вещь возвращается в
+сумку, а купленная оплачивается ровно один раз.
 """
 
 from __future__ import annotations
@@ -300,10 +300,10 @@ def test_taking_a_thing_off_from_the_character_screen(
 def test_a_level_point_is_spent_from_the_stats_screen(
     content: GameContent, hero: Character
 ) -> None:
-    """A point with nowhere to go would be a level that changed nothing.
+    """Очко, которое некуда деть, было бы уровнем, ничего не изменившим.
 
-    It is spent on «Характеристики», next to the line that says what the point
-    actually buys - the character sheet only points the way there.
+    Тратят его на «Характеристиках», рядом со строкой, которая говорит, что это очко
+    на самом деле покупает, — а экран персонажа только показывает туда дорогу.
     """
     fresh = replace(hero, unspent_stat_points=2)
     sheet = step(content, fresh, begin(fresh), "Персонаж")
@@ -479,7 +479,7 @@ def test_a_slot_is_filled_and_emptied_from_the_panel(content: GameContent, hero:
     assert emptied.pending.character.loadout.actives[1] is None
 
 
-# --- the city ---------------------------------------------------------
+# --- город ------------------------------------------------------------
 
 
 def test_the_mentor_takes_gold_and_hands_the_points_back(
@@ -704,7 +704,7 @@ def quest_still_offered(content: GameContent, hero: Character) -> bool:
     return any(quest.id == "farhold_tallies" for quest in quest_rules.available(content, hero))
 
 
-# --- finding one thing in a full bag ----------------------------------
+# --- найти одну вещь в полной сумке -----------------------------------
 
 
 def test_search_narrows_the_bag(content: GameContent, hero: Character) -> None:

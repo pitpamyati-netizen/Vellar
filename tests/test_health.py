@@ -1,4 +1,4 @@
-"""The liveness heartbeat: what the container healthcheck reads."""
+"""Сердцебиение: то, что читает проверка здоровья контейнера."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def settings_for(path, **overrides: object) -> Settings:
 
 
 def test_a_missing_file_is_not_a_heartbeat(tmp_path) -> None:
-    """Before the first beat there is nothing to read, and that is not alive."""
+    """До первого удара читать нечего, и живым это не считается."""
     settings = settings_for(tmp_path / "never-written")
     assert age_seconds(settings.heartbeat_path) is None
     assert is_alive(settings) is False
@@ -35,7 +35,7 @@ def test_a_fresh_beat_is_alive_and_an_old_one_is_not(tmp_path) -> None:
     touch(path)
     settings = settings_for(path, heartbeat_seconds=10.0)
 
-    # Three beats is the limit, so 25 seconds still counts and 31 does not.
+    # Три удара - предел, поэтому 25 секунд ещё считаются, а 31 уже нет.
     assert settings.heartbeat_stale_after == 30.0
     modified = path.stat().st_mtime
     assert is_alive(settings, now=modified + 25) is True
@@ -47,14 +47,15 @@ async def test_the_beat_continues_while_the_block_runs(tmp_path) -> None:
     settings = settings_for(path, heartbeat_seconds=0.01)
 
     async with heartbeat(settings):
-        # The first beat lands before the block, so the probe never reads an
-        # empty directory while the bot is already serving.
+        # Первый удар ложится до входа в блок, поэтому проверка не читает пустой
+        # каталог, пока бот уже обслуживает.
         assert path.exists()
         first = path.stat().st_mtime_ns
         await asyncio.sleep(0.05)
         assert path.stat().st_mtime_ns > first
 
-    # A file left behind by a clean stop would make the next start look wedged.
+    # Файл, оставшийся после чистой остановки, заставил бы следующий старт выглядеть
+    # вставшим.
     assert not path.exists()
 
 
@@ -72,5 +73,5 @@ async def test_the_beat_stops_even_when_the_block_raises(tmp_path) -> None:
         pass
 
     assert not path.exists()
-    # No task survives to keep touching the file after the crash.
+    # После падения не остаётся задачи, которая продолжала бы трогать файл.
     assert all(task.get_name() != "heartbeat" for task in asyncio.all_tasks())

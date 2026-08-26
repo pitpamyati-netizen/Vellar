@@ -1,1 +1,1 @@
-"""mmorpg.presentation.telegram.keyboards layer package."""
+"""Слой mmorpg.presentation.telegram.keyboards."""

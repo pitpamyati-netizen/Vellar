@@ -1,12 +1,12 @@
-"""Crafts: gathering raw stuff on the road and making things out of it.
+"""Ремёсла: сбор сырья в дороге и работа из него руками.
 
-A craft is work, not identity: an adventurer picks a class once and can learn
-every craft afterwards (``Narrative.md``, section 2). The definitions come from
-``content/crafts.toml``; only the work already done lives on the character,
-because a rank is earned, never granted.
+Ремесло - это работа, а не то, кто ты такой: приключенец выбирает класс один
+раз, а ремёсла может выучить все (``Narrative.md``, раздел 2). Описания
+приходят из ``content/crafts.toml``; на персонаже лежит только уже сделанная
+работа, потому что ранг зарабатывают, а не выдают.
 
-Nothing derived is stored. A rank is recomputed from experience every time it is
-shown, exactly like a character level.
+Ничего производного не хранится. Ранг пересчитывается из опыта каждый раз,
+когда его показывают, ровно как уровень персонажа.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from mmorpg.domain.entities.stats import StatCode
 
 
 class CraftKind(StrEnum):
-    """Gathering brings materials in; making turns them into items."""
+    """Сбор приносит сырьё, работа руками превращает его в вещи."""
 
     GATHERING = "gathering"
     MAKING = "making"
@@ -28,13 +28,13 @@ class CraftKind(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class CraftYield:
-    """One material a gathering craft can bring back, from ``level`` up.
+    """Одно сырьё, которое собирающее ремесло приносит начиная с уровня ``level``.
 
-    ``biomes`` is where it is found - the biomes of the locations around a city
-    (``content/world.toml``). Gathering used to ignore the map entirely: one
-    button gave the same thing in every city on the road, so fifteen cities held
-    the same two materials (Roadmap, "Риски"). An empty tuple still means
-    "anywhere", because a craft has to have something a player can always work.
+    ``biomes`` — это где оно лежит: биомы локаций вокруг города
+    (``content/world.toml``). Сбор когда-то не смотрел на карту вовсе: одна кнопка
+    давала одно и то же в каждом городе дороги, и пятнадцать городов держали два
+    одинаковых сырья. Пустой список по-прежнему значит «везде», потому что у
+    ремесла должно быть то, чем игрок может заняться всегда.
     """
 
     item_id: str
@@ -42,7 +42,7 @@ class CraftYield:
     biomes: tuple[str, ...] = ()
 
     def found_in(self, biomes: frozenset[str]) -> bool:
-        """Whether this material is in the ground around these places."""
+        """Лежит ли это сырьё в земле вокруг этих мест."""
         return not self.biomes or bool(biomes.intersection(self.biomes))
 
 
@@ -68,7 +68,7 @@ class RecipeInput:
 
 @dataclass(frozen=True, slots=True)
 class Recipe:
-    """One thing a making craft knows how to produce."""
+    """Одна вещь, которую ремесло умеет сделать."""
 
     id: str
     craft_id: str
@@ -81,11 +81,11 @@ class Recipe:
 
 @dataclass(frozen=True, slots=True)
 class QualityTier:
-    """How well a batch came out.
+    """Насколько хорошо вышла партия.
 
-    A bag holds item ids and counts, never instances, so quality pays in what
-    comes out of the work: ``extra`` more items, and ``refund_percent`` of the
-    materials left unspent.
+    Сумка держит идентификаторы вещей и их число, а не образцы, поэтому качество
+    платит тем, что выходит из работы: ``extra`` вещей сверху и ``refund_percent``
+    сырья, оставшегося неистраченным.
     """
 
     id: str
@@ -96,7 +96,7 @@ class QualityTier:
 
 @dataclass(frozen=True, slots=True)
 class CraftRules:
-    """The structural numbers of the craft system, shared by content and rules."""
+    """Опорные числа ремесла, общие для содержимого и правил."""
 
     max_rank: int
     experience_per_rank: int
@@ -120,11 +120,11 @@ class CraftRules:
 
 @dataclass(frozen=True, slots=True)
 class CraftProgress:
-    """What one character has done in one craft.
+    """Что один персонаж сделал в одном ремесле.
 
-    ``gathered_at`` is the unix time of the last gathering. The cooldown is
-    personal and short: the road refills for this character on their own clock,
-    not on a shared watch everybody had to wait out together.
+    ``gathered_at`` - unix-время последнего сбора. Откат личный и короткий: дорога
+    пополняется для этого персонажа по его собственным часам, а не по общей страже,
+    которую всем приходилось пережидать вместе.
     """
 
     experience: int = 0
@@ -133,7 +133,7 @@ class CraftProgress:
 
 @dataclass(frozen=True, slots=True)
 class CraftLog:
-    """Every craft a character has touched. Untouched crafts are simply absent."""
+    """Каждое ремесло, которого персонаж коснулся. Нетронутых ремёсел просто нет."""
 
     entries: Mapping[str, CraftProgress] = field(default_factory=dict)
 

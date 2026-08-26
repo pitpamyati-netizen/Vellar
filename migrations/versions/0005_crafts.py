@@ -1,15 +1,15 @@
-"""Craft work a character has done.
+"""Работа, сделанная персонажем в ремёслах.
 
-One column, one document (Roadmap 1.7). ``crafts`` maps a craft id to the work
-already put into it and to the watch its last gathering happened in::
+Одна колонка, один документ (Roadmap 1.7). ``crafts`` сопоставляет ремеслу уже
+вложенную в него работу и стражу, в которую случился последний сбор::
 
     {"mining": {"experience": 240, "cycle": 12}}
 
-A rank is never stored: it is counted back from the experience by
-``mmorpg.domain.rules.crafts``, exactly like a character level is counted from
-theirs. It is read and written whole, for one character at a time, so a table
-would buy nothing. Every character created before this migration has learned no
-craft, which is what the empty default says.
+Ранг не хранится никогда: его отсчитывает обратно от опыта
+``mmorpg.domain.rules.crafts``, ровно как уровень персонажа отсчитывается от
+своего. Читается и пишется целиком и для одного персонажа за раз, поэтому
+таблица не дала бы ничего. Каждый персонаж, созданный до этой миграции, не
+изучил ни одного ремесла - об этом и говорит пустое значение по умолчанию.
 
 Revision ID: 0005
 Revises: 0004

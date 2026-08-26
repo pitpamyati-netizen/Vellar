@@ -1,8 +1,8 @@
-"""City services: the inn, the mentor, the strongbox and the descent.
+"""Городские службы: постоялый двор, наставник, сундук и спуск.
 
-Each one exists because something in the game costs money. The inn sells health,
-the mentor sells a second opinion about a skill point, the strongbox keeps gold
-out of reach of a bad fight, and the descent is where the money comes from.
+Каждая из них существует потому, что что-то в игре стоит денег. Постоялый двор
+продаёт здоровье, наставник - второе мнение об очке умений, сундук держит золото
+подальше от проигранного боя, а спуск - это то, откуда деньги берутся.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ DEPOSIT_STEPS: tuple[int, ...] = (50, 250, 1000)
 def tavern_screen(
     content: GameContent, character: Character, city: City, notice: str = ""
 ) -> Screen:
-    """A bed, a board with contracts, and a clerk who pays for closed ones."""
+    """Постель, доска с заданиями и писарь, который платит за закрытые."""
     stats = derived_stats(content, character)
     health = character.health_or(stats.max_health)
     # Города считает тот, в котором игрок стоит, а не тот, где он завёлся: иначе
@@ -66,7 +66,7 @@ def mentor_screen(
     state: PageState,
     notice: str = "",
 ) -> Screen:
-    """Unlearning: the only way a spent skill point comes back.
+    """Роспуск: единственный способ вернуть потраченное очко умений.
 
     В списке только то, за что платили очком, - умения класса. Расовое стояло
     здесь наравне с ними, наставник брал за него деньги, объявлял «забыто» - и
@@ -107,7 +107,7 @@ def withdraw_label(sum_: int) -> Label:
 
 
 def bank_screen(content: GameContent, character: Character, city: City, notice: str = "") -> Screen:
-    """Gold in the strongbox is not on you, and a lost fight takes only what is."""
+    """Золото в сундуке не при тебе, а проигранный бой берёт только то, что при тебе."""
     lines = [
         *head(f"Банк Палаты, {city.name}.", notice),
         "Стойка, весы и книга, в которую записывают всё до монеты.",
@@ -178,10 +178,10 @@ def dungeon_screen(
     total: int,
     notice: str = "",
 ) -> Screen:
-    """The descent: fights in a row, no exit in the middle without loss.
+    """Спуск: бои подряд, без выхода посередине без потерь.
 
-    How many is not a constant: each Seal of the Chamber opens another layer
-    below the old bottom, so the number is said rather than assumed
+    Сколько их - не постоянное число: каждая Печать Палаты открывает ещё один слой
+    под прежним дном, поэтому число называют, а не подразумевают
     (``domain/rules/turning.py``).
     """
     stats = derived_stats(content, character)

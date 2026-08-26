@@ -1,18 +1,19 @@
-"""Real PostgreSQL and Redis, or nothing.
+"""Настоящие PostgreSQL и Redis - или ничего.
 
-These tests run the SQL and the Redis commands the bot actually issues. The rest
-of the suite uses the in-memory adapters, which means a mistake in the SQL itself
-- a typo, a column PostgreSQL will not accept - is invisible everywhere else. That
-gap is what this package exists to close.
+Эти тесты выполняют тот самый SQL и те самые команды Redis, которые шлёт бот.
+Остальной набор работает на адаптерах в памяти, а значит, ошибка в самом SQL -
+опечатка, колонка, которую PostgreSQL не примет - невидима больше нигде. Этот
+пакет существует, чтобы закрыть ту брешь.
 
-Skipped, never failed, when the services are not up: ``docker compose up -d
-postgres redis`` and they run.
+Пропускаются, но не падают, когда службы не подняты: ``docker compose up -d
+postgres redis`` - и они работают.
 
-The connections are opened **once for the whole run**, not once per test. Opening
-them costs about two seconds apiece here - name resolution, not the database -
-and forty-six of those made this package sixteen times slower than the entire
-rest of the suite. Sharing is safe because nothing is shared *through* them: each
-test owns its rows and cleans them up, and a pool is a pool.
+Соединения открываются **один раз на весь прогон**, а не на каждый тест.
+Открытие стоит здесь секунды две на каждое - разрешение имени, а не база, - и
+сорок шесть таких открытий делали этот пакет в шестнадцать раз медленнее всего
+остального набора. Делить их безопасно, потому что *через* них не делится
+ничего: каждый тест владеет своими строками и убирает их за собой, а пул - это
+пул.
 """
 
 from __future__ import annotations
@@ -35,10 +36,10 @@ def _settings() -> Settings:
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def pool() -> AsyncIterator[object]:
-    """An asyncpg pool against the migrated database, or a skip.
+    """Пул asyncpg против накатанной базы - или пропуск.
 
-    Wrapped exactly as the running game wraps it (``ReconnectingPool``), so the
-    SQL here goes through the same proxy the players' queries go through.
+    Обёрнут ровно так, как его оборачивает работающая игра (``ReconnectingPool``),
+    поэтому здешний SQL идёт через тот же посредник, что и запросы игроков.
     """
     import asyncpg
 
@@ -53,7 +54,7 @@ async def pool() -> AsyncIterator[object]:
 
     assert created is not None
     try:
-        # The adapters expect the schema from migrations/, not an empty database.
+        # Адаптеры ждут схему из migrations/, а не пустую базу.
         exists = await created.fetchval("SELECT to_regclass('public.users')")
         if exists is None:
             pytest.skip("the database has no schema: run 'alembic upgrade head' first")
@@ -64,7 +65,7 @@ async def pool() -> AsyncIterator[object]:
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def redis() -> AsyncIterator[object]:
-    """A Redis client on a database of its own, built the way the game builds it."""
+    """Клиент Redis на отдельной базе, собранный так же, как его собирает игра."""
     from redis.asyncio import Redis
 
     from mmorpg.infrastructure.persistence.pool import create_redis_client
@@ -73,7 +74,7 @@ async def redis() -> AsyncIterator[object]:
     client: Redis = create_redis_client(settings)
     try:
         await client.ping()
-    # redis-py raises several unrelated types for "the server is not there".
+    # redis-py бросает несколько несвязанных типов на «сервера там нет».
     except Exception as unreachable:
         await client.aclose()
         pytest.skip(f"Redis is not reachable: {unreachable}")

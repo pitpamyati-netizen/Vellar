@@ -1,17 +1,16 @@
-# The full stack: PostgreSQL, Redis, a one-shot migration run, and the bot in
-# long-polling mode. Sized for roughly a hundred players online at once - see
-# docs/deployment.md for where those numbers come from and what to change first
-# when the player count grows.
+# Полный стек: PostgreSQL, Redis, разовый прогон миграций и бот в режиме long
+# polling. Рассчитан примерно на сотню игроков онлайн разом — откуда взяты эти числа
+# и что менять первым при росте числа игроков, см. docs/deployment.md.
 #
-#   docker compose up -d           start everything
-#   docker compose logs -f bot     watch the bot
-#   docker compose down            stop, keeping the world
+# docker compose up -d           запустить всё
+# docker compose logs -f bot     следить за ботом
+# docker compose down            остановить, сохранив мир
 #
-# Webhook mode adds docker-compose.prod.yml on top; see docs/deployment.md.
+# Режим вебхука добавляет сверху docker-compose.prod.yml; см. docs/deployment.md.
 name: vellar
 
-# Without a cap the JSON log file grows until the disk is full, which takes the
-# database down with it.
+# Без потолка файл журнала JSON растёт, пока не кончится диск, а вместе с диском уходит
+# и база.
 x-logging: &logging
   driver: json-file
   options:
@@ -26,13 +25,13 @@ services:
       POSTGRES_USER: vellar
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vellar}
       POSTGRES_DB: vellar
-      # Checksums turn silent corruption into a loud error while it is still
-      # confined to one page.
+      # Контрольные суммы превращают тихую порчу данных в громкую ошибку, пока она ещё
+      # заперта на одной странице.
       POSTGRES_INITDB_ARGS: "--data-checksums"
     command:
       - postgres
-      # The bot holds at most POSTGRES_POOL_MAX (20) connections. The rest is
-      # headroom for the migration run, psql and pg_dump.
+      # Бот держит не больше POSTGRES_POOL_MAX (20) соединений. Остальное — запас на
+      # прогон миграций, psql и pg_dump.
       - -c
       - max_connections=100
       - -c
@@ -45,12 +44,12 @@ services:
       - maintenance_work_mem=64MB
       - -c
       - wal_compression=on
-      # Queries are single-row lookups by primary key; anything over 200 ms is a
-      # bug worth reading about, and the p95 budget per update is 100 ms.
+      # Запросы — это поиск одной строки по первичному ключу; всё дольше 200 мс —
+      # ошибка, о которой стоит прочитать, а бюджет p95 на обновление — 100 мс.
       - -c
       - log_min_duration_statement=200
     ports:
-      # Loopback only: the database is for this host, not for the network.
+      # Только loopback: база предназначена этой машине, а не сети.
       - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -73,16 +72,16 @@ services:
     container_name: vellar-redis
     command:
       - redis-server
-      # Redis holds FSM state and active fights, not just a cache: losing the
-      # file drops players out of a fight mid-turn, so it is persisted.
+      # Redis держит состояние автомата и начатые бои, а не один лишь кэш: потеря файла
+      # выбивает игроков из боя посреди хода, поэтому он сохраняется.
       - --appendonly
       - "yes"
       - --appendfsync
       - everysec
       - --maxmemory
       - 512mb
-      # Only keys the game gave a TTL may be evicted. FSM keys have none, so
-      # this policy can never silently forget where a player is standing.
+      # Вытеснять можно только те ключи, которым игра дала срок. У ключей автомата срока
+      # нет, поэтому эта политика не может тихо забыть, где стоит игрок.
       - --maxmemory-policy
       - volatile-lru
     ports:
@@ -103,13 +102,13 @@ services:
         limits:
           memory: 640m
 
-  # Runs to completion before the bot starts, so the bot never meets a schema it
-  # does not know. Idempotent: on an up-to-date database it is a no-op.
+  # Доходит до конца раньше, чем стартует бот, поэтому бот никогда не встречает схему,
+  # которой не знает. Идемпотентно: на свежей базе не делает ничего.
   migrate:
     build:
       context: .
       args:
-        # Stamped by Start.bat; "unknown" for a hand-run build.
+        # Штампует Start.bat; «unknown» — у сборки, запущенной руками.
         VELLAR_BUILD: ${VELLAR_BUILD:-unknown}
     image: vellar-bot
     depends_on:
@@ -120,7 +119,7 @@ services:
     environment:
       POSTGRES_DSN: postgresql://vellar:${POSTGRES_PASSWORD:-vellar}@postgres:5432/vellar
     command: ["alembic", "upgrade", "head"]
-    # The image probe watches for a heartbeat this container never writes.
+    # Проверка из образа ждёт сердцебиение, которого этот контейнер не пишет.
     healthcheck:
       disable: true
     restart: "no"
@@ -142,32 +141,32 @@ services:
         condition: service_completed_successfully
     env_file:
       - .env
-    # These win over .env: the stack has real PostgreSQL and Redis, so the
-    # in-memory adapters must never be reachable from here whatever .env says.
+    # Эти значения сильнее .env: у стека есть настоящие PostgreSQL и Redis, поэтому
+    # адаптеры в памяти отсюда не должны быть достижимы, что бы ни говорил .env.
     environment:
       APP_ENV: dev
       POSTGRES_DSN: postgresql://vellar:${POSTGRES_PASSWORD:-vellar}@postgres:5432/vellar
       REDIS_DSN: redis://redis:6379/0
-      # asyncio debug mode timestamps every callback: a development tool, not
-      # something to run players on (src/mmorpg/monitoring.py).
+      # Режим отладки asyncio проставляет время каждому колбэку: это инструмент
+      # разработки, а не то, на чём держат игроков (src/mmorpg/monitoring.py).
       SLOW_CALLBACK_DETECTOR: "false"
       HEARTBEAT_PATH: /tmp/vellar-heartbeat
-      # No log files in the stack: stdout is collected by the daemon below
-      # (rotated at 5 files of 10 MB), and the bot owns nothing under /app.
+      # В стеке файлов журнала нет: stdout собирает демон ниже (пять файлов по 10 МБ), а
+      # боту под /app не принадлежит ничего.
       LOG_DIR: ""
     restart: unless-stopped
-    # Long enough for aiogram to finish the updates already in flight.
+    # Достаточно, чтобы aiogram доработал обновления, уже бывшие в полёте.
     stop_grace_period: 25s
     logging: *logging
     deploy:
       resources:
         limits:
-          # Measured idle is well under 200 MB; the rest is headroom for a burst
-          # of concurrent updates.
+          # Замеренный простой куда ниже 200 МБ; остальное — запас на всплеск
+          # одновременных обновлений.
           memory: 512m
           cpus: "2.0"
-      # Telegram gives getUpdates to one consumer. A second replica would spend
-      # its life losing races with the first, so polling never scales out.
+      # Telegram отдаёт getUpdates одному потребителю. Вторая копия провела бы жизнь,
+      # проигрывая гонки первой, поэтому опрос не растёт вширь никогда.
       replicas: 1
 
 volumes:

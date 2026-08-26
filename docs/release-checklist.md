@@ -1,158 +1,157 @@
-# Release checklist
+# Лист проверки перед выпуском
 
-Run through this before shipping anything player-facing. The accessibility half is
-not advisory: a failure there makes the game unplayable for its primary audience.
+Пройти по нему перед тем, как выпускать что-либо, что увидит игрок. Половина о
+доступности — не совет: отказ там делает игру непроходимой для основной аудитории.
 
-## 1. The gate
+## 1. Гейт
 
 ```bash
 pwsh -File scripts/ci.ps1
 ```
 
-- [ ] `ruff check` and `ruff format --check` clean
-- [ ] `mypy --strict` clean
-- [ ] `pytest` green
-- [ ] `domain/` coverage at 90% or above (the CI script enforces this separately)
+- [ ] `ruff check` и `ruff format --check` чисты
+- [ ] `mypy --strict` чист
+- [ ] `pytest` зелёный
+- [ ] покрытие `domain/` не ниже 90 % (скрипт CI следит за этим отдельно)
 
-## 2. Accessibility
+## 2. Доступность
 
-The full rules are in [accessibility.md](accessibility.md). The mechanical ones are
-covered by `tests/presentation/test_accessibility.py`; these are the ones a human
-still has to check:
+Полные правила — в [accessibility.md](accessibility.md). Механические закрывает
+`tests/presentation/test_accessibility.py`; вот то, что всё ещё проверяет человек:
 
-- [ ] Every **new screen is listed in `tests/presentation/conftest.py::all_screens`**
-      - a screen nobody listed is a screen nobody checked
-- [ ] First line of each new screen answers "where am I / what just happened"
-- [ ] Numbers read as `X из Y`, never as a bar or a table
-- [ ] Every new action has a typed command duplicate
-- [ ] Button positions unchanged between refreshes of the same screen; unavailable
-      actions stay in place and explain themselves in the body
-- [ ] Pressing a button from a *different* screen produces the "action unavailable"
-      answer, not silence and not a crash
-- [ ] **A duel is heard from both sides**: attack a second account, and check that
-      the panel opens there too, that each turn arrives as its own message, and
-      that «Сдаться» ends a fight the other side never answers (ADR 0021)
-- [ ] Listen to one full session with a screen reader before shipping
+- [ ] Каждый **новый экран внесён в `tests/presentation/conftest.py::all_screens`** —
+      экран, которого никто не перечислил, это экран, которого никто не проверил
+- [ ] Первая строка каждого нового экрана отвечает «где я / что случилось»
+- [ ] Числа читаются как `X из Y`, никогда полосой и никогда таблицей
+- [ ] У каждого нового действия есть текстовая команда-двойник
+- [ ] Положение кнопок не меняется между обновлениями одного экрана; недоступные
+      действия остаются на месте и объясняют себя в теле
+- [ ] Нажатие кнопки *другого* экрана даёт ответ «действие недоступно», а не молчание и
+      не падение
+- [ ] **Поединок слышен с обеих сторон**: напасть на второй аккаунт и убедиться, что
+      панель открылась и там, что каждый ход приходит своим сообщением и что «Сдаться»
+      кончает бой, на который другая сторона не отвечает (ADR 0021)
+- [ ] Прослушать одну полную сессию с экранным диктором до выпуска
 
-## 3. Content
+## 3. Содержимое
 
 ```bash
 uv run pytest tests/content
 ```
 
-- [ ] Content loads: the bot refuses to start on invalid content, so a green run
-      here is a green start
-- [ ] New skills declare an `effect` that exists in `EFFECT_SPECS`
-- [ ] New modifier keys added to `traits.toml [meta].modifier_keys` first, and a
-      key a skill or an edge names is in `modifiers.EFFECTIVE_KEYS` - the engine
-      reads that list and nothing else (ADR 0018)
-- [ ] World table still covers levels 1-300 with no gaps
+- [ ] Содержимое загружается: на неверном бот не стартует, поэтому зелёный прогон здесь
+      это зелёный старт
+- [ ] Новые умения объявляют `effect`, который есть в `EFFECT_SPECS`
+- [ ] Новые ключи прибавок сначала добавлены в `traits.toml [meta].modifier_keys`, а
+      ключ, который называет умение или грань, есть в `modifiers.EFFECTIVE_KEYS` —
+      движок читает этот список и больше ничего (ADR 0018)
+- [ ] Таблица мира по-прежнему покрывает уровни 1–300 без пробелов
 
-## 3a. The keeper panel
+## 3a. Панель смотрителя
 
-Only when the panel or what it edits changed. The rules are in
+Только когда изменилась панель или то, что она правит. Правила — в
 [keeper.md](keeper.md).
 
-- [ ] A new field on an editable entity is a row in `FIELDS`
-      (`domain/rules/overlay.py`), not a button in the screen - the card is drawn
-      from the description
-- [ ] A field whose value ends up on a button carries a `limit`, or a keeper can
-      type a paragraph into one
-- [ ] `overlay.apply` still leaves `content/` untouched: dropping every edit gives
-      back exactly the world the files describe
-- [ ] A half-written edit is stored, is *not* in the game, and the card says why
-- [ ] Anything the panel deletes for good is confirmed twice or reports its number
-- [ ] A ban lands on the account, not on the character, and the banned player is
-      turned away before any router - with one sentence in private, in silence in
-      the group
-- [ ] Everything done to somebody else's character reaches `keeper_log`: a keeper
-      action nobody can look up is one nobody answers for
-- [ ] A rolled-back trade returns the item to whoever gave it and the *payout* -
-      not the price - to whoever paid, and says what it could not return
+- [ ] Новое поле у правимой сущности — это строка в `FIELDS`
+      (`domain/rules/overlay.py`), а не кнопка на экране: карточка рисуется по описанию
+- [ ] У поля, значение которого попадает на кнопку, есть `limit`, иначе смотритель
+      наберёт туда абзац
+- [ ] `overlay.apply` по-прежнему не трогает `content/`: сброс всех правок возвращает
+      ровно тот мир, который описан файлами
+- [ ] Недописанная правка сохранена, в игре её *нет*, и карточка говорит почему
+- [ ] Всё, что панель удаляет насовсем, подтверждается дважды или называет своё число
+- [ ] Блокировка ложится на аккаунт, а не на персонажа, и заблокированного разворачивают
+      раньше любого роутера — одной фразой в личной переписке и молчанием в группе
+- [ ] Всё, сделанное с чужим персонажем, доходит до `keeper_log`: действие смотрителя,
+      которого не найти, — это действие, за которое никто не отвечает
+- [ ] Откаченная сделка возвращает вещь тому, кто её отдал, и *выплату* — не цену — тому,
+      кто платил, и говорит, чего вернуть не смогла
       (`docs/adr/0012-a-rolled-back-trade-returns-what-is-there.md`)
 
-## 4. Determinism
+## 4. Определённость
 
-- [ ] `tests/domain/test_procgen.py` green - a change that makes generation
-      non-reproducible breaks every player's map mid-visit
-- [ ] No new use of the global `random` module anywhere
+- [ ] `tests/domain/test_procgen.py` зелёный — правка, делающая сборку
+      невоспроизводимой, ломает карту каждому игроку прямо посреди вылазки
+- [ ] Нигде не появилось нового обращения к глобальному модулю `random`
 
-## 5. Data and migrations
+## 5. Данные и миграции
 
 ```bash
 docker compose up -d postgres redis
 uv run pytest -m integration
 ```
 
-- [ ] New columns have a migration in `migrations/versions/`
-- [ ] The integration tests pass. They are the *only* place the SQL is executed;
-      the rest of the suite runs against the in-memory adapters and cannot see a
-      column PostgreSQL refuses, or a name it reserves - `verbose` was one
-- [ ] Every new query is covered there, or it ships unverified
-- [ ] Nothing derived was added to a table: totals are recomputed, not stored
-- [ ] Every Redis key the game writes carries a TTL. The FSM keys are the one
-      exception and stay without one: `volatile-lru` may only evict what expires,
-      and a player's position must survive memory pressure
-- [ ] A purse two players can reach at once moves by `spend_gold`/`grant_gold`,
-      never by writing back a character read earlier in the step
+- [ ] У новых колонок есть миграция в `migrations/versions/`
+- [ ] Интеграционные тесты проходят. Это *единственное* место, где выполняется SQL:
+      остальной набор работает на адаптерах в памяти и не видит ни колонки, которую
+      PostgreSQL отвергнет, ни имени, которое он резервирует, — `verbose` было одним
+      из таких
+- [ ] Каждый новый запрос ими покрыт, иначе он уезжает непроверенным
+- [ ] В таблицы не добавлено ничего производного: итоги считаются, а не хранятся
+- [ ] У каждого ключа Redis, который пишет игра, есть срок. Ключи автомата —
+      единственное исключение и остаются без него: `volatile-lru` вправе вытеснять
+      только то, что истекает, а место игрока обязано пережить нехватку памяти
+- [ ] Кошелёк, до которого могут дотянуться двое, двигается через
+      `spend_gold`/`grant_gold`, а не записью персонажа, прочитанного раньше по шагу
 
-## 5a. The economy
+## 5a. Экономика
 
-Only when something that pays or charges changed.
+Только когда изменилось что-то платящее или берущее.
 
-- [ ] Every new movement of gold writes a `gold_flow` line
-      (`mmorpg.economy_log`), or the next tuning pass is a guess again
-- [ ] Nothing new hands out gold that does not come from somewhere: the arena
-      pays out of what it holds, the duty removes, fights and quests create
-- [ ] Combat numbers still meet their promises -
-      `tests/domain/test_combat_balance.py` covers length, the cost of an
-      ordinary fight, and the spread between classes
+- [ ] Каждое новое движение золота пишет строку `gold_flow` (`mmorpg.economy_log`),
+      иначе следующая правка баланса снова будет догадкой
+- [ ] Ничто новое не раздаёт золото из ниоткуда: арена платит из того, что держит,
+      пошлина убирает, бои и задания создают
+- [ ] Числа боя по-прежнему держат свои обещания —
+      `tests/domain/test_combat_balance.py` покрывает длину, цену обычного боя и разброс
+      между классами
 
-## 6. Runtime
+## 6. Работа
 
-- [ ] `Start.bat local` starts and plays
-- [ ] `Start.bat solo` migrates and plays, and a restart puts a player back in
-      the main menu rather than into a screen that no longer exists
-- [ ] `Start.bat docker` (or `docker compose up -d --wait`) reaches healthy on its own
-- [ ] Startup logs show `content_loaded` with the expected counts, then `connected`
-- [ ] `docker compose stop bot` logs `Polling stopped` and exits 0 - a shutdown
-      that has to be killed is dropping players' updates
-- [ ] No `slow_operation` or asyncio slow-callback warnings under normal play
-- [ ] `SLOW_CALLBACK_DETECTOR` is off wherever players are connected - unset is
-      off everywhere except `APP_ENV=local`
-- [ ] A `metrics` line appears every minute, `failures=0`, and `p95` inside
+- [ ] `Start.bat local` стартует и играется
+- [ ] `Start.bat solo` накатывает миграции и играется, а перезапуск возвращает игрока в
+      главное меню, а не на экран, которого больше нет
+- [ ] `Start.bat docker` (или `docker compose up -d --wait`) сам доходит до здорового
+- [ ] В журнале старта видно `content_loaded` с ожидаемыми числами, затем `connected`
+- [ ] `docker compose stop bot` пишет `Polling stopped` и выходит с нулём — остановка,
+      которую приходится убивать, теряет обновления игроков
+- [ ] При обычной игре нет ни `slow_operation`, ни предупреждений asyncio о медленных
+      колбэках
+- [ ] `SLOW_CALLBACK_DETECTOR` выключен везде, где подключены игроки: незаданный —
+      выключен везде, кроме `APP_ENV=local`
+- [ ] Строка `metrics` появляется каждую минуту, `failures=0`, а `p95` внутри
       `SLOW_CALLBACK_SECONDS`
-- [ ] `uv run python scripts/loadtest.py --pause 3` stays inside the budget, and
-      `--players 100` with no pause is a queue rather than an error
-- [ ] `pwsh -File scripts/backup.ps1` ends with "копия разворачивается", and the
-      scheduled task is registered (`-Schedule 04:00`)
-- [ ] `uv run python scripts/watchdog.py --quiet` exits 0 while the game runs,
-      and the keepers get a message when it is stopped
+- [ ] `uv run python scripts/loadtest.py --pause 3` укладывается в бюджет, а
+      `--players 100` без паузы даёт очередь, а не ошибку
+- [ ] `pwsh -File scripts/backup.ps1` кончается словами «копия разворачивается», и
+      задача в расписании заведена (`-Schedule 04:00`)
+- [ ] `uv run python scripts/watchdog.py --quiet` выходит с нулём, пока игра работает, и
+      смотрители получают сообщение, когда её остановили
 
-## 7. Channel and group
+## 7. Канал и группа
 
 - [ ] `uv run python scripts/broadcast.py --kind service --headline "..." --dry-run`
-      renders the post and stays under the limit
-- [ ] The bot is an administrator of the channel in `CHANNEL_ID`, and a real post
-      arrives - a broadcast nobody saw is a broadcast that does not work
-- [ ] New broadcast texts follow `Narrative.md`, section 8, and are covered by
+      рисует пост и укладывается в предел
+- [ ] Бот — администратор канала из `CHANNEL_ID`, и настоящий пост доходит: объявление,
+      которого никто не увидел, не работает
+- [ ] Новые тексты объявлений следуют `Narrative.md`, раздел 8, и покрыты
       `tests/presentation/test_broadcast.py`
-- [ ] This version has a section in `content/changelog.toml`, written as what a
-      player can now do, and `--changelog latest --dry-run` renders it
-- [ ] Its `headline` names the version and the one change worth hearing about -
-      it is the whole post for a player who stops after the first line
-- [ ] The update is posted **after** the code is live - a changelog announcing
-      something nobody can do yet is a bug report from every player at once
-- [ ] Group commands answer in one message and stay silent for other bots' traffic
-- [ ] `GROUP_ID` names the real group. `*` is for trying the commands out; left in
-      production it answers in every group anybody adds the bot to
-- [ ] The group rules are pinned there, in the players' own words: what the bot
-      answers to, that trades settle only through it, and that a keeper may ban an
-      account for a term (`docs/keeper.md`, "Блокировка и журнал"). Rules nobody
-      published are rules nobody agreed to
+- [ ] У этой версии есть раздел в `content/changelog.toml`, написанный как то, что игрок
+      теперь может сделать, и `--changelog latest --dry-run` его рисует
+- [ ] Его `headline` называет версию и то единственное изменение, о котором стоит
+      услышать: для игрока, остановившегося после первой строки, это весь пост
+- [ ] Обновление публикуется **после** того, как код уже в бою: список изменений,
+      объявляющий то, чего ещё никто не может сделать, — это жалоба от всех игроков разом
+- [ ] Команды в группе отвечают одним сообщением и молчат на поток чужих ботов
+- [ ] `GROUP_ID` называет настоящую группу. `*` — чтобы попробовать команды; оставленная
+      в бою, она отвечает в любой группе, куда бота добавят
+- [ ] Правила группы закреплены там же и словами самих игроков: на что бот отвечает, что
+      сделки закрываются только через него и что смотритель может закрыть аккаунт на срок
+      (`docs/keeper.md`, «Блокировка и журнал»). Правила, которых никто не опубликовал, —
+      правила, с которыми никто не соглашался
 
-## 8. Release
+## 8. Выпуск
 
-- [ ] Documentation updated **in the same commit** as the code
-- [ ] An ADR added for any decision a future reader would question
-- [ ] Commit messages are conventional and in English
+- [ ] Документация обновлена **в том же коммите**, что и код
+- [ ] На всякое решение, о котором будущий читатель задаст вопрос, добавлен ADR
+- [ ] Сообщения коммитов — conventional commits и на английском

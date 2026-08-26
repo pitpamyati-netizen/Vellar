@@ -1,33 +1,33 @@
-"""The one paginated list used by every long list in the game.
+"""Единственный список со страницами, которым пользуются все длинные списки игры.
 
-Inventory, equipment, skills, traits, the shop, quests, the city list and the
-location list all render through this component, so they behave identically: same
-page size, same header wording, same navigation row in the same position
-(spec section 13).
+Сумка, снаряжение, умения, черты, лавка, задания, список городов и список локаций
+рисуются через эту часть, поэтому ведут себя одинаково: тот же размер страницы,
+те же слова в заголовке, тот же ряд перемещения на том же месте (спецификация,
+раздел 13).
 
-Layout, top to bottom:
+Раскладка сверху вниз:
 
-    <title>. Найдено N записей, страница X из Y.
-    [entry 1]                     one entry per row, 8 per page
+    <заголовок>. Найдено N записей, страница X из Y.
+    [запись 1]                     по одной записи в ряду, до 8 на страницу
     ...
     [Предыдущая страница] [Страница X из Y] [Следующая страница]
     [Фильтры] [Поиск] [Сбросить фильтры]
     [Назад] [Главное меню]
 
-The entries come first and the machinery after them: a bag is opened to reach the
-things in it, not to page through it. The paging row appears only when there is
-more than one page, and the filter row only when the list is long enough to need
-filtering or a filter is already on - on a list of three items both rows are
-noise, and the entries themselves never move. "Фильтры" is there only where the
-list has sections to cut it by, and "Сбросить фильтры" only where something is
-actually filtered - the same rule, one row down.
+Записи идут первыми, а механика после них: сумку открывают, чтобы добраться до
+вещей, а не чтобы её листать. Ряд страниц появляется, только когда страниц больше
+одной, а ряд отбора — только когда список достаточно длинен, чтобы его отбирать,
+или отбор уже задан: на списке из трёх вещей оба ряда — шум, а сами записи не
+двигаются никогда. «Фильтры» стоят только там, где список есть по чему резать, а
+«Сбросить фильтры» — только там, где что-то и правда отобрано; то же правило,
+одним рядом ниже.
 
-A direction that leads nowhere is not shown. On page 8 of 8 there is no
-"Следующая страница" and on page 1 there is no "Предыдущая": a button that
-answers "вы уже в конце" is a button that wasted a press to say so.
+Направление, которое никуда не ведёт, не показывается. На восьмой странице из
+восьми нет «Следующей страницы», а на первой нет «Предыдущей»: кнопка,
+отвечающая «вы уже в конце», тратит нажатие, чтобы это сказать.
 
-The page button is not decoration: pressing it asks for a page number, which is
-the fastest way to move through a long list by ear.
+Кнопка страницы — не украшение: её нажатие спрашивает номер страницы, а это самый
+быстрый способ пройти длинный список на слух.
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ COUNTS_LINE = 48
 
 @dataclass(frozen=True, slots=True)
 class ListEntry:
-    """One row of a list: its button label and the id it maps back to."""
+    """Одна строка списка: надпись её кнопки и идентификатор, к которому она ведёт."""
 
     key: str
     text: str
@@ -68,7 +68,7 @@ class ListEntry:
 
 @dataclass(frozen=True, slots=True)
 class ListFilters:
-    """Filter and sort state. Lives in FSM data, so it survives leaving the screen."""
+    """Отбор и порядок. Живут в данных автомата, поэтому переживают уход с экрана."""
 
     category: str = ""
     query: str = ""
@@ -90,11 +90,11 @@ class ListFilters:
         )
 
     def describe(self) -> str:
-        """The filters in words. Empty when nothing is filtered.
+        """Отборы словами. Пусто, когда не отобрано ничего.
 
-        The sort order used to be stated on every list header, including the ones
-        nobody had filtered - a sentence the player had to hear past on every
-        single page to reach the contents. It is said only when it is news.
+        Порядок раньше назывался в заголовке каждого списка, включая те, которые никто
+        не отбирал, - фраза, которую игроку приходилось прослушивать на каждой странице,
+        чтобы добраться до содержимого. Теперь он называется, только когда он новость.
         """
         if not self.active:
             return ""
@@ -118,7 +118,7 @@ class ListFilters:
 
 @dataclass(frozen=True, slots=True)
 class PageState:
-    """Where the player is in a list."""
+    """Где игрок стоит в списке."""
 
     page: int = 1
     filters: ListFilters = field(default_factory=ListFilters)
@@ -185,11 +185,11 @@ def page_label(page: int, pages: int) -> Label:
 
 
 def paging_row(page: int, pages: int) -> tuple[Label, ...]:
-    """The paging row, with only the directions that lead somewhere.
+    """Ряд страниц, и в нём только те направления, что куда-то ведут.
 
-    "Следующая страница" on the last page was a promise the list could not keep:
-    the press did nothing and said nothing, which by ear is indistinguishable from
-    the game having frozen.
+    «Следующая страница» на последней странице была обещанием, которого список не мог
+    сдержать: нажатие не делало ничего и не говорило ничего, а на слух это неотличимо
+    от зависшей игры.
     """
     row: list[Label] = []
     if page > 1:
@@ -244,11 +244,11 @@ def paginated_screen(
     show_filters: bool = True,
     categories: Sequence[str] = (),
 ) -> Screen:
-    """Render a list page as a screen.
+    """Нарисовать одну страницу списка экраном.
 
-    The header always says what the list is, which filters are on, how many
-    entries matched and which page this is - so a player who hears only this
-    message knows exactly where they are.
+    Заголовок всегда говорит, что это за список, какие отборы включены, сколько
+    записей подошло и какая это страница, - поэтому игрок, услышавший одно лишь это
+    сообщение, точно знает, где он.
     """
     described = state.filters.describe()
     header = f"{title}. {described}." if described else f"{title}."
@@ -280,10 +280,10 @@ def paginated_screen(
     lines.extend(line for entry in visible if (line := entry_line(entry)))
 
     rows: list[tuple[Label, ...]] = [(entry.as_label(),) for entry in visible]
-    # Everything below the entries is machinery, and machinery nobody needs is not
-    # shown: one page means nothing to page through, and a list that fits on one
-    # page with no filter on has nothing to filter down (accessibility rule 7 -
-    # the entries above keep their positions either way).
+    # Всё, что ниже записей, - механика, а механику, которая никому не нужна, не
+    # показывают: одна страница значит, что листать нечего, а список, влезший на одну
+    # страницу без единого отбора, отбирать не из чего (правило доступности 7 - записи
+    # выше в любом случае держат свои места).
     if pages > 1:
         rows.append(paging_row(current.page, pages))
     if show_filters and (pages > 1 or current.filters.active):

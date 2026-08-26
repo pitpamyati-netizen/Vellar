@@ -1,12 +1,12 @@
-"""What a trip into a location does to a character.
+"""Что вылазка в локацию делает с персонажем.
 
-The combat engine decides how a fight goes; this module decides what the fight
-was *worth* - experience, gold, loot, contract counters, and the wounds carried
-back out. The same goes for the quiet nodes: a cache pays, a shrine patches you
-up, and both are rolled from the node seed rather than stored.
+Как идёт бой, решает боевой движок; этот модуль решает, чего бой *стоил*: опыт,
+золото, добыча, счётчики заданий и раны, вынесенные обратно. То же и с тихими
+узлами: тайник платит, святилище латает, и то и другое бросается из сида узла, а
+не хранится.
 
-Everything here is pure. Nothing writes; each function returns the new character
-and a structured description of what changed, and the caller stores it.
+Всё здесь чистое. Ничто не пишет: каждая функция возвращает нового персонажа и
+разложенное по полям описание того, что изменилось, а сохраняет вызывающий.
 """
 
 from __future__ import annotations
@@ -31,14 +31,14 @@ from mmorpg.domain.rules.progression import (
 from mmorpg.domain.rules.quests import QuestStep
 from mmorpg.domain.rules.stats import derived_stats
 
-# Losing is expensive but never ruinous: a tenth of what is on you, and you wake
-# up in the city with a quarter of your health. The Chamber does not confiscate,
-# it just does not help either.
+# Поражение дорого, но никогда не разорительно: десятая часть того, что при тебе, и
+# просыпаешься в городе с четвертью здоровья. Палата не отнимает - она просто и не
+# помогает.
 DEFEAT_GOLD_PERCENT = 10
 DEFEAT_HEALTH_PERCENT = 25
 
-# A quiet node pays a fraction of what a fight of the same level pays: searching
-# is the safe way to spend a watch, so it is also the slower one.
+# Тихий узел платит долю от того, что платит бой того же уровня: поиск - безопасный
+# способ потратить стражу, а значит, и более медленный.
 CACHE_GOLD_BASE = 6.0
 CACHE_GOLD_PER_LEVEL = 3.2
 EVENT_GOLD_PER_LEVEL = 1.6
@@ -69,7 +69,7 @@ GATHER_SOURCES: dict[str, str] = {
 
 @dataclass(frozen=True, slots=True)
 class Aftermath:
-    """The result of one fight, once it has been paid out."""
+    """Итог одного боя, уже оплаченного."""
 
     character: Character
     experience: int = 0
@@ -86,7 +86,7 @@ class Aftermath:
 
 @dataclass(frozen=True, slots=True)
 class SearchResult:
-    """What a node without a fight gave up."""
+    """Что отдал узел, в котором не было боя."""
 
     character: Character
     kind: NodeKind
@@ -155,7 +155,7 @@ def resolve_victory(
 
 
 def resolve_defeat(content: GameContent, character: Character) -> Aftermath:
-    """Losing costs gold and a watch of walking back, never a level."""
+    """Поражение стоит золота и стражи обратной дороги, но никогда - уровня."""
     stats = derived_stats(content, character)
     lost = character.gold * DEFEAT_GOLD_PERCENT // 100
     revived = character.with_gold(-lost).with_health(
@@ -170,7 +170,7 @@ def resolve_search(
     node: LocationNode,
     seed: bytes,
 ) -> SearchResult:
-    """Work through a node that holds no fight. Deterministic from the seed."""
+    """Отработать узел, в котором нет боя. Определяется сидом."""
     source = rng(seed)
     stats = derived_stats(content, character)
     log, steps = quest_rules.record_search(content, character, node.kind)
@@ -221,24 +221,21 @@ def resolve_search(
     )
 
 
-# --- the bottom of a descent ------------------------------------------
-#
-# A descent used to be three fights that happened to be in a row: the epic
-# opponent on the last floor was the only thing separating it from three fights
-# in a location, and the screen promised a reward "внизу и целиком" that nothing
-# in the code paid (Roadmap, "Риски"). This is that reward.
-#
-# It is worth about another epic fight - enough that walking down wounded is a
-# real decision and that leaving on the second floor costs something.
+# --- дно спуска -------------------------------------------------------  Спуск когда-то
+# был тремя боями, которые просто шли подряд: эпический противник на последнем этаже был
+# единственным, что отличало его от трёх боёв в локации, а экран обещал награду «внизу и
+# целиком», которой в коде не платило ничто. Это и есть та награда.  Она стоит примерно
+# ещё одного эпического боя — достаточно, чтобы спускаться раненым было настоящим
+# решением, а уйти на втором этаже чего-то стоило.
 DESCENT_GOLD_BASE = 25.0
 DESCENT_GOLD_PER_LEVEL = 9.0
-#: The bottom pays experience like one more opponent of the depth's own level.
+#: Дно платит опытом как ещё один противник уровня самого спуска.
 DESCENT_EXPERIENCE_BASE = 30
 
 
 @dataclass(frozen=True, slots=True)
 class DescentPrize:
-    """What the bottom of a descent handed over."""
+    """Что отдало дно спуска."""
 
     character: Character
     gold: int = 0
@@ -252,18 +249,18 @@ class DescentPrize:
 
 
 def descent_gold(level: int) -> int:
-    """What the bottom pays, before anything is rolled."""
+    """Сколько платит дно, до всяких бросков."""
     return max(1, round(DESCENT_GOLD_BASE + DESCENT_GOLD_PER_LEVEL * max(1, level)))
 
 
 def descent_prize(
     content: GameContent, character: Character, *, level: int, seed: bytes
 ) -> DescentPrize:
-    """Pay for a descent walked to the bottom. Deterministic from the seed.
+    """Заплатить за спуск, пройденный до дна. Определяется сидом.
 
-    The find is never a material: the bottom of a hole in the ground is where a
-    thing is, not where herbs grow, and a descent that paid in wolf pelts would
-    read as a bug.
+    Находка никогда не бывает сырьём: дно ямы в земле - это место, где лежит вещь, а
+    не место, где растут травы, и спуск, заплативший волчьими шкурами, читался бы
+    как ошибка.
     """
     source = rng(seed)
     gold = descent_gold(level)
@@ -286,7 +283,7 @@ def descent_prize(
 
 @dataclass(frozen=True, slots=True)
 class RestResult:
-    """A night in a city: what it healed and what it cost."""
+    """Ночь в городе: что она вылечила и чего стоила."""
 
     character: Character
     healed: int
@@ -295,10 +292,11 @@ class RestResult:
 
 
 def rest(content: GameContent, character: Character, *, paid: bool) -> RestResult:
-    """Sleep it off. A paid bed heals everything; straw heals a part of it.
+    """Отоспаться. Оплаченная постель лечит всё, солома - часть.
 
-    The free bed exists so a broke character is never stuck: without it, a player
-    who lost their last coin at one hit point would have no move left at all.
+    Бесплатная постель существует затем, чтобы разорившийся персонаж никогда не
+    застревал: без неё игрок, потерявший последнюю монету на одной единице
+    здоровья, не имел бы ни одного хода.
     """
     stats = derived_stats(content, character)
     current = character.health_or(stats.max_health)
@@ -323,10 +321,10 @@ def rest(content: GameContent, character: Character, *, paid: bool) -> RestResul
 def use_consumable(
     content: GameContent, character: Character, item_id: str
 ) -> tuple[Character, int]:
-    """Drink a potion outside a fight. Returns the character and what it healed.
+    """Выпить зелье вне боя. Возвращает персонажа и то, что зелье вылечило.
 
-    Only healing works out here: a damage buff with nobody to hit would be a way
-    to throw a potion away by accident.
+    Здесь работает только лечение: усиление урона, когда бить некого, было бы
+    способом случайно выбросить зелье.
     """
     item = content.item(item_id)
     if item.effect is None:
@@ -354,13 +352,13 @@ def _pick_item(
     materials_only: bool,
     of_source: str = "",
 ) -> str:
-    """A find that suits the level. Empty when content has nothing that low.
+    """Находка под уровень. Пусто, когда в содержимом нет ничего настолько простого.
 
-    ``of_source`` narrows a gather to what the node actually holds, and it is
-    never given up on: if content has nothing of that kind low enough, the node
-    hands over the cheapest thing of the right kind instead of the wrong kind.
-    An ore vein that pays in herbs is the same bug as a boar wearing a wolf's
-    skin, and the whole point of ``source`` is not to have it.
+    ``of_source`` сужает сбор до того, что в узле действительно есть, и от этого
+    никогда не отступают: если в содержимом нет ничего такого рода достаточно
+    низкого, узел отдаёт самое дешёвое нужного рода, а не что-то не то. Рудная жила,
+    платящая травами, - та же ошибка, что кабан в волчьей шкуре, и весь смысл
+    ``source`` в том, чтобы её не было.
     """
     fits_kind = [
         item

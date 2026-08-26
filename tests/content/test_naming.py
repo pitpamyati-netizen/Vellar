@@ -1,11 +1,11 @@
-"""Everything the player hears is named in the language of Vellar.
+"""Всё, что слышит игрок, названо на языке Vellar.
 
-The black list from ``Narrative.md``, section 2, lives here: one word from it
-turns a name into the generic fantasy set the world is written against. Races
-and classes are the exception the section names - they are read out on the
-creation screen and have to be recognised by ear, so they carry the familiar
-words. What they must never do is drift into a craft: making things for pay is
-``content/crafts.toml`` and nothing else (Roadmap 1.7).
+Чёрный список из ``Narrative.md``, раздел 2, живёт здесь: одно слово из него
+превращает имя в тот дежурный фэнтезийный набор, против которого написан мир.
+Расы и классы - названное в том же разделе исключение: их читают вслух на экране
+создания, и узнавать их надо на слух, поэтому они несут привычные слова. Чего им
+нельзя никогда - это сползти в ремесло: делать вещи за плату - это
+``content/crafts.toml`` и больше ничто (Roadmap 1.7).
 """
 
 from __future__ import annotations
@@ -16,8 +16,8 @@ from collections.abc import Iterator
 from mmorpg.domain.entities import GameContent
 from tests.content.conftest import FORBIDDEN_WORDS
 
-# A class is how the adventurer fights; a craft is what they make for pay. A
-# craft name on either creation axis means the two have been mixed up again.
+# Класс - это как приключенец дерётся, ремесло - что он делает за плату. Название
+# ремесла на любой из осей создания значит, что эти двое снова перепутаны.
 CRAFT_WORDS = (
     "кузнец",
     "кожевник",
@@ -30,7 +30,7 @@ CRAFT_WORDS = (
 
 
 def spoken(content: GameContent) -> Iterator[tuple[str, str]]:
-    """Every player-visible string in the content directory, with its source."""
+    """Каждая видимая игроку строка каталога содержимого, вместе с её источником."""
     for race in content.races:
         yield race.id, f"{race.name} {race.description}"
         yield race.id, f"{race.passive.name} {race.passive.text}"
@@ -68,7 +68,7 @@ def test_no_content_speaks_the_forbidden_vocabulary(content: GameContent) -> Non
 
 
 def test_neither_axis_is_named_after_a_craft(content: GameContent) -> None:
-    """A race says what you are, a class says how you fight - neither is a job."""
+    """Раса говорит, кто ты, класс - как ты дерёшься, и ни то ни другое не работа."""
     named = [(race.id, race.name) for race in content.races]
     named += [(klass.id, klass.name) for klass in content.classes]
     for source, name in named:
@@ -78,7 +78,7 @@ def test_neither_axis_is_named_after_a_craft(content: GameContent) -> None:
 
 
 def test_races_and_classes_are_distinct_by_ear(content: GameContent) -> None:
-    """Both are picked from a list of buttons, and a button routes by its text."""
+    """И то и другое выбирают из списка кнопок, а кнопка ведёт по своему тексту."""
     race_names = [race.name for race in content.races]
     class_names = [klass.name for klass in content.classes]
     assert len(set(race_names)) == len(race_names)
@@ -86,8 +86,8 @@ def test_races_and_classes_are_distinct_by_ear(content: GameContent) -> None:
     assert not set(race_names) & set(class_names)
 
 
-# Cyrillic words and nothing else: no apostrophes, no Latin, no invented spelling
-# a screen reader would have to spell out letter by letter.
+# Только кириллические слова: ни апострофов, ни латиницы, ни выдуманного написания,
+# которое экранному диктору пришлось бы читать по буквам.
 PLAIN_NAME = re.compile(r"^[А-ЯЁ][а-яё]+(?: [а-яё]+)?$")
 
 
@@ -95,21 +95,21 @@ def test_a_race_is_named_plainly(content: GameContent) -> None:
     for race in content.races:
         assert PLAIN_NAME.fullmatch(race.name), f"{race.id}: {race.name!r} is not plain Russian"
         assert len(race.name) <= 20, race.id
-        # What the race does to a person is the line under the name, and it is
-        # read out in full on the details screen.
+        # Что раса делает с человеком - это строка под именем, и её читают целиком на
+        # экране подробностей.
         assert race.description.endswith("."), race.id
         assert len(race.description) <= 120, race.id
 
 
 def test_a_class_is_one_word(content: GameContent) -> None:
-    """The class button carries the role after the name, so the name stays short."""
+    """Кнопка класса несёт роль после имени, поэтому имя остаётся коротким."""
     for klass in content.classes:
         assert PLAIN_NAME.fullmatch(klass.name), klass.id
         assert " " not in klass.name, f"{klass.id}: {klass.name!r} is more than one word"
 
 
 def test_every_race_keeps_its_frozen_id(content: GameContent) -> None:
-    """Renaming is a text change: characters in the database point at these ids."""
+    """Переименование - это правка текста: персонажи в базе показывают на эти идентификаторы."""
     assert {race.id for race in content.races} == {
         "human",
         "high_elf",

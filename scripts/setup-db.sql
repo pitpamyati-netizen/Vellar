@@ -1,29 +1,28 @@
--- The role and the database that solo mode expects, created once by hand.
+-- Роль и база, которых ждёт режим solo, заводятся один раз руками.
 --
--- Run through Start.bat setup-db, which passes :role, :db and :pw and connects
--- as the PostgreSQL superuser. Everything after that - tables, columns, indexes
--- - belongs to the migrations in migrations\ and never to this file.
+-- Запускается через Start.bat setup-db, который передаёт :role, :db и :pw и
+-- подключается суперпользователем PostgreSQL. Всё, что дальше — таблицы, колонки,
+-- указатели, — принадлежит миграциям в migrations\ и никогда этому файлу.
 --
--- Idempotent on purpose: running it again on a database that already exists
--- changes nothing, so it is safe to reach for when unsure. Note that it also
--- leaves an existing role's password alone; if POSTGRES_PASSWORD in .env is
--- changed afterwards, change it in PostgreSQL too (ALTER ROLE vellar PASSWORD).
+-- Идемпотентно нарочно: повторный запуск на уже существующей базе не меняет ничего,
+-- поэтому за ним безопасно тянуться при сомнении. Учтите, что пароль уже
+-- существующей роли он тоже не трогает; если POSTGRES_PASSWORD в .env потом сменили,
+-- смените его и в PostgreSQL (ALTER ROLE vellar PASSWORD).
 
 \set ON_ERROR_STOP on
 
--- CREATEDB is not for the game, which never creates one: it is for
--- scripts/backup.ps1, which proves a backup restores by restoring it into a
--- database of its own and dropping it again. A backup nobody ever unpacked is
--- not a backup.
+-- CREATEDB нужен не игре — она не заводит баз никогда, — а scripts/backup.ps1, который
+-- доказывает, что копия разворачивается, разворачивая её в отдельную базу и удаляя ту
+-- снова. Копия, которую никто ни разу не распаковал, копией не является.
 SELECT format('CREATE ROLE %I LOGIN CREATEDB PASSWORD %L', :'role', :'pw')
 WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'role')
 \gexec
 
--- Existing installations were created without it; granting it is idempotent.
+-- Существующие установки заведены без него; выдать его повторно ничего не меняет.
 SELECT format('ALTER ROLE %I CREATEDB', :'role')
 \gexec
 
--- Owned by that role, so the migrations need nothing granted to them.
+-- Принадлежит этой же роли, поэтому миграциям не нужно выдавать ничего.
 SELECT format('CREATE DATABASE %I OWNER %I', :'db', :'role')
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'db')
 \gexec

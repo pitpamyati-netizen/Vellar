@@ -1,8 +1,8 @@
-"""Contracts as content: everything they point at has to exist.
+"""Задания как содержимое: всё, на что они показывают, обязано существовать.
 
-A contract that names a missing item, an unreachable level or a chain that never
-opens is a dead end a player walks into, so it is caught here rather than in the
-group chat.
+Задание, называющее пропавшую вещь, недостижимый уровень или цепочку, которая
+никогда не откроется, - это тупик, в который входит игрок, поэтому его ловят
+здесь, а не в групповом чате.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from tests.content.conftest import FORBIDDEN_WORDS
 
 
 def test_the_first_act_is_actually_written(content: GameContent) -> None:
-    """Levels 1-30 need contracts, or the act exists only in the roadmap."""
+    """Уровням 1-30 нужны задания, иначе акт существует только в дорожной карте."""
     farhold = content.quests_in("farhold")
     assert len(farhold) >= 5
     assert farhold[0].level == 1
@@ -73,7 +73,7 @@ def test_every_contract_names_a_price_and_a_person(content: GameContent) -> None
 
 
 def test_the_terms_are_short_enough_to_hear(content: GameContent) -> None:
-    """Two sentences, says Narrative.md; the cap here is the listening budget."""
+    """Две фразы, говорит Narrative.md; потолок здесь - это бюджет слушателя."""
     for quest in content.quests:
         assert len(quest.terms) <= 200, quest.id
         assert len(quest.intro) <= 140, quest.id
@@ -104,11 +104,10 @@ def test_a_narrowed_target_is_one_the_game_can_count(content: GameContent) -> No
 
 
 def test_a_contract_for_made_goods_asks_for_something_makeable(content: GameContent) -> None:
-    """Nobody may be asked for a thing no recipe in the game produces.
+    """Никого нельзя просить о вещи, которой не делает ни один рецепт в игре.
 
-    Contracts and crafts used to be two games in one bot: nothing on any board
-    asked for a made thing, so the work had no customer but the shopkeeper
-    (Roadmap, "Риски").
+    Задания и ремёсла когда-то были двумя играми в одном боте: ни одна доска не
+    просила сделанной вещи, и у работы не было заказчика, кроме лавочника.
     """
     made = {recipe.output_id for recipe in content.recipes}
     asked = [quest for quest in content.quests if quest.objective is ObjectiveKind.CRAFT]

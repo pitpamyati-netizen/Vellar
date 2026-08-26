@@ -1,13 +1,13 @@
-"""Ports: what the domain needs from the outside world.
+"""Порты: что домену нужно от внешнего мира.
 
-These are ``typing.Protocol`` definitions only - no implementation, no imports of
-asyncpg or redis. Two implementations satisfy each of them: a PostgreSQL/Redis one
-for dev and prod, and an in-memory one for ``APP_ENV=local`` and the test suite
-(``docs/adr/0005-in-memory-adapters.md``).
+Здесь только объявления ``typing.Protocol`` - никакой реализации и никаких
+импортов asyncpg или redis. Каждому из них отвечают две реализации: на
+PostgreSQL и Redis для dev и prod и на памяти для ``APP_ENV=local`` и набора
+тестов (``docs/adr/0005-in-memory-adapters.md``).
 
-This is the one place in ``domain/`` where ``async def`` appears: a port describes
-a boundary to the outside world, and everything beyond that boundary is
-asynchronous. The rules and entities themselves stay synchronous and pure.
+Это единственное место в ``domain/``, где встречается ``async def``: порт
+описывает границу с внешним миром, а всё за этой границей асинхронно. Сами
+правила и сущности остаются синхронными и чистыми.
 """
 
 from __future__ import annotations
@@ -25,9 +25,9 @@ from mmorpg.domain.entities.trade import Offer, TradeRecord, TradeStatus
 
 @dataclass(frozen=True, slots=True)
 class AccessibilitySettings:
-    """Per-player presentation preferences.
+    """Как игрок просит показывать ему игру.
 
-    Emoji are **off by default** - accessibility rule 6.
+    Значки **выключены по умолчанию** - правило доступности 6.
     """
 
     emoji: bool = False
@@ -37,13 +37,13 @@ class AccessibilitySettings:
 
 @dataclass(frozen=True, slots=True)
 class User:
-    """A Telegram user, independent of their characters.
+    """Пользователь Telegram, отдельно от его персонажей.
 
-    ``keeper`` is the right that was handed out from inside the game. It lives on
-    the account and not on the character for the same reason a black list does: a
-    right a player could walk around by rolling a second character would not be
-    one. The right that comes from ``ADMIN_IDS`` is not stored here at all - it is
-    read from the environment every time (``docs/keeper.md``).
+    ``keeper`` - право, выданное изнутри игры. Оно лежит на аккаунте, а не на
+    персонаже, по той же причине, что и чёрный список: право, которое обходится
+    заведением второго персонажа, правом не является. Право, идущее из
+    ``ADMIN_IDS``, здесь не хранится вовсе - оно читается из окружения каждый раз
+    (``docs/keeper.md``).
     """
 
     telegram_id: int
@@ -138,12 +138,12 @@ class KeeperLogRepository(Protocol):
 
 @runtime_checkable
 class PrivacyRepository(Protocol):
-    """What a player shows in the group, and whom they refuse to deal with.
+    """Что игрок показывает в группе и с кем отказывается иметь дело.
 
-    Both live on the account rather than on the character: a black list a player
-    could walk around by rolling a second character would not be one (Roadmap 2.5).
-    A player who never touched any of this is open to everyone, so an account with
-    no row at all answers "visible, blocks nobody".
+    И то и другое лежит на аккаунте, а не на персонаже: чёрный список, который
+    обходится заведением второго персонажа, списком не является (Roadmap 2.5).
+    Игрок, который ничего из этого не трогал, открыт всем, поэтому аккаунт без
+    строки отвечает «виден, не блокирует никого».
     """
 
     async def profile_visible(self, telegram_id: int) -> bool: ...
@@ -151,13 +151,13 @@ class PrivacyRepository(Protocol):
     async def set_profile_visible(self, telegram_id: int, visible: bool) -> None: ...
 
     async def blocks(self, telegram_id: int, other_id: int) -> bool:
-        """Whether ``telegram_id`` put ``other_id`` on their black list."""
+        """Занёс ли ``telegram_id`` игрока ``other_id`` в свой чёрный список."""
 
     async def block(self, telegram_id: int, other_id: int, *, at: int) -> bool:
-        """Add to the black list. False if they were already on it."""
+        """Занести в чёрный список. False, если он там уже был."""
 
     async def unblock(self, telegram_id: int, other_id: int) -> bool:
-        """Take off the black list. False if they were not on it."""
+        """Убрать из чёрного списка. False, если его там не было."""
 
 
 @runtime_checkable
@@ -173,37 +173,37 @@ class CharacterRepository(Protocol):
     async def save(self, character: Character) -> None: ...
 
     async def spend_gold(self, character_id: int, amount: int) -> bool:
-        """Take gold off a character in one step, or take nothing at all.
+        """Снять золото с персонажа одним шагом или не снять ничего вовсе.
 
-        ``save`` writes back a whole character that was read some steps earlier,
-        so between reading the purse and writing it back another update may have
-        spent the same coins - and the write would put them back. A trade settles
-        against a purse the payer may be spending elsewhere in that instant, which
-        is the one place in the game where that gap is a hole and not a rounding
-        error (Roadmap, "Риски"). ``False`` means the gold was not there.
+        ``save`` записывает обратно персонажа целиком, прочитанного несколько шагов
+        назад, поэтому между чтением кошелька и обратной записью другое обновление могло
+        истратить те же монеты — и запись вернула бы их на место. Сделка закрывается
+        против кошелька, который плательщик в это мгновение, возможно, тратит в другом
+        месте, а это единственное место в игре, где такой зазор — дыра, а не погрешность
+        округления. ``False`` значит, что золота там не было.
         """
 
     async def grant_gold(self, character_id: int, amount: int) -> None:
-        """Put gold on a character in one step, whatever else is happening to it.
+        """Положить золото персонажу одним шагом, что бы с ним ни происходило.
 
-        The other half of :meth:`spend_gold`: paying somebody by writing back a
-        whole character read a moment ago would undo whatever that character did
-        in between - a fight won, a potion bought.
+        Вторая половина :meth:`spend_gold`: заплатить кому-то, записав обратно
+        персонажа, прочитанного мгновением раньше, значило бы отменить всё, что этот
+        персонаж успел сделать между делом, - выигранный бой, купленное зелье.
         """
 
     async def name_taken(self, name: str) -> bool: ...
 
     async def arena_opponent(self, *, level: int, window: int, exclude_id: int) -> Character | None:
-        """Somebody of about this level to fight a copy of, or ``None``.
+        """Кто-то примерно этого уровня, с чьей копией можно подраться, или ``None``.
 
-        The arena is asynchronous: what comes back is a character record, and the
-        engine plays that character in the fight (``domain/rules/combat``). The
-        opponent is never told and never waits - but they fight with their own
-        weapon and their own skills, not with a made-up number (ADR 0021).
+        Арена асинхронна: обратно приходит запись персонажа, и этим персонажем в бою
+        играет движок (``domain/rules/combat``). Противнику не сообщают ничего, и он
+        ничего не ждёт - но дерётся он своим оружием и своими умениями, а не
+        выдуманным числом (ADR 0021).
         """
 
     async def arena_table(self, *, limit: int = 10) -> tuple[Character, ...]:
-        """The season table: most wins first."""
+        """Таблица сезона: больше побед - выше."""
 
     async def turning_tally(self, cycle_id: str) -> Mapping[str, int]:
         """Голоса за голосование этого цикла: ответ и сколько Печатей за ним.
@@ -245,22 +245,23 @@ class InventoryRepository(Protocol):
 
 @runtime_checkable
 class TradeRepository(Protocol):
-    """Pending offers and the journal of everything that became of them.
+    """Стоящие предложения и журнал всего, чем они кончились.
 
-    This is the one part of the group economy that cannot live in a cache: while
-    an offer stands, the author's item or gold is held in it, and a store that
-    expires by itself would quietly swallow both (Roadmap 2.3).
+    Это единственная часть групповой экономики, которой нельзя жить в кэше: пока
+    предложение стоит, в нём держится вещь или золото автора, а хранилище,
+    истекающее само, тихо проглотило бы и то и другое (Roadmap 2.3).
 
-    ``close`` is the gate that makes a trade atomic. It changes the row only while
-    it is still pending and returns what it changed, so two people answering the
-    same offer in the same second produce exactly one settlement: the loser gets
-    ``None`` back and moves nothing.
+    ``close`` - ворота, которые делают сделку неделимой. Строка меняется только
+    пока она ещё стоит, и возвращается то, что изменилось, поэтому двое, ответившие
+    на одно предложение в одну секунду, дают ровно одно закрытие: проигравший
+    получает обратно ``None`` и не двигает ничего.
     """
 
     async def open(self, offer: Offer, *, scope: str) -> TradeRecord | None:
-        """Publish an offer, assigning the short number players will type.
+        """Объявить предложение, выдав ему короткий номер, который будут набирать игроки.
 
-        ``None`` means no number was free - the group has 999 offers standing.
+        ``None`` значит, что свободного номера не нашлось: в группе стоит 999
+        предложений.
         """
 
     async def pending(self, number: int, *, scope: str) -> TradeRecord | None: ...
@@ -276,32 +277,30 @@ class TradeRepository(Protocol):
     ) -> TradeRecord | None: ...
 
     async def expire(self, *, before: int, scope: str | None = None) -> tuple[TradeRecord, ...]:
-        """Close every offer made before ``before`` and return them, once each.
+        """Закрыть все предложения, сделанные раньше ``before``, и вернуть их по разу.
 
-        The caller returns each stake to its author; returning a record twice
-        would hand out the same item twice, which is why this both reads and
-        writes in one step.
+        Вызывающий возвращает каждую ставку её автору; вернуть запись дважды значило бы
+        выдать одну и ту же вещь дважды, поэтому здесь и читают, и пишут одним шагом.
 
-        ``scope`` narrows the sweep to one group, and ``None`` - the usual case -
-        sweeps all of them. An offer number belongs to a group; the five minutes
-        it lives do not, and a stake held by a group that has gone quiet must not
-        wait for that group to speak again to come home.
+        ``scope`` сужает уборку до одной группы, а ``None`` - обычный случай - убирает
+        во всех. Номер предложения принадлежит группе, а пять минут его жизни - нет, и
+        ставка, которую держит затихшая группа, не должна ждать, пока эта группа снова
+        заговорит.
         """
 
     async def journal(self, character_id: int, *, limit: int = 20) -> tuple[TradeRecord, ...]:
-        """The latest trades this character was a side of, newest first."""
+        """Последние сделки, стороной которых был этот персонаж, свежие сверху."""
 
     async def revert(self, trade_id: int) -> TradeRecord | None:
-        """Mark a settled trade as undone, and return it as it was. ``None`` - it was not.
+        """Пометить закрытую сделку откаченной и вернуть её как была. ``None`` - не была.
 
-        The same gate as ``close``, and for the same reason: only a trade that
-        actually settled can be undone, and only once, so two keepers pressing
-        the button together move the goods one time between them. Moving them
-        back is the caller's work
-        (``application/services/group_trade.roll_back``).
+        Те же ворота, что у ``close``, и по той же причине: откатить можно только
+        действительно закрывшуюся сделку и только один раз, поэтому двое смотрителей,
+        нажавших кнопку вместе, двинут товар один раз на двоих. Двигать его обратно -
+        работа вызывающего (``application/services/group_trade.roll_back``).
 
-        When it settled is not overwritten, and when it was undone is not kept
-        here: that belongs to the keeper's journal, together with who did it
+        Время закрытия не перетирается, а время отката здесь не держится: это дело
+        журнала смотрителя, вместе с тем, кто именно откатил
         (``domain/entities/moderation.KeeperEntry``).
         """
 
@@ -327,31 +326,30 @@ class ContentOverlayRepository(Protocol):
 
 @runtime_checkable
 class LocationStateCache(Protocol):
-    """The shared state of a location: what is left in its nodes and who is in it.
+    """Общее состояние локации: что осталось в узлах и кто в ней ходит.
 
-    A location is common ground. The map itself is permanent and needs no storage
-    at all; what is shared is how much of each node's wave is still standing, and
-    who is walking around. None of it is a source of truth - losing Redis refills
-    every node and forgets who was where, which costs a walk and never a
-    character (``docs/procgen.md``).
+    Локация - общая земля. Сама карта постоянна и хранения не требует вовсе; общим
+    остаётся то, сколько от волны каждого узла ещё стоит и кто по локации ходит.
+    Ничто из этого не источник истины: потерянный Redis наполняет каждый узел
+    заново и забывает, кто где был, а стоит это прогулки и никогда не персонажа
+    (``docs/procgen.md``).
     """
 
     async def state(self, city_id: str, slot: int, *, now: int) -> LocationState:
-        """Every node of this location as it stands at ``now``.
+        """Каждый узел этой локации в том виде, в каком он стоит на ``now``.
 
-        Nodes whose refill time has come are rolled into their next wave on the
-        way out, so a caller never has to ask twice.
+        Узлы, у которых подошёл срок наполнения, по дороге наружу переводятся в
+        следующую волну, чтобы вызывающему не приходилось спрашивать дважды.
         """
 
     async def take(
         self, city_id: str, slot: int, node: int, *, wave: int, size: int, now: int, ttl: int
     ) -> LocationState:
-        """Take one thing out of a node: a pack killed, a handful gathered.
+        """Вынуть из узла одно: убитую стаю, горсть собранного.
 
-        ``wave`` is the wave the caller saw. A press that arrives after the node
-        has already rolled over belongs to a wave that is gone and changes
-        nothing - which is what keeps two players emptying the last pack at the
-        same time from emptying it twice.
+        ``wave`` - волна, которую видел вызывающий. Нажатие, пришедшее после того, как
+        узел уже перевернулся, принадлежит ушедшей волне и не меняет ничего - именно
+        это и не даёт двоим, вычищающим последнюю стаю разом, вычистить её дважды.
         """
 
     async def arrive(
@@ -363,12 +361,12 @@ class LocationStateCache(Protocol):
     async def others_at(
         self, city_id: str, slot: int, node: int, *, exclude: int, now: int, ttl: int
     ) -> tuple[Presence, ...]:
-        """Who else is standing on this node right now, freshest first."""
+        """Кто ещё стоит на этом узле прямо сейчас, свежие сверху."""
 
 
 @runtime_checkable
 class StateCache(Protocol):
-    """Short-lived JSON blobs: the active fight, the current screen, shop rolls."""
+    """Короткоживущие JSON-записи: начатый бой, текущий экран, прилавок лавки."""
 
     async def get(self, key: str) -> str | None: ...
 
@@ -379,6 +377,6 @@ class StateCache(Protocol):
 
 @runtime_checkable
 class IdempotencyStore(Protocol):
-    """Drops duplicate Telegram updates so a redelivery cannot apply twice."""
+    """Отбрасывает повторное обновление Telegram, чтобы оно не сработало дважды."""
 
     async def seen(self, update_id: int, ttl: int = 300) -> bool: ...

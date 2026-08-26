@@ -1,11 +1,12 @@
-"""Privacy: a profile a player may close, and the people they refuse to deal with.
+"""Приватность: карточка, которую игрок вправе закрыть, и те, с кем он не имеет дела.
 
-Both belong to the account rather than to the character. A black list a player
-could walk around by rolling a second character would not be one, and neither
-would a hidden profile that reopens on the next character (Roadmap 2.5).
+И то и другое принадлежит аккаунту, а не персонажу. Чёрный список, который
+обходится заведением второго персонажа, списком не является, как не является
+закрытой и карточка, открывающаяся на следующем персонаже (Roadmap 2.5).
 
-``blocks`` holds one row per direction. The pair is closed both ways in the rules,
-not in the schema, so lifting a block is always the decision of whoever made it.
+``blocks`` держит по строке на направление. Пара закрывается в обе стороны
+правилами, а не схемой, поэтому снять блокировку - всегда решение того, кто её
+поставил.
 
 Revision ID: 0003
 Revises: 0002
@@ -23,8 +24,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Open by default: privacy is a choice a player makes, not a state they have
-    # to leave before anyone can see them.
+    # Открыто по умолчанию: приватность - это выбор, который игрок делает, а не
+    # состояние, из которого он обязан выйти, чтобы его вообще увидели.
     op.execute("ALTER TABLE users ADD COLUMN show_profile BOOLEAN NOT NULL DEFAULT TRUE")
     op.execute(
         """
@@ -37,9 +38,9 @@ def upgrade() -> None:
         )
         """
     )
-    # Every group command reads the list from both ends: does the author block the
-    # target, does the target block the author. The primary key serves the first
-    # question, this index the second.
+    # Каждая команда в группе читает список с обоих концов: блокирует ли автор адресата
+    # и блокирует ли адресат автора. Первому вопросу служит первичный ключ, второму -
+    # этот указатель.
     op.execute("CREATE INDEX blocks_blocked_idx ON blocks (blocked_id)")
 
 

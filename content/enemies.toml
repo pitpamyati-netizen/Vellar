@@ -1,24 +1,24 @@
-# Enemy archetypes. Concrete enemies are generated, never stored: the generator
-# picks an archetype that fits the biome and scales it to the location level.
+# Породы противников. Конкретные противники собираются и не хранятся никогда:
+# сборщик берёт породу, подходящую биому, и растягивает её на уровень локации.
 #
-# Multipliers are relative to the level baseline in
-# mmorpg/domain/procgen/enemies.py. 1.0 is an average opponent.
+# Множители считаются от основания по уровням в
+# mmorpg/domain/procgen/enemies.py. 1.0 - это средний противник.
 #
-# biomes: which location biomes this archetype can appear in. "*" means anywhere.
-# Every biome used in world.toml must have at least three candidates - checked by
-# tests/content/test_enemies.py.
+# biomes: в каких биомах локаций эта порода может появиться. "*" значит везде.
+# У каждого биома, который встречается в world.toml, обязано быть хотя бы три
+# кандидата - проверяет tests/content/test_enemies.py.
 #
 # element: каким родом урона этот противник бьёт. Физические четыре - piercing,
-# slashing, bludgeoning, rending - и магические двенадцать; полный список в
+# slashing, bludgeoning, rending - и магические одиннадцать; полный список в
 # entities/damage.py. Не объявлено - решает порода: зверь рвёт, гуманоид рубит,
 # нежить бьёт скверной, стихия - чарами, тварь - разумом. По роду урона считается
 # сопротивление цели, и без него «Рождённый в стуже» был надписью (ADR 0018).
 
 [meta]
 kinds = ["beast", "humanoid", "undead", "elemental", "aberration"]
-# Titles are adjectives, never nouns: they are glued in front of the archetype
-# name ("Матёрый серый волк"). "Владыка кабан" is not Russian - which tier it is
-# the combat screen says in its own words.
+# Прозвища - прилагательные, и никогда существительные: их приклеивают перед именем
+# породы («Матёрый серый волк»). «Владыка кабан» - это не по-русски, а какая это
+# ступень, боевой экран говорит своими словами.
 elite_titles = ["Матёрый", "Свирепый", "Лютый", "Исполинский", "Порченый"]
 
 [[enemy]]
@@ -125,8 +125,9 @@ loot = ["iron_scrap"]
 id = "wandering_beast"
 name = "Дикий зверь"
 kind = "beast"
-# Wildcard archetypes keep every biome above the three-candidate floor, so no
-# location ever fields the same enemy twice in a row. See tests/content/test_enemies.py.
+# Породы «на любой биом» держат каждый биом выше порога в три кандидата, поэтому ни одна
+# локация не выставит одного и того же противника дважды подряд. См.
+# tests/content/test_enemies.py.
 biomes = ["*"]
 health = 1.0
 damage = 1.1

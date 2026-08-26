@@ -1,8 +1,9 @@
-"""Screen fixtures.
+"""Приспособления экранов.
 
-``all_screens`` builds every screen the game can show, so the accessibility tests
-can inspect all of them at once. Every new screen must be added here - that is
-deliberate: a screen nobody listed is a screen nobody checked.
+``all_screens`` собирает каждый экран, который игра умеет показать, чтобы тесты
+доступности могли осмотреть их все разом. Каждый новый экран обязан быть добавлен
+сюда, и это нарочно: экран, которого никто не перечислил, - это экран, которого
+никто не проверил.
 """
 
 from __future__ import annotations
@@ -164,8 +165,9 @@ def sample_fight(content: GameContent, fighter: Character) -> BattleState:
 
 @pytest.fixture(scope="session")
 def crowded_fight(content: GameContent, fighter: Character) -> BattleState:
-    """The longest the combat screen can get: three enemies, each announcing, and
-    a trace with something to say about it."""
+    """Самый длинный вид боевого экрана: три противника, каждый объявляет намерение,
+    и след, о котором есть что сказать.
+    """
     pack = tuple(
         Enemy(
             archetype_id="grey_wolf",
@@ -203,8 +205,9 @@ def duel_fight(content: GameContent, fighter: Character) -> BattleState:
 
 @pytest.fixture(scope="session")
 def boss_fight(content: GameContent, fighter: Character) -> BattleState:
-    """A tier that announces itself: the enemy line has to say how long this will
-    take before the player commits a turn to it."""
+    """Ступень, объявляющая себя: строка противника обязана сказать, насколько это
+    надолго, до того как игрок потратит на неё ход.
+    """
     boss = Enemy(
         archetype_id="grey_wolf",
         name="Владыка серого волка",
@@ -248,7 +251,7 @@ def sealbearer(fighter: Character) -> Character:
 
 @pytest.fixture(scope="session")
 def craftsman(fighter: Character) -> Character:
-    """Somebody who has already put a watch or two into two crafts."""
+    """Тот, кто уже вложил стражу-другую в два ремесла."""
     return replace(
         fighter,
         crafts=CraftLog(
@@ -264,7 +267,7 @@ def craftsman(fighter: Character) -> Character:
 
 @pytest.fixture(scope="session")
 def keeper(fighter: Character) -> Character:
-    """Somebody whose Telegram id is in ADMIN_IDS: one extra row, nothing else."""
+    """Тот, чей Telegram-id стоит в ADMIN_IDS: один лишний ряд, и больше ничего."""
     return replace(fighter, is_admin=True)
 
 
@@ -431,10 +434,10 @@ def all_screens(
     keeper_view: keeper_screens.KeeperView,
     banned_view: keeper_screens.KeeperView,
 ) -> list[Screen]:
-    """Every screen in the game, rendered with sample data.
+    """Каждый экран игры, нарисованный на образцовых данных.
 
-    New screens must be added here: a screen nobody listed is a screen nobody
-    checked against the accessibility rules.
+    Новые экраны обязаны попадать сюда: экран, которого никто не перечислил, - это
+    экран, которого никто не сверял с правилами доступности.
     """
     empty = CharacterDraft()
     screens: list[Screen] = [

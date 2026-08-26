@@ -1,7 +1,7 @@
-"""The accessibility rules from docs/accessibility.md, enforced mechanically.
+"""Правила доступности из docs/accessibility.md, закреплённые механически.
 
-A failure here is a blocker-priority bug, not a style nit: each of these
-corresponds to a way the game becomes unplayable by ear.
+Падение здесь - ошибка уровня «блокер», а не придирка к стилю: за каждым из них
+стоит способ, которым игра становится непроходимой на слух.
 """
 
 from __future__ import annotations
@@ -35,12 +35,12 @@ def _source_files() -> list[Path]:
     return iter_source_files()
 
 
-# --- rule 1 and 2: no inline keyboards, no message editing ------------
+# --- правила 1 и 2: никаких inline-клавиатур, никаких правок сообщений ---
 
 
 @pytest.mark.parametrize("path", _source_files(), ids=lambda p: p.name)
 def test_no_inline_keyboards_or_message_edits(path: Path) -> None:
-    """Inline buttons and edits are invisible to a screen reader. Both are banned."""
+    """Inline-кнопки и правки сообщений экранному диктору не видны. Запрещены оба."""
     text = path.read_text(encoding="utf-8")
     for forbidden in FORBIDDEN_SUBSTRINGS:
         if forbidden in text and "FORBIDDEN_SUBSTRINGS" not in text:
@@ -59,14 +59,14 @@ def test_only_reply_keyboards_are_imported() -> None:
     assert "ReplyKeyboardMarkup" in imported
 
 
-# --- rule 8: the service row is on every screen ----------------------
+# --- правило 8: служебный ряд есть на каждом экране -------------------
 
 
 def test_service_row_is_stable() -> None:
     assert SERVICE_ROW == (BACK, MAIN_MENU)
     assert [item.text for item in SERVICE_ROW] == ["Назад", "Главное меню"]
-    # "Осмотреться" left the keyboard but not the game: the command still works,
-    # and so does a button pressed from an older keyboard.
+    # «Осмотреться» ушло с клавиатуры, но не из игры: команда работает, как работает и
+    # кнопка, нажатая на старой клавиатуре.
     assert LOOK not in SERVICE_ROW
 
 
@@ -83,7 +83,7 @@ def test_every_screen_ends_with_the_service_row(all_screens: list[Screen]) -> No
         assert screen.all_rows()[-1] == SERVICE_ROW, screen.id
 
 
-# --- rule 9: unique labels within a screen ---------------------------
+# --- правило 9: надписи внутри экрана не повторяются -------------------
 
 
 def test_labels_are_unique_within_every_screen(all_screens: list[Screen]) -> None:
@@ -103,7 +103,7 @@ def test_duplicate_labels_are_rejected_at_construction() -> None:
         )
 
 
-# --- rule 6: emoji never carry meaning alone -------------------------
+# --- правило 6: значок никогда не несёт смысл в одиночку --------------
 
 
 def test_labels_are_unambiguous_without_emoji(all_screens: list[Screen]) -> None:
@@ -125,7 +125,7 @@ def test_emoji_are_off_by_default() -> None:
     assert AccessibilitySettings().emoji is False
 
 
-# --- rule 5: no pseudo-graphics --------------------------------------
+# --- правило 5: никакой псевдографики ---------------------------------
 
 
 def test_no_pseudo_graphics_in_screen_text(all_screens: list[Screen]) -> None:
@@ -135,7 +135,7 @@ def test_no_pseudo_graphics_in_screen_text(all_screens: list[Screen]) -> None:
             assert symbol not in text, f"{screen.id} draws with {symbol!r}"
 
 
-# --- rule 11: message length -----------------------------------------
+# --- правило 11: длина сообщения --------------------------------------
 
 
 def test_screens_fit_the_message_limit(all_screens: list[Screen]) -> None:
@@ -145,7 +145,7 @@ def test_screens_fit_the_message_limit(all_screens: list[Screen]) -> None:
         )
 
 
-# --- rule 4: the key fact comes first --------------------------------
+# --- правило 4: главное идёт первым -----------------------------------
 
 
 def test_screens_open_with_a_non_empty_line(all_screens: list[Screen]) -> None:
@@ -154,11 +154,11 @@ def test_screens_open_with_a_non_empty_line(all_screens: list[Screen]) -> None:
         assert screen.lines[0].strip(), screen.id
 
 
-# --- rule 14: no Markdown --------------------------------------------
+# --- правило 14: никакой разметки -------------------------------------
 
 
 def test_no_markdown_parse_mode_is_configured() -> None:
-    """Asterisks and underscores are read aloud, so the bot sends plain text."""
+    """Звёздочки и подчёркивания читаются вслух, поэтому бот шлёт чистый текст."""
     for path in _source_files():
         text = path.read_text(encoding="utf-8")
         assert "ParseMode.MARKDOWN" not in text, path.name

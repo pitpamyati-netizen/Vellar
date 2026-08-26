@@ -1,30 +1,32 @@
-"""Posts to the game channel.
+"""Посты в канал игры.
 
-The channel carries **news about the game**: what changed, what opened, what is
-planned, and service notices. It is not a feed of what players did - no level-ups,
-no kills, no trades. Those belong in the group, where the people they concern are.
-The rules that govern the wording live in ``Narrative.md`` ("Канал"); the ones that
-can be enforced by code live here.
+Канал несёт **новости об игре**: что изменилось, что открылось, что задумано, и
+служебные объявления. Это не лента того, что делали игроки: ни взятых уровней, ни
+побед, ни сделок. Им место в группе, где сидят те, кого они касаются. Правила о
+словах живут в ``Narrative.md`` («Канал»); те, что можно закрепить кодом, живут
+здесь.
 
-A changelog is a news item, not a commit log: it says what a player can now do,
-never which module changed.
+Список изменений — это новость, а не список коммитов: он говорит, что игрок
+теперь может сделать, и никогда — какой модуль изменился.
 
-Enforced here:
+Что закреплено здесь:
 
-- the headline is the whole message for a reader who stops after one line;
-- plain text only, ``parse_mode=None`` - the channel is read by screen readers too,
-  and Markdown is spoken aloud (accessibility rule 14);
-- no pseudo-graphics, no bars, numbers spelled as ``X из Y`` by the caller (rule 5);
-- one emoji at most, at the head of the line, chosen by meaning - never decoration
-  (rule 6: the text is unambiguous with every emoji stripped);
-- a hard length limit, because a channel post is not paginated;
-- the words of a player, not of the team that ships the game: a post naming a
-  module, a commit or a database is refused at render, before anyone sees it.
+- заголовок — это всё сообщение для того, кто остановился после первой строки;
+- только чистый текст, ``parse_mode=None``: канал читают и экранные дикторы, а
+  разметку они произносят вслух (правило доступности 14);
+- никакой псевдографики, никаких полос, числа вызывающий пишет как ``X из Y``
+  (правило 5);
+- не больше одного значка, в начале строки, выбранного по смыслу, а не для
+  украшения (правило 6: текст однозначен со снятыми значками);
+- жёсткий предел длины, потому что пост в канале на страницы не режется;
+- слова игрока, а не команды, которая игру выпускает: пост, называющий модуль,
+  коммит или базу, отвергается на отрисовке, до того как его кто-нибудь увидит.
 
-The text of an update lives in ``content/changelog.toml`` and is read by
-``scripts/broadcast.py``; this module only turns it into a post.
+Текст обновления живёт в ``content/changelog.toml`` и читается
+``scripts/broadcast.py``; этот модуль только превращает его в пост.
 
-A broadcast never blocks or breaks gameplay: a failed send is logged and dropped.
+Объявление никогда не блокирует и не ломает игру: несостоявшаяся отправка
+пишется в журнал и отбрасывается.
 """
 
 from __future__ import annotations
@@ -39,15 +41,15 @@ from mmorpg.logging import get_logger
 logger = get_logger(__name__)
 
 BROADCAST_LIMIT = 700
-# A changelog earns more room than a notice, because cutting it would mean
-# splitting one update across two posts.
+# Список обновлений заслуживает больше места, чем объявление: обрезать его значило бы
+# разорвать одно обновление на два поста.
 CHANGELOG_LIMIT = 2000
 
-# Words that give away a post written for the team instead of for the players.
-# A player cannot act on a module name, so it is not news: the same fact is
-# always sayable as something they can now do (``Narrative.md``, section 8).
-# Stems are matched from the start of a word and are long enough to be
-# unambiguous; short words are matched whole, or "баг" would flag "Багровый".
+# Слова, выдающие пост, написанный для своих, а не для игроков. По названию модуля игрок
+# не может сделать ничего, а значит, это не новость: тот же самый факт всегда можно
+# сказать как то, что игрок теперь может сделать (``Narrative.md``, раздел 8). Основы
+# сверяются с начала слова и достаточно длинны, чтобы быть однозначными; короткие слова
+# сверяются целиком, иначе «баг» пометил бы «Багровый».
 JARGON_STEMS = (
     "модул",
     "коммит",
@@ -78,7 +80,7 @@ _WORD = re.compile(r"[a-zа-яё]+")
 
 
 class BroadcastKind(StrEnum):
-    """What kind of news this is. The kind picks the emoji and the length limit."""
+    """Какого рода эта новость. Род выбирает значок и предел длины."""
 
     NEWS = "news"
     CHANGELOG = "changelog"
@@ -98,7 +100,7 @@ def limit_for(kind: BroadcastKind) -> int:
 
 @dataclass(frozen=True, slots=True)
 class BroadcastEvent:
-    """One channel post: a headline and, optionally, the detail behind it."""
+    """Один пост в канал: заголовок и, если есть, подробности за ним."""
 
     kind: BroadcastKind
     headline: str
@@ -111,7 +113,7 @@ class BroadcastEvent:
 
 
 def jargon_in(text: str) -> str | None:
-    """The first word that would give the post away as a commit message."""
+    """Первое слово, которое выдало бы в посте сообщение коммита."""
     words: list[str] = _WORD.findall(text.lower())
     for word in words:
         if word in JARGON_WORDS or word.startswith(JARGON_STEMS):
@@ -120,7 +122,7 @@ def jargon_in(text: str) -> str | None:
 
 
 def render_broadcast(event: BroadcastEvent, *, emoji: bool = True) -> str:
-    """Render the post. The first line stands on its own; details follow."""
+    """Собрать пост. Первая строка стоит сама по себе, подробности идут следом."""
     head = event.headline.strip()
     if emoji:
         head = f"{EMOJI[event.kind]} {head}"
@@ -138,13 +140,13 @@ def render_broadcast(event: BroadcastEvent, *, emoji: bool = True) -> str:
 
 
 class ChannelSink(Protocol):
-    """The one Telegram call a broadcaster makes. ``aiogram.Bot`` satisfies it."""
+    """Единственный вызов Telegram, который делает вещатель. ``aiogram.Bot`` ему отвечает."""
 
     async def send_message(self, chat_id: int | str, text: str) -> object: ...
 
 
 def chat_id_of(raw: str) -> int | str:
-    """``-1001234567890`` becomes an int, ``@vellar`` stays a string."""
+    """``-1001234567890`` становится числом, ``@vellar`` остаётся строкой."""
     value = raw.strip()
     try:
         return int(value)
@@ -154,10 +156,10 @@ def chat_id_of(raw: str) -> int | str:
 
 @dataclass(slots=True)
 class ChannelBroadcaster:
-    """Posts events to the game channel, or to nowhere when it is not configured.
+    """Пишет события в канал игры или в никуда, когда канал не настроен.
 
-    An unconfigured channel is the normal state of a local run, so this is a
-    no-op rather than an error: the game must be playable without a channel.
+    Ненастроенный канал - обычное состояние локального запуска, поэтому здесь ничего
+    не делают, а не отказывают: играть игра обязана и без канала.
     """
 
     sink: ChannelSink | None
@@ -169,15 +171,15 @@ class ChannelBroadcaster:
         return self.sink is not None and bool(self.chat_id.strip())
 
     async def announce(self, event: BroadcastEvent) -> bool:
-        """Post one event. Returns whether it actually reached Telegram."""
+        """Опубликовать одно событие. Возвращает, дошло ли оно до Telegram."""
         text = render_broadcast(event, emoji=self.emoji)
         if not self.enabled or self.sink is None:
             logger.debug("broadcast_skipped", kind=event.kind.value, reason="no_channel")
             return False
         try:
             await self.sink.send_message(chat_id_of(self.chat_id), text)
-        # Broad on purpose: a dead channel, a revoked admin right or a network
-        # blip must never take down the turn that produced the event.
+        # Широко нарочно: мёртвый канал, отобранное право администратора или сбой сети
+        # не должны ронять тот ход, который породил событие.
         except Exception as error:
             logger.warning("broadcast_failed", kind=event.kind.value, error=str(error))
             return False
@@ -185,16 +187,16 @@ class ChannelBroadcaster:
         return True
 
 
-# --- what the channel actually posts ---------------------------------
+# --- что канал на самом деле публикует -------------------------------
 
 
 def news(headline: str, *details: str) -> BroadcastEvent:
-    """A game news item: something opened, changed or is coming."""
+    """Новость игры: что-то открылось, изменилось или скоро будет."""
     return BroadcastEvent(kind=BroadcastKind.NEWS, headline=headline, details=details)
 
 
 def service(headline: str, *details: str) -> BroadcastEvent:
-    """A service notice: maintenance, downtime, a restart."""
+    """Служебное объявление: работы, простой, перезапуск."""
     return BroadcastEvent(kind=BroadcastKind.SERVICE, headline=headline, details=details)
 
 
@@ -206,15 +208,17 @@ def changelog(
     changed: tuple[str, ...] = (),
     fixed: tuple[str, ...] = (),
 ) -> BroadcastEvent:
-    """An update, written for players.
+    """Обновление, написанное для игроков.
 
-    Each entry is what a player can now do or will now see - never a module, a
-    function or a commit. Empty sections are omitted rather than left as headings
-    with nothing under them, because a screen reader reads the heading anyway.
+    Каждая запись - то, что игрок теперь может сделать или увидит, и никогда не
+    модуль, не функция и не коммит. Пустые разделы выбрасываются, а не остаются
+    заголовками, под которыми ничего нет, потому что заголовок экранный диктор всё
+    равно прочитает.
 
-    The headline is written in ``content/changelog.toml`` and says what the update
-    is about, because the first line is the whole post for a reader who stops
-    after it. An update that writes none falls back to the bare version.
+    Заголовок пишется в ``content/changelog.toml`` и говорит, о чём обновление,
+    потому что для того, кто остановился после первой строки, она и есть весь пост.
+    Обновление, которое заголовка не написало, откатывается к голому номеру
+    версии.
     """
     details: list[str] = []
     for title, entries in (("Добавлено", added), ("Изменилось", changed), ("Исправлено", fixed)):

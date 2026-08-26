@@ -1,8 +1,8 @@
-"""In-memory caches with TTL bookkeeping.
+"""Кэши в памяти, которые сами следят за сроком.
 
-The TTL is honoured logically rather than by a background sweeper: entries carry
-an expiry stamp and are dropped on read. The clock is injected, so tests advance
-time without sleeping.
+Срок соблюдается по смыслу, а не фоновым уборщиком: у записи есть отметка
+истечения, и на чтении просроченная выбрасывается. Часы подставляются извне,
+поэтому тесты двигают время, не засыпая.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ class InMemoryStateCache:
 
 
 class InMemoryLocationStateCache:
-    """The shared state of every location, for a game running without Redis."""
+    """Общее состояние всех локаций - для игры, работающей без Redis."""
 
     def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
         self._clock = clock
@@ -54,7 +54,8 @@ class InMemoryLocationStateCache:
         if entry is None:
             return {}
         nodes, expires_at = entry
-        # A location nobody has walked into for days is better refilled than kept.
+        # Локацию, в которую никто не заходил сутками, лучше наполнить заново, чем
+        # хранить.
         return nodes if expires_at > self._clock() else {}
 
     async def state(self, city_id: str, slot: int, *, now: int) -> LocationState:
@@ -68,8 +69,8 @@ class InMemoryLocationStateCache:
     ) -> LocationState:
         nodes = dict(self._live_nodes(city_id, slot))
         current = refreshed(nodes.get(node, NodeState()), now)
-        # A press that names an older wave belongs to a node that has already
-        # rolled over: it is not an error, it just changes nothing.
+        # Нажатие, называющее прежнюю волну, принадлежит узлу, который уже перевернулся:
+        # это не ошибка, оно просто ничего не меняет.
         nodes[node] = taken_one(current, size, now) if current.wave == wave else current
         self._states[self._key(city_id, slot)] = (nodes, self._clock() + ttl)
         return LocationState(nodes=MappingProxyType(dict(nodes)))
@@ -104,10 +105,10 @@ class InMemoryIdempotencyStore:
         self._seen: dict[int, float] = {}
 
     async def seen(self, update_id: int, ttl: int = 300) -> bool:
-        """True when this update was already handled.
+        """True, когда это обновление уже обработано.
 
-        Expired entries are swept on the way through, so the dict cannot grow
-        without bound in a long-running process.
+        Просроченные записи выметаются по дороге, поэтому словарь не может расти без
+        предела в долго живущем процессе.
         """
         now = self._clock()
         expired = [key for key, expires_at in self._seen.items() if expires_at <= now]

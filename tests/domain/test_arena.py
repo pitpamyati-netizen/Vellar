@@ -1,4 +1,4 @@
-"""The Debt Circle: the stake, the payout and who is let in."""
+"""Круг долгов: ставка, выплата и кого туда пускают."""
 
 from __future__ import annotations
 
@@ -24,10 +24,10 @@ def fighter() -> Character:
 
 
 def test_the_stake_grows_with_the_level(fighter: Character) -> None:
-    """A round has to stay worth something at 200 as it was at 20."""
+    """Круг обязан на 200-м уровне стоить того же, чего стоил на 20-м."""
     assert arena.stake_for(1) < arena.stake_for(20) < arena.stake_for(200)
-    # Nobody has fought yet, so the Circle is fronting the welcome and a first
-    # win pays what the sign over the Circle says.
+    # Никто ещё не дрался, поэтому Круг выдаёт приветствие вперёд, и первая победа
+    # платит столько, сколько написано на вывеске над Кругом.
     assert arena.payout_for(fighter) == arena.stake_for(fighter.level) * 2
 
 
@@ -54,20 +54,20 @@ def test_winning_pays_the_stake_back_doubled(fighter: Character) -> None:
 
     assert result.won is True
     assert result.payout == stake * 2
-    # Out one stake, in two: a won round is worth exactly one stake.
+    # Ушла одна ставка, пришли две: выигранный круг стоит ровно одной ставки.
     assert result.character.gold == fighter.gold + stake
     assert result.character.arena_wins == 1
     assert result.character.arena_losses == 0
-    # The welcome is spent: the Circle now holds nothing of theirs.
+    # Приветствие истрачено: теперь Круг не держит с них ничего.
     assert result.held == 0
 
 
 def test_the_circle_never_pays_out_what_it_never_took_in(fighter: Character) -> None:
-    """The whole point of the hold: winning cannot mint gold.
+    """Весь смысл залога: победа не может напечатать золото.
 
-    A fighter who never loses gets the welcome once and then draws even - the
-    Circle hands back the stake and nothing more, because there is nothing of
-    theirs left in it.
+    Тот, кто не проигрывает никогда, получает приветствие один раз, а дальше выходит
+    в ноль: Круг отдаёт ставку и ничего сверх, потому что его в Круге больше не
+    лежит ничего.
     """
     purse = fighter
     for _ in range(6):
@@ -79,16 +79,16 @@ def test_the_circle_never_pays_out_what_it_never_took_in(fighter: Character) -> 
 
 
 def test_a_lost_stake_is_what_a_later_win_pays_back(fighter: Character) -> None:
-    """Losing is not a hole in the pocket: the Circle keeps holding the stake."""
+    """Поражение - не дыра в кармане: Круг продолжает держать ставку."""
     staked, stake = arena.place_stake(fighter)
-    after_welcome = arena.settle(staked, won=True).character  # spends the welcome
+    after_welcome = arena.settle(staked, won=True).character  # тратит приветствие
 
     lost = arena.settle(arena.place_stake(after_welcome)[0], won=False)
     assert lost.held == stake
 
     won = arena.settle(arena.place_stake(lost.character)[0], won=True)
     assert won.payout == stake * 2
-    # Lost one stake, won it back: level with where the losing streak started.
+    # Одну ставку проиграл, её же отыграл: там же, где началась полоса поражений.
     assert won.character.gold == after_welcome.gold
 
 
@@ -100,6 +100,6 @@ def test_losing_forfeits_the_stake_and_nothing_else(fighter: Character) -> None:
     assert result.payout == 0
     assert result.character.gold == fighter.gold - stake
     assert result.character.arena_losses == 1
-    # A round never costs a level, an item or a contract.
+    # Круг никогда не стоит ни уровня, ни вещи, ни задания.
     assert result.character.level == fighter.level
     assert result.character.experience == fighter.experience

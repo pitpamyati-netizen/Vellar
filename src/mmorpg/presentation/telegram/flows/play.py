@@ -1,14 +1,14 @@
-"""Navigation and every action outside a fight, as a pure state machine.
+"""Перемещение и всякое действие вне боя как чистый автомат.
 
-Same shape as the creation flow: ``advance(state, message) -> state``, no I/O and
-no clock. What the world looks like arrives as values - the standing generation
-of a location, the shop rotation, the moment gathering is judged at - which is
-what keeps generation reproducible (``docs/procgen.md``).
+Форма та же, что у создания: ``advance(state, message) -> state``, без
+ввода-вывода и без часов. То, как выглядит мир, приходит значениями - нынешняя
+волна локации, переворот лавки, момент, на который судят сбор, - и это то, что
+делает сборку воспроизводимой (``docs/procgen.md``).
 
-The flow never writes anything. When a step should change stored data - gold, a
-loadout, a contract, the bag - it puts the result into :class:`PendingWrite` and
-the handler persists it. That is what keeps the whole game testable without a
-database (``docs/architecture.md``).
+Ветка не пишет ничего. Когда шаг должен изменить сохранённое - золото, набор
+умений, задание, сумку, - он кладёт итог в :class:`PendingWrite`, а сохраняет
+хендлер. Именно это и позволяет проверять всю игру без базы
+(``docs/architecture.md``).
 """
 
 from __future__ import annotations
@@ -86,7 +86,8 @@ DEFAULT_SETTINGS = AccessibilitySettings()
 # жителем города (``flows/keeper.py``).
 KEEPER_SCREENS = keeper_flow.SCREENS
 
-# Which city service each button opens, and the id the city declares it under.
+# Какая кнопка какую городскую службу открывает и под каким идентификатором город её
+# объявляет.
 SERVICES: dict[str, tuple[str, ScreenId]] = {
     labels.LOCATIONS.text: ("locations", ScreenId.LOCATION_LIST),
     labels.SHOP.text: ("shop", ScreenId.SHOP),
@@ -98,7 +99,7 @@ SERVICES: dict[str, tuple[str, ScreenId]] = {
     labels.BANK.text: ("bank", ScreenId.BANK),
 }
 
-# Said when the screen claims a location the game can no longer rebuild.
+# Говорится, когда экран называет локацию, которую игра больше не может собрать.
 LOST_VISIT = "Та вылазка уже закончилась. Выберите локацию заново."
 
 
@@ -107,12 +108,13 @@ def begin(character: Character) -> PlayState:
 
 
 def known_city(content: GameContent, city_id: str, fallback_id: str) -> City:
-    """The city this id names, or the one the character stands in.
+    """Город, который называет этот идентификатор, или тот, в котором стоит персонаж.
 
-    State comes back from storage, and storage outlives content: a city id written
-    by an older release may name nothing at all today. That is not an error the
-    player should ever meet - they get their own city instead of a crash
-    (accessibility rule 12, same principle as ``NavigationStack.deserialise``).
+    Состояние приходит из хранилища, а хранилище живёт дольше содержимого:
+    идентификатор города, записанный прежним выпуском, сегодня может не называть
+    ничего. Это не та ошибка, с которой игроку стоит встречаться, - он получает свой
+    город, а не падение (правило доступности 12, тот же принцип, что и у
+    ``NavigationStack.deserialise``).
     """
     for candidate in (city_id, fallback_id):
         if content.has_city(candidate):
@@ -121,14 +123,14 @@ def known_city(content: GameContent, city_id: str, fallback_id: str) -> City:
 
 
 def _location_allows_pvp(content: GameContent, session: LocationSession) -> bool:
-    """Whether this place is one of the free ones (``domain/rules/pvp.py``)."""
+    """Одно ли это из вольных мест (``domain/rules/pvp.py``)."""
     if not location_known(content, session):
         return False
     return content.city(session.city_id).location(session.slot).pvp
 
 
 def location_known(content: GameContent, session: LocationSession) -> bool:
-    """Whether the visit in this session can still be rebuilt from content."""
+    """Можно ли ещё собрать вылазку этой сессии из содержимого."""
     return (
         session.active
         and content.has_city(session.city_id)
@@ -139,7 +141,7 @@ def location_known(content: GameContent, session: LocationSession) -> bool:
 def build_location(
     content: GameContent, world_seed: str, session: LocationSession
 ) -> GeneratedLocation:
-    """Rebuild the location the player is standing in. Nothing about it is stored."""
+    """Собрать локацию, в которой стоит игрок. О ней не хранится ничего."""
     city = content.city(session.city_id)
     location = city.location(session.slot)
     return generate_location(
@@ -154,7 +156,7 @@ def build_location(
 
 
 def visit_seed(world_seed: str, session: LocationSession) -> bytes:
-    """The seed of the place itself. The map never changes, so neither does it."""
+    """Сид самого места. Карта не меняется, значит, не меняется и он."""
     return location_seed(world_seed, session.city_id, session.slot)
 
 
@@ -165,17 +167,17 @@ def node_standing(
     state: LocationState,
     now: int,
 ) -> dict[int, node_rules.Standing]:
-    """What is left in every node of the location being visited."""
+    """Что осталось в каждом узле локации, по которой идут."""
     location = build_location(content, world_seed, session)
     return node_rules.standing(visit_seed(world_seed, session), location, state, now)
 
 
 def node_fight_seed(world_seed: str, session: LocationSession, wave: int) -> bytes:
-    """The seed of the fight standing at the current node in its current wave.
+    """Сид боя, стоящего в нынешнем узле в его нынешней волне.
 
-    The wave is part of it on purpose: the pack that walks in after the last one
-    fell is a different pack, or the node would hand out the same three wolves for
-    ever (``domain/rules/nodes.py``).
+    Волна входит в него нарочно: стая, пришедшая после того, как пала прошлая, - это
+    другая стая, иначе узел выдавал бы одних и тех же трёх волков вечно
+    (``domain/rules/nodes.py``).
     """
     return derive(visit_seed(world_seed, session), "fight", session.node, wave)
 
@@ -208,7 +210,7 @@ def dungeon_level(content: GameContent, character: Character, city_id: str) -> i
     return max(city.level_min, min(city.level_max, deepest.level_min))
 
 
-# --- rendering --------------------------------------------------------
+# --- отрисовка --------------------------------------------------------
 
 
 def render(
@@ -313,9 +315,9 @@ def render(
                 pvp=_location_allows_pvp(content, state.session),
                 notice=state.notice,
             )
-        # The screen says "location" but the visit behind it is gone: state saved
-        # by an older release, or a location content no longer has. The player is
-        # put back on the list they walked in from, never left with a crash.
+        # Экран говорит «локация», а вылазки за ним больше нет: состояние, сохранённое
+        # прежним выпуском, или локация, которой в содержимом не стало. Игрока
+        # возвращают к списку, из которого он вошёл, и никогда не оставляют с падением.
         case ScreenId.LOCATION:
             return screens.location_list_screen(
                 content, city, character, state.location_page, state.notice or LOST_VISIT
@@ -373,8 +375,8 @@ def render(
                 place=here.name,
                 notice=state.notice,
             )
-        # A craft that content no longer has is not an error: the player is put
-        # back on the list they came from (accessibility rule 12).
+        # Ремесло, которого в содержимом больше нет, - не ошибка: игрока возвращают к
+        # списку, из которого он пришёл (правило доступности 12).
         case ScreenId.CRAFTS | ScreenId.CRAFT:
             return craft_screens.crafts_screen(content, character, state.notice)
         case ScreenId.QUESTS:
@@ -500,7 +502,7 @@ def _sale_prices(content: GameContent, owned: tuple[OwnedItem, ...]) -> dict[str
     return {held.item_id: economy.sell_price(content, content.item(held.item_id)) for held in owned}
 
 
-# --- stepping ---------------------------------------------------------
+# --- шаги -------------------------------------------------------------
 
 
 def advance(
@@ -517,13 +519,13 @@ def advance(
     keeper: KeeperView | None = None,
     location_state: LocationState | None = None,
 ) -> PlayState:
-    """Apply one message. Always answers; never raises on unexpected input."""
-    # A visit that can no longer be rebuilt is dropped before anything reads it,
-    # so the state written back is a state that works. Healing in ``render`` alone
-    # would fix the answer and leave the stored screen broken for ever.
+    """Применить одно сообщение. Отвечает всегда; на неожиданный ввод не падает."""
+    # Вылазку, которую больше не собрать, выбрасывают до того, как её кто-нибудь
+    # прочитает, поэтому обратно записывается работающее состояние. Лечение в одном лишь
+    # ``render`` починило бы ответ и оставило бы сохранённый экран сломанным навсегда.
     if state.screen is ScreenId.LOCATION and not location_known(content, state.session):
-        # The dead screen leaves the stack too, so "Назад" walks on to the city
-        # instead of back into the place that is gone.
+        # Мёртвый экран уходит и из стопки, поэтому «Назад» шагает дальше, в город, а не
+        # обратно в место, которого больше нет.
         walked, _ = (
             state.stack.pop()
             if state.stack.current is ScreenId.LOCATION
@@ -543,9 +545,9 @@ def advance(
             .at(ScreenId.LOCATION_LIST)
             .with_notice(LOST_VISIT)
         )
-        # The buttons that were on screen belong to a place that is gone, so this
-        # press only explains and hands over a working keyboard (rule 12) - except
-        # for the service row, which means what it says everywhere.
+        # Кнопки, бывшие на экране, принадлежат месту, которого больше нет, поэтому это
+        # нажатие только объясняет и выдаёт работающую клавиатуру (правило 12) - кроме
+        # служебного ряда, который везде значит то, что на нём написано.
         intent = resolve(text, render(content, character, healed, world_seed=world_seed)).intent
         if intent is Intent.MAIN_MENU:
             return replace(
@@ -694,11 +696,11 @@ def advance(
 
 
 def mark_task(state: PlayState, character: Character, task: TutorialTask) -> PlayState:
-    """Tick off an introduction task on whatever step happened to finish it.
+    """Отметить дело вступления на том шаге, который его и закончил.
 
-    The step may already be storing a changed character - a purchase, a contract -
-    so the mark goes on that one; otherwise on the character as loaded. A task
-    already done changes nothing and says nothing.
+    Шаг может уже сохранять изменённого персонажа - покупку, задание, - и тогда
+    отметка ложится на него; иначе на того, каким его загрузили. Уже сделанное дело
+    ничего не меняет и ничего не говорит.
     """
     base = state.pending.character or character
     marked = tutorial_rules.complete(base, task)
@@ -713,7 +715,7 @@ def mark_task(state: PlayState, character: Character, task: TutorialTask) -> Pla
 
 
 def _handle_arena(character: Character, state: PlayState, command: Command) -> PlayState:
-    """One button, and it costs money: the stake is taken before the fight."""
+    """Одна кнопка, и она стоит денег: ставку берут до боя."""
     if command.intent is not Intent.SELECT or not arena_screens.ARENA_FIGHT.matches(
         command.argument
     ):
@@ -721,8 +723,8 @@ def _handle_arena(character: Character, state: PlayState, command: Command) -> P
     refused = arena_rules.refusal(character)
     if refused:
         return state.with_notice(refused)
-    # The handler picks the opponent and takes the stake: it is the one that can
-    # read another character out of storage.
+    # Противника выбирает и ставку берёт хендлер: только он может прочитать из хранилища
+    # другого персонажа.
     return replace(state, fight="arena").at(ScreenId.COMBAT)
 
 
@@ -795,7 +797,7 @@ def _handle_pledge(
 def _handle_tutorial(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    """One button: open the screen the current task is done on."""
+    """Одна кнопка: открыть экран, на котором делается нынешнее дело."""
     if command.intent is not Intent.SELECT or not tutorial_screens.DO_TASK.matches(
         command.argument
     ):
@@ -806,8 +808,8 @@ def _handle_tutorial(
 
     card = tutorial_screens.card_for(task)
     city = known_city(content, state.city_id, character.city_id)
-    # Every task but the first two happens somewhere in a city, so the walk there
-    # is made for the player rather than described to them.
+    # Всё, кроме первых двух дел, случается где-то в городе, поэтому дорогу туда
+    # проходят за игрока, а не описывают ему.
     needed = {
         ScreenId.QUEST_BOARD: "tavern",
         ScreenId.TAVERN: "tavern",
@@ -827,12 +829,12 @@ def _handle_tutorial(
     )
     opened = fresh.at(card.screen).with_notice(f"Задание: {card.title}. {card.text}")
     if card.screen is ScreenId.STATS:
-        # Reading them *is* the task, and the screen is now open.
+        # Прочитать их *и есть* дело, а экран теперь открыт.
         return mark_task(opened, character, TutorialTask.STATS)
     return opened
 
 
-# --- menu, world, city ------------------------------------------------
+# --- меню, мир, город -------------------------------------------------
 
 
 def _handle_main_menu(
@@ -856,8 +858,8 @@ def _handle_main_menu(
         return state.at(ScreenId.SETTINGS)
     if labels.TUTORIAL.matches(command.argument):
         return state.at(ScreenId.TUTORIAL)
-    # Pressed from an older keyboard by somebody who is no longer a keeper, the
-    # button is simply not a button any more.
+    # Нажатая со старой клавиатуры тем, кто больше не смотритель, эта кнопка просто
+    # перестаёт быть кнопкой.
     if labels.KEEPER.matches(command.argument) and character.is_admin:
         return state.at(ScreenId.KEEPER)
     return state.with_notice("Нажмите кнопку из меню.")
@@ -867,7 +869,7 @@ def _handle_main_menu(
 
 
 def _bag(goods: Goods) -> dict[str, int]:
-    """The bag as the craft rules want it: item id to how many are in it."""
+    """Сумка в том виде, в каком её хотят правила ремесла: вещь - и сколько её."""
     return {held.item_id: held.quantity for held in goods.owned}
 
 
@@ -908,8 +910,8 @@ def _handle_craft(
     craft = content.craft(state.craft_id)
 
     if labels.GATHER.matches(command.argument):
-        # The place is part of the seed as well as of the rules: the same watch of
-        # work in two cities is two different pieces of work.
+        # Место входит и в сид, и в правила: одна и та же стража работы в двух городах -
+        # это две разные работы.
         here = known_city(content, state.city_id, character.city_id)
         seed = derive(world_seed, "gather", character.id, craft.id, here.id, clock.now)
         worked, gathered = craft_rules.gather(
@@ -931,16 +933,16 @@ def _handle_craft(
     for recipe in content.recipes_of(craft.id):
         if not command.argument.startswith(content.item(recipe.output_id).name):
             continue
-        # The work already done is part of the seed, so two batches in a row are
-        # not the same batch twice.
+        # Уже сделанная работа входит в сид, поэтому две партии подряд - не одна и та же
+        # партия дважды.
         experience = character.crafts.progress(craft.id).experience
         seed = derive(world_seed, "craft", character.id, recipe.id, clock.now, experience)
         worked, made = craft_rules.make(content, character, recipe, owned, seed=seed)
         line = craft_screens.made_line(content, made)
         if not made.ok:
             return state.with_notice(line)
-        # Somebody in a city may be waiting for exactly this thing: a contract for
-        # made goods counts here, where the work happens.
+        # Кто-то в городе может ждать ровно этого: задание на сделанные вещи
+        # засчитывается здесь, там, где случается работа.
         log, steps = quest_rules.record_craft(content, worked, made.item_id, made.count)
         worked = replace(worked, quests=log)
         for step in steps:
@@ -954,8 +956,8 @@ def _handle_craft(
 def _handle_world(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    # The keyboard the keeper is answering lists every city, so the step that
-    # reads it must agree with it (screens.world_screen).
+    # Клавиатура, которой отвечает смотритель, перечисляет все города, поэтому шаг,
+    # который её читает, обязан с ней сходиться (screens.world_screen).
     available = (
         content.cities if character.is_admin else content.cities_available_at(character.level)
     )
@@ -965,8 +967,8 @@ def _handle_world(
             if city.name == command.argument:
                 return replace(state, city_id=city.id).at(ScreenId.CITY)
 
-    # A locked city can still arrive here - typed, or pressed from an older
-    # keyboard - so it gets a real explanation rather than a generic refusal.
+    # Закрытый город всё-таки может сюда попасть - набранным или нажатым со старой
+    # клавиатуры, - поэтому он получает настоящее объяснение, а не общий отказ.
     for city in content.cities:
         if city.name == command.argument:
             return state.with_notice(
@@ -1029,7 +1031,7 @@ def _handle_character(
 
 
 def _handle_stats(character: Character, state: PlayState, command: Command) -> PlayState:
-    """One point, one press. The screen it answers on says what the point bought."""
+    """Очко на нажатие. Экран, на котором отвечают, говорит, что это очко купило."""
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите характеристику, чтобы вложить очко.")
     for code, stat_name in STAT_NAMES.items():
@@ -1202,7 +1204,7 @@ def _handle_item(
 
 
 def _equip(content: GameContent, character: Character, state: PlayState, item: Item) -> PlayState:
-    """Put a thing on. What it replaces goes back into the bag, never nowhere.
+    """Надеть вещь. То, что она заменяет, возвращается в сумку, а не в никуда.
 
     Надеть можно что угодно: чужая вещь не запрещена, она дорога. Чего она стоит
     точностью и инициативой, сказано на карточке до нажатия — и повторяется вслед
@@ -1232,7 +1234,7 @@ def _handle_settings(
     updated, said = settings_screens.toggled(settings, command.argument)
     if not said:
         return state.with_notice("Нажмите переключатель из списка.")
-    # The handler persists it; the flow only decides what should change.
+    # Сохраняет хендлер; ветка только решает, что должно измениться.
     return state.storing(PendingWrite(settings=updated)).with_notice(said)
 
 
@@ -1346,7 +1348,7 @@ def _handle_edge(
     return state.with_notice("Выберите одну из двух граней.")
 
 
-# --- city services ----------------------------------------------------
+# --- городские службы -------------------------------------------------
 
 
 def _handle_tavern(
@@ -1384,7 +1386,7 @@ def _hand_in(content: GameContent, character: Character, state: PlayState) -> Pl
     if not due:
         return state.with_notice("Сдавать нечего: ни одно задание не досчитано.")
     payout = quest_rules.hand_in(content, character, due[0].quest)
-    if payout is None:  # pragma: no cover - ready_to_hand_in already checked it
+    if payout is None:  # pragma: no cover - ready_to_hand_in это уже проверил
         return state.with_notice("Сдавать нечего.")
 
     write = PendingWrite(character=payout.character).because(economy_log.QUEST)
@@ -1437,7 +1439,7 @@ def _handle_offer(
             f"Палата берёт своё с торговли, а не с задания."
         )
     if labels.QUEST_LEAVE.matches(command.argument):
-        # Refusing never closes a contract for good (Narrative.md, section 4).
+        # Отказ никогда не закрывает задание насовсем (Narrative.md, раздел 4).
         return go_back(state).with_notice("Вы ушли. Задание останется на доске.")
     if labels.QUEST_ABANDON.matches(command.argument):
         if not character.quests.is_taken(quest.id):
@@ -1482,7 +1484,7 @@ def _handle_mentor(
         if character.gold < price:
             return state.with_notice(f"Наставник берёт {price} золота, у вас {character.gold}.")
         forgotten = skill_rules.forget(content, character, skill)
-        if forgotten is None:  # pragma: no cover - the list only holds known skills
+        if forgotten is None:  # pragma: no cover - в списке лежат только изученные умения
             return state.with_notice("Это умение вы не изучали.")
         paid = forgotten.with_gold(-price)
         return state.storing(PendingWrite(character=paid).because(economy_log.SERVICE)).with_notice(
@@ -1537,7 +1539,7 @@ def _handle_dungeon(
     return replace(state, descent=descent, fight="dungeon").at(ScreenId.COMBAT)
 
 
-# --- locations --------------------------------------------------------
+# --- локации ----------------------------------------------------------
 
 
 def _handle_location_list(
@@ -1557,9 +1559,9 @@ def _handle_location_list(
                     f"Локация {location.name} рассчитана на уровни с {location.level_min} "
                     f"по {location.level_max}. Ваш уровень: {character.level}."
                 )
-            # What is left in the nodes is shared by everybody in the place, so
-            # the handler reads it from the cache before the screen is drawn; the
-            # flow only says which location was entered and where the player is.
+            # То, что осталось в узлах, общее для всех, кто в месте, поэтому хендлер
+            # читает это из кэша до отрисовки экрана; ветка говорит лишь, в какую
+            # локацию вошли и где стоит игрок.
             session = LocationSession(city_id=city.id, slot=location.slot, node=0)
             return replace(state, session=session).at(ScreenId.LOCATION)
     return state.with_notice("Не узнал эту локацию. Нажмите локацию из списка.")
@@ -1614,8 +1616,8 @@ def _handle_location(
         )
         if refused:
             return state.with_notice(refused)
-        # The handler owns the fight: it is the one that can read the other
-        # character out of storage and take the snapshot.
+        # Боем владеет хендлер: только он может прочитать из хранилища другого персонажа
+        # и снять с него слепок.
         return replace(state, fight=f"pvp:{person.character_id}").at(ScreenId.COMBAT)
 
     for neighbour in (location.node(index) for index in node.links):
@@ -1648,12 +1650,12 @@ def _resolve_node_action(
     location_state: LocationState,
     now: int,
 ) -> PlayState:
-    """Non-combat nodes resolve immediately; combat is handed to the fight screen."""
+    """Небоевые узлы разрешаются сразу; бой передаётся боевому экрану."""
     index = state.session.node
     node = location.node(index)
 
     if node.kind in {NodeKind.ENTRANCE, NodeKind.EXIT}:
-        # A door pays nobody: looking at it is an answer, not a reward.
+        # Дверь не платит никому: посмотреть на неё - это ответ, а не награда.
         return state.with_notice(
             f"{node.name}: смотреть здесь не на что, кроме дороги в обе стороны."
         )
@@ -1665,12 +1667,11 @@ def _resolve_node_action(
         return state.with_notice(_empty_node_line(node.name))
 
     if node.kind.is_combat:
-        # The handler builds the fight itself: it owns the enemy generation and
-        # the cache the fight lives in.
+        # Бой собирает сам хендлер: ему принадлежат и сборка противника, и кэш, в
+        # котором бой живёт.
         return replace(state, fight="node").at(ScreenId.COMBAT)
 
-    # The wave is part of the seed, so the second handful out of the same vein is
-    # not the first one all over again.
+    # Волна входит в сид, поэтому вторая горсть из той же жилы - не первая заново.
     seed = derive(visit_seed(world_seed, state.session), "search", index, left.wave, left.taken)
     result = adventure.resolve_search(content, character, node, seed)
     write = PendingWrite(character=result.character, node_take=index)
@@ -1686,7 +1687,7 @@ def _resolve_node_action(
 
 
 def search_line(content: GameContent, node_name: str, result: adventure.SearchResult) -> str:
-    """One sentence about a node worked through, then what it gave."""
+    """Одна фраза об отработанном узле, а следом - что он дал."""
     parts = [f"{node_name}: сделано."]
     if result.gold:
         parts.append(f"Найдено золота: {result.gold}.")

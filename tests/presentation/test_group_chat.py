@@ -1,9 +1,10 @@
-"""The bot in the game group.
+"""Бот в игровой группе.
 
-The group is the one place where the bot speaks in front of people who did not
-ask it anything, so most of these tests are about **not** speaking: wrong chat,
-wrong shape, nobody addressed, too many commands. The rest check that what it does
-say is short, plain, gender-neutral and answerable by exactly one person.
+Группа - то единственное место, где бот говорит при людях, которые его ни о чём
+не спрашивали, поэтому большая часть здешних тестов о том, как **не** говорить:
+не тот чат, не та форма, никто не назван, слишком много команд. Остальные
+проверяют, что сказанное коротко, просто, не выдаёт пола и отвечаемо ровно одним
+человеком.
 """
 
 from __future__ import annotations
@@ -47,11 +48,11 @@ ARGUS = Party(user_id=ARGUS_ACCOUNT, character_id=1, name="Аргус")
 MERLA = Party(user_id=MERLA_ACCOUNT, character_id=2, name="Мерла")
 
 
-# --- doubles ----------------------------------------------------------
+# --- заменители -------------------------------------------------------
 
 
 class FakeBot:
-    """Records what would have been sent and deleted."""
+    """Записывает то, что было бы отправлено и удалено."""
 
     def __init__(self) -> None:
         self.sent: list[dict] = []
@@ -154,7 +155,7 @@ def bus(
     privacy: InMemoryPrivacyRepository,
     reaper: MessageReaper,
 ):
-    """Everything ``handle_group_message`` needs, in one callable."""
+    """Всё, что нужно ``handle_group_message``, одним вызовом."""
     bot = FakeBot()
     limiter = RateLimiter()
 
@@ -177,14 +178,14 @@ def bus(
 
 
 async def drain(reaper: MessageReaper) -> None:
-    """Let the scheduled deletions run. The fixture's delay is zero."""
+    """Дать отработать отложенным удалениям. Отсрочка у приспособления нулевая."""
     for _ in range(100):
         if not reaper.pending:
             return
         await asyncio.sleep(0)
 
 
-# --- when the bot stays quiet -----------------------------------------
+# --- когда бот молчит -------------------------------------------------
 
 
 async def test_a_chat_that_is_not_the_game_group_is_ignored(
@@ -213,7 +214,7 @@ async def test_ordinary_conversation_is_never_answered(
 async def test_a_command_shouted_into_the_room_addresses_nobody(
     bus, argus_account: User, world
 ) -> None:
-    """The reply *is* how the target is named, so without one there is no target."""
+    """Адресата называет сам ответ на его сообщение, поэтому без ответа адресата нет."""
     await bus.deliver(message("профиль", sender=argus_account))
 
     assert bus.bot.sent == []
@@ -241,7 +242,7 @@ async def test_a_half_typed_command_is_silence_not_a_correction(
     assert bus.bot.sent == []
 
 
-# --- answering --------------------------------------------------------
+# --- ответы -----------------------------------------------------------
 
 
 async def test_a_profile_answers_the_person_who_asked(
@@ -255,7 +256,7 @@ async def test_a_profile_answers_the_person_who_asked(
     posted = bus.bot.sent[0]
     assert posted["chat_id"] == GROUP_ID
     assert posted["text"].startswith("Мерла, уровень")
-    # Anchored to the asker: a profile has no buttons and needs no target.
+    # Привязано к спросившему: у карточки нет кнопок и адресат ей не нужен.
     assert posted["reply_parameters"].message_id == 2
     assert posted["reply_markup"] is None
 
@@ -281,7 +282,7 @@ async def test_an_offer_is_anchored_to_its_target_and_carries_two_buttons(
     )
 
     posted = bus.bot.sent[0]
-    # The anchor is what makes the keyboard selective: only Merla sees it.
+    # Привязка и делает клавиатуру избирательной: её видит одна Мерла.
     assert posted["reply_parameters"].message_id == 7
     markup = posted["reply_markup"]
     assert markup.selective is True
@@ -291,7 +292,7 @@ async def test_an_offer_is_anchored_to_its_target_and_carries_two_buttons(
 async def test_the_buttons_are_the_commands_they_duplicate(
     bus, argus_account: User, merla_account: User, world
 ) -> None:
-    """Pressing a button and typing it must reach the same place (rule 10)."""
+    """Нажать кнопку и набрать её текстом обязано приводить в одно место (правило 10)."""
     target = message("что продаёшь", sender=merla_account, message_id=7)
     await bus.deliver(message(f"продать 100 {SWORD_NAME}", sender=argus_account, reply_to=target))
     accept, decline = (button.text for button in bus.bot.sent[0]["reply_markup"].keyboard[0])
@@ -332,18 +333,18 @@ async def test_a_stranger_pressing_the_button_gets_a_refusal_not_the_goods(
     await bus.deliver(message("Принять 1", sender=stranger))
 
     assert "не вам" in bus.bot.sent[1]["text"]
-    # The sword is held by the offer, and a stranger cannot pull it out of there.
+    # Меч держит предложение, и посторонний его оттуда не вытащит.
     assert await inventory.count(world["Аргус"].id, SWORD) == 0
     assert await inventory.count(doven.id, SWORD) == 0
 
 
-# --- privacy ----------------------------------------------------------
+# --- приватность ------------------------------------------------------
 
 
 async def test_hiding_the_profile_needs_no_reply_and_closes_the_card(
     bus, argus_account: User, merla_account: User, world
 ) -> None:
-    """It is a sentence about the speaker, so there is nobody to address it to."""
+    """Это фраза о самом говорящем, поэтому обращать её не к кому."""
     await bus.deliver(message("скрыть профиль", sender=merla_account, message_id=1))
     here = message("я тут", sender=merla_account, message_id=2)
 
@@ -384,11 +385,11 @@ async def test_a_black_list_closes_the_pair_in_both_directions(
     await bus.deliver(message("блок", sender=merla_account, reply_to=argus_here, message_id=2))
     merla_here = message("и я", sender=merla_account, message_id=3)
 
-    # The blocked player is refused...
+    # Заблокированному отказано...
     await bus.deliver(
         message(f"продать 100 {SWORD_NAME}", sender=argus_account, reply_to=merla_here)
     )
-    # ...and so is the one who drew the line.
+    # ...и тому, кто провёл черту, тоже.
     await bus.deliver(message("профиль", sender=merla_account, reply_to=argus_here))
 
     assert bus.bot.sent[0]["text"].startswith("Чёрный список: Аргус.")
@@ -434,7 +435,7 @@ async def test_nobody_blocks_themselves(bus, merla_account: User, world) -> None
     assert "самому себе" in bus.bot.sent[0]["text"]
 
 
-# --- the five minutes -------------------------------------------------
+# --- пять минут -------------------------------------------------------
 
 
 async def test_everything_the_bot_says_in_the_group_is_put_on_the_clock(
@@ -473,7 +474,7 @@ async def test_shutdown_cancels_pending_deletions() -> None:
     assert deleted == []
 
 
-# --- flooding ---------------------------------------------------------
+# --- наплыв -----------------------------------------------------------
 
 
 def test_a_burst_is_stopped_after_the_limit() -> None:
@@ -531,7 +532,7 @@ async def test_a_flood_gets_one_answer_and_then_silence(
     assert texts[2].startswith("Слишком много команд")
 
 
-# --- what the group actually reads ------------------------------------
+# --- что группа на самом деле читает ----------------------------------
 
 
 def offer(kind: OfferKind = OfferKind.SELL) -> Offer:
@@ -548,7 +549,7 @@ def offer(kind: OfferKind = OfferKind.SELL) -> Offer:
 
 
 def test_every_refusal_has_words(content: GameContent) -> None:
-    """A refusal the bot cannot phrase would come out as silence."""
+    """Отказ, который бот не смог бы высказать, вышел бы молчанием."""
     for refusal in Refusal:
         text = group_screens.render(
             content, GroupOutcome(result=GroupResult.REFUSED, refusal=refusal)
@@ -599,7 +600,7 @@ def test_an_offer_says_who_gives_what_before_who_may_answer(content: GameContent
 
 
 def test_an_offer_says_what_it_holds_and_what_the_duty_costs(content: GameContent) -> None:
-    """Both are news to the author: their sword is gone and 95 is what comes back."""
+    """И то и другое новость для автора: меча нет, а обратно приходит 95."""
     reply = group_screens.render(
         content,
         GroupOutcome(result=GroupResult.OFFER_MADE, offer=offer(), tax=trade_tax(100)),
@@ -677,10 +678,10 @@ def test_group_messages_are_plain_short_and_ungendered(
     text = group_screens.render(content, outcome).text
 
     assert len(text) <= MESSAGE_LIMIT
-    # Markdown is spoken aloud by screen readers (accessibility rule 14).
+    # Разметку экранный диктор произносит вслух (правило доступности 14).
     assert not set(text) & set("*_`[]")
     assert not set(text) & set("■□▓░█▒─│")
-    # A past-tense verb would have to guess the character's gender.
+    # Глаголу в прошедшем времени пришлось бы угадывать пол персонажа.
     for gendered in ("передал", "получил", "продал", "купил"):
         assert gendered not in text.casefold()
 
@@ -698,7 +699,7 @@ def test_a_hand_over_names_both_sides_by_role(content: GameContent) -> None:
 
 
 def test_a_group_reply_carries_no_service_row(content: GameContent) -> None:
-    """The group is not a screen: there is nowhere to go "Назад" to."""
+    """Группа — не экран: возвращаться «Назад» там некуда."""
     reply = group_screens.render(
         content, GroupOutcome(result=GroupResult.OFFER_MADE, offer=offer())
     )
@@ -707,7 +708,7 @@ def test_a_group_reply_carries_no_service_row(content: GameContent) -> None:
     assert reply.buttons == ("Принять 12", "Отказ 12")
 
 
-# --- which chat is the group ------------------------------------------
+# --- какой чат считается группой --------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -719,8 +720,8 @@ def test_a_group_reply_carries_no_service_row(content: GameContent) -> None:
         ("vellar_chat", Chat(id=1, type="supergroup", username="vellar_chat"), True),
         ("@vellar_chat", Chat(id=1, type="supergroup", username="other"), False),
         ("@vellar_chat", Chat(id=1, type="supergroup"), False),
-        # A wildcard is how the group half of the game is tried before anybody
-        # has looked up a numeric id (Roadmap, "Риски").
+        # Звёздочка — это то, как групповую половину игры пробуют раньше, чем кто-нибудь
+        # разыщет числовой id.
         ("*", Chat(id=OTHER_CHAT, type="supergroup"), True),
         ("*", Chat(id=GROUP_ID, type="group"), True),
     ],
@@ -734,8 +735,9 @@ def test_the_group_is_recognised_by_id_or_by_username(
 def test_a_group_the_bot_does_not_answer_in_is_written_down(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """The one thing missing to test the group commands was a number nobody could
-    see. The bot knows it, so the bot says it - once per chat, into the log."""
+    """Единственным, чего не хватало для проверки команд в группе, был номер, которого
+    никто не видит. Бот его знает - значит, бот его и называет, один раз на чат, в журнал.
+    """
     from mmorpg.presentation.telegram.handlers import group as group_handlers
 
     group_handlers._SEEN_CHATS.clear()

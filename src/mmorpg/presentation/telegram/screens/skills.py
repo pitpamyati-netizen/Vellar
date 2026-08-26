@@ -1,13 +1,13 @@
-"""Skill screens: what is known, what a point buys, and what sits in the panel.
+"""Экраны умений: что изучено, что покупает очко и что лежит в панели.
 
-Three screens, and no more, because the panel itself never changes shape:
+Три экрана, и не больше, потому что форма самой панели не меняется никогда:
 
-- **Умения** - every skill of the class, its rank and what one point would do;
-- **Слоты умений** - the six battle positions and the racial one;
-- **Грань** - the single rank-three choice.
+- **Умения** — все умения класса, ранг каждого и то, что сделало бы одно очко;
+- **Слоты умений** — шесть боевых мест и расовое;
+- **Грань** — единственный выбор третьего ранга.
 
-A slot always keeps its number and its place, empty or not, so a player can learn
-the panel by position once and never relearn it (accessibility rule 7).
+Слот всегда держит свой номер и своё место, пустой он или нет, поэтому панель
+можно один раз выучить по положению и не переучивать (правило доступности 7).
 
 Пассивные умения слотов не занимают: изученное работает, и укладывать его
 некуда. Три слота из шести означали только то, что половина потраченных очков
@@ -57,12 +57,12 @@ def matching_skills(
 
 
 def skill_state(content: GameContent, character: Character, skill: Skill) -> str:
-    """One phrase that says everything a player needs about a skill's standing.
+    """Одна фраза, говорящая всё, что игроку нужно знать о положении умения.
 
-    Including what the press will actually do. A skill waiting for its edge used
-    to read "повысить за одно очко" and then spend the press on the edge question
-    instead: the player chose an edge, came back, saw the same rank and the same
-    button, and had every reason to think the screen was going in circles.
+    В том числе и то, что сделает нажатие. Умение, ждущее свою грань, раньше читалось
+    как «повысить за одно очко», а нажатие вместо этого уходило на вопрос о грани:
+    игрок выбирал грань, возвращался, видел тот же ранг и ту же кнопку и имел все
+    основания решить, что экран ходит по кругу.
     """
     if not skill_rules.is_known(character, skill.code):
         return "не изучено, одно очко умений"
@@ -107,7 +107,7 @@ def skills_screen(
     state: PageState,
     notice: str = "",
 ) -> Screen:
-    """The list a skill point is spent from."""
+    """Список, из которого тратят очко умений."""
     pool = matching_skills(content, character, skill_rules.teachable(content, character), state)
     entries = [
         ListEntry(
@@ -142,14 +142,14 @@ def skills_screen(
 
 
 def slot_label(content: GameContent, character: Character, slot: int) -> Label:
-    """A slot button carries its number and what is in it."""
+    """Кнопка слота несёт свой номер и то, что в нём лежит."""
     code = character.loadout.actives[slot]
     name = content.skill(code).name if code and content.has_skill(code) else EMPTY_SLOT
     return label(f"Боевой слот {slot + 1}: {name}")
 
 
 def slots_screen(content: GameContent, character: Character, notice: str = "") -> Screen:
-    """The panel, exactly as it will look in a fight."""
+    """Панель ровно в том виде, в каком она будет выглядеть в бою."""
     rules = content.rules
     racial_code = character.loadout.racial
     racial = (
@@ -186,7 +186,7 @@ def pick_screen(
     state: PageState,
     notice: str = "",
 ) -> Screen:
-    """What may go into one slot: known battle skills, and nothing else."""
+    """Что можно положить в слот: изученные боевые умения, и больше ничего."""
     available = skill_rules.equippable(content, character)
     entries = [
         ListEntry(
@@ -216,7 +216,7 @@ def edge_label(edge_name: str) -> Label:
 
 
 def edge_screen(content: GameContent, character: Character, skill: Skill) -> Screen:
-    """The rank-three fork. Two ways to use the same skill, not two skills.
+    """Развилка третьего ранга. Два способа применять одно умение, а не два умения.
 
     Каждая грань говорит только то, что написано у неё в содержимом. Раньше сюда
     дописывались две общие фразы - «бьёт сильнее на 20 процентов» первой грани и

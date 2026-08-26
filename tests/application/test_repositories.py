@@ -1,7 +1,7 @@
-"""Repository behaviour, verified against the in-memory adapters.
+"""Поведение хранилищ, проверенное на адаптерах в памяти.
 
-The PostgreSQL adapters implement the same protocols; their SQL is exercised by
-integration tests marked ``integration`` and skipped when no database is running.
+Адаптеры на PostgreSQL отвечают тем же протоколам; их SQL прогоняют тесты с
+пометкой ``integration``, и они пропускаются, когда база не поднята.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from mmorpg.infrastructure.persistence import (
 
 
 class FakeClock:
-    """A clock the tests move by hand, so no test ever sleeps."""
+    """Часы, которые тесты двигают руками, чтобы ни один из них не засыпал."""
 
     def __init__(self) -> None:
         self.now = 1_000.0
@@ -52,7 +52,7 @@ def a_character(user_id: int = 42, name: str = "Тест") -> Character:
     return Character(id=0, user_id=user_id, name=name, race_id="human", class_id="warrior")
 
 
-# --- the adapters satisfy the ports ---------------------------------
+# --- адаптеры отвечают портам --------------------------------------
 
 
 def test_in_memory_adapters_implement_the_ports() -> None:
@@ -90,7 +90,7 @@ async def test_settings_can_be_saved_for_an_unknown_user() -> None:
     assert stored.settings.emoji is True
 
 
-# --- characters ------------------------------------------------------
+# --- персонажи -------------------------------------------------------
 
 
 async def test_create_assigns_an_id() -> None:
@@ -144,7 +144,7 @@ async def test_names_are_unique_case_insensitively() -> None:
     assert await characters.name_taken("Аргуса") is False
 
 
-# --- inventory -------------------------------------------------------
+# --- сумка -----------------------------------------------------------
 
 
 async def test_inventory_stacks_and_removes() -> None:
@@ -192,7 +192,7 @@ async def test_state_cache_delete() -> None:
 
 
 async def test_what_one_player_took_is_gone_for_the_next_one() -> None:
-    """A node holds a wave, and the wave is shared by everybody in the place."""
+    """В узле стоит волна, и эта волна общая для всех, кто в месте."""
     cache = InMemoryLocationStateCache()
     assert await cache.state("farhold", 1, now=100) == LocationState()
 
@@ -218,7 +218,7 @@ async def test_the_last_thing_out_empties_the_node_and_three_minutes_refill_it()
 
 
 async def test_a_press_that_names_an_older_wave_takes_nothing() -> None:
-    """Two players emptying the last pack together empty it once, not twice."""
+    """Двое, вычищающие последнюю стаю разом, вычищают её один раз, а не два."""
     cache = InMemoryLocationStateCache()
     await cache.take("farhold", 1, 3, wave=0, size=1, now=1_000, ttl=600)
     late = await cache.take("farhold", 1, 3, wave=0, size=1, now=1_000 + RESPAWN_SECONDS, ttl=600)
@@ -254,7 +254,7 @@ async def test_somebody_who_walked_off_stops_being_seen() -> None:
 
 
 async def test_duplicate_updates_are_dropped() -> None:
-    """A redelivered Telegram update must not apply its effect twice."""
+    """Повторно доставленное обновление Telegram не должно сработать дважды."""
     store = InMemoryIdempotencyStore()
     assert await store.seen(555) is False
     assert await store.seen(555) is True
@@ -271,7 +271,7 @@ async def test_idempotency_entries_expire() -> None:
 
 @pytest.mark.integration
 async def test_postgres_adapters_are_importable() -> None:
-    """The SQL adapters must at least import without a database present."""
+    """Адаптеры на SQL обязаны хотя бы импортироваться без поднятой базы."""
     from mmorpg.infrastructure.persistence.postgres import (
         PostgresCharacterRepository,
         PostgresInventoryRepository,

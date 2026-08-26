@@ -1,13 +1,13 @@
-"""Connection pools.
+"""Пулы соединений.
 
-Both pools are created once at startup and closed on shutdown - never per request
-(``docs/architecture.md``, "Latency budget").
+Оба пула создаются один раз на старте и закрываются при остановке - никогда не
+на запрос (``docs/architecture.md``, «Бюджет задержки»).
 
-Neither is created *once and for all*, though: a link that breaks under a running
-game is replaced without the game stopping, and the call that was in the air when
-it broke is made again. PostgreSQL gets that from :class:`ReconnectingPool`,
-Redis has it built in and is only told to use it, and startup waits for both
-instead of exiting when a stack comes up out of order.
+При этом ни один из них не создаётся *раз и навсегда*: связь, оборвавшаяся под
+работающей игрой, заменяется, не останавливая игру, а вызов, бывший в воздухе,
+делается заново. PostgreSQL получает это от :class:`ReconnectingPool`, у Redis
+это встроено и ему лишь велят этим пользоваться, а старт ждёт обоих вместо того,
+чтобы выйти, когда стек поднялся не по порядку.
 """
 
 from __future__ import annotations
@@ -19,23 +19,22 @@ from mmorpg.infrastructure.persistence.reconnect import ReconnectingPool, lost_c
 from mmorpg.logging import get_logger
 from mmorpg.retry import RetryPolicy, keep_trying
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:  # pragma: no cover - только для типов
     from redis.asyncio import Redis
 
 logger = get_logger(__name__)
 
-#: How often an idle Redis connection proves it is still alive. A connection that
-#: died quietly is then found by the health check instead of by a player.
+#: Как часто простаивающее соединение Redis доказывает, что оно живо. Тихо умершее
+#: соединение находит тогда проверка здоровья, а не игрок.
 REDIS_HEALTH_CHECK_SECONDS = 30
 REDIS_CONNECT_TIMEOUT_SECONDS = 5.0
 
 
 async def create_postgres_pool(settings: Settings) -> ReconnectingPool:
-    """Open the asyncpg pool with the configured bounds, and keep it open.
+    """Открыть пул asyncpg с настроенными границами и держать его открытым.
 
-    Startup waits for the database rather than exiting: the container may well be
-    ahead of PostgreSQL, and the operator does not care in which order Docker
-    started them.
+    Старт ждёт базу, а не выходит: контейнер вполне может опередить PostgreSQL, а
+    тому, кто запускал, всё равно, в каком порядке их поднял Docker.
     """
     policy = RetryPolicy.from_settings(settings)
     pool = await keep_trying(
@@ -57,19 +56,19 @@ async def _open_postgres(settings: Settings) -> Any:
         max_size=settings.postgres_pool_max,
         command_timeout=5.0,
     )
-    if pool is None:  # pragma: no cover - asyncpg only returns None on misuse
+    if pool is None:  # pragma: no cover - asyncpg возвращает None только при неверном обращении
         msg = "could not create the PostgreSQL pool"
         raise RuntimeError(msg)
     return pool
 
 
 def create_redis_client(settings: Settings) -> Redis:
-    """Build the Redis client; its connection pool is managed by redis-py.
+    """Собрать клиент Redis; его пулом соединений управляет redis-py.
 
-    redis-py can reconnect and send the command again on its own, and is told to
-    here rather than left on its defaults. Repeating is safe for everything the
-    game keeps in Redis: a screen, a fight, a location, a shop roll are all
-    written whole, so writing them twice writes the same thing.
+    redis-py умеет переподключиться и послать команду заново сам, и здесь ему это
+    велят, а не оставляют на значениях по умолчанию. Повторять безопасно для всего,
+    что игра держит в Redis: экран, бой, локация и прилавок пишутся целиком, поэтому
+    записать их дважды - записать то же самое.
     """
     from redis.asyncio import Redis
     from redis.asyncio.retry import Retry
@@ -95,7 +94,7 @@ def create_redis_client(settings: Settings) -> Redis:
 
 
 async def wait_for_redis(client: Redis, settings: Settings) -> None:
-    """Ping until Redis answers. Same reason as the PostgreSQL wait above."""
+    """Стучаться, пока Redis не ответит. Причина та же, что у ожидания PostgreSQL выше."""
     await keep_trying(
         client.ping,
         policy=RetryPolicy.from_settings(settings),

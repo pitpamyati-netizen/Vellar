@@ -1,10 +1,11 @@
-"""Contracts: which ones a city offers, what counts towards them, what they pay.
+"""Задания: какие предлагает город, что в них засчитывается, сколько они платят.
 
-Pure arithmetic over the character's ledger. Nothing here writes anything: every
-function returns a new ledger or a new character, and the handler stores it.
+Чистая арифметика по журналу персонажа. Ничто здесь ничего не пишет: каждая
+функция возвращает новый журнал или нового персонажа, а сохраняет хендлер.
 
-The counter only ever moves forward, and only for a contract the character
-actually took - a kill made before taking the job is a kill, not a favour.
+Счётчик двигается только вперёд и только по заданию, которое персонаж
+действительно взял: убитый до того, как работа взята, - это убитый, а не
+одолжение.
 """
 
 from __future__ import annotations
@@ -18,15 +19,15 @@ from mmorpg.domain.entities.quest import ObjectiveKind, Quest, QuestLog
 from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules.progression import LevelUp, earned, grant_experience
 
-# How far above the contract's level a character may still take it. Below the
-# level it is simply not offered; there is no ceiling, because an easy contract
-# already pays its fixed price and nothing more.
+# Насколько выше уровня задания персонаж всё ещё может его взять. Ниже уровня оно просто
+# не предлагается; потолка нет, потому что лёгкое задание и так платит свою постоянную
+# цену и ничего сверх.
 LEVEL_SLACK = 0
 
 
 @dataclass(frozen=True, slots=True)
 class QuestStep:
-    """One counter that moved, ready to be turned into a sentence."""
+    """Один сдвинувшийся счётчик, готовый превратиться во фразу."""
 
     quest: Quest
     progress: int
@@ -37,7 +38,7 @@ class QuestStep:
 
 
 def is_open(quest: Quest, character: Character) -> bool:
-    """Whether the board shows this contract to this character right now."""
+    """Показывает ли доска это задание этому персонажу прямо сейчас."""
     log = character.quests
     if log.is_done(quest.id) or log.is_taken(quest.id):
         return False
@@ -47,13 +48,13 @@ def is_open(quest: Quest, character: Character) -> bool:
 
 
 def available(content: GameContent, character: Character, city_id: str = "") -> tuple[Quest, ...]:
-    """Contracts this city will hand out to this character, easiest first."""
+    """Задания, которые этот город выдаст этому персонажу, от простых к сложным."""
     city = city_id or character.city_id
     return tuple(quest for quest in content.quests_in(city) if is_open(quest, character))
 
 
 def taken(content: GameContent, character: Character) -> tuple[QuestStep, ...]:
-    """Everything in the ledger right now, with its counter."""
+    """Всё, что сейчас в журнале, вместе со счётчиками."""
     return tuple(
         QuestStep(quest=content.quest(quest_id), progress=progress)
         for quest_id, progress in sorted(character.quests.taken.items())
@@ -64,7 +65,7 @@ def taken(content: GameContent, character: Character) -> tuple[QuestStep, ...]:
 def ready_to_hand_in(
     content: GameContent, character: Character, city_id: str = ""
 ) -> tuple[QuestStep, ...]:
-    """Counted-out contracts belonging to the city the character is standing in."""
+    """Досчитанные задания, принадлежащие городу, в котором стоит персонаж."""
     city = city_id or character.city_id
     return tuple(
         step for step in taken(content, character) if step.done and step.quest.city_id == city
@@ -100,7 +101,7 @@ def _counts_search(quest: Quest, node: NodeKind) -> bool:
 def record_kills(
     content: GameContent, character: Character, enemies: tuple[Enemy, ...]
 ) -> tuple[QuestLog, tuple[QuestStep, ...]]:
-    """Count defeated opponents into every contract that asked for them."""
+    """Засчитать побеждённых противников во все задания, которые их просили."""
     log = character.quests
     moved: dict[str, int] = {}
     for quest_id in tuple(log.taken):
@@ -110,7 +111,7 @@ def record_kills(
         counted = sum(1 for enemy in enemies if _counts_kill(quest, enemy))
         if not counted:
             continue
-        # Never past the target: an overshoot would read as "12 из 10".
+        # Никогда за цель: перебор читался бы как «12 из 10».
         room = max(0, quest.target_count - log.progress(quest_id))
         gained = min(counted, room)
         if gained:
@@ -131,12 +132,12 @@ def _counts_craft(quest: Quest, item_id: str) -> bool:
 def record_craft(
     content: GameContent, character: Character, item_id: str, count: int = 1
 ) -> tuple[QuestLog, tuple[QuestStep, ...]]:
-    """Count a batch that came out of a craft into the contracts that asked for it.
+    """Засчитать вышедшую из ремесла партию в задания, которые её просили.
 
-    Made, not bought: the counter moves where the work happens, so a contract for
-    three whetstones is three whetstones somebody actually forged. Nothing is
-    taken out of the bag - what was made stays made, and the payment comes on
-    handing the contract in like every other one.
+    Сделано, а не куплено: счётчик двигается там, где случается работа, поэтому
+    задание на три точильных камня - это три камня, которые кто-то и правда выковал.
+    Из сумки при этом не вынимается ничего: сделанное остаётся сделанным, а плата
+    приходит при сдаче задания, как и у всех прочих.
     """
     log = character.quests
     moved: dict[str, int] = {}
@@ -160,7 +161,7 @@ def record_craft(
 def record_search(
     content: GameContent, character: Character, node: NodeKind
 ) -> tuple[QuestLog, tuple[QuestStep, ...]]:
-    """Count one node worked through without a fight."""
+    """Засчитать один узел, отработанный без боя."""
     log = character.quests
     moved: dict[str, int] = {}
     for quest_id in tuple(log.taken):
@@ -191,7 +192,7 @@ def abandon(character: Character, quest: Quest) -> Character:
 
 @dataclass(frozen=True, slots=True)
 class QuestPayout:
-    """What handing a contract in changed. The item is added by the handler."""
+    """Что изменила сдача задания. Вещь добавляет хендлер."""
 
     character: Character
     quest: Quest
@@ -208,7 +209,7 @@ QUEST_REWARD_KEY = "quest_reward_percent"
 
 
 def hand_in(content: GameContent, character: Character, quest: Quest) -> QuestPayout | None:
-    """Close a counted-out contract and pay for it. ``None`` if it is not due."""
+    """Закрыть досчитанное задание и заплатить за него. ``None``, если срок не подошёл."""
     log = character.quests
     if not log.is_taken(quest.id) or log.progress(quest.id) < quest.target_count:
         return None

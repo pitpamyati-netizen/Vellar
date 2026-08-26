@@ -1,4 +1,4 @@
-"""mmorpg.domain.procgen layer package."""
+"""Слой mmorpg.domain.procgen."""
 
 from mmorpg.domain.procgen.enemies import generate_enemy, generate_group
 from mmorpg.domain.procgen.location import (

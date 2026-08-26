@@ -1,1 +1,1 @@
-"""mmorpg.presentation.telegram.middlewares layer package."""
+"""Слой mmorpg.presentation.telegram.middlewares."""

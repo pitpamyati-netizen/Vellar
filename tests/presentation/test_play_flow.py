@@ -1,4 +1,4 @@
-"""Menu, world, city and location navigation."""
+"""Перемещение по меню, миру, городу и локации."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ def in_location(content: GameContent, hero: Character, in_city: PlayState) -> Pl
     return step(content, hero, in_city, "Локации", "1. Луга у Заставы")
 
 
-# --- menu and world ---------------------------------------------------
+# --- меню и мир -------------------------------------------------------
 
 
 def test_main_menu_states_where_you_are(
@@ -85,7 +85,7 @@ def test_entering_a_city(content: GameContent, hero: Character, in_city: PlaySta
     assert "Дубно" in render(content, hero, in_city, world_seed=WORLD_SEED).text()
 
 
-# --- shop and inventory -----------------------------------------------
+# --- лавка и сумка ----------------------------------------------------
 
 
 def test_shop_and_inventory_are_real_screens(
@@ -129,7 +129,7 @@ def test_shop_and_inventory_are_real_screens(
 def test_buying_defers_the_write_to_the_handler(
     content: GameContent, hero: Character, in_city: PlayState
 ) -> None:
-    """The flow stays pure: it records the intent, the handler performs it."""
+    """Ветка остаётся чистой: она записывает намерение, а исполняет хендлер."""
     from mmorpg.domain.rules.economy import buy_price, roll_assortment
     from mmorpg.presentation.telegram.flows.play import Goods
     from mmorpg.presentation.telegram.screens.shop import buy_label
@@ -188,7 +188,7 @@ def test_every_city_service_is_a_real_screen(
     section: str,
     screen: ScreenId,
 ) -> None:
-    """No stubs left in a city: each service answers and comes back (Roadmap 1.5)."""
+    """В городе не осталось заглушек: каждая служба отвечает и возвращает (Roadmap 1.5)."""
     opened = step(content, hero, in_city, section)
     assert opened.screen is screen
     rendered = render(content, hero, opened, world_seed=WORLD_SEED)
@@ -197,7 +197,7 @@ def test_every_city_service_is_a_real_screen(
     assert step(content, hero, opened, "Назад").screen is ScreenId.CITY
 
 
-# --- locations --------------------------------------------------------
+# --- локации ----------------------------------------------------------
 
 
 def test_location_list_shows_level_bands(
@@ -240,7 +240,7 @@ def test_moving_between_nodes(
 def test_every_node_is_reachable_from_the_entrance(
     content: GameContent, hero: Character, in_location: PlayState
 ) -> None:
-    """Walking the graph by button presses must reach the exit."""
+    """Обход графа нажатиями кнопок обязан привести к выходу."""
     location = build_location(content, WORLD_SEED, in_location.session)
     seen = {0}
     frontier = [0]
@@ -314,7 +314,7 @@ def test_leaving_a_location_clears_the_session(
 def test_the_map_does_not_move_under_your_feet(
     content: GameContent, hero: Character, in_location: PlayState
 ) -> None:
-    """The map must not change under a player who is standing in it."""
+    """Карта не должна меняться под игроком, который в ней стоит."""
     before = render(content, hero, in_location, world_seed=WORLD_SEED).text()
     later = advance(
         content,
@@ -339,7 +339,7 @@ def test_a_combat_node_hands_over_to_the_fight_screen(
     assert fighting.screen is ScreenId.COMBAT
 
 
-# --- navigation -------------------------------------------------------
+# --- перемещение ------------------------------------------------------
 
 
 def test_back_walks_the_stack(
@@ -420,15 +420,14 @@ def test_state_survives_a_round_trip(
     assert restored.stack == in_location.stack
 
 
-# --- state that came back from an older release -----------------------
-#
-# Storage outlives content and outlives the code that wrote it. A screen that
-# names something the game can no longer build must land the player somewhere
-# real: a crash here is answered with an apology on *every* press afterwards,
-# because the state that caused it is read again each time.
+# --- состояние, пришедшее от прежнего выпуска -------------------------  Хранилище
+# живёт дольше содержимого и дольше кода, который в него писал. Экран, называющий то,
+# чего игра больше не может собрать, обязан посадить игрока на что-то настоящее: падение
+# здесь отвечает извинением на *каждое* следующее нажатие, потому что вызвавшее его
+# состояние читается каждый раз заново.
 
-# Written by a release that stored the location screen without the visit behind
-# it. This exact document was found in Redis, and every press against it raised.
+# Записано выпуском, который сохранял экран локации без стоящей за ним вылазки. Ровно
+# такой документ нашёлся в Redis, и каждое нажатие по нему падало.
 STALE_LOCATION = (
     '{"screen": "location", "stack": "main_menu,world,city,location_list,location",'
     ' "world_page": 1, "location_page": 1, "city": "farhold",'
@@ -480,13 +479,13 @@ def test_a_quest_offer_for_an_unknown_contract_falls_back_to_the_board(
     assert render(content, hero, lost, world_seed=WORLD_SEED).id is ScreenId.QUEST_BOARD
 
 
-# --- the introduction -------------------------------------------------
+# --- вступление -------------------------------------------------------
 
 
 def test_the_introduction_is_offered_until_it_is_done(
     content: GameContent, hero: Character, menu: PlayState
 ) -> None:
-    """A played character does not need a tutorial button for ever."""
+    """Разыгранному персонажу кнопка обучения навсегда не нужна."""
     fresh = render(content, hero, menu, world_seed=WORLD_SEED)
     assert "Обучение" in [item.text for row in fresh.rows for item in row]
 
@@ -501,13 +500,13 @@ def test_the_introduction_is_offered_until_it_is_done(
 def test_a_task_button_walks_the_player_to_the_screen(
     content: GameContent, hero: Character, menu: PlayState
 ) -> None:
-    """The point of the button: no route to memorise, no menu to guess."""
+    """Смысл кнопки: не надо запоминать дорогу и не надо угадывать меню."""
     opened = step(content, hero, menu, "Обучение")
     assert opened.screen is ScreenId.TUTORIAL
 
     walked = step(content, hero, opened, "Перейти к шагу")
     assert walked.screen is ScreenId.STATS
-    # Reading them is the task, so it is already ticked off.
+    # Прочитать их и есть дело, поэтому оно уже отмечено.
     assert walked.pending.character is not None
     assert walked.pending.character.tutorial != hero.tutorial
 
@@ -515,7 +514,7 @@ def test_a_task_button_walks_the_player_to_the_screen(
 def test_a_task_done_by_playing_counts_too(
     content: GameContent, hero: Character, menu: PlayState
 ) -> None:
-    """Nobody has to open the introduction for it to notice what they did."""
+    """Открывать вступление не обязательно, чтобы оно заметило сделанное."""
     from mmorpg.domain.rules import tutorial as tutorial_rules
     from mmorpg.domain.rules.tutorial import TutorialTask
 
@@ -529,8 +528,8 @@ def test_a_finished_introduction_says_so_and_offers_nothing(
     content: GameContent, hero: Character
 ) -> None:
     taught = replace(hero, tutorial=0b111111)
-    # The button is gone from the menu, but the screen still answers whoever
-    # arrives on it from an older keyboard (accessibility rule 12).
+    # Кнопка ушла из меню, но экран всё равно отвечает тому, кто попал на него со старой
+    # клавиатуры (правило доступности 12).
     standing = begin(taught).at(ScreenId.TUTORIAL)
     text = render(content, taught, standing, world_seed=WORLD_SEED).text()
     assert "Все шаги сделаны" in text
@@ -539,13 +538,13 @@ def test_a_finished_introduction_says_so_and_offers_nothing(
     assert pressed.pending.empty
 
 
-# --- other players on the road ----------------------------------------
+# --- другие игроки на дороге ------------------------------------------
 
 
 def test_a_free_location_shows_who_else_is_here(
     content: GameContent, hero: Character, in_city: PlayState
 ) -> None:
-    """On a free location the news that matters is who is standing next to you."""
+    """На вольной локации важнее всего новость о том, кто стоит рядом."""
     from mmorpg.domain.entities.location import Presence
 
     grown = replace(hero, level=20)

@@ -39,10 +39,10 @@ TYPING_REASON = "reason"
 
 @dataclass(frozen=True, slots=True)
 class PendingWrite:
-    """What the handler must store after this step.
+    """Что хендлер обязан сохранить после этого шага.
 
-    ``items`` is a list of bag changes: a positive number adds, a negative one
-    takes away. Nothing here is applied by the flow itself.
+    ``items`` — список изменений сумки: положительное число добавляет,
+    отрицательное убирает. Ветка сама не применяет здесь ничего.
 
     Последние поля - работа смотрителя. Они отделены от остальных нарочно: всё,
     что стирает или меняет чужое, должно быть видно в одном списке.
@@ -104,22 +104,22 @@ class PendingWrite:
         return replace(self, items=(*self.items, *changes))
 
     def because(self, flow: str) -> PendingWrite:
-        """Say why the purse changed, for the gold journal (``mmorpg.economy_log``).
+        """Сказать, почему изменился кошелёк, для книги золота (``mmorpg.economy_log``).
 
-        A label and nothing more: the flow stays pure and the handler that does
-        the writing is the one that writes the line.
+        Только имя и ничего больше: ветка остаётся чистой, а строку пишет тот хендлер,
+        который и делает запись.
         """
         return replace(self, gold_flow=flow)
 
 
 @dataclass(frozen=True, slots=True)
 class Clock:
-    """The two timed things left in the game, and the moment they are read at.
+    """Две вещи со сроком, оставшиеся в игре, и момент, на который их читают.
 
-    The world no longer turns over on a shared watch: a location keeps its map
-    until it is cleared out. What is still timed is a shop shelf and a personal
-    gathering cooldown, and both arrive here as values so the flow stays free of
-    the clock (``docs/adr/0003-location-generations.md``).
+    Мир больше не переворачивается по общей страже: локация держит свою карту, пока
+    её не вычистят. Со сроком остались прилавок лавки и личный откат сбора, и оба
+    приходят сюда значениями, чтобы ветка оставалась без часов
+    (``docs/adr/0003-location-generations.md``).
     """
 
     now: int = 0
@@ -129,9 +129,9 @@ class Clock:
 
 @dataclass(frozen=True, slots=True)
 class Goods:
-    """What the player owns and what the current city sells.
+    """Что у игрока есть и чем торгует нынешний город.
 
-    Passed in from the handler: the flow itself never touches a repository.
+    Передаётся хендлером: сама ветка не трогает хранилищ.
     """
 
     gold: int = 0
@@ -142,11 +142,11 @@ class Goods:
 
 @dataclass(frozen=True, slots=True)
 class LocationSession:
-    """A visit to one location: where the player is standing, and nothing else.
+    """Вылазка в одну локацию: где стоит игрок, и больше ничего.
 
-    The map is permanent, so a visit has nothing to capture about it. What is
-    left in the nodes is shared by everybody in the place and is read fresh on
-    every step (``domain/rules/nodes.py``, docs/adr/0003).
+    Карта постоянна, поэтому вылазке нечего о ней запоминать. То, что осталось в
+    узлах, общее для всех, кто в месте, и читается заново на каждом шаге
+    (``domain/rules/nodes.py``, docs/adr/0003).
     """
 
     city_id: str = ""
@@ -160,10 +160,10 @@ class LocationSession:
 
 @dataclass(frozen=True, slots=True)
 class Descent:
-    """An unfinished run into the dungeons of a city.
+    """Незаконченный спуск в подземелья города.
 
-    ``started_at`` is the moment the descent began; it is part of the seed, so
-    two descents in a row are two different descents.
+    ``started_at`` - момент, когда спуск начался; он входит в сид, поэтому два
+    спуска подряд - это два разных спуска.
     """
 
     city_id: str = ""
@@ -191,14 +191,14 @@ class PlayState:
     skill_page: PageState = field(default_factory=PageState)
     mentor_page: PageState = field(default_factory=PageState)
     board_page: PageState = field(default_factory=PageState)
-    # What the player is in the middle of choosing: a slot, an edge, a contract.
+    # Что игрок сейчас выбирает: слот, грань, задание.
     pick_slot: int = 0
     edge_skill: str = ""
     quest_id: str = ""
     craft_id: str = ""
     npc_id: str = ""
-    # The moment the craft screen was opened at: the cooldown line must not tick
-    # down while the player is still reading the screen it was printed on.
+    # Момент, на который открыли экран ремесла: строка отката не должна тикать, пока
+    # игрок ещё читает тот экран, на котором она напечатана.
     craft_moment: int = 0
     # Что правит смотритель: разновидность, сущность, поле, чужой персонаж. Всё
     # остальное панель читает заново на каждом шаге, потому что мир между двумя
@@ -216,7 +216,7 @@ class PlayState:
     searching: bool = False
     #: Вещь, карточку которой открыли из сумки или с прилавка.
     item_id: str = ""
-    # Transient: cleared at the start of every step, read by the handler.
+    # Скоропортящееся: очищается в начале каждого шага, читается хендлером.
     pending: PendingWrite = field(default_factory=PendingWrite)
     fight: str = ""
     #: Кого шаг попросил позвать в отряд. Переходное, как и ``fight``: хендлер
@@ -353,7 +353,7 @@ def go_back(state: PlayState) -> PlayState:
 
 
 def page_move(command: Command, current: PageState, pages: int) -> PageState | None:
-    """Shared paging arithmetic. ``None`` when this command was not a page move."""
+    """Общая арифметика страниц. ``None``, когда команда страницу не листала."""
     if command.intent in {Intent.NEXT_PAGE, Intent.PREVIOUS_PAGE}:
         delta = 1 if command.intent is Intent.NEXT_PAGE else -1
         return current.moved(delta, pages)

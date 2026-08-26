@@ -1,4 +1,4 @@
-"""mmorpg.infrastructure.content layer package."""
+"""Слой mmorpg.infrastructure.content."""
 
 from mmorpg.infrastructure.content.changelog import Release, load_changelog, select_release
 from mmorpg.infrastructure.content.loader import ContentError, load_content

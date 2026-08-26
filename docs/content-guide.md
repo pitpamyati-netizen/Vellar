@@ -1,155 +1,151 @@
-# Content guide
+# Руководство по содержимому
 
-All game content lives in `content/*.toml`. **Adding a race, a class, a trait, an
-item or a city requires no code changes.** The loader
-(`src/mmorpg/infrastructure/content/loader.py`) parses these files once at startup,
-validates them, and fails loudly with the full list of problems if anything is
-wrong - the bot refuses to start on broken content.
+Всё содержимое игры лежит в `content/*.toml`. **Добавить расу, класс, черту, вещь или
+город можно без единой правки кода.** Загрузчик
+(`src/mmorpg/infrastructure/content/loader.py`) разбирает эти файлы один раз на
+старте, проверяет их и громко падает с полным списком бед, если что-то не так: на
+испорченном содержимом бот не поднимается.
 
-| File | Contains |
+| Файл | Что в нём |
 | --- | --- |
-| `world.toml` | 15 cities, 5 locations each, level bands, unlock conditions |
-| `races.toml` | 16 races: stat bonuses, passive ability, racial active reference |
-| `classes.toml` | 8 classes: key stats, resource curve, health curve, progression meta |
-| `traits.toml` | 64 traits, the modifier vocabulary, categories |
-| `skills.toml` | 20 active + 40 passive per class, 1 active per race, both edges of each |
-| `items.toml` | kinds of gear, grades, rarities, consumables, materials |
-| `crafts.toml` | gathering and making crafts, recipes, rank and quality rules |
+| `world.toml` | 15 городов, по 5 локаций, полосы уровней, условия открытия |
+| `races.toml` | 16 рас: прибавки, пассивная способность, ссылка на расовое умение |
+| `classes.toml` | 8 классов: ключевые характеристики, кривые ресурса и здоровья, опорные числа |
+| `traits.toml` | 64 черты, словарь прибавок, категории |
+| `skills.toml` | по 20 боевых и 40 пассивных на класс, 1 боевое на расу, по две грани у каждого |
+| `items.toml` | виды снаряжения, ступени, редкости, расходники, сырьё |
+| `crafts.toml` | собирающие и делающие ремёсла, рецепты, правила ранга и качества |
 
-## Ground rules
+## Общие правила
 
-1. **Traits and equipment never grant active skills.** They grant modifiers, and
-   equipment may additionally boost a specific skill through `skill_modifiers`.
-   This is what keeps the interface small enough to be played by ear
-   (`docs/skills.md`).
-2. **One modifier vocabulary.** Traits, passives and equipment all draw from
-   `traits.toml [meta].modifier_keys`. A key that is not listed there is rejected.
-   Add the key to that list first, then implement it in the rules layer.
-3. **Panel size is fixed.** 6 active slots and 1 racial. New content changes what
-   fills them, never how many there are. A passive occupies no slot at all: what is
-   learned works (`docs/skills.md`, ADR 0016).
-4. **Player-visible text is Russian, everything else English.** Names, descriptions
-   and `text` fields are what the player hears; ids, codes and comments are English.
-5. **No pseudo-graphics in any text field** - screen readers read them character by
-   character. Numbers as words: `"выше на 15 процентов"`.
-6. **Race, class and craft are three different things.** A race says what the
-   adventurer is, a class says how they fight, a craft says what they make for
-   pay - and crafts live in `crafts.toml` and nowhere else. Races and classes
-   are read out on the creation screen, so they carry familiar words; what they
-   must never do is drift into a craft, or into the black list in
-   `Narrative.md`, section 2. `tests/content/test_naming.py` reads every name
-   and description in this directory and fails on either.
+1. **Черты и снаряжение не дают боевых умений.** Они дают прибавки, а снаряжение
+   может ещё и усилить конкретное умение через `skill_modifiers`. Это и держит
+   интерфейс достаточно маленьким, чтобы играть на слух (`docs/skills.md`).
+2. **Словарь прибавок один.** Черты, пассивные умения и снаряжение берут из
+   `traits.toml [meta].modifier_keys`. Ключ, которого там нет, отвергается. Сначала
+   добавьте ключ в список, потом реализуйте его в слое правил.
+3. **Размер панели постоянен.** 6 боевых слотов и 1 расовый. Новое содержимое меняет
+   то, чем они заполнены, но не их число. Пассивное умение слота не занимает вовсе:
+   изученное работает (`docs/skills.md`, ADR 0016).
+4. **Видимый игроку текст — русский, всё остальное — английский.** Имена, описания и
+   поля `text` — это то, что игрок слышит; идентификаторы и коды — английские.
+5. **Никакой псевдографики ни в одном текстовом поле** — экранный диктор читает её по
+   знаку. Числа словами: `"выше на 15 процентов"`.
+6. **Раса, класс и ремесло — три разные вещи.** Раса говорит, кто такой приключенец,
+   класс — как он дерётся, ремесло — что он делает за плату, и ремёсла живут в
+   `crafts.toml` и больше нигде. Расы и классы читают вслух на экране создания, поэтому
+   они несут привычные слова; чего им нельзя — сползти в ремесло или в чёрный список из
+   `Narrative.md`, раздел 2. `tests/content/test_naming.py` читает каждое имя и каждое
+   описание в этом каталоге и падает на обоих случаях.
 
-## Add a race
+## Добавить расу
 
 ```toml
 [[race]]
-id = "seaborn"                       # snake_case, unique, never changes
-name = "Морской народ"               # one or two Russian words, <= 20 letters
+id = "seaborn"                       # snake_case, уникально, не меняется никогда
+name = "Морской народ"               # одно-два русских слова, <= 20 букв
 description = "Одна фраза: какие они и что это даёт в дороге."
 bonuses = { AGI = 2, WIS = 1, STR = -1 }
 passive = { id = "tide_born", name = "Приливная выучка", text = "Одна фраза об эффекте.", modifiers = { dodge_percent = 5 } }
-active = "race_seaborn_undertow"     # must exist in skills.toml
+active = "race_seaborn_undertow"     # обязано существовать в skills.toml
 ```
 
-**The passive must have `modifiers`, and every key in them must be one the engine
-reads** (`modifiers.EFFECTIVE_KEYS`). A race without them does not load: all
-sixteen used to be an id, a name and a text nobody counted, and the player picked
-a race by a line the game ignored. The `text` says exactly what the modifiers do,
-in numbers - it is read at character creation and is the reason the race is
-picked.
+**У пассивной способности обязаны быть `modifiers`, и каждый их ключ обязан быть
+таким, который движок читает** (`modifiers.EFFECTIVE_KEYS`). Раса без них не
+загружается: все шестнадцать когда-то были идентификатором, именем и текстом, которого
+никто не считал, и игрок выбирал расу по строке, которую игра пропускала мимо. `text`
+говорит ровно то, что делают прибавки, в числах, — его читают при создании персонажа,
+и ради него расу и выбирают.
 
-The id is frozen from the moment the first character picks it: characters point
-at it in the database, so a rename is a `name`/`description` change and never a
-change of key.
+Идентификатор заморожен с той минуты, как его выбрал первый персонаж: персонажи
+показывают на него в базе, поэтому переименование — это правка `name`/`description`, а
+не смена ключа.
 
-Budget rule, enforced by `tests/content/test_races_classes_skills.py`: positive
-points may not exceed `3 + (sum of penalties)`, and the net total may not exceed
-`+3`. `{ STR = 2, END = 2, INT = -2 }` is legal; `{ STR = 4 }` is not.
+Правило бюджета, которое держит `tests/content/test_races_classes_skills.py`:
+положительных очков не больше `3 + (сумма штрафов)`, а чистая сумма не больше `+3`.
+`{ STR = 2, END = 2, INT = -2 }` законно, `{ STR = 4 }` — нет.
 
-Then add the racial active to `skills.toml` with `owner = "race:seaborn"`, `kind =
-"active"`, `level = 1` and exactly two edges. The passive stays in `races.toml`: it
-is always on and occupies no slot.
+Потом добавьте расовое боевое умение в `skills.toml` с `owner = "race:seaborn"`, `kind
+= "active"`, `level = 1` и ровно двумя гранями. Пассивная способность остаётся в
+`races.toml`: она работает всегда и слота не занимает.
 
-Finally bump `EXPECTED_RACES` in the loader and the race count test - the count is
-asserted deliberately, so growing the roster is a conscious decision.
+Наконец, поднимите `EXPECTED_RACES` в загрузчике и в тесте на число рас — счёт
+проверяется нарочно, чтобы рост набора был осознанным решением.
 
-## Add a class
+## Добавить класс
 
 ```toml
 [[class]]
 id = "monk"
-name = "Монах"                       # one Russian word: how the character fights
+name = "Монах"                       # одно русское слово: как персонаж дерётся
 role = "Ближний бой без оружия"
 description = "Одна фраза."
 key_stats = ["AGI", "WIS"]
-weapons = ["staff", "dagger"]        # ids from items.toml [meta].weapon_types
-armor = ["cloth", "light"]           # ids from items.toml [meta].armor_types
+weapons = ["staff", "dagger"]        # идентификаторы из items.toml [meta].weapon_types
+armor = ["cloth", "light"]           # идентификаторы из items.toml [meta].armor_types
 bonuses = { AGI = 2, WIS = 1 }
 resource = { id = "chi", name = "Ци", base = 55, per_level = 1.2, stat = "WIS", per_stat = 1.5, regen_per_turn = 8 }
 health = { base = 95, per_level = 7.5, per_endurance = 6.0 }
 ```
 
-`weapons` and `armor` are the class in the player's hands - a rogue holding a
-two-handed sword is not a rogue. Both lists are required and both must name kinds
-that at least one item in `items.toml` actually is, at a level the class can
-reach early: a class with nothing to put on plays bare-handed in a shirt.
+`weapons` и `armor` — это класс в руках игрока: разбойник с двуручным мечом уже не
+разбойник. Оба списка обязательны, и оба обязаны называть роды, которыми хотя бы одна
+вещь в `items.toml` и правда является, на уровне, до которого класс доберётся рано:
+классу, которому нечего надеть, придётся драться голыми руками в рубахе.
 
-A class needs exactly **20 active** and exactly **40 passive** skills, at the
-levels listed in `classes.toml [meta].active_unlock_levels` /
-`passive_unlock_levels`. The loader checks both the counts and the exact level
-sequence. The schedule is even by design - sixty skills over three hundred levels,
-one active roughly every dozen-odd levels with two passives between each pair -
-and a skill point per level is exactly what sixty skills at five ranks cost.
+Классу нужны ровно **20 боевых** и ровно **40 пассивных** умений на тех уровнях, что
+перечислены в `classes.toml [meta].active_unlock_levels` / `passive_unlock_levels`.
+Загрузчик проверяет и число, и точную последовательность уровней. Расписание ровное по
+замыслу — шестьдесят умений на триста уровней, боевое примерно раз в дюжину уровней и
+по два пассивных между ними, — а очко умений за уровень это ровно то, во что обходятся
+шестьдесят умений по пять рангов.
 
-## Add a craft or a recipe
+## Добавить ремесло или рецепт
 
 ```toml
 [[craft]]
-id = "fishing"                       # snake_case, unique, never changes
-name = "Рыбный лов"                  # what the work is called, in Russian
-kind = "gathering"                   # or "making"
-stat = "AGI"                         # the stat the work leans on
+id = "fishing"                       # snake_case, уникально, не меняется никогда
+name = "Рыбный лов"                  # как называется работа, по-русски
+kind = "gathering"                   # или "making"
+stat = "AGI"                         # характеристика, на которую опирается работа
 description = "Одна фраза о работе."
-yields = [{ item = "river_fish", level = 1 }]   # gathering only, item from items.toml
+yields = [{ item = "river_fish", level = 1 }]   # только для сбора, вещь из items.toml
 
 [[recipe]]
 id = "alchemy_fish_oil"
-craft = "alchemy"                    # a making craft
-rank = 2                             # 1..max_rank from [meta]
+craft = "alchemy"                    # делающее ремесло
+rank = 2                             # 1..max_rank из [meta]
 inputs = [{ item = "river_fish", count = 3 }]
 output = { item = "small_healing_potion", count = 1 }
 experience = 20
 ```
 
-A gathering craft brings in materials and needs at least one `yields` entry
-starting at level one; a making craft has no `yields` and needs at least one
-recipe at rank one. A recipe only ever outputs an item that already exists in
-`items.toml`, and it must be worth more than its materials - work that pays less
-than selling the raw stuff is a trap, and
-`tests/content/test_crafts_content.py` refuses it.
+Собирающее ремесло приносит сырьё, и ему нужна хотя бы одна запись `yields`,
+начинающаяся с первого уровня; у делающего `yields` нет, и ему нужен хотя бы один
+рецепт первого ранга. Рецепт выдаёт только ту вещь, которая уже есть в `items.toml`, и
+стоить она обязана больше своего сырья: работа, платящая меньше, чем продажа сырья, —
+ловушка, и `tests/content/test_crafts_content.py` её не пропускает.
 
-Ranks, gathering amounts and the three quality tiers live in `crafts.toml
-[meta]`; the rules that read them are `domain/rules/crafts.py`. See
-`docs/crafts.md`.
+Ранги, размеры сбора и три ступени качества живут в `crafts.toml [meta]`; читают их
+`domain/rules/crafts.py`. См. `docs/crafts.md`.
 
-## Add a skill
+## Добавить умение
 
 ```toml
 [[skill]]
-code = "monk_palm_strike"      # unique across all skills
-name = "Удар ладонью"          # unique within its owner - buttons route by text
-owner = "class:monk"           # "class:<id>" or "race:<id>"
-kind = "active"                # or "passive"
-level = 1                      # must match the unlock schedule for its kind
-cost = 10                      # active only
-cooldown = 0                   # active only, in turns
+code = "monk_palm_strike"      # уникально среди всех умений
+name = "Удар ладонью"          # уникально внутри владельца — кнопки ведут по тексту
+owner = "class:monk"           # "class:<id>" или "race:<id>"
+kind = "active"                # или "passive"
+level = 1                      # обязан совпасть с расписанием для своего вида
+cost = 10                      # только боевое
+cooldown = 0                   # только боевое, в ходах
 target = "enemy"               # self | enemy | all_enemies
-effect = "damage"              # must be listed in skills.toml [meta].active_effects
-power = 135                    # a PERCENTAGE at rank 1 - see below
-scaling = "AGI"                # which stat the standard blow is measured on
-tag = "точность"               # optional: натиск | оборона | точность
-weapons = ["staff"]            # optional: without one of these it does not fire
+effect = "damage"              # обязан быть в skills.toml [meta].active_effects
+power = 135                    # ПРОЦЕНТ на первом ранге — см. ниже
+scaling = "AGI"                # на какой характеристике меряется обычный удар
+tag = "точность"               # необязательно: натиск | оборона | точность
+weapons = ["staff"]            # необязательно: без такого оружия не срабатывает
 text = "Одна фраза, что делает умение."
 edges = [
     { name = "Первая грань", text = "Что меняется." },
@@ -157,12 +153,12 @@ edges = [
 ]
 ```
 
-`weapons` is what the skill needs in hand: a shot asks for a bow, a backstab for
-a dagger. Left out, the skill works with anything and bare-handed too. The list
-may only ever be *narrower* than what the class wields (`classes.toml`) - a wider
-one is a button that can never fire, and the loader refuses it.
+`weapons` — это то, что умению нужно в руке: выстрелу нужен лук, удару в спину —
+кинжал. Не назван — умение работает с чем угодно и голыми руками тоже. Список вправе
+быть только *уже* того, что носит класс (`classes.toml`): более широкий — это кнопка,
+которая не сработает никогда, и загрузчик её не пропускает.
 
-A passive declares `effect` as a **modifier key** instead, and omits
+Пассивное умение вместо этого объявляет `effect` **ключом прибавки** и не пишет
 `cost`/`cooldown`/`target`/`scaling`:
 
 ```toml
@@ -170,123 +166,118 @@ effect = "armor_percent"
 power = 6
 ```
 
-**`power` is never an absolute number.** It is a percentage of something that
-already grows with the character, so a skill written once is correct at level 1
-and at level 300:
+**`power` никогда не бывает абсолютным числом.** Это процент от чего-то, что и так
+растёт вместе с персонажем, поэтому умение, написанное один раз, верно и на первом
+уровне, и на трёхсотом:
 
-| effect kind | percentage of | 100 means |
+| род эффекта | процент от чего | 100 значит |
 | --- | --- | --- |
-| damage | the standard blow | one plain "Атака" |
-| healing, shields | maximum health | a full bar |
-| buffs, debuffs | the modifier itself | +100% to that stat |
+| урон | обычного удара | одна простая «Атака» |
+| лечение, барьеры | максимума здоровья | полная полоса |
+| усиления, ослабления | самого модификатора | +100 % к этой характеристике |
 
-Rough scale for damage: an opener with no cooldown 130, a blow on a cooldown
-170-200, an area skill 110-150 *per target*, a capstone 210-275. Writing an
-absolute number here is the one mistake that cannot be caught by a test - it will
-simply be a skill that stops mattering. See ADR 0007.
+Примерная шкала урона: открывающий удар без отката 130, удар с откатом 170–200,
+умение по всем 110–150 *на цель*, венчающее умение 210–275. Абсолютное число здесь —
+единственная ошибка, которую не поймает тест: умение просто перестанет иметь значение.
+См. ADR 0007.
 
-`tag` is optional and only needed when the effect would leave the wrong trace, or
-when a class would otherwise never reach all three tags - and every class must,
-or a перелом is impossible for it.
+`tag` необязателен и нужен, только когда эффект оставил бы не тот след или когда класс
+иначе не добрался бы до всех трёх тегов — а добраться обязан каждый, иначе перелом для
+него невозможен.
 
-Every skill declares exactly two edges; their codes are derived as `<code>_a` and
-`<code>_b`. Introducing a new `effect` value means adding it to
-`[meta].active_effects` **and** implementing it in the combat engine - the engine
-test fails on an effect it does not handle.
+У каждого умения ровно две грани; их коды выводятся как `<code>_a` и `<code>_b`. Новое
+значение `effect` означает и запись в `[meta].active_effects`, **и** реализацию в
+боевом движке: тест движка падает на эффекте, которого тот не умеет.
 
-## Add a trait
+## Добавить черту
 
 ```toml
 [[trait]]
 id = "stone_patience"
 name = "Каменное терпение"
-category = "defense"                 # one of traits.toml [meta].categories
-tags = ["броня", "выносливость"]     # free-form, shown in filters
+category = "defense"                 # одна из traits.toml [meta].categories
+tags = ["броня", "выносливость"]     # свободные, показываются в фильтрах
 modifiers = { armor_percent = 8, initiative_percent = -4 }
 text = "Броня выше на 8 процентов, инициатива ниже на 4."
 ```
 
-Traits in the `dark` category must contain both an upside and a real penalty; the
-test uses `[meta].lower_is_better` to decide which direction is which (for
-`shop_price_percent` a negative value is the bonus).
+Черты категории `dark` обязаны нести и выгоду, и настоящий штраф; какое направление
+какое, тест решает по `[meta].lower_is_better` (для `shop_price_percent` выгода —
+отрицательное значение).
 
-## Add a kind of gear
+## Добавить вид снаряжения
 
-Gear is **not written by hand**. A sword exists on twelve grades in five
-rarities, and so does every other kind - about two thousand things. What is
-written is the *kind*; the thing is assembled from kind, grade and rarity the way
-an opponent is assembled from an archetype and a level (ADR 0015).
+Снаряжение **руками не пишут**. Меч существует на двенадцати ступенях в пяти
+редкостях, и так же — любой другой вид: около двух тысяч вещей. Пишут *вид*, а вещь
+собирается из вида, ступени и редкости — так же, как противник собирается из породы и
+уровня (ADR 0015).
 
 ```toml
 [[gear]]
-id = "halberd"                       # snake_case, unique, never changes
-noun = "алебарда"                    # the noun the name is built from
-gender = "f"                         # m | f | n | p - "Крепкая алебарда"
+id = "halberd"                       # snake_case, уникально, не меняется никогда
+noun = "алебарда"                    # существительное, из которого строится имя
+gender = "f"                         # m | f | n | p — «Крепкая алебарда»
 slot = "weapon"                      # weapon/head/body/hands/feet/trinket
-weapon_type = "spear"                # weapons only, from [meta].weapon_types
+weapon_type = "spear"                # только оружие, из [meta].weapon_types
 ```
 
-Armour declares `armor_type` instead; a trinket declares neither. The name is
-built as **grade adjective + noun + rarity mark**: «Крепкая алебарда редкой
-работы». All three come from `[meta]`, and the loader refuses a grade that has no
-adjective for one of the four genders - a name that does not agree is a name the
-player stumbles over.
+Доспех вместо этого объявляет `armor_type`, а оберег — ни того ни другого. Имя
+строится как **прилагательное ступени + существительное + пометка редкости**:
+«Крепкая алебарда редкой работы». Все три части приходят из `[meta]`, и загрузчик не
+пропускает ступень, у которой нет прилагательного для одного из четырёх родов: имя,
+которое не согласуется, — это имя, о которое игрок спотыкается.
 
-Damage, armour, stats and price are **not written either**. They come from
-`[meta]`:
+Урон, броня, характеристики и цена **тоже не пишутся**. Они приходят из `[meta]`:
 
-- `weapon_types[].damage_type` - **what the kind deals**: a spear pierces, a sword
-  slashes, a mace bludgeons, a wand deals arcane. It is required, because a weapon
-  that does not say what it deals is a blow with no kind: the hero's plain attack
-  takes its kind from here, and the target's resistances are counted by it. The
-  sixteen kinds live in `domain/entities/damage.py`.
-- `weapon_types[].dice` - the **average** of the kind on the first grade and the
-  shape of the roll (`"2d6"`): the more dice, the more often the middle comes up.
-  The average grows with the grade.
-- `weapon_types[].spread` - the **character** of the kind: how many times the top
-  of the blow is above the bottom. A sword is 1.2, a mace is 1.5, and nobody goes
-  above 1.5 - that is the ceiling of the whole game (`dice.MAX_SPREAD`), and
-  content cannot get around it: anything declared above is clamped and the author
-  is told at startup. **Do not write a flat part**: it is computed from the
-  average and the spread, because by hand it does not hold - `1d16+3` promised
-  one and a half at the first grade and nine and a half at the last (ADR 0020).
-- `armor_types[].armor` - the share of armour relative to light, and
-  `slots[].armor_share` - how much the place covers at all.
-- `rarities[].stats` / `special` / `scaling` - what the rarity is worth: no
-  stats at all, one, two, two and a property, and finally a **relic**, whose
-  numbers count from the *hero's* level and grow with them.
+- `weapon_types[].damage_type` — **чем бьёт род**: копьё колет, меч рубит, булава
+  дробит, жезл бьёт чарами. Обязательно, потому что оружие, которое не говорит, чем
+  оно бьёт, — это удар без рода: обычный удар героя берёт род отсюда, и по нему же
+  считаются сопротивления цели. Пятнадцать родов живут в `domain/entities/damage.py`.
+- `weapon_types[].dice` — **среднее** рода на первой ступени и форма броска (`"2d6"`):
+  чем больше костей, тем чаще выпадает середина. Среднее растёт со ступенью.
+- `weapon_types[].spread` — **характер** рода: во сколько раз верх удара выше низа. У
+  меча 1,2, у булавы 1,5, и выше 1,5 не поднимается никто — это потолок всей игры
+  (`dice.MAX_SPREAD`), и обойти его содержимым нельзя: объявленное выше зажимается, а
+  автору говорят об этом на старте. **Плоскую часть не пишите**: она считается из
+  среднего и размаха, потому что руками её не удержать — `1d16+3` обещало полтора раза
+  на первой ступени и девять с половиной на последней (ADR 0020).
+- `armor_types[].armor` — доля брони относительно лёгкой, а `slots[].armor_share` —
+  сколько место закрывает вообще.
+- `rarities[].stats` / `special` / `scaling` — чего стоит редкость: ни одной
+  характеристики, одна, две, две и свойство и, наконец, **реликвия**, числа которой
+  считаются от уровня *героя* и растут вместе с ним.
 
-## Add a consumable or a material
+## Добавить расходник или сырьё
 
 ```toml
 [[item]]
 id = "sea_glass_vial"
 name = "Склянка морского стекла"
-kind = "consumable"                  # consumable | material - never equipment
+kind = "consumable"                  # consumable | material — никогда не снаряжение
 slot = "none"
-rarity = "rare"                      # from items.toml [meta].rarities
+rarity = "rare"                      # из items.toml [meta].rarities
 level = 18
 price = 760
 stack = 10
 effect = { kind = "heal_percent", power = 30 }
 ```
 
-**An item has no description.** Items are generated in their thousands; a phrase
-written for each is either invented on the spot or the same phrase a thousand
-times over. What a thing is, its kind, its grade and its numbers answer. A `text`
-field is refused by the loader, and so is a hand-written `kind = "equipment"`.
+**У вещи нет описания.** Вещей собираются тысячи; фраза, написанная каждой, — это либо
+выдумка на месте, либо одна и та же фраза тысячу раз подряд. Что вещь такое, отвечают
+её род, ступень и числа. Поле `text` загрузчик отвергает, как и написанное руками
+`kind = "equipment"`.
 
-Materials declare `source` - what kind of stock they are: `травы`, `руда`,
-`шкуры` or `обломки`. A gathering node hands over only its own kind, so a herb
-patch pays in herbs and an ore vein in ore (`domain/rules/adventure.GATHER_SOURCES`).
-A material without a `source` would be handed out by every node alike, which is
-how "Полезные травы" once paid in iron scrap; `tests/content` refuses one.
+Сырьё объявляет `source` — какого оно рода: `травы`, `руда`, `шкуры` или `обломки`.
+Узел сбора отдаёт только свой род, поэтому травяная делянка платит травами, а рудная
+жила рудой (`domain/rules/adventure.GATHER_SOURCES`). Сырьё без `source` выдавал бы
+любой узел подряд — так «Полезные травы» когда-то платили железным ломом;
+`tests/content` этого не пропускает.
 
-Anything that names a thing by name - a contract reward, a recipe output, a loot
-table - uses the assembled name: `reward_item = "light_feet@14#rare"`. A **relic**
-may only ever be the reward of a contract that ends a chain of four or more.
+Всё, что называет вещь по имени — награда задания, выход рецепта, таблица добычи, —
+пользуется собранным именем: `reward_item = "light_feet@14#rare"`. **Реликвия** вправе
+быть наградой только того задания, которое завершает цепочку из четырёх и больше.
 
-## Add or rebalance a city
+## Добавить или перебалансировать город
 
 ```toml
 [[city]]
@@ -309,93 +300,90 @@ level_min = 290
 level_max = 294
 ```
 
-Invariants checked by `tests/content/test_world.py`:
+Инварианты, которые проверяет `tests/content/test_world.py`:
 
-- exactly 15 cities (change `EXPECTED_CITIES` deliberately if you extend the world);
-- exactly 5 locations per city, slots `1..5` in order;
-- inside a city, both bounds increase from location to location and there is no gap
+- ровно 15 городов (`EXPECTED_CITIES` меняют осознанно, если мир расширяют);
+- ровно 5 локаций на город, места `1..5` по порядку;
+- внутри города обе границы растут от локации к локации и между ними нет пробела
   (`next.level_min <= previous.level_max`);
-- the first location starts at the city's `level_min`, the last ends at its
+- первая локация начинается на `level_min` города, последняя кончается на его
   `level_max`;
-- city bands overlap: the next city starts inside the previous one's band, so a
-  player always has both a place to push and a place to farm;
-- every level from 1 to `max_character_level` is covered by at least one location.
+- полосы городов перекрываются: следующий начинается внутри полосы предыдущего, чтобы
+  у игрока всегда было и куда рваться, и где подкопить;
+- каждый уровень от 1 до `max_character_level` покрыт хотя бы одной локацией.
 
-Location level ranges drive enemy level, loot quality and rarity, experience and
-event difficulty. Location layout itself is generated, never stored - see
-`docs/procgen.md`.
+Полосы уровней локации решают уровень противников, качество и редкость добычи, опыт и
+тяжесть событий. Сама карта локации собирается и не хранится — см. `docs/procgen.md`.
 
-They drive the **descent** too, and that is not a detail: a city's dungeon takes
-its level from the deepest location the player has reached, and never from the
-player. Content that follows the player around also pays as a fresh challenge for
-ever, and the only brake experience has - the penalty for fighting below your
-level - never fires (ADR 0019).
+Они же решают и **спуск**, и это не мелочь: подземелье города берёт свой уровень от
+самой глубокой локации, до которой добрался игрок, и никогда от самого игрока.
+Содержимое, которое подстраивается под игрока, к тому же платит как свежий вызов
+вечно, и единственный тормоз опыта — штраф за бой ниже своего уровня — не срабатывает
+никогда (ADR 0019).
 
-## Enemy archetypes
+## Породы противников
 
-`content/enemies.toml`. Beyond the multipliers, an archetype may declare
-**`element`** - the **kind of damage** it deals. Four physical ones (`piercing`,
-`slashing`, `bludgeoning`, `rending`) and twelve magical ones (`arcane`, `fire`,
-`cold`, `poison`, `acid`, `air`, `chaos`, `holy`, `light`, `mental`, `nature`,
-`negative`); the whole list is `domain/entities/damage.py`. Left out, the breed
-decides: a beast rends, a humanoid slashes, undead strike with `negative`, an
-elemental with `arcane`, an aberration with `mental`.
+`content/enemies.toml`. Кроме множителей, порода может объявить **`element`** — **род
+урона**, которым она бьёт. Четыре физических (`piercing`, `slashing`, `bludgeoning`,
+`rending`) и одиннадцать магических (`arcane`, `fire`, `cold`, `poison`, `acid`,
+`air`, `holy`, `light`, `mental`, `nature`, `negative`); весь список —
+`domain/entities/damage.py`. Не назван — решает порода: зверь рвёт, гуманоид рубит,
+нежить бьёт `negative`, стихия — `arcane`, тварь — `mental`.
 
-The target's resistances are counted by that kind **and** by its half - a
-`resist_piercing_percent` and a `resist_physical_percent` add up rather than
-replace each other, so plate softens every blow of iron while the gambeson under
-it softens the spear in particular. There is no `elemental` any more: it promised
-an element and named none.
+Сопротивления цели считаются по этому роду **и** по его половине:
+`resist_piercing_percent` и `resist_physical_percent` складываются, а не заменяют друг
+друга, поэтому латы смягчают всякий удар железа, а стёганка под ними — именно копьё.
+Ни `elemental`, ни `chaos` больше нет: первый обещал стихию и не называл ни одной, у
+второго не было ни источника, ни оружия, ни породы, которая бьёт хаосом.
 
-## Add a quest
+## Добавить задание
 
-`content/quests.toml`. A quest is a paid job: the giver names the price in the
-first two sentences, and refusing is always a button (`Narrative.md`, section 4).
+`content/quests.toml`. Задание — оплаченная работа: тот, кто его даёт, называет цену в
+первых двух фразах, а отказ — всегда кнопка (`Narrative.md`, раздел 4).
 
 ```toml
 [[quest]]
-id = "farhold_tallies"     # frozen key: it lives in the character's ledger
-city = "farhold"           # who hands it out, and where it is handed in
-level = 1                  # not offered below this level
-follows = ""               # stays off the board until that quest is paid out
+id = "farhold_tallies"     # замороженный ключ: он лежит в журнале персонажа
+city = "farhold"           # кто выдаёт и куда сдавать
+level = 1                  # ниже этого уровня не предлагается
+follows = ""               # не появляется на доске, пока то задание не оплачено
 name = "Столбы на Тракте"
 giver = "Довен, писарь заставы"
-intro = "Стоит у столба со сводкой."          # up to 140 characters
-terms = "Сходите на Луга у Заставы, обойдите три места, плачу 40."  # up to 200
+intro = "Стоит у столба со сводкой."          # до 140 знаков
+terms = "Сходите на Луга у Заставы, обойдите три места, плачу 40."  # до 200
 objective = "search"       # kill | elite | search | craft
-location = 1               # which location of that city, by slot. Optional
+location = 1               # какая локация этого города, по месту. Необязательно
 target_count = 3
-target_kind = ""           # kill: an enemy kind; search: gather/cache/shrine/event;
-                           # craft: the item id being asked for
+target_kind = ""           # kill: порода противника; search: gather/cache/shrine/event;
+                           # craft: идентификатор запрашиваемой вещи
 reward_gold = 40
 reward_experience = 60
-reward_item = "small_healing_potion"   # optional
+reward_item = "small_healing_potion"   # необязательно
 ```
 
-What each objective counts (`domain/rules/quests.py`): `kill` counts defeated
-opponents, narrowed by enemy kind; `elite` counts only the strong ones; `search`
-counts nodes worked through without a fight; `craft` counts what came out of the
-work, never what was bought. A counter never runs past its target, and only moves
-for a quest the character has actually taken.
+Что считает каждая цель (`domain/rules/quests.py`): `kill` считает побеждённых
+противников, сужая по породе; `elite` — только сильных; `search` — узлы, отработанные
+без боя; `craft` — то, что вышло из работы, и никогда купленное. Счётчик не убегает за
+свою цель и двигается только по заданию, которое персонаж действительно взял.
 
-**Say where.** `location` is what turns "обойдите три места" into "город Дубно,
-«Локации», «1. Луга у Заставы»" on the quest screen. Without it the screen can
-only point at the whole city, and the first act shipped without it - players took
-the first quest and had no idea where to go. Set it on everything that happens
-on the road; never on a `craft`, which happens at the workbench.
+**Говорите где.** `location` — это то, что превращает «обойдите три места» в «город
+Дубно, „Локации“, „1. Луга у Заставы“» на экране заданий. Без него экран может показать
+только на город целиком, и первый акт вышел именно таким — игроки брали первое задание
+и не понимали, куда идти. Ставьте его всему, что случается в дороге, и никогда —
+`craft`, который случается за верстаком.
 
-Checked by `tests/content/test_quests.py`: the city exists, the location exists in
-that city, the reward item exists, the chain never loops, the level sits inside
-the city's band, a quest never pays less than the one it follows, and none of
-it speaks the black-listed vocabulary from `Narrative.md`.
+Проверяет `tests/content/test_quests.py`: город существует, локация в этом городе
+существует, вещь-награда существует, цепочка не замыкается в круг, уровень лежит внутри
+полосы города, задание не платит меньше того, за которым идёт, и ничто из этого не
+говорит словами из чёрного списка `Narrative.md`.
 
-## Checking your changes
+## Как проверить свои правки
 
 ```bash
 uv run pytest tests/content
 ```
 
-The loader reports every problem at once:
+Загрузчик называет все беды разом:
 
 ```
 content validation failed (2 problems):

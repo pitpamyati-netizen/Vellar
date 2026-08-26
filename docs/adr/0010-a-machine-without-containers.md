@@ -1,65 +1,62 @@
-# ADR 0010 - A machine without containers: PostgreSQL, no Redis
+# ADR 0010 — Машина без контейнеров: PostgreSQL, без Redis
 
-Status: accepted (2026-08-19)
+Статус: принято (2026-08-19)
 
-## Context
+## Обстоятельства
 
-Running the game with anything kept meant Docker Desktop, which is several
-gigabytes on a machine that is otherwise only asked for Python and a database.
-The two modes that existed were the far ends of a range: `local` keeps nothing
-and needs nothing, the stack keeps everything and needs Docker. What was missing
-is the case that is actually being asked for - one person, one machine, a world
-that is still there tomorrow.
+Запустить игру с сохранением чего бы то ни было значило поставить Docker Desktop, а это
+несколько гигабайт на машине, у которой в остальном просят только Python и базу. Два
+существовавших режима были дальними концами шкалы: `local` не хранит ничего и не требует
+ничего, стек хранит всё и требует Docker. Не хватало как раз того случая, который и
+просят: один человек, одна машина, мир, который и завтра на месте.
 
-PostgreSQL installs on Windows from one installer. Redis does not: it has no
-supported Windows build, so it comes as WSL or as a third-party port, which is
-the whole problem again in a smaller box.
+PostgreSQL ставится на Windows одним установщиком. Redis — нет: поддерживаемой сборки
+под Windows у него нет, поэтому он приходит либо как WSL, либо как сторонний порт, а это
+та же самая беда в коробке поменьше.
 
-## Decision
+## Решение
 
-A fourth `APP_ENV`, `solo`: long polling against PostgreSQL, with everything that
-was in Redis held by the process instead.
+Четвёртый `APP_ENV`, `solo`: long polling против PostgreSQL, а всё, что было в Redis,
+держит вместо него сам процесс.
 
-The choice is no longer one flag. `Settings.uses_postgres` and
-`Settings.uses_redis` are decided separately, and `main._build_session_state`
-picks the session half on its own - `RedisStorage` and the Redis caches for `dev`
-and `prod`, `MemoryStorage` and the in-memory caches for `solo`.
+Выбор больше не один флаг. `Settings.uses_postgres` и `Settings.uses_redis` решаются
+отдельно, а `main._build_session_state` сам выбирает сессионную половину:
+`RedisStorage` и кэши Redis для `dev` и `prod`, `MemoryStorage` и кэши в памяти для
+`solo`.
 
-The split follows what the two stores actually hold:
+Деление идёт по тому, что эти два хранилища на самом деле держат:
 
 | PostgreSQL | Redis |
 | --- | --- |
-| who a character is, and everything they own | where they are standing |
-| gold, and every movement of it | the fight they are in the middle of |
-| contracts, craft work, keeper edits | the map of a location, the shop shelf |
-| | which updates have already been handled |
+| кто такой персонаж и всё, чем он владеет | где он стоит |
+| золото и каждое его движение | бой, который он ведёт |
+| задания, работа в ремёслах, правки смотрителя | карта локации, прилавок лавки |
+| | какие обновления уже обработаны |
 
-The left column is the world and must survive. The right column is a session,
-and every entry in it is already written to be lost safely (`Claude.md`, rule 8):
-a screen that no longer exists returns the player to a live one, a location
-without a map is generated again from its seed, a shop shelf is derived from the
-seed and the clock.
+Левый столбец — это мир, и он обязан пережить. Правый — сессия, и каждая его запись уже
+написана так, чтобы теряться безопасно (`Claude.md`, правило 8): несуществующий экран
+возвращает игрока на живой, локация без карты собирается заново из своего сида, а
+прилавок выводится из сида и часов.
 
-## Consequences
+## Последствия
 
-- `Start.bat solo` needs PostgreSQL and `uv`, and nothing else. `Start.bat
-  setup-db` creates the role and the database once, `scripts/setup-db.sql` being
-  idempotent; the schema is then the same `alembic upgrade head` the stack runs.
-- A restart costs more than in the stack, and it is stated plainly rather than
-  discovered: a fight in progress ends and everyone is put back in the main menu,
-  unhurt. Nothing they own is touched. Putting them there is a handler and not a
-  hope - the first press after a restart carries no state, and
-  `handlers/creation.resume` answers it with the main menu instead of leaving it
-  to fall through every router into silence.
-- Deduplication of updates is per process, so a restart could let a repeated
-  update through. One update, in the second either side of a restart that also
-  dropped the fight - a small cost next to the service it removes.
-- In-memory session state is only correct because polling is one process
-  (`run_polling`). `prod` may sit behind several, and keeps Redis: two processes
-  sharing nothing would each think they know where a player is standing.
-- The dump is the same file in both directions: `stop.bat` takes it through the
-  container when the stack is up and through the machine's own `pg_dump` when it
-  is not, so a world can be carried from a solo run to a stack and back.
-- Redis stays in the stack, in `docker-compose.yml` and in the sizing in
-  `docs/deployment.md`. This ADR does not make it optional there; it makes it
-  absent from one mode that never had a second process to share it with.
+- `Start.bat solo` требует PostgreSQL и `uv`, и больше ничего. `Start.bat setup-db` один
+  раз заводит роль и базу, `scripts/setup-db.sql` идемпотентен; схему дальше накатывает
+  тот же `alembic upgrade head`, что и в стеке.
+- Перезапуск стоит дороже, чем в стеке, и об этом сказано прямо, а не оставлено на
+  обнаружение: начатый бой кончается, а всех возвращают в главное меню целыми. Ничего из
+  принадлежащего им не трогают. Возвращает их хендлер, а не надежда: первое нажатие
+  после перезапуска приходит без состояния, и `handlers/creation.resume` отвечает ему
+  главным меню вместо того, чтобы дать ему провалиться сквозь все роутеры в тишину.
+- Отсев повторных обновлений идёт на процесс, поэтому перезапуск может пропустить
+  повторённое обновление. Одно обновление в ту секунду по обе стороны от перезапуска,
+  который и так оборвал бой, — небольшая цена рядом с убранной службой.
+- Сессионное состояние в памяти верно только потому, что опрос — это один процесс
+  (`run_polling`). За `prod` может стоять несколько, и он Redis сохраняет: два процесса,
+  не делящих ничего, каждый думали бы, что знают, где стоит игрок.
+- Дамп — один и тот же файл в обе стороны: `stop.bat` берёт его через контейнер, когда
+  стек поднят, и через собственный `pg_dump` машины, когда нет, — поэтому мир переносим
+  из solo в стек и обратно.
+- Redis остаётся в стеке, в `docker-compose.yml` и в расчёте в `docs/deployment.md`.
+  Этот ADR не делает его там необязательным; он убирает его из одного режима, которому и
+  делить-то его было не с кем.
