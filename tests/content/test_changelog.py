@@ -7,14 +7,21 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from mmorpg.infrastructure.content import ContentError, load_changelog, select_release
+from mmorpg.infrastructure.content import (
+    ContentError,
+    load_changelog,
+    select_release,
+    unannounced_changes,
+)
 from mmorpg.infrastructure.content.changelog import (
     ENTRY_LIMIT,
     HEADLINE_PREFIX,
+    WORKING_TREE,
     Release,
     version_key,
 )
@@ -225,3 +232,75 @@ def test_every_problem_is_reported_together(tmp_path: Path) -> None:
     assert "duplicate release 0.1" in problems
     assert f"the limit is {ENTRY_LIMIT}" in problems
     assert "empty line" in problems
+
+
+# --- свежесть --------------------------------------------------------
+
+
+def git(root: Path, *args: str) -> None:
+    subprocess.run(
+        ["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", *args],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+
+
+def game_tree(root: Path, *, code: str = "one", release: str = "0.1") -> None:
+    """Крошечное подобие дерева игры: то, что видит игрок, и рассказ об этом."""
+    (root / "src").mkdir(exist_ok=True)
+    (root / "src" / "rules.py").write_text(code, encoding="utf-8")
+    (root / "content").mkdir(exist_ok=True)
+    write(root / "content", f'[[release]]\nversion = "{release}"\nadded = ["Дорога."]\n')
+
+
+def repo_with_a_release(root: Path) -> Path:
+    git(root, "init", "-q")
+    game_tree(root)
+    git(root, "add", "-A")
+    git(root, "commit", "-qm", "feat: the road")
+    return root
+
+
+def test_git_that_cannot_answer_is_not_a_verdict(tmp_path: Path) -> None:
+    """Нет дерева - нет и ответа: выдумывать за git отказ выпуска нечего."""
+    assert unannounced_changes(tmp_path / "nowhere at all") is None
+
+
+def test_a_release_written_with_the_change_is_fresh(tmp_path: Path) -> None:
+    assert unannounced_changes(repo_with_a_release(tmp_path)) == ()
+
+
+def test_a_change_committed_after_the_release_is_unannounced(tmp_path: Path) -> None:
+    """Ровно то, что случилось с 1.12: игру переписали, а файл остался прежним."""
+    root = repo_with_a_release(tmp_path)
+    (root / "src" / "rules.py").write_text("two", encoding="utf-8")
+    git(root, "commit", "-qam", "feat: a tree costs more than it pays")
+
+    behind = unannounced_changes(root)
+
+    assert behind is not None
+    assert any("a tree costs more" in line for line in behind)
+
+
+def test_a_change_still_in_the_working_tree_counts_too(tmp_path: Path) -> None:
+    """Пост уходит из того дерева, что лежит на диске, а не из того, что закоммичено."""
+    root = repo_with_a_release(tmp_path)
+    (root / "src" / "rules.py").write_text("two", encoding="utf-8")
+
+    assert unannounced_changes(root) == (WORKING_TREE,)
+
+
+def test_the_release_being_written_right_now_is_not_a_complaint(tmp_path: Path) -> None:
+    """Дописывают файл как раз тогда, когда дерево изменено: это и есть рассказ о переменах."""
+    root = repo_with_a_release(tmp_path)
+    game_tree(root, code="two", release="0.2")
+
+    assert unannounced_changes(root) == ()
+
+
+def test_a_release_never_committed_has_nothing_to_lag_behind(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q")
+    game_tree(tmp_path)
+
+    assert unannounced_changes(tmp_path) == ()

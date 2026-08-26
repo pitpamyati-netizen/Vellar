@@ -17,6 +17,11 @@
 безопасно запускать и против живого канала. Без него пост публичен и постоянен:
 канал — это летопись игры, а удалённый пост всё равно остаётся постом, который
 игроки видели.
+
+Поэтому ``latest`` значит «то, что в игре сейчас», а не «последняя строка в
+файле»: если игру меняли после того, как файл дописали, пост не уходит вовсе и
+говорит, чего в нём не хватает. Назвать версию числом по-прежнему можно всегда -
+тогда выбор сделали вы, а не слово ``latest``.
 """
 
 from __future__ import annotations
@@ -25,13 +30,19 @@ import argparse
 import asyncio
 import io
 import sys
+from pathlib import Path
 
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 
 from mmorpg.config import Settings, load_settings
 from mmorpg.infrastructure.content import ContentError
-from mmorpg.infrastructure.content.changelog import LATEST, load_changelog, select_release
+from mmorpg.infrastructure.content.changelog import (
+    LATEST,
+    load_changelog,
+    select_release,
+    unannounced_changes,
+)
 from mmorpg.presentation.telegram.broadcast import (
     BroadcastEvent,
     BroadcastKind,
@@ -73,10 +84,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
+def stale_complaint(project_root: Path, version: str) -> str | None:
+    """Сказать, чем самая свежая запись отстала от игры, - или промолчать, если не отстала."""
+    behind = unannounced_changes(project_root)
+    if not behind:
+        # Пустой кортеж - файл свежий; None - git не ответил, и выдумывать за него нечего.
+        return None
+    listed = "\n  ".join(behind)
+    return (
+        f"content/changelog.toml is behind the game: the newest release it lists is {version}, "
+        f"but the game changed after it:\n  {listed}\n"
+        f"Write those changes into a release, or name the version you meant: --changelog {version}"
+    )
+
+
 def build_event(args: argparse.Namespace, settings: Settings) -> BroadcastEvent:
     """Превратить аргументы в тот единственный пост, который сделает этот запуск."""
     if args.changelog:
         release = select_release(load_changelog(settings.content_dir), args.changelog)
+        if args.changelog == LATEST:
+            complaint = stale_complaint(settings.content_dir.parent, release.version)
+            if complaint:
+                raise ValueError(complaint)
         return changelog(
             release.version,
             headline=release.headline,
