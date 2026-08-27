@@ -30,6 +30,7 @@ from aiogram.types import Message
 from mmorpg import economy_log
 from mmorpg.application.services import group_trade, keeper_panel, moderation
 from mmorpg.application.services.content import ContentRegistry
+from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.keeper import set_keeper, sync_keeper
 from mmorpg.application.services.party import PartyStore
 from mmorpg.config import Settings
@@ -53,6 +54,7 @@ from mmorpg.domain.ports.repositories import (
 )
 from mmorpg.domain.procgen.seeds import rotation_index
 from mmorpg.domain.rules import economy as economy_rules
+from mmorpg.domain.rules import guild as guild_rules
 from mmorpg.domain.rules import moderation as moderation_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import party as party_rules
@@ -82,6 +84,7 @@ from mmorpg.presentation.telegram.flows.state import (
 from mmorpg.presentation.telegram.handlers.combat import open_fight
 from mmorpg.presentation.telegram.handlers.creation import welcome_screen
 from mmorpg.presentation.telegram.messaging import send_screen, send_text
+from mmorpg.presentation.telegram.screens import guild as guild_screens
 from mmorpg.presentation.telegram.screens import keeper as keeper_screens
 from mmorpg.presentation.telegram.screens import party as party_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
@@ -133,6 +136,7 @@ async def play(
     trades: TradeRepository,
     state_cache: StateCache,
     parties: PartyStore,
+    guilds: GuildStore,
     user: User | None = None,
 ) -> None:
     if message.from_user is None or message.text is None:
@@ -192,6 +196,7 @@ async def play(
     )
 
     party = await _party_view(flow, character, characters, parties)
+    guild_view = await _guild_view(flow, character, characters, guilds)
 
     updated = advance(
         content,
@@ -205,6 +210,7 @@ async def play(
         neighbours=company,
         keeper=view,
         party=party,
+        guild=guild_view,
         location_state=here,
     )
 
@@ -222,6 +228,11 @@ async def play(
     if updated.invite_name:
         called = await _invite_by_name(message, character, updated.invite_name, characters, parties)
         updated = replace(updated, invite_name="").with_notice(called)
+    if updated.guild_action:
+        said, character = await _guild_step(
+            message, character, updated.guild_action, updated.guild_arg, characters, guilds
+        )
+        updated = replace(updated, guild_action="", guild_arg="").with_notice(said)
 
     before_level = character.level
     character = await _apply(
@@ -275,6 +286,7 @@ async def play(
         updated, character, "", characters, users, keeper_log, trades, registry, now, settings
     )
     gathered = await _party_view(updated, character, characters, parties)
+    guild_view = await _guild_view(updated, character, characters, guilds)
     await state.set_state(STATE_FOR_SCREEN[updated.screen])
     await state.update_data({STATE_KEY: updated.serialise()})
     screen = await render_play(
@@ -290,6 +302,7 @@ async def play(
         tally=counted,
         keeper=shown,
         party=gathered,
+        guild=guild_view,
         location_state=here,
     )
     # Уровень объявляется вторым сообщением, и это единственное место в игре,
@@ -319,6 +332,7 @@ async def render_play(
     tally: Mapping[str, int] | None = None,
     keeper: KeeperView | None = None,
     party: party_screens.PartyView | None = None,
+    guild: guild_screens.GuildView | None = None,
     location_state: LocationState | None = None,
 ) -> Screen:
     """Нарисовать один игровой экран и вернуть его. Берётся здесь и боевым хендлером.
@@ -338,6 +352,7 @@ async def render_play(
         tally=tally,
         keeper=keeper,
         party=party,
+        guild=guild,
         location_state=location_state,
     )
     await send_screen(message, screen, emoji=emoji)
@@ -979,3 +994,238 @@ async def _call_to_party(
     if target is None or not any(person.character_id == target_id for person in company):
         return "Этого человека здесь больше нет."
     return await _invite(message, character, target, parties)
+
+
+# --- гильдия (``domain/rules/guild.py``, ADR 0030) --------------------
+# Гильдия лежит в базе, поэтому автомат её только просит - словом ``guild_action``
+# на состоянии, - а делает всё хендлер: он двигает золото, зовёт и говорит, чем
+# кончилось (``Claude.md``, правило 5).
+
+
+_GUILD_SCREENS = frozenset(
+    {
+        ScreenId.GUILD,
+        ScreenId.GUILD_FOUND,
+        ScreenId.GUILD_INVITE,
+        ScreenId.GUILD_ROSTER,
+        ScreenId.GUILD_VAULT,
+    }
+)
+
+
+async def _guild_view(
+    flow: PlayState,
+    character: Character,
+    characters: CharacterRepository,
+    guilds: GuildStore,
+) -> guild_screens.GuildView:
+    """Что показать на экранах гильдии. Везде, кроме них, - пусто."""
+    if flow.screen not in _GUILD_SCREENS:
+        return guild_screens.GuildView()
+    guild = await guilds.of(character.id)
+    caller = ""
+    called_to = await guilds.called_to(character.id)
+    if called_to:
+        from_guild = await guilds.by_id(called_to)
+        caller = from_guild.name if from_guild is not None else ""
+    if guild is None:
+        return guild_screens.GuildView(my_gold=character.gold, caller=caller)
+    members: list[tuple[str, guild_rules.GuildRank]] = []
+    for one in guild.members:
+        who = await characters.get(one.character_id)
+        if who is not None:
+            members.append((who.name, one.rank))
+    return guild_screens.GuildView(
+        name=guild.name,
+        my_rank=guild.rank_of(character.id),
+        members=tuple(members),
+        vault_gold=guild.vault_gold,
+        my_gold=character.gold,
+        caller=caller,
+    )
+
+
+async def _guild_step(
+    message: Message,
+    character: Character,
+    action: str,
+    arg: str,
+    characters: CharacterRepository,
+    guilds: GuildStore,
+) -> tuple[str, Character]:
+    """Исполнить то, что игрок попросил сделать с гильдией. Ответ - целой фразой.
+
+    Возвращает и персонажа: грамота, вклад и выемка двигают его золото, и
+    сохранены они уже здесь.
+    """
+    guild = await guilds.of(character.id)
+
+    async def fresh() -> Character:
+        return await characters.get(character.id) or character
+
+    match action:
+        case "found":
+            refusal = guild_rules.found_refusal(
+                level=character.level,
+                gold=character.gold,
+                in_guild=guild is not None,
+                name_taken=await guilds.by_name(arg) is not None,
+                name=arg,
+            )
+            if refusal:
+                return refusal, character
+            if not await characters.spend_gold(character.id, guild_rules.FOUND_COST):
+                return "Золота на грамоту не хватило.", await fresh()
+            economy_log.record(
+                economy_log.SERVICE, -guild_rules.FOUND_COST, character_id=character.id
+            )
+            made = await guilds.create(arg.strip(), character.id)
+            return f"Гильдия «{made.name}» основана. Вы её основатель.", await fresh()
+
+        case "invite":
+            if guild is None:
+                return "У вас нет гильдии.", character
+            target = await characters.find_by_name(arg)
+            if target is None:
+                return f"Игрока с именем {arg} в Велларе нет.", character
+            if target.id == character.id:
+                return "Так нельзя: зов самому себе.", character
+            refusal = guild_rules.invite_refusal(
+                guild=guild,
+                inviter_id=character.id,
+                invitee_name=target.name,
+                invitee_in_guild=await guilds.of(target.id) is not None,
+            )
+            if refusal:
+                return refusal, character
+            await guilds.call(guild_id=guild.id, invitee_id=target.id)
+            await _tell(
+                message,
+                target.user_id,
+                f"Гильдия «{guild.name}» зовёт вас к себе. Наберите «/гильдия принять», "
+                "чтобы вступить, или «/гильдия отклонить».",
+            )
+            return f"Зов отправлен: {target.name}.", character
+
+        case "accept":
+            joined = await guilds.accept(character.id)
+            if joined is None:
+                return "Вас сейчас никакая гильдия не зовёт.", character
+            return f"Вы в гильдии «{joined.name}».", character
+
+        case "decline":
+            await guilds.forget_call(character.id)
+            return "Зов отклонён.", character
+
+        case "leave":
+            if guild is None:
+                return "Вы не в гильдии.", character
+            if guild.founder_id == character.id:
+                return "Вы основатель: гильдию можно только распустить.", character
+            await guilds.leave(character.id)
+            await _tell_party(
+                message,
+                characters,
+                [one.character_id for one in guild.members],
+                character.id,
+                f"{character.name} вышел из гильдии «{guild.name}».",
+            )
+            return "Вы вышли из гильдии.", character
+
+        case "disband":
+            if guild is None:
+                return "У вас нет гильдии.", character
+            if guild.founder_id != character.id:
+                return "Гильдию основали не вы. Из неё можно выйти.", character
+            if guild.vault_gold:
+                await characters.grant_gold(character.id, guild.vault_gold)
+                economy_log.record(
+                    economy_log.GUILD_VAULT, guild.vault_gold, character_id=character.id
+                )
+            await guilds.disband(guild)
+            await _tell_party(
+                message,
+                characters,
+                [one.character_id for one in guild.members],
+                character.id,
+                f"Гильдия «{guild.name}» распущена.",
+            )
+            return "Гильдия распущена. Казна вернулась к вам.", await fresh()
+
+        case "promote" | "demote" | "kick":
+            return await _guild_rank_step(
+                message, character, action, arg, characters, guilds, guild
+            )
+
+        case "deposit" | "withdraw":
+            return await _guild_vault_step(character, action, arg, characters, guilds, guild)
+
+    return "Не понял, что сделать с гильдией.", character  # pragma: no cover
+
+
+async def _guild_rank_step(
+    message: Message,
+    character: Character,
+    action: str,
+    name: str,
+    characters: CharacterRepository,
+    guilds: GuildStore,
+    guild: guild_rules.Guild | None,
+) -> tuple[str, Character]:
+    if guild is None:
+        return "У вас нет гильдии.", character
+    target = await characters.find_by_name(name)
+    if target is None or guild.rank_of(target.id) is None:
+        return f"{name} — не в вашей гильдии.", character
+    if action == "kick":
+        refusal = guild_rules.kick_refusal(guild=guild, actor_id=character.id, target_id=target.id)
+        if refusal:
+            return refusal, character
+        await guilds.save(guild.without(target.id))
+        await _tell(message, target.user_id, f"Вас исключили из гильдии «{guild.name}».")
+        return f"{target.name} исключён из гильдии.", character
+    to = guild_rules.GuildRank.OFFICER if action == "promote" else guild_rules.GuildRank.MEMBER
+    refusal = guild_rules.rank_change_refusal(
+        guild=guild, actor_id=character.id, target_id=target.id, to=to
+    )
+    if refusal:
+        return refusal, character
+    await guilds.save(guild.with_rank(target.id, to))
+    await _tell(
+        message, target.user_id, f"В гильдии «{guild.name}» ваше звание теперь: {to.title}."
+    )
+    return f"{target.name} теперь {to.title}.", character
+
+
+async def _guild_vault_step(
+    character: Character,
+    action: str,
+    arg: str,
+    characters: CharacterRepository,
+    guilds: GuildStore,
+    guild: guild_rules.Guild | None,
+) -> tuple[str, Character]:
+    if guild is None:
+        return "У вас нет гильдии.", character
+    amount = int(arg) if arg.isdigit() else 0
+    if amount <= 0:
+        return "Назовите сумму.", character
+
+    async def fresh() -> Character:
+        return await characters.get(character.id) or character
+
+    if action == "deposit":
+        if not await characters.spend_gold(character.id, amount):
+            return f"На руках только {character.gold}.", await fresh()
+        await guilds.deposit(guild, amount)
+        economy_log.record(economy_log.GUILD_VAULT, -amount, character_id=character.id)
+        return f"В казну внесено {amount}.", await fresh()
+
+    refusal = guild_rules.withdraw_refusal(guild=guild, actor_id=character.id, amount=amount)
+    if refusal:
+        return refusal, character
+    if not await guilds.withdraw(guild, amount):
+        return "В казне столько не набралось.", character
+    await characters.grant_gold(character.id, amount)
+    economy_log.record(economy_log.GUILD_VAULT, amount, character_id=character.id)
+    return f"Из казны взято {amount}.", await fresh()

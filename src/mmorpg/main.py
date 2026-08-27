@@ -34,6 +34,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from mmorpg.application.services.content import ContentRegistry
 from mmorpg.application.services.group_trade import release_expired_offers
+from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.party import PartyStore
 from mmorpg.config import AppEnv, Settings, load_settings
 from mmorpg.domain.entities.content import GameContent
@@ -52,6 +53,7 @@ from mmorpg.infrastructure.content import load_content
 from mmorpg.infrastructure.persistence import (
     InMemoryCharacterRepository,
     InMemoryContentOverlayRepository,
+    InMemoryGuildRepository,
     InMemoryInventoryRepository,
     InMemoryKeeperLogRepository,
     InMemoryPartyRepository,
@@ -214,6 +216,7 @@ async def _build_adapters(
             locations=InMemoryLocationStateCache(),
             overlays=InMemoryContentOverlayRepository(),
             parties=PartyStore(InMemoryPartyRepository(), memory_cache),
+            guilds=GuildStore(InMemoryGuildRepository(), memory_cache),
             # Приёмник подключается, как только появился Bot; до тех пор - и всегда,
             # когда CHANNEL_ID пуст, - объявление ничего не делает.
             broadcasts=ChannelBroadcaster(sink=None, chat_id=settings.channel_id),
@@ -224,6 +227,7 @@ async def _build_adapters(
     from mmorpg.infrastructure.persistence.postgres import (
         PostgresCharacterRepository,
         PostgresContentOverlayRepository,
+        PostgresGuildRepository,
         PostgresInventoryRepository,
         PostgresKeeperLogRepository,
         PostgresPartyRepository,
@@ -259,6 +263,7 @@ async def _build_adapters(
         locations=locations,
         overlays=PostgresContentOverlayRepository(pool),
         parties=PartyStore(PostgresPartyRepository(pool), state_cache),
+        guilds=GuildStore(PostgresGuildRepository(pool), state_cache),
         broadcasts=ChannelBroadcaster(sink=None, chat_id=settings.channel_id),
     )
     return storage, dependencies, idempotency

@@ -21,6 +21,7 @@ from mmorpg.domain.entities.location import LocationState, Presence
 from mmorpg.domain.entities.moderation import Ban, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, TradeRecord, TradeStatus
+from mmorpg.domain.rules.guild import Guild
 from mmorpg.domain.rules.party import Party
 
 
@@ -345,6 +346,38 @@ class PartyRepository(Protocol):
 
     async def disband(self, leader_id: int) -> None:
         """Убрать отряд целиком."""
+
+
+@runtime_checkable
+class GuildRepository(Protocol):
+    """Гильдия: имя, состав со званиями и общая казна (ADR 0030).
+
+    Лежит в базе, как персонаж: гильдию нельзя терять между заходами. Казна
+    двигается условным ``UPDATE`` — ``deposit`` не спорит ни с кем, ``withdraw``
+    не уходит в минус, даже если два офицера нажали разом.
+    """
+
+    async def of(self, character_id: int) -> Guild | None:
+        """Гильдия, в которой состоит этот персонаж. ``None`` — ни в какой."""
+
+    async def by_id(self, guild_id: int) -> Guild | None: ...
+
+    async def by_name(self, name: str) -> Guild | None:
+        """Поиск по имени без учёта регистра — для проверки занятости и зова."""
+
+    async def create(self, name: str, founder_id: int) -> Guild:
+        """Завести гильдию. Основатель сразу в составе со званием основателя."""
+
+    async def save(self, guild: Guild) -> None:
+        """Записать имя и состав со званиями. Казну этим не трогают."""
+
+    async def disband(self, guild_id: int) -> None: ...
+
+    async def deposit(self, guild_id: int, amount: int) -> None:
+        """Положить в казну. Всегда проходит."""
+
+    async def withdraw(self, guild_id: int, amount: int) -> bool:
+        """Взять из казны. Ложь — в казне столько не было."""
 
 
 @runtime_checkable

@@ -68,6 +68,11 @@ class Play(StatesGroup):
     npc = State()
     party = State()
     party_invite = State()
+    guild = State()
+    guild_found = State()
+    guild_invite = State()
+    guild_roster = State()
+    guild_vault = State()
     settings = State()
     tutorial = State()
     keeper = State()
@@ -133,6 +138,11 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.NPC: Play.npc,
     ScreenId.PARTY: Play.party,
     ScreenId.PARTY_INVITE: Play.party_invite,
+    ScreenId.GUILD: Play.guild,
+    ScreenId.GUILD_FOUND: Play.guild_found,
+    ScreenId.GUILD_INVITE: Play.guild_invite,
+    ScreenId.GUILD_ROSTER: Play.guild_roster,
+    ScreenId.GUILD_VAULT: Play.guild_vault,
     ScreenId.SETTINGS: Play.settings,
     ScreenId.TUTORIAL: Play.tutorial,
     ScreenId.KEEPER: Play.keeper,
@@ -198,6 +208,11 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.NPC: ScreenId.NPCS,
     ScreenId.PARTY: ScreenId.MAIN_MENU,
     ScreenId.PARTY_INVITE: ScreenId.PARTY,
+    ScreenId.GUILD: ScreenId.MAIN_MENU,
+    ScreenId.GUILD_FOUND: ScreenId.GUILD,
+    ScreenId.GUILD_INVITE: ScreenId.GUILD,
+    ScreenId.GUILD_ROSTER: ScreenId.GUILD,
+    ScreenId.GUILD_VAULT: ScreenId.GUILD,
     ScreenId.SETTINGS: ScreenId.MAIN_MENU,
     ScreenId.TUTORIAL: ScreenId.MAIN_MENU,
     ScreenId.KEEPER: ScreenId.MAIN_MENU,

@@ -28,6 +28,7 @@ from aiogram.types import Chat, Message, User
 
 from mmorpg.application.services import keeper_panel
 from mmorpg.application.services.content import ContentRegistry
+from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.party import PartyStore
 from mmorpg.config import Settings
 from mmorpg.domain.entities import Character, GameContent
@@ -43,6 +44,7 @@ from mmorpg.infrastructure.cache.memory import (
 from mmorpg.infrastructure.persistence.memory import (
     InMemoryCharacterRepository,
     InMemoryContentOverlayRepository,
+    InMemoryGuildRepository,
     InMemoryInventoryRepository,
     InMemoryKeeperLogRepository,
     InMemoryPartyRepository,
@@ -135,6 +137,7 @@ class Keeper:
                 self.deps["trades"],
                 self.deps["cache"],
                 self.deps["parties"],
+                self.deps["guilds"],
             )
         return self.sent.last
 
@@ -237,6 +240,7 @@ async def keeper(
         trades=trades,
         cache=cache,
         parties=PartyStore(InMemoryPartyRepository(), cache),
+        guilds=GuildStore(InMemoryGuildRepository(), cache),
     )
 
 
@@ -657,6 +661,7 @@ async def test_a_player_who_is_not_a_keeper_gets_nothing_from_the_panel(
         InMemoryTradeRepository(),
         InMemoryStateCache(),
         PartyStore(InMemoryPartyRepository(), InMemoryStateCache()),
+        GuildStore(InMemoryGuildRepository(), InMemoryStateCache()),
     )
 
     assert sent.last.id is ScreenId.MAIN_MENU

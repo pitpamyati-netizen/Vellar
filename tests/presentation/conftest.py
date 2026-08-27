@@ -42,6 +42,7 @@ from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules.combat import hero_combatant, monster_combatant, open_battle
 from mmorpg.domain.rules.economy import buy_price, roll_assortment
+from mmorpg.domain.rules.guild import GuildRank
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.handlers import creation as handlers_creation
 from mmorpg.presentation.telegram.keyboards import labels
@@ -51,6 +52,7 @@ from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import combat as combat_screens
 from mmorpg.presentation.telegram.screens import crafts as craft_screens
 from mmorpg.presentation.telegram.screens import creation, play, shop
+from mmorpg.presentation.telegram.screens import guild as guild_screens
 from mmorpg.presentation.telegram.screens import items as item_screens
 from mmorpg.presentation.telegram.screens import keeper as keeper_screens
 from mmorpg.presentation.telegram.screens import party as party_screens
@@ -617,6 +619,61 @@ def all_screens(
         ),
         party_screens.invite_screen(party_screens.PartyView(members=("Аргус",), leader=True)),
         party_screens.invite_screen(party_screens.PartyView()),
+        guild_screens.guild_screen(guild_screens.GuildView(my_gold=900)),
+        guild_screens.guild_screen(guild_screens.GuildView(my_gold=50, caller="Медный Крест")),
+        guild_screens.guild_screen(
+            guild_screens.GuildView(
+                name="Стая",
+                my_rank=GuildRank.FOUNDER,
+                members=(("Аргус", GuildRank.FOUNDER), ("Мирна", GuildRank.OFFICER)),
+                vault_gold=1200,
+                my_gold=300,
+            ),
+            notice="Гильдия основана.",
+        ),
+        guild_screens.guild_screen(
+            guild_screens.GuildView(
+                name="Стая",
+                my_rank=GuildRank.MEMBER,
+                members=(("Аргус", GuildRank.FOUNDER), ("Мирна", GuildRank.MEMBER)),
+                vault_gold=1200,
+                my_gold=300,
+            ),
+        ),
+        guild_screens.found_screen(guild_screens.GuildView(my_gold=900)),
+        guild_screens.invite_screen(
+            guild_screens.GuildView(
+                name="Стая", my_rank=GuildRank.OFFICER, members=(("Аргус", GuildRank.FOUNDER),)
+            )
+        ),
+        guild_screens.roster_screen(
+            guild_screens.GuildView(
+                name="Стая",
+                my_rank=GuildRank.FOUNDER,
+                members=(
+                    ("Аргус", GuildRank.FOUNDER),
+                    ("Мирна", GuildRank.OFFICER),
+                    ("Тьен", GuildRank.MEMBER),
+                ),
+            )
+        ),
+        guild_screens.roster_screen(
+            guild_screens.GuildView(
+                name="Стая",
+                my_rank=GuildRank.MEMBER,
+                members=(("Аргус", GuildRank.FOUNDER), ("Мирна", GuildRank.MEMBER)),
+            )
+        ),
+        guild_screens.vault_screen(
+            guild_screens.GuildView(
+                name="Стая", my_rank=GuildRank.OFFICER, vault_gold=800, my_gold=250
+            )
+        ),
+        guild_screens.vault_screen(
+            guild_screens.GuildView(
+                name="Стая", my_rank=GuildRank.MEMBER, vault_gold=800, my_gold=250
+            )
+        ),
         tutorial_screens.tutorial_screen(hero),
         tutorial_screens.tutorial_screen(replace(hero, tutorial=0b000111)),
         tutorial_screens.tutorial_screen(replace(hero, tutorial=0b111111)),

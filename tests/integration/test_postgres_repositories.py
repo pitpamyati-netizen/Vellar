@@ -24,10 +24,12 @@ from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatBlock
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeStatus
 from mmorpg.domain.ports.repositories import AccessibilitySettings, User
+from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
 from mmorpg.domain.rules.party import Party as PlayerParty
 from mmorpg.infrastructure.persistence.postgres import (
     PostgresCharacterRepository,
     PostgresContentOverlayRepository,
+    PostgresGuildRepository,
     PostgresInventoryRepository,
     PostgresKeeperLogRepository,
     PostgresPartyRepository,
@@ -989,3 +991,80 @@ async def test_disbanding_removes_the_whole_party(pool, three_fighters) -> None:
 
     assert await parties.by_leader(leader) is None
     assert await parties.of(second) is None
+
+
+# --- гильдия (ADR 0030) --------------------------------------------
+
+
+async def test_a_guild_survives_a_round_trip_with_ranks_and_vault(pool, three_fighters) -> None:
+    founder, officer, member = three_fighters
+    guilds = PostgresGuildRepository(pool)
+
+    made = await guilds.create("Ирисы", founder)
+    await guilds.save(
+        Guild(
+            id=made.id,
+            name="Ирисы",
+            founder_id=founder,
+            members=(
+                GuildMember(founder, GuildRank.FOUNDER),
+                GuildMember(officer, GuildRank.OFFICER),
+                GuildMember(member, GuildRank.MEMBER),
+            ),
+        )
+    )
+    await guilds.deposit(made.id, 900)
+
+    read = await guilds.by_id(made.id)
+    assert read is not None
+    assert read.vault_gold == 900
+    assert read.rank_of(officer) is GuildRank.OFFICER
+    assert (await guilds.by_name("ИРИСЫ")) is not None
+    for who in three_fighters:
+        assert (await guilds.of(who)) is not None
+
+    await guilds.disband(made.id)
+
+
+async def test_the_database_keeps_one_guild_per_character(pool, three_fighters) -> None:
+    a, b, c = three_fighters
+    guilds = PostgresGuildRepository(pool)
+    first = await guilds.create("Ирисы", a)
+    await guilds.save(first.with_member(b))
+    second = await guilds.create("Полынь", c)
+
+    # b нельзя завести во вторую гильдию: строку из первой выметают.
+    await guilds.save(second.with_member(b))
+    left = await guilds.by_id(first.id)
+    assert left is not None and b not in [m.character_id for m in left.members]
+    moved = await guilds.of(b)
+    assert moved is not None and moved.id == second.id
+
+    await guilds.disband(first.id)
+    await guilds.disband(second.id)
+
+
+async def test_the_vault_withdraw_is_atomic(pool, three_fighters) -> None:
+    founder, *_ = three_fighters
+    guilds = PostgresGuildRepository(pool)
+    made = await guilds.create("Ирисы", founder)
+    await guilds.deposit(made.id, 250)
+
+    assert await guilds.withdraw(made.id, 400) is False
+    assert await guilds.withdraw(made.id, 250) is True
+    kept = await guilds.by_id(made.id)
+    assert kept is not None and kept.vault_gold == 0
+
+    await guilds.disband(made.id)
+
+
+async def test_disbanding_removes_the_guild_and_its_members(pool, three_fighters) -> None:
+    founder, officer, _ = three_fighters
+    guilds = PostgresGuildRepository(pool)
+    made = await guilds.create("Ирисы", founder)
+    await guilds.save(made.with_member(officer, GuildRank.OFFICER))
+
+    await guilds.disband(made.id)
+
+    assert await guilds.by_id(made.id) is None
+    assert await guilds.of(officer) is None

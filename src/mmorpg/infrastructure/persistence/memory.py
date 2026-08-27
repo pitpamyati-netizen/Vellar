@@ -19,6 +19,7 @@ from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, TradeRecord, TradeStatus
 from mmorpg.domain.ports.repositories import AccessibilitySettings, Census, User
 from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
+from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
 from mmorpg.domain.rules.party import Party
 
 
@@ -367,6 +368,69 @@ class InMemoryPartyRepository:
 
     async def disband(self, leader_id: int) -> None:
         self._members.pop(leader_id, None)
+
+
+class InMemoryGuildRepository:
+    """Гильдии в словаре: id -> гильдия. Имя ищется без учёта регистра."""
+
+    def __init__(self) -> None:
+        self._guilds: dict[int, Guild] = {}
+        self._next_id = 1
+
+    async def by_id(self, guild_id: int) -> Guild | None:
+        return self._guilds.get(guild_id)
+
+    async def by_name(self, name: str) -> Guild | None:
+        wanted = name.strip().casefold()
+        for guild in self._guilds.values():
+            if guild.name.casefold() == wanted:
+                return guild
+        return None
+
+    async def of(self, character_id: int) -> Guild | None:
+        for guild in self._guilds.values():
+            if guild.has(character_id):
+                return guild
+        return None
+
+    async def create(self, name: str, founder_id: int) -> Guild:
+        guild = Guild(
+            id=self._next_id,
+            name=name.strip(),
+            founder_id=founder_id,
+            members=(GuildMember(founder_id, GuildRank.FOUNDER),),
+        )
+        self._guilds[guild.id] = guild
+        self._next_id += 1
+        return guild
+
+    async def save(self, guild: Guild) -> None:
+        stored = self._guilds.get(guild.id)
+        vault = stored.vault_gold if stored is not None else guild.vault_gold
+        # «Одна гильдия на человека»: новичков выметают из любой другой гильдии.
+        joining = {one.character_id for one in guild.members}
+        for other_id, other in list(self._guilds.items()):
+            if other_id == guild.id:
+                continue
+            kept = tuple(m for m in other.members if m.character_id not in joining)
+            if len(kept) != len(other.members):
+                self._guilds[other_id] = replace(other, members=kept)
+        self._guilds[guild.id] = replace(guild, vault_gold=vault)
+
+    async def disband(self, guild_id: int) -> None:
+        self._guilds.pop(guild_id, None)
+
+    async def deposit(self, guild_id: int, amount: int) -> None:
+        guild = self._guilds.get(guild_id)
+        if guild is not None and amount > 0:
+            self._guilds[guild_id] = replace(guild, vault_gold=guild.vault_gold + amount)
+
+    async def withdraw(self, guild_id: int, amount: int) -> bool:
+        guild = self._guilds.get(guild_id)
+        if guild is None or amount <= 0 or amount > guild.vault_gold:
+            return False
+        self._guilds[guild_id] = replace(guild, vault_gold=guild.vault_gold - amount)
+        return True
 
 
 class InMemoryTradeRepository:

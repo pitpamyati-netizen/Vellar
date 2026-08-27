@@ -62,6 +62,7 @@ from mmorpg.presentation.telegram.screens import chamber as chamber_screens
 from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import crafts as craft_screens
 from mmorpg.presentation.telegram.screens import format as format_screens
+from mmorpg.presentation.telegram.screens import guild as guild_screens
 from mmorpg.presentation.telegram.screens import items as item_screens
 from mmorpg.presentation.telegram.screens import party as party_screens
 from mmorpg.presentation.telegram.screens import play as screens
@@ -72,6 +73,7 @@ from mmorpg.presentation.telegram.screens import skills as skill_screens
 from mmorpg.presentation.telegram.screens import tutorial as tutorial_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.creation import STAT_NAMES
+from mmorpg.presentation.telegram.screens.guild import GuildView
 from mmorpg.presentation.telegram.screens.keeper import KeeperView
 from mmorpg.presentation.telegram.screens.paginated import (
     SEARCH_PROMPT,
@@ -248,6 +250,7 @@ def render(
     tally: Mapping[str, int] | None = None,
     keeper: KeeperView | None = None,
     party: PartyView | None = None,
+    guild: GuildView | None = None,
     location_state: LocationState | None = None,
 ) -> Screen:
     shelf = goods or Goods(gold=character.gold)
@@ -263,6 +266,16 @@ def render(
             return party_screens.party_screen(party or PartyView(), state.notice)
         case ScreenId.PARTY_INVITE:
             return party_screens.invite_screen(party or PartyView(), state.notice)
+        case ScreenId.GUILD:
+            return guild_screens.guild_screen(guild or GuildView(), state.notice)
+        case ScreenId.GUILD_FOUND:
+            return guild_screens.found_screen(guild or GuildView(), state.notice)
+        case ScreenId.GUILD_INVITE:
+            return guild_screens.invite_screen(guild or GuildView(), state.notice)
+        case ScreenId.GUILD_ROSTER:
+            return guild_screens.roster_screen(guild or GuildView(), state.notice)
+        case ScreenId.GUILD_VAULT:
+            return guild_screens.vault_screen(guild or GuildView(), state.notice)
         case ScreenId.SETTINGS:
             return settings_screens.settings_screen(settings or DEFAULT_SETTINGS, state.notice)
         case ScreenId.LIST_FILTERS:
@@ -547,6 +560,7 @@ def advance(
     neighbours: Sequence[Presence] = (),
     keeper: KeeperView | None = None,
     party: PartyView | None = None,
+    guild: GuildView | None = None,
     location_state: LocationState | None = None,
 ) -> PlayState:
     """Применить одно сообщение. Отвечает всегда; на неожиданный ввод не падает."""
@@ -602,6 +616,7 @@ def advance(
         neighbours=neighbours,
         keeper=view,
         party=party,
+        guild=guild,
         location_state=location_state,
     )
     command = resolve(text, screen)
@@ -642,7 +657,14 @@ def advance(
             return with_list_page(state, turned).with_notice("")
 
     state = replace(
-        state, pending=PendingWrite(), fight="", invite=0, invite_name="", party_action=""
+        state,
+        pending=PendingWrite(),
+        fight="",
+        invite=0,
+        invite_name="",
+        party_action="",
+        guild_action="",
+        guild_arg="",
     )
     shelf = goods or Goods(gold=character.gold)
     ticking = clock or Clock()
@@ -652,6 +674,9 @@ def advance(
     # (``domain/rules/party.py``).
     if (with_party := _party_intent(state, command)) is not None:
         return with_party
+
+    if (with_guild := _guild_intent(state, command)) is not None:
+        return with_guild
 
     if state.screen in KEEPER_SCREENS:
         return keeper_flow.advance(content, character, state, command, view)
@@ -721,6 +746,16 @@ def advance(
             return state.with_notice("Нажмите кнопку отряда.")
         case ScreenId.PARTY_INVITE:
             return _handle_party_invite(state, command, text)
+        case ScreenId.GUILD:
+            return state.with_notice("Нажмите кнопку гильдии.")
+        case ScreenId.GUILD_FOUND:
+            return _handle_guild_text(state, command, text, action="found")
+        case ScreenId.GUILD_INVITE:
+            return _handle_guild_text(state, command, text, action="invite")
+        case ScreenId.GUILD_ROSTER:
+            return _handle_guild_roster(state, command)
+        case ScreenId.GUILD_VAULT:
+            return _handle_guild_vault(state, command)
         case ScreenId.LOCATION_LIST:
             return _handle_location_list(content, character, state, command)
         case ScreenId.LOCATION:
@@ -1623,6 +1658,67 @@ def _handle_party_invite(state: PlayState, command: Command, text: str) -> PlayS
     if command.intent is not Intent.UNKNOWN or not name:
         return state.with_notice("Напишите имя того, кого зовёте, одним сообщением.")
     return replace(state, invite_name=name)
+
+
+#: Намерение гильдии и слово, которым оно называется в состоянии.
+_GUILD_ACTIONS: dict[Intent, str] = {
+    Intent.GUILD_DISBAND: "disband",
+    Intent.GUILD_LEAVE: "leave",
+    Intent.GUILD_ACCEPT: "accept",
+    Intent.GUILD_DECLINE: "decline",
+}
+
+_GUILD_SCREENS: dict[Intent, ScreenId] = {
+    Intent.GUILD: ScreenId.GUILD,
+    Intent.GUILD_FOUND: ScreenId.GUILD_FOUND,
+    Intent.GUILD_INVITE: ScreenId.GUILD_INVITE,
+    Intent.GUILD_ROSTER: ScreenId.GUILD_ROSTER,
+    Intent.GUILD_VAULT: ScreenId.GUILD_VAULT,
+}
+
+
+def _guild_intent(state: PlayState, command: Command) -> PlayState | None:
+    """Шаг гильдии, откуда бы его ни сделали. ``None`` - это был не он."""
+    screen = _GUILD_SCREENS.get(command.intent)
+    if screen is not None:
+        return state.at(screen)
+    action = _GUILD_ACTIONS.get(command.intent)
+    if action is None:
+        return None
+    return replace(state, guild_action=action)
+
+
+def _handle_guild_text(state: PlayState, command: Command, text: str, *, action: str) -> PlayState:
+    """Набранное на экране «основать» / «позвать» - имя, и больше ничего."""
+    name = text.strip()
+    if command.intent is not Intent.UNKNOWN or not name:
+        return state.with_notice("Напишите имя одним сообщением.")
+    return replace(state, guild_action=action, guild_arg=name)
+
+
+def _guild_pick(command: Command, prefix: str) -> str:
+    """Имя из надписи вроде «Повысить: Мирна». Пусто - не та кнопка."""
+    if command.intent is Intent.SELECT and command.argument.startswith(f"{prefix}: "):
+        return command.argument.split(": ", 1)[1].strip()
+    return ""
+
+
+def _handle_guild_roster(state: PlayState, command: Command) -> PlayState:
+    for prefix, action in (("Повысить", "promote"), ("Понизить", "demote"), ("Выгнать", "kick")):
+        if name := _guild_pick(command, prefix):
+            return replace(state, guild_action=action, guild_arg=name)
+    return state.with_notice("Нажмите кнопку рядом с именем.")
+
+
+def _handle_guild_vault(state: PlayState, command: Command) -> PlayState:
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите сумму.")
+    for step in guild_screens.VAULT_STEPS:
+        if labels.guild_deposit_label(step).matches(command.argument):
+            return replace(state, guild_action="deposit", guild_arg=str(step))
+        if labels.guild_withdraw_label(step).matches(command.argument):
+            return replace(state, guild_action="withdraw", guild_arg=str(step))
+    return state.with_notice("Нажмите сумму.")
 
 
 def _handle_location_list(

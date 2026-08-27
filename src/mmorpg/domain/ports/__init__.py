@@ -3,6 +3,7 @@
 from mmorpg.domain.ports.repositories import (
     AccessibilitySettings,
     CharacterRepository,
+    GuildRepository,
     IdempotencyStore,
     InventoryRepository,
     LocationStateCache,
@@ -16,6 +17,7 @@ from mmorpg.domain.ports.repositories import (
 __all__ = [
     "AccessibilitySettings",
     "CharacterRepository",
+    "GuildRepository",
     "IdempotencyStore",
     "InventoryRepository",
     "LocationStateCache",

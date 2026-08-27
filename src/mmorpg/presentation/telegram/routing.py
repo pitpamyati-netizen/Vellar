@@ -40,6 +40,15 @@ class Intent(StrEnum):
     PARTY_ACCEPT = "party_accept"
     PARTY_DECLINE = "party_decline"
     PARTY_LEAVE = "party_leave"
+    GUILD = "guild"
+    GUILD_FOUND = "guild_found"
+    GUILD_DISBAND = "guild_disband"
+    GUILD_INVITE = "guild_invite"
+    GUILD_ACCEPT = "guild_accept"
+    GUILD_DECLINE = "guild_decline"
+    GUILD_LEAVE = "guild_leave"
+    GUILD_ROSTER = "guild_roster"
+    GUILD_VAULT = "guild_vault"
     PAGE = "page"
     NEXT_PAGE = "next_page"
     PREVIOUS_PAGE = "previous_page"
@@ -82,6 +91,8 @@ SIMPLE_COMMANDS: dict[str, Intent] = {
     # Отряд: одна команда на всё, что с ним делают.
     "/отряд": Intent.PARTY,
     "/party": Intent.PARTY,
+    "/гильдия": Intent.GUILD,
+    "/guild": Intent.GUILD,
     # Списки: то же, что три кнопки под страницами, но набором.
     "/поиск": Intent.SEARCH,
     "/search": Intent.SEARCH,
@@ -134,6 +145,32 @@ _PARTY_WORDS: dict[str, Intent] = {
     "leave": Intent.PARTY_LEAVE,
 }
 
+#: Слова после ``/гильдия``.
+_GUILD_COMMAND = re.compile(r"^/(?:гильдия|guild)\s+(\S+)$", re.IGNORECASE)
+_GUILD_WORDS: dict[str, Intent] = {
+    "основать": Intent.GUILD_FOUND,
+    "создать": Intent.GUILD_FOUND,
+    "found": Intent.GUILD_FOUND,
+    "распустить": Intent.GUILD_DISBAND,
+    "disband": Intent.GUILD_DISBAND,
+    "пригласить": Intent.GUILD_INVITE,
+    "позвать": Intent.GUILD_INVITE,
+    "invite": Intent.GUILD_INVITE,
+    "принять": Intent.GUILD_ACCEPT,
+    "вступить": Intent.GUILD_ACCEPT,
+    "accept": Intent.GUILD_ACCEPT,
+    "отклонить": Intent.GUILD_DECLINE,
+    "отказать": Intent.GUILD_DECLINE,
+    "decline": Intent.GUILD_DECLINE,
+    "уйти": Intent.GUILD_LEAVE,
+    "выйти": Intent.GUILD_LEAVE,
+    "leave": Intent.GUILD_LEAVE,
+    "состав": Intent.GUILD_ROSTER,
+    "roster": Intent.GUILD_ROSTER,
+    "казна": Intent.GUILD_VAULT,
+    "vault": Intent.GUILD_VAULT,
+}
+
 
 def parse_command(text: str) -> Command | None:
     """Разобрать набранную команду. ``None``, когда текст командой не является."""
@@ -156,6 +193,12 @@ def parse_command(text: str) -> Command | None:
         if word in _PARTY_WORDS:
             return Command(intent=_PARTY_WORDS[word])
         return Command(intent=Intent.PARTY, argument=word)
+
+    if (match := _GUILD_COMMAND.match(stripped)) is not None:
+        word = match.group(1).casefold()
+        if word in _GUILD_WORDS:
+            return Command(intent=_GUILD_WORDS[word])
+        return Command(intent=Intent.GUILD, argument=word)
 
     if (match := _COMBAT_COMMAND.match(stripped)) is not None:
         word = match.group(1).casefold()
@@ -183,6 +226,15 @@ _BUTTON_INTENTS: tuple[tuple[object, Intent], ...] = (
     (labels.PARTY_ACCEPT, Intent.PARTY_ACCEPT),
     (labels.PARTY_DECLINE, Intent.PARTY_DECLINE),
     (labels.PARTY_LEAVE, Intent.PARTY_LEAVE),
+    (labels.GUILD, Intent.GUILD),
+    (labels.GUILD_FOUND, Intent.GUILD_FOUND),
+    (labels.GUILD_DISBAND, Intent.GUILD_DISBAND),
+    (labels.GUILD_INVITE, Intent.GUILD_INVITE),
+    (labels.GUILD_ACCEPT, Intent.GUILD_ACCEPT),
+    (labels.GUILD_DECLINE, Intent.GUILD_DECLINE),
+    (labels.GUILD_LEAVE, Intent.GUILD_LEAVE),
+    (labels.GUILD_ROSTER, Intent.GUILD_ROSTER),
+    (labels.GUILD_VAULT, Intent.GUILD_VAULT),
     (labels.NEXT_PAGE, Intent.NEXT_PAGE),
     (labels.PREVIOUS_PAGE, Intent.PREVIOUS_PAGE),
     (labels.SEARCH, Intent.SEARCH),

@@ -21,6 +21,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import Chat, Message, User
 
 from mmorpg.application.services.content import ContentRegistry
+from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.party import PartyStore
 from mmorpg.config import Settings
 from mmorpg.domain.entities import Character, GameContent
@@ -28,6 +29,7 @@ from mmorpg.infrastructure.cache.memory import InMemoryLocationStateCache, InMem
 from mmorpg.infrastructure.persistence.memory import (
     InMemoryCharacterRepository,
     InMemoryContentOverlayRepository,
+    InMemoryGuildRepository,
     InMemoryInventoryRepository,
     InMemoryKeeperLogRepository,
     InMemoryPartyRepository,
@@ -85,6 +87,11 @@ def parties(cache: InMemoryStateCache) -> PartyStore:
     return PartyStore(InMemoryPartyRepository(), cache)
 
 
+@pytest.fixture
+def guilds(cache: InMemoryStateCache) -> GuildStore:
+    return GuildStore(InMemoryGuildRepository(), cache)
+
+
 def a_message(account: int, text: str) -> Message:
     return Message(
         message_id=1,
@@ -123,6 +130,7 @@ class Player:
             self.deps["trades"],
             self.deps["cache"],
             self.deps["parties"],
+            self.deps["guilds"],
         )
         return self.sent.last
 
@@ -133,6 +141,7 @@ async def table(
     registry: ContentRegistry,
     cache: InMemoryStateCache,
     parties: PartyStore,
+    guilds: GuildStore,
     sent: Recorder,
 ) -> tuple[Player, Player, Character, Character]:
     """Двое игроков одного уровня, каждый со своим автоматом."""
@@ -147,6 +156,7 @@ async def table(
         "trades": InMemoryTradeRepository(),
         "cache": cache,
         "parties": parties,
+        "guilds": guilds,
     }
     argus = await characters.create(
         Character(

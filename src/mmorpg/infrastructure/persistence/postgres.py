@@ -22,6 +22,7 @@ from mmorpg.domain.entities.stats import StatBlock
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeRecord, TradeStatus
 from mmorpg.domain.ports.repositories import AccessibilitySettings, Census, User
 from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
+from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
 from mmorpg.domain.rules.party import Party as PlayerParty
 
 if TYPE_CHECKING:  # pragma: no cover - только для типов
@@ -975,3 +976,117 @@ class PostgresPartyRepository:
 
     async def disband(self, leader_id: int) -> None:
         await self._pool.execute("DELETE FROM parties WHERE leader_id = $1", leader_id)
+
+
+class PostgresGuildRepository:
+    """Гильдия: строка в ``guilds`` (имя, основатель, казна) и строка на каждого
+    участника в ``guild_members`` со званием (``migrations/0017``, ADR 0030).
+
+    Казна двигается условным ``UPDATE``: ``withdraw`` не уходит в минус, даже
+    если два офицера нажали разом.
+    """
+
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        self._pool = pool
+
+    async def _assemble(self, row: Any) -> Guild:
+        members = await self._pool.fetch(
+            "SELECT character_id, rank FROM guild_members WHERE guild_id = $1"
+            " ORDER BY rank DESC, character_id",
+            row["id"],
+        )
+        return Guild(
+            id=row["id"],
+            name=row["name"],
+            founder_id=row["founder_id"],
+            vault_gold=row["vault_gold"],
+            members=tuple(GuildMember(m["character_id"], GuildRank(m["rank"])) for m in members),
+        )
+
+    async def by_id(self, guild_id: int) -> Guild | None:
+        row = await self._pool.fetchrow(
+            "SELECT id, name, founder_id, vault_gold FROM guilds WHERE id = $1", guild_id
+        )
+        return await self._assemble(row) if row is not None else None
+
+    async def by_name(self, name: str) -> Guild | None:
+        row = await self._pool.fetchrow(
+            "SELECT id, name, founder_id, vault_gold FROM guilds WHERE lower(name) = lower($1)",
+            name.strip(),
+        )
+        return await self._assemble(row) if row is not None else None
+
+    async def of(self, character_id: int) -> Guild | None:
+        row = await self._pool.fetchrow(
+            "SELECT g.id, g.name, g.founder_id, g.vault_gold FROM guilds g"
+            " JOIN guild_members m ON m.guild_id = g.id WHERE m.character_id = $1",
+            character_id,
+        )
+        return await self._assemble(row) if row is not None else None
+
+    async def create(self, name: str, founder_id: int) -> Guild:
+        async with self._pool.acquire() as connection, connection.transaction():
+            guild_id = await connection.fetchval(
+                "INSERT INTO guilds (name, founder_id) VALUES ($1, $2) RETURNING id",
+                name.strip(),
+                founder_id,
+            )
+            await connection.execute(
+                "INSERT INTO guild_members (guild_id, character_id, rank) VALUES ($1, $2, $3)",
+                guild_id,
+                founder_id,
+                int(GuildRank.FOUNDER),
+            )
+        return Guild(
+            id=int(guild_id),
+            name=name.strip(),
+            founder_id=founder_id,
+            members=(GuildMember(founder_id, GuildRank.FOUNDER),),
+        )
+
+    async def save(self, guild: Guild) -> None:
+        async with self._pool.acquire() as connection, connection.transaction():
+            await connection.execute(
+                "UPDATE guilds SET name = $2 WHERE id = $1", guild.id, guild.name.strip()
+            )
+            ids = [one.character_id for one in guild.members]
+            # Индекс по character_id держит «одна гильдия на человека»: выметаем
+            # новичков из любой другой гильдии, прежде чем записать эту.
+            await connection.execute(
+                "DELETE FROM guild_members WHERE character_id = ANY($1::bigint[])"
+                " AND guild_id <> $2",
+                ids,
+                guild.id,
+            )
+            await connection.execute(
+                "DELETE FROM guild_members WHERE guild_id = $1"
+                " AND character_id <> ALL($2::bigint[])",
+                guild.id,
+                ids,
+            )
+            await connection.executemany(
+                """
+                INSERT INTO guild_members (guild_id, character_id, rank)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (guild_id, character_id) DO UPDATE SET rank = EXCLUDED.rank
+                """,
+                [(guild.id, one.character_id, int(one.rank)) for one in guild.members],
+            )
+
+    async def disband(self, guild_id: int) -> None:
+        await self._pool.execute("DELETE FROM guilds WHERE id = $1", guild_id)
+
+    async def deposit(self, guild_id: int, amount: int) -> None:
+        if amount > 0:
+            await self._pool.execute(
+                "UPDATE guilds SET vault_gold = vault_gold + $2 WHERE id = $1", guild_id, amount
+            )
+
+    async def withdraw(self, guild_id: int, amount: int) -> bool:
+        updated = await self._pool.fetchval(
+            "UPDATE guilds SET vault_gold = vault_gold - $2"
+            " WHERE id = $1 AND vault_gold >= $2 RETURNING vault_gold",
+            guild_id,
+            amount,
+        )
+        return updated is not None

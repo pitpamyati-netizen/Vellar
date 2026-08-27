@@ -155,6 +155,14 @@ def parties(cache: Any) -> Any:
 
 
 @pytest.fixture
+def guilds(cache: Any) -> Any:
+    from mmorpg.application.services.guild import GuildStore
+    from mmorpg.infrastructure.persistence.memory import InMemoryGuildRepository
+
+    return GuildStore(InMemoryGuildRepository(), cache)
+
+
+@pytest.fixture
 async def argus(characters: InMemoryCharacterRepository) -> Character:
     return await characters.create(
         Character(
@@ -232,6 +240,7 @@ class Player:
                 self.deps["trades"],
                 self.deps["cache"],
                 self.deps["parties"],
+                self.deps["guilds"],
             )
         return self.sent.last
 
@@ -251,6 +260,7 @@ async def player(
     deltas: Any,
     cache: Any,
     parties: Any,
+    guilds: Any,
     overlays: InMemoryContentOverlayRepository,
     registry: ContentRegistry,
     argus: Character,
@@ -270,6 +280,7 @@ async def player(
         trades=InMemoryTradeRepository(),
         cache=cache,
         parties=parties,
+        guilds=guilds,
     )
 
 
@@ -619,6 +630,7 @@ async def test_what_one_player_took_is_gone_for_everybody(
     users: InMemoryUserRepository,
     deltas: Any,
     parties: Any,
+    guilds: Any,
     overlays: InMemoryContentOverlayRepository,
     registry: ContentRegistry,
     state: FSMContext,
@@ -688,6 +700,7 @@ async def test_what_one_player_took_is_gone_for_everybody(
             InMemoryTradeRepository(),
             cache,
             parties,
+            guilds,
         )
     data = await second_state.get_data()
     theirs = PlayState.deserialise(data["play"])

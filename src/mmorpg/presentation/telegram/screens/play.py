@@ -143,6 +143,7 @@ def main_menu_screen(
         (labels.CHARACTER, labels.INVENTORY),
         (labels.SKILLS, labels.QUESTS),
         (labels.CRAFTS, labels.PARTY),
+        (labels.GUILD,),
         (labels.SETTINGS,),
     ]
     # Вступление предлагают, пока ему есть что сказать, а потом оно уходит навсегда:

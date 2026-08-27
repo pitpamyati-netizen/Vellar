@@ -237,6 +237,11 @@ class PlayState:
     #: ``accept``, ``decline``. Переходное, как и ``invite``: отряд лежит в общем
     #: хранилище, а автомат не читает и не пишет ничего.
     party_action: str = ""
+    #: То же для гильдии: ``found``, ``disband``, ``leave``, ``accept``,
+    #: ``decline``, ``invite``, ``promote``, ``demote``, ``kick``, ``deposit``,
+    #: ``withdraw``. ``guild_arg`` - имя или сумма к нему. Переходное.
+    guild_action: str = ""
+    guild_arg: str = ""
 
     def at(self, screen: ScreenId) -> PlayState:
         return replace(self, screen=screen, stack=self.stack.push(screen), notice="")

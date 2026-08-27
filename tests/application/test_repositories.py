@@ -15,6 +15,7 @@ from mmorpg.domain.entities.location import LocationState, NodeState, Presence
 from mmorpg.domain.ports import (
     AccessibilitySettings,
     CharacterRepository,
+    GuildRepository,
     IdempotencyStore,
     InventoryRepository,
     LocationStateCache,
@@ -23,6 +24,7 @@ from mmorpg.domain.ports import (
     User,
     UserRepository,
 )
+from mmorpg.domain.rules.guild import GuildRank
 from mmorpg.domain.rules.nodes import RESPAWN_SECONDS
 from mmorpg.domain.rules.party import Party
 from mmorpg.infrastructure.cache import (
@@ -32,6 +34,7 @@ from mmorpg.infrastructure.cache import (
 )
 from mmorpg.infrastructure.persistence import (
     InMemoryCharacterRepository,
+    InMemoryGuildRepository,
     InMemoryInventoryRepository,
     InMemoryPartyRepository,
     InMemoryUserRepository,
@@ -63,6 +66,7 @@ def test_in_memory_adapters_implement_the_ports() -> None:
     assert isinstance(InMemoryCharacterRepository(), CharacterRepository)
     assert isinstance(InMemoryInventoryRepository(), InventoryRepository)
     assert isinstance(InMemoryPartyRepository(), PartyRepository)
+    assert isinstance(InMemoryGuildRepository(), GuildRepository)
     assert isinstance(InMemoryStateCache(), StateCache)
     assert isinstance(InMemoryLocationStateCache(), LocationStateCache)
     assert isinstance(InMemoryIdempotencyStore(), IdempotencyStore)
@@ -207,6 +211,44 @@ async def test_disbanding_clears_the_roster() -> None:
     assert await roster.of(2) is None
 
 
+# --- гильдия --------------------------------------------------------
+
+
+async def test_a_guild_is_created_with_its_founder_and_found_by_any_member() -> None:
+    guilds = InMemoryGuildRepository()
+    made = await guilds.create("Стая", 7)
+    assert made.rank_of(7) is GuildRank.FOUNDER
+
+    await guilds.save(made.with_member(8))
+    for member in (7, 8):
+        found = await guilds.of(member)
+        assert found is not None and found.name == "Стая"
+    assert (await guilds.by_name("стая")) is not None
+
+
+async def test_the_guild_vault_never_goes_negative_and_deposit_always_lands() -> None:
+    guilds = InMemoryGuildRepository()
+    made = await guilds.create("Стая", 1)
+
+    await guilds.deposit(made.id, 300)
+    assert await guilds.withdraw(made.id, 500) is False
+    assert await guilds.withdraw(made.id, 200) is True
+
+    left = await guilds.by_id(made.id)
+    assert left is not None and left.vault_gold == 100
+
+
+async def test_saving_a_roster_does_not_touch_the_vault() -> None:
+    guilds = InMemoryGuildRepository()
+    made = await guilds.create("Стая", 1)
+    await guilds.deposit(made.id, 400)
+
+    await guilds.save((await guilds.by_id(made.id)).with_member(2))  # type: ignore[union-attr]
+
+    kept = await guilds.by_id(made.id)
+    assert kept is not None and kept.vault_gold == 400 and kept.has(2)
+
+
 # --- caches ----------------------------------------------------------
 
 
@@ -310,12 +352,14 @@ async def test_postgres_adapters_are_importable() -> None:
     """Адаптеры на SQL обязаны хотя бы импортироваться без поднятой базы."""
     from mmorpg.infrastructure.persistence.postgres import (
         PostgresCharacterRepository,
+        PostgresGuildRepository,
         PostgresInventoryRepository,
         PostgresPartyRepository,
         PostgresUserRepository,
     )
 
     assert PostgresCharacterRepository is not None
+    assert PostgresGuildRepository is not None
     assert PostgresInventoryRepository is not None
     assert PostgresPartyRepository is not None
     assert PostgresUserRepository is not None

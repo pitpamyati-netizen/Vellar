@@ -189,3 +189,36 @@ PARTY_INVITE = label("Пригласить в отряд", "✉️")
 PARTY_ACCEPT = label("Пойти вместе", "🤝")
 PARTY_DECLINE = label("Отказаться", "🙅")
 PARTY_LEAVE = label("Покинуть отряд", "🚪")
+
+
+# --- гильдия (``domain/rules/guild.py``) ---
+
+GUILD = label("Гильдия", "🏛")
+GUILD_FOUND = label("Основать гильдию", "🏛")
+GUILD_DISBAND = label("Распустить гильдию", "🚪")
+GUILD_INVITE = label("Позвать в гильдию", "✉️")
+GUILD_ACCEPT = label("Вступить в гильдию", "🏛")
+GUILD_DECLINE = label("Отклонить", "🙅")
+GUILD_LEAVE = label("Выйти из гильдии", "🚪")
+GUILD_ROSTER = label("Состав гильдии", "📋")
+GUILD_VAULT = label("Казна гильдии", "💰")
+
+
+def guild_deposit_label(sum_: int) -> Label:
+    return label(f"Внести {sum_}")
+
+
+def guild_withdraw_label(sum_: int) -> Label:
+    return label(f"Взять {sum_}")
+
+
+def guild_promote_label(name: str) -> Label:
+    return label(f"Повысить: {name}")
+
+
+def guild_demote_label(name: str) -> Label:
+    return label(f"Понизить: {name}")
+
+
+def guild_kick_label(name: str) -> Label:
+    return label(f"Выгнать: {name}")
