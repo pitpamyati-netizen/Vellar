@@ -15,6 +15,7 @@ from mmorpg.domain.procgen import (
     DEFAULT_SHOP_ROTATION_SECONDS,
     MAX_NODES,
     MIN_NODES,
+    approach_length,
     combat_nodes,
     epoch_seed,
     generate_enemy,
@@ -144,6 +145,54 @@ def test_the_boss_stays_pinned_every_epoch() -> None:
         bosses = [n for n in location.nodes if n.kind is NodeKind.BOSS_BATTLE]
         assert len(bosses) == 1
         assert bosses[0].index == len(location.nodes) - 2, "самый глубокий внутренний узел"
+
+
+def _boss_and_guards(location) -> tuple[int, list[int]]:
+    """Индекс босса и индексы стражей подступа (закреплённый хвост локации)."""
+    count = len(location.nodes)
+    boss = count - 2
+    guards = list(range(count - 2 - approach_length(count), boss))
+    return boss, guards
+
+
+def test_the_boss_is_gated_by_a_chain_of_elites() -> None:
+    """К хозину логова ведёт вереница эпических боёв, и она закреплена (ADR 0033)."""
+    for slot in range(1, 6):
+        for epoch in range(6):
+            location = build(slot=slot, epoch=epoch)
+            boss, guards = _boss_and_guards(location)
+            assert guards, "у подступа хотя бы один страж"
+            assert 1 <= len(guards) <= 3
+            for index in guards:
+                assert location.node(index).kind is NodeKind.ELITE_BATTLE, index
+            # Босс висит только за последним стражем; стражи - линейная цепочка.
+            assert location.node(boss).links == (guards[-1],)
+            for position, index in enumerate(guards):
+                lower = guards[position - 1] if position else None
+                upper = guards[position + 1] if position + 1 < len(guards) else boss
+                for link in location.node(index).links:
+                    assert link in (upper, lower) or link < guards[0], (
+                        f"страж {index} связан в обход подступа с {link}"
+                    )
+
+
+def test_no_shortcut_bypasses_the_approach() -> None:
+    """Выбей стражей и босса из графа - и хозин логова отрезан от входа."""
+    for slot in range(1, 6):
+        for epoch in range(1, 12):
+            location = build(slot=slot, epoch=epoch)
+            boss, guards = _boss_and_guards(location)
+            blocked = {boss, *guards}
+            seen = {0}
+            frontier = [0]
+            while frontier:
+                current = frontier.pop()
+                for link in location.node(current).links:
+                    if link not in seen and link not in blocked:
+                        seen.add(link)
+                        frontier.append(link)
+            assert boss not in seen, "к боссу нет пути помимо стражей"
+            assert location.exit_node.index in seen, "а к выходу - есть, и мимо логова"
 
 
 def test_the_category_composition_is_permanent() -> None:

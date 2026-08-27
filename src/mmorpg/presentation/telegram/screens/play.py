@@ -403,7 +403,9 @@ def location_screen(
         )
     if boss is not None and not left_at(boss.index).empty:
         lines.append(
-            f"Хозяин логова стоит в узле {boss.index}, уровень {boss.level}. Мимо есть путь."
+            f"Хозяин логова стоит в узле {boss.index}, уровень {boss.level}. К нему "
+            "ведёт цепочка эпических боёв, и в обход неё не пройти. Мимо самого "
+            "логова путь есть: драться с хозином необязательно."
         )
 
     lines.append("Отсюда ведут тропы:")

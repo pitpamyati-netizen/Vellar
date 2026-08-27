@@ -1,6 +1,6 @@
 """Сборка локации: вечный скелет и сменное поколение округи.
 
-Локация - это от 8 до 14 узлов, сшитых в связный граф, где вход стоит под
+Локация - это от 12 до 24 узлов, сшитых в связный граф, где вход стоит под
 номером 0, а выход - последним. Связность и достижимость выхода обеспечены самой
 постройкой: каждый узел привязывается к более раннему до того, как добавляются
 короткие тропы, поэтому граф - это остовное дерево плюс рёбра.
@@ -17,6 +17,12 @@
 (``domain/rules/nodes.location_epoch``, ADR 0032). Категория узла, его имя и
 уровень при смене поколения не трогаются.
 
+**К хозину логова ведёт цепочка эпических боёв.** Несколько самых глубоких
+внутренних узлов перед боссом - это подступ: закреплённая линейная вереница
+эпических противников, и короткие тропы её не обходят (ADR 0033). Драться с самим
+боссом по-прежнему необязательно: выход привязан в обход подступа, и мимо логова
+есть дорога.
+
 Сборщик не знает ни о времени, ни о хранении: это чистая функция от места и
 номера поколения, а результат выбрасывается сразу после отрисовки. Наполнение же
 узлов приходит волнами (``domain/rules/nodes.py``).
@@ -30,9 +36,19 @@ from enum import StrEnum
 from mmorpg.domain.entities.location import GeneratedLocation, LocationNode, NodeKind
 from mmorpg.domain.procgen.seeds import epoch_seed, location_seed, node_seed, rng
 
-MIN_NODES = 8
-MAX_NODES = 14
+MIN_NODES = 12
+MAX_NODES = 24
 EXTRA_LINK_RATIO = 0.35
+
+
+def approach_length(count: int) -> int:
+    """Сколько эпических узлов-стражей стоит на подступе к боссу.
+
+    Растёт с размером локации: у самой маленькой один страж, у самой большой три.
+    Считается от числа узлов, а число узлов - часть скелета, поэтому длина подступа
+    тоже постоянна и переживает смену поколения.
+    """
+    return 1 + (count - MIN_NODES) // 6
 
 
 class _Category(StrEnum):
@@ -41,25 +57,31 @@ class _Category(StrEnum):
     COMBAT = "combat"
     FINDING = "finding"
     SHRINE = "shrine"
+    APPROACH = "approach"
     BOSS = "boss"
 
 
-# Веса постоянных категорий среднего узла. Вход, выход и босс закреплены отдельно,
-# поэтому это касается только того, что между ними и до босса. Сумма весов
-# повторяет прежнее деление видов: бой 42 + 9, находка 16 + 14 + 12, святилище 7.
+# Веса постоянных категорий среднего узла. Вход, выход, подступ и босс закреплены
+# отдельно, поэтому это касается только того, что между входом и подступом. Находок
+# теперь чуть больше боёв: на большой локации череда одинаковых стычек звучит
+# однообразно, а разнобой дел - это и есть то разнообразие, ради которого локацию
+# растили.
 _INTERIOR_CATEGORIES: tuple[tuple[_Category, int], ...] = (
-    (_Category.COMBAT, 51),
-    (_Category.FINDING, 42),
-    (_Category.SHRINE, 7),
+    (_Category.COMBAT, 45),
+    (_Category.FINDING, 46),
+    (_Category.SHRINE, 9),
 )
 
 # Какие конкретные виды и с каким весом принимает узел категории. Состав узлов
 # категории (сколько стычек, сколько сильных боёв) решается на скелете и
 # постоянен; поколение только переставляет, какой узел каким из них стал.
+# Эпических боёв в общем замесе стало больше: сильный одиночный противник - это
+# смена ритма посреди стай, и на длинной локации без него дорога плоская.
 _CATEGORY_KINDS: dict[_Category, tuple[tuple[NodeKind, int], ...]] = {
-    _Category.COMBAT: ((NodeKind.BATTLE, 42), (NodeKind.ELITE_BATTLE, 9)),
-    _Category.FINDING: ((NodeKind.GATHER, 16), (NodeKind.EVENT, 14), (NodeKind.CACHE, 12)),
+    _Category.COMBAT: ((NodeKind.BATTLE, 37), (NodeKind.ELITE_BATTLE, 14)),
+    _Category.FINDING: ((NodeKind.GATHER, 15), (NodeKind.EVENT, 15), (NodeKind.CACHE, 14)),
     _Category.SHRINE: ((NodeKind.SHRINE, 1),),
+    _Category.APPROACH: ((NodeKind.ELITE_BATTLE, 1),),
     _Category.BOSS: ((NodeKind.BOSS_BATTLE, 1),),
 }
 
@@ -74,6 +96,10 @@ _CATEGORY_NAMES: dict[_Category, tuple[str, ...]] = {
         "Логово",
         "Развилка с врагом",
         "Страж прохода",
+        "Звериная тропа",
+        "Нора",
+        "Гнездовье",
+        "Разорённый пост",
     ),
     _Category.FINDING: (
         "Развилка",
@@ -84,8 +110,27 @@ _CATEGORY_NAMES: dict[_Category, tuple[str, ...]] = {
         "Прогалина",
         "Старая делянка",
         "Приметное место",
+        "Осыпь",
+        "Промоина",
+        "Бурелом",
+        "Заброшенный шурф",
+        "Каменная гряда",
     ),
-    _Category.SHRINE: ("Святилище", "Замшелый камень", "Источник"),
+    _Category.SHRINE: (
+        "Святилище",
+        "Замшелый камень",
+        "Источник",
+        "Ключ из-под камня",
+        "Обетный столб",
+    ),
+    _Category.APPROACH: (
+        "Дозорный завал",
+        "Тесный проход",
+        "Сторожевая нора",
+        "Последняя развилка",
+        "Осыпь перед логовом",
+        "Загороженный лаз",
+    ),
     _Category.BOSS: ("Хозяин этих мест", "Тронный камень", "Сердце логова"),
 }
 
@@ -112,13 +157,16 @@ def generate_location(
     skeleton = rng(seed)
 
     count = skeleton.randint(MIN_NODES, MAX_NODES)
-    categories = _interior_categories(skeleton, count)
+    approach = approach_length(count)
+    approach_start = count - 2 - approach
+
+    categories = _interior_categories(skeleton, count, approach)
     composition = _kind_composition(skeleton, categories)
-    tree = _spanning_tree(skeleton, count)
+    tree = _spanning_tree(skeleton, count, approach_start)
 
     era = rng(epoch_seed(seed, epoch))
     kinds = _lay_kinds(era, categories, composition)
-    links = _lay_paths(era, count, tree)
+    links = _lay_paths(era, count, tree, approach_start)
 
     ordered_kinds = (NodeKind.ENTRANCE, *kinds, NodeKind.EXIT)
     ordered_categories: tuple[_Category | None, ...] = (None, *categories, None)
@@ -146,19 +194,21 @@ def generate_location(
     )
 
 
-def _interior_categories(source: random.Random, count: int) -> tuple[_Category, ...]:
-    """Постоянная категория каждого среднего узла. Самый глубокий - всегда босс.
+def _interior_categories(source: random.Random, count: int, approach: int) -> tuple[_Category, ...]:
+    """Постоянная категория каждого среднего узла.
 
-    Босс на самом глубоком внутреннем узле - тот же инвариант, что и раньше:
-    у каждой локации ровно один босс и всегда на одном удалении, а по дороге к
-    выходу он не стоит - в графе есть короткие тропы, поэтому драться с ним
-    решение, а не пошлина. Раз этот узел закреплён, боевой узел в локации есть
-    всегда.
+    Хвост закреплён: несколько узлов подступа, а за ними - босс. Босс на самом
+    глубоком внутреннем узле - тот же инвариант, что и раньше: у каждой локации
+    ровно один босс и всегда на одном удалении. По дороге к выходу он не стоит -
+    выход привязан в обход подступа, поэтому драться с боссом решение, а не
+    пошлина. Раз этот хвост закреплён, боевой узел в локации есть всегда.
     """
     population = [category for category, _ in _INTERIOR_CATEGORIES]
     weights = [weight for _, weight in _INTERIOR_CATEGORIES]
-    interior = source.choices(population, weights=weights, k=count - 2)
-    interior[-1] = _Category.BOSS
+    # count - 2 внутренних узлов всего, минус подступ, минус один под босса.
+    interior = source.choices(population, weights=weights, k=count - 3 - approach)
+    interior.extend(_Category.APPROACH for _ in range(approach))
+    interior.append(_Category.BOSS)
     return tuple(interior)
 
 
@@ -203,31 +253,52 @@ def _lay_kinds(
     return tuple(result)
 
 
-def _spanning_tree(source: random.Random, count: int) -> list[set[int]]:
+def _spanning_tree(source: random.Random, count: int, approach_start: int) -> list[set[int]]:
     """Остовное дерево, растущее от входа. Постоянное: это и есть выученная дорога.
 
-    Раз узел ``i`` всегда цепляется к какому-то узлу ``j < i``, каждый узел
-    достижим от нулевого - выход в том числе.
+    Обычные узлы (``1 .. approach_start - 1``) цепляются к любому более раннему,
+    поэтому каждый из них достижим от входа. Хвост уложен нарочно:
+
+    * подступ - линейная вереница: первый его узел привязан к какому-то обычному
+      узлу, каждый следующий - к предыдущему;
+    * босс висит только на последнем узле подступа;
+    * выход привязан к обычному узлу, а не к подступу или боссу, - значит, к
+      выходу можно пройти, не трогая ни стражей, ни хозина логова (ADR 0033).
     """
     links: list[set[int]] = [set() for _ in range(count)]
-    for index in range(1, count):
-        parent = source.randrange(index)
-        links[index].add(parent)
-        links[parent].add(index)
+
+    def join(left: int, right: int) -> None:
+        links[left].add(right)
+        links[right].add(left)
+
+    for index in range(1, approach_start):
+        join(index, source.randrange(index))
+
+    join(approach_start, source.randrange(approach_start))
+    for index in range(approach_start + 1, count - 2):
+        join(index, index - 1)
+
+    join(count - 2, count - 3)  # босс - только за последним стражем
+    join(count - 1, source.randrange(approach_start))  # выход - в обход подступа
     return links
 
 
-def _lay_paths(era: random.Random, count: int, tree: list[set[int]]) -> list[set[int]]:
+def _lay_paths(
+    era: random.Random, count: int, tree: list[set[int]], approach_start: int
+) -> list[set[int]]:
     """Дерево плюс несколько коротких троп этого поколения.
 
     Ненаправленные тропы, добавленные поверх остовного дерева, связность сломать
-    не могут: выход достижим от входа по самому дереву.
+    не могут: выход достижим от входа по самому дереву. Подступа и босса они не
+    касаются - иначе срезка провела бы мимо стражей, и подступ перестал бы быть
+    подступом (ADR 0033).
     """
+    protected = set(range(approach_start, count - 1))  # стражи и босс; выход не в счёт
     links: list[set[int]] = [set(node) for node in tree]
     for _ in range(int(count * EXTRA_LINK_RATIO)):
         left = era.randrange(count)
         right = era.randrange(count)
-        if left == right:
+        if left == right or left in protected or right in protected:
             continue
         links[left].add(right)
         links[right].add(left)
