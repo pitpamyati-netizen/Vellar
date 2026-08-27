@@ -11,8 +11,8 @@
 Состояния (``entities/statuses.py``) объявляются здесь же, списком ``inflicts``
 для цели и ``holds`` для себя. Раньше половина этого была признаком внутри бойца:
 ``stunned`` считал ходы, горение отличалось от кровотечения только названием
-умения, а «щит» был числом без имени. Теперь всё это - двадцать состояний с
-именами, и умение просто называет, какое из них вешает и на сколько ходов.
+умения, а «щит» был числом без имени. Теперь всё это - состояния с именами, и
+умение просто называет, какое из них вешает и на сколько ходов.
 """
 
 from __future__ import annotations
@@ -353,7 +353,6 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
         holds=(S(StatusKind.HEALTH_REGEN, 3), S(StatusKind.RESOURCE_REGEN, 3, scale=0.5)),
     ),
     # --- помехи цели (сила - размер штрафа, отсюда scale=-1) ---
-    "debuff_damage": _debuff(aoe=True, target_modifiers=(M("damage_percent", scale=-1.0),)),
     "debuff_accuracy": _debuff(aoe=True, target_modifiers=(M("accuracy_percent", scale=-1.0),)),
     "debuff_armor": _debuff(target_modifiers=(M("armor_percent", scale=-1.0),)),
     "debuff_vulnerable": _debuff(duration=3, target_modifiers=(M("damage_taken_percent"),)),
@@ -381,10 +380,24 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
     "debuff_aoe_slow": _debuff(aoe=True, inflicts=(S(StatusKind.SLOW, 2),)),
     "debuff_aoe_weakness": _debuff(aoe=True, inflicts=(S(StatusKind.WEAKNESS, 2),)),
     "debuff_aoe_fear": _debuff(aoe=True, inflicts=(S(StatusKind.FEAR, 1),), recharges=True),
-    # Провокация - оборона, что бы ни говорила категория. Переключать цель не на
-    # что: противник и так бьёт по игроку, поэтому от неё остаётся ровно то, что
-    # она делает, - удар слабее.
-    "taunt": _debuff(target_modifiers=(M("damage_percent", scale=-1.0),), tag=ActionTag.GUARD),
+    # Провокация уводит удар цели на провокатора: движок ведёт вызванного бойца
+    # на того, кто крикнул (``combat._forced_target``, ADR 0027). В одиночку
+    # переключать некого, поэтому она несёт с собой и то, что видно и там, -
+    # провокатор прикрывается броней на те же ходы. Сила ранга ложится в эту
+    # броню.
+    "taunt": _debuff(
+        inflicts=(S(StatusKind.TAUNT, 2),),
+        self_modifiers=(M("armor_percent"),),
+        tag=ActionTag.GUARD,
+    ),
+    # То же, но на весь двор: паладин вызывает всех сразу и вдобавок сбивает им
+    # удар - это его дело в отряде, встать между стаей и товарищами.
+    "taunt_aoe": _debuff(
+        aoe=True,
+        inflicts=(S(StatusKind.TAUNT, 2),),
+        target_modifiers=(M("damage_percent", scale=-1.0),),
+        tag=ActionTag.GUARD,
+    ),
     # --- особое ---
     "avoid_combat": EffectSpec(category=EffectCategory.SPECIAL, special="avoid_combat"),
 }

@@ -178,7 +178,8 @@ def test_every_button_says_what_it_does(
     cleave, taunt = screen.rows[2][0].text, screen.rows[3][0].text
     assert "урон " in cleave, cleave
     assert "стоит 8" in cleave, cleave
-    assert "урон минус 18 процентов" in taunt, taunt
+    assert "цель бьёт по вам" in taunt, taunt
+    assert "броня плюс" in taunt, taunt
     assert "на 2 хода" in taunt, taunt
 
 

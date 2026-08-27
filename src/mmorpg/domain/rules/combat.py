@@ -1190,7 +1190,17 @@ def _apply_statuses(
     )
     for target_id in targets:
         for inflict in spec.inflicts:
-            magnitude = per_turn if status_spec(inflict.kind).is_dot else None
+            if inflict.kind is StatusKind.TAUNT:
+                # Величина провокации - номер провокатора: по нему движок потом
+                # ведёт вызванного бойца (``_forced_target``). Срок берётся из
+                # умения, чтобы грань «Затянуть» тянула и саму провокацию, а не
+                # только броню провокатора.
+                inflict = replace(inflict, turns=max(inflict.turns, spec.duration))
+                magnitude: float | None = float(actor_id)
+            elif status_spec(inflict.kind).is_dot:
+                magnitude = per_turn
+            else:
+                magnitude = None
             working = _inflicted(
                 working,
                 target_id,
@@ -2242,7 +2252,7 @@ def _chosen_by_engine(
     решает за него движок. Раньше слепок бил выдуманным числом, одинаковым для
     воина и мага одного уровня (ADR 0021).
     """
-    target = _weakest_foe(state, actor)
+    target = _forced_target(state, actor) or _weakest_foe(state, actor)
     target_id = target.id if target is not None else 0
     if not actor.is_hero:
         return BattleAction(kind=ActionKind.ATTACK, target=target_id)
@@ -2278,14 +2288,30 @@ def _weakest_foe(state: BattleState, actor: Combatant) -> Combatant | None:
     """Кого движок бьёт: того, кому осталось меньше всех.
 
     Добить раненого - это то, что сделал бы всякий, и это читается со слуха:
-    игрок слышит, кого бьют, и успевает его прикрыть. Перехватить удар на себя
-    отряд не может: мест в отряде нет, и обещать защиту нечем
-    (``domain/rules/party.py``).
+    игрок слышит, кого бьют, и успевает его прикрыть. Единственное, что уводит
+    удар с раненого, - провокация: она названа кнопкой, и за неё платят ходом
+    (``_forced_target``, ADR 0027).
     """
     foes = state.foes_of(actor.id)
     if not foes:
         return None
     return min(foes, key=lambda one: (one.health / max(1, one.max_health), one.id))
+
+
+def _forced_target(state: BattleState, actor: Combatant) -> Combatant | None:
+    """Кого этот боец обязан бить, если его вызвали на провокацию.
+
+    Провокация вешает на бойца ``StatusKind.TAUNT``, а величиной у неё - номер
+    провокатора. Пока он жив и всё ещё враг вызванному, движок ведёт удар на
+    него, а не на самого слабого. Провокатор при этом сам открыт: он крикнул -
+    он и стоит под ударом (ADR 0027).
+    """
+    if not actor.effects.has(StatusKind.TAUNT):
+        return None
+    caller = state.by_id(round(actor.effects.magnitude_of(StatusKind.TAUNT)))
+    if caller is None or not caller.alive or caller.side == actor.side:
+        return None
+    return caller
 
 
 def is_low_health(state: BattleState, combatant_id: int) -> bool:

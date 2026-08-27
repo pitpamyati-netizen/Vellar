@@ -206,7 +206,6 @@ active_effects = [
     "debuff_burning",
     "debuff_charm",
     "debuff_confusion",
-    "debuff_damage",
     "debuff_death_mark",
     "debuff_fear",
     "debuff_freeze",
@@ -224,6 +223,7 @@ active_effects = [
     "heal_big",
     "heal_over_time",
     "taunt",
+    "taunt_aoe",
 ]
 
 # =====================================================================
@@ -318,12 +318,12 @@ cost = 11
 cooldown = 3
 target = "enemy"
 effect = "taunt"
-power = 18
+power = 25
 scaling = "END"
 tag = "guard"
-text = "2 хода у цели урон ниже на 18 процентов."
+text = "2 хода цель бьёт по вам, а у вас броня выше на 25 процентов."
 edges = [
-    { name = "На весь двор", text = "Задевает всех противников.", aoe = true },
+    { name = "На весь двор", text = "Провокация ложится на всех противников.", aoe = true },
     { name = "Затянуть", text = "Действует на 2 хода дольше.", duration = 2 },
 ]
 
@@ -1858,13 +1858,13 @@ level = 36
 cost = 11
 cooldown = 3
 target = "all_enemies"
-effect = "debuff_damage"
+effect = "taunt_aoe"
 power = 19
 scaling = "CHA"
 tag = "guard"
-text = "2 хода у всех противников урон ниже на 19 процентов."
+text = "2 хода все противники бьют по вам, а урон у них ниже на 19 процентов."
 edges = [
-    { name = "Громче", text = "Прибавка выше на 30 процентов.", power = 30 },
+    { name = "Громче", text = "Урон противников ниже ещё на 30 процентов.", power = 30 },
     { name = "Не отвести глаз", text = "Действует на 2 хода дольше.", duration = 2 },
 ]
 

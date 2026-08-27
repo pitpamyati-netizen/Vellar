@@ -32,7 +32,7 @@ from mmorpg.domain.entities.damage import DamageType
 
 
 class StatusKind(StrEnum):
-    """Двадцать одно состояние игры. Больше их не бывает."""
+    """Двадцать два состояния игры. Больше их не бывает."""
 
     SILENCE = "silence"
     BURNING = "burning"
@@ -56,6 +56,11 @@ class StatusKind(StrEnum):
     BARRIER = "barrier"
     #: Закрылся: ход отдан обороне (``rules/combat.DEFEND_*``).
     GUARD = "guard"
+    #: Взят на провокацию: движок ведёт этого бойца на того, кто его вызвал.
+    #: Величина - номер вызвавшего (``rules/combat._forced_target``). В одиночку
+    #: переключать некого, поэтому провокация несёт с собой ещё и то, что видно
+    #: и там: провокатор прикрывается броней (ADR 0027).
+    TAUNT = "taunt"
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,6 +176,10 @@ STATUSES: Mapping[StatusKind, StatusSpec] = MappingProxyType(
             modifiers={"armor_flat": 1.0},
             flat_modifiers={"dodge_percent": 30.0},
         ),
+        # Провокация ничего не прибавляет носителю: она только уводит его удар на
+        # провокатора (``rules/combat._forced_target``). Величина у неё - номер
+        # провокатора, а не проценты, поэтому ``modifiers`` пусты.
+        StatusKind.TAUNT: _spec(StatusKind.TAUNT, "Провокация"),
     }
 )
 

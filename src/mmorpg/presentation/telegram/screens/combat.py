@@ -174,8 +174,31 @@ def skill_effect(
         return f"лечит {round(viewer.max_health * power / 100.0)}"
     if spec.category is EffectCategory.BARRIER:
         return _with_extras(f"барьер {round(viewer.max_health * power / 100.0)}", spec)
-    parts = (_modifier_phrase(spec, power), SPECIAL_NAMES.get(spec.special, ""))
+    parts = (
+        *_status_phrases(spec),
+        _modifier_phrase(spec, power),
+        SPECIAL_NAMES.get(spec.special, ""),
+    )
     return ", ".join(part for part in parts if part) or "особое действие"
+
+
+def _status_phrases(spec: EffectSpec) -> tuple[str, ...]:
+    """Состояния, которые умение вешает: на цель и на себя, произносимой строкой.
+
+    Провокацию называют тем, что она делает, - уводит удар, - а не именем
+    состояния: «цель бьёт по вам» игрок понимает сразу, «провокация цели» - нет.
+    """
+    out: list[str] = []
+    for one in spec.inflicts:
+        if one.kind is StatusKind.TAUNT:
+            who = "все противники" if spec.aoe else "цель"
+            verb = "бьют" if spec.aoe else "бьёт"
+            out.append(f"{who} {verb} по вам на {turns(spec.duration or one.turns)}")
+        else:
+            reach = "по всем" if spec.aoe else "цели"
+            out.append(f"{status_name(one.kind).lower()} {reach} на {turns(one.turns)}")
+    out.extend(f"вам {status_name(one.kind).lower()} на {turns(one.turns)}" for one in spec.holds)
+    return tuple(out)
 
 
 def _with_extras(line: str, spec: EffectSpec) -> str:

@@ -16,6 +16,7 @@ from mmorpg.domain.entities.combat import (
     Verdict,
 )
 from mmorpg.domain.entities.location import Enemy, EnemyKind
+from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.combat import act, hero_combatant, monster_combatant, open_battle
 from mmorpg.domain.rules.skill_effects import DAMAGE_TAGS, known_effects, spec_for
@@ -398,13 +399,22 @@ def test_racial_skill_uses_the_separate_slot(content: GameContent, fighter: Char
     assert any(event.kind is EventKind.HEAL for event in after.events)
 
 
-def test_debuffs_land_on_the_enemy(content: GameContent, fighter: Character) -> None:
+def test_a_taunt_lands_on_the_enemy_and_braces_the_taunter(
+    content: GameContent, fighter: Character
+) -> None:
+    """Провокация вешает вызов на цель и прикрывает провокатора броней (ADR 0027)."""
     state, roster = start(content, fighter, make_enemy(health=900))
     after = act(content, roster, state, BattleAction(kind=ActionKind.SKILL, slot=1), SEED)
+
     target = after.by_id(2)
     assert target is not None
-    assert len(target.effects) == 1
-    assert target.effects.modifiers()["damage_percent"] < 0
+    assert target.effects.has(StatusKind.TAUNT)
+    # Величина вызова - номер провокатора: по нему движок ведёт удар цели.
+    assert round(target.effects.magnitude_of(StatusKind.TAUNT)) == 1
+
+    taunter = after.by_id(1)
+    assert taunter is not None
+    assert taunter.effects.modifiers()["armor_percent"] > 0
 
 
 # --- цель -------------------------------------------------------------

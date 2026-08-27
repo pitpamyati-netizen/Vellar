@@ -132,8 +132,53 @@ def test_the_party_gives_a_fighter_nothing(content: GameContent) -> None:
     assert derived_stats(content, hero, shared.effects) == derived_stats(content, hero)
 
 
+def test_a_taunt_pulls_the_pack_off_the_wounded_ally(content: GameContent) -> None:
+    """Провокация уводит удар стаи с раненого на провокатора (ADR 0027)."""
+    from dataclasses import replace
+
+    caller = replace(
+        a_hero("Аргус", 1),
+        loadout=SkillLoadout(
+            actives=("warrior_provokatsiya", None, None, None, None, None),
+            racial="race_human_second_wind",
+        ),
+    )
+    state, roster = build(
+        content,
+        [caller, a_hero("Мирна", 2)],
+        enemies=(make_enemy(health=90_000, damage=40),),
+    )
+    hurt = one(state, 2)
+    state = state.replace_combatant(replace(hurt, health=max(1, hurt.max_health // 10)))
+
+    provoked = state
+    for _ in range(len(state.order)):
+        provoked = act(
+            content,
+            roster,
+            provoked,
+            BattleAction(kind=ActionKind.SKILL, slot=0, target=3),
+            SEED,
+        )
+        if one(provoked, 3).effects.has(StatusKind.TAUNT):
+            break
+    assert one(provoked, 3).effects.has(StatusKind.TAUNT)
+
+    struck = 0
+    working = provoked
+    for _ in range(len(state.order) * 3):
+        if working.is_over:
+            break
+        working = act(content, roster, working, BattleAction(kind=ActionKind.DEFEND), SEED)
+        hit = next((e.target_id for e in working.events if e.actor_id == 3 and e.target_id), 0)
+        if hit:
+            struck = hit
+            break
+    assert struck == 1, "стая идёт на провокатора, а не на раненого"
+
+
 def test_the_pack_goes_for_the_one_who_has_least_left(content: GameContent) -> None:
-    """Перехватить удар в отряде нечем: стая добивает раненого."""
+    """Без провокации перехватить удар в отряде нечем: стая добивает раненого."""
     from dataclasses import replace
 
     state, roster = build(

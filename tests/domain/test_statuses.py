@@ -105,8 +105,8 @@ def held(one: Combatant) -> set[StatusKind]:
 # --- сам список -------------------------------------------------------
 
 
-def test_there_are_twenty_one_statuses_and_every_one_is_described() -> None:
-    assert len(StatusKind) == 21
+def test_there_are_twenty_two_statuses_and_every_one_is_described() -> None:
+    assert len(StatusKind) == 22
     for kind in StatusKind:
         spec = STATUSES[kind]
         assert spec.name, kind
