@@ -524,6 +524,22 @@ class Location:
 
 
 @dataclass(frozen=True, slots=True)
+class DeepDungeon:
+    """Второй спуск города - ход ниже прежнего дна.
+
+    У города два подземелья, не одно. Первое (``dungeons`` в ``world.toml`` не
+    объявляют - оно безымянное и берёт уровень от самой глубокой локации, до
+    которой дорос игрок) для тех, кто ещё в полосе. Это, глубокое, идёт по
+    ``city.level_max`` и открывается тому, кто добрался до последней локации
+    города: не зеркало игрока, а место (ADR 0019, ADR 0028). Механики новой в
+    нём нет - тот же движок спуска, только уровень выше и дно богаче.
+    """
+
+    name: str
+    flavour: str
+
+
+@dataclass(frozen=True, slots=True)
 class City:
     id: str
     order: int
@@ -535,6 +551,7 @@ class City:
     unlock_requires: tuple[str, ...]
     services: tuple[str, ...]
     locations: tuple[Location, ...]
+    deep_dungeon: DeepDungeon
 
     def location(self, slot: int) -> Location:
         for location in self.locations:

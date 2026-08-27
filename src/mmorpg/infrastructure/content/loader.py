@@ -22,6 +22,7 @@ from mmorpg.domain.entities.content import (
     CharacterClass,
     City,
     ClassResource,
+    DeepDungeon,
     EdgeEffect,
     EquipSlot,
     GameContent,
@@ -1410,6 +1411,11 @@ def _parse_world(raw: Mapping[str, Any], problems: list[str]) -> tuple[City, ...
             )
             for loc in entry.get("location", ())
         )
+        raw_deep = entry.get("deep_dungeon", {})
+        deep = DeepDungeon(
+            name=str(raw_deep.get("name", "")),
+            flavour=str(raw_deep.get("flavour", "")),
+        )
         parsed.append(
             City(
                 id=city_id,
@@ -1422,6 +1428,7 @@ def _parse_world(raw: Mapping[str, Any], problems: list[str]) -> tuple[City, ...
                 unlock_requires=tuple(str(item) for item in entry.get("unlock_requires", ())),
                 services=tuple(str(item) for item in entry.get("services", ())),
                 locations=locations,
+                deep_dungeon=deep,
             )
         )
     return tuple(parsed)
@@ -1444,6 +1451,9 @@ def _validate_world(cities: Sequence[City], rules: ProgressionRules, problems: l
         slots = [location.slot for location in city.locations]
         if slots != list(range(1, len(city.locations) + 1)):
             problems.append(f"world.toml: {city.id} has non-sequential location slots {slots}")
+
+        if not city.deep_dungeon.name or not city.deep_dungeon.flavour:
+            problems.append(f"world.toml: {city.id} is missing [city.deep_dungeon] name/flavour")
 
         for requirement in city.unlock_requires:
             if (

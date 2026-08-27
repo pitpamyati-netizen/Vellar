@@ -606,6 +606,34 @@ def test_a_descent_you_outgrew_says_so_before_you_walk_in(
     assert "переросли этот спуск" in text
 
 
+def test_a_city_has_a_second_deeper_descent(content: GameContent, hero: Character) -> None:
+    """Ниже обычного дна у города есть второй ход - глубокий спуск (ADR 0028).
+
+    Он не зеркало игрока: идёт по верху полосы города, с вошедшим не растёт, и
+    открыт тому, кто добрался до последней локации.
+    """
+    city = content.city("farhold")
+    deep = city.deep_dungeon
+    assert dungeon_level(content, hero, "farhold", deep=True) == city.level_max
+
+    # Двенадцатый уровень до последней локации Дубно (22) не дорос: глубокий ход
+    # назван, но кнопки не получает.
+    early = step(content, hero, begin(hero), "Мир", "Дубно", "Подземелья")
+    early_text = render(content, hero, early, world_seed=WORLD_SEED).text()
+    assert deep.name in early_text
+    assert "нужен уровень 22" in early_text
+    assert step(content, hero, early, "В глубокий спуск").fight != "dungeon"
+
+    # Двадцать второй - дорос: кнопка есть, и она уводит в спуск второго яруса.
+    ready = replace(hero, level=22)
+    screen = step(content, ready, begin(ready), "Мир", "Дубно", "Подземелья")
+    assert deep.flavour in render(content, ready, screen, world_seed=WORLD_SEED).text()
+    down = step(content, ready, screen, "В глубокий спуск")
+    assert down.fight == "dungeon"
+    assert down.descent.tier == 2
+    assert down.descent.level == city.level_max
+
+
 def test_the_journal_lists_what_is_taken(content: GameContent, hero: Character) -> None:
     from mmorpg.domain.rules import quests as quest_rules
 

@@ -185,10 +185,24 @@ def node_fight_seed(world_seed: str, session: LocationSession, wave: int) -> byt
 
 
 def descent_fight_seed(world_seed: str, descent: Descent) -> bytes:
-    return derive(world_seed, "descent", descent.city_id, descent.started_at, descent.depth)
+    return derive(
+        world_seed, "descent", descent.city_id, descent.tier, descent.started_at, descent.depth
+    )
 
 
-def dungeon_level(content: GameContent, character: Character, city_id: str) -> int:
+def deep_dungeon_open(city: City, character: Character) -> bool:
+    """Открыт ли глубокий спуск: тому, кто добрался до последней локации города.
+
+    Не зеркало игрока (ADR 0019): у глубокого спуска свой уровень -
+    ``city.level_max``, - а порог входа - та же земля, самая глубокая локация
+    города. Пока до неё не дорос, ниже прежнего дна ходить незачем и не по чему.
+    """
+    return character.level >= city.locations[-1].level_min
+
+
+def dungeon_level(
+    content: GameContent, character: Character, city_id: str, *, deep: bool = False
+) -> int:
     """Уровень спуска. Его решает город, а не тот, кто в него спускается.
 
     Спуск был зеркалом: ``character.level + 1``, всегда на голову выше игрока и
@@ -207,6 +221,11 @@ def dungeon_level(content: GameContent, character: Character, city_id: str) -> i
     нет: три схватки подряд без передышки опасны сами по себе.
     """
     city = content.city(city_id)
+    if deep:
+        # Глубокий спуск идёт по верхней границе полосы города и с игроком не
+        # растёт: он тут ровно за тем, чтобы платить по своему уровню, а не по
+        # уровню вошедшего (ADR 0028).
+        return city.level_max
     reached = [place for place in city.locations if character.level >= place.level_min]
     deepest = reached[-1] if reached else city.locations[0]
     return max(city.level_min, min(city.level_max, deepest.level_min))
@@ -414,7 +433,10 @@ def render(
                 character,
                 city,
                 level=dungeon_level(content, character, city.id),
-                depth=state.descent.depth,
+                deep_level=dungeon_level(content, character, city.id, deep=True),
+                deep_open=deep_dungeon_open(city, character),
+                depth=state.descent.depth if state.descent.city_id == city.id else 0,
+                active_tier=state.descent.tier if state.descent.city_id == city.id else 0,
                 total=turning_rules.descent_depth(character),
                 notice=state.notice,
             )
@@ -1544,15 +1566,20 @@ def _handle_dungeon(
 ) -> PlayState:
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите «Спуститься» или «Назад».")
-    if not labels.DUNGEON_ENTER.matches(command.argument):
+    city = known_city(content, state.city_id, character.city_id)
+    if labels.DUNGEON_ENTER.matches(command.argument):
+        deep = False
+    elif labels.DUNGEON_ENTER_DEEP.matches(command.argument) and deep_dungeon_open(city, character):
+        deep = True
+    else:
         return state.with_notice("Нажмите «Спуститься» или «Назад».")
 
-    city = known_city(content, state.city_id, character.city_id)
     descent = Descent(
         city_id=city.id,
-        level=dungeon_level(content, character, city.id),
+        level=dungeon_level(content, character, city.id, deep=deep),
         depth=1,
         started_at=clock.now,
+        tier=2 if deep else 1,
     )
     return replace(state, descent=descent, fight="dungeon").at(ScreenId.COMBAT)
 

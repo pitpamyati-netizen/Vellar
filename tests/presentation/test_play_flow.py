@@ -420,6 +420,15 @@ def test_state_survives_a_round_trip(
     assert restored.stack == in_location.stack
 
 
+def test_a_deep_descent_survives_a_round_trip(hero: Character) -> None:
+    from mmorpg.presentation.telegram.flows.state import Descent
+
+    deep = PlayState(descent=Descent(city_id="farhold", level=30, depth=2, started_at=7, tier=2))
+    restored = PlayState.deserialise(deep.serialise())
+    assert restored.descent == deep.descent
+    assert restored.descent.deep
+
+
 # --- состояние, пришедшее от прежнего выпуска -------------------------  Хранилище
 # живёт дольше содержимого и дольше кода, который в него писал. Экран, называющий то,
 # чего игра больше не может собрать, обязан посадить игрока на что-то настоящее: падение

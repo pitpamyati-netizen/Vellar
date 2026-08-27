@@ -174,40 +174,70 @@ def dungeon_screen(
     city: City,
     *,
     level: int,
+    deep_level: int,
+    deep_open: bool,
     depth: int,
+    active_tier: int,
     total: int,
     notice: str = "",
 ) -> Screen:
     """Спуск: бои подряд, без выхода посередине без потерь.
 
-    Сколько их - не постоянное число: каждая Печать Палаты открывает ещё один слой
-    под прежним дном, поэтому число называют, а не подразумевают
-    (``domain/rules/turning.py``).
+    У города два спуска (ADR 0028). Обычный берёт уровень от самой глубокой
+    локации, до которой дорос игрок; глубокий (``city.deep_dungeon``) идёт по
+    верху полосы города и открыт тому, кто добрался до последней локации. Ниже
+    того и другого дна Печати Палаты кладут ещё по схватке, поэтому число
+    называют, а не подразумевают (``domain/rules/turning.py``).
     """
     stats = derived_stats(content, character)
     health = character.health_or(stats.max_health)
+    fights = f"{total} {plural(total, 'схватка', 'схватки', 'схваток')} подряд, без передышки"
     lines = [
         *head(f"Подземелья города {city.name}.", notice),
         "Ход вниз, сквозняк, вода по щиколотку.",
-        f"Спуск рассчитан на уровень {level}. Ваш уровень: {character.level}.",
-        f"{total} {plural(total, 'схватка', 'схватки', 'схваток')} подряд, без "
-        "передышки. Здоровье не восстанавливается между ними.",
+        f"{fights}. Здоровье между ними не восстанавливается.",
         f"Здоровье: {amount(health, stats.max_health)}.",
-        "Последний внизу — сильный противник, и за ним дно: "
-        f"{adventure.descent_gold(level)} золота, опыт и находка сверх того, "
-        "что возьмёте в схватках.",
         "Дно платит только тем, кто до него дошёл: уйти на середине — уйти со "
         "взятым в схватках и без этого.",
     ]
-    # Спуск — место, а не зеркало: он не растёт вместе с вошедшим (``flows/play.
-    # dungeon_level``). Кто перерос город, тот и его подземелье перерос, и
-    # сказать об этом надо до входа, а не по итогам десяти пустых спусков.
-    if character.level > level:
-        lines.append(
-            "Вы переросли этот спуск: платит он по своему уровню, а не по вашему. "
-            "Дальше — следующий город."
-        )
     if depth:
         lines.insert(1, f"Пройдено схваток: {depth} из {total}.")
-    rows: list[tuple[Label, ...]] = [(labels.DUNGEON_ENTER,)]
+
+    def bottom_line(at: int) -> str:
+        return (
+            f"Последний внизу — сильный противник, и за ним дно: "
+            f"{adventure.descent_gold(at)} золота, опыт и находка."
+        )
+
+    rows: list[tuple[Label, ...]] = []
+    if active_tier == 2:
+        deep = city.deep_dungeon
+        lines.append(f"{deep.name}. {deep.flavour}")
+        lines.append(f"Спуск рассчитан на уровень {deep_level}. Ваш уровень: {character.level}.")
+        lines.append(bottom_line(deep_level))
+        rows.append((labels.DUNGEON_ENTER_DEEP,))
+        return Screen(id=ScreenId.DUNGEON, lines=tuple(lines), rows=tuple(rows))
+
+    lines.append(f"Спуск рассчитан на уровень {level}. Ваш уровень: {character.level}.")
+    lines.append(bottom_line(level))
+    # Спуск — место, а не зеркало: он не растёт вместе с вошедшим (``flows/play.
+    # dungeon_level``). Кто перерос город, тот и его обычный спуск перерос.
+    if character.level > level:
+        lines.append("Вы переросли этот спуск: платит он по своему уровню, а не по вашему.")
+    rows.append((labels.DUNGEON_ENTER,))
+
+    if not depth:
+        deep = city.deep_dungeon
+        if deep_open:
+            lines.append(f"Ниже — {deep.name}. {deep.flavour}")
+            lines.append(
+                f"Этот спуск идёт по уровню {deep_level} и с вами не растёт — дно у него богаче."
+            )
+            rows.append((labels.DUNGEON_ENTER_DEEP,))
+        else:
+            need = city.locations[-1].level_min
+            lines.append(
+                f"Ниже есть ещё ход, {deep.name}, но он открыт тем, кто добрался до "
+                f"последней локации города: нужен уровень {need}."
+            )
     return Screen(id=ScreenId.DUNGEON, lines=tuple(lines), rows=tuple(rows))

@@ -731,7 +731,12 @@ async def _finish(
                 updated.get(session.owner, roster[owner.id])
             ):
                 bottom = await _pay_the_bottom(
-                    content, updated[session.owner], session, payout, inventory
+                    content,
+                    updated[session.owner],
+                    session,
+                    payout,
+                    inventory,
+                    level=max(1, flow.descent.level),
                 )
                 updated[session.owner] = bottom
         elif session.kind is BattleKind.NODE:
@@ -940,12 +945,18 @@ async def _pay_the_bottom(
     session: BattleSession,
     payout: Payout,
     inventory: InventoryRepository,
+    *,
+    level: int,
 ) -> Character:
-    """Выдать то, ради чего спуск и затевался."""
+    """Выдать то, ради чего спуск и затевался.
+
+    Платит дно по уровню спуска, а не по уровню вошедшего: глубокий спуск идёт
+    выше по полосе, поэтому и дно у него богаче (ADR 0019, ADR 0028).
+    """
     prize = adventure.descent_prize(
         content,
         character,
-        level=max(1, character.level),
+        level=level,
         seed=derive("descent-prize", session.id, session.depth),
     )
     economy_log.record(economy_log.DESCENT, prize.gold, character_id=prize.character.id)

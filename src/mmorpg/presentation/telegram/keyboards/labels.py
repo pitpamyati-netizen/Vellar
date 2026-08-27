@@ -92,6 +92,7 @@ DEPOSIT = label("Положить в банк", "📥")
 WITHDRAW = label("Забрать из банка", "📤")
 FORGET_SKILL = label("Забыть умение", "🧠")
 DUNGEON_ENTER = label("Спуститься", "🕳")
+DUNGEON_ENTER_DEEP = label("В глубокий спуск", "🕳")
 DUNGEON_DEEPER = label("Идти глубже", "⬇️")
 DUNGEON_LEAVE = label("Выйти на воздух", "🚪")
 

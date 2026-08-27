@@ -20,6 +20,13 @@ def test_each_city_has_five_locations(content: GameContent) -> None:
         assert [location.slot for location in city.locations] == [1, 2, 3, 4, 5]
 
 
+def test_each_city_has_a_named_deep_dungeon(content: GameContent) -> None:
+    """Второй спуск города - содержимое: имя и строка на каждый город (ADR 0028)."""
+    for city in content.cities:
+        assert city.deep_dungeon.name, city.id
+        assert city.deep_dungeon.flavour, city.id
+
+
 def test_every_level_is_covered(content: GameContent) -> None:
     covered: set[int] = set()
     for city in content.cities:

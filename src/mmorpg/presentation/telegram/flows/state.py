@@ -164,16 +164,25 @@ class Descent:
 
     ``started_at`` - момент, когда спуск начался; он входит в сид, поэтому два
     спуска подряд - это два разных спуска.
+
+    ``tier`` - какой из двух спусков города: 1 - обычный, 2 - глубокий
+    (``city.deep_dungeon``, ADR 0028). В сид он тоже входит: два хода вниз - это
+    два разных места, а не одно и то же на другой глубине.
     """
 
     city_id: str = ""
     level: int = 0
     depth: int = 0
     started_at: int = 0
+    tier: int = 1
 
     @property
     def active(self) -> bool:
         return bool(self.city_id)
+
+    @property
+    def deep(self) -> bool:
+        return self.tier == 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -256,6 +265,7 @@ class PlayState:
                     self.descent.level,
                     self.descent.depth,
                     self.descent.started_at,
+                    self.descent.tier,
                 ],
                 "stub": self.stub_title,
                 "pick": self.pick_slot,
@@ -290,7 +300,13 @@ class PlayState:
         # старого образца называла ещё поколение и маску пройденного.
         session_parts = [*data.get("session", []), "", 0, 0][:3]
         city_id, slot, node = session_parts
-        descent_city, descent_level, depth, descent_started = data.get("descent", ["", 0, 0, 0])
+        # Хвост читается с запасом: запись старого образца не называла ``tier``.
+        raw_descent = data.get("descent", [])
+        descent_city = raw_descent[0] if len(raw_descent) > 0 else ""
+        descent_level = raw_descent[1] if len(raw_descent) > 1 else 0
+        depth = raw_descent[2] if len(raw_descent) > 2 else 0
+        descent_started = raw_descent[3] if len(raw_descent) > 3 else 0
+        descent_tier = raw_descent[4] if len(raw_descent) > 4 else 1
         # Раньше здесь лежала пара [вид, слот]: пассивные умения тоже клали в
         # слоты. Сохранённая пара читается как её второй член - номер слота.
         pick_raw = data.get("pick", 0)
@@ -313,6 +329,7 @@ class PlayState:
                 level=int(descent_level),
                 depth=int(depth),
                 started_at=int(descent_started),
+                tier=int(descent_tier) or 1,
             ),
             stub_title=data.get("stub", ""),
             list_page=PageState(
