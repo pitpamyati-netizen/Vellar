@@ -29,6 +29,7 @@ from mmorpg.infrastructure.cache.memory import InMemoryLocationStateCache, InMem
 from mmorpg.infrastructure.persistence.memory import (
     InMemoryCharacterRepository,
     InMemoryInventoryRepository,
+    InMemoryPartyRepository,
 )
 from mmorpg.presentation.telegram.flows.state import LocationSession, PlayState
 from mmorpg.presentation.telegram.handlers import combat as combat_handler
@@ -103,6 +104,11 @@ def cache() -> InMemoryStateCache:
     return InMemoryStateCache()
 
 
+@pytest.fixture
+def parties(cache: InMemoryStateCache) -> PartyStore:
+    return PartyStore(InMemoryPartyRepository(), cache)
+
+
 def a_fighter(name: str, account: int) -> Character:
     return Character(
         id=0,
@@ -161,6 +167,7 @@ async def open_duel(
     bot: FakeBot,
     attacker: Character,
     defender: Character,
+    parties: PartyStore | None = None,
 ) -> None:
     state = context(storage, ATTACKER)
     await state.set_state(Play.main_menu)
@@ -173,6 +180,7 @@ async def open_duel(
         flow=a_flow(defender.id),
         characters=characters,
         state_cache=cache,
+        parties=parties or PartyStore(InMemoryPartyRepository(), cache),
         storage=storage,
     )
 
@@ -196,6 +204,7 @@ async def press(
         InMemoryInventoryRepository(),
         InMemoryLocationStateCache(),
         cache,
+        PartyStore(InMemoryPartyRepository(), cache),
     )
 
 
@@ -364,17 +373,17 @@ async def test_a_party_goes_into_the_duel_together(
     characters: InMemoryCharacterRepository,
     screens: Screens,
     bot: FakeBot,
+    parties: PartyStore,
     attacker: Character,
     defender: Character,
 ) -> None:
     """Отряд нападающего входит в бой целиком: двое против одного - тот же бой."""
     ally = await characters.create(a_fighter("Тьен", 700_003))
-    parties = PartyStore(cache)
     await parties.create(attacker.id)
     await parties.call(leader_id=attacker.id, invitee_id=ally.id)
     await parties.accept(ally.id)
 
-    await open_duel(content, storage, cache, characters, bot, attacker, defender)
+    await open_duel(content, storage, cache, characters, bot, attacker, defender, parties)
 
     battle_id = (await context(storage, ATTACKER).get_data()).get("battle")
     session = await BattleStore(cache).load(str(battle_id))
@@ -411,6 +420,7 @@ async def test_a_pve_fight_still_opens_for_one(
         flow=replace(a_flow(), fight="node"),
         characters=characters,
         state_cache=cache,
+        parties=PartyStore(InMemoryPartyRepository(), cache),
         storage=storage,
     )
     screen = screens.answered[-1]

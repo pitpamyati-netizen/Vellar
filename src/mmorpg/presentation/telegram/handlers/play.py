@@ -132,6 +132,7 @@ async def play(
     registry: ContentRegistry,
     trades: TradeRepository,
     state_cache: StateCache,
+    parties: PartyStore,
     user: User | None = None,
 ) -> None:
     if message.from_user is None or message.text is None:
@@ -190,7 +191,7 @@ async def play(
         settings,
     )
 
-    party = await _party_view(flow, character, characters, state_cache)
+    party = await _party_view(flow, character, characters, parties)
 
     updated = advance(
         content,
@@ -211,17 +212,15 @@ async def play(
     # расформировать, позвать, согласиться. Делает всё это хендлер, и он же
     # говорит, чем кончилось (``domain/rules/party.py``).
     if updated.party_action:
-        said = await _party_step(message, character, updated.party_action, characters, state_cache)
+        said = await _party_step(message, character, updated.party_action, characters, parties)
         updated = replace(updated, party_action="").with_notice(said)
     if updated.invite:
         called = await _call_to_party(
-            message, character, updated.invite, company, characters, state_cache
+            message, character, updated.invite, company, characters, parties
         )
         updated = replace(updated, invite=0).with_notice(called)
     if updated.invite_name:
-        called = await _invite_by_name(
-            message, character, updated.invite_name, characters, state_cache
-        )
+        called = await _invite_by_name(message, character, updated.invite_name, characters, parties)
         updated = replace(updated, invite_name="").with_notice(called)
 
     before_level = character.level
@@ -260,6 +259,7 @@ async def play(
             emoji=emoji,
             characters=characters,
             state_cache=state_cache,
+            parties=parties,
             storage=state.storage,
             location_state=here,
             now=now,
@@ -274,7 +274,7 @@ async def play(
     shown = await _keeper_view(
         updated, character, "", characters, users, keeper_log, trades, registry, now, settings
     )
-    gathered = await _party_view(updated, character, characters, state_cache)
+    gathered = await _party_view(updated, character, characters, parties)
     await state.set_state(STATE_FOR_SCREEN[updated.screen])
     await state.update_data({STATE_KEY: updated.serialise()})
     screen = await render_play(
@@ -820,12 +820,11 @@ async def _party_view(
     flow: PlayState,
     character: Character,
     characters: CharacterRepository,
-    state_cache: StateCache,
+    parties: PartyStore,
 ) -> party_screens.PartyView:
     """Что показать на экране отряда. Везде, кроме него, - пусто."""
     if flow.screen not in (ScreenId.PARTY, ScreenId.PARTY_INVITE):
         return party_screens.PartyView()
-    parties = PartyStore(state_cache)
     party = await parties.of(character.id)
     caller_id = await parties.called_by(character.id)
     caller = await characters.get(caller_id) if caller_id else None
@@ -853,10 +852,9 @@ async def _party_step(
     character: Character,
     action: str,
     characters: CharacterRepository,
-    state_cache: StateCache,
+    parties: PartyStore,
 ) -> str:
     """Исполнить то, что игрок попросил сделать с отрядом. Ответ - целой фразой."""
-    parties = PartyStore(state_cache)
     match action:
         case "create":
             if await parties.create(character.id) is None:
@@ -924,7 +922,7 @@ async def _invite_by_name(
     character: Character,
     name: str,
     characters: CharacterRepository,
-    state_cache: StateCache,
+    parties: PartyStore,
 ) -> str:
     """Позвать по набранному имени. Так зовут того, кто стоит не рядом."""
     target = await characters.find_by_name(name)
@@ -932,21 +930,20 @@ async def _invite_by_name(
         return f"Игрока с именем {name} в Велларе нет."
     if target.id == character.id:
         return "Так нельзя: зов самому себе."
-    return await _invite(message, character, target, state_cache)
+    return await _invite(message, character, target, parties)
 
 
 async def _invite(
     message: Message,
     character: Character,
     target: Character,
-    state_cache: StateCache,
+    parties: PartyStore,
 ) -> str:
     """Один зов - одна дорога: проверить, положить и сказать обоим.
 
     Дорог, которыми зовут, три - имя, кнопка на узле и ответ в игровой группе, -
     а правило одно, и живёт оно здесь (``domain/rules/party.invite_refusal``).
     """
-    parties = PartyStore(state_cache)
     party = await parties.of(character.id)
     theirs = await parties.of(target.id)
     refused = party_rules.invite_refusal(
@@ -975,10 +972,10 @@ async def _call_to_party(
     target_id: int,
     company: Sequence[Presence],
     characters: CharacterRepository,
-    state_cache: StateCache,
+    parties: PartyStore,
 ) -> str:
     """Позвать соседа по узлу. Согласие даёт он сам, и другого пути нет."""
     target = await characters.get(target_id)
     if target is None or not any(person.character_id == target_id for person in company):
         return "Этого человека здесь больше нет."
-    return await _invite(message, character, target, state_cache)
+    return await _invite(message, character, target, parties)

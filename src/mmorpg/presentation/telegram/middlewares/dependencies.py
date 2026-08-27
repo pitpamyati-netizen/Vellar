@@ -15,6 +15,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
 from mmorpg.application.services.content import ContentRegistry
+from mmorpg.application.services.party import PartyStore
 from mmorpg.config import Settings
 from mmorpg.domain.ports.repositories import (
     CharacterRepository,
@@ -45,6 +46,7 @@ class Dependencies:
     state_cache: StateCache
     locations: LocationStateCache
     overlays: ContentOverlayRepository
+    parties: PartyStore
     broadcasts: ChannelBroadcaster
 
     def as_data(self) -> dict[str, Any]:
@@ -64,6 +66,7 @@ class Dependencies:
             "state_cache": self.state_cache,
             "locations": self.locations,
             "overlays": self.overlays,
+            "parties": self.parties,
             "broadcasts": self.broadcasts,
         }
 

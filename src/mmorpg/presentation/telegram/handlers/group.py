@@ -38,7 +38,6 @@ from mmorpg.domain.ports.repositories import (
     CharacterRepository,
     InventoryRepository,
     PrivacyRepository,
-    StateCache,
     TradeRepository,
 )
 from mmorpg.domain.rules.group_commands import UNADDRESSED, GroupIntent, parse_group_command
@@ -81,7 +80,7 @@ def build_router(reaper: MessageReaper, limiter: RateLimiter | None = None) -> R
         inventory: InventoryRepository,
         trades: TradeRepository,
         privacy: PrivacyRepository,
-        state_cache: StateCache,
+        parties: PartyStore,
     ) -> None:
         await handle_group_message(
             message,
@@ -92,7 +91,7 @@ def build_router(reaper: MessageReaper, limiter: RateLimiter | None = None) -> R
             inventory=inventory,
             trades=trades,
             privacy=privacy,
-            state_cache=state_cache,
+            parties=parties,
             limiter=limits,
             reaper=reaper,
         )
@@ -144,7 +143,7 @@ async def handle_group_message(
     inventory: InventoryRepository,
     trades: TradeRepository,
     privacy: PrivacyRepository,
-    state_cache: StateCache,
+    parties: PartyStore,
     limiter: RateLimiter,
     reaper: MessageReaper,
     now: int | None = None,
@@ -187,7 +186,7 @@ async def handle_group_message(
         inventory=inventory,
         trades=trades,
         privacy=privacy,
-        parties=PartyStore(state_cache),
+        parties=parties,
         scope=str(message.chat.id),
     )
     outcome = await trade.run(

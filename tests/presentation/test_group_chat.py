@@ -29,6 +29,7 @@ from mmorpg.infrastructure.cache.memory import InMemoryStateCache
 from mmorpg.infrastructure.persistence import (
     InMemoryCharacterRepository,
     InMemoryInventoryRepository,
+    InMemoryPartyRepository,
     InMemoryPrivacyRepository,
     InMemoryTradeRepository,
 )
@@ -166,6 +167,7 @@ def bus(
     """Всё, что нужно ``handle_group_message``, одним вызовом."""
     bot = FakeBot()
     limiter = RateLimiter()
+    parties = PartyStore(InMemoryPartyRepository(), cache)
 
     async def deliver(msg: Message, *, now: int = NOW):
         return await handle_group_message(
@@ -177,13 +179,15 @@ def bus(
             inventory=inventory,
             trades=trades,
             privacy=privacy,
-            state_cache=cache,
+            parties=parties,
             limiter=limiter,
             reaper=reaper,
             now=now,
         )
 
-    return SimpleNamespace(deliver=deliver, bot=bot, limiter=limiter, privacy=privacy, cache=cache)
+    return SimpleNamespace(
+        deliver=deliver, bot=bot, limiter=limiter, privacy=privacy, cache=cache, parties=parties
+    )
 
 
 async def drain(reaper: MessageReaper) -> None:
@@ -777,7 +781,7 @@ async def test_an_invite_from_the_group_reaches_the_one_who_was_called(
     bus, argus_account: User, merla_account: User, world
 ) -> None:
     """Зов ответом на сообщение кладётся в отряд и доходит в личные сообщения."""
-    parties = PartyStore(bus.cache)
+    parties = bus.parties
     await parties.create(world["Аргус"].id)
 
     target = message("я тут", sender=merla_account, message_id=1)
@@ -797,7 +801,7 @@ async def test_an_invite_is_refused_to_the_one_who_drew_the_line(
     bus, argus_account: User, merla_account: User, world
 ) -> None:
     """Чёрный список закрывает и зов: он такое же дело, как обмен."""
-    await PartyStore(bus.cache).create(world["Аргус"].id)
+    await bus.parties.create(world["Аргус"].id)
     await bus.privacy.block(MERLA_ACCOUNT, ARGUS_ACCOUNT, at=NOW)
 
     target = message("я тут", sender=merla_account, message_id=1)

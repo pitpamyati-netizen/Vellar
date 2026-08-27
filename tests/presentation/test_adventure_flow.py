@@ -139,10 +139,19 @@ def deltas() -> Any:
 
 @pytest.fixture
 def cache() -> Any:
-    """Общее хранилище: в нём лежат бой и отряд (ADR 0021)."""
+    """Общее хранилище: в нём лежит бой (ADR 0021)."""
     from mmorpg.infrastructure.cache.memory import InMemoryStateCache
 
     return InMemoryStateCache()
+
+
+@pytest.fixture
+def parties(cache: Any) -> Any:
+    """Состав отряда - в базе, приглашения - в кэше со сроком (ADR 0029)."""
+    from mmorpg.application.services.party import PartyStore
+    from mmorpg.infrastructure.persistence.memory import InMemoryPartyRepository
+
+    return PartyStore(InMemoryPartyRepository(), cache)
 
 
 @pytest.fixture
@@ -205,6 +214,7 @@ class Player:
                 self.deps["inventory"],
                 self.deps["deltas"],
                 self.deps["cache"],
+                self.deps["parties"],
             )
         else:
             await play_handler.play(
@@ -221,6 +231,7 @@ class Player:
                 self.deps["registry"],
                 self.deps["trades"],
                 self.deps["cache"],
+                self.deps["parties"],
             )
         return self.sent.last
 
@@ -239,6 +250,7 @@ async def player(
     users: InMemoryUserRepository,
     deltas: Any,
     cache: Any,
+    parties: Any,
     overlays: InMemoryContentOverlayRepository,
     registry: ContentRegistry,
     argus: Character,
@@ -257,6 +269,7 @@ async def player(
         registry=registry,
         trades=InMemoryTradeRepository(),
         cache=cache,
+        parties=parties,
     )
 
 
@@ -605,6 +618,7 @@ async def test_what_one_player_took_is_gone_for_everybody(
     inventory: InMemoryInventoryRepository,
     users: InMemoryUserRepository,
     deltas: Any,
+    parties: Any,
     overlays: InMemoryContentOverlayRepository,
     registry: ContentRegistry,
     state: FSMContext,
@@ -673,6 +687,7 @@ async def test_what_one_player_took_is_gone_for_everybody(
             registry,
             InMemoryTradeRepository(),
             cache,
+            parties,
         )
     data = await second_state.get_data()
     theirs = PlayState.deserialise(data["play"])

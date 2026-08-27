@@ -24,11 +24,13 @@ from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatBlock
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeStatus
 from mmorpg.domain.ports.repositories import AccessibilitySettings, User
+from mmorpg.domain.rules.party import Party as PlayerParty
 from mmorpg.infrastructure.persistence.postgres import (
     PostgresCharacterRepository,
     PostgresContentOverlayRepository,
     PostgresInventoryRepository,
     PostgresKeeperLogRepository,
+    PostgresPartyRepository,
     PostgresPrivacyRepository,
     PostgresTradeRepository,
     PostgresUserRepository,
@@ -917,3 +919,73 @@ async def test_the_keeper_journal_is_written_and_read_from_the_end(pool, clean_u
     assert mine[0].keeper_name == "Смотритель"
     assert mine[0].detail == "шаг 2"
     await pool.execute("DELETE FROM keeper_log WHERE keeper_id = $1", clean_user)
+
+
+# --- отряд (ADR 0029) ------------------------------------------------
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def three_fighters(pool, clean_user) -> tuple[int, int, int]:
+    """Трое персонажей одного аккаунта, уходящие каскадом вместе с ним."""
+    await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user, username="tester"))
+    characters = PostgresCharacterRepository(pool)
+    a = await characters.create(a_character(clean_user, name="Вожак"))
+    b = await characters.create(a_character(clean_user, name="Второй"))
+    c = await characters.create(a_character(clean_user, name="Третий"))
+    return (a.id, b.id, c.id)
+
+
+async def test_a_party_roster_survives_a_round_trip(pool, three_fighters) -> None:
+    leader, second, third = three_fighters
+    parties = PostgresPartyRepository(pool)
+
+    await parties.save(PlayerParty(leader_id=leader, members=(leader, second, third)))
+
+    by_leader = await parties.by_leader(leader)
+    assert by_leader is not None
+    assert by_leader.members == (leader, second, third)
+    for member in three_fighters:
+        found = await parties.of(member)
+        assert found is not None and found.leader_id == leader
+
+    await parties.disband(leader)
+
+
+async def test_the_database_keeps_one_party_per_character(pool, three_fighters) -> None:
+    leader, second, third = three_fighters
+    parties = PostgresPartyRepository(pool)
+    await parties.save(PlayerParty(leader_id=leader, members=(leader, second)))
+    await parties.save(PlayerParty(leader_id=third, members=(third, second)))
+
+    first = await parties.by_leader(leader)
+    assert first is not None and second not in first.members
+    moved = await parties.of(second)
+    assert moved is not None and moved.leader_id == third
+
+    await parties.disband(leader)
+    await parties.disband(third)
+
+
+async def test_shrinking_a_party_drops_only_the_one_who_left(pool, three_fighters) -> None:
+    leader, second, third = three_fighters
+    parties = PostgresPartyRepository(pool)
+    await parties.save(PlayerParty(leader_id=leader, members=(leader, second, third)))
+
+    await parties.save(PlayerParty(leader_id=leader, members=(leader, third)))
+
+    left = await parties.by_leader(leader)
+    assert left is not None and left.members == (leader, third)
+    assert await parties.of(second) is None
+
+    await parties.disband(leader)
+
+
+async def test_disbanding_removes_the_whole_party(pool, three_fighters) -> None:
+    leader, second, _ = three_fighters
+    parties = PostgresPartyRepository(pool)
+    await parties.save(PlayerParty(leader_id=leader, members=(leader, second)))
+
+    await parties.disband(leader)
+
+    assert await parties.by_leader(leader) is None
+    assert await parties.of(second) is None

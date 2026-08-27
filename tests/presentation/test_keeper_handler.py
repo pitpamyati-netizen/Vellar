@@ -28,6 +28,7 @@ from aiogram.types import Chat, Message, User
 
 from mmorpg.application.services import keeper_panel
 from mmorpg.application.services.content import ContentRegistry
+from mmorpg.application.services.party import PartyStore
 from mmorpg.config import Settings
 from mmorpg.domain.entities import Character, GameContent
 from mmorpg.domain.entities.moderation import KeeperAction
@@ -44,6 +45,7 @@ from mmorpg.infrastructure.persistence.memory import (
     InMemoryContentOverlayRepository,
     InMemoryInventoryRepository,
     InMemoryKeeperLogRepository,
+    InMemoryPartyRepository,
     InMemoryTradeRepository,
     InMemoryUserRepository,
 )
@@ -132,6 +134,7 @@ class Keeper:
                 self.deps["registry"],
                 self.deps["trades"],
                 self.deps["cache"],
+                self.deps["parties"],
             )
         return self.sent.last
 
@@ -182,6 +185,11 @@ def trades() -> InMemoryTradeRepository:
 
 
 @pytest.fixture
+def cache() -> InMemoryStateCache:
+    return InMemoryStateCache()
+
+
+@pytest.fixture
 def telegram() -> FakeTelegram:
     return FakeTelegram()
 
@@ -197,6 +205,7 @@ async def keeper(
     registry: ContentRegistry,
     trades: InMemoryTradeRepository,
     telegram: FakeTelegram,
+    cache: InMemoryStateCache,
 ) -> Keeper:
     await characters.create(
         Character(
@@ -226,7 +235,8 @@ async def keeper(
         overlays=overlays,
         registry=registry,
         trades=trades,
-        cache=InMemoryStateCache(),
+        cache=cache,
+        parties=PartyStore(InMemoryPartyRepository(), cache),
     )
 
 
@@ -646,6 +656,7 @@ async def test_a_player_who_is_not_a_keeper_gets_nothing_from_the_panel(
         registry,
         InMemoryTradeRepository(),
         InMemoryStateCache(),
+        PartyStore(InMemoryPartyRepository(), InMemoryStateCache()),
     )
 
     assert sent.last.id is ScreenId.MAIN_MENU

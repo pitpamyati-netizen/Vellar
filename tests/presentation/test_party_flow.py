@@ -30,6 +30,7 @@ from mmorpg.infrastructure.persistence.memory import (
     InMemoryContentOverlayRepository,
     InMemoryInventoryRepository,
     InMemoryKeeperLogRepository,
+    InMemoryPartyRepository,
     InMemoryTradeRepository,
     InMemoryUserRepository,
 )
@@ -79,6 +80,11 @@ def registry(content: GameContent) -> ContentRegistry:
     return ContentRegistry(content)
 
 
+@pytest.fixture
+def parties(cache: InMemoryStateCache) -> PartyStore:
+    return PartyStore(InMemoryPartyRepository(), cache)
+
+
 def a_message(account: int, text: str) -> Message:
     return Message(
         message_id=1,
@@ -116,6 +122,7 @@ class Player:
             self.deps["registry"],
             self.deps["trades"],
             self.deps["cache"],
+            self.deps["parties"],
         )
         return self.sent.last
 
@@ -125,6 +132,7 @@ async def table(
     characters: InMemoryCharacterRepository,
     registry: ContentRegistry,
     cache: InMemoryStateCache,
+    parties: PartyStore,
     sent: Recorder,
 ) -> tuple[Player, Player, Character, Character]:
     """Двое игроков одного уровня, каждый со своим автоматом."""
@@ -138,6 +146,7 @@ async def table(
         "registry": registry,
         "trades": InMemoryTradeRepository(),
         "cache": cache,
+        "parties": parties,
     }
     argus = await characters.create(
         Character(
@@ -189,7 +198,7 @@ async def test_the_main_menu_leads_to_the_party(
 
 async def test_a_party_is_created_and_then_disbanded(
     table: tuple[Player, Player, Character, Character],
-    cache: InMemoryStateCache,
+    parties: PartyStore,
 ) -> None:
     """Заведённый отряд виден сразу, и расформировать его может тот, кто завёл."""
     argus, _, argus_character, _ = table
@@ -199,12 +208,12 @@ async def test_a_party_is_created_and_then_disbanded(
     assert created.id is ScreenId.PARTY
     assert "Отряд создан" in created.text()
     assert buttons(created) == {labels.PARTY_INVITE.text, labels.PARTY_DISBAND.text}
-    assert await PartyStore(cache).of(argus_character.id) is not None
+    assert await parties.of(argus_character.id) is not None
 
     gone = await argus.press(labels.PARTY_DISBAND.text)
     assert "Отряд расформирован" in gone.text()
     assert buttons(gone) == {labels.PARTY_CREATE.text}
-    assert await PartyStore(cache).of(argus_character.id) is None
+    assert await parties.of(argus_character.id) is None
 
 
 async def test_nobody_is_called_before_the_party_exists(
@@ -220,12 +229,27 @@ async def test_nobody_is_called_before_the_party_exists(
     assert "Создайте его" in answer.text()
 
 
+async def test_a_party_is_still_there_after_a_fresh_start(
+    table: tuple[Player, Player, Character, Character],
+    sent: Recorder,
+) -> None:
+    """Отряд переживает выход из игры: состав в базе, а не в состоянии игрока (ADR 0029)."""
+    argus, _, _, _ = table
+    await argus.press(labels.PARTY.text)
+    await argus.press(labels.PARTY_CREATE.text)
+
+    # Тот же аккаунт заходит заново - чистый автомат, ничего не помнящий.
+    again = Player(ARGUS_ACCOUNT, sent, **argus.deps)
+    screen = await again.press(labels.PARTY.text)
+    assert buttons(screen) == {labels.PARTY_INVITE.text, labels.PARTY_DISBAND.text}
+
+
 # --- зов именем ---------------------------------------------------------
 
 
 async def test_a_call_by_name_is_answered_by_the_one_who_was_called(
     table: tuple[Player, Player, Character, Character],
-    cache: InMemoryStateCache,
+    parties: PartyStore,
 ) -> None:
     """Позвали именем, согласился сам, и отряд стал общим для двоих."""
     argus, mirna, argus_character, mirna_character = table
@@ -243,7 +267,6 @@ async def test_a_call_by_name_is_answered_by_the_one_who_was_called(
     joined = await mirna.press(labels.PARTY_ACCEPT.text)
     assert "Вы в отряде: Аргус, Мирна" in joined.text()
 
-    parties = PartyStore(cache)
     party = await parties.of(mirna_character.id)
     assert party is not None and party.members == (argus_character.id, mirna_character.id)
 
@@ -256,7 +279,7 @@ async def test_a_call_by_name_is_answered_by_the_one_who_was_called(
 
 async def test_a_call_declined_leaves_nothing_hanging(
     table: tuple[Player, Player, Character, Character],
-    cache: InMemoryStateCache,
+    parties: PartyStore,
 ) -> None:
     argus, mirna, _, mirna_character = table
     await argus.press("/отряд создать")
@@ -265,8 +288,8 @@ async def test_a_call_declined_leaves_nothing_hanging(
 
     refused = await mirna.press("/отряд отказать")
     assert "Зов отклонён" in refused.text()
-    assert await PartyStore(cache).called_by(mirna_character.id) == 0
-    assert await PartyStore(cache).of(mirna_character.id) is None
+    assert await parties.called_by(mirna_character.id) == 0
+    assert await parties.of(mirna_character.id) is None
 
 
 async def test_a_name_nobody_carries_is_answered_plainly(

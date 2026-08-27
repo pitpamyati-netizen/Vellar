@@ -17,6 +17,7 @@ from mmorpg.domain.rules import party as party_rules
 from mmorpg.domain.rules.combat import act
 from mmorpg.domain.rules.party import Party
 from mmorpg.infrastructure.cache.memory import InMemoryStateCache
+from mmorpg.infrastructure.persistence.memory import InMemoryPartyRepository
 
 SEED = b"battle-store-0001"
 
@@ -141,7 +142,7 @@ def test_the_verdict_is_read_per_participant(content: GameContent) -> None:
 
 async def test_a_party_is_created_before_anyone_is_called(cache: InMemoryStateCache) -> None:
     """Отряд из одного - это отряд: он заведён нарочно, и звать в него можно."""
-    parties = PartyStore(cache)
+    parties = PartyStore(InMemoryPartyRepository(), cache)
     party = await parties.create(1)
     assert party is not None and party.members == (1,) and party.alone
     assert await parties.of(1) == party
@@ -152,14 +153,14 @@ async def test_nobody_is_called_into_a_party_that_was_never_created(
     cache: InMemoryStateCache,
 ) -> None:
     """Зов без отряда ни к чему не ведёт: звать умеет тот, у кого отряд есть."""
-    parties = PartyStore(cache)
+    parties = PartyStore(InMemoryPartyRepository(), cache)
     await parties.call(leader_id=1, invitee_id=2)
     assert await parties.accept(2) is None
     assert await parties.of(2) is None
 
 
 async def test_disbanding_lets_everyone_go(cache: InMemoryStateCache) -> None:
-    parties = PartyStore(cache)
+    parties = PartyStore(InMemoryPartyRepository(), cache)
     await parties.save(Party(leader_id=1, members=(1, 2, 3)))
     party = await parties.of(1)
     assert party is not None
@@ -170,7 +171,7 @@ async def test_disbanding_lets_everyone_go(cache: InMemoryStateCache) -> None:
 
 
 async def test_a_party_is_joined_when_the_call_is_accepted(cache: InMemoryStateCache) -> None:
-    parties = PartyStore(cache)
+    parties = PartyStore(InMemoryPartyRepository(), cache)
     await parties.create(1)
     await parties.call(leader_id=1, invitee_id=2)
     assert await parties.called_by(2) == 1
@@ -184,13 +185,13 @@ async def test_a_party_is_joined_when_the_call_is_accepted(cache: InMemoryStateC
 
 
 async def test_nobody_joins_a_party_they_were_not_called_to(cache: InMemoryStateCache) -> None:
-    parties = PartyStore(cache)
+    parties = PartyStore(InMemoryPartyRepository(), cache)
     assert await parties.accept(5) is None
     assert await parties.of(5) is None
 
 
 async def test_declining_forgets_the_call(cache: InMemoryStateCache) -> None:
-    parties = PartyStore(cache)
+    parties = PartyStore(InMemoryPartyRepository(), cache)
     await parties.create(1)
     await parties.call(leader_id=1, invitee_id=2)
     await parties.forget_call(2)
@@ -200,7 +201,7 @@ async def test_declining_forgets_the_call(cache: InMemoryStateCache) -> None:
 async def test_leaving_shrinks_the_party_and_the_leader_ends_it(
     cache: InMemoryStateCache,
 ) -> None:
-    parties = PartyStore(cache)
+    parties = PartyStore(InMemoryPartyRepository(), cache)
     await parties.save(Party(leader_id=1, members=(1, 2, 3)))
 
     left = await parties.leave(3)
@@ -213,14 +214,28 @@ async def test_leaving_shrinks_the_party_and_the_leader_ends_it(
     assert await parties.of(1) is None
 
 
-async def test_the_party_survives_the_storage(cache: InMemoryStateCache) -> None:
-    """Отряд переживает дорогу через кэш - составом и тем, кто его собрал."""
-    parties = PartyStore(cache)
+async def test_the_party_roster_lives_in_the_repository_not_the_cache(
+    cache: InMemoryStateCache,
+) -> None:
+    """Состав отряда лежит в базе и сроком не ограничен: он переживает вылазку (ADR 0029).
+
+    Зов - другое дело, он в кэше со сроком; поэтому истечение кэша забирает
+    приглашение и не трогает состав.
+    """
+    roster = InMemoryPartyRepository()
+    parties = PartyStore(roster, cache)
     await parties.save(Party(leader_id=1, members=(1, 2)))
+    await parties.call(leader_id=1, invitee_id=3)
 
     read = await parties.of(2)
     assert read is not None
     assert (read.leader_id, read.members) == (1, (1, 2))
+
+    # Кэш выметен целиком - как после разрыва Redis или суток простоя.
+    await cache.delete("party-call:3")
+    assert await parties.called_by(3) == 0
+    still = await parties.of(2)
+    assert still is not None and still.members == (1, 2), "состав кэшем не держится"
 
 
 def test_the_party_has_a_ceiling_and_a_level_window() -> None:

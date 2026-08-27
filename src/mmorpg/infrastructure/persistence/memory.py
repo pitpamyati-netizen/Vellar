@@ -19,6 +19,7 @@ from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, TradeRecord, TradeStatus
 from mmorpg.domain.ports.repositories import AccessibilitySettings, Census, User
 from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
+from mmorpg.domain.rules.party import Party
 
 
 class InMemoryUserRepository:
@@ -326,6 +327,46 @@ class InMemoryContentOverlayRepository:
 
     async def forget(self, kind: OverlayKind, entity_id: str) -> bool:
         return self._records.pop((kind.value, entity_id), None) is not None
+
+
+class InMemoryPartyRepository:
+    """Состав отрядов в словаре: собравший -> состав.
+
+    Индекс «в двух отрядах сразу не стоит никто» держится тем же способом, что и
+    в базе (``migrations/0016``): ``save`` сначала выметает участников из любого
+    другого отряда.
+    """
+
+    def __init__(self) -> None:
+        self._members: dict[int, tuple[int, ...]] = {}
+
+    async def by_leader(self, leader_id: int) -> Party | None:
+        members = self._members.get(leader_id)
+        if members is None:
+            return None
+        party = Party(leader_id=leader_id, members=members)
+        return None if party.disbanded else party
+
+    async def of(self, character_id: int) -> Party | None:
+        for leader_id, members in self._members.items():
+            if character_id in members:
+                return await self.by_leader(leader_id)
+        return None
+
+    async def save(self, party: Party) -> None:
+        if party.disbanded:
+            await self.disband(party.leader_id)
+            return
+        for member in party.members:
+            for leader_id in list(self._members):
+                if leader_id != party.leader_id and member in self._members[leader_id]:
+                    self._members[leader_id] = tuple(
+                        one for one in self._members[leader_id] if one != member
+                    )
+        self._members[party.leader_id] = party.members
+
+    async def disband(self, leader_id: int) -> None:
+        self._members.pop(leader_id, None)
 
 
 class InMemoryTradeRepository:

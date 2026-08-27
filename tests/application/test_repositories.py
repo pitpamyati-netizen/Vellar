@@ -18,11 +18,13 @@ from mmorpg.domain.ports import (
     IdempotencyStore,
     InventoryRepository,
     LocationStateCache,
+    PartyRepository,
     StateCache,
     User,
     UserRepository,
 )
 from mmorpg.domain.rules.nodes import RESPAWN_SECONDS
+from mmorpg.domain.rules.party import Party
 from mmorpg.infrastructure.cache import (
     InMemoryIdempotencyStore,
     InMemoryLocationStateCache,
@@ -31,6 +33,7 @@ from mmorpg.infrastructure.cache import (
 from mmorpg.infrastructure.persistence import (
     InMemoryCharacterRepository,
     InMemoryInventoryRepository,
+    InMemoryPartyRepository,
     InMemoryUserRepository,
 )
 
@@ -59,6 +62,7 @@ def test_in_memory_adapters_implement_the_ports() -> None:
     assert isinstance(InMemoryUserRepository(), UserRepository)
     assert isinstance(InMemoryCharacterRepository(), CharacterRepository)
     assert isinstance(InMemoryInventoryRepository(), InventoryRepository)
+    assert isinstance(InMemoryPartyRepository(), PartyRepository)
     assert isinstance(InMemoryStateCache(), StateCache)
     assert isinstance(InMemoryLocationStateCache(), LocationStateCache)
     assert isinstance(InMemoryIdempotencyStore(), IdempotencyStore)
@@ -171,6 +175,38 @@ async def test_empty_stacks_disappear_from_the_listing() -> None:
     assert await inventory.list_items(1) == ()
 
 
+# --- отряд ----------------------------------------------------------
+
+
+async def test_a_party_roster_is_stored_and_read_back_by_any_member() -> None:
+    roster = InMemoryPartyRepository()
+    await roster.save(Party(leader_id=1, members=(1, 2, 3)))
+
+    assert await roster.by_leader(1) == Party(leader_id=1, members=(1, 2, 3))
+    for member in (1, 2, 3):
+        found = await roster.of(member)
+        assert found is not None and found.leader_id == 1
+
+
+async def test_nobody_stands_in_two_parties_at_once() -> None:
+    roster = InMemoryPartyRepository()
+    await roster.save(Party(leader_id=1, members=(1, 2)))
+    await roster.save(Party(leader_id=3, members=(3, 2)))
+
+    first = await roster.by_leader(1)
+    assert first is not None and 2 not in first.members
+    second = await roster.of(2)
+    assert second is not None and second.leader_id == 3
+
+
+async def test_disbanding_clears_the_roster() -> None:
+    roster = InMemoryPartyRepository()
+    await roster.save(Party(leader_id=1, members=(1, 2)))
+    await roster.disband(1)
+    assert await roster.by_leader(1) is None
+    assert await roster.of(2) is None
+
+
 # --- caches ----------------------------------------------------------
 
 
@@ -275,9 +311,11 @@ async def test_postgres_adapters_are_importable() -> None:
     from mmorpg.infrastructure.persistence.postgres import (
         PostgresCharacterRepository,
         PostgresInventoryRepository,
+        PostgresPartyRepository,
         PostgresUserRepository,
     )
 
     assert PostgresCharacterRepository is not None
     assert PostgresInventoryRepository is not None
+    assert PostgresPartyRepository is not None
     assert PostgresUserRepository is not None

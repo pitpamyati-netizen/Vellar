@@ -21,6 +21,7 @@ from mmorpg.domain.entities.location import LocationState, Presence
 from mmorpg.domain.entities.moderation import Ban, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, TradeRecord, TradeStatus
+from mmorpg.domain.rules.party import Party
 
 
 @dataclass(frozen=True, slots=True)
@@ -322,6 +323,28 @@ class ContentOverlayRepository(Protocol):
 
     async def forget(self, kind: OverlayKind, entity_id: str) -> bool:
         """Снять правку целиком. Ложь — правки и не было."""
+
+
+@runtime_checkable
+class PartyRepository(Protocol):
+    """Состав отряда: кто с кем идёт вместе.
+
+    Отряд лежит в базе по той же причине, что персонаж: постоянный состав нельзя
+    терять между заходами (ADR 0029). Приглашения - другое дело: они висят в
+    кэше со сроком, потому что зов, который нельзя ни принять, ни отменить, хуже,
+    чем никакого (``Claude.md``, правило 8).
+    """
+
+    async def of(self, character_id: int) -> Party | None:
+        """Отряд, в котором стоит этот персонаж. ``None`` - он сам по себе."""
+
+    async def by_leader(self, leader_id: int) -> Party | None: ...
+
+    async def save(self, party: Party) -> None:
+        """Записать состав. Собравший всегда в составе (``Party.__post_init__``)."""
+
+    async def disband(self, leader_id: int) -> None:
+        """Убрать отряд целиком."""
 
 
 @runtime_checkable

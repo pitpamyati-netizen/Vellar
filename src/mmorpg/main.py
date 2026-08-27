@@ -34,6 +34,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from mmorpg.application.services.content import ContentRegistry
 from mmorpg.application.services.group_trade import release_expired_offers
+from mmorpg.application.services.party import PartyStore
 from mmorpg.config import AppEnv, Settings, load_settings
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.ports.repositories import (
@@ -53,6 +54,7 @@ from mmorpg.infrastructure.persistence import (
     InMemoryContentOverlayRepository,
     InMemoryInventoryRepository,
     InMemoryKeeperLogRepository,
+    InMemoryPartyRepository,
     InMemoryPrivacyRepository,
     InMemoryTradeRepository,
     InMemoryUserRepository,
@@ -198,6 +200,7 @@ async def _build_adapters(
             "using_in_memory_adapters",
             detail="APP_ENV=local: state is lost on restart, never deploy this way",
         )
+        memory_cache = InMemoryStateCache()
         dependencies = Dependencies(
             settings=settings,
             registry=registry,
@@ -207,9 +210,10 @@ async def _build_adapters(
             trades=InMemoryTradeRepository(),
             privacy=InMemoryPrivacyRepository(),
             keeper_log=InMemoryKeeperLogRepository(),
-            state_cache=InMemoryStateCache(),
+            state_cache=memory_cache,
             locations=InMemoryLocationStateCache(),
             overlays=InMemoryContentOverlayRepository(),
+            parties=PartyStore(InMemoryPartyRepository(), memory_cache),
             # Приёмник подключается, как только появился Bot; до тех пор - и всегда,
             # когда CHANNEL_ID пуст, - объявление ничего не делает.
             broadcasts=ChannelBroadcaster(sink=None, chat_id=settings.channel_id),
@@ -222,6 +226,7 @@ async def _build_adapters(
         PostgresContentOverlayRepository,
         PostgresInventoryRepository,
         PostgresKeeperLogRepository,
+        PostgresPartyRepository,
         PostgresPrivacyRepository,
         PostgresTradeRepository,
         PostgresUserRepository,
@@ -253,6 +258,7 @@ async def _build_adapters(
         state_cache=state_cache,
         locations=locations,
         overlays=PostgresContentOverlayRepository(pool),
+        parties=PartyStore(PostgresPartyRepository(pool), state_cache),
         broadcasts=ChannelBroadcaster(sink=None, chat_id=settings.channel_id),
     )
     return storage, dependencies, idempotency

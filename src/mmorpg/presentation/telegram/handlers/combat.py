@@ -130,13 +130,13 @@ async def open_fight(
     emoji: bool = False,
     characters: CharacterRepository,
     state_cache: StateCache,
+    parties: PartyStore,
     storage: BaseStorage | None = None,
     location_state: LocationState | None = None,
     now: int = 0,
 ) -> None:
     """Собрать бой, которого попросил игровой поток, и показать его всем."""
     store = BattleStore(state_cache)
-    parties = PartyStore(state_cache)
 
     standing = await store.busy(character.id)
     if standing is not None:
@@ -412,6 +412,7 @@ async def fight(
     inventory: InventoryRepository,
     locations: LocationStateCache,
     state_cache: StateCache,
+    parties: PartyStore,
 ) -> None:
     """Одно сообщение - один ход. Никогда молчание, никогда два сообщения."""
     if message.from_user is None or message.text is None:
@@ -440,7 +441,7 @@ async def fight(
 
     if session.state.is_over:
         await _after_the_fight(
-            message, state, content, settings, character, flow, characters, state_cache
+            message, state, content, settings, character, flow, characters, state_cache, parties
         )
         return
 
@@ -1063,6 +1064,7 @@ async def _after_the_fight(
     flow: PlayState,
     characters: CharacterRepository,
     state_cache: StateCache,
+    parties: PartyStore,
 ) -> None:
     """Экран итога - настоящий экран: он отвечает на каждую кнопку."""
     text = message.text or ""
@@ -1092,6 +1094,7 @@ async def _after_the_fight(
             flow=replace(flow, fight="dungeon"),
             characters=characters,
             state_cache=state_cache,
+            parties=parties,
             storage=_storage_of(state),
         )
         return

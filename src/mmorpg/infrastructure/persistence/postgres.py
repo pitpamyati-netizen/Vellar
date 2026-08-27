@@ -22,6 +22,7 @@ from mmorpg.domain.entities.stats import StatBlock
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeRecord, TradeStatus
 from mmorpg.domain.ports.repositories import AccessibilitySettings, Census, User
 from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
+from mmorpg.domain.rules.party import Party as PlayerParty
 
 if TYPE_CHECKING:  # pragma: no cover - только для типов
     import asyncpg
@@ -914,3 +915,63 @@ class PostgresInventoryRepository:
             item_id,
         )
         return int(value or 0)
+
+
+class PostgresPartyRepository:
+    """Состав отряда: строка на собравшего в ``parties`` и строка на каждого
+    участника в ``party_members`` (``migrations/0016``, ADR 0029).
+
+    Приглашения здесь не лежат: они висят в кэше со сроком.
+    """
+
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        self._pool = pool
+
+    async def by_leader(self, leader_id: int) -> PlayerParty | None:
+        rows = await self._pool.fetch(
+            "SELECT character_id FROM party_members WHERE leader_id = $1 ORDER BY character_id",
+            leader_id,
+        )
+        if not rows:
+            return None
+        members = tuple(row["character_id"] for row in rows if row["character_id"] != leader_id)
+        return PlayerParty(leader_id=leader_id, members=members)
+
+    async def of(self, character_id: int) -> PlayerParty | None:
+        leader_id = await self._pool.fetchval(
+            "SELECT leader_id FROM party_members WHERE character_id = $1",
+            character_id,
+        )
+        return await self.by_leader(int(leader_id)) if leader_id is not None else None
+
+    async def save(self, party: PlayerParty) -> None:
+        if party.disbanded:
+            await self.disband(party.leader_id)
+            return
+        async with self._pool.acquire() as connection, connection.transaction():
+            await connection.execute(
+                "INSERT INTO parties (leader_id) VALUES ($1) ON CONFLICT (leader_id) DO NOTHING",
+                party.leader_id,
+            )
+            # Индекс по character_id держит «один отряд на человека»; вычищаем
+            # участников из любого другого отряда, прежде чем записать этот.
+            await connection.execute(
+                "DELETE FROM party_members WHERE character_id = ANY($1::bigint[])"
+                " AND leader_id <> $2",
+                list(party.members),
+                party.leader_id,
+            )
+            await connection.execute(
+                "DELETE FROM party_members WHERE leader_id = $1"
+                " AND character_id <> ALL($2::bigint[])",
+                party.leader_id,
+                list(party.members),
+            )
+            await connection.executemany(
+                "INSERT INTO party_members (leader_id, character_id) VALUES ($1, $2)"
+                " ON CONFLICT DO NOTHING",
+                [(party.leader_id, member) for member in party.members],
+            )
+
+    async def disband(self, leader_id: int) -> None:
+        await self._pool.execute("DELETE FROM parties WHERE leader_id = $1", leader_id)
