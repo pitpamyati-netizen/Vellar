@@ -177,6 +177,32 @@ def test_a_taunt_pulls_the_pack_off_the_wounded_ally(content: GameContent) -> No
     assert struck == 1, "стая идёт на провокатора, а не на раненого"
 
 
+def test_an_area_heal_reaches_the_whole_party(content: GameContent) -> None:
+    """«Лечит вас и ваш отряд» лечит и отряд, а не одного знаменосца."""
+    from dataclasses import replace
+
+    healer = replace(
+        a_hero("Аргус", 1, level=290),
+        loadout=SkillLoadout(
+            actives=("warrior_znamya_ne_padaet", None, None, None, None, None),
+            racial="race_human_second_wind",
+        ),
+    )
+    state, roster = build(
+        content, [healer, a_hero("Мирна", 2, level=290)], enemies=(make_enemy(health=90_000),)
+    )
+    ally = one(state, 2)
+    state = state.replace_combatant(replace(ally, health=max(1, ally.max_health // 3)))
+    before = one(state, 2).health
+
+    after = state
+    for _ in range(len(state.order)):
+        after = act(content, roster, after, BattleAction(kind=ActionKind.SKILL, slot=0), SEED)
+        if one(after, 2).health > before:
+            break
+    assert one(after, 2).health > before, "товарищ должен подлечиться"
+
+
 def test_the_pack_goes_for_the_one_who_has_least_left(content: GameContent) -> None:
     """Без провокации перехватить удар в отряде нечем: стая добивает раненого."""
     from dataclasses import replace

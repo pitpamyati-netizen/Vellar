@@ -171,7 +171,13 @@ def skill_effect(
         return _with_extras(line, spec)
 
     if spec.category is EffectCategory.HEAL:
-        return f"лечит {round(viewer.max_health * power / 100.0)}"
+        each = round(viewer.max_health * power / 100.0)
+        line = f"лечит по {each} каждый ход" if spec.dot_turns else f"лечит {each}"
+        if spec.aoe:
+            line = f"{line}, вас и отряд"
+        if spec.cleanse_count:
+            line = f"{line}, снимает эффекты"
+        return line
     if spec.category is EffectCategory.BARRIER:
         return _with_extras(f"барьер {round(viewer.max_health * power / 100.0)}", spec)
     parts = (

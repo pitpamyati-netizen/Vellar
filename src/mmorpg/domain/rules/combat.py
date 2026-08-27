@@ -1054,20 +1054,27 @@ def _apply_spec(
             source=source,
         )
 
+    # Кого лечит и с кого снимает беды это умение: себя, а умение по площади -
+    # весь свой отряд. «Лечит вас и ваш отряд» полгода лечило одного заклинателя.
+    mended = tuple(one.id for one in working.allies_of(actor_id)) if spec.aoe else (actor_id,)
+
     if spec.category is EffectCategory.HEAL:
         # Лечение и щит - проценты от максимума здоровья, а не от удара: здоровье
         # растёт впятеро быстрее удара, и лечение, оценённое в ударах, к сороковому
-        # уровню не стоило бы ничего.
-        healer = working.by_id(actor_id)
-        if healer is not None:
-            amount = round(healer.max_health * power / 100.0)
+        # уровню не стоило бы ничего. Доля своя у каждого: лечение на четверть
+        # запаса поднимает раненого товарища ровно на четверть его запаса.
+        for beneficiary in mended:
+            one = working.by_id(beneficiary)
+            if one is None:
+                continue
+            amount = round(one.max_health * power / 100.0)
             amount = round(amount * mods.percent(modifiers, "healing_done_percent"))
             if spec.special == "heal_over_time":
                 working = _mending(
-                    working, actor_id, skill=skill, spec=spec, per_turn=float(amount)
+                    working, beneficiary, skill=skill, spec=spec, per_turn=float(amount)
                 )
             else:
-                working = _heal(working, actor_id, amount, modifiers, skill_name=skill.name)
+                working = _heal(working, beneficiary, amount, modifiers, skill_name=skill.name)
 
     if spec.category is EffectCategory.BARRIER:
         holder = working.by_id(actor_id)
@@ -1076,10 +1083,13 @@ def _apply_spec(
             working = _barriered(working, actor_id, skill=skill, spec=spec, amount=held)
 
     if spec.bonus_heal:
-        holder = working.by_id(actor_id)
-        if holder is not None:
-            extra = round(holder.max_health * spec.bonus_heal / 100.0)
-            working = _heal(working, actor_id, extra, modifiers, skill_name=skill.name)
+        # По площади - тому же отряду: «лечит ещё на 10 процентов» у полкового
+        # лечения добавляет всем, а не одному знаменосцу.
+        for beneficiary in mended if spec.category is EffectCategory.HEAL else (actor_id,):
+            holder = working.by_id(beneficiary)
+            if holder is not None:
+                extra = round(holder.max_health * spec.bonus_heal / 100.0)
+                working = _heal(working, beneficiary, extra, modifiers, skill_name=skill.name)
 
     if spec.bonus_barrier:
         holder = working.by_id(actor_id)
@@ -1088,8 +1098,13 @@ def _apply_spec(
             working = _barriered(working, actor_id, skill=skill, spec=spec, amount=extra)
 
     if spec.cleanse_count:
-        holder = working.by_id(actor_id)
-        if holder is not None:
+        # Умение по площади снимает беды со всего отряда - «и раны закрыть»
+        # у полкового лечения закрывает раны всем, а не только знаменосцу.
+        cleansed_from = mended if spec.aoe else (actor_id,)
+        for beneficiary in cleansed_from:
+            holder = working.by_id(beneficiary)
+            if holder is None:
+                continue
             before = len(holder.effects.penalties())
             cleansed = holder.effects.cleanse(cleansed_count(spec, power))
             removed = before - len(cleansed.penalties())
@@ -1098,7 +1113,7 @@ def _apply_spec(
                 working = working.with_events(
                     BattleEvent(
                         kind=EventKind.CLEANSED,
-                        actor_id=actor_id,
+                        actor_id=beneficiary,
                         actor=holder.name,
                         amount=removed,
                         skill_name=skill.name,
