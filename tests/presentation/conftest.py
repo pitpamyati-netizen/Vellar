@@ -693,7 +693,6 @@ def all_screens(
             ),
         ),
         arena_screens.arena_screen(replace(hero, gold=0)),
-        play.stub_screen("Арена"),
         skill_screens.skills_screen(content, fighter, PageState()),
         skill_screens.skills_screen(content, hero, PageState(page=2)),
         # Длинный список умений - самый длинный экран игры: у разбойника на

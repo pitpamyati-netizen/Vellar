@@ -679,19 +679,3 @@ def stats_screen(
     else:
         lines.append("Свободных очков нет: их даёт новый уровень.")
     return Screen(id=ScreenId.STATS, lines=tuple(lines), rows=tuple(rows))
-
-
-def stub_screen(title: str, notice: str = "") -> Screen:
-    """То, чего ещё не сделали.
-
-    Заглушка — это настоящий экран с работающим «Назад», и никогда не молчание: см.
-    правила доступности, игра обязана отвечать всегда.
-    """
-    return Screen(
-        id=ScreenId.STUB,
-        lines=(
-            f"{title}. Этот раздел ещё не готов.",
-            notice or "Он появится в одном из следующих обновлений.",
-            "Нажмите «Назад», чтобы вернуться, или «Главное меню».",
-        ),
-    )

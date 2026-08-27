@@ -606,6 +606,27 @@ def test_a_descent_you_outgrew_says_so_before_you_walk_in(
     assert "переросли этот спуск" in text
 
 
+def test_a_service_the_city_does_not_offer_answers_instead_of_a_stub(
+    content: GameContent, hero: Character, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Экрана-заглушки больше нет: нажатая со старой клавиатуры служба, которой у
+    города нет, получает объяснение и оставляет игрока в городе (правило 12).
+    """
+    from mmorpg.presentation.telegram.flows import play as play_flow
+    from mmorpg.presentation.telegram.routing import Command, Intent
+
+    bare = replace(content.city("farhold"), services=("shop", "locations"))
+    monkeypatch.setattr(play_flow, "known_city", lambda *a, **k: bare)
+
+    state = replace(begin(hero), screen=ScreenId.CITY, city_id="farhold")
+    answered = play_flow._handle_city(
+        content, hero, state, Command(intent=Intent.SELECT, argument="Арена")
+    )
+
+    assert answered.screen is ScreenId.CITY
+    assert "нет такой службы" in answered.notice
+
+
 def test_a_city_has_a_second_deeper_descent(content: GameContent, hero: Character) -> None:
     """Ниже обычного дна у города есть второй ход - глубокий спуск (ADR 0028).
 

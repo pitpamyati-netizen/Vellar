@@ -453,8 +453,6 @@ def render(
                 total=turning_rules.descent_depth(character),
                 notice=state.notice,
             )
-        case ScreenId.STUB:
-            return screens.stub_screen(state.stub_title, state.notice)
         case _:
             return screens.main_menu_screen(
                 content, character, derived_stats(content, character), state.notice
@@ -1073,7 +1071,9 @@ def _handle_city(
 
     declared, target = service
     if declared not in city.services:
-        return replace(state, stub_title=command.argument).at(ScreenId.STUB)
+        # Все города сейчас предлагают всё; сюда попадают только со старой
+        # клавиатуры. Настоящего экрана за этим нет - есть объяснение (правило 12).
+        return state.with_notice(f"В городе {city.name} нет такой службы. Ниже — то, что есть.")
     fresh = replace(state, list_page=PageState(), board_page=PageState(), mentor_page=PageState())
     return fresh.at(target)
 

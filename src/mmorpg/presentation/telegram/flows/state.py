@@ -194,7 +194,6 @@ class PlayState:
     city_id: str = ""
     session: LocationSession = field(default_factory=LocationSession)
     descent: Descent = field(default_factory=Descent)
-    stub_title: str = ""
     notice: str = ""
     list_page: PageState = field(default_factory=PageState)
     skill_page: PageState = field(default_factory=PageState)
@@ -272,7 +271,6 @@ class PlayState:
                     self.descent.started_at,
                     self.descent.tier,
                 ],
-                "stub": self.stub_title,
                 "pick": self.pick_slot,
                 "edge": self.edge_skill,
                 "quest": self.quest_id,
@@ -336,7 +334,6 @@ class PlayState:
                 started_at=int(descent_started),
                 tier=int(descent_tier) or 1,
             ),
-            stub_title=data.get("stub", ""),
             list_page=PageState(
                 page=int(list_page),
                 filters=ListFilters(category=str(list_category), query=str(list_query)),
