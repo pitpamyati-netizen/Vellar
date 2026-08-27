@@ -1,22 +1,28 @@
 """Не отправлять быстрее, чем Telegram принимает.
 
-У Telegram есть счёт исходящим: около тридцати сообщений в секунду на бота
-целиком, сколько бы игроков ни нажимало кнопки. Превышение — это не ошибка сети,
-а ответ ``429`` с просьбой подождать, и просьба эта относится к боту, а не к
-тому, кто её вызвал: один всплеск задерживает ответы всем.
-
-Поэтому очередь стоит здесь, перед отправкой, а не после отказа. Разница
-существенная: пауза в несколько десятков миллисекунд, растянутая по всплеску,
-никем не замечается, а ``429`` — это ответ, который не пришёл, и для того, кто
+У Telegram счёт двойной. Один — на бота целиком: около тридцати сообщений в
+секунду, сколько бы игроков ни нажимало кнопки. Второй — на отдельный чат:
+примерно одно сообщение в секунду в один и тот же диалог. Превышение любого —
+это не ошибка сети, а ответ ``429`` с просьбой подождать, и для того, кто
 слушает экран, он неотличим от сломанной игры (``docs/accessibility.md``,
 правило 3).
+
+Именно второй счёт и ловил игрока, барабанящего по кнопкам боя: ответы шли в
+один частный чат быстрее, чем чат принимает, Telegram отвечал «Retry after 30»,
+а ``middlewares/retry.py`` столько не ждёт — и ход пропадал в тишину. Поэтому
+здесь два окна: общее (``SendWindow``) и по чату (``PerChatWindow``). Всплеск в
+несколько сообщений — экран и весть о взятом уровне следом — окно по чату
+впитывает; барабанную дробь оно растягивает до одного ответа в секунду.
+
+Очередь стоит здесь, перед отправкой, а не после отказа: пауза, растянутая по
+всплеску, никем не замечается, а ``429`` — это ответ, который не пришёл.
 
 Считаются только отправки. ``getUpdates`` и всё, что читает, счётом не
 ограничено, и занимать им место в окне значило бы придерживать ответы игрокам
 ради опроса, который никому ничего не должен.
 
-Окно скользящее и общее: у Telegram счёт один на бота. Часы и сон — параметры,
-поэтому тест двигает время, а не ждёт секунду.
+Окна скользящие, часы и сон — параметры, поэтому тест двигает время, а не ждёт
+секунду.
 
 Что осталось за пределом этого модуля, названо честно: у групп счёт свой
 (двадцать сообщений в минуту на группу), и его держит не очередь, а повтор после
@@ -50,6 +56,12 @@ logger = get_logger(__name__)
 SENDS_PER_SECOND = 30
 WINDOW_SECONDS = 1.0
 
+#: Сколько сообщений подряд Telegram принимает в один частный чат и за какой
+#: срок. Три за три секунды — это устойчивый один ответ в секунду плюс запас на
+#: всплеск: экран, а следом весть о взятом уровне (``screens/play``).
+SENDS_PER_CHAT = 3
+PER_CHAT_WINDOW_SECONDS = 3.0
+
 #: Ждать дольше этого нет смысла: столько ждущих отправок означает, что игра
 #: упёрлась в счёт Telegram всерьёз, и об этом надо сказать в журнал, а не
 #: молча растянуть очередь.
@@ -65,6 +77,19 @@ def is_send(method: TelegramMethod[TelegramType]) -> bool:
     """
     name = type(method).__name__
     return name.startswith(("Send", "Forward", "Copy"))
+
+
+def chat_of(method: TelegramMethod[TelegramType]) -> int | None:
+    """Номер частного чата, куда идёт отправка, или ``None``.
+
+    Счёт по чату держится только для частных диалогов: у групп и каналов он свой
+    (``middlewares/throttle.py``, ``middlewares/retry.py``), а строковый
+    ``@username`` вместо номера — это канал.
+    """
+    chat = getattr(method, "chat_id", None)
+    # Номер частного чата положителен и равен номеру игрока; у групп и каналов
+    # он отрицателен, а канал бывает и строкой ``@username``.
+    return chat if isinstance(chat, int) and chat > 0 else None
 
 
 class SendWindow:
@@ -107,11 +132,73 @@ class SendWindow:
                 await self._sleep(pause)
 
 
-class SendRateMiddleware(BaseRequestMiddleware):
-    """Придерживает отправку, пока в окне Telegram нет места."""
+class PerChatWindow:
+    """Скользящее окно на каждый частный чат.
 
-    def __init__(self, window: SendWindow | None = None) -> None:
+    Держит по окну на чат и по замку на чат: пока один игрок барабанит по
+    кнопкам и его ответы растянуты до одного в секунду, чужие чаты идут своим
+    ходом. Чаты, замолчавшие на целое окно, забываются, иначе бот держал бы
+    очередь на каждый когда-либо виденный диалог (ср. ``throttle._sweep``).
+    """
+
+    def __init__(
+        self,
+        limit: int = SENDS_PER_CHAT,
+        window: float = PER_CHAT_WINDOW_SECONDS,
+        clock: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], Awaitable[None]] | None = None,
+    ) -> None:
+        self._limit = limit
+        self._window = window
+        self._clock = clock
+        self._sleep = sleep or asyncio.sleep
+        self._sent: dict[int, deque[float]] = {}
+        self._gates: dict[int, asyncio.Lock] = {}
+        self._swept_at = 0.0
+
+    def waiting(self, chat: int) -> int:
+        return len(self._sent.get(chat, ()))
+
+    async def take(self, chat: int) -> float:
+        """Занять место в окне этого чата, дождавшись, если мест нет."""
+        gate = self._gates.setdefault(chat, asyncio.Lock())
+        async with gate:
+            sent = self._sent.setdefault(chat, deque())
+            waited = 0.0
+            while True:
+                now = self._clock()
+                while sent and now - sent[0] >= self._window:
+                    sent.popleft()
+                if len(sent) < self._limit:
+                    sent.append(now)
+                    self._sweep(now)
+                    return waited
+                pause = self._window - (now - sent[0])
+                waited += pause
+                await self._sleep(pause)
+
+    def _sweep(self, now: float) -> None:
+        if now - self._swept_at < self._window:
+            return
+        self._swept_at = now
+        stale = [
+            chat for chat, sent in self._sent.items() if not sent or now - sent[-1] >= self._window
+        ]
+        for chat in stale:
+            self._sent.pop(chat, None)
+            gate = self._gates.get(chat)
+            if gate is not None and not gate.locked():
+                self._gates.pop(chat, None)
+
+
+class SendRateMiddleware(BaseRequestMiddleware):
+    """Придерживает отправку, пока в окне Telegram нет места — общем и по чату."""
+
+    def __init__(
+        self, window: SendWindow | None = None, per_chat: PerChatWindow | None = None
+    ) -> None:
         self._window = window or SendWindow()
+        self._per_chat = per_chat or PerChatWindow()
 
     async def __call__(
         self,
@@ -120,6 +207,18 @@ class SendRateMiddleware(BaseRequestMiddleware):
         method: TelegramMethod[TelegramType],
     ) -> Response[TelegramType]:
         if is_send(method):
+            # Счёт по чату — первым: он растягивает барабанную дробь одного
+            # игрока, не занимая мест в общем окне, пока ждёт.
+            chat = chat_of(method)
+            if chat is not None:
+                waited_here = await self._per_chat.take(chat)
+                if waited_here:
+                    logger.warning(
+                        "telegram_chat_queued",
+                        method=type(method).__name__,
+                        chat=chat,
+                        waited=round(waited_here, 3),
+                    )
             crowded = self._window.waiting >= CROWDED
             waited = await self._window.take()
             if crowded and waited:

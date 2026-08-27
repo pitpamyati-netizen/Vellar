@@ -10,8 +10,10 @@ from typing import Any
 from aiogram.methods import GetUpdates, SendMessage
 
 from mmorpg.presentation.telegram.middlewares.sending import (
+    PerChatWindow,
     SendRateMiddleware,
     SendWindow,
+    chat_of,
     is_send,
 )
 
@@ -75,7 +77,8 @@ def test_only_sends_are_counted() -> None:
 async def test_the_middleware_holds_a_send_and_lets_a_poll_straight_through() -> None:
     clock = FakeClock()
     window = SendWindow(limit=1, window=1.0, clock=clock, sleep=clock.sleep)
-    middleware = SendRateMiddleware(window)
+    roomy = PerChatWindow(limit=99, window=1.0, clock=clock, sleep=clock.sleep)
+    middleware = SendRateMiddleware(window, roomy)
     made: list[str] = []
 
     async def make_request(bot: Any, method: Any) -> Any:
@@ -90,3 +93,66 @@ async def test_the_middleware_holds_a_send_and_lets_a_poll_straight_through() ->
 
     assert made == ["SendMessage", "GetUpdates", "SendMessage"]
     assert clock.slept == [1.0]
+
+
+async def test_a_chat_gets_paced_after_its_burst() -> None:
+    """Барабанная дробь в один чат растягивается до одного ответа в секунду."""
+    clock = FakeClock()
+    window = PerChatWindow(limit=3, window=3.0, clock=clock, sleep=clock.sleep)
+
+    for _ in range(3):
+        assert await window.take(555) == 0.0
+    assert clock.slept == []
+
+    waited = await window.take(555)
+
+    assert waited == 3.0
+    assert window.waiting(555) == 1
+
+
+async def test_one_loud_chat_does_not_hold_up_another() -> None:
+    clock = FakeClock()
+    window = PerChatWindow(limit=1, window=3.0, clock=clock, sleep=clock.sleep)
+
+    await window.take(111)
+    assert await window.take(222) == 0.0
+
+
+async def test_a_silent_chat_is_forgotten() -> None:
+    clock = FakeClock()
+    window = PerChatWindow(limit=1, window=2.0, clock=clock, sleep=clock.sleep)
+
+    await window.take(111)
+    clock.now = 5.0
+    await window.take(222)
+
+    assert 111 not in window._sent
+
+
+async def test_the_middleware_paces_a_flooding_chat_but_not_a_poll() -> None:
+    clock = FakeClock()
+    roomy = SendWindow(limit=99, window=1.0, clock=clock, sleep=clock.sleep)
+    per_chat = PerChatWindow(limit=1, window=2.0, clock=clock, sleep=clock.sleep)
+    middleware = SendRateMiddleware(roomy, per_chat)
+    made: list[str] = []
+
+    async def make_request(bot: Any, method: Any) -> Any:
+        made.append(type(method).__name__)
+        return None
+
+    await middleware(make_request, None, SendMessage(chat_id=7, text="раз"))  # type: ignore[arg-type]
+    await middleware(make_request, None, GetUpdates())  # type: ignore[arg-type]
+    assert clock.slept == []
+
+    await middleware(make_request, None, SendMessage(chat_id=7, text="два"))  # type: ignore[arg-type]
+
+    assert made == ["SendMessage", "GetUpdates", "SendMessage"]
+    assert clock.slept == [2.0]
+
+
+def test_only_private_chats_are_paced_per_chat() -> None:
+    """У групп и каналов счёт свой; строковый ``@username`` — это канал."""
+    assert chat_of(SendMessage(chat_id=42, text="да")) == 42
+    assert chat_of(SendMessage(chat_id=-1001234, text="да")) is None
+    assert chat_of(SendMessage(chat_id="@vellar_channel", text="да")) is None
+    assert chat_of(GetUpdates()) is None
