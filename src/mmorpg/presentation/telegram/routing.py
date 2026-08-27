@@ -40,6 +40,7 @@ class Intent(StrEnum):
     PARTY_ACCEPT = "party_accept"
     PARTY_DECLINE = "party_decline"
     PARTY_LEAVE = "party_leave"
+    PARTY_TRANSFER = "party_transfer"
     GUILD = "guild"
     GUILD_FOUND = "guild_found"
     GUILD_DISBAND = "guild_disband"
@@ -49,6 +50,7 @@ class Intent(StrEnum):
     GUILD_LEAVE = "guild_leave"
     GUILD_ROSTER = "guild_roster"
     GUILD_VAULT = "guild_vault"
+    GUILD_TRANSFER = "guild_transfer"
     PAGE = "page"
     NEXT_PAGE = "next_page"
     PREVIOUS_PAGE = "previous_page"
@@ -143,6 +145,8 @@ _PARTY_WORDS: dict[str, Intent] = {
     "decline": Intent.PARTY_DECLINE,
     "уйти": Intent.PARTY_LEAVE,
     "leave": Intent.PARTY_LEAVE,
+    "передать": Intent.PARTY_TRANSFER,
+    "transfer": Intent.PARTY_TRANSFER,
 }
 
 #: Слова после ``/гильдия``.
@@ -169,6 +173,8 @@ _GUILD_WORDS: dict[str, Intent] = {
     "roster": Intent.GUILD_ROSTER,
     "казна": Intent.GUILD_VAULT,
     "vault": Intent.GUILD_VAULT,
+    "передать": Intent.GUILD_TRANSFER,
+    "transfer": Intent.GUILD_TRANSFER,
 }
 
 
@@ -226,6 +232,7 @@ _BUTTON_INTENTS: tuple[tuple[object, Intent], ...] = (
     (labels.PARTY_ACCEPT, Intent.PARTY_ACCEPT),
     (labels.PARTY_DECLINE, Intent.PARTY_DECLINE),
     (labels.PARTY_LEAVE, Intent.PARTY_LEAVE),
+    (labels.PARTY_TRANSFER, Intent.PARTY_TRANSFER),
     (labels.GUILD, Intent.GUILD),
     (labels.GUILD_FOUND, Intent.GUILD_FOUND),
     (labels.GUILD_DISBAND, Intent.GUILD_DISBAND),
@@ -235,6 +242,7 @@ _BUTTON_INTENTS: tuple[tuple[object, Intent], ...] = (
     (labels.GUILD_LEAVE, Intent.GUILD_LEAVE),
     (labels.GUILD_ROSTER, Intent.GUILD_ROSTER),
     (labels.GUILD_VAULT, Intent.GUILD_VAULT),
+    (labels.GUILD_TRANSFER, Intent.GUILD_TRANSFER),
     (labels.NEXT_PAGE, Intent.NEXT_PAGE),
     (labels.PREVIOUS_PAGE, Intent.PREVIOUS_PAGE),
     (labels.SEARCH, Intent.SEARCH),

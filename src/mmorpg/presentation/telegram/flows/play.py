@@ -70,6 +70,7 @@ from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import settings as settings_screens
 from mmorpg.presentation.telegram.screens import shop as shop_screens
 from mmorpg.presentation.telegram.screens import skills as skill_screens
+from mmorpg.presentation.telegram.screens import transfer as transfer_screens
 from mmorpg.presentation.telegram.screens import tutorial as tutorial_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.creation import STAT_NAMES
@@ -276,6 +277,30 @@ def render(
             return guild_screens.roster_screen(guild or GuildView(), state.notice)
         case ScreenId.GUILD_VAULT:
             return guild_screens.vault_screen(guild or GuildView(), state.notice)
+        case ScreenId.TRANSFER_TO:
+            return transfer_screens.recipients_screen(
+                state.transfer_scope,
+                _transfer_recipients(state, character, party, guild),
+                state.list_page,
+                state.notice,
+            )
+        case ScreenId.TRANSFER_ITEM:
+            return transfer_screens.bag_screen(
+                content, shelf.owned, state.transfer_to, state.list_page, state.notice
+            )
+        case ScreenId.TRANSFER_AMOUNT if content.has_item(state.transfer_item):
+            return transfer_screens.amount_screen(
+                content.item(state.transfer_item),
+                _owned_count(shelf, state.transfer_item),
+                state.transfer_to,
+                state.notice,
+            )
+        # Вещь пропала из содержимого или из сумки: игрока возвращают к выбору
+        # вещи, а не к падению (``Claude.md``, правило 8).
+        case ScreenId.TRANSFER_AMOUNT:
+            return transfer_screens.bag_screen(
+                content, shelf.owned, state.transfer_to, state.list_page, state.notice
+            )
         case ScreenId.SETTINGS:
             return settings_screens.settings_screen(settings or DEFAULT_SETTINGS, state.notice)
         case ScreenId.LIST_FILTERS:
@@ -462,7 +487,7 @@ def render(
 def list_sections(content: GameContent, screen: ScreenId) -> tuple[str, ...]:
     """По каким разделам режется список на этом экране. Пусто - не режется."""
     match screen:
-        case ScreenId.INVENTORY | ScreenId.SHOP | ScreenId.SELL:
+        case ScreenId.INVENTORY | ScreenId.SHOP | ScreenId.SELL | ScreenId.TRANSFER_ITEM:
             return shop_screens.ITEM_SECTIONS
         case ScreenId.SKILLS:
             return skill_screens.SKILL_SECTIONS
@@ -536,6 +561,20 @@ def _page_for(state: PlayState, screen: ScreenId) -> PageState:
 
 def _owned_count(goods: Goods, item_id: str) -> int:
     return next((held.quantity for held in goods.owned if held.item_id == item_id), 0)
+
+
+def _transfer_recipients(
+    state: PlayState,
+    character: Character,
+    party: PartyView | None,
+    guild: GuildView | None,
+) -> tuple[str, ...]:
+    """Кому игрок может передать вещь: состав объединения минус он сам."""
+    if state.transfer_scope == "guild":
+        names: tuple[str, ...] = tuple(name for name, _ in guild.members) if guild else ()
+    else:
+        names = tuple(party.members) if party else ()
+    return tuple(name for name in names if name != character.name)
 
 
 def _sale_prices(content: GameContent, owned: tuple[OwnedItem, ...]) -> dict[str, int]:
@@ -663,6 +702,7 @@ def advance(
         party_action="",
         guild_action="",
         guild_arg="",
+        transfer_amount=0,
     )
     shelf = goods or Goods(gold=character.gold)
     ticking = clock or Clock()
@@ -675,6 +715,9 @@ def advance(
 
     if (with_guild := _guild_intent(state, command)) is not None:
         return with_guild
+
+    if (with_transfer := _transfer_intent(state, command)) is not None:
+        return with_transfer
 
     if state.screen in KEEPER_SCREENS:
         return keeper_flow.advance(content, character, state, command, view)
@@ -754,6 +797,14 @@ def advance(
             return _handle_guild_roster(state, command)
         case ScreenId.GUILD_VAULT:
             return _handle_guild_vault(state, command)
+        case ScreenId.TRANSFER_TO:
+            return _handle_transfer_to(
+                state, command, _transfer_recipients(state, character, party, guild)
+            )
+        case ScreenId.TRANSFER_ITEM:
+            return _handle_transfer_item(content, state, command, shelf)
+        case ScreenId.TRANSFER_AMOUNT:
+            return _handle_transfer_amount(content, state, command, text, shelf)
         case ScreenId.LOCATION_LIST:
             return _handle_location_list(content, character, state, command)
         case ScreenId.LOCATION:
@@ -1719,6 +1770,86 @@ def _handle_guild_vault(state: PlayState, command: Command) -> PlayState:
         if labels.guild_withdraw_label(step).matches(command.argument):
             return replace(state, guild_action="withdraw", guild_arg=str(step))
     return state.with_notice("Нажмите сумму.")
+
+
+# --- передача вещи (``handlers/play._transfer_step``) -----------------
+#
+# Автомат об отряде и гильдии ничего не читает, поэтому он только выбирает: кому,
+# что и сколько. Двигает сумку другого игрока хендлер, читая ``transfer_amount``.
+
+
+def _transfer_intent(state: PlayState, command: Command) -> PlayState | None:
+    """Начало передачи вещи — из отряда или из гильдии. ``None`` — это был не он.
+
+    Кнопка есть только на экране объединения, но набранная команда
+    (``/отряд передать``) работает откуда угодно, как и ``/отряд``: пустой
+    список получателей на том конце просто скажет, что передавать некому.
+    """
+    if command.intent is Intent.PARTY_TRANSFER:
+        scope = "party"
+    elif command.intent is Intent.GUILD_TRANSFER:
+        scope = "guild"
+    else:
+        return None
+    return replace(
+        state, transfer_scope=scope, transfer_to="", transfer_item="", list_page=PageState()
+    ).at(ScreenId.TRANSFER_TO)
+
+
+def _transfer_home(state: PlayState) -> ScreenId:
+    return ScreenId.GUILD if state.transfer_scope == "guild" else ScreenId.PARTY
+
+
+def _transfer_now(state: PlayState, item_id: str, amount: int) -> PlayState:
+    """Всё выбрано: вернуться на экран объединения и оставить хендлеру триггер."""
+    return replace(state, transfer_item=item_id, transfer_amount=amount).at(_transfer_home(state))
+
+
+def _handle_transfer_to(
+    state: PlayState, command: Command, recipients: tuple[str, ...]
+) -> PlayState:
+    if not recipients:
+        return go_back(state).with_notice("Передавать некому: рядом больше никого нет.")
+    if command.intent is Intent.SELECT and command.argument in recipients:
+        return replace(state, transfer_to=command.argument, list_page=PageState()).at(
+            ScreenId.TRANSFER_ITEM
+        )
+    return state.with_notice("Нажмите, кому передать вещь.")
+
+
+def _handle_transfer_item(
+    content: GameContent, state: PlayState, command: Command, goods: Goods
+) -> PlayState:
+    listed = _search_and_filters(content, state, command)
+    if listed is not None:
+        return listed
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите вещь из сумки.")
+    item = transfer_screens.item_from_button(content, command.argument, goods.owned)
+    if item is None:
+        return state.with_notice("Нажмите вещь из сумки.")
+    held = _owned_count(goods, item.id)
+    if held <= 0:
+        return state.with_notice("Этой вещи у вас уже нет.")
+    if held == 1:
+        return _transfer_now(state, item.id, 1)
+    return replace(state, transfer_item=item.id).at(ScreenId.TRANSFER_AMOUNT)
+
+
+def _handle_transfer_amount(
+    content: GameContent, state: PlayState, command: Command, text: str, goods: Goods
+) -> PlayState:
+    if not content.has_item(state.transfer_item):
+        return go_back(replace(state, transfer_item="")).with_notice("Этой вещи в игре больше нет.")
+    held = _owned_count(goods, state.transfer_item)
+    if held <= 0:
+        return go_back(replace(state, transfer_item="")).with_notice("Этой вещи у вас уже нет.")
+    if command.intent is Intent.SELECT and labels.TRANSFER_ALL.matches(command.argument):
+        return _transfer_now(state, state.transfer_item, held)
+    wanted = text.strip()
+    if command.intent is Intent.UNKNOWN and wanted.isdecimal() and 1 <= int(wanted) <= held:
+        return _transfer_now(state, state.transfer_item, int(wanted))
+    return state.with_notice(f"Наберите число от 1 до {held} или нажмите «Передать всё».")
 
 
 def _handle_location_list(

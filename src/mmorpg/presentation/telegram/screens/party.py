@@ -54,6 +54,8 @@ def party_screen(view: PartyView, notice: str = "") -> Screen:
             "боя, который в одиночку не берётся."
         )
         rows.append((labels.PARTY_INVITE,))
+        if len(view.members) > 1:
+            rows.append((labels.PARTY_TRANSFER,))
         rows.append((labels.PARTY_DISBAND,) if view.leader else (labels.PARTY_LEAVE,))
     else:
         lines.append("Вы идёте один.")

@@ -29,6 +29,7 @@ from aiogram.types import Message
 
 from mmorpg import economy_log
 from mmorpg.application.services import group_trade, keeper_panel, moderation
+from mmorpg.application.services.battle import BattleStore
 from mmorpg.application.services.content import ContentRegistry
 from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.keeper import set_keeper, sync_keeper
@@ -47,6 +48,7 @@ from mmorpg.domain.ports.repositories import (
     InventoryRepository,
     KeeperLogRepository,
     LocationStateCache,
+    PrivacyRepository,
     StateCache,
     TradeRepository,
     User,
@@ -137,6 +139,7 @@ async def play(
     state_cache: StateCache,
     parties: PartyStore,
     guilds: GuildStore,
+    privacy: PrivacyRepository | None = None,
     user: User | None = None,
 ) -> None:
     if message.from_user is None or message.text is None:
@@ -233,6 +236,25 @@ async def play(
             message, character, updated.guild_action, updated.guild_arg, characters, guilds
         )
         updated = replace(updated, guild_action="", guild_arg="").with_notice(said)
+    if updated.transfer_amount:
+        said = await _transfer_step(
+            message,
+            content,
+            character,
+            updated.transfer_scope,
+            updated.transfer_to,
+            updated.transfer_item,
+            updated.transfer_amount,
+            characters,
+            inventory,
+            parties,
+            guilds,
+            privacy,
+            state_cache,
+        )
+        updated = replace(updated, transfer_amount=0, transfer_to="", transfer_item="").with_notice(
+            said
+        )
 
     before_level = character.level
     character = await _apply(
@@ -837,8 +859,14 @@ async def _party_view(
     characters: CharacterRepository,
     parties: PartyStore,
 ) -> party_screens.PartyView:
-    """Что показать на экране отряда. Везде, кроме него, - пусто."""
-    if flow.screen not in (ScreenId.PARTY, ScreenId.PARTY_INVITE):
+    """Что показать на экране отряда. Везде, кроме него, - пусто.
+
+    Экраны передачи вещи общие для отряда и гильдии: состав отряда нужен им
+    только когда передают из отряда (``flow.transfer_scope``).
+    """
+    on_party = flow.screen in (ScreenId.PARTY, ScreenId.PARTY_INVITE)
+    on_transfer = flow.screen in _TRANSFER_SCREENS and flow.transfer_scope == "party"
+    if not on_party and not on_transfer:
         return party_screens.PartyView()
     party = await parties.of(character.id)
     caller_id = await parties.called_by(character.id)
@@ -1012,6 +1040,12 @@ _GUILD_SCREENS = frozenset(
     }
 )
 
+#: Экраны адресной передачи. Общие для отряда и гильдии; чей это состав, говорит
+#: ``PlayState.transfer_scope``.
+_TRANSFER_SCREENS = frozenset(
+    {ScreenId.TRANSFER_TO, ScreenId.TRANSFER_ITEM, ScreenId.TRANSFER_AMOUNT}
+)
+
 
 async def _guild_view(
     flow: PlayState,
@@ -1020,7 +1054,8 @@ async def _guild_view(
     guilds: GuildStore,
 ) -> guild_screens.GuildView:
     """Что показать на экранах гильдии. Везде, кроме них, - пусто."""
-    if flow.screen not in _GUILD_SCREENS:
+    on_transfer = flow.screen in _TRANSFER_SCREENS and flow.transfer_scope == "guild"
+    if flow.screen not in _GUILD_SCREENS and not on_transfer:
         return guild_screens.GuildView()
     guild = await guilds.of(character.id)
     caller = ""
@@ -1229,3 +1264,99 @@ async def _guild_vault_step(
     await characters.grant_gold(character.id, amount)
     economy_log.record(economy_log.GUILD_VAULT, amount, character_id=character.id)
     return f"Из казны взято {amount}.", await fresh()
+
+
+# --- передача вещи в отряде и гильдии --------------------------------
+#
+# Адресный подарок соратнику или соклановцу, минуя игровую группу. Мгновенный и
+# без подтверждения получателя — как `передать` в группе (``Narrative.md``,
+# раздел 9). Эскроу и пошлины нет: передача из рук в руки ими не облагается, и
+# ``gold_flow`` тут ничего не пишет.
+#
+# Проверки — состав, чёрный список, занятость боем — оркестровка, требующая
+# хранилищ, поэтому живут здесь, рядом с ``_guild_step`` (``Claude.md``,
+# правило 5).
+
+
+async def _fellow_ids(
+    scope: str,
+    character: Character,
+    parties: PartyStore,
+    guilds: GuildStore,
+) -> tuple[list[int], str] | None:
+    """Кто с игроком в одном объединении и как оно зовётся. ``None`` — он не в нём."""
+    if scope == "guild":
+        guild = await guilds.of(character.id)
+        if guild is None:
+            return None
+        return [one.character_id for one in guild.members], "гильдии"
+    party = await parties.of(character.id)
+    if party is None:
+        return None
+    return list(party.members), "отряде"
+
+
+async def _transfer_step(
+    message: Message,
+    content: GameContent,
+    character: Character,
+    scope: str,
+    to_name: str,
+    item_id: str,
+    amount: int,
+    characters: CharacterRepository,
+    inventory: InventoryRepository,
+    parties: PartyStore,
+    guilds: GuildStore,
+    privacy: PrivacyRepository | None,
+    state_cache: StateCache,
+) -> str:
+    """Передать вещь соратнику или соклановцу. Ответ — целой фразой.
+
+    ``privacy`` в бою приходит из посредника зависимостей и всегда есть; ``None``
+    бывает только в тестах, не трогающих передачу, — как и у ``user`` в ``play``.
+    """
+    if amount <= 0 or not to_name or not item_id or not content.has_item(item_id):
+        return "Передача не сложилась. Начните заново."
+
+    if await BattleStore(state_cache).busy(character.id) is not None:
+        return "Сейчас вы в бою. Передать вещь можно после него."
+
+    fellows = await _fellow_ids(scope, character, parties, guilds)
+    if fellows is None:
+        return "Вы уже не в отряде." if scope == "party" else "Вы уже не в гильдии."
+    member_ids, where = fellows
+
+    recipient: Character | None = None
+    for member_id in member_ids:
+        if member_id == character.id:
+            continue
+        who = await characters.get(member_id)
+        if who is not None and who.name == to_name:
+            recipient = who
+            break
+    if recipient is None:
+        return f"{to_name} — не в вашей {where}."
+
+    # Чёрный список закрывает пару в обе стороны — так же, как в группе
+    # (``Narrative.md``, раздел 9).
+    if privacy is not None and (
+        await privacy.blocks(recipient.user_id, character.user_id)
+        or await privacy.blocks(character.user_id, recipient.user_id)
+    ):
+        return f"С {to_name} у вас закрыты дела: передача не проходит."
+
+    name = content.item(item_id).name
+    held = await inventory.count(character.id, item_id)
+    if held < amount:
+        return f"{name}: у вас {held} из {amount}, столько не передать."
+    if not await inventory.remove(character.id, item_id, amount):
+        return "Вещь не удалось забрать из сумки. Попробуйте заново."
+    await inventory.add(recipient.id, item_id, amount)
+
+    await _tell(
+        message,
+        recipient.user_id,
+        f"{character.name} передал вам: {name}, штук {amount}.",
+    )
+    return f"{name}, штук {amount} — передано игроку {to_name}."

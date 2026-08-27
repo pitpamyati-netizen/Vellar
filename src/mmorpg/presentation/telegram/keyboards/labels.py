@@ -189,6 +189,7 @@ PARTY_INVITE = label("Пригласить в отряд", "✉️")
 PARTY_ACCEPT = label("Пойти вместе", "🤝")
 PARTY_DECLINE = label("Отказаться", "🙅")
 PARTY_LEAVE = label("Покинуть отряд", "🚪")
+PARTY_TRANSFER = label("Передать соратнику", "🎁")
 
 
 # --- гильдия (``domain/rules/guild.py``) ---
@@ -202,6 +203,12 @@ GUILD_DECLINE = label("Отклонить", "🙅")
 GUILD_LEAVE = label("Выйти из гильдии", "🚪")
 GUILD_ROSTER = label("Состав гильдии", "📋")
 GUILD_VAULT = label("Казна гильдии", "💰")
+GUILD_TRANSFER = label("Передать соклановцу", "🎁")
+
+
+# --- передача вещей в отряде и гильдии (``handlers/play._transfer_step``) ---
+
+TRANSFER_ALL = label("Передать всё", "🎁")
 
 
 def guild_deposit_label(sum_: int) -> Label:

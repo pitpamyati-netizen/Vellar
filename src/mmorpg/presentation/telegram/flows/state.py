@@ -241,6 +241,15 @@ class PlayState:
     #: ``withdraw``. ``guild_arg`` - имя или сумма к нему. Переходное.
     guild_action: str = ""
     guild_arg: str = ""
+    #: Адресная передача вещи в отряде или гильдии. ``transfer_scope`` —
+    #: ``party`` или ``guild``; ``transfer_to`` — имя получателя;
+    #: ``transfer_item`` — что передают. Всё это выбор игрока и переживает уход
+    #: с экрана, а ``transfer_amount`` переходное: хендлер читает его и обнуляет,
+    #: потому что двигать сумку другого игрока умеет только он.
+    transfer_scope: str = ""
+    transfer_to: str = ""
+    transfer_item: str = ""
+    transfer_amount: int = 0
 
     def at(self, screen: ScreenId) -> PlayState:
         return replace(self, screen=screen, stack=self.stack.push(screen), notice="")
@@ -276,6 +285,7 @@ class PlayState:
                 "quest": self.quest_id,
                 "npc": self.npc_id,
                 "item": self.item_id,
+                "transfer": [self.transfer_scope, self.transfer_to, self.transfer_item],
                 "searching": self.searching,
                 "list_filters": [
                     self.list_page.filters.category,
@@ -320,6 +330,8 @@ class PlayState:
         # Хвост списка читается с запасом: состояние переживает выкатку, а
         # сохранённому состоянию не верят (``Claude.md``, правило 8).
         keeper = [*data.get("keeper", []), "", "", "", 0, "", 1, ""][:7]
+        # Хвост читается с запасом: запись старого образца не называла передачу.
+        transfer_scope, transfer_to, transfer_item = [*data.get("transfer", []), "", "", ""][:3]
         return cls(
             screen=ScreenId(data["screen"]),
             stack=NavigationStack.deserialise(data.get("stack", "")),
@@ -355,6 +367,9 @@ class PlayState:
             keeper_typing=str(keeper[4]),
             keeper_page=PageState(page=int(keeper[5])),
             keeper_reason=str(keeper[6]),
+            transfer_scope=str(transfer_scope),
+            transfer_to=str(transfer_to),
+            transfer_item=str(transfer_item),
         )
 
 
@@ -393,6 +408,8 @@ LIST_PAGE_FIELD: dict[ScreenId, str] = {
     ScreenId.INVENTORY: "list_page",
     ScreenId.SHOP: "list_page",
     ScreenId.SELL: "list_page",
+    ScreenId.TRANSFER_TO: "list_page",
+    ScreenId.TRANSFER_ITEM: "list_page",
     ScreenId.SKILL_PICK: "list_page",
     ScreenId.CHAMBER_PLEDGE: "list_page",
     ScreenId.SKILLS: "skill_page",
