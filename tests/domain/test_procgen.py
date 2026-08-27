@@ -10,12 +10,13 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from mmorpg.domain.entities import GameContent, NodeKind, NodeState
-from mmorpg.domain.entities.location import EnemyRank
+from mmorpg.domain.entities.location import EnemyRank, LocationState
 from mmorpg.domain.procgen import (
     DEFAULT_SHOP_ROTATION_SECONDS,
     MAX_NODES,
     MIN_NODES,
     combat_nodes,
+    epoch_seed,
     generate_enemy,
     generate_group,
     generate_location,
@@ -30,8 +31,11 @@ from mmorpg.domain.rules import nodes as node_rules
 
 WORLD_SEED = "vellar-test"
 
+_COMBAT_KINDS = {NodeKind.BATTLE, NodeKind.ELITE_BATTLE, NodeKind.BOSS_BATTLE}
+_FINDING_KINDS = {NodeKind.GATHER, NodeKind.CACHE, NodeKind.EVENT}
 
-def build(city_id: str = "farhold", slot: int = 1, seed: str = WORLD_SEED):
+
+def build(city_id: str = "farhold", slot: int = 1, seed: str = WORLD_SEED, epoch: int = 0):
     return generate_location(
         world_seed=seed,
         city_id=city_id,
@@ -40,7 +44,17 @@ def build(city_id: str = "farhold", slot: int = 1, seed: str = WORLD_SEED):
         biome="луга",
         level_min=1,
         level_max=4,
+        epoch=epoch,
     )
+
+
+def _family(kind: NodeKind) -> str:
+    """Постоянная категория узла: её смена поколения не трогает."""
+    if kind in _COMBAT_KINDS:
+        return "combat"
+    if kind in _FINDING_KINDS:
+        return "finding"
+    return kind.value
 
 
 # --- то единственное, что ещё на часах -------------------------------
@@ -85,13 +99,80 @@ def test_a_different_world_seed_changes_everything() -> None:
     assert build(seed="one") != build(seed="another")
 
 
+# --- поколение округи -----------------------------------------------
+
+
+def test_a_new_epoch_is_seeded_differently() -> None:
+    seed = location_seed(WORLD_SEED, "farhold", 1)
+    assert epoch_seed(seed, 0) != epoch_seed(seed, 1)
+    assert epoch_seed(seed, 1) != epoch_seed(seed, 2)
+
+
+def test_the_same_epoch_rebuilds_identically() -> None:
+    assert build(epoch=3) == build(epoch=3)
+
+
+def test_the_skeleton_survives_every_epoch() -> None:
+    """Число узлов, их места, имена, уровни и главные тропы не трогаются поколением."""
+    base = build(epoch=0)
+    for epoch in range(1, 12):
+        later = build(epoch=epoch)
+        assert [n.name for n in later.nodes] == [n.name for n in base.nodes]
+        assert [n.level for n in later.nodes] == [n.level for n in base.nodes]
+        assert len(later.nodes) == len(base.nodes)
+        assert later.is_connected
+        # Категория узла постоянна: боевой остаётся боевым, находка - находкой.
+        assert [_family(n.kind) for n in later.nodes] == [_family(n.kind) for n in base.nodes]
+        assert later.exit_node.index == base.exit_node.index
+
+
+def test_an_epoch_relays_kinds_or_paths() -> None:
+    """Хоть что-то в облике округи да меняется на дистанции поколений."""
+    for slot in range(1, 6):
+        base = build(slot=slot)
+        moved = any(
+            [n.kind for n in build(slot=slot, epoch=e).nodes] != [n.kind for n in base.nodes]
+            or [n.links for n in build(slot=slot, epoch=e).nodes] != [n.links for n in base.nodes]
+            for e in range(1, 20)
+        )
+        assert moved, f"slot {slot}: округа не переложилась ни в одном поколении"
+
+
+def test_the_boss_stays_pinned_every_epoch() -> None:
+    for epoch in range(8):
+        location = build(epoch=epoch)
+        bosses = [n for n in location.nodes if n.kind is NodeKind.BOSS_BATTLE]
+        assert len(bosses) == 1
+        assert bosses[0].index == len(location.nodes) - 2, "самый глубокий внутренний узел"
+
+
+def test_the_category_composition_is_permanent() -> None:
+    """Сколько в локации сбора, тайников и событий - постоянно; двигаются только места."""
+    base = build(slot=2)
+    want = sorted(n.kind for n in base.nodes)
+    for epoch in range(1, 15):
+        assert sorted(n.kind for n in build(slot=2, epoch=epoch).nodes) == want
+
+
+def test_location_epoch_counts_by_wave_not_clock() -> None:
+    assert node_rules.location_epoch(LocationState()) == 0
+    nodes = {i: NodeState(wave=w) for i, w in enumerate([10, 10, 10, 10])}
+    # 40 волн суммарно = ровно одно сменившееся поколение.
+    assert node_rules.location_epoch(LocationState(nodes=nodes)) == 1
+    nodes[0] = NodeState(wave=9)
+    assert node_rules.location_epoch(LocationState(nodes=nodes)) == 0
+
+
 # --- строение --------------------------------------------------------
 
 
-@given(slot=st.integers(min_value=1, max_value=5))
+@given(
+    slot=st.integers(min_value=1, max_value=5),
+    epoch=st.integers(min_value=0, max_value=25),
+)
 @settings(max_examples=400, suppress_health_check=[HealthCheck.function_scoped_fixture])
-def test_structure_invariants(slot: int) -> None:
-    location = build(slot=slot)
+def test_structure_invariants(slot: int, epoch: int) -> None:
+    location = build(slot=slot, epoch=epoch)
 
     assert MIN_NODES <= len(location.nodes) <= MAX_NODES
     assert location.entrance.kind is NodeKind.ENTRANCE

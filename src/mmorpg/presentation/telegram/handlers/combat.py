@@ -275,7 +275,12 @@ async def _spawn(
             depth=descent.depth,
         )
 
-    location = build_location(content, settings.world_seed, flow.session)
+    location = build_location(
+        content,
+        settings.world_seed,
+        flow.session,
+        epoch=node_rules.location_epoch(location_state),
+    )
     node = location.node(flow.session.node)
     left = node_rules.standing_at(
         visit_seed(settings.world_seed, flow.session), location, location_state, node.index, now
@@ -986,7 +991,9 @@ async def _take_node(
     node_state = await take_from_node(
         content, visit, session.node, locations, now, settings, wave=session.wave
     )
-    location = build_location(content, settings.world_seed, visit)
+    location = build_location(
+        content, settings.world_seed, visit, epoch=node_rules.location_epoch(node_state)
+    )
     left = node_rules.standing_at(
         visit_seed(settings.world_seed, visit), location, node_state, session.node, now
     )

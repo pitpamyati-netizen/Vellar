@@ -10,6 +10,7 @@ from mmorpg.domain.procgen.location import (
 from mmorpg.domain.procgen.seeds import (
     DEFAULT_SHOP_ROTATION_SECONDS,
     enemy_seed,
+    epoch_seed,
     location_seed,
     node_seed,
     rng,
@@ -27,6 +28,7 @@ __all__ = [
     "MIN_NODES",
     "combat_nodes",
     "enemy_seed",
+    "epoch_seed",
     "generate_enemy",
     "generate_group",
     "generate_location",

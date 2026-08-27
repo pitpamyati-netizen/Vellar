@@ -144,9 +144,18 @@ def location_known(content: GameContent, session: LocationSession) -> bool:
 
 
 def build_location(
-    content: GameContent, world_seed: str, session: LocationSession
+    content: GameContent,
+    world_seed: str,
+    session: LocationSession,
+    *,
+    epoch: int = 0,
 ) -> GeneratedLocation:
-    """Собрать локацию, в которой стоит игрок. О ней не хранится ничего."""
+    """Собрать локацию, в которой стоит игрок, в её нынешнем поколении округи.
+
+    ``epoch`` считается из общего состояния локации
+    (``node_rules.location_epoch``): скелет от него не зависит, а виды узлов и
+    короткие тропы - зависят. О самой локации не хранится ничего.
+    """
     city = content.city(session.city_id)
     location = city.location(session.slot)
     return generate_location(
@@ -157,6 +166,7 @@ def build_location(
         biome=location.biome,
         level_min=location.level_min,
         level_max=location.level_max,
+        epoch=epoch,
     )
 
 
@@ -173,7 +183,7 @@ def node_standing(
     now: int,
 ) -> dict[int, node_rules.Standing]:
     """Что осталось в каждом узле локации, по которой идут."""
-    location = build_location(content, world_seed, session)
+    location = build_location(content, world_seed, session, epoch=node_rules.location_epoch(state))
     return node_rules.standing(visit_seed(world_seed, session), location, state, now)
 
 
@@ -369,7 +379,9 @@ def render(
                 content, city, character, state.location_page, state.notice
             )
         case ScreenId.LOCATION if location_known(content, state.session):
-            location = build_location(content, world_seed, state.session)
+            location = build_location(
+                content, world_seed, state.session, epoch=node_rules.location_epoch(here_now)
+            )
             return screens.location_screen(
                 location,
                 location.node(state.session.node),
@@ -1894,7 +1906,9 @@ def _handle_location(
             .at(ScreenId.LOCATION_LIST)
             .with_notice(LOST_VISIT)
         )
-    location = build_location(content, world_seed, state.session)
+    location = build_location(
+        content, world_seed, state.session, epoch=node_rules.location_epoch(location_state)
+    )
     node = location.node(state.session.node)
 
     if command.intent is not Intent.SELECT:

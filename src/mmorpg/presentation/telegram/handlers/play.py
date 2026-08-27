@@ -823,11 +823,13 @@ async def take_from_node(
     Волна, которую видел игрок, передаётся вниз: нажатие, опоздавшее к смене
     волны, ничего не забирает (``domain/rules/nodes.py``).
     """
-    location = build_location(content, settings.world_seed, session)
     seed = visit_seed(settings.world_seed, session)
     known = state
     if known is None:
         known = await locations.state(session.city_id, session.slot, now=now)
+    location = build_location(
+        content, settings.world_seed, session, epoch=node_rules.location_epoch(known)
+    )
     left = node_rules.standing_at(seed, location, known, index, now)
     if left.empty:
         return known

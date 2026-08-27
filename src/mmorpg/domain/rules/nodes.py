@@ -30,6 +30,14 @@ from mmorpg.domain.procgen.seeds import rng, wave_seed
 #: чтобы локация не стояла пустой для того, кто вошёл вторым.
 RESPAWN_SECONDS = 180
 
+#: Сколько волн, снятых со всех узлов локации вместе, сменяет поколение округи:
+#: конкретные виды узлов переставляются внутри их категорий, а короткие тропы
+#: ложатся заново (``domain/procgen/location.py``, ADR 0032). Считается по
+#: выработке, а не по часам: пока в округе есть что брать, она стоит как стояла,
+#: а выбитую заселяет заново. Локацию, которую сутками никто не трогал, кэш
+#: забывает целиком, и её поколение откатывается к нулевому само.
+REGROWTH_WAVES = 40
+
 #: Сколько единиц держит волна, по разновидности узла: от и до включительно.
 #: Двери не держат ничего, хозяин логова стоит один — на то он и хозяин.
 WAVE_SIZE: dict[NodeKind, tuple[int, int]] = {
@@ -51,6 +59,16 @@ def wave_size(location_seed_value: bytes, index: int, kind: NodeKind, wave: int)
     if high <= low:
         return low
     return rng(wave_seed(location_seed_value, index, wave)).randint(low, high)
+
+
+def location_epoch(state: LocationState) -> int:
+    """Какое поколение округи стоит сейчас. По выработке, не по часам.
+
+    Сумма волн, снятых со всех узлов, поделённая на :data:`REGROWTH_WAVES`.
+    Растёт, пока локацию работают, и оседает сама, когда кэш забывает
+    нетронутую локацию (``Claude.md``, правило 8: у каждого ключа есть срок).
+    """
+    return sum(node.wave for node in state.nodes.values()) // REGROWTH_WAVES
 
 
 def refreshed(state: NodeState, now: int) -> NodeState:
