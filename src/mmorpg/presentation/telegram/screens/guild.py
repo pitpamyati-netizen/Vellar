@@ -55,6 +55,8 @@ def guild_screen(view: GuildView, notice: str = "") -> Screen:
         lines.append(f"В гильдии: {amount(len(view.members), MAX_MEMBERS, with_percent=False)}.")
         lines.append(f"В казне: {gold(view.vault_gold)}.")
         rows.append((labels.GUILD_ROSTER, labels.GUILD_VAULT))
+        if len(view.members) > 1:
+            rows.append((labels.GUILD_TRANSFER,))
         if view.officer:
             rows.append((labels.GUILD_INVITE,))
         rows.append((labels.GUILD_DISBAND,) if view.founder else (labels.GUILD_LEAVE,))

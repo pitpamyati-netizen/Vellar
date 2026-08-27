@@ -58,6 +58,7 @@ from mmorpg.presentation.telegram.screens import keeper as keeper_screens
 from mmorpg.presentation.telegram.screens import party as party_screens
 from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import skills as skill_screens
+from mmorpg.presentation.telegram.screens import transfer as transfer_screens
 from mmorpg.presentation.telegram.screens import tutorial as tutorial_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.paginated import (
@@ -673,6 +674,25 @@ def all_screens(
             guild_screens.GuildView(
                 name="Стая", my_rank=GuildRank.MEMBER, vault_gold=800, my_gold=250
             )
+        ),
+        transfer_screens.recipients_screen("party", ("Мирна", "Тьен"), PageState()),
+        transfer_screens.recipients_screen("guild", (), PageState()),
+        transfer_screens.recipients_screen(
+            "guild",
+            tuple(f"Соклановец {n}" for n in range(20)),
+            PageState(page=2),
+            notice="Кому передать?",
+        ),
+        transfer_screens.bag_screen(
+            content,
+            (shop.OwnedItem("small_healing_potion", 3), shop.OwnedItem("sword@1#common", 1)),
+            "Мирна",
+            PageState(),
+        ),
+        transfer_screens.bag_screen(content, (), "Мирна", PageState()),
+        transfer_screens.amount_screen(content.item("small_healing_potion"), 3, "Мирна"),
+        transfer_screens.amount_screen(
+            content.item("small_healing_potion"), 1, "Мирна", notice="Столько нет."
         ),
         tutorial_screens.tutorial_screen(hero),
         tutorial_screens.tutorial_screen(replace(hero, tutorial=0b000111)),

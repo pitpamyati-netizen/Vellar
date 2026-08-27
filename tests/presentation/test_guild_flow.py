@@ -34,6 +34,7 @@ from mmorpg.infrastructure.persistence.memory import (
     InMemoryInventoryRepository,
     InMemoryKeeperLogRepository,
     InMemoryPartyRepository,
+    InMemoryPrivacyRepository,
     InMemoryTradeRepository,
     InMemoryUserRepository,
 )
@@ -123,6 +124,7 @@ class Player:
             self.deps["cache"],
             self.deps["parties"],
             self.deps["guilds"],
+            self.deps["privacy"],
         )
         return self.sent.last
 
@@ -147,6 +149,7 @@ async def table(
         "cache": cache,
         "parties": PartyStore(InMemoryPartyRepository(), cache),
         "guilds": guilds,
+        "privacy": InMemoryPrivacyRepository(),
     }
     argus = await characters.create(
         Character(
@@ -316,3 +319,55 @@ async def test_a_guild_is_still_there_after_a_fresh_start(
     screen = await again.press(labels.GUILD.text)
     assert labels.GUILD_ROSTER.text in buttons(screen)
     assert labels.GUILD_DISBAND.text in buttons(screen)
+
+
+# --- передача вещи соклановцу ---------------------------------------
+
+
+async def _two_in_a_guild(argus: Player, mirna: Player) -> None:
+    await _found(argus)
+    await argus.press(labels.GUILD_INVITE.text)
+    await argus.press("Мирна")
+    await mirna.press("/гильдия принять")
+
+
+async def test_an_item_is_passed_to_a_guildmate(
+    table: tuple[Player, Player, Character, Character],
+    content: GameContent,
+) -> None:
+    argus, mirna, argus_character, mirna_character = table
+    await argus.deps["inventory"].add(argus_character.id, "small_healing_potion", 4)
+    await _two_in_a_guild(argus, mirna)
+
+    screen = await argus.press(labels.GUILD.text)
+    assert labels.GUILD_TRANSFER.text in buttons(screen)
+
+    to_screen = await argus.press(labels.GUILD_TRANSFER.text)
+    assert to_screen.id is ScreenId.TRANSFER_TO
+    assert "Мирна" in buttons(to_screen)
+
+    bag = await argus.press("Мирна")
+    potion = content.item("small_healing_potion").name
+    button = next(one for one in buttons(bag) if one.startswith(f"{potion}, штук "))
+    await argus.press(button)
+    done = await argus.press(labels.TRANSFER_ALL.text)
+
+    assert done.id is ScreenId.GUILD
+    assert "передано игроку Мирна" in done.text()
+    theirs = {
+        e.item_id: e.quantity for e in await mirna.deps["inventory"].list_items(mirna_character.id)
+    }
+    assert theirs["small_healing_potion"] == 4
+    assert not await argus.deps["inventory"].list_items(argus_character.id)
+
+
+async def test_a_non_guildmate_is_not_offered(
+    table: tuple[Player, Player, Character, Character],
+) -> None:
+    """В списке получателей только гильдия: чужого там нет."""
+    argus, _mirna, argus_character, _ = table
+    await argus.deps["inventory"].add(argus_character.id, "small_healing_potion", 2)
+    await _found(argus)  # гильдия из одного человека
+
+    screen = await argus.press(labels.GUILD.text)
+    assert labels.GUILD_TRANSFER.text not in buttons(screen)

@@ -33,6 +33,7 @@ from mmorpg.infrastructure.persistence.memory import (
     InMemoryInventoryRepository,
     InMemoryKeeperLogRepository,
     InMemoryPartyRepository,
+    InMemoryPrivacyRepository,
     InMemoryTradeRepository,
     InMemoryUserRepository,
 )
@@ -131,6 +132,7 @@ class Player:
             self.deps["cache"],
             self.deps["parties"],
             self.deps["guilds"],
+            self.deps["privacy"],
         )
         return self.sent.last
 
@@ -157,6 +159,7 @@ async def table(
         "cache": cache,
         "parties": parties,
         "guilds": guilds,
+        "privacy": InMemoryPrivacyRepository(),
     }
     argus = await characters.create(
         Character(
@@ -311,3 +314,97 @@ async def test_a_name_nobody_carries_is_answered_plainly(
     answer = await argus.press("Никого")
     assert "Никого" in answer.text()
     assert "нет" in answer.text()
+
+
+# --- передача вещи соратнику -----------------------------------------
+
+
+async def _gathered(argus: Player, mirna: Player) -> None:
+    await argus.press("/отряд создать")
+    await argus.press(labels.PARTY_INVITE.text)
+    await argus.press("Мирна")
+    await mirna.press(labels.PARTY_ACCEPT.text)
+    await argus.press(labels.PARTY.text)
+
+
+def _bag(player: Player, character_id: int) -> Any:
+    return player.deps["inventory"].list_items(character_id)
+
+
+async def test_a_stack_is_passed_after_asking_how_many(
+    table: tuple[Player, Player, Character, Character],
+    content: GameContent,
+) -> None:
+    """Кому → что → сколько: стопку передают, спросив число."""
+    argus, mirna, argus_character, mirna_character = table
+    inventory = argus.deps["inventory"]
+    await inventory.add(argus_character.id, "small_healing_potion", 5)
+    await _gathered(argus, mirna)
+
+    screen = await argus.press(labels.PARTY.text)
+    assert labels.PARTY_TRANSFER.text in buttons(screen)
+
+    to_screen = await argus.press(labels.PARTY_TRANSFER.text)
+    assert to_screen.id is ScreenId.TRANSFER_TO
+    assert "Мирна" in buttons(to_screen)
+    assert "Аргус" not in buttons(to_screen)
+
+    bag = await argus.press("Мирна")
+    assert bag.id is ScreenId.TRANSFER_ITEM
+    potion = content.item("small_healing_potion").name
+    button = next(one for one in buttons(bag) if one.startswith(f"{potion}, штук "))
+
+    amount = await argus.press(button)
+    assert amount.id is ScreenId.TRANSFER_AMOUNT
+
+    done = await argus.press("2")
+    assert done.id is ScreenId.PARTY
+    assert "передано игроку Мирна" in done.text()
+
+    mine = {e.item_id: e.quantity for e in await _bag(argus, argus_character.id)}
+    theirs = {e.item_id: e.quantity for e in await _bag(mirna, mirna_character.id)}
+    assert mine["small_healing_potion"] == 3
+    assert theirs["small_healing_potion"] == 2
+
+
+async def test_a_single_item_skips_the_amount_step(
+    table: tuple[Player, Player, Character, Character],
+    content: GameContent,
+) -> None:
+    argus, mirna, argus_character, mirna_character = table
+    inventory = argus.deps["inventory"]
+    await inventory.add(argus_character.id, "sword@1#common", 1)
+    await _gathered(argus, mirna)
+
+    await argus.press(labels.PARTY_TRANSFER.text)
+    bag = await argus.press("Мирна")
+    sword = content.item("sword@1#common").name
+    button = next(one for one in buttons(bag) if one.startswith(f"{sword}, штук "))
+
+    done = await argus.press(button)
+    assert done.id is ScreenId.PARTY
+    assert "передано игроку Мирна" in done.text()
+    theirs = {e.item_id: e.quantity for e in await _bag(mirna, mirna_character.id)}
+    assert theirs["sword@1#common"] == 1
+
+
+async def test_a_blocked_pair_does_not_pass_items(
+    table: tuple[Player, Player, Character, Character],
+    content: GameContent,
+) -> None:
+    argus, mirna, argus_character, mirna_character = table
+    await argus.deps["inventory"].add(argus_character.id, "small_healing_potion", 3)
+    await argus.deps["privacy"].block(MIRNA_ACCOUNT, ARGUS_ACCOUNT, at=0)
+    await _gathered(argus, mirna)
+
+    await argus.press(labels.PARTY_TRANSFER.text)
+    bag = await argus.press("Мирна")
+    potion = content.item("small_healing_potion").name
+    button = next(one for one in buttons(bag) if one.startswith(f"{potion}, штук "))
+    await argus.press(button)
+    refused = await argus.press("1")
+
+    assert "закрыты дела" in refused.text()
+    assert not await _bag(mirna, mirna_character.id)
+    mine = {e.item_id: e.quantity for e in await _bag(argus, argus_character.id)}
+    assert mine["small_healing_potion"] == 3
