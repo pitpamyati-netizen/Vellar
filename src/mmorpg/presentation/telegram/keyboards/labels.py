@@ -154,6 +154,18 @@ KEEPER_RENAME = label("Переименовать", "✍")
 KEEPER_GIVE_ITEM = label("Выдать вещь", "🎁")
 KEEPER_GIVE_AT_PLAYER_LEVEL = label("Ступень по уровню игрока", "📏")
 
+# Умения игрока: список, карточка одного умения, изучение и сброс дерева.
+KEEPER_SKILLS = label("Умения", "✨")
+KEEPER_SKILL_LEARN = label("Изучить умение", "📚")
+KEEPER_SKILL_RESPEC = label("Сбросить дерево умений", "♻️")
+KEEPER_RANK_UP = label("Ранг больше", "🔼")
+KEEPER_RANK_DOWN = label("Ранг меньше", "🔽")
+KEEPER_SKILL_EDGE_BTN = label("Сменить грань", "🌿")
+KEEPER_SKILL_EDGE_CLEAR = label("Снять грань", "🍂")
+KEEPER_SKILL_SLOT_BTN = label("Положить в слот", "🧩")
+KEEPER_SKILL_SLOT_CLEAR = label("Убрать из слотов", "␡")
+KEEPER_SKILL_FORGET = label("Забыть умение", "🧠")
+
 # Игроки.
 KEEPER_FIND = label("Найти по имени", "🔤")
 KEEPER_MOVE = label("Перевести в город", "🧭")

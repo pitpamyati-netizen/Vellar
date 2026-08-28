@@ -20,7 +20,8 @@ from __future__ import annotations
 from dataclasses import replace
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import GameContent
+from mmorpg.domain.entities.content import GameContent, OwnerKind
+from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.progression import (
     MAX_LEVEL,
     LevelUp,
@@ -93,6 +94,111 @@ def move_to(character: Character, city_id: str) -> Character:
     экран остался в снесённом городе, стоит там, пока его оттуда не выведут.
     """
     return replace(character, city_id=city_id)
+
+
+def teach_skill(content: GameContent, character: Character, code: str) -> Character | None:
+    """Дать классовое умение первым рангом — без очков и без гейтов ветви.
+
+    Смотритель не покупает умение, а ставит его: это обход работы, как и всё
+    здесь. Расовое умение так не выдают — оно приходит с расой.
+    """
+    if not content.has_skill(code):
+        return None
+    skill = content.skill(code)
+    if skill.owner_kind is not OwnerKind.CLASS or skill_rules.is_known(character, code):
+        return None
+    return replace(character, loadout=character.loadout.with_rank(code, 1))
+
+
+def set_skill_rank(
+    content: GameContent, character: Character, code: str, rank: int
+) -> Character | None:
+    """Выставить ранг изученного умения. Ноль — забыть умение целиком.
+
+    Очки не двигаются: смотритель ставит ранг, а не платит за него. Грань,
+    оказавшаяся выше нового ранга, снимается вместе с ним.
+    """
+    loadout = character.loadout
+    if not content.has_skill(code) or not skill_rules.is_known(character, code):
+        return None
+    wanted = max(0, min(rank, content.rules.max_rank))
+    if wanted == 0:
+        if code == loadout.racial:
+            return None
+        return replace(
+            character,
+            loadout=replace(
+                loadout,
+                ranks={key: value for key, value in loadout.ranks.items() if key != code},
+                edges={key: value for key, value in loadout.edges.items() if key != code},
+                actives=tuple(None if item == code else item for item in loadout.actives),
+            ),
+        )
+    updated = loadout.with_rank(code, wanted)
+    if wanted < skill_rules.edge_rank_for(content, character) and loadout.edge_of(code) is not None:
+        updated = replace(
+            updated, edges={key: value for key, value in updated.edges.items() if key != code}
+        )
+    return replace(character, loadout=updated)
+
+
+def set_skill_edge(
+    content: GameContent, character: Character, code: str, edge_code: str
+) -> Character | None:
+    """Выбрать грань изученного умения или снять её пустым значением."""
+    if not content.has_skill(code) or not skill_rules.is_known(character, code):
+        return None
+    skill = content.skill(code)
+    if edge_code and all(edge.code != edge_code for edge in skill.edges):
+        return None
+    edges = {key: value for key, value in character.loadout.edges.items() if key != code}
+    if edge_code:
+        edges[code] = edge_code
+    return replace(character, loadout=replace(character.loadout, edges=edges))
+
+
+def put_skill_in_slot(
+    content: GameContent, character: Character, slot: int, code: str | None
+) -> Character | None:
+    """Разложить изученное боевое умение по слотам — тем же правилом, что и игрок."""
+    return skill_rules.put_in_slot(content, character, slot, code)
+
+
+def unslot_skill(content: GameContent, character: Character, code: str) -> Character | None:
+    """Убрать умение из того слота, где оно лежит. ``None`` — его нигде нет."""
+    slot = next((index for index, held in enumerate(character.loadout.actives) if held == code), -1)
+    if slot < 0:
+        return None
+    return skill_rules.put_in_slot(content, character, slot, None)
+
+
+def respec_skills(content: GameContent, character: Character) -> Character:
+    """Сбросить классовое дерево: очки — назад в нераспределённые, панель — чистой.
+
+    Это законная замена «понизить уровень»: очки возвращаются все, а расовое
+    умение и его ранг не трогаются — за него не платили.
+    """
+    loadout = character.loadout
+    refund = sum(
+        skill_rules.spent_on(content, character, code)
+        for code in loadout.ranks
+        if content.has_skill(code)
+        and content.skill(code).owner_kind is OwnerKind.CLASS
+        and code != loadout.racial
+    )
+    kept: dict[str, int] = {}
+    if loadout.racial and loadout.racial in loadout.ranks:
+        kept[loadout.racial] = loadout.ranks[loadout.racial]
+    return replace(
+        character,
+        loadout=replace(
+            loadout,
+            ranks=kept,
+            edges={key: value for key, value in loadout.edges.items() if key == loadout.racial},
+            actives=(None,) * len(loadout.actives),
+        ),
+        unspent_skill_points=character.unspent_skill_points + refund,
+    )
 
 
 def set_level(content: GameContent, character: Character, level: int) -> tuple[Character, LevelUp]:

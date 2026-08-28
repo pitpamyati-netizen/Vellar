@@ -64,6 +64,7 @@ ACTIONS: Mapping[KeeperAction, str] = {
     KeeperAction.ROLLBACK: "откатил сделку",
     KeeperAction.RENAME: "переименовал",
     KeeperAction.GRANT_ITEM: "выдал вещь",
+    KeeperAction.SKILL: "правил умения",
 }
 
 

@@ -9,10 +9,11 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from types import MappingProxyType
 
 import pytest
 
-from mmorpg.domain.entities import Character, GameContent
+from mmorpg.domain.entities import Character, GameContent, SkillLoadout
 from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.ports.repositories import Census
@@ -634,6 +635,41 @@ def walk_to(panel: Panel, screen: ScreenId) -> Panel:
         case ScreenId.KEEPER_GIVE_ITEM:
             walked = walk_to(panel, ScreenId.KEEPER_GIVE)
             return walked.press(walked.button_with("сырьё"))
+        case (
+            ScreenId.KEEPER_SKILLS
+            | ScreenId.KEEPER_SKILL
+            | ScreenId.KEEPER_SKILL_LEARN
+            | ScreenId.KEEPER_SKILL_EDGE
+            | ScreenId.KEEPER_SKILL_SLOT
+        ):
+            skilled = Character(
+                id=7,
+                user_id=900,
+                name="Мерла",
+                race_id="human",
+                class_id="warrior",
+                level=20,
+                loadout=SkillLoadout(
+                    actives=("warrior_rassechenie", None, None, None, None, None),
+                    racial="race_human_second_wind",
+                    ranks=MappingProxyType({"warrior_rassechenie": 3, "race_human_second_wind": 1}),
+                ),
+            )
+            panel.players = (skilled,)
+            panel.target = skilled
+            walked = panel.press(labels.KEEPER_PLAYERS.text)
+            walked = walked.press(walked.button_with("Мерла"))
+            walked = walked.press(labels.KEEPER_SKILLS.text)
+            if screen is ScreenId.KEEPER_SKILLS:
+                return walked
+            if screen is ScreenId.KEEPER_SKILL_LEARN:
+                return walked.press(labels.KEEPER_SKILL_LEARN.text)
+            walked = walked.press(walked.button_with("Рассечение"))
+            if screen is ScreenId.KEEPER_SKILL:
+                return walked
+            if screen is ScreenId.KEEPER_SKILL_EDGE:
+                return walked.press(labels.KEEPER_SKILL_EDGE_BTN.text)
+            return walked.press(labels.KEEPER_SKILL_SLOT_BTN.text)
         case _:
             return panel.press(labels.KEEPER_SERVICE.text)
 
@@ -809,6 +845,98 @@ def test_giving_an_item_is_written_down(with_players: Panel) -> None:
 
     assert card.notes and card.notes[-1].action == KeeperAction.GRANT_ITEM
     assert card.notes[-1].target == "Мерла"
+
+
+# --- умения игрока ---------------------------------------------------
+
+
+def _skilled(with_players: Panel) -> Panel:
+    with_players.players = (
+        replace(
+            with_players.players[0],
+            level=20,
+            loadout=SkillLoadout(
+                actives=("warrior_rassechenie", None, None, None, None, None),
+                racial="race_human_second_wind",
+                ranks=MappingProxyType({"warrior_rassechenie": 3, "race_human_second_wind": 1}),
+            ),
+        ),
+    )
+    with_players.target = with_players.players[0]
+    with_players.press(labels.KEEPER_PLAYERS.text)
+    with_players.press(with_players.button_with("Мерла"))
+    return with_players.press(labels.KEEPER_SKILLS.text)
+
+
+def test_a_skill_rank_moves_both_ways_without_points(with_players: Panel) -> None:
+    card = _skilled(with_players)
+    card.press(card.button_with("Рассечение"))
+    card.press(labels.KEEPER_RANK_UP.text)
+    assert card.target is not None and card.target.loadout.rank_of("warrior_rassechenie") == 4
+
+    card.press(labels.KEEPER_RANK_DOWN.text, labels.KEEPER_RANK_DOWN.text)
+    assert card.target.loadout.rank_of("warrior_rassechenie") == 2
+
+
+def test_forgetting_a_skill_returns_to_the_list(with_players: Panel) -> None:
+    card = _skilled(with_players)
+    card.press(card.button_with("Рассечение"), labels.KEEPER_SKILL_FORGET.text)
+
+    assert card.target is not None and "warrior_rassechenie" not in card.target.loadout.ranks
+    assert card.state.screen is ScreenId.KEEPER_SKILLS
+
+
+def test_a_skill_is_taught_without_points(with_players: Panel) -> None:
+    card = _skilled(with_players)
+    before = set(card.target.loadout.ranks) if card.target else set()
+    card.press(labels.KEEPER_SKILL_LEARN.text)
+    option = next(text for text in card.buttons() if "боевое" in text or "пассивное" in text)
+    card.press(option)
+
+    assert card.target is not None and set(card.target.loadout.ranks) - before
+    assert card.state.screen is ScreenId.KEEPER_SKILLS
+
+
+def test_respec_returns_points_and_keeps_the_racial(with_players: Panel) -> None:
+    card = _skilled(with_players)
+    card.press(labels.KEEPER_SKILL_RESPEC.text)
+
+    assert card.target is not None
+    assert card.target.unspent_skill_points > 0
+    assert "race_human_second_wind" in card.target.loadout.ranks
+    assert "warrior_rassechenie" not in card.target.loadout.ranks
+
+
+def test_an_edge_is_chosen_from_the_card(with_players: Panel) -> None:
+    card = _skilled(with_players)
+    card.press(card.button_with("Рассечение"), labels.KEEPER_SKILL_EDGE_BTN.text)
+    edge = next(
+        text for text in card.buttons() if text not in {labels.BACK.text, labels.MAIN_MENU.text}
+    )
+    card.press(edge)
+
+    assert card.target is not None
+    assert card.target.loadout.edge_of("warrior_rassechenie") is not None
+    assert card.state.screen is ScreenId.KEEPER_SKILL
+
+
+def test_a_skill_is_dropped_into_a_slot(with_players: Panel) -> None:
+    card = _skilled(with_players)
+    card.press(labels.KEEPER_SKILL_LEARN.text)
+    option = next(text for text in card.buttons() if "боевое" in text)
+    card.press(option)
+    name = option.split(". ", 1)[1].split(" — ")[0]
+    card.press(card.button_with(name))
+    card.press(labels.KEEPER_SKILL_SLOT_BTN.text, "Слот 3")
+
+    assert card.target is not None and card.target.loadout.actives[2] is not None
+
+
+def test_editing_a_skill_is_written_down(with_players: Panel) -> None:
+    card = _skilled(with_players)
+    card.press(card.button_with("Рассечение"), labels.KEEPER_RANK_UP.text)
+
+    assert card.notes and card.notes[-1].action == KeeperAction.SKILL
 
 
 # --- блокировка --------------------------------------------------------

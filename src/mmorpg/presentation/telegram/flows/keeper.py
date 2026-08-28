@@ -26,6 +26,7 @@ from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.rules import keeper as keeper_rules
 from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules import quests as quest_rules
+from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.overlay import FieldKind, FieldSpec
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.flows.state import (
@@ -68,6 +69,11 @@ PANEL: frozenset[ScreenId] = frozenset(
         ScreenId.KEEPER_GIVE,
         ScreenId.KEEPER_GIVE_GEAR,
         ScreenId.KEEPER_GIVE_ITEM,
+        ScreenId.KEEPER_SKILLS,
+        ScreenId.KEEPER_SKILL,
+        ScreenId.KEEPER_SKILL_LEARN,
+        ScreenId.KEEPER_SKILL_EDGE,
+        ScreenId.KEEPER_SKILL_SLOT,
     }
 )
 SCREENS: frozenset[ScreenId] = PANEL | {ScreenId.NPCS, ScreenId.NPC}
@@ -145,6 +151,27 @@ def _give_level(state: PlayState, view: KeeperView) -> int:
     if typed_level is not None and typed_level >= 1:
         return typed_level
     return view.target.level if view.target is not None else 1
+
+
+def _skill_ok(content: GameContent, state: PlayState, view: KeeperView) -> bool:
+    """Есть ли ещё и игрок, и то умение, которое сейчас правят."""
+    return (
+        view.target is not None
+        and content.has_skill(state.keeper_field)
+        and skill_rules.is_known(view.target, state.keeper_field)
+    )
+
+
+def _render_skill(content: GameContent, state: PlayState, view: KeeperView) -> Screen:
+    assert view.target is not None  # проверено `_skill_ok`
+    code = state.keeper_field
+    match state.screen:
+        case ScreenId.KEEPER_SKILL_EDGE:
+            return keeper_screens.skill_edge_screen(content, view.target, code, state.notice)
+        case ScreenId.KEEPER_SKILL_SLOT:
+            return keeper_screens.skill_slot_screen(content, view.target, code, state.notice)
+        case _:
+            return keeper_screens.keeper_skill_screen(content, view.target, code, state.notice)
 
 
 # --- рисование ---------------------------------------------------------
@@ -245,6 +272,18 @@ def _render_panel(
             return keeper_screens.give_item_screen(
                 content.item(state.keeper_entity), view.target, state.notice
             )
+        case ScreenId.KEEPER_SKILLS if view.target is not None:
+            return keeper_screens.player_skills_screen(
+                content, view.target, state.keeper_page, state.notice
+            )
+        case ScreenId.KEEPER_SKILL_LEARN if view.target is not None:
+            return keeper_screens.skill_learn_screen(
+                content, view.target, state.keeper_page, state.notice
+            )
+        case ScreenId.KEEPER_SKILL | ScreenId.KEEPER_SKILL_EDGE | ScreenId.KEEPER_SKILL_SLOT if (
+            _skill_ok(content, state, view)
+        ):
+            return _render_skill(content, state, view)
         case ScreenId.KEEPER:
             return keeper_screens.keeper_screen(content, character, stats, view, state.notice)
         case _:
@@ -384,6 +423,16 @@ def advance(
             return _step_give_gear(content, state, command, view)
         case ScreenId.KEEPER_GIVE_ITEM:
             return _step_give_item(state, command)
+        case ScreenId.KEEPER_SKILLS:
+            return _step_player_skills(content, state, command, view)
+        case ScreenId.KEEPER_SKILL_LEARN:
+            return _step_skill_learn(content, state, command, view)
+        case ScreenId.KEEPER_SKILL:
+            return _step_skill(content, state, command, view)
+        case ScreenId.KEEPER_SKILL_EDGE:
+            return _step_skill_edge(content, state, command, view)
+        case ScreenId.KEEPER_SKILL_SLOT:
+            return _step_skill_slot(content, state, command, view)
         case _:
             return state.with_notice("Здесь только чтение. Нажмите «Назад».")
 
@@ -896,6 +945,164 @@ def _granted(
     ).with_notice(said)
 
 
+def _skill_write(
+    state: PlayState, changed: Character, detail: str, said: str, *, back: bool
+) -> PlayState:
+    """Общий хвост правки умения: журнал, экран, весть."""
+    walked = go_back(state) if back else state
+    note = _note(KeeperAction.SKILL, changed.name, detail)
+    return walked.storing(PendingWrite(other=changed, note=note)).with_notice(said)
+
+
+def _step_player_skills(
+    content: GameContent, state: PlayState, command: Command, view: KeeperView
+) -> PlayState:
+    if view.target is None:
+        return go_back(state).with_notice("Того персонажа больше нет.")
+    codes = sorted(view.target.loadout.ranks)
+    moved = page_move(command, state.keeper_page, total_pages(len(codes)))
+    if moved is not None:
+        return replace(state, keeper_page=moved, notice="")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите умение или кнопку ниже.")
+    if labels.KEEPER_SKILL_LEARN.matches(command.argument):
+        return replace(state, keeper_page=PageState()).at(ScreenId.KEEPER_SKILL_LEARN)
+    if labels.KEEPER_SKILL_RESPEC.matches(command.argument):
+        changed = keeper_rules.respec_skills(content, view.target)
+        return _skill_write(
+            state,
+            changed,
+            "сброс дерева умений",
+            f"Дерево сброшено. Очков умений теперь: {changed.unspent_skill_points}.",
+            back=False,
+        )
+    code = keeper_screens.player_skill_from_button(content, view.target, command.argument)
+    if not code:
+        return state.with_notice("Не узнал умение. Нажмите строку из списка.")
+    return replace(state, keeper_field=code, keeper_page=PageState()).at(ScreenId.KEEPER_SKILL)
+
+
+def _step_skill_learn(
+    content: GameContent, state: PlayState, command: Command, view: KeeperView
+) -> PlayState:
+    if view.target is None:
+        return go_back(state).with_notice("Того персонажа больше нет.")
+    pool = keeper_screens.teach_pool(content, view.target)
+    moved = page_move(command, state.keeper_page, total_pages(len(pool)))
+    if moved is not None:
+        return replace(state, keeper_page=moved, notice="")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите умение из списка.")
+    code = keeper_screens.skill_learn_from_button(content, view.target, command.argument)
+    if not code:
+        return state.with_notice("Не узнал умение. Нажмите строку из списка.")
+    changed = keeper_rules.teach_skill(content, view.target, code)
+    if changed is None:
+        return state.with_notice("Так это умение не выдать.")
+    name = content.skill(code).name
+    return _skill_write(state, changed, f"изучено {name}", f"{name}: изучено, ранг 1.", back=True)
+
+
+def _step_skill(
+    content: GameContent, state: PlayState, command: Command, view: KeeperView
+) -> PlayState:
+    if not _skill_ok(content, state, view):
+        return go_back(state).with_notice("Того умения больше нет.")
+    assert view.target is not None
+    code = state.keeper_field
+    if command.intent is not Intent.SELECT:
+        return state.with_notice(PRESS_A_BUTTON)
+    rank = view.target.loadout.rank_of(code)
+    if labels.KEEPER_RANK_UP.matches(command.argument):
+        return _set_rank(content, state, view, code, rank + 1)
+    if labels.KEEPER_RANK_DOWN.matches(command.argument):
+        return _set_rank(content, state, view, code, rank - 1)
+    if labels.KEEPER_SKILL_FORGET.matches(command.argument):
+        return _set_rank(content, state, view, code, 0)
+    if labels.KEEPER_SKILL_EDGE_BTN.matches(command.argument):
+        return state.at(ScreenId.KEEPER_SKILL_EDGE)
+    if labels.KEEPER_SKILL_EDGE_CLEAR.matches(command.argument):
+        return _set_edge(content, state, view, code, "")
+    if labels.KEEPER_SKILL_SLOT_BTN.matches(command.argument):
+        return state.at(ScreenId.KEEPER_SKILL_SLOT)
+    if labels.KEEPER_SKILL_SLOT_CLEAR.matches(command.argument):
+        changed = keeper_rules.unslot_skill(content, view.target, code)
+        if changed is None:
+            return state.with_notice("Это умение и так не в слоте.")
+        return _skill_write(
+            state,
+            changed,
+            f"{content.skill(code).name}: убрано из слота",
+            "Убрано из слотов.",
+            back=False,
+        )
+    return state.with_notice(PRESS_A_BUTTON)
+
+
+def _set_rank(
+    content: GameContent, state: PlayState, view: KeeperView, code: str, rank: int
+) -> PlayState:
+    assert view.target is not None
+    changed = keeper_rules.set_skill_rank(content, view.target, code, rank)
+    if changed is None:
+        return state.with_notice("Так ранг не поставить.")
+    name = content.skill(code).name
+    if not skill_rules.is_known(changed, code):
+        return _skill_write(state, changed, f"забыто {name}", f"{name}: забыто.", back=True)
+    now = changed.loadout.rank_of(code)
+    return _skill_write(state, changed, f"{name} ранг {now}", f"{name}: ранг {now}.", back=False)
+
+
+def _set_edge(
+    content: GameContent, state: PlayState, view: KeeperView, code: str, edge_code: str
+) -> PlayState:
+    assert view.target is not None
+    changed = keeper_rules.set_skill_edge(content, view.target, code, edge_code)
+    if changed is None:
+        return state.with_notice("Такой грани у умения нет.")
+    picked = changed.loadout.edge_of(code)
+    named = "снята"
+    if picked:
+        named = next((one.name for one in content.skill(code).edges if one.code == picked), picked)
+    back = state.screen is ScreenId.KEEPER_SKILL_EDGE
+    return _skill_write(
+        state, changed, f"{content.skill(code).name}: грань {named}", f"Грань: {named}.", back=back
+    )
+
+
+def _step_skill_edge(
+    content: GameContent, state: PlayState, command: Command, view: KeeperView
+) -> PlayState:
+    if not _skill_ok(content, state, view):
+        return go_back(state).with_notice("Того умения больше нет.")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите грань из списка.")
+    edge_code = keeper_screens.skill_edge_from_button(content, state.keeper_field, command.argument)
+    if not edge_code:
+        return state.with_notice("Не узнал грань. Нажмите строку из списка.")
+    return _set_edge(content, state, view, state.keeper_field, edge_code)
+
+
+def _step_skill_slot(
+    content: GameContent, state: PlayState, command: Command, view: KeeperView
+) -> PlayState:
+    if not _skill_ok(content, state, view):
+        return go_back(state).with_notice("Того умения больше нет.")
+    assert view.target is not None
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите слот из списка.")
+    number = keeper_screens.skill_slot_from_button(content, command.argument)
+    if not number:
+        return state.with_notice("Не узнал слот. Нажмите строку из списка.")
+    changed = keeper_rules.put_skill_in_slot(content, view.target, number - 1, state.keeper_field)
+    if changed is None:
+        return state.with_notice("В этот слот умение не положить.")
+    name = content.skill(state.keeper_field).name
+    return _skill_write(
+        state, changed, f"{name}: в слот {number}", f"{name}: в слоте {number}.", back=True
+    )
+
+
 def _step_players(
     content: GameContent, state: PlayState, command: Command, view: KeeperView
 ) -> PlayState:
@@ -937,6 +1144,10 @@ def _step_player(
             keeper_typing="",
             keeper_page=PageState(),
         ).at(ScreenId.KEEPER_GIVE)
+    if labels.KEEPER_SKILLS.matches(command.argument):
+        return replace(
+            state, keeper_kind="skill", keeper_field="", keeper_typing="", keeper_page=PageState()
+        ).at(ScreenId.KEEPER_SKILLS)
     if labels.KEEPER_TRADES.matches(command.argument):
         return replace(state, keeper_typing="").at(ScreenId.KEEPER_TRADES)
     if labels.KEEPER_BAN.matches(command.argument):

@@ -95,6 +95,11 @@ class Play(StatesGroup):
     keeper_give = State()
     keeper_give_gear = State()
     keeper_give_item = State()
+    keeper_skills = State()
+    keeper_skill = State()
+    keeper_skill_learn = State()
+    keeper_skill_edge = State()
+    keeper_skill_slot = State()
 
 
 # Какой экран какому состоянию принадлежит. По этому разборщик говорит игроку, где он на
@@ -172,6 +177,11 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.KEEPER_GIVE: Play.keeper_give,
     ScreenId.KEEPER_GIVE_GEAR: Play.keeper_give_gear,
     ScreenId.KEEPER_GIVE_ITEM: Play.keeper_give_item,
+    ScreenId.KEEPER_SKILLS: Play.keeper_skills,
+    ScreenId.KEEPER_SKILL: Play.keeper_skill,
+    ScreenId.KEEPER_SKILL_LEARN: Play.keeper_skill_learn,
+    ScreenId.KEEPER_SKILL_EDGE: Play.keeper_skill_edge,
+    ScreenId.KEEPER_SKILL_SLOT: Play.keeper_skill_slot,
 }
 
 # Тот единственный шаг, куда ведёт «назад», для каждого экрана. Создание идёт назад по
@@ -251,6 +261,11 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.KEEPER_GIVE: ScreenId.KEEPER_PLAYER,
     ScreenId.KEEPER_GIVE_GEAR: ScreenId.KEEPER_GIVE,
     ScreenId.KEEPER_GIVE_ITEM: ScreenId.KEEPER_GIVE,
+    ScreenId.KEEPER_SKILLS: ScreenId.KEEPER_PLAYER,
+    ScreenId.KEEPER_SKILL: ScreenId.KEEPER_SKILLS,
+    ScreenId.KEEPER_SKILL_LEARN: ScreenId.KEEPER_SKILLS,
+    ScreenId.KEEPER_SKILL_EDGE: ScreenId.KEEPER_SKILL,
+    ScreenId.KEEPER_SKILL_SLOT: ScreenId.KEEPER_SKILL,
 }
 
 CREATION_ORDER: tuple[ScreenId, ...] = (

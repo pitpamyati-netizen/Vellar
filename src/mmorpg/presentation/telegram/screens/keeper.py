@@ -21,7 +21,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import GameContent, GearArchetype, Item, ItemKind, Rarity
+from mmorpg.domain.entities.content import (
+    GameContent,
+    GearArchetype,
+    Item,
+    ItemKind,
+    OwnerKind,
+    Rarity,
+    SkillKind,
+)
 from mmorpg.domain.entities.moderation import Ban, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import OfferKind, TradeRecord, TradeStatus
@@ -29,6 +37,7 @@ from mmorpg.domain.ports.repositories import Census
 from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.rules import moderation as moderation_rules
 from mmorpg.domain.rules import overlay as overlay_rules
+from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.keeper import GOLD_STEP, POINTS_STEP
 from mmorpg.domain.rules.overlay import FieldKind, FieldSpec
 from mmorpg.domain.rules.stats import DerivedStats
@@ -476,7 +485,8 @@ def player_screen(
         (labels.KEEPER_GOLD, labels.KEEPER_LEVEL),
         (labels.KEEPER_HEAL, labels.KEEPER_POINTS),
         (labels.KEEPER_TUNE, labels.KEEPER_GIVE_ITEM),
-        (labels.KEEPER_MOVE, labels.KEEPER_TRADES),
+        (labels.KEEPER_SKILLS, labels.KEEPER_MOVE),
+        (labels.KEEPER_TRADES,),
         (labels.KEEPER_UNBAN,) if _under_ban(view) else (labels.KEEPER_BAN,),
         (labels.KEEPER_DELETE,),
     ]
@@ -720,6 +730,166 @@ def give_item_screen(item: Item, player: Character, notice: str = "") -> Screen:
         "Наберите количество сообщением. Со знаком минус — убрать столько из сумки.",
     )
     return Screen(id=ScreenId.KEEPER_GIVE_ITEM, lines=lines)
+
+
+# --- умения игрока --------------------------------------------------
+
+_SKILL_KIND_WORD: dict[SkillKind, str] = {
+    SkillKind.ACTIVE: "боевое",
+    SkillKind.PASSIVE: "пассивное",
+}
+
+
+def skill_line(content: GameContent, player: Character, code: str) -> str:
+    """Одна строка об умении игрока: ранг, грань, слот."""
+    if not content.has_skill(code):
+        return f"{code} — умения такого в игре больше нет"
+    skill = content.skill(code)
+    rank = player.loadout.rank_of(code)
+    parts = [f"{skill.name} — ранг {rank} из {content.rules.max_rank}"]
+    edge = player.loadout.edge_of(code)
+    if edge:
+        named = next((one.name for one in skill.edges if one.code == edge), edge)
+        parts.append(f"грань {named}")
+    slot = next((index + 1 for index, held in enumerate(player.loadout.actives) if held == code), 0)
+    if slot:
+        parts.append(f"слот {slot}")
+    if code == player.loadout.racial:
+        parts.append("расовое")
+    return ", ".join(parts)
+
+
+def player_skills_screen(
+    content: GameContent, player: Character, state: PageState, notice: str = ""
+) -> Screen:
+    """Все умения игрока: нажать — карточка; плюс изучить и сбросить дерево."""
+    codes = sorted(player.loadout.ranks)
+    entries = [
+        ListEntry(key=code, text=numbered(index, skill_line(content, player, code)))
+        for index, code in enumerate(codes, start=1)
+    ]
+    return paginated_screen(
+        screen_id=ScreenId.KEEPER_SKILLS,
+        title="Умения",
+        entries=entries,
+        state=state,
+        lead_lines=(
+            notice or f"Умения: {player.name}. Нажмите умение, чтобы его править.",
+            f"Нераспределено очков умений: {player.unspent_skill_points}.",
+        ),
+        empty_text="Ни одного изученного умения.",
+        extra_rows=((labels.KEEPER_SKILL_LEARN,), (labels.KEEPER_SKILL_RESPEC,)),
+        show_filters=False,
+    )
+
+
+def player_skill_from_button(content: GameContent, player: Character, pressed: str) -> str:
+    for index, code in enumerate(sorted(player.loadout.ranks), start=1):
+        if pressed.strip() == numbered(index, skill_line(content, player, code)):
+            return code
+    return ""
+
+
+def teach_pool(content: GameContent, player: Character) -> tuple[tuple[str, str], ...]:
+    known = set(player.loadout.ranks)
+    return tuple(
+        (skill.code, f"{skill.name} — {_SKILL_KIND_WORD.get(skill.kind, 'умение')}")
+        for skill in skill_rules.teachable(content, player)
+        if skill.code not in known and skill.owner_kind is OwnerKind.CLASS
+    )
+
+
+def skill_learn_screen(
+    content: GameContent, player: Character, state: PageState, notice: str = ""
+) -> Screen:
+    pool = teach_pool(content, player)
+    entries = [
+        ListEntry(key=code, text=numbered(index, text))
+        for index, (code, text) in enumerate(pool, start=1)
+    ]
+    return paginated_screen(
+        screen_id=ScreenId.KEEPER_SKILL_LEARN,
+        title="Изучить умение",
+        entries=entries,
+        state=state,
+        lead_lines=(notice or f"Изучить умение: {player.name}. Даётся первым рангом, без очков.",),
+        empty_text="Все умения класса этому игроку уже открыты.",
+        show_filters=False,
+    )
+
+
+def skill_learn_from_button(content: GameContent, player: Character, pressed: str) -> str:
+    for index, (code, text) in enumerate(teach_pool(content, player), start=1):
+        if pressed.strip() == numbered(index, text):
+            return code
+    return ""
+
+
+def keeper_skill_screen(
+    content: GameContent, player: Character, code: str, notice: str = ""
+) -> Screen:
+    """Одно умение игрока: ранг, грань, слот, забыть."""
+    skill = content.skill(code)
+    rows: list[tuple[Label, ...]] = [(labels.KEEPER_RANK_UP, labels.KEEPER_RANK_DOWN)]
+    if skill.edges:
+        rows.append((labels.KEEPER_SKILL_EDGE_BTN, labels.KEEPER_SKILL_EDGE_CLEAR))
+    if skill.kind is SkillKind.ACTIVE and skill.owner_kind is OwnerKind.CLASS:
+        rows.append((labels.KEEPER_SKILL_SLOT_BTN, labels.KEEPER_SKILL_SLOT_CLEAR))
+    if code != player.loadout.racial:
+        rows.append((labels.KEEPER_SKILL_FORGET,))
+    branch = skill_rules.branch_of(skill)
+    where = (
+        f"Ветвь: {skill_rules.BRANCH_NAMES[branch]}."
+        if branch is not None
+        else "Вне классового дерева."
+    )
+    lines = (
+        notice or f"Умение: {skill.name}. Кому: {player.name}.",
+        skill_line(content, player, code) + ".",
+        where,
+    )
+    return Screen(id=ScreenId.KEEPER_SKILL, lines=lines, rows=tuple(rows))
+
+
+def skill_edge_screen(
+    content: GameContent, player: Character, code: str, notice: str = ""
+) -> Screen:
+    skill = content.skill(code)
+    lines = (
+        notice or f"Грань умения {skill.name}. Кому: {player.name}.",
+        *(f"{one.name}: {one.text}" for one in skill.edges),
+    )
+    rows = tuple((label(one.name),) for one in skill.edges)
+    return Screen(id=ScreenId.KEEPER_SKILL_EDGE, lines=lines, rows=rows)
+
+
+def skill_edge_from_button(content: GameContent, code: str, pressed: str) -> str:
+    for one in content.skill(code).edges:
+        if label(one.name).matches(pressed):
+            return one.code
+    return ""
+
+
+def skill_slot_screen(
+    content: GameContent, player: Character, code: str, notice: str = ""
+) -> Screen:
+    slots = content.rules.active_slots
+    lines = (
+        notice or f"В какой слот: {content.skill(code).name}. Кому: {player.name}.",
+        f"Слотов {slots}. Умение лежит разом в одном.",
+    )
+    rows = tuple(
+        tuple(label(f"Слот {number}") for number in range(start, min(start + 3, slots + 1)))
+        for start in range(1, slots + 1, 3)
+    )
+    return Screen(id=ScreenId.KEEPER_SKILL_SLOT, lines=lines, rows=rows)
+
+
+def skill_slot_from_button(content: GameContent, pressed: str) -> int:
+    for number in range(1, content.rules.active_slots + 1):
+        if label(f"Слот {number}").matches(pressed):
+            return number
+    return 0
 
 
 # --- блокировка --------------------------------------------------------

@@ -6,10 +6,13 @@
 
 from __future__ import annotations
 
+from types import MappingProxyType
+
 import pytest
 
-from mmorpg.domain.entities import Character, GameContent
+from mmorpg.domain.entities import Character, GameContent, SkillLoadout
 from mmorpg.domain.rules import keeper
+from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.progression import MAX_LEVEL, experience_to_reach
 from mmorpg.domain.rules.stats import derived_stats
 
@@ -139,6 +142,86 @@ def test_moving_a_character_changes_only_where_they_stand(hero: Character) -> No
     assert moved.city_id == "dusk_harbor"
     assert moved.gold == hero.gold
     assert moved.level == hero.level
+
+
+@pytest.fixture
+def warrior() -> Character:
+    return Character(
+        id=2,
+        user_id=42,
+        name="Дорн",
+        race_id="human",
+        class_id="warrior",
+        level=20,
+        unspent_skill_points=3,
+        loadout=SkillLoadout(
+            actives=("warrior_rassechenie", None, None, None, None, None),
+            racial="race_human_second_wind",
+            ranks=MappingProxyType({"warrior_rassechenie": 3, "race_human_second_wind": 1}),
+            edges=MappingProxyType({"warrior_rassechenie": "warrior_rassechenie_a"}),
+        ),
+    )
+
+
+def test_teaching_a_skill_costs_the_keeper_no_points(
+    content: GameContent, warrior: Character
+) -> None:
+    taught = keeper.teach_skill(content, warrior, "warrior_provokatsiya")
+
+    assert taught is not None
+    assert taught.loadout.rank_of("warrior_provokatsiya") == 1
+    assert taught.unspent_skill_points == warrior.unspent_skill_points
+    assert keeper.teach_skill(content, warrior, "warrior_rassechenie") is None, "уже изучено"
+    assert keeper.teach_skill(content, warrior, "race_human_second_wind") is None, "расовое"
+
+
+def test_a_rank_is_set_outright_without_moving_points(
+    content: GameContent, warrior: Character
+) -> None:
+    bumped = keeper.set_skill_rank(content, warrior, "warrior_rassechenie", 5)
+
+    assert bumped is not None and bumped.loadout.rank_of("warrior_rassechenie") == 5
+    assert bumped.unspent_skill_points == warrior.unspent_skill_points
+
+
+def test_a_rank_of_zero_forgets_the_skill_and_frees_its_slot(
+    content: GameContent, warrior: Character
+) -> None:
+    gone = keeper.set_skill_rank(content, warrior, "warrior_rassechenie", 0)
+
+    assert gone is not None
+    assert not skill_rules.is_known(gone, "warrior_rassechenie")
+    assert "warrior_rassechenie" not in gone.loadout.actives
+    assert keeper.set_skill_rank(content, warrior, "race_human_second_wind", 0) is None
+
+
+def test_lowering_the_rank_past_the_edge_rank_clears_the_edge(
+    content: GameContent, warrior: Character
+) -> None:
+    lowered = keeper.set_skill_rank(content, warrior, "warrior_rassechenie", 1)
+
+    assert lowered is not None
+    assert lowered.loadout.edge_of("warrior_rassechenie") is None
+
+
+def test_an_edge_that_is_not_on_the_skill_is_refused(
+    content: GameContent, warrior: Character
+) -> None:
+    assert keeper.set_skill_edge(content, warrior, "warrior_rassechenie", "нет-такой") is None
+    cleared = keeper.set_skill_edge(content, warrior, "warrior_rassechenie", "")
+    assert cleared is not None and cleared.loadout.edge_of("warrior_rassechenie") is None
+
+
+def test_respec_returns_every_class_point_and_keeps_the_racial(
+    content: GameContent, warrior: Character
+) -> None:
+    spent = skill_rules.spent_on(content, warrior, "warrior_rassechenie")
+    back = keeper.respec_skills(content, warrior)
+
+    assert back.unspent_skill_points == warrior.unspent_skill_points + spent
+    assert not skill_rules.is_known(back, "warrior_rassechenie")
+    assert skill_rules.is_known(back, "race_human_second_wind")
+    assert all(slot is None for slot in back.loadout.actives)
 
 
 def test_a_keeper_flag_is_not_a_game_rule(hero: Character) -> None:
