@@ -169,6 +169,12 @@ KEEPER_SKILL_FORGET = label("Забыть умение", "🧠")
 # Характеристики игрока: вложенное в каждую, числом.
 KEEPER_STATS_EDIT_BTN = label("Характеристики", "📊")
 
+# Задания игрока: журнал, отметка и счётчик.
+KEEPER_QUESTS_BTN = label("Задания", "📜")
+KEEPER_QUEST_DONE = label("Отметить закрытым", "✅")
+KEEPER_QUEST_REOPEN = label("Убрать из журнала", "↩️")
+KEEPER_QUEST_COUNT = label("Выставить счётчик", "🔢")
+
 # Игроки.
 KEEPER_FIND = label("Найти по имени", "🔤")
 KEEPER_MOVE = label("Перевести в город", "🧭")

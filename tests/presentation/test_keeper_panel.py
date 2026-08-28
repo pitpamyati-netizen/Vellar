@@ -673,6 +673,12 @@ def walk_to(panel: Panel, screen: ScreenId) -> Panel:
         case ScreenId.KEEPER_STATS_EDIT:
             walked = walk_to(panel, ScreenId.KEEPER_PLAYER)
             return walked.press(labels.KEEPER_STATS_EDIT_BTN.text)
+        case ScreenId.KEEPER_QUESTS:
+            walked = walk_to(panel, ScreenId.KEEPER_PLAYER)
+            return walked.press(labels.KEEPER_QUESTS_BTN.text)
+        case ScreenId.KEEPER_QUEST:
+            walked = walk_to(panel, ScreenId.KEEPER_QUESTS)
+            return walked.press(walked.button_with("Столбы на Тракте"))
         case _:
             return panel.press(labels.KEEPER_SERVICE.text)
 
@@ -971,6 +977,36 @@ def test_a_stat_edit_is_written_down(with_players: Panel) -> None:
     card.press(card.button_with("Удача"), "2")
 
     assert card.notes and card.notes[-1].action == KeeperAction.POINTS
+
+
+# --- задания игрока ------------------------------------------------
+
+
+def _quests(with_players: Panel) -> Panel:
+    with_players.target = with_players.players[0]
+    with_players.press(labels.KEEPER_PLAYERS.text)
+    with_players.press(with_players.button_with("Мерла"))
+    return with_players.press(labels.KEEPER_QUESTS_BTN.text)
+
+
+def test_a_quest_is_forced_closed_then_removed_from_the_journal(with_players: Panel) -> None:
+    card = _quests(with_players)
+    card.press(card.button_with("Столбы на Тракте"))
+    card.press(labels.KEEPER_QUEST_DONE.text)
+    assert card.target is not None and card.target.quests.is_done("farhold_tallies")
+
+    card.press(labels.KEEPER_QUEST_REOPEN.text)
+    assert not card.target.quests.is_done("farhold_tallies")
+    assert not card.target.quests.is_taken("farhold_tallies")
+
+
+def test_a_quest_counter_is_set_by_a_typed_number(with_players: Panel) -> None:
+    card = _quests(with_players)
+    card.press(card.button_with("Столбы на Тракте"))
+    card.press(labels.KEEPER_QUEST_COUNT.text, "3")
+
+    assert card.target is not None and card.target.quests.progress("farhold_tallies") == 3
+    assert card.notes and card.notes[-1].action == KeeperAction.QUEST
 
 
 # --- блокировка --------------------------------------------------------

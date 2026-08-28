@@ -76,6 +76,8 @@ PANEL: frozenset[ScreenId] = frozenset(
         ScreenId.KEEPER_SKILL_EDGE,
         ScreenId.KEEPER_SKILL_SLOT,
         ScreenId.KEEPER_STATS_EDIT,
+        ScreenId.KEEPER_QUESTS,
+        ScreenId.KEEPER_QUEST,
     }
 )
 SCREENS: frozenset[ScreenId] = PANEL | {ScreenId.NPCS, ScreenId.NPC}
@@ -290,6 +292,20 @@ def _render_panel(
             return keeper_screens.stats_edit_screen(
                 view.target, chosen=state.keeper_field, notice=state.notice
             )
+        case ScreenId.KEEPER_QUESTS if view.target is not None:
+            return keeper_screens.player_quests_screen(
+                content, view.target, state.keeper_page, state.notice
+            )
+        case ScreenId.KEEPER_QUEST if view.target is not None and content.has_quest(
+            state.keeper_field
+        ):
+            return keeper_screens.keeper_quest_screen(
+                content,
+                view.target,
+                state.keeper_field,
+                counting=state.keeper_typing == TYPING_VALUE,
+                notice=state.notice,
+            )
         case ScreenId.KEEPER:
             return keeper_screens.keeper_screen(content, character, stats, view, state.notice)
         case _:
@@ -327,6 +343,7 @@ def awaits_text(state: PlayState, command: Command) -> bool:
         or (state.screen is ScreenId.KEEPER_GIVE_GEAR and state.keeper_typing == TYPING_VALUE)
         or (state.screen is ScreenId.KEEPER_GIVE_ITEM and state.keeper_typing == TYPING_VALUE)
         or (state.screen is ScreenId.KEEPER_STATS_EDIT and state.keeper_typing == TYPING_VALUE)
+        or (state.screen is ScreenId.KEEPER_QUEST and state.keeper_typing == TYPING_VALUE)
         or (state.screen is ScreenId.KEEPER_PLAYERS and state.keeper_typing == TYPING_NAME)
         or (state.screen is ScreenId.KEEPER_BAN and state.keeper_typing == TYPING_REASON)
     )
@@ -353,6 +370,8 @@ def typed(
         return _typed_give_item(content, state, view, text)
     if state.screen is ScreenId.KEEPER_STATS_EDIT:
         return _typed_stat(content, state, view, text)
+    if state.screen is ScreenId.KEEPER_QUEST:
+        return _typed_quest_count(content, state, view, text)
     if state.screen is ScreenId.KEEPER_BAN:
         return replace(state, keeper_typing="", keeper_reason=text.strip()).with_notice(
             f"Причина записана: {text.strip()}. Теперь нажмите срок."
@@ -444,6 +463,10 @@ def advance(
             return _step_skill_slot(content, state, command, view)
         case ScreenId.KEEPER_STATS_EDIT:
             return _step_stats_edit(state, command, view)
+        case ScreenId.KEEPER_QUESTS:
+            return _step_player_quests(content, state, command, view)
+        case ScreenId.KEEPER_QUEST:
+            return _step_keeper_quest(content, state, command, view)
         case _:
             return state.with_notice("Здесь только чтение. Нажмите «Назад».")
 
@@ -1152,6 +1175,67 @@ def _typed_stat(content: GameContent, state: PlayState, view: KeeperView, text: 
     )
 
 
+def _quest_write(state: PlayState, changed: Character, detail: str, said: str) -> PlayState:
+    note = _note(KeeperAction.QUEST, changed.name, detail)
+    return state.storing(PendingWrite(other=changed, note=note)).with_notice(said)
+
+
+def _step_player_quests(
+    content: GameContent, state: PlayState, command: Command, view: KeeperView
+) -> PlayState:
+    if view.target is None:
+        return go_back(state).with_notice("Того персонажа больше нет.")
+    moved = page_move(command, state.keeper_page, total_pages(len(content.quests)))
+    if moved is not None:
+        return replace(state, keeper_page=moved, notice="")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите задание из списка.")
+    quest_id = keeper_screens.player_quest_from_button(content, command.argument, view.target)
+    if not quest_id:
+        return state.with_notice("Не узнал задание. Нажмите строку из списка.")
+    return replace(state, keeper_field=quest_id, keeper_typing="").at(ScreenId.KEEPER_QUEST)
+
+
+def _step_keeper_quest(
+    content: GameContent, state: PlayState, command: Command, view: KeeperView
+) -> PlayState:
+    if view.target is None or not content.has_quest(state.keeper_field):
+        return go_back(state).with_notice("Того задания больше нет.")
+    quest_id = state.keeper_field
+    name = content.quest(quest_id).name
+    if command.intent is not Intent.SELECT:
+        return state.with_notice(PRESS_A_BUTTON)
+    if labels.KEEPER_QUEST_DONE.matches(command.argument):
+        changed = keeper_rules.mark_quest_done(view.target, quest_id)
+        return _quest_write(state, changed, f"{name}: закрыто", f"{name}: закрыто.")
+    if labels.KEEPER_QUEST_REOPEN.matches(command.argument):
+        changed = keeper_rules.clear_quest(view.target, quest_id)
+        return _quest_write(state, changed, f"{name}: из журнала", f"{name}: убрано из журнала.")
+    if labels.KEEPER_QUEST_COUNT.matches(command.argument):
+        return replace(state, keeper_typing=TYPING_VALUE).with_notice(
+            "Наберите новое число счётчика."
+        )
+    return state.with_notice(PRESS_A_BUTTON)
+
+
+def _typed_quest_count(
+    content: GameContent, state: PlayState, view: KeeperView, text: str
+) -> PlayState:
+    if view.target is None or not content.has_quest(state.keeper_field):
+        return go_back(state).with_notice("Того задания больше нет.")
+    value = _to_int(text)
+    if value is None or value < 0:
+        return state.with_notice("Нужно целое число не меньше нуля.")
+    name = content.quest(state.keeper_field).name
+    changed = keeper_rules.set_quest_progress(view.target, state.keeper_field, value)
+    return _quest_write(
+        replace(state, keeper_typing=""),
+        changed,
+        f"{name}: счётчик {value}",
+        f"{name}: счётчик {value}.",
+    )
+
+
 def _step_players(
     content: GameContent, state: PlayState, command: Command, view: KeeperView
 ) -> PlayState:
@@ -1199,6 +1283,10 @@ def _step_player(
         ).at(ScreenId.KEEPER_SKILLS)
     if labels.KEEPER_STATS_EDIT_BTN.matches(command.argument):
         return replace(state, keeper_field="", keeper_typing="").at(ScreenId.KEEPER_STATS_EDIT)
+    if labels.KEEPER_QUESTS_BTN.matches(command.argument):
+        return replace(
+            state, keeper_kind="quest", keeper_field="", keeper_typing="", keeper_page=PageState()
+        ).at(ScreenId.KEEPER_QUESTS)
     if labels.KEEPER_TRADES.matches(command.argument):
         return replace(state, keeper_typing="").at(ScreenId.KEEPER_TRADES)
     if labels.KEEPER_BAN.matches(command.argument):

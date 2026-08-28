@@ -65,6 +65,7 @@ ACTIONS: Mapping[KeeperAction, str] = {
     KeeperAction.RENAME: "переименовал",
     KeeperAction.GRANT_ITEM: "выдал вещь",
     KeeperAction.SKILL: "правил умения",
+    KeeperAction.QUEST: "правил задание",
 }
 
 

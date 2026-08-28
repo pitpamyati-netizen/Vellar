@@ -159,6 +159,23 @@ def test_a_stat_is_set_by_moving_the_difference_through_unspent_points(hero: Cha
     assert back is not None and back.unspent_stat_points == 9
 
 
+def test_quest_state_is_forced_for_a_stuck_quest(hero: Character) -> None:
+    from mmorpg.domain.entities.quest import QuestLog
+
+    with_log = replace(hero, quests=QuestLog(taken=MappingProxyType({"farhold_tallies": 2})))
+
+    done = keeper.mark_quest_done(with_log, "farhold_tallies")
+    assert done.quests.is_done("farhold_tallies")
+    assert not done.quests.is_taken("farhold_tallies")
+
+    cleared = keeper.clear_quest(done, "farhold_tallies")
+    assert not cleared.quests.is_done("farhold_tallies")
+
+    bumped = keeper.set_quest_progress(done, "farhold_tallies", 5)
+    assert bumped.quests.progress("farhold_tallies") == 5
+    assert not bumped.quests.is_done("farhold_tallies")
+
+
 @pytest.fixture
 def warrior() -> Character:
     return Character(

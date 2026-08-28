@@ -18,9 +18,11 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from types import MappingProxyType
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, OwnerKind
+from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.progression import (
@@ -114,6 +116,40 @@ def move_to(character: Character, city_id: str) -> Character:
     экран остался в снесённом городе, стоит там, пока его оттуда не выведут.
     """
     return replace(character, city_id=city_id)
+
+
+def mark_quest_done(character: Character, quest_id: str) -> Character:
+    """Затолкать задание в закрытые — когда оно застряло и сдать его нечем."""
+    log = character.quests
+    taken = {key: value for key, value in log.taken.items() if key != quest_id}
+    done = log.done if quest_id in log.done else (*log.done, quest_id)
+    return replace(character, quests=QuestLog(taken=MappingProxyType(taken), done=done))
+
+
+def clear_quest(character: Character, quest_id: str) -> Character:
+    """Убрать задание из журнала совсем: ни взято, ни закрыто — можно брать заново."""
+    log = character.quests
+    return replace(
+        character,
+        quests=QuestLog(
+            taken=MappingProxyType(
+                {key: value for key, value in log.taken.items() if key != quest_id}
+            ),
+            done=tuple(one for one in log.done if one != quest_id),
+        ),
+    )
+
+
+def set_quest_progress(character: Character, quest_id: str, amount: int) -> Character:
+    """Выставить счётчик задания. Не взято — берётся с этим счётом; закрыто — снова взято."""
+    log = character.quests
+    return replace(
+        character,
+        quests=QuestLog(
+            taken=MappingProxyType({**log.taken, quest_id: max(0, amount)}),
+            done=tuple(one for one in log.done if one != quest_id),
+        ),
+    )
 
 
 def teach_skill(content: GameContent, character: Character, code: str) -> Character | None:

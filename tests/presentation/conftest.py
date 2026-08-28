@@ -615,6 +615,11 @@ def all_screens(
         keeper_screens.skill_slot_screen(content, fighter, "warrior_rassechenie"),
         keeper_screens.stats_edit_screen(replace(fighter, unspent_stat_points=6)),
         keeper_screens.stats_edit_screen(fighter, chosen="STR", notice="Сила: 4."),
+        keeper_screens.player_quests_screen(content, fighter, PageState()),
+        keeper_screens.keeper_quest_screen(content, fighter, "farhold_tallies"),
+        keeper_screens.keeper_quest_screen(
+            content, hero, "farhold_tallies", counting=True, notice="Наберите число."
+        ),
         keeper_screens.stats_screen(keeper_view.census),
         keeper_screens.stats_screen(Census()),
         keeper_screens.service_screen(keeper_view),

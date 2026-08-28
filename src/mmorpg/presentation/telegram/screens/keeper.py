@@ -32,6 +32,7 @@ from mmorpg.domain.entities.content import (
 )
 from mmorpg.domain.entities.moderation import Ban, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
+from mmorpg.domain.entities.quest import Quest
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.entities.trade import OfferKind, TradeRecord, TradeStatus
 from mmorpg.domain.ports.repositories import Census
@@ -488,7 +489,8 @@ def player_screen(
         (labels.KEEPER_HEAL, labels.KEEPER_POINTS),
         (labels.KEEPER_TUNE, labels.KEEPER_GIVE_ITEM),
         (labels.KEEPER_SKILLS, labels.KEEPER_STATS_EDIT_BTN),
-        (labels.KEEPER_MOVE, labels.KEEPER_TRADES),
+        (labels.KEEPER_QUESTS_BTN, labels.KEEPER_MOVE),
+        (labels.KEEPER_TRADES,),
         (labels.KEEPER_UNBAN,) if _under_ban(view) else (labels.KEEPER_BAN,),
         (labels.KEEPER_DELETE,),
     ]
@@ -927,6 +929,75 @@ def stat_from_button(pressed: str) -> str:
         if label(stat_name(code)).matches(pressed):
             return code.value
     return ""
+
+
+# --- задания игрока -------------------------------------------------
+
+
+def _quest_state_word(player: Character, quest: Quest) -> str:
+    log = player.quests
+    if log.is_done(quest.id):
+        return "закрыто"
+    if log.is_taken(quest.id):
+        return f"взято {log.progress(quest.id)} из {quest.target_count}"
+    return "не в журнале"
+
+
+def _quest_line(content: GameContent, player: Character, quest: Quest) -> str:
+    city = content.city(quest.city_id).name if content.has_city(quest.city_id) else quest.city_id
+    return f"{quest.name} — {city}, {_quest_state_word(player, quest)}"
+
+
+def player_quests_screen(
+    content: GameContent, player: Character, state: PageState, notice: str = ""
+) -> Screen:
+    entries = [
+        ListEntry(key=quest.id, text=numbered(index, _quest_line(content, player, quest)))
+        for index, quest in enumerate(content.quests, start=1)
+    ]
+    return paginated_screen(
+        screen_id=ScreenId.KEEPER_QUESTS,
+        title="Задания",
+        entries=entries,
+        state=state,
+        lead_lines=(
+            notice or f"Задания: {player.name}. Нажмите задание, чтобы поправить его в журнале.",
+            f"Закрыто у игрока: {len(player.quests.done)}. Взято: {len(player.quests.taken)}.",
+        ),
+        empty_text="Заданий в игре нет.",
+        show_filters=False,
+    )
+
+
+def player_quest_from_button(content: GameContent, pressed: str, player: Character) -> str:
+    for index, quest in enumerate(content.quests, start=1):
+        if pressed.strip() == numbered(index, _quest_line(content, player, quest)):
+            return quest.id
+    return ""
+
+
+def keeper_quest_screen(
+    content: GameContent,
+    player: Character,
+    quest_id: str,
+    *,
+    counting: bool = False,
+    notice: str = "",
+) -> Screen:
+    quest = content.quest(quest_id)
+    log = player.quests
+    rows: list[tuple[Label, ...]] = []
+    if not log.is_done(quest_id):
+        rows.append((labels.KEEPER_QUEST_DONE,))
+    if log.is_done(quest_id) or log.is_taken(quest_id):
+        rows.append((labels.KEEPER_QUEST_REOPEN,))
+    rows.append((labels.KEEPER_QUEST_COUNT,))
+    lines = (
+        notice or f"Задание: {quest.name}. Кому: {player.name}.",
+        f"Считать: {quest.target_count} по счёту. У игрока: {_quest_state_word(player, quest)}.",
+        "Наберите новое число счётчика." if counting else "Нажмите, что сделать с заданием.",
+    )
+    return Screen(id=ScreenId.KEEPER_QUEST, lines=lines, rows=tuple(rows))
 
 
 # --- блокировка --------------------------------------------------------

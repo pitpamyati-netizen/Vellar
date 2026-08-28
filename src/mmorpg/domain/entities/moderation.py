@@ -39,6 +39,7 @@ class KeeperAction(StrEnum):
     RENAME = "rename"
     GRANT_ITEM = "grant_item"
     SKILL = "skill"
+    QUEST = "quest"
 
 
 @dataclass(frozen=True, slots=True)
