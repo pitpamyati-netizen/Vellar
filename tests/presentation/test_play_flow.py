@@ -314,7 +314,7 @@ def test_leaving_a_location_clears_the_session(
 def test_the_map_does_not_move_under_your_feet(
     content: GameContent, hero: Character, in_location: PlayState
 ) -> None:
-    """Карта не должна меняться под игроком, который в ней стоит."""
+    """Карту двигает выработка, а не часы: постоял, осмотрелся - всё на месте (ADR 0035)."""
     before = render(content, hero, in_location, world_seed=WORLD_SEED).text()
     later = advance(
         content,

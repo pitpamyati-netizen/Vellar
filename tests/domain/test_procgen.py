@@ -15,7 +15,6 @@ from mmorpg.domain.procgen import (
     DEFAULT_SHOP_ROTATION_SECONDS,
     MAX_NODES,
     MIN_NODES,
-    approach_length,
     combat_nodes,
     epoch_seed,
     generate_enemy,
@@ -86,9 +85,26 @@ def test_ten_thousand_runs_are_byte_identical() -> None:
     assert all(location_seed(WORLD_SEED, "farhold", 1) == reference for _ in range(10_000))
 
 
-def test_the_map_is_permanent() -> None:
-    """Локация - это место, а место не переворачивается: карта всегда одна и та же."""
+def test_the_same_seed_and_epoch_are_byte_identical() -> None:
+    """Определённость: тот же сид и то же поколение - тот же граф."""
     assert build() == build()
+    assert build(epoch=7) == build(epoch=7)
+
+
+def test_a_new_epoch_relays_the_whole_layout() -> None:
+    """Карта локации больше не стоит на месте: поколение перекладывает раскладку."""
+    for slot in range(1, 6):
+        base = build(slot=slot, epoch=0)
+        links_moved = any(
+            [n.links for n in build(slot=slot, epoch=e).nodes] != [n.links for n in base.nodes]
+            for e in range(1, 6)
+        )
+        names_moved = any(
+            [n.name for n in build(slot=slot, epoch=e).nodes] != [n.name for n in base.nodes]
+            for e in range(1, 6)
+        )
+        assert links_moved, f"slot {slot}: дерево троп ни разу не переложилось"
+        assert names_moved, f"slot {slot}: имена узлов ни разу не сменились"
 
 
 def test_different_slots_and_cities_differ() -> None:
@@ -113,30 +129,27 @@ def test_the_same_epoch_rebuilds_identically() -> None:
     assert build(epoch=3) == build(epoch=3)
 
 
-def test_the_skeleton_survives_every_epoch() -> None:
-    """Число узлов, их места, имена, уровни и главные тропы не трогаются поколением."""
+def test_what_survives_every_epoch() -> None:
+    """Постоянно то, чего игрок не слышит как карту: размер, набор дел, уровни.
+
+    Раскладка (кто где стоит, тропы, имена) перекладывается поколением - это
+    проверяет ``test_a_new_epoch_relays_the_whole_layout``. А число узлов, набор
+    категорий среди них, набор видов находок и кривая уровней по глубине - функция
+    места, и поколение их не трогает: иначе ``search``-задание на вид узла встало
+    бы намертво.
+    """
+    finding = _FINDING_KINDS | {NodeKind.SHRINE}
     base = build(epoch=0)
+    want_categories = sorted(_family(n.kind) for n in base.nodes)
+    want_finding = sorted(n.kind for n in base.nodes if n.kind in finding)
     for epoch in range(1, 12):
         later = build(epoch=epoch)
-        assert [n.name for n in later.nodes] == [n.name for n in base.nodes]
-        assert [n.level for n in later.nodes] == [n.level for n in base.nodes]
         assert len(later.nodes) == len(base.nodes)
+        assert [n.level for n in later.nodes] == [n.level for n in base.nodes]
+        assert sorted(_family(n.kind) for n in later.nodes) == want_categories
+        assert sorted(n.kind for n in later.nodes if n.kind in finding) == want_finding
         assert later.is_connected
-        # Категория узла постоянна: боевой остаётся боевым, находка - находкой.
-        assert [_family(n.kind) for n in later.nodes] == [_family(n.kind) for n in base.nodes]
-        assert later.exit_node.index == base.exit_node.index
-
-
-def test_an_epoch_relays_kinds_or_paths() -> None:
-    """Хоть что-то в облике округи да меняется на дистанции поколений."""
-    for slot in range(1, 6):
-        base = build(slot=slot)
-        moved = any(
-            [n.kind for n in build(slot=slot, epoch=e).nodes] != [n.kind for n in base.nodes]
-            or [n.links for n in build(slot=slot, epoch=e).nodes] != [n.links for n in base.nodes]
-            for e in range(1, 20)
-        )
-        assert moved, f"slot {slot}: округа не переложилась ни в одном поколении"
+        assert later.exit_node.index == base.exit_node.index == len(later.nodes) - 1
 
 
 def test_the_boss_stays_pinned_every_epoch() -> None:
@@ -147,52 +160,28 @@ def test_the_boss_stays_pinned_every_epoch() -> None:
         assert bosses[0].index == len(location.nodes) - 2, "самый глубокий внутренний узел"
 
 
-def _boss_and_guards(location) -> tuple[int, list[int]]:
-    """Индекс босса и индексы стражей подступа (закреплённый хвост локации)."""
-    count = len(location.nodes)
-    boss = count - 2
-    guards = list(range(count - 2 - approach_length(count), boss))
-    return boss, guards
+def test_the_exit_is_reachable_without_the_boss() -> None:
+    """Босс держит конец, но не дорогу к выходу: драться с ним - решение (ADR 0035)."""
 
+    def reachable(location, *, without: int | None) -> set[int]:
+        seen = {0}
+        frontier = [0]
+        while frontier:
+            current = frontier.pop()
+            for link in location.node(current).links:
+                if link not in seen and link != without:
+                    seen.add(link)
+                    frontier.append(link)
+        return seen
 
-def test_the_boss_is_gated_by_a_chain_of_elites() -> None:
-    """К хозину логова ведёт вереница эпических боёв, и она закреплена (ADR 0033)."""
-    for slot in range(1, 6):
-        for epoch in range(6):
-            location = build(slot=slot, epoch=epoch)
-            boss, guards = _boss_and_guards(location)
-            assert guards, "у подступа хотя бы один страж"
-            assert 1 <= len(guards) <= 2
-            for index in guards:
-                assert location.node(index).kind is NodeKind.ELITE_BATTLE, index
-            # Босс висит только за последним стражем; стражи - линейная цепочка.
-            assert location.node(boss).links == (guards[-1],)
-            for position, index in enumerate(guards):
-                lower = guards[position - 1] if position else None
-                upper = guards[position + 1] if position + 1 < len(guards) else boss
-                for link in location.node(index).links:
-                    assert link in (upper, lower) or link < guards[0], (
-                        f"страж {index} связан в обход подступа с {link}"
-                    )
-
-
-def test_no_shortcut_bypasses_the_approach() -> None:
-    """Выбей стражей и босса из графа - и хозин логова отрезан от входа."""
     for slot in range(1, 6):
         for epoch in range(1, 12):
             location = build(slot=slot, epoch=epoch)
-            boss, guards = _boss_and_guards(location)
-            blocked = {boss, *guards}
-            seen = {0}
-            frontier = [0]
-            while frontier:
-                current = frontier.pop()
-                for link in location.node(current).links:
-                    if link not in seen and link not in blocked:
-                        seen.add(link)
-                        frontier.append(link)
-            assert boss not in seen, "к боссу нет пути помимо стражей"
-            assert location.exit_node.index in seen, "а к выходу - есть, и мимо логова"
+            boss = len(location.nodes) - 2
+            assert boss in reachable(location, without=None), "в полный граф босс входит"
+            without_boss = reachable(location, without=boss)
+            assert boss not in without_boss
+            assert location.exit_node.index in without_boss, "к выходу путь есть мимо логова"
 
 
 def test_the_finding_composition_is_permanent() -> None:
@@ -206,7 +195,7 @@ def test_the_finding_composition_is_permanent() -> None:
 
 
 def test_the_combat_mix_relays_with_the_epoch() -> None:
-    """Боевой состав локации перекладывается поколением (ADR 0034), но стая есть всегда."""
+    """Боевой состав локации перекладывается поколением (ADR 0035), но стая есть всегда."""
     for slot in range(1, 6):
         base = build(slot=slot)
         combat_total = sum(1 for n in base.nodes if n.kind in _COMBAT_KINDS)
@@ -224,8 +213,9 @@ def test_the_combat_mix_relays_with_the_epoch() -> None:
 def test_a_search_quest_target_is_stocked_in_its_location(content: GameContent) -> None:
     """Задание «найдите четыре схрона» обязано быть выполнимым в любом поколении.
 
-    Состав находок постоянен (ADR 0032), но проверить это по живому содержимому
-    надёжнее, чем верить, что скелет случайно выдал достаточно узлов нужного вида.
+    Набор видов находок постоянен (ADR 0035), но проверить это по живому
+    содержимому надёжнее, чем верить, что раздача случайно выдала достаточно узлов
+    нужного вида в каждом поколении.
     """
     from mmorpg.domain.entities.quest import ObjectiveKind
 

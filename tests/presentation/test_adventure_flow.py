@@ -709,10 +709,10 @@ async def test_what_one_player_took_is_gone_for_everybody(
     assert shared.node(node).taken == 1, "the second player got a fresh copy of the place"
 
 
-async def test_the_map_is_the_same_map_after_the_place_is_emptied(
+async def test_the_map_relays_when_the_district_is_worked_out(
     player: Player, content: GameContent, deltas: Any
 ) -> None:
-    """Локация постоянна: вычистить её значит изменить то, что в ней, а не то, где она."""
+    """Карта не стоит на месте: выработанная округа заселяется заново и иначе (ADR 0035)."""
     await player.press("Мир")
     await player.press("Дубно")
     await player.press("Локации")
@@ -722,25 +722,31 @@ async def test_the_map_is_the_same_map_after_the_place_is_emptied(
     location = build_location(content, SETTINGS.world_seed, flow.session)
     seed = location_seed(SETTINGS.world_seed, "farhold", 1)
     now = int(time.time())
+
+    # Проработать округу: вычистить каждый узел и дать волнам встать заново.
+    inside = [
+        node.index for node in location.nodes if node.kind not in {NodeKind.ENTRANCE, NodeKind.EXIT}
+    ]
     for node in location.nodes:
         size = node_rules.wave_size(seed, node.index, node.kind, 0)
         for _ in range(size):
             await deltas.take("farhold", 1, node.index, wave=0, size=size, now=now, ttl=600)
 
-    await player.press("Назад")
-    await player.press("1. Луга у Заставы")
+    later = now + node_rules.RESPAWN_SECONDS
+    worked = await deltas.state("farhold", 1, now=later)
+    assert all(worked.node(index).wave == 1 for index in inside)
+    epoch = node_rules.location_epoch(worked)
+    assert epoch >= 1, "плотная вылазка сменила поколение"
 
-    again = build_location(content, SETTINGS.world_seed, (await player.flow()).session)
-    assert again == location, "the map does not roll over, ever"
-    inside = [
-        node.index for node in location.nodes if node.kind not in {NodeKind.ENTRANCE, NodeKind.EXIT}
-    ]
-    emptied = await deltas.state("farhold", 1, now=now)
-    assert all(emptied.node(index).empty for index in inside)
+    relaid = build_location(content, SETTINGS.world_seed, flow.session, epoch=epoch)
+    assert [n.links for n in relaid.nodes] != [n.links for n in location.nodes], "тропы легли иначе"
 
-    # Через три минуты всё стоит снова, и это новое.
-    filled = await deltas.state("farhold", 1, now=now + node_rules.RESPAWN_SECONDS)
-    assert all(filled.node(index).wave == 1 for index in inside)
+    # Босс по-прежнему держит конец, граф связен, выход достижим мимо логова.
+    bosses = [n for n in relaid.nodes if n.kind is NodeKind.BOSS_BATTLE]
+    assert len(bosses) == 1
+    assert bosses[0].index == len(relaid.nodes) - 2
+    assert relaid.is_connected
+    assert relaid.exit_node.index in relaid.reachable_from(0)
 
 
 # --- Круг долгов ------------------------------------------------------
