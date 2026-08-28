@@ -100,6 +100,7 @@ class Play(StatesGroup):
     keeper_skill_learn = State()
     keeper_skill_edge = State()
     keeper_skill_slot = State()
+    keeper_stats_edit = State()
 
 
 # Какой экран какому состоянию принадлежит. По этому разборщик говорит игроку, где он на
@@ -182,6 +183,7 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.KEEPER_SKILL_LEARN: Play.keeper_skill_learn,
     ScreenId.KEEPER_SKILL_EDGE: Play.keeper_skill_edge,
     ScreenId.KEEPER_SKILL_SLOT: Play.keeper_skill_slot,
+    ScreenId.KEEPER_STATS_EDIT: Play.keeper_stats_edit,
 }
 
 # Тот единственный шаг, куда ведёт «назад», для каждого экрана. Создание идёт назад по
@@ -266,6 +268,7 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.KEEPER_SKILL_LEARN: ScreenId.KEEPER_SKILLS,
     ScreenId.KEEPER_SKILL_EDGE: ScreenId.KEEPER_SKILL,
     ScreenId.KEEPER_SKILL_SLOT: ScreenId.KEEPER_SKILL,
+    ScreenId.KEEPER_STATS_EDIT: ScreenId.KEEPER_PLAYER,
 }
 
 CREATION_ORDER: tuple[ScreenId, ...] = (

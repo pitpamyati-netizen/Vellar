@@ -6,11 +6,13 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from types import MappingProxyType
 
 import pytest
 
 from mmorpg.domain.entities import Character, GameContent, SkillLoadout
+from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.rules import keeper
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.progression import MAX_LEVEL, experience_to_reach
@@ -57,8 +59,6 @@ def test_a_level_brings_the_points_a_level_brings(content: GameContent, hero: Ch
 
 
 def test_the_last_level_has_nothing_above_it(content: GameContent, hero: Character) -> None:
-    from dataclasses import replace
-
     topped = replace(hero, level=MAX_LEVEL)
     grown, level_up = keeper.raise_level(content, topped)
 
@@ -142,6 +142,21 @@ def test_moving_a_character_changes_only_where_they_stand(hero: Character) -> No
     assert moved.city_id == "dusk_harbor"
     assert moved.gold == hero.gold
     assert moved.level == hero.level
+
+
+def test_a_stat_is_set_by_moving_the_difference_through_unspent_points(hero: Character) -> None:
+    rich = replace(hero, unspent_stat_points=10)
+
+    up = keeper.set_stat(rich, StatCode.STR, 4)
+    assert up is not None
+    assert up.allocated[StatCode.STR] == 4
+    assert up.unspent_stat_points == 6
+
+    assert keeper.set_stat(up, StatCode.END, 100) is None, "очков столько нет"
+    assert keeper.set_stat(rich, StatCode.STR, -1) is None, "ниже нуля нельзя"
+
+    back = keeper.set_stat(up, StatCode.STR, 1)
+    assert back is not None and back.unspent_stat_points == 9
 
 
 @pytest.fixture

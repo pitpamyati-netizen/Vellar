@@ -670,6 +670,9 @@ def walk_to(panel: Panel, screen: ScreenId) -> Panel:
             if screen is ScreenId.KEEPER_SKILL_EDGE:
                 return walked.press(labels.KEEPER_SKILL_EDGE_BTN.text)
             return walked.press(labels.KEEPER_SKILL_SLOT_BTN.text)
+        case ScreenId.KEEPER_STATS_EDIT:
+            walked = walk_to(panel, ScreenId.KEEPER_PLAYER)
+            return walked.press(labels.KEEPER_STATS_EDIT_BTN.text)
         case _:
             return panel.press(labels.KEEPER_SERVICE.text)
 
@@ -937,6 +940,37 @@ def test_editing_a_skill_is_written_down(with_players: Panel) -> None:
     card.press(card.button_with("Рассечение"), labels.KEEPER_RANK_UP.text)
 
     assert card.notes and card.notes[-1].action == KeeperAction.SKILL
+
+
+# --- характеристики игрока -----------------------------------------
+
+
+def test_a_stat_is_set_from_its_button_and_a_typed_value(with_players: Panel) -> None:
+    with_players.players = (replace(with_players.players[0], unspent_stat_points=10),)
+    with_players.target = with_players.players[0]
+    with_players.press(labels.KEEPER_PLAYERS.text)
+    with_players.press(with_players.button_with("Мерла"))
+    card = with_players.press(labels.KEEPER_STATS_EDIT_BTN.text)
+
+    card.press(card.button_with("Сила"), "4")
+    assert card.target is not None and card.target.allocated.STR == 4
+    assert card.target.unspent_stat_points == 6
+
+    # больше, чем есть очков — отказ, значение не меняется
+    card.press(card.button_with("Выносливость"), "99")
+    assert card.target.allocated.END == 0
+    assert card.state.notice
+
+
+def test_a_stat_edit_is_written_down(with_players: Panel) -> None:
+    with_players.players = (replace(with_players.players[0], unspent_stat_points=5),)
+    with_players.target = with_players.players[0]
+    with_players.press(labels.KEEPER_PLAYERS.text)
+    with_players.press(with_players.button_with("Мерла"))
+    card = with_players.press(labels.KEEPER_STATS_EDIT_BTN.text)
+    card.press(card.button_with("Удача"), "2")
+
+    assert card.notes and card.notes[-1].action == KeeperAction.POINTS
 
 
 # --- блокировка --------------------------------------------------------

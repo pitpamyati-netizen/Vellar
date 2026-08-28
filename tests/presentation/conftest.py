@@ -613,6 +613,8 @@ def all_screens(
         keeper_screens.keeper_skill_screen(content, fighter, "race_human_second_wind"),
         keeper_screens.skill_edge_screen(content, fighter, "warrior_rassechenie"),
         keeper_screens.skill_slot_screen(content, fighter, "warrior_rassechenie"),
+        keeper_screens.stats_edit_screen(replace(fighter, unspent_stat_points=6)),
+        keeper_screens.stats_edit_screen(fighter, chosen="STR", notice="Сила: 4."),
         keeper_screens.stats_screen(keeper_view.census),
         keeper_screens.stats_screen(Census()),
         keeper_screens.service_screen(keeper_view),

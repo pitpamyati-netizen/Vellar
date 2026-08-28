@@ -98,6 +98,7 @@ class ScreenId(StrEnum):
     KEEPER_SKILL_LEARN = "keeper_skill_learn"
     KEEPER_SKILL_EDGE = "keeper_skill_edge"
     KEEPER_SKILL_SLOT = "keeper_skill_slot"
+    KEEPER_STATS_EDIT = "keeper_stats_edit"
     CREATE_NAME = "create_name"
     CREATE_RACE = "create_race"
     CREATE_RACE_DETAILS = "create_race_details"

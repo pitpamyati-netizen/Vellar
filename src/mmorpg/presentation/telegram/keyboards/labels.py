@@ -166,6 +166,9 @@ KEEPER_SKILL_SLOT_BTN = label("Положить в слот", "🧩")
 KEEPER_SKILL_SLOT_CLEAR = label("Убрать из слотов", "␡")
 KEEPER_SKILL_FORGET = label("Забыть умение", "🧠")
 
+# Характеристики игрока: вложенное в каждую, числом.
+KEEPER_STATS_EDIT_BTN = label("Характеристики", "📊")
+
 # Игроки.
 KEEPER_FIND = label("Найти по имени", "🔤")
 KEEPER_MOVE = label("Перевести в город", "🧭")

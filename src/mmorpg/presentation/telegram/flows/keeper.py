@@ -22,6 +22,7 @@ from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, GameContent
 from mmorpg.domain.entities.moderation import KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
+from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.rules import keeper as keeper_rules
 from mmorpg.domain.rules import overlay as overlay_rules
@@ -74,6 +75,7 @@ PANEL: frozenset[ScreenId] = frozenset(
         ScreenId.KEEPER_SKILL_LEARN,
         ScreenId.KEEPER_SKILL_EDGE,
         ScreenId.KEEPER_SKILL_SLOT,
+        ScreenId.KEEPER_STATS_EDIT,
     }
 )
 SCREENS: frozenset[ScreenId] = PANEL | {ScreenId.NPCS, ScreenId.NPC}
@@ -284,6 +286,10 @@ def _render_panel(
             _skill_ok(content, state, view)
         ):
             return _render_skill(content, state, view)
+        case ScreenId.KEEPER_STATS_EDIT if view.target is not None:
+            return keeper_screens.stats_edit_screen(
+                view.target, chosen=state.keeper_field, notice=state.notice
+            )
         case ScreenId.KEEPER:
             return keeper_screens.keeper_screen(content, character, stats, view, state.notice)
         case _:
@@ -320,6 +326,7 @@ def awaits_text(state: PlayState, command: Command) -> bool:
         or (state.screen is ScreenId.KEEPER_AMOUNT and state.keeper_typing == TYPING_VALUE)
         or (state.screen is ScreenId.KEEPER_GIVE_GEAR and state.keeper_typing == TYPING_VALUE)
         or (state.screen is ScreenId.KEEPER_GIVE_ITEM and state.keeper_typing == TYPING_VALUE)
+        or (state.screen is ScreenId.KEEPER_STATS_EDIT and state.keeper_typing == TYPING_VALUE)
         or (state.screen is ScreenId.KEEPER_PLAYERS and state.keeper_typing == TYPING_NAME)
         or (state.screen is ScreenId.KEEPER_BAN and state.keeper_typing == TYPING_REASON)
     )
@@ -344,6 +351,8 @@ def typed(
         return replace(state, keeper_field=str(value)).with_notice(f"Ступень по уровню {value}.")
     if state.screen is ScreenId.KEEPER_GIVE_ITEM:
         return _typed_give_item(content, state, view, text)
+    if state.screen is ScreenId.KEEPER_STATS_EDIT:
+        return _typed_stat(content, state, view, text)
     if state.screen is ScreenId.KEEPER_BAN:
         return replace(state, keeper_typing="", keeper_reason=text.strip()).with_notice(
             f"Причина записана: {text.strip()}. Теперь нажмите срок."
@@ -433,6 +442,8 @@ def advance(
             return _step_skill_edge(content, state, command, view)
         case ScreenId.KEEPER_SKILL_SLOT:
             return _step_skill_slot(content, state, command, view)
+        case ScreenId.KEEPER_STATS_EDIT:
+            return _step_stats_edit(state, command, view)
         case _:
             return state.with_notice("Здесь только чтение. Нажмите «Назад».")
 
@@ -1103,6 +1114,44 @@ def _step_skill_slot(
     )
 
 
+_STAT_CODES: frozenset[str] = frozenset(code.value for code in StatCode)
+
+
+def _step_stats_edit(state: PlayState, command: Command, view: KeeperView) -> PlayState:
+    """Нажать характеристику — выбрать её; значение набирают следующим сообщением."""
+    if view.target is None:
+        return go_back(state).with_notice("Того персонажа больше нет.")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите характеристику или «Назад».")
+    code = keeper_screens.stat_from_button(command.argument)
+    if not code:
+        return state.with_notice("Не узнал характеристику. Нажмите строку из списка.")
+    return replace(state, keeper_field=code, keeper_typing=TYPING_VALUE).with_notice(
+        f"{keeper_screens.stat_name(StatCode(code))}: наберите новое значение."
+    )
+
+
+def _typed_stat(content: GameContent, state: PlayState, view: KeeperView, text: str) -> PlayState:
+    if view.target is None or state.keeper_field not in _STAT_CODES:
+        return state.with_notice("Сначала нажмите характеристику.")
+    value = _to_int(text)
+    if value is None:
+        return state.with_notice("Нужно целое число.")
+    code = StatCode(state.keeper_field)
+    changed = keeper_rules.set_stat(view.target, code, value)
+    if changed is None:
+        return state.with_notice(
+            "Так не выставить: ниже нуля нельзя, а на прибавку не хватает "
+            "нераспределённых очков — выдайте их через «Задать точно»."
+        )
+    said = f"{keeper_screens.stat_name(code)}: {changed.allocated[code]}."
+    return (
+        replace(state, keeper_typing="")
+        .storing(PendingWrite(other=changed, note=_note(KeeperAction.POINTS, changed.name, said)))
+        .with_notice(said)
+    )
+
+
 def _step_players(
     content: GameContent, state: PlayState, command: Command, view: KeeperView
 ) -> PlayState:
@@ -1148,6 +1197,8 @@ def _step_player(
         return replace(
             state, keeper_kind="skill", keeper_field="", keeper_typing="", keeper_page=PageState()
         ).at(ScreenId.KEEPER_SKILLS)
+    if labels.KEEPER_STATS_EDIT_BTN.matches(command.argument):
+        return replace(state, keeper_field="", keeper_typing="").at(ScreenId.KEEPER_STATS_EDIT)
     if labels.KEEPER_TRADES.matches(command.argument):
         return replace(state, keeper_typing="").at(ScreenId.KEEPER_TRADES)
     if labels.KEEPER_BAN.matches(command.argument):

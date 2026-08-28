@@ -21,6 +21,7 @@ from dataclasses import replace
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, OwnerKind
+from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.progression import (
     MAX_LEVEL,
@@ -59,6 +60,25 @@ def set_health(content: GameContent, character: Character, value: int) -> Charac
 def rename(character: Character, name: str) -> Character:
     """Сменить имя. Годность имени проверяет тот, кто принял набранное."""
     return replace(character, name=name.strip())
+
+
+def set_stat(character: Character, code: StatCode, value: int) -> Character | None:
+    """Выставить вложенное в характеристику. Разница идёт через нераспределённые очки.
+
+    Больше, чем есть очков (уже вложенных сюда плюс нераспределённых), поставить
+    нельзя: тогда персонаж носил бы то, чего на его уровне иметь не может. Ниже
+    нуля — тоже нельзя. Не хватает очков — их сначала выдают («Задать точно»).
+    """
+    if value < 0:
+        return None
+    delta = value - character.allocated[code]
+    if delta > character.unspent_stat_points:
+        return None
+    return replace(
+        character,
+        allocated=character.allocated.with_change(code, delta),
+        unspent_stat_points=character.unspent_stat_points - delta,
+    )
 
 
 def raise_level(content: GameContent, character: Character) -> tuple[Character, LevelUp]:

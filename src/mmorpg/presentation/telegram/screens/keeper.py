@@ -32,6 +32,7 @@ from mmorpg.domain.entities.content import (
 )
 from mmorpg.domain.entities.moderation import Ban, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
+from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.entities.trade import OfferKind, TradeRecord, TradeStatus
 from mmorpg.domain.ports.repositories import Census
 from mmorpg.domain.procgen import items as item_procgen
@@ -44,6 +45,7 @@ from mmorpg.domain.rules.stats import DerivedStats
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
+from mmorpg.presentation.telegram.screens.creation import STAT_NAMES
 from mmorpg.presentation.telegram.screens.format import amount, duration, gold
 from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
@@ -485,8 +487,8 @@ def player_screen(
         (labels.KEEPER_GOLD, labels.KEEPER_LEVEL),
         (labels.KEEPER_HEAL, labels.KEEPER_POINTS),
         (labels.KEEPER_TUNE, labels.KEEPER_GIVE_ITEM),
-        (labels.KEEPER_SKILLS, labels.KEEPER_MOVE),
-        (labels.KEEPER_TRADES,),
+        (labels.KEEPER_SKILLS, labels.KEEPER_STATS_EDIT_BTN),
+        (labels.KEEPER_MOVE, labels.KEEPER_TRADES),
         (labels.KEEPER_UNBAN,) if _under_ban(view) else (labels.KEEPER_BAN,),
         (labels.KEEPER_DELETE,),
     ]
@@ -890,6 +892,41 @@ def skill_slot_from_button(content: GameContent, pressed: str) -> int:
         if label(f"Слот {number}").matches(pressed):
             return number
     return 0
+
+
+# --- характеристики игрока ------------------------------------------
+
+
+def stat_name(code: StatCode) -> str:
+    return STAT_NAMES[code]
+
+
+def stats_edit_screen(player: Character, *, chosen: str = "", notice: str = "") -> Screen:
+    """Вложенное в каждую характеристику. Нажать характеристику, затем набрать число."""
+    order = list(StatCode)
+    picked = (
+        f"Выбрано: {stat_name(StatCode(chosen))}. Наберите новое значение."
+        if chosen in {code.value for code in StatCode}
+        else "Нажмите характеристику, затем наберите новое значение."
+    )
+    lines = (
+        notice or f"Характеристики: {player.name}.",
+        ", ".join(f"{stat_name(code)} {player.allocated[code]}" for code in order),
+        f"Нераспределено очков характеристик: {player.unspent_stat_points}.",
+        picked,
+    )
+    rows = tuple(
+        tuple(label(stat_name(code)) for code in order[index : index + 2])
+        for index in range(0, len(order), 2)
+    )
+    return Screen(id=ScreenId.KEEPER_STATS_EDIT, lines=lines, rows=rows)
+
+
+def stat_from_button(pressed: str) -> str:
+    for code in StatCode:
+        if label(stat_name(code)).matches(pressed):
+            return code.value
+    return ""
 
 
 # --- блокировка --------------------------------------------------------

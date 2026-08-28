@@ -526,6 +526,7 @@ async def _keeper_view(
             ScreenId.KEEPER_SKILL_LEARN,
             ScreenId.KEEPER_SKILL_EDGE,
             ScreenId.KEEPER_SKILL_SLOT,
+            ScreenId.KEEPER_STATS_EDIT,
         }
         and flow.keeper_target
     ):
