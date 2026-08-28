@@ -997,3 +997,58 @@ async def test_an_empty_circle_says_so_and_charges_nothing(
     unchanged = await characters.get(rich.id)
     assert unchanged is not None
     assert unchanged.gold == rich.gold
+
+
+# --- обучение платит (ADR 0038) --------------------------------------
+
+
+async def test_a_tutorial_step_pays_experience_and_gold(
+    player: Player, characters: InMemoryCharacterRepository, argus: Character
+) -> None:
+    """Кнопка «Обучение» ведёт к шагу, а закрытый шаг тут же платит."""
+    from mmorpg.domain.rules import tutorial as tutorial_rules
+
+    screen = await player.press("Обучение")
+    assert screen.id is ScreenId.STATS  # без экрана-обзора между меню и делом
+
+    paid = await characters.get_active(ACCOUNT)
+    assert paid is not None
+    assert tutorial_rules.is_done(paid, tutorial_rules.TutorialTask.STATS)
+    assert paid.gold == argus.gold + tutorial_rules.STEP_REWARD.gold
+    assert paid.experience > argus.experience
+    assert "Награда за обучение" in screen.text()
+
+
+async def test_finishing_the_tutorial_hands_over_the_full_kit(
+    player: Player,
+    inventory: InMemoryInventoryRepository,
+    characters: InMemoryCharacterRepository,
+    argus: Character,
+) -> None:
+    """Последний шаг закрывает обучение и выдаёт набор: доспех, зелья, опыт, золото."""
+    from mmorpg.domain.rules import tutorial as tutorial_rules
+
+    # Всё, кроме лавки, уже позади (маска без бита TRADE); TRADE закроет покупка.
+    await characters.save(replace(argus, gold=1_000, tutorial=0b101111))
+
+    await player.press("Мир")
+    await player.press("Дубно")
+    shop = await player.press("Лавка")
+    buy = next(
+        item.text
+        for row in shop.rows
+        for item in row
+        if item.text not in {"Назад", "Главное меню", "Продать вещи"}
+    )
+    await player.press(buy)
+    bought = await player.press("Купить")
+
+    done = await characters.get_active(ACCOUNT)
+    assert done is not None
+    assert tutorial_rules.finished(done)
+    for slot in ("head", "hands", "feet"):
+        assert done.equipment.item_in(slot) is not None
+    held = {row.item_id: row.quantity for row in await inventory.list_items(done.id)}
+    for item_id, count in tutorial_rules.COMPLETION_REWARD.items:
+        assert held.get(item_id, 0) >= count
+    assert "Обучение пройдено" in bought.text()

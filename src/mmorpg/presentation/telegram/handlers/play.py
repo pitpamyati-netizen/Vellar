@@ -55,14 +55,15 @@ from mmorpg.domain.ports.repositories import (
     UserRepository,
 )
 from mmorpg.domain.procgen.seeds import rotation_index
+from mmorpg.domain.rules import adventure, progression
 from mmorpg.domain.rules import economy as economy_rules
 from mmorpg.domain.rules import guild as guild_rules
 from mmorpg.domain.rules import moderation as moderation_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import party as party_rules
-from mmorpg.domain.rules import progression
 from mmorpg.domain.rules import roamer as roamer_rules
 from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules import tutorial as tutorial_rules
 from mmorpg.domain.rules.economy import buy_price, roll_assortment
 from mmorpg.domain.rules.modifiers import collect_modifiers
 from mmorpg.domain.rules.stats import derived_stats, primary_stats
@@ -260,6 +261,7 @@ async def play(
         )
 
     before_level = character.level
+    before_tutorial = character.tutorial
     character = await _apply(
         updated.pending, character, message.from_user.id, characters, inventory, users
     )
@@ -282,6 +284,12 @@ async def play(
         updated = updated.with_notice(f"{updated.notice} {served}".strip())
     # Правка могла только что изменить мир, а рисовать надо уже изменённый.
     content = registry.current
+    # За закрытый шаг обучения платят здесь, отдельной записью: опыт, золото,
+    # зелья, а на завершении — доспех в пустые слоты (ADR 0038). Уровень от
+    # опыта подхватит общий механизм второго сообщения ниже.
+    character, updated = await _pay_tutorial(
+        content, character, before_tutorial, updated, characters, inventory
+    )
     updated, here = await sync_location(content, updated, flow, character, locations, now, settings)
 
     # Спуск в блуждающее подземелье: замок берут здесь, до боя, - подземелье
@@ -764,6 +772,35 @@ async def _apply(
         await characters.save(write.character)
         return write.character
     return character
+
+
+async def _pay_tutorial(
+    content: GameContent,
+    character: Character,
+    before_mask: int,
+    updated: PlayState,
+    characters: CharacterRepository,
+    inventory: InventoryRepository,
+) -> tuple[Character, PlayState]:
+    """Начислить награду за шаги обучения, закрытые этим действием (ADR 0038).
+
+    ``character`` здесь уже с новыми битами (их сохранил ``_apply``); награда
+    ложится отдельной записью, чтобы своя метка золотого журнала шага —
+    покупка, сдача задания — не путалась с наградой.
+    """
+    newly = tutorial_rules.newly_done(before_mask, character.tutorial)
+    if not newly:
+        return character, updated
+
+    payout = adventure.apply_tutorial_rewards(content, character, newly)
+    await characters.save(payout.character)
+    for item_id, count in payout.items:
+        if content.has_item(item_id):
+            await inventory.add(payout.character.id, item_id, count)
+    if payout.gold:
+        economy_log.record(economy_log.TUTORIAL, payout.gold, character_id=payout.character.id)
+    said = " ".join(payout.lines)
+    return payout.character, updated.with_notice(f"{updated.notice} {said}".strip())
 
 
 async def _location_state(

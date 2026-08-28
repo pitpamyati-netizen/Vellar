@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from mmorpg.domain.entities.character import Character
+from mmorpg.domain.entities.character import Character, Equipment
 from mmorpg.domain.entities.content import GameContent, Item, Skill
 from mmorpg.domain.entities.damage import UNARMED, DamageType
 from mmorpg.domain.entities.dice import Dice
@@ -244,6 +244,42 @@ def skill_refusal(content: GameContent, character: Character, skill: Skill) -> s
     if not held:
         return f"{skill.name} просит другое оружие: {wanted}. В руках ничего."
     return f"{skill.name} просит другое оружие: {wanted}. В руках — {_weapon_name(content, held)}."
+
+
+def fill_gear(
+    content: GameContent, class_id: str, base: Equipment, slots: Iterable[str]
+) -> Equipment:
+    """Дозаполнить названные слоты комплектом класса первой ступени.
+
+    Трогает только пустые слоты ``base``. Вещь — первой ступени, обычной редкости,
+    то есть без единой прибавки: род оружия — первый из списка класса, род доспеха
+    — самый крепкий, какой класс носит (``classes.toml``). Это начало дороги, а не
+    подарок: тем же собирается стартовый набор при создании персонажа и
+    completion-набор обучения (ADR 0038).
+    """
+    if not content.gear_tiers:
+        return base
+    klass = content.character_class(class_id)
+    first = content.gear_tiers[0].level
+    by_kind = {
+        (archetype.slot, archetype.weapon_type or archetype.armor_type): archetype
+        for archetype in content.gear_archetypes
+    }
+    weapon_kind = klass.weapon_types[0] if klass.weapon_types else ""
+    armor_kind = klass.armor_types[-1] if klass.armor_types else ""
+
+    equipment = base
+    for slot in slots:
+        if equipment.item_in(slot) is not None:
+            continue
+        kind = weapon_kind if slot == WEAPON_SLOT else armor_kind
+        archetype = by_kind.get((slot, kind))
+        if archetype is None:
+            continue
+        item_id = gear_procgen.gear_id(archetype.id, first, "common")
+        if content.has_item(item_id):
+            equipment = equipment.equip(slot, item_id)
+    return equipment
 
 
 def _weapon_name(content: GameContent, type_id: str) -> str:

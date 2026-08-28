@@ -875,11 +875,21 @@ async def _settle_world(
                 for step in won.quest_steps
             )
             # Выигранный бой - один из шагов обучения, и засчитывает его сама
-            # победа, где бы она ни случилась.
+            # победа, где бы она ни случилась. За шаг платят тут же (ADR 0038);
+            # уровень от опыта подхватит ``progression.growth`` в ``_finish``.
             marked = tutorial_rules.complete(character, TutorialTask.FIGHT)
             if marked is not None:
-                character = marked
+                reward = adventure.apply_tutorial_rewards(
+                    content, marked, frozenset({TutorialTask.FIGHT})
+                )
+                character = reward.character
+                for item_id, count in reward.items:
+                    if content.has_item(item_id):
+                        await inventory.add(character.id, item_id, count)
+                if reward.gold:
+                    economy_log.record(economy_log.TUTORIAL, reward.gold, character_id=character.id)
                 payout.extra.append(tutorial_screens.completion_line(TutorialTask.FIGHT, character))
+                payout.extra.extend(reward.lines)
             updated[one.character_id] = character
 
     for one in losers:

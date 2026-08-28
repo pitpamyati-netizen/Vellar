@@ -112,6 +112,13 @@ def emptied_location(location: GeneratedLocation) -> dict[int, node_rules.Standi
     )
 
 
+def _with_tutorial_hint(screen: Screen, screen_id: ScreenId, character: Character) -> Screen:
+    """Экран шага с приклеенной подсказкой обучения — так его дописывает ``render`` (ADR 0038)."""
+    hint = tutorial_screens.hint_line(screen_id, character)
+    assert hint, "фикстуре нужен незакрытый шаг на этом экране"
+    return replace(screen, lines=(*screen.lines, hint))
+
+
 @pytest.fixture(scope="session")
 def fighter(content: GameContent) -> Character:
     return Character(
@@ -592,6 +599,11 @@ def all_screens(
             sample_location.entrance,
             standing=full_location(sample_location),
         ),
+        _with_tutorial_hint(
+            play.location_list_screen(content, content.city("farhold"), hero, PageState()),
+            ScreenId.LOCATION_LIST,
+            hero,
+        ),
         play.location_screen(
             sample_location,
             sample_location.exit_node,
@@ -710,6 +722,7 @@ def all_screens(
         tutorial_screens.tutorial_screen(hero),
         tutorial_screens.tutorial_screen(replace(hero, tutorial=0b000111)),
         tutorial_screens.tutorial_screen(replace(hero, tutorial=0b111111)),
+        _with_tutorial_hint(skill_screens.slots_screen(content, hero), ScreenId.SKILL_SLOTS, hero),
         chamber_screens.chamber_screen(content, fighter),
         chamber_screens.chamber_screen(content, sealbearer, notice="Перерождение совершено."),
         chamber_screens.turning_screen(content, fighter),

@@ -290,6 +290,52 @@ def render(
     guild: GuildView | None = None,
     location_state: LocationState | None = None,
 ) -> Screen:
+    screen = _render(
+        content,
+        character,
+        state,
+        world_seed=world_seed,
+        goods=goods,
+        settings=settings,
+        clock=clock,
+        neighbours=neighbours,
+        arena_table=arena_table,
+        tally=tally,
+        keeper=keeper,
+        party=party,
+        guild=guild,
+        location_state=location_state,
+    )
+    # Подсказка незакрытого шага обучения — строка в теле экрана, не весть
+    # (правило доступности 4: заголовок отвечает «где я», а подсказка — это
+    # руководство, идущее следом). Свой notice экрана её не трогает (ADR 0038).
+    # На переполненную страницу списка подсказку не клеят: там уже нет места, а
+    # игрок пришёл сюда по кнопке с объяснением в вести.
+    hint = tutorial_screens.hint_line(state.screen, character)
+    if hint and hint not in screen.lines:
+        with_hint = replace(screen, lines=(*screen.lines, hint))
+        if with_hint.fits_message_limit():
+            return with_hint
+    return screen
+
+
+def _render(
+    content: GameContent,
+    character: Character,
+    state: PlayState,
+    *,
+    world_seed: str,
+    goods: Goods | None = None,
+    settings: AccessibilitySettings | None = None,
+    clock: Clock | None = None,
+    neighbours: Sequence[Presence] = (),
+    arena_table: Sequence[Character] = (),
+    tally: Mapping[str, int] | None = None,
+    keeper: KeeperView | None = None,
+    party: PartyView | None = None,
+    guild: GuildView | None = None,
+    location_state: LocationState | None = None,
+) -> Screen:
     shelf = goods or Goods(gold=character.gold)
     clock = clock or Clock()
     here_now = location_state or LocationState()
@@ -785,7 +831,7 @@ def advance(
         case ScreenId.SELL:
             return _handle_sell(content, character, state, command, shelf)
         case ScreenId.MAIN_MENU:
-            return _handle_main_menu(character, state, command, clock=ticking)
+            return _handle_main_menu(content, character, state, command, clock=ticking)
         case ScreenId.WORLD:
             return _handle_world(content, character, state, command)
         case ScreenId.CITY:
@@ -958,22 +1004,22 @@ def _handle_pledge(
     )
 
 
-def _handle_tutorial(
-    content: GameContent, character: Character, state: PlayState, command: Command
+def _walk_to_tutorial_step(
+    content: GameContent, character: Character, state: PlayState
 ) -> PlayState:
-    """Одна кнопка: открыть экран, на котором делается нынешнее дело."""
-    if command.intent is not Intent.SELECT or not tutorial_screens.DO_TASK.matches(
-        command.argument
-    ):
-        return state.with_notice("Нажмите «Перейти к шагу» или «Назад».")
+    """Дойти до экрана, на котором делается нынешний шаг обучения.
+
+    Дорогу до городской службы проходят за игрока, а не описывают ему: «идите в
+    Персонаж, потом в Характеристики» держать в голове он не должен. На самом
+    экране шага висит подсказка (``tutorial_screens.hint_line``), пока шаг не
+    закрыт.
+    """
     task = tutorial_rules.next_task(character)
     if task is None:
-        return state.with_notice("Все шаги сделаны.")
+        return state.with_notice("Все шаги обучения сделаны.")
 
     card = tutorial_screens.card_for(task)
     city = known_city(content, state.city_id, character.city_id)
-    # Всё, кроме первых двух дел, случается где-то в городе, поэтому дорогу туда
-    # проходят за игрока, а не описывают ему.
     needed = {
         ScreenId.QUEST_BOARD: "tavern",
         ScreenId.TAVERN: "tavern",
@@ -982,7 +1028,7 @@ def _handle_tutorial(
     }.get(card.screen)
     if needed is not None and needed not in city.services:
         return state.with_notice(
-            f"В городе {city.name} этого нет. Задание можно сделать в другом городе."
+            f"В городе {city.name} этого нет. Шаг обучения можно сделать в другом городе."
         )
     fresh = replace(
         state,
@@ -991,18 +1037,29 @@ def _handle_tutorial(
         board_page=PageState(),
         location_page=PageState(),
     )
-    opened = fresh.at(card.screen).with_notice(f"Задание: {card.title}. {card.text}")
+    opened = fresh.at(card.screen).with_notice(f"Шаг обучения: {card.title}. {card.text}")
     if card.screen is ScreenId.STATS:
         # Прочитать их *и есть* дело, а экран теперь открыт.
         return mark_task(opened, character, TutorialTask.STATS)
     return opened
 
 
+def _handle_tutorial(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    """Экран-обзор обучения: одна кнопка ведёт к нынешнему шагу."""
+    if command.intent is not Intent.SELECT or not tutorial_screens.DO_TASK.matches(
+        command.argument
+    ):
+        return state.with_notice("Нажмите «Перейти к шагу» или «Назад».")
+    return _walk_to_tutorial_step(content, character, state)
+
+
 # --- меню, мир, город -------------------------------------------------
 
 
 def _handle_main_menu(
-    character: Character, state: PlayState, command: Command, *, clock: Clock
+    content: GameContent, character: Character, state: PlayState, command: Command, *, clock: Clock
 ) -> PlayState:
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите кнопку из меню.")
@@ -1021,7 +1078,9 @@ def _handle_main_menu(
     if labels.SETTINGS.matches(command.argument):
         return state.at(ScreenId.SETTINGS)
     if labels.TUTORIAL.matches(command.argument):
-        return state.at(ScreenId.TUTORIAL)
+        # Не экран-обзор, а сразу дело: кнопка ведёт туда, где шаг делается, и
+        # там его объясняет подсказка (ADR 0038).
+        return _walk_to_tutorial_step(content, character, state)
     # Нажатая со старой клавиатуры тем, кто больше не смотритель, эта кнопка просто
     # перестаёт быть кнопкой.
     if labels.KEEPER.matches(command.argument) and character.is_admin:

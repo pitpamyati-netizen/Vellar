@@ -9,11 +9,16 @@
 делается - вопрос к ``presentation``. Ход дела - битовая маска на персонаже,
 поэтому задачу нельзя засчитать дважды, а порядок можно поменять позже, ничего
 никому не переписывая.
+
+За шаг платят - немного опыта и золота (:data:`STEP_REWARD`), - а за пройденное
+целиком дают набор: доспех первой ступени в пустые слоты, зелья, опыт и золото
+(:data:`COMPLETION_REWARD`). Что именно начислить, решает
+``domain/rules/adventure.apply_tutorial_rewards``; здесь только числа.
 """
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from mmorpg.domain.entities.character import Character
@@ -65,6 +70,12 @@ def next_task(character: Character) -> TutorialTask | None:
     return None
 
 
+def newly_done(before_mask: int, after_mask: int) -> frozenset[TutorialTask]:
+    """Какие шаги закрылись между двумя масками. По ним начисляют награду."""
+    opened = after_mask & ~before_mask
+    return frozenset(task for task in ORDER if opened & _bit(task))
+
+
 def complete(character: Character, task: TutorialTask) -> Character | None:
     """Отметить дело сделанным. ``None``, когда оно уже было, - чтобы ничего не сохранять дважды.
 
@@ -74,3 +85,36 @@ def complete(character: Character, task: TutorialTask) -> Character | None:
     if is_done(character, task):
         return None
     return replace(character, tutorial=character.tutorial | _bit(task))
+
+
+# --- награда --------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class TutorialReward:
+    """Что дают за шаг обучения или за всё сразу. Только числа и ключи."""
+
+    experience: int = 0
+    gold: int = 0
+    #: Расходники: ключ вещи и сколько. Кладёт в сумку хендлер.
+    items: tuple[tuple[str, int], ...] = ()
+    #: Дозаполнить пустые слоты снаряжения комплектом класса (только на завершении).
+    fill_gear: bool = False
+
+
+#: Одинаково за каждый из шести шагов - чтобы порядок можно было менять, не трогая
+#: баланс. Немного: обучение подталкивает, а не заменяет собой первые уровни.
+STEP_REWARD = TutorialReward(experience=25, gold=8)
+
+#: Сверх шести шагов - за то, что обучение пройдено целиком.
+COMPLETION_REWARD = TutorialReward(
+    experience=100,
+    gold=40,
+    items=(("small_healing_potion", 3),),
+    fill_gear=True,
+)
+
+#: Слоты, которые completion-набор дозаполняет, если они пусты. Оружие и нагрудник
+#: игрок обычно получает при создании; здесь - шлем, перчатки, сапоги и то из
+#: первых двух, чего вдруг нет.
+GEAR_SLOTS: tuple[str, ...] = ("weapon", "head", "body", "hands", "feet")

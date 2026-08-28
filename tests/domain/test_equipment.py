@@ -121,6 +121,36 @@ def test_a_kind_gives_what_the_kind_promises(content: GameContent) -> None:
     )
 
 
+# --- стартовый / completion-комплект (fill_gear) -----------------------
+
+
+def test_fill_gear_dresses_the_class_in_first_tier_common(content: GameContent) -> None:
+    from mmorpg.domain.entities.character import Equipment
+
+    first = content.gear_tiers[0].level
+    filled = gear.fill_gear(
+        content, "warrior", Equipment(), ("weapon", "head", "body", "hands", "feet")
+    )
+    for slot in ("weapon", "head", "body", "hands", "feet"):
+        item_id = filled.item_in(slot)
+        assert item_id is not None, slot
+        item = content.item(item_id)
+        assert item.level == first
+        assert item.rarity == "common"
+    # Доспех — самого крепкого рода, какой воин носит.
+    heavy = content.character_class("warrior").armor_types[-1]
+    assert content.item(filled.item_in("body")).armor_type == heavy
+
+
+def test_fill_gear_leaves_worn_slots_alone(content: GameContent) -> None:
+    from mmorpg.domain.entities.character import Equipment
+
+    base = Equipment().equip("body", "heavy_body@14#rare")
+    filled = gear.fill_gear(content, "warrior", base, ("weapon", "body", "head"))
+    assert filled.item_in("body") == "heavy_body@14#rare"
+    assert filled.item_in("head") is not None
+
+
 def test_a_full_plate_set_costs_initiative_four_times(content: GameContent) -> None:
     worn = ("heavy_body@45#common", "heavy_hands@45#common", "heavy_feet@45#common")
     bundle = gear.type_modifiers(content, worn)

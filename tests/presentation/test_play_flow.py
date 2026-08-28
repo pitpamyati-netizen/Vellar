@@ -519,15 +519,31 @@ def test_the_introduction_is_offered_until_it_is_done(
 def test_a_task_button_walks_the_player_to_the_screen(
     content: GameContent, hero: Character, menu: PlayState
 ) -> None:
-    """Смысл кнопки: не надо запоминать дорогу и не надо угадывать меню."""
-    opened = step(content, hero, menu, "Обучение")
-    assert opened.screen is ScreenId.TUTORIAL
-
-    walked = step(content, hero, opened, "Перейти к шагу")
+    """Кнопка «Обучение» ведёт сразу к делу, без экрана-обзора между ними (ADR 0038)."""
+    walked = step(content, hero, menu, "Обучение")
     assert walked.screen is ScreenId.STATS
     # Прочитать их и есть дело, поэтому оно уже отмечено.
     assert walked.pending.character is not None
     assert walked.pending.character.tutorial != hero.tutorial
+
+
+def test_the_step_screen_shows_a_hint_until_the_step_is_done(
+    content: GameContent, hero: Character, menu: PlayState
+) -> None:
+    """Экран шага сам говорит, что сделать, — не нужно ходить в «Обучение» (ADR 0038)."""
+    from mmorpg.domain.rules import tutorial as tutorial_rules
+
+    on_stats = step(content, hero, menu, "Обучение")
+    # STATS уже отмечен открытием, поэтому смотрим на следующий шаг — слоты умений.
+    on_slots = step(content, hero, on_stats, "Назад", "Умения", "Слоты умений")
+    assert on_slots.screen is ScreenId.SKILL_SLOTS
+    text = render(content, hero, on_slots, world_seed=WORLD_SEED).text()
+    assert "Шаг обучения" in text
+
+    taught = replace(hero, tutorial=0b111111)
+    assert tutorial_rules.finished(taught)
+    done_text = render(content, taught, on_slots, world_seed=WORLD_SEED).text()
+    assert "Шаг обучения" not in done_text
 
 
 def test_a_task_done_by_playing_counts_too(

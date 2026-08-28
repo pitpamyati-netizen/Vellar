@@ -22,6 +22,7 @@ from mmorpg.domain.procgen.seeds import rng
 from mmorpg.domain.rules import economy
 from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules import quests as quest_rules
+from mmorpg.domain.rules.equipment import fill_gear
 from mmorpg.domain.rules.progression import (
     LevelUp,
     earned,
@@ -30,6 +31,13 @@ from mmorpg.domain.rules.progression import (
 )
 from mmorpg.domain.rules.quests import QuestStep
 from mmorpg.domain.rules.stats import derived_stats
+from mmorpg.domain.rules.tutorial import (
+    COMPLETION_REWARD,
+    GEAR_SLOTS,
+    STEP_REWARD,
+    TutorialTask,
+    finished,
+)
 
 # Поражение дорого, но никогда не разорительно: десятая часть того, что при тебе, и
 # просыпаешься в городе с четвертью здоровья. Палата не отнимает - она просто и не
@@ -291,6 +299,78 @@ def descent_prize(
         experience=earned(content, paid, experience),
         item_id=item_id,
         level_up=level_up,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class TutorialPayout:
+    """Что начислила награда за шаг обучения (ADR 0038).
+
+    ``character`` - уже с опытом, золотом и дозаполненным снаряжением. ``items``
+    кладёт в сумку хендлер: у домена нет доступа к хранилищу. ``lines`` -
+    фактические строки для игрока, как ``payout.extra`` в бою.
+    """
+
+    character: Character
+    experience: int = 0
+    gold: int = 0
+    items: tuple[tuple[str, int], ...] = ()
+    level_up: LevelUp | None = None
+    lines: tuple[str, ...] = ()
+
+
+def apply_tutorial_rewards(
+    content: GameContent, character: Character, newly_done: frozenset[TutorialTask]
+) -> TutorialPayout:
+    """Начислить награду за только что закрытые шаги обучения.
+
+    ``character`` приходит уже с проставленными битами
+    (``tutorial.complete``); ``newly_done`` - что именно закрылось этим
+    действием. Completion-набор идёт сверху, когда закрыт последний шаг, и ровно
+    один раз: ``finished`` становится истиной только на шестом шаге.
+    """
+    if not newly_done:
+        return TutorialPayout(character=character)
+
+    completing = finished(character)
+    steps = len(newly_done)
+    gold = STEP_REWARD.gold * steps + (COMPLETION_REWARD.gold if completing else 0)
+    experience = STEP_REWARD.experience * steps + (
+        COMPLETION_REWARD.experience if completing else 0
+    )
+    items = COMPLETION_REWARD.items if completing else ()
+
+    updated = character.with_gold(gold)
+    if completing and COMPLETION_REWARD.fill_gear:
+        updated = replace(
+            updated, equipment=fill_gear(content, updated.class_id, updated.equipment, GEAR_SLOTS)
+        )
+    grown, level_up = grant_experience(content, updated, experience)
+
+    lines = [f"Награда за обучение: {earned(content, character, experience)} опыта, {gold} золота."]
+    if completing:
+        pieces = sum(
+            1
+            for slot in GEAR_SLOTS
+            if grown.equipment.item_in(slot) is not None
+            and character.equipment.item_in(slot) is None
+        )
+        extra = []
+        if pieces:
+            extra.append(f"снаряжение в {pieces} слотов")
+        for item_id, count in items:
+            if content.has_item(item_id):
+                extra.append(f"{content.item(item_id).name} ({count})")
+        gift = "; ".join(extra) if extra else "опыт и золото"
+        lines.append(f"Обучение пройдено целиком. Сверху: {gift}.")
+
+    return TutorialPayout(
+        character=grown,
+        experience=earned(content, character, experience),
+        gold=gold,
+        items=items,
+        level_up=level_up if level_up.levels_gained else None,
+        lines=tuple(lines),
     )
 
 
