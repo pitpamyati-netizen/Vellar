@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from mmorpg.domain.entities.character import Character, InventoryEntry
@@ -39,9 +39,13 @@ from mmorpg.domain.ports.repositories import Census
 from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.rules import moderation as moderation_rules
 from mmorpg.domain.rules import overlay as overlay_rules
+from mmorpg.domain.rules import party as party_rules
 from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules.guild import MAX_MEMBERS as GUILD_MAX_MEMBERS
+from mmorpg.domain.rules.guild import Guild, GuildRank
 from mmorpg.domain.rules.keeper import GOLD_STEP, POINTS_STEP
 from mmorpg.domain.rules.overlay import FieldKind, FieldSpec
+from mmorpg.domain.rules.party import Party
 from mmorpg.domain.rules.stats import DerivedStats
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
@@ -105,6 +109,14 @@ class KeeperView:
     trades: tuple[TradeRecord, ...] = ()
     #: Сумка открытого игрока. Читается только на экране «Сумка и снаряжение».
     target_bag: tuple[InventoryEntry, ...] = ()
+    #: Отряд открытого игрока и имена его состава ``(id, имя)``, собравший первым.
+    #: ``None`` — он не в отряде, и кнопки «Отряд игрока» на карточке нет.
+    target_party: Party | None = None
+    target_party_members: tuple[tuple[int, str], ...] = ()
+    #: Гильдия открытого игрока и её состав ``(id, имя, звание)``, основатель
+    #: первым. ``None`` — он не в гильдии.
+    target_guild: Guild | None = None
+    target_guild_members: tuple[tuple[int, str, GuildRank], ...] = ()
     #: Момент, которым меряется остаток срока. Ноль — сроков на экране нет.
     now: int = 0
 
@@ -496,6 +508,18 @@ def player_screen(
         (labels.KEEPER_UNBAN,) if _under_ban(view) else (labels.KEEPER_BAN,),
         (labels.KEEPER_DELETE,),
     ]
+    # Кнопка появляется только у того, кто и правда в отряде или гильдии: пустая
+    # вела бы на экран без единой строки (``Claude.md``, правило 9).
+    group_row = [
+        button
+        for present, button in (
+            (view.target_party is not None, labels.KEEPER_PARTY_BTN),
+            (view.target_guild is not None, labels.KEEPER_GUILD_BTN),
+        )
+        if present
+    ]
+    if group_row:
+        rows.insert(6, tuple(group_row))
     if view.granting:
         lines.append(_right(view))
         if not view.target_locked:
@@ -1187,6 +1211,87 @@ def trades_screen(player: Character, view: KeeperView, notice: str = "") -> Scre
         (label(trade_entry(index, record)),) for index, record in enumerate(shown, start=1)
     )
     return Screen(id=ScreenId.KEEPER_TRADES, lines=tuple(lines), rows=rows)
+
+
+# --- отряд и гильдия игрока ------------------------------------------
+
+
+def _member_number(count: int, pressed: str, make: Callable[[int], Label]) -> int:
+    """Порядковый номер участника, чью кнопку нажали. Ноль — нажали не её."""
+    for number in range(1, count + 1):
+        if make(number).matches(pressed):
+            return number
+    return 0
+
+
+def group_kick_number(count: int, pressed: str) -> int:
+    return _member_number(count, pressed, labels.keeper_group_kick_label)
+
+
+def rank_up_number(count: int, pressed: str) -> int:
+    return _member_number(count, pressed, labels.keeper_rank_up_label)
+
+
+def rank_down_number(count: int, pressed: str) -> int:
+    return _member_number(count, pressed, labels.keeper_rank_down_label)
+
+
+def keeper_party_screen(view: KeeperView, notice: str = "") -> Screen:
+    """Отряд открытого игрока: вывести любого, кроме собравшего, и расформировать.
+
+    Зова и согласия здесь нет - это обход, как и всё в панели. Собравшего не
+    выводят: отряд без него расформировывают целиком.
+    """
+    members = view.target_party_members
+    leader = members[0][1] if members else "—"
+    lines = [
+        notice or f"Отряд игрока. Собрал: {leader}.",
+        f"В отряде: {amount(len(members), party_rules.MAX_MEMBERS, with_percent=False)}.",
+    ]
+    rows: list[tuple[Label, ...]] = []
+    for number, (_, name) in enumerate(members, start=1):
+        first = number == 1
+        lines.append(f"{number}. {name}{' — собрал' if first else ''}.")
+        if not first:
+            rows.append((labels.keeper_group_kick_label(number),))
+    lines.append("Собравшего не выводят: отряд без него расформировывают целиком.")
+    rows.append((labels.KEEPER_PARTY_DISBAND,))
+    return Screen(id=ScreenId.KEEPER_PARTY, lines=tuple(lines), rows=tuple(rows))
+
+
+def keeper_guild_screen(view: KeeperView, *, counting: bool = False, notice: str = "") -> Screen:
+    """Гильдия открытого игрока: звание, вывод из состава, казна числом, роспуск.
+
+    Основателя не трогают - ни звание, ни вывод: второго основателя не бывает, а
+    гильдию без него распускают. Казну двигает хендлер условным ``UPDATE``.
+    """
+    guild = view.target_guild
+    members = view.target_guild_members
+    name = guild.name if guild is not None else "—"
+    vault = guild.vault_gold if guild is not None else 0
+    lines = [
+        notice or f"Гильдия «{name}».",
+        f"В гильдии: {amount(len(members), GUILD_MAX_MEMBERS, with_percent=False)}. "
+        f"В казне: {gold(vault)}.",
+    ]
+    rows: list[tuple[Label, ...]] = []
+    for number, (_, member_name, rank) in enumerate(members, start=1):
+        lines.append(f"{number}. {member_name} — {rank.title}.")
+    lines.append("Основателя не выводят и звания ему не меняют: гильдию без него распускают.")
+    for number, (_, _, rank) in enumerate(members, start=1):
+        if rank is GuildRank.FOUNDER:
+            continue
+        step = (
+            labels.keeper_rank_up_label(number)
+            if rank is GuildRank.MEMBER
+            else labels.keeper_rank_down_label(number)
+        )
+        rows.append((step, labels.keeper_group_kick_label(number)))
+    if counting:
+        lines.append("Наберите новое число казны сообщением.")
+    rows.append((labels.KEEPER_VAULT_SET,))
+    rows.append((labels.KEEPER_GUILD_DISBAND,))
+    return Screen(id=ScreenId.KEEPER_GUILD, lines=tuple(lines), rows=tuple(rows))
 
 
 # --- журнал ------------------------------------------------------------

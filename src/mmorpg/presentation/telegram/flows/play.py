@@ -792,11 +792,13 @@ def advance(
 
     # Отряд отвечает откуда угодно: зов приходит туда, где игрок сейчас стоит, и
     # соглашаться, уходя ради этого с экрана, ему не приходится
-    # (``domain/rules/party.py``).
-    if (with_party := _party_intent(state, command)) is not None:
+    # (``domain/rules/party.py``). Но не с панели смотрителя: там «Расформировать
+    # отряд» и «Распустить гильдию» правят чужое объединение, а не своё.
+    on_panel = state.screen in keeper_flow.PANEL
+    if not on_panel and (with_party := _party_intent(state, command)) is not None:
         return with_party
 
-    if (with_guild := _guild_intent(state, command)) is not None:
+    if not on_panel and (with_guild := _guild_intent(state, command)) is not None:
         return with_guild
 
     if (with_transfer := _transfer_intent(state, command)) is not None:

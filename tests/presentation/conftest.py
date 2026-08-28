@@ -44,7 +44,8 @@ from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules.combat import hero_combatant, monster_combatant, open_battle
 from mmorpg.domain.rules.economy import buy_price, roll_assortment
-from mmorpg.domain.rules.guild import GuildRank
+from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
+from mmorpg.domain.rules.party import Party as PlayerParty
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.handlers import creation as handlers_creation
 from mmorpg.presentation.telegram.keyboards import labels
@@ -357,6 +358,31 @@ SAMPLE_TRADES: tuple[TradeRecord, ...] = (
 )
 
 
+#: Карточка игрока, который и в отряде, и в гильдии: чтобы экраны отряда и
+#: гильдии с карточки собрались вместе со всеми прочими.
+_group_view = keeper_screens.KeeperView(
+    target_party=PlayerParty(leader_id=7, members=(7, 8, 9)),
+    target_party_members=((7, "Мерла"), (8, "Аргус"), (9, "Довен")),
+    target_guild=Guild(
+        id=1,
+        name="Клинки",
+        founder_id=7,
+        members=(
+            GuildMember(7, GuildRank.FOUNDER),
+            GuildMember(8, GuildRank.OFFICER),
+            GuildMember(9, GuildRank.MEMBER),
+        ),
+        vault_gold=400,
+    ),
+    target_guild_members=(
+        (7, "Мерла", GuildRank.FOUNDER),
+        (8, "Аргус", GuildRank.OFFICER),
+        (9, "Довен", GuildRank.MEMBER),
+    ),
+    now=NOW,
+)
+
+
 @pytest.fixture(scope="session")
 def keeper_view(edits: tuple[OverlayRecord, ...], fighter: Character) -> keeper_screens.KeeperView:
     return keeper_screens.KeeperView(
@@ -627,6 +653,12 @@ def all_screens(
         keeper_screens.keeper_quest_screen(content, fighter, "farhold_tallies"),
         keeper_screens.keeper_quest_screen(
             content, hero, "farhold_tallies", counting=True, notice="Наберите число."
+        ),
+        keeper_screens.keeper_party_screen(_group_view),
+        keeper_screens.keeper_guild_screen(_group_view),
+        keeper_screens.keeper_guild_screen(_group_view, counting=True, notice="Казна: 500."),
+        keeper_screens.player_screen(
+            edited, fighter, derived_stats(content, fighter), view=_group_view
         ),
         keeper_screens.stats_screen(keeper_view.census),
         keeper_screens.stats_screen(Census()),

@@ -25,6 +25,8 @@ from mmorpg.domain.entities.content import GameContent, OwnerKind
 from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules.guild import Guild, GuildRank
+from mmorpg.domain.rules.party import Party
 from mmorpg.domain.rules.progression import (
     MAX_LEVEL,
     LevelUp,
@@ -280,6 +282,48 @@ def respec_skills(content: GameContent, character: Character) -> Character:
         ),
         unspent_skill_points=character.unspent_skill_points + refund,
     )
+
+
+# --- отряд и гильдия игрока -------------------------------------------
+#
+# Смотритель правит объединение тем же обходом, что и персонажа: без зова и без
+# согласия - «вывести», «сменить звание», «выставить казну». Собравшего отряд и
+# основателя гильдии так не трогают: объединение без того, кто за него отвечает,
+# не правят, а распускают целиком (это делает хендлер).
+
+
+def remove_from_party(party: Party, character_id: int) -> Party | None:
+    """Вывести человека из отряда. ``None`` - его там нет или это собравший."""
+    if not party.has(character_id) or character_id == party.leader_id:
+        return None
+    return party.without(character_id)
+
+
+def remove_from_guild(guild: Guild, character_id: int) -> Guild | None:
+    """Вывести человека из гильдии. ``None`` - его там нет или это основатель."""
+    if guild.rank_of(character_id) is None or character_id == guild.founder_id:
+        return None
+    return guild.without(character_id)
+
+
+def set_guild_rank(guild: Guild, character_id: int, rank: GuildRank) -> Guild | None:
+    """Сменить звание участнику. ``None`` - его нет в гильдии, это основатель, или
+    звание не между «участник» и «офицер»: второго основателя не бывает."""
+    current = guild.rank_of(character_id)
+    if current is None or character_id == guild.founder_id:
+        return None
+    if rank not in (GuildRank.MEMBER, GuildRank.OFFICER) or current is rank:
+        return None
+    return guild.with_rank(character_id, rank)
+
+
+def set_vault_gold(guild: Guild, amount: int) -> Guild:
+    """Выставить казну гильдии. Ниже нуля не опускается.
+
+    Двигает казну хендлер условным ``UPDATE`` (``Claude.md``, правило 8), как и
+    кошелёк персонажа; здесь - только новое число.
+    """
+    return replace(guild, vault_gold=max(0, amount))
 
 
 def set_level(content: GameContent, character: Character, level: int) -> tuple[Character, LevelUp]:

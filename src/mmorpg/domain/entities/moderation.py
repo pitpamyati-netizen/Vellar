@@ -40,6 +40,7 @@ class KeeperAction(StrEnum):
     GRANT_ITEM = "grant_item"
     SKILL = "skill"
     QUEST = "quest"
+    GROUP = "group"
 
 
 @dataclass(frozen=True, slots=True)

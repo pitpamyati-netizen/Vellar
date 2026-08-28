@@ -20,6 +20,8 @@ from mmorpg.domain.entities.content import Item
 from mmorpg.domain.entities.moderation import KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayRecord
 from mmorpg.domain.ports.repositories import AccessibilitySettings
+from mmorpg.domain.rules.guild import Guild
+from mmorpg.domain.rules.party import Party
 from mmorpg.presentation.telegram.routing import Command, Intent
 from mmorpg.presentation.telegram.screens.base import ScreenId
 from mmorpg.presentation.telegram.screens.paginated import ListFilters, PageState
@@ -77,6 +79,17 @@ class PendingWrite:
     #: Правка сумки чужого персонажа, идущая рядом с правкой снаряжения (``other``):
     #: снятое кладётся в сумку, надетое из неё убирается. Адрес — ``other.id``.
     bag_changes: tuple[tuple[str, int], ...] = ()
+    #: Отряд игрока, изменённый смотрителем (вывод из состава): ``parties.save``.
+    party_save: Party | None = None
+    #: Отряд игрока, который смотритель расформировал: id собравшего. Ноль - нет.
+    party_disband: int = 0
+    #: Гильдия игрока, изменённая смотрителем (состав, звания): ``guilds.save``.
+    guild_save: Guild | None = None
+    #: Гильдия, которую смотритель распустил: её id. Ноль - нет.
+    guild_disband: int = 0
+    #: Казна гильдии, выставленная числом: id гильдии и новое значение. Двигает её
+    #: хендлер условным ``UPDATE`` (``Claude.md``, правило 8), а не записью целиком.
+    guild_vault: tuple[int, int] | None = None
     #: Перечитать правки из хранилища.
     reload: bool = False
     #: Почему изменился кошелёк: метка для денежного журнала
@@ -104,6 +117,11 @@ class PendingWrite:
             and not self.rollback
             and self.grant_item is None
             and not self.bag_changes
+            and self.party_save is None
+            and not self.party_disband
+            and self.guild_save is None
+            and not self.guild_disband
+            and self.guild_vault is None
             and not self.reload
             and self.node_take < 0
         )

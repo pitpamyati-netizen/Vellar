@@ -28,6 +28,7 @@ from mmorpg.domain.rules import keeper as keeper_rules
 from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules.guild import GuildRank
 from mmorpg.domain.rules.overlay import FieldKind, FieldSpec
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.flows.state import (
@@ -79,6 +80,8 @@ PANEL: frozenset[ScreenId] = frozenset(
         ScreenId.KEEPER_QUESTS,
         ScreenId.KEEPER_QUEST,
         ScreenId.KEEPER_BAG,
+        ScreenId.KEEPER_PARTY,
+        ScreenId.KEEPER_GUILD,
     }
 )
 SCREENS: frozenset[ScreenId] = PANEL | {ScreenId.NPCS, ScreenId.NPC}
@@ -311,6 +314,12 @@ def _render_panel(
             return keeper_screens.bag_screen(
                 content, view.target, view.target_bag, state.keeper_page, state.notice
             )
+        case ScreenId.KEEPER_PARTY if view.target is not None and view.target_party is not None:
+            return keeper_screens.keeper_party_screen(view, state.notice)
+        case ScreenId.KEEPER_GUILD if view.target is not None and view.target_guild is not None:
+            return keeper_screens.keeper_guild_screen(
+                view, counting=state.keeper_typing == TYPING_VALUE, notice=state.notice
+            )
         case ScreenId.KEEPER:
             return keeper_screens.keeper_screen(content, character, stats, view, state.notice)
         case _:
@@ -349,6 +358,7 @@ def awaits_text(state: PlayState, command: Command) -> bool:
         or (state.screen is ScreenId.KEEPER_GIVE_ITEM and state.keeper_typing == TYPING_VALUE)
         or (state.screen is ScreenId.KEEPER_STATS_EDIT and state.keeper_typing == TYPING_VALUE)
         or (state.screen is ScreenId.KEEPER_QUEST and state.keeper_typing == TYPING_VALUE)
+        or (state.screen is ScreenId.KEEPER_GUILD and state.keeper_typing == TYPING_VALUE)
         or (state.screen is ScreenId.KEEPER_PLAYERS and state.keeper_typing == TYPING_NAME)
         or (state.screen is ScreenId.KEEPER_BAN and state.keeper_typing == TYPING_REASON)
     )
@@ -377,6 +387,8 @@ def typed(
         return _typed_stat(content, state, view, text)
     if state.screen is ScreenId.KEEPER_QUEST:
         return _typed_quest_count(content, state, view, text)
+    if state.screen is ScreenId.KEEPER_GUILD:
+        return _typed_vault(state, view, text)
     if state.screen is ScreenId.KEEPER_BAN:
         return replace(state, keeper_typing="", keeper_reason=text.strip()).with_notice(
             f"Причина записана: {text.strip()}. Теперь нажмите срок."
@@ -474,6 +486,10 @@ def advance(
             return _step_keeper_quest(content, state, command, view)
         case ScreenId.KEEPER_BAG:
             return _step_bag(content, state, command, view)
+        case ScreenId.KEEPER_PARTY:
+            return _step_keeper_party(state, command, view)
+        case ScreenId.KEEPER_GUILD:
+            return _step_keeper_guild(state, command, view)
         case _:
             return state.with_notice("Здесь только чтение. Нажмите «Назад».")
 
@@ -1231,6 +1247,110 @@ def _quest_write(state: PlayState, changed: Character, detail: str, said: str) -
     return state.storing(PendingWrite(other=changed, note=note)).with_notice(said)
 
 
+# --- отряд и гильдия игрока ------------------------------------------
+
+
+def _step_keeper_party(state: PlayState, command: Command, view: KeeperView) -> PlayState:
+    if view.target is None or view.target_party is None:
+        return go_back(state).with_notice("Этот игрок больше не в отряде.")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice(PRESS_A_BUTTON)
+    party = view.target_party
+    members = view.target_party_members
+
+    if labels.KEEPER_PARTY_DISBAND.matches(command.argument):
+        note = _note(KeeperAction.GROUP, view.target.name, "отряд расформирован")
+        return (
+            go_back(state)
+            .storing(PendingWrite(party_disband=party.leader_id, note=note))
+            .with_notice("Отряд расформирован.")
+        )
+
+    number = keeper_screens.group_kick_number(len(members), command.argument)
+    if number <= 1:
+        return state.with_notice("Не узнал. Нажмите строку из списка.")
+    member_id, member_name = members[number - 1]
+    changed = keeper_rules.remove_from_party(party, member_id)
+    if changed is None:
+        return state.with_notice("Так из отряда не вывести.")
+    note = _note(KeeperAction.GROUP, member_name, "выведен из отряда")
+    return state.storing(PendingWrite(party_save=changed, note=note)).with_notice(
+        f"{member_name} выведен из отряда."
+    )
+
+
+def _step_keeper_guild(state: PlayState, command: Command, view: KeeperView) -> PlayState:
+    if view.target is None or view.target_guild is None:
+        return go_back(state).with_notice("Этот игрок больше не в гильдии.")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice(PRESS_A_BUTTON)
+    guild = view.target_guild
+    members = view.target_guild_members
+
+    if labels.KEEPER_GUILD_DISBAND.matches(command.argument):
+        note = _note(KeeperAction.GROUP, guild.name, "гильдия распущена")
+        return (
+            go_back(state)
+            .storing(PendingWrite(guild_disband=guild.id, note=note))
+            .with_notice(f"Гильдия «{guild.name}» распущена.")
+        )
+    if labels.KEEPER_VAULT_SET.matches(command.argument):
+        return replace(state, keeper_typing=TYPING_VALUE).with_notice(
+            "Наберите новое число казны сообщением."
+        )
+
+    up = keeper_screens.rank_up_number(len(members), command.argument)
+    if up:
+        return _guild_rank(state, view, members, up, GuildRank.OFFICER)
+    down = keeper_screens.rank_down_number(len(members), command.argument)
+    if down:
+        return _guild_rank(state, view, members, down, GuildRank.MEMBER)
+    kick = keeper_screens.group_kick_number(len(members), command.argument)
+    if kick:
+        member_id, member_name, _ = members[kick - 1]
+        changed = keeper_rules.remove_from_guild(guild, member_id)
+        if changed is None:
+            return state.with_notice("Так из гильдии не вывести.")
+        note = _note(KeeperAction.GROUP, member_name, f"выведен из гильдии «{guild.name}»")
+        return state.storing(PendingWrite(guild_save=changed, note=note)).with_notice(
+            f"{member_name} выведен из гильдии."
+        )
+    return state.with_notice("Не узнал. Нажмите строку из списка.")
+
+
+def _guild_rank(
+    state: PlayState,
+    view: KeeperView,
+    members: tuple[tuple[int, str, GuildRank], ...],
+    number: int,
+    rank: GuildRank,
+) -> PlayState:
+    assert view.target_guild is not None  # проверено вызывающим
+    member_id, member_name, _ = members[number - 1]
+    changed = keeper_rules.set_guild_rank(view.target_guild, member_id, rank)
+    if changed is None:
+        return state.with_notice("Так звание не сменить.")
+    note = _note(KeeperAction.GROUP, member_name, f"звание: {rank.title}")
+    return state.storing(PendingWrite(guild_save=changed, note=note)).with_notice(
+        f"{member_name}: {rank.title}."
+    )
+
+
+def _typed_vault(state: PlayState, view: KeeperView, text: str) -> PlayState:
+    if view.target is None or view.target_guild is None:
+        return go_back(state).with_notice("Этот игрок больше не в гильдии.")
+    value = _to_int(text)
+    if value is None or value < 0:
+        return state.with_notice("Нужно целое число не меньше нуля.")
+    guild = view.target_guild
+    note = _note(KeeperAction.GROUP, guild.name, f"казна: {value}")
+    return (
+        replace(state, keeper_typing="")
+        .storing(PendingWrite(guild_vault=(guild.id, value), note=note))
+        .with_notice(f"В казне: {value}.")
+    )
+
+
 def _step_player_quests(
     content: GameContent, state: PlayState, command: Command, view: KeeperView
 ) -> PlayState:
@@ -1342,6 +1462,10 @@ def _step_player(
         return replace(state, keeper_typing="", keeper_page=PageState()).at(ScreenId.KEEPER_BAG)
     if labels.KEEPER_TRADES.matches(command.argument):
         return replace(state, keeper_typing="").at(ScreenId.KEEPER_TRADES)
+    if labels.KEEPER_PARTY_BTN.matches(command.argument) and view.target_party is not None:
+        return replace(state, keeper_typing="").at(ScreenId.KEEPER_PARTY)
+    if labels.KEEPER_GUILD_BTN.matches(command.argument) and view.target_guild is not None:
+        return replace(state, keeper_typing="").at(ScreenId.KEEPER_GUILD)
     if labels.KEEPER_BAN.matches(command.argument):
         return replace(state, keeper_typing="", keeper_reason="").at(ScreenId.KEEPER_BAN)
     if labels.KEEPER_UNBAN.matches(command.argument):

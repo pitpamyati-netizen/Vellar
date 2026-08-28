@@ -274,6 +274,48 @@ def test_respec_returns_every_class_point_and_keeps_the_racial(
     assert all(slot is None for slot in back.loadout.actives)
 
 
+def test_a_member_is_taken_out_of_the_party_but_not_the_leader() -> None:
+    from mmorpg.domain.rules.party import Party
+
+    party = Party(leader_id=1, members=(1, 2, 3))
+
+    out = keeper.remove_from_party(party, 2)
+    assert out is not None and out.members == (1, 3)
+
+    assert keeper.remove_from_party(party, 1) is None, "собравшего так не вывести"
+    assert keeper.remove_from_party(party, 9) is None, "его в отряде нет"
+
+
+def test_a_guild_member_is_taken_out_and_reranked_but_never_the_founder() -> None:
+    from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
+
+    guild = Guild(
+        id=1,
+        name="Клинки",
+        founder_id=1,
+        members=(
+            GuildMember(1, GuildRank.FOUNDER),
+            GuildMember(2, GuildRank.OFFICER),
+            GuildMember(3, GuildRank.MEMBER),
+        ),
+        vault_gold=200,
+    )
+
+    out = keeper.remove_from_guild(guild, 3)
+    assert out is not None and not out.has(3)
+    assert keeper.remove_from_guild(guild, 1) is None, "основателя не выводят"
+    assert keeper.remove_from_guild(guild, 9) is None
+
+    up = keeper.set_guild_rank(guild, 3, GuildRank.OFFICER)
+    assert up is not None and up.rank_of(3) is GuildRank.OFFICER
+    assert keeper.set_guild_rank(guild, 1, GuildRank.OFFICER) is None, "у основателя одно звание"
+    assert keeper.set_guild_rank(guild, 2, GuildRank.OFFICER) is None, "уже офицер"
+    assert keeper.set_guild_rank(guild, 2, GuildRank.FOUNDER) is None, "второго основателя нет"
+
+    assert keeper.set_vault_gold(guild, 500).vault_gold == 500
+    assert keeper.set_vault_gold(guild, -1).vault_gold == 0
+
+
 def test_a_keeper_flag_is_not_a_game_rule(hero: Character) -> None:
     """Ни одно правило этого не читает: флаг только открывает экран."""
     assert hero.is_admin is False

@@ -400,6 +400,41 @@ async def test_deleting_a_player_takes_two_presses_and_then_really_deletes(
     assert await characters.get(merla.id) is None
 
 
+async def test_a_guild_member_is_taken_out_from_the_card_and_it_reaches_storage(
+    keeper: Keeper, characters: InMemoryCharacterRepository, merla: Character
+) -> None:
+    from mmorpg.domain.rules.guild import GuildRank
+
+    argus = await characters.create(
+        Character(id=0, user_id=900_002, name="Аргус", race_id="human", class_id="warrior", level=3)
+    )
+    guilds = keeper.deps["guilds"]
+    guild = await guilds.create("Клинки", merla.id)
+    await guilds.save(guild.with_member(argus.id, GuildRank.MEMBER))
+
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(keeper.button_with("Мерла"))
+    await keeper.press(labels.KEEPER_GUILD_BTN.text)
+    await keeper.press(keeper.button_with("Вывести"))
+
+    stored = await guilds.of(merla.id)
+    assert stored is not None and not stored.has(argus.id)
+
+
+async def test_a_party_is_disbanded_from_the_card_and_it_reaches_storage(
+    keeper: Keeper, characters: InMemoryCharacterRepository, merla: Character
+) -> None:
+    parties = keeper.deps["parties"]
+    await parties.create(merla.id)
+
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(keeper.button_with("Мерла"))
+    await keeper.press(labels.KEEPER_PARTY_BTN.text)
+    await keeper.press(labels.KEEPER_PARTY_DISBAND.text)
+
+    assert await parties.of(merla.id) is None
+
+
 # --- статистика --------------------------------------------------------
 
 

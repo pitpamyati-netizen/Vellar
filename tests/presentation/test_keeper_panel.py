@@ -19,6 +19,8 @@ from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.ports.repositories import Census
 from mmorpg.domain.rules import moderation as moderation_rules
 from mmorpg.domain.rules import overlay as overlay_rules
+from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
+from mmorpg.domain.rules.party import Party
 from mmorpg.presentation.telegram.flows import keeper as keeper_flow
 from mmorpg.presentation.telegram.flows.play import Clock, advance, begin, render
 from mmorpg.presentation.telegram.keyboards import labels
@@ -71,6 +73,11 @@ class Panel:
         # Сумка открытого игрока и её правки за проход.
         self.target_bag: tuple[InventoryEntry, ...] = ()
         self.bag_changes: list[tuple[str, int]] = []
+        # Отряд и гильдия открытого игрока.
+        self.target_party: Party | None = None
+        self.target_party_members: tuple[tuple[int, str], ...] = ()
+        self.target_guild: Guild | None = None
+        self.target_guild_members: tuple[tuple[int, str, GuildRank], ...] = ()
 
     @property
     def view(self) -> KeeperView:
@@ -84,6 +91,10 @@ class Panel:
             target_locked=self.target_locked,
             target_ban=self.target_ban,
             target_bag=self.target_bag,
+            target_party=self.target_party,
+            target_party_members=self.target_party_members,
+            target_guild=self.target_guild,
+            target_guild_members=self.target_guild_members,
             now=CLOCK.now,
         )
 
@@ -167,6 +178,28 @@ class Panel:
                 if sentence is not None
                 else moderation_rules.lifted()
             )
+        if pending.party_save is not None:
+            self.target_party = pending.party_save
+            kept = set(pending.party_save.members)
+            self.target_party_members = tuple(
+                one for one in self.target_party_members if one[0] in kept
+            )
+        if pending.party_disband:
+            self.target_party = None
+            self.target_party_members = ()
+        if pending.guild_save is not None:
+            self.target_guild = pending.guild_save
+            kept_ids = {one.character_id for one in pending.guild_save.members}
+            self.target_guild_members = tuple(
+                (cid, name, pending.guild_save.rank_of(cid))
+                for cid, name, _ in self.target_guild_members
+                if cid in kept_ids
+            )
+        if pending.guild_disband:
+            self.target_guild = None
+            self.target_guild_members = ()
+        if pending.guild_vault is not None and self.target_guild is not None:
+            self.target_guild = replace(self.target_guild, vault_gold=pending.guild_vault[1])
         if pending.note is not None:
             self.notes.append(pending.note)
         if pending.service:
@@ -688,6 +721,25 @@ def walk_to(panel: Panel, screen: ScreenId) -> Panel:
         case ScreenId.KEEPER_BAG:
             walked = walk_to(panel, ScreenId.KEEPER_PLAYER)
             return walked.press(labels.KEEPER_BAG_BTN.text)
+        case ScreenId.KEEPER_PARTY:
+            walked = walk_to(panel, ScreenId.KEEPER_PLAYER)
+            walked.target_party = Party(leader_id=7, members=(7, 8))
+            walked.target_party_members = ((7, "Мерла"), (8, "Аргус"))
+            return walked.press(labels.KEEPER_PARTY_BTN.text)
+        case ScreenId.KEEPER_GUILD:
+            walked = walk_to(panel, ScreenId.KEEPER_PLAYER)
+            walked.target_guild = Guild(
+                id=1,
+                name="Клинки",
+                founder_id=7,
+                members=(GuildMember(7, GuildRank.FOUNDER), GuildMember(8, GuildRank.MEMBER)),
+                vault_gold=300,
+            )
+            walked.target_guild_members = (
+                (7, "Мерла", GuildRank.FOUNDER),
+                (8, "Аргус", GuildRank.MEMBER),
+            )
+            return walked.press(labels.KEEPER_GUILD_BTN.text)
         case _:
             return panel.press(labels.KEEPER_SERVICE.text)
 
@@ -1119,3 +1171,120 @@ def test_the_journal_is_a_door_of_its_own_and_only_reads(panel: Panel) -> None:
     assert walked.state.screen is ScreenId.KEEPER_LOG
     # Нажимать здесь нечего: кнопок нет, кроме служебного ряда.
     assert walked.buttons() == ["Назад", "Главное меню"]
+
+
+# --- отряд и гильдия игрока -----------------------------------------
+
+
+def _party_card(with_players: Panel) -> Panel:
+    """Карточка игрока, который собрал отряд из троих."""
+    card = opened(with_players)
+    card.target_party = Party(leader_id=7, members=(7, 8, 9))
+    card.target_party_members = ((7, "Мерла"), (8, "Аргус"), (9, "Довен"))
+    return card
+
+
+def _guild_card(with_players: Panel) -> Panel:
+    """Карточка игрока — основателя гильдии из троих."""
+    card = opened(with_players)
+    card.target_guild = Guild(
+        id=1,
+        name="Клинки",
+        founder_id=7,
+        members=(
+            GuildMember(7, GuildRank.FOUNDER),
+            GuildMember(8, GuildRank.OFFICER),
+            GuildMember(9, GuildRank.MEMBER),
+        ),
+        vault_gold=400,
+    )
+    card.target_guild_members = (
+        (7, "Мерла", GuildRank.FOUNDER),
+        (8, "Аргус", GuildRank.OFFICER),
+        (9, "Довен", GuildRank.MEMBER),
+    )
+    return card
+
+
+def test_group_buttons_are_absent_when_the_player_is_in_neither(with_players: Panel) -> None:
+    plain = opened(with_players)
+    assert labels.KEEPER_PARTY_BTN.text not in plain.buttons()
+    assert labels.KEEPER_GUILD_BTN.text not in plain.buttons()
+
+
+def test_the_party_button_appears_for_a_player_in_a_party(with_players: Panel) -> None:
+    assert labels.KEEPER_PARTY_BTN.text in _party_card(with_players).buttons()
+
+
+def test_the_guild_button_appears_for_a_player_in_a_guild(with_players: Panel) -> None:
+    assert labels.KEEPER_GUILD_BTN.text in _guild_card(with_players).buttons()
+
+
+def test_a_member_is_taken_out_of_the_party_but_not_the_leader(with_players: Panel) -> None:
+    card = _party_card(with_players).press(labels.KEEPER_PARTY_BTN.text)
+    assert card.state.screen is ScreenId.KEEPER_PARTY
+
+    card.press(labels.keeper_group_kick_label(2).text)
+    assert card.target_party is not None
+    assert card.target_party.members == (7, 9)
+    assert card.notes[-1].action == KeeperAction.GROUP
+    assert card.notes[-1].target == "Аргус"
+
+    # Собравшего кнопкой не вывести: его строка кнопки не получает.
+    assert labels.keeper_group_kick_label(1).text not in card.buttons()
+
+
+def test_the_party_is_disbanded_from_the_card(with_players: Panel) -> None:
+    card = _party_card(with_players).press(labels.KEEPER_PARTY_BTN.text)
+    card.press(labels.KEEPER_PARTY_DISBAND.text)
+
+    assert card.target_party is None
+    assert card.notes[-1].action == KeeperAction.GROUP
+    assert card.state.screen is ScreenId.KEEPER_PLAYER
+    assert labels.KEEPER_PARTY_BTN.text not in card.buttons()
+
+
+def test_a_guild_rank_is_raised_and_lowered_but_never_the_founder(with_players: Panel) -> None:
+    card = _guild_card(with_players).press(labels.KEEPER_GUILD_BTN.text)
+    assert card.state.screen is ScreenId.KEEPER_GUILD
+
+    card.press(labels.keeper_rank_down_label(2).text)
+    assert card.target_guild is not None
+    assert card.target_guild.rank_of(8) is GuildRank.MEMBER
+
+    card.press(labels.keeper_rank_up_label(2).text)
+    assert card.target_guild.rank_of(8) is GuildRank.OFFICER
+
+    # У основателя (номер 1) кнопок звания нет.
+    assert labels.keeper_rank_down_label(1).text not in card.buttons()
+    assert labels.keeper_group_kick_label(1).text not in card.buttons()
+
+
+def test_a_guild_member_is_taken_out_of_the_roster(with_players: Panel) -> None:
+    card = _guild_card(with_players).press(labels.KEEPER_GUILD_BTN.text)
+    card.press(labels.keeper_group_kick_label(3).text)
+
+    assert card.target_guild is not None
+    assert not card.target_guild.has(9)
+    assert card.notes[-1].action == KeeperAction.GROUP
+
+
+def test_the_guild_vault_is_set_by_a_typed_number(with_players: Panel) -> None:
+    card = _guild_card(with_players).press(labels.KEEPER_GUILD_BTN.text)
+    card.press(labels.KEEPER_VAULT_SET.text, "1500")
+
+    assert card.state.pending.guild_vault == (1, 1500)
+    assert card.target_guild is not None and card.target_guild.vault_gold == 1500
+    assert card.state.screen is ScreenId.KEEPER_GUILD
+
+    card.press(labels.KEEPER_VAULT_SET.text, "щедро")
+    assert card.state.notice and card.target_guild.vault_gold == 1500
+
+
+def test_the_guild_is_disbanded_from_the_card(with_players: Panel) -> None:
+    card = _guild_card(with_players).press(labels.KEEPER_GUILD_BTN.text)
+    card.press(labels.KEEPER_GUILD_DISBAND.text)
+
+    assert card.target_guild is None
+    assert card.state.screen is ScreenId.KEEPER_PLAYER
+    assert labels.KEEPER_GUILD_BTN.text not in card.buttons()

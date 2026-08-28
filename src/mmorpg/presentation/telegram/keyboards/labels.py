@@ -190,6 +190,26 @@ KEEPER_PROMOTE = label("Сделать смотрителем", "🗝")
 KEEPER_DEMOTE = label("Убрать из смотрителей", "🚷")
 KEEPER_TRADES = label("Сделки", "🤝")
 
+# Отряд и гильдия игрока.
+KEEPER_PARTY_BTN = label("Отряд игрока", "🫂")
+KEEPER_GUILD_BTN = label("Гильдия игрока", "🏛")
+KEEPER_PARTY_DISBAND = label("Расформировать отряд игрока", "💥")
+KEEPER_GUILD_DISBAND = label("Распустить гильдию игрока", "💥")
+KEEPER_VAULT_SET = label("Казна: выставить число", "💰")
+
+
+def keeper_group_kick_label(number: int) -> Label:
+    return label(f"Вывести {number}")
+
+
+def keeper_rank_up_label(number: int) -> Label:
+    return label(f"Повысить {number}")
+
+
+def keeper_rank_down_label(number: int) -> Label:
+    return label(f"Понизить {number}")
+
+
 # Обслуживание.
 KEEPER_SWEEP_DRAFTS = label("Убрать брошенных", "🧺")
 KEEPER_CHECK_BLOCKED = label("Проверить, кто заблокировал", "📮")

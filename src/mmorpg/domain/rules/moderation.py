@@ -66,6 +66,7 @@ ACTIONS: Mapping[KeeperAction, str] = {
     KeeperAction.GRANT_ITEM: "выдал вещь",
     KeeperAction.SKILL: "правил умения",
     KeeperAction.QUEST: "правил задание",
+    KeeperAction.GROUP: "правил отряд или гильдию",
 }
 
 

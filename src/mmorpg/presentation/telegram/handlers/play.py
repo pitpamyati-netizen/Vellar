@@ -201,6 +201,8 @@ async def play(
         now,
         settings,
         inventory,
+        parties,
+        guilds,
     )
 
     party = await _party_view(flow, character, characters, parties)
@@ -279,6 +281,8 @@ async def play(
         now=now,
         settings=settings,
         acting=character,
+        parties=parties,
+        guilds=guilds,
         granting=settings.is_admin(message.from_user.id),
     )
     if served:
@@ -341,6 +345,8 @@ async def play(
         now,
         settings,
         inventory,
+        parties,
+        guilds,
     )
     gathered = await _party_view(updated, character, characters, parties)
     guild_view = await _guild_view(updated, character, characters, guilds)
@@ -485,6 +491,12 @@ async def _goods(
     return Goods(gold=character.gold, owned=owned, stock=stock, prices=prices)
 
 
+async def _named(characters: CharacterRepository, character_id: int) -> str:
+    """Имя персонажа по id, или само число, если персонажа уже нет."""
+    one = await characters.get(character_id)
+    return one.name if one is not None else str(character_id)
+
+
 async def _keeper_view(
     flow: PlayState,
     character: Character,
@@ -497,6 +509,8 @@ async def _keeper_view(
     now: int,
     settings: Settings,
     inventory: InventoryRepository | None = None,
+    parties: PartyStore | None = None,
+    guilds: GuildStore | None = None,
 ) -> KeeperView:
     """Что панели показать. Для игрока это ноль запросов: ветка не выполняется.
 
@@ -542,6 +556,8 @@ async def _keeper_view(
             ScreenId.KEEPER_QUESTS,
             ScreenId.KEEPER_QUEST,
             ScreenId.KEEPER_BAG,
+            ScreenId.KEEPER_PARTY,
+            ScreenId.KEEPER_GUILD,
         }
         and flow.keeper_target
     ):
@@ -582,12 +598,44 @@ async def _keeper_view(
     if flow.screen is ScreenId.KEEPER_BAG and target is not None and inventory is not None:
         bag = await inventory.list_items(target.id)
 
+    # Отряд и гильдия открытого игрока: на карточке от них зависит, рисовать ли
+    # кнопку, а на самих экранах нужен и состав. Имена резолвятся здесь - домену
+    # их взять неоткуда, - и только там, где их показывают.
+    group_screens = {ScreenId.KEEPER_PLAYER, ScreenId.KEEPER_PARTY, ScreenId.KEEPER_GUILD}
+    named = flow.screen in {ScreenId.KEEPER_PARTY, ScreenId.KEEPER_GUILD}
+    target_party = None
+    target_party_members: tuple[tuple[int, str], ...] = ()
+    target_guild = None
+    target_guild_members: tuple[tuple[int, str, guild_rules.GuildRank], ...] = ()
+    if target is not None and flow.screen in group_screens:
+        if parties is not None and (party := await parties.of(target.id)) is not None:
+            target_party = party
+            if named:
+                party_names: list[tuple[int, str]] = []
+                for member_id in party.members:
+                    party_names.append((member_id, await _named(characters, member_id)))
+                target_party_members = tuple(party_names)
+        if guilds is not None and (guild := await guilds.of(target.id)) is not None:
+            target_guild = guild
+            if named:
+                ranked = sorted(guild.members, key=lambda one: -int(one.rank))
+                guild_names: list[tuple[int, str, guild_rules.GuildRank]] = []
+                for one in ranked:
+                    guild_names.append(
+                        (one.character_id, await _named(characters, one.character_id), one.rank)
+                    )
+                target_guild_members = tuple(guild_names)
+
     return KeeperView(
         records=registry.records,
         players=players,
         trades=journal,
         target=target,
         target_bag=bag,
+        target_party=target_party,
+        target_party_members=target_party_members,
+        target_guild=target_guild,
+        target_guild_members=target_guild_members,
         census=census,
         granting=granting,
         target_keeper=target_keeper,
@@ -612,6 +660,8 @@ async def _serve(
     now: int,
     settings: Settings,
     acting: Character,
+    parties: PartyStore,
+    guilds: GuildStore,
     granting: bool = False,
 ) -> str:
     """Сделать то, о чём попросила панель, и сказать числом, что получилось.
@@ -641,6 +691,18 @@ async def _serve(
                 await inventory.remove(write.other.id, item_id, -delta)
     if write.remove_character:
         await characters.delete(write.remove_character)
+    if write.party_save is not None:
+        await parties.save(write.party_save)
+    if write.party_disband:
+        await parties.disband(party_rules.Party(leader_id=write.party_disband))
+    if write.guild_save is not None:
+        await guilds.save(write.guild_save)
+    if write.guild_disband:
+        gone = await guilds.by_id(write.guild_disband)
+        if gone is not None:
+            await guilds.disband(gone)
+    if write.guild_vault is not None:
+        await _set_vault(guilds, *write.guild_vault)
     if write.keeper_grant is not None and granting:
         # Автомат уже спросил то же самое; здесь оно спрашивается ещё раз, потому
         # что раздача права - единственное, что раздаёт саму панель.
@@ -668,6 +730,24 @@ async def _serve(
             ),
         )
     return " ".join(said)
+
+
+async def _set_vault(guilds: GuildStore, guild_id: int, amount: int) -> None:
+    """Выставить казну гильдии числом.
+
+    Абсолютного «выставить» у хранилища нет нарочно: казна двигается условным
+    ``UPDATE`` (``Claude.md``, правило 8). Разницу до цели закрывают тем же
+    ``deposit``/``withdraw``, что и игроки, поэтому два офицера, нажавшие разом,
+    друг друга не затрут.
+    """
+    guild = await guilds.by_id(guild_id)
+    if guild is None:
+        return
+    delta = max(0, amount) - guild.vault_gold
+    if delta > 0:
+        await guilds.deposit(guild, delta)
+    elif delta < 0:
+        await guilds.withdraw(guild, -delta)
 
 
 async def _ban(
