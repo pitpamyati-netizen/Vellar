@@ -75,6 +75,10 @@ class BattleSession:
     #: неё: если узел успел смениться, забирать уже нечего.
     wave: int = 0
     depth: int = 0
+    #: Это заход в блуждающее подземелье (ADR 0037). Тогда ``city_id`` и ``slot``
+    #: называют локацию, где оно осело, - по ним снимают замок и убирают
+    #: пройденное подземелье.
+    roamer: bool = False
     #: Расчёт после боя уже проведён: кто добил, тот и заплатил всем.
     settled: bool = False
 
@@ -120,6 +124,7 @@ def begin(
     node: int = 0,
     wave: int = 0,
     depth: int = 0,
+    roamer: bool = False,
     opening_effects: Mapping[int, Sequence[ActiveEffect]] | None = None,
 ) -> tuple[BattleSession, dict[int, Character]]:
     """Собрать бой из тех, кто в нём участвует.
@@ -186,6 +191,7 @@ def begin(
         node=node,
         wave=wave,
         depth=depth,
+        roamer=roamer,
     )
     return session, roster
 
@@ -448,6 +454,7 @@ def serialise(session: BattleSession) -> str:
             "node": session.node,
             "wave": session.wave,
             "depth": session.depth,
+            "roamer": session.roamer,
             "settled": session.settled,
             "round": state.round,
             "order": list(state.order),
@@ -489,6 +496,7 @@ def deserialise(raw: str) -> BattleSession:
         node=int(data.get("node", 0)),
         wave=int(data.get("wave", 0)),
         depth=int(data.get("depth", 0)),
+        roamer=bool(data.get("roamer", False)),
         settled=bool(data.get("settled", False)),
     )
 

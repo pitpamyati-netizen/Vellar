@@ -37,7 +37,7 @@ from mmorpg.application.services.party import PartyStore
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
-from mmorpg.domain.entities.location import LocationState, Presence
+from mmorpg.domain.entities.location import LocationState, Presence, Roamer
 from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind
 from mmorpg.domain.entities.stats import StatCode
@@ -61,6 +61,7 @@ from mmorpg.domain.rules import moderation as moderation_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import party as party_rules
 from mmorpg.domain.rules import progression
+from mmorpg.domain.rules import roamer as roamer_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.economy import buy_price, roll_assortment
 from mmorpg.domain.rules.modifiers import collect_modifiers
@@ -78,10 +79,12 @@ from mmorpg.presentation.telegram.flows.play import (
 from mmorpg.presentation.telegram.flows.state import (
     TYPING_NAME,
     Clock,
+    Descent,
     Goods,
     LocationSession,
     PendingWrite,
     PlayState,
+    go_back,
 )
 from mmorpg.presentation.telegram.handlers.combat import open_fight
 from mmorpg.presentation.telegram.handlers.creation import welcome_screen
@@ -280,6 +283,19 @@ async def play(
     # Правка могла только что изменить мир, а рисовать надо уже изменённый.
     content = registry.current
     updated, here = await sync_location(content, updated, flow, character, locations, now, settings)
+
+    # Спуск в блуждающее подземелье: замок берут здесь, до боя, - подземелье
+    # общее, а ветка ничего не читает и не пишет (ADR 0037).
+    if updated.fight == "dungeon" and updated.descent.roamer and updated.descent.layer == 0:
+        blocked = await _claim_roamer(character, updated.descent, locations, parties)
+        if blocked:
+            updated = go_back(replace(updated, fight="", descent=Descent())).with_notice(blocked)
+            await state.set_state(STATE_FOR_SCREEN[updated.screen])
+            await state.update_data({STATE_KEY: updated.serialise()})
+            await render_play(
+                message, content, settings, updated, character, emoji=emoji, location_state=here
+            )
+            return
 
     if updated.fight:
         await open_fight(
@@ -759,7 +775,9 @@ async def _location_state(
     """Что стоит в узлах локации, где игрок находится. Пусто вне локации."""
     if not flow.session.active or not location_known(content, flow.session):
         return LocationState()
-    return await locations.state(flow.session.city_id, flow.session.slot, now=now)
+    state = await locations.state(flow.session.city_id, flow.session.slot, now=now)
+    roamer = await locations.roamer(flow.session.city_id, flow.session.slot, now=now)
+    return state.with_roamer(roamer)
 
 
 async def sync_location(
@@ -792,6 +810,9 @@ async def sync_location(
     if index >= 0:
         state = await take_from_node(content, session, index, locations, now, settings, state=state)
 
+    roamer = await _roaming_here(content, session, locations, state, now, settings)
+    state = state.with_roamer(roamer)
+
     await locations.arrive(
         session.city_id,
         session.slot,
@@ -805,6 +826,63 @@ async def sync_location(
         ttl=PRESENCE_TTL,
     )
     return updated, state
+
+
+async def _claim_roamer(
+    character: Character,
+    descent: Descent,
+    locations: LocationStateCache,
+    parties: PartyStore,
+) -> str:
+    """Взять замок подземелья перед заходом. Пустая строка - можно идти.
+
+    Одиночное подземелье не пускает того, кто ведёт отряд: спутники всё равно
+    остались бы снаружи, а замок занялся бы без нужды. Групповое не пускает
+    одиночку. Замок — ``SET NX`` в кэше локации: двое, нажавшие «Спуститься»
+    разом, не окажутся внутри вместе (ADR 0037).
+    """
+    party = await parties.of(character.id)
+    in_party = party is not None and len(party.members) >= 2
+    if descent.group and not in_party:
+        return "Это подземелье рассчитано на отряд. В одиночку туда не спускаются."
+    if not descent.group and in_party:
+        return "Подземелье для одного: с отрядом сюда не спускаются, ищите то, что на отряд."
+
+    took = await locations.claim_roamer(
+        descent.city_id, descent.slot, character.id, ttl=roamer_rules.ROAMER_HOLD_TTL
+    )
+    if not took:
+        return "В подземелье только что спустились. Дождитесь, пока выйдут."
+    return ""
+
+
+async def _roaming_here(
+    content: GameContent,
+    session: LocationSession,
+    locations: LocationStateCache,
+    state: LocationState,
+    now: int,
+    settings: Settings,
+) -> Roamer | None:
+    """Блуждающее подземелье этой локации: либо уже есть, либо сейчас объявится.
+
+    Появление детерминировано местом, поколением округи и окном (ADR 0037):
+    первый, кто зашёл в это окно, и заводит подземелье, остальные видят то же.
+    """
+    existing = await locations.roamer(session.city_id, session.slot, now=now)
+    if existing is not None:
+        return existing
+    epoch = node_rules.location_epoch(state)
+    location = build_location(content, settings.world_seed, session, epoch=epoch)
+    rolled = roamer_rules.roll_spawn(
+        visit_seed(settings.world_seed, session),
+        location,
+        epoch=epoch,
+        window=roamer_rules.window_of(now),
+    )
+    if rolled is None:
+        return None
+    return await locations.spawn_roamer(session.city_id, session.slot, rolled, ttl=LOCATION_TTL)
 
 
 async def take_from_node(

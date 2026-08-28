@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from dataclasses import replace
 from types import MappingProxyType
 
-from mmorpg.domain.entities.location import LocationState, NodeState, Presence
+from mmorpg.domain.entities.location import LocationState, NodeState, Presence, Roamer
 from mmorpg.domain.rules.nodes import refreshed, taken_one
 
 
@@ -44,6 +45,10 @@ class InMemoryLocationStateCache:
         self._clock = clock
         self._states: dict[str, tuple[dict[int, NodeState], float]] = {}
         self._people: dict[str, dict[int, tuple[Presence, int]]] = {}
+        #: Описатель подземелья и срок его жизни; отдельно - замок (номер того, кто
+        #: внутри) со своим сроком.
+        self._roamers: dict[str, tuple[Roamer, float]] = {}
+        self._holds: dict[str, tuple[int, float]] = {}
 
     @staticmethod
     def _key(city_id: str, slot: int) -> str:
@@ -97,6 +102,58 @@ class InMemoryLocationStateCache:
         ]
         fresh.sort(key=lambda item: item[1], reverse=True)
         return tuple(presence for presence, _ in fresh)
+
+    # --- блуждающее подземелье (ADR 0037) ---
+
+    def _held_by(self, key: str) -> int:
+        entry = self._holds.get(key)
+        if entry is None:
+            return 0
+        character_id, expires_at = entry
+        if expires_at <= self._clock():
+            del self._holds[key]
+            return 0
+        return character_id
+
+    async def roamer(self, city_id: str, slot: int, *, now: int) -> Roamer | None:
+        key = self._key(city_id, slot)
+        entry = self._roamers.get(key)
+        if entry is None:
+            return None
+        roamer, expires_at = entry
+        if expires_at <= self._clock():
+            del self._roamers[key]
+            return None
+        return replace(roamer, holder=self._held_by(key))
+
+    async def spawn_roamer(self, city_id: str, slot: int, roamer: Roamer, *, ttl: int) -> Roamer:
+        existing = await self.roamer(city_id, slot, now=0)
+        if existing is not None:
+            return existing
+        key = self._key(city_id, slot)
+        self._roamers[key] = (replace(roamer, holder=0), self._clock() + ttl)
+        return replace(roamer, holder=0)
+
+    async def claim_roamer(self, city_id: str, slot: int, character_id: int, *, ttl: int) -> bool:
+        key = self._key(city_id, slot)
+        held = self._held_by(key)
+        if held not in (0, character_id):
+            return False
+        self._holds[key] = (character_id, self._clock() + ttl)
+        return True
+
+    async def hold_roamer(self, city_id: str, slot: int, character_id: int, *, ttl: int) -> None:
+        key = self._key(city_id, slot)
+        if self._held_by(key) in (0, character_id):
+            self._holds[key] = (character_id, self._clock() + ttl)
+
+    async def release_roamer(self, city_id: str, slot: int) -> None:
+        self._holds.pop(self._key(city_id, slot), None)
+
+    async def clear_roamer(self, city_id: str, slot: int) -> None:
+        key = self._key(city_id, slot)
+        self._roamers.pop(key, None)
+        self._holds.pop(key, None)
 
 
 class InMemoryIdempotencyStore:

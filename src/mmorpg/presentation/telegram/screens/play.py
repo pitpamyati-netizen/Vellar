@@ -17,6 +17,7 @@ from mmorpg.domain.entities.location import (
     LocationNode,
     NodeKind,
     Presence,
+    Roamer,
 )
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules.combat import blow_range
@@ -349,6 +350,10 @@ def node_left_line(standing: Standing, kind: NodeKind) -> str:
     return f"{word}: {standing.left} из {standing.size}."
 
 
+#: Как подземелье описывается на экране, смотря на кого оно рассчитано.
+ROAMER_AUDIENCE: dict[bool, str] = {False: "рассчитано на одного", True: "рассчитано на отряд"}
+
+
 def location_screen(
     location: GeneratedLocation,
     node: LocationNode,
@@ -357,9 +362,13 @@ def location_screen(
     character_level: int = 1,
     others: Sequence[Presence] = (),
     pvp: bool = False,
+    roamer: Roamer | None = None,
     notice: str = "",
 ) -> Screen:
     neighbours = tuple(location.node(index) for index in node.links)
+    # Подземелье этого узла, если оно тут и свободно, - только тогда рисуется кнопка.
+    roamer_here = roamer if (roamer is not None and roamer.node == node.index) else None
+    roamer_open = roamer_here if (roamer_here is not None and not roamer_here.taken) else None
 
     def left_at(index: int) -> Standing:
         """Что стоит в узле. Про узел, о котором не сказали, экран не падает."""
@@ -389,6 +398,17 @@ def location_screen(
             lines.append(risk)
         lines.append(node_left_line(here, node.kind))
 
+    if roamer_open is not None:
+        lines.append(
+            f"Прямо здесь в земле открылось блуждающее подземелье, "
+            f"{ROAMER_AUDIENCE[roamer_open.group]}: тёмный ход вниз, комнаты с "
+            "развилками, назад пути нет, в глубине логово."
+        )
+    elif roamer_here is not None:
+        lines.append(
+            "Прямо здесь блуждающее подземелье, но в него уже спустились. Дождитесь, пока выйдут."
+        )
+
     lines.append(f"Узлов, где ещё что-то есть: {busy} из {len(worth_doing)}.")
     if busy == len(worth_doing):
         # Говорится один раз, в начале вылазки: что это за место и как оно устроено.
@@ -406,6 +426,13 @@ def location_screen(
             f"Хозяин логова стоит в узле {boss.index}, уровень {boss.level}, в "
             "самой глубине. Мимо его логова путь к выходу есть: драться с хозином "
             "необязательно."
+        )
+    if roamer is not None and roamer_here is None:
+        occupied = " Сейчас туда уже спустились." if roamer.taken else ""
+        lines.append(
+            f"В сводке этого не было: у узла {roamer.node} открылось блуждающее "
+            f"подземелье, уровень {roamer.level}, "
+            f"{ROAMER_AUDIENCE[roamer.group]}.{occupied}"
         )
 
     lines.append("Отсюда ведут тропы:")
@@ -428,6 +455,8 @@ def location_screen(
 
     action = label(NODE_ACTIONS[node.kind])
     rows: list[tuple[Label, ...]] = [(action,)]
+    if roamer_open is not None:
+        rows.insert(0, (labels.ENTER_ROAMER,))
     for person in others:
         # Позвать можно везде, напасть - только на вольной земле.
         row = (

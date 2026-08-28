@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
 from mmorpg.domain.entities.character import Character, InventoryEntry
-from mmorpg.domain.entities.location import LocationState, Presence
+from mmorpg.domain.entities.location import LocationState, Presence, Roamer
 from mmorpg.domain.entities.moderation import Ban, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, TradeRecord, TradeStatus
@@ -419,6 +419,34 @@ class LocationStateCache(Protocol):
         self, city_id: str, slot: int, node: int, *, exclude: int, now: int, ttl: int
     ) -> tuple[Presence, ...]:
         """Кто ещё стоит на этом узле прямо сейчас, свежие сверху."""
+
+    # --- блуждающее подземелье (ADR 0037) ---
+    #
+    # Подземелье живёт двумя записями: описатель (где стоит, на одного или на
+    # отряд, какая сложность) и замок (номер того, кто сейчас внутри). Обе со
+    # сроком.
+
+    async def roamer(self, city_id: str, slot: int, *, now: int) -> Roamer | None:
+        """Подземелье этой локации, если оно есть. ``holder`` подставлен из замка."""
+
+    async def spawn_roamer(self, city_id: str, slot: int, roamer: Roamer, *, ttl: int) -> Roamer:
+        """Поставить описатель, только если его ещё нет. Вернуть тот, что теперь лежит.
+
+        Первый записавший выигрывает: двое, вошедшие в пустую локацию разом, не
+        заведут два разных подземелья.
+        """
+
+    async def claim_roamer(self, city_id: str, slot: int, character_id: int, *, ttl: int) -> bool:
+        """Взять замок подземелья. ``True`` - взят (или уже за этим же персонажем)."""
+
+    async def hold_roamer(self, city_id: str, slot: int, character_id: int, *, ttl: int) -> None:
+        """Продлить замок: заход идёт, внутри всё ещё этот персонаж."""
+
+    async def release_roamer(self, city_id: str, slot: int) -> None:
+        """Снять замок: заход кончился, но само подземелье остаётся."""
+
+    async def clear_roamer(self, city_id: str, slot: int) -> None:
+        """Убрать подземелье целиком: его прошли до логова, оно осыпалось."""
 
 
 @runtime_checkable

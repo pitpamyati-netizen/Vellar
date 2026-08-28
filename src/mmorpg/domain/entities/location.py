@@ -153,6 +153,35 @@ class NodeState:
 
 
 @dataclass(frozen=True, slots=True)
+class Roamer:
+    """Блуждающее подземелье: подземный ход, которого в сводке не было (ADR 0037).
+
+    Появляется само собой у одного из узлов локации, стоит там до тех пор, пока
+    кто-нибудь не пройдёт его до логова (тогда оно осыпается), и заход в него
+    устроен тем же движком, что городской спуск (``domain/rules/dungeon.py``).
+    Пока внутри кто-то есть - ``holder`` держит его номер, и войти не может
+    больше никто.
+
+    Ничего из этого не хранится в БД: подземелье живёт в кэше локации со сроком,
+    как волны узлов и присутствие (``domain/rules/roamer.py``).
+    """
+
+    node: int
+    group: bool
+    difficulty: str
+    level: int
+    #: Окно появления (``roamer.window_of``). Входит в сид захода: подземелье,
+    #: осевшее в другом окне, - другое подземелье.
+    stamp: int
+    #: Номер персонажа, что сейчас внутри. Ноль - подземелье свободно.
+    holder: int = 0
+
+    @property
+    def taken(self) -> bool:
+        return self.holder != 0
+
+
+@dataclass(frozen=True, slots=True)
 class LocationState:
     """Что делят все, кто стоит в одной локации.
 
@@ -160,15 +189,23 @@ class LocationState:
     поколение считается из этого же состояния. Общим остаётся состояние каждого
     узла - какая волна там стоит и сколько от неё осталось. Стая, которую убил
     другой игрок, для тебя тоже мертва, а то, чего не тронул никто, всё ещё ждёт.
+
+    ``roamer`` - блуждающее подземелье, если оно сейчас в этой локации (ADR 0037).
     """
 
     nodes: Mapping[int, NodeState] = field(default_factory=dict)
+    roamer: Roamer | None = None
 
     def node(self, index: int) -> NodeState:
         return self.nodes.get(index, NodeState())
 
     def with_node(self, index: int, node: NodeState) -> LocationState:
-        return LocationState(nodes=MappingProxyType({**self.nodes, index: node}))
+        return LocationState(
+            nodes=MappingProxyType({**self.nodes, index: node}), roamer=self.roamer
+        )
+
+    def with_roamer(self, roamer: Roamer | None) -> LocationState:
+        return LocationState(nodes=self.nodes, roamer=roamer)
 
 
 @dataclass(frozen=True, slots=True)

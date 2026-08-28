@@ -52,6 +52,7 @@ from mmorpg.domain.rules import dungeon as dungeon_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import party as party_rules
 from mmorpg.domain.rules import pvp as pvp_rules
+from mmorpg.domain.rules import roamer as roamer_rules
 from mmorpg.domain.rules import turning as turning_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
 from mmorpg.domain.rules.combat import act
@@ -252,8 +253,17 @@ async def _spawn(
     if flow.fight == "dungeon" or flow.descent.active:
         descent = flow.descent
         city = content.city(descent.city_id)
-        # Данж занимает биом самой глубокой локации города: та же земля, ниже.
-        biome = city.locations[-1].biome
+        if descent.roamer:
+            # Подземелье осело прямо в локации: биом её, а не самой глубокой
+            # локации города, и одиночке спутников с собой не брать (ADR 0037).
+            biome = city.location(descent.slot).biome
+            group_stakes = roamer_rules.GROUP_STAKES if descent.group else 1.0
+            if not descent.group:
+                side = [(character, True)]
+        else:
+            # Данж занимает биом самой глубокой локации города: та же земля, ниже.
+            biome = city.locations[-1].biome
+            group_stakes = 1.0
         difficulty = dungeon_rules.difficulty_of(descent.difficulty)
         spec = dungeon_rules.spec_of(difficulty)
         room = dungeon_rules.room_of(descent.room)
@@ -266,8 +276,8 @@ async def _spawn(
             biome=biome,
             level=descent.level,
             rank=room.rank,
-            stakes=spec.stakes * dungeon_rules.ROOM_STAKES[room],
-            bounty=dungeon_rules.bounty_of(conditions),
+            stakes=spec.stakes * dungeon_rules.ROOM_STAKES[room] * group_stakes,
+            bounty=dungeon_rules.bounty_of(conditions) * group_stakes,
         )
         return begin(
             content,
@@ -277,7 +287,10 @@ async def _spawn(
             seed=seed,
             kind=BattleKind.DESCENT,
             owner=character.id,
+            city_id=descent.city_id,
+            slot=descent.slot,
             depth=descent.layer + 1,
+            roamer=descent.roamer,
             opening_effects=_dungeon_opening_effects(conditions),
         )
 
@@ -442,17 +455,26 @@ async def fight(
     session = await store.load(battle_id) if battle_id else None
     if session is None:
         # Боя нет: он кончился, истёк срок или состояние соврало.
-        await _leave_to_play(message, state, content, settings, flow, character)
+        await _leave_to_play(message, state, content, settings, flow, character, locations)
         return
 
     viewer = session.combatant_of(character.id)
     if viewer is None:  # pragma: no cover - в чужой бой не попадают
-        await _leave_to_play(message, state, content, settings, flow, character)
+        await _leave_to_play(message, state, content, settings, flow, character, locations)
         return
 
     if session.state.is_over:
         await _after_the_fight(
-            message, state, content, settings, character, flow, characters, state_cache, parties
+            message,
+            state,
+            content,
+            settings,
+            character,
+            flow,
+            characters,
+            state_cache,
+            parties,
+            locations,
         )
         return
 
@@ -753,6 +775,9 @@ async def _finish(
             if line:
                 payout.extra.append(line)
 
+    if session.roamer:
+        await _settle_roamer(session, next_flow, owner, payouts, locations)
+
     for character_id, character in updated.items():
         fighter = session.combatant_of(character_id)
         if fighter is None or not fighter.live:
@@ -969,6 +994,34 @@ def _heal_room_winners(
         updated[one.character_id] = character.with_health(current + restored, stats.max_health)
 
 
+async def _settle_roamer(
+    session: BattleSession,
+    next_flow: PlayState,
+    owner: Combatant | None,
+    payouts: dict[int, Payout],
+    locations: LocationStateCache,
+) -> None:
+    """Что стало с блуждающим подземельем после боя в нём (ADR 0037).
+
+    Логово пройдено (заход кончился победой) - подземелье осыпается и исчезает.
+    Победа в обычной комнате - замок продлевается, владелец всё ещё внутри.
+    Поражение - замок снят, но само подземелье остаётся: в него зайдёт следующий.
+    """
+    won = owner is not None and session.state.verdict_for(owner.id) is Verdict.VICTORY
+    completed = won and session.in_descent and not next_flow.descent.active
+    if completed:
+        await locations.clear_roamer(session.city_id, session.slot)
+        payouts.setdefault(session.owner, Payout()).extra.append(
+            "Ход за спиной осыпался: блуждающего подземелья больше нет."
+        )
+    elif won:
+        await locations.hold_roamer(
+            session.city_id, session.slot, session.owner, ttl=roamer_rules.ROAMER_HOLD_TTL
+        )
+    else:
+        await locations.release_roamer(session.city_id, session.slot)
+
+
 async def _after_dungeon_room(
     content: GameContent,
     settings: Settings,
@@ -1146,14 +1199,18 @@ async def _after_the_fight(
     characters: CharacterRepository,
     state_cache: StateCache,
     parties: PartyStore,
+    locations: LocationStateCache,
 ) -> None:
     """Экран итога - настоящий экран: он отвечает на каждую кнопку."""
     text = message.text or ""
     if labels.MAIN_MENU.matches(text) or text.strip().casefold() in {"/меню", "/menu"}:
+        if flow.descent.roamer:
+            await locations.release_roamer(flow.descent.city_id, flow.descent.slot)
         home = replace(
             flow,
             screen=ScreenId.MAIN_MENU,
             stack=NavigationStack((ScreenId.MAIN_MENU,)),
+            descent=Descent(),
             fight="",
             notice="",
         )
@@ -1169,10 +1226,9 @@ async def _after_the_fight(
         if picked is not None:
             if picked.descent.room == dungeon_rules.RoomKind.STAIRS.value:
                 # Ход наверх - это не бой: заход кончается с тем, что уже взято.
+                # Замок подземелья снимает ``_leave_to_play`` (ADR 0037).
                 await state.update_data({STATE_KEY: ""})
-                await _leave_to_play(
-                    message, state, content, settings, replace(flow, descent=Descent()), character
-                )
+                await _leave_to_play(message, state, content, settings, flow, character, locations)
                 return
             await state.update_data({STATE_KEY: ""})
             await open_fight(
@@ -1188,7 +1244,7 @@ async def _after_the_fight(
                 storage=_storage_of(state),
             )
             return
-    await _leave_to_play(message, state, content, settings, flow, character)
+    await _leave_to_play(message, state, content, settings, flow, character, locations)
 
 
 def _dungeon_fork(
@@ -1224,9 +1280,16 @@ async def _leave_to_play(
     settings: Settings,
     flow: PlayState,
     character: Character,
+    locations: LocationStateCache | None = None,
 ) -> None:
     """Бросить бой и вернуть игрока на тот экран, с которого он пришёл."""
     from mmorpg.presentation.telegram.handlers.play import render_play
+
+    # Брошенный заход отпускает замок: само блуждающее подземелье остаётся для
+    # других (ADR 0037).
+    if flow.descent.roamer and locations is not None:
+        await locations.release_roamer(flow.descent.city_id, flow.descent.slot)
+        flow = replace(flow, descent=Descent())
 
     stack, previous = flow.stack.pop()
     target = previous or (ScreenId.LOCATION if flow.session.active else ScreenId.CITY)

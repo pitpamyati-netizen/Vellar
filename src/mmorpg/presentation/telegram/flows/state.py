@@ -181,6 +181,13 @@ class Descent:
     tier: int = 1
     difficulty: str = "recon"
     room: str = "skirmish"
+    #: Это блуждающее подземелье в локации (ADR 0037), а не городской спуск. Тогда
+    #: ``slot`` называет локацию, ``stamp`` - окно появления подземелья, и оба
+    #: входят в сид захода вместо города и ``tier``.
+    roamer: bool = False
+    slot: int = 0
+    stamp: int = 0
+    group: bool = False
 
     @property
     def active(self) -> bool:
@@ -287,6 +294,10 @@ class PlayState:
                     self.descent.tier,
                     self.descent.difficulty,
                     self.descent.room,
+                    self.descent.roamer,
+                    self.descent.slot,
+                    self.descent.stamp,
+                    self.descent.group,
                 ],
                 "pick": self.pick_slot,
                 "edge": self.edge_skill,
@@ -331,6 +342,10 @@ class PlayState:
         descent_tier = raw_descent[4] if len(raw_descent) > 4 else 1
         descent_difficulty = raw_descent[5] if len(raw_descent) > 5 else "recon"
         descent_room = raw_descent[6] if len(raw_descent) > 6 else "skirmish"
+        descent_roamer = raw_descent[7] if len(raw_descent) > 7 else False
+        descent_slot = raw_descent[8] if len(raw_descent) > 8 else 0
+        descent_stamp = raw_descent[9] if len(raw_descent) > 9 else 0
+        descent_group = raw_descent[10] if len(raw_descent) > 10 else False
         # Раньше здесь лежала пара [вид, слот]: пассивные умения тоже клали в
         # слоты. Сохранённая пара читается как её второй член - номер слота.
         pick_raw = data.get("pick", 0)
@@ -358,6 +373,10 @@ class PlayState:
                 tier=int(descent_tier) or 1,
                 difficulty=str(descent_difficulty) or "recon",
                 room=str(descent_room) or "skirmish",
+                roamer=bool(descent_roamer),
+                slot=int(descent_slot),
+                stamp=int(descent_stamp),
+                group=bool(descent_group),
             ),
             list_page=PageState(
                 page=int(list_page),

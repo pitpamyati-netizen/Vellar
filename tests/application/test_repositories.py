@@ -11,7 +11,7 @@ from dataclasses import replace
 import pytest
 
 from mmorpg.domain.entities import Character, StatBlock
-from mmorpg.domain.entities.location import LocationState, NodeState, Presence
+from mmorpg.domain.entities.location import LocationState, NodeState, Presence, Roamer
 from mmorpg.domain.ports import (
     AccessibilitySettings,
     CharacterRepository,
@@ -329,6 +329,58 @@ async def test_somebody_who_walked_off_stops_being_seen() -> None:
     await cache.arrive("farhold", 1, Presence(7, "Мерла", 12, node=3), now=2000, ttl=600)
     await cache.leave("farhold", 1, 7)
     assert await cache.others_at("farhold", 1, 3, exclude=1, now=2000, ttl=600) == ()
+
+
+def _roamer(node: int = 3) -> Roamer:
+    return Roamer(node=node, group=False, difficulty="delve", level=7, stamp=1)
+
+
+async def test_a_roamer_is_spawned_once_and_seen_by_everyone() -> None:
+    cache = InMemoryLocationStateCache()
+    first = await cache.spawn_roamer("farhold", 1, _roamer(node=3), ttl=600)
+    # Второй, вошедший в ту же локацию, не заводит своё подземелье - видит то же.
+    second = await cache.spawn_roamer("farhold", 1, _roamer(node=5), ttl=600)
+    assert first.node == second.node == 3
+    assert (await cache.roamer("farhold", 1, now=0)).node == 3
+
+
+async def test_only_one_party_holds_the_roamer_at_a_time() -> None:
+    cache = InMemoryLocationStateCache()
+    await cache.spawn_roamer("farhold", 1, _roamer(), ttl=600)
+    assert await cache.claim_roamer("farhold", 1, 7, ttl=600) is True
+    # Тот же персонаж может «взять» замок снова - это не второй заход.
+    assert await cache.claim_roamer("farhold", 1, 7, ttl=600) is True
+    # Чужому вход закрыт, пока первый внутри.
+    assert await cache.claim_roamer("farhold", 1, 8, ttl=600) is False
+    assert (await cache.roamer("farhold", 1, now=0)).holder == 7
+
+
+async def test_releasing_the_hold_leaves_the_roamer_for_the_next_one() -> None:
+    cache = InMemoryLocationStateCache()
+    await cache.spawn_roamer("farhold", 1, _roamer(), ttl=600)
+    await cache.claim_roamer("farhold", 1, 7, ttl=600)
+    await cache.release_roamer("farhold", 1)
+    here = await cache.roamer("farhold", 1, now=0)
+    assert here is not None and here.holder == 0
+    assert await cache.claim_roamer("farhold", 1, 8, ttl=600) is True
+
+
+async def test_clearing_the_roamer_removes_it_completely() -> None:
+    cache = InMemoryLocationStateCache()
+    await cache.spawn_roamer("farhold", 1, _roamer(), ttl=600)
+    await cache.claim_roamer("farhold", 1, 7, ttl=600)
+    await cache.clear_roamer("farhold", 1)
+    assert await cache.roamer("farhold", 1, now=0) is None
+    assert await cache.claim_roamer("farhold", 1, 8, ttl=600) is True
+
+
+async def test_an_abandoned_hold_expires_on_its_own() -> None:
+    clock = FakeClock()
+    cache = InMemoryLocationStateCache(clock=clock)
+    await cache.spawn_roamer("farhold", 1, _roamer(), ttl=6000)
+    await cache.claim_roamer("farhold", 1, 7, ttl=600)
+    clock.advance(601)
+    assert (await cache.roamer("farhold", 1, now=0)).holder == 0
 
 
 async def test_duplicate_updates_are_dropped() -> None:

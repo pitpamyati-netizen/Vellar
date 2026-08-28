@@ -37,6 +37,7 @@ from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import quests as quest_rules
+from mmorpg.domain.rules import roamer as roamer_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules import turning as turning_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
@@ -201,7 +202,19 @@ def node_fight_seed(world_seed: str, session: LocationSession, wave: int) -> byt
 
 
 def dungeon_run_seed(world_seed: str, descent: Descent) -> bytes:
-    """Сид всего захода: из него растут и развилки, и условия (ADR 0036)."""
+    """Сид всего захода: из него растут и развилки, и условия (ADR 0036).
+
+    У блуждающего подземелья (ADR 0037) сид привязан к его личности - месту, слоту
+    и окну появления, - а не к городскому входу.
+    """
+    if descent.roamer:
+        return roamer_rules.run_seed(
+            world_seed,
+            descent.city_id,
+            descent.slot,
+            descent.stamp,
+            dungeon_rules.difficulty_of(descent.difficulty),
+        )
     return dungeon_rules.run_seed(
         world_seed,
         descent.city_id,
@@ -402,6 +415,7 @@ def render(
                 character_level=character.level,
                 others=neighbours,
                 pvp=_location_allows_pvp(content, state.session),
+                roamer=here_now.roamer,
                 notice=state.notice,
             )
         # Экран говорит «локация», а вылазки за ним больше нет: состояние, сохранённое
@@ -1944,6 +1958,9 @@ def _handle_location(
             .with_notice(f"Вы покинули локацию {location.name}.")
         )
 
+    if labels.ENTER_ROAMER.matches(command.argument):
+        return _enter_roamer(state, location_state, node.index, now)
+
     for person in neighbours:
         if screens.invite_label(person.name).matches(command.argument):
             # Звать умеет только хендлер: отряд лежит в общем хранилище, а
@@ -1975,6 +1992,34 @@ def _handle_location(
         )
 
     return state.with_notice("Не узнал это действие. Нажмите кнопку узла.")
+
+
+def _enter_roamer(
+    state: PlayState, location_state: LocationState, node_index: int, now: int
+) -> PlayState:
+    """Спуститься в блуждающее подземелье (ADR 0037).
+
+    Ветка только собирает заход; замок берёт хендлер - подземелье общее, а
+    автомат ничего не читает и не пишет (``domain/rules/roamer.py``).
+    """
+    roamer = location_state.roamer
+    if roamer is None or roamer.node != node_index:
+        return state.with_notice("Здесь никакого подземелья нет.")
+    if roamer.taken:
+        return state.with_notice("В подземелье уже спустились. Дождитесь, пока выйдут.")
+    descent = Descent(
+        city_id=state.session.city_id,
+        slot=state.session.slot,
+        level=max(1, roamer.level),
+        layer=0,
+        started_at=now,
+        difficulty=roamer.difficulty,
+        room=dungeon_rules.RoomKind.SKIRMISH.value,
+        roamer=True,
+        stamp=roamer.stamp,
+        group=roamer.group,
+    )
+    return replace(state, descent=descent, fight="dungeon").at(ScreenId.COMBAT)
 
 
 def _empty_node_line(node_name: str) -> str:

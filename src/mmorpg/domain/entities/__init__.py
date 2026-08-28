@@ -59,6 +59,7 @@ from mmorpg.domain.entities.location import (
     LocationState,
     NodeKind,
     NodeState,
+    Roamer,
 )
 from mmorpg.domain.entities.overlay import KEEPER_PREFIX, OverlayKind, OverlayRecord
 from mmorpg.domain.entities.quest import ObjectiveKind, Quest, QuestLog
@@ -138,6 +139,7 @@ __all__ = [
     "Rarity",
     "Recipe",
     "RecipeInput",
+    "Roamer",
     "Skill",
     "SkillEdge",
     "SkillKind",

@@ -806,6 +806,111 @@ async def test_a_descent_pays_at_the_bottom_and_not_before(
     assert stored.gold > strong.gold
 
 
+# --- блуждающее подземелье (ADR 0037) -----------------------------------
+
+
+async def _seed_roamer(deltas: Any, node: int, *, group: bool = False, holder: int = 0) -> None:
+    from mmorpg.domain.entities.location import Roamer
+
+    # Хождение по локации могло уже бросить подземелье само (``_roaming_here``); тест
+    # ставит свой на известный узел.
+    await deltas.clear_roamer("farhold", 1)
+    await deltas.spawn_roamer(
+        "farhold",
+        1,
+        Roamer(node=node, group=group, difficulty="delve", level=3, stamp=1),
+        ttl=600,
+    )
+    if holder:
+        await deltas.claim_roamer("farhold", 1, holder, ttl=600)
+
+
+async def test_a_roamer_shows_up_in_the_location_and_a_solo_run_can_be_entered(
+    player: Player, content: GameContent, deltas: Any
+) -> None:
+    node = await walk_to(player, content, NodeKind.GATHER)
+    await _seed_roamer(deltas, node)
+
+    shown = await player.press("Осмотреться")
+    assert "подземелье" in shown.text().casefold()
+    assert "Спуститься в подземелье" in [item.text for row in shown.rows for item in row]
+
+    screen = await player.press("Спуститься в подземелье")
+    assert screen.id is ScreenId.COMBAT
+    flow = await player.flow()
+    assert flow.descent.roamer is True
+    assert flow.descent.slot == 1
+    assert flow.descent.group is False
+    # Пока игрок внутри - подземелье занято, чужому вход закрыт.
+    held = await deltas.roamer("farhold", 1, now=0)
+    assert held is not None and held.holder != 0
+    assert await deltas.claim_roamer("farhold", 1, 424_242, ttl=600) is False
+
+
+async def test_a_taken_roamer_shows_no_button_and_refuses_entry(
+    player: Player, content: GameContent, deltas: Any
+) -> None:
+    node = await walk_to(player, content, NodeKind.GATHER)
+    await _seed_roamer(deltas, node, holder=999_999)
+
+    shown = await player.press("Осмотреться")
+    assert "уже спустились" in shown.text().casefold()
+    assert "Спуститься в подземелье" not in [item.text for row in shown.rows for item in row]
+
+
+async def test_a_group_roamer_turns_a_lone_adventurer_away(
+    player: Player, content: GameContent, deltas: Any
+) -> None:
+    node = await walk_to(player, content, NodeKind.GATHER)
+    await _seed_roamer(deltas, node, group=True)
+    await player.press("Осмотреться")
+
+    screen = await player.press("Спуститься в подземелье")
+    assert screen.id is ScreenId.LOCATION
+    assert "отряд" in screen.text().casefold()
+    # Замок не взят: одиночку не пустили.
+    here = await deltas.roamer("farhold", 1, now=0)
+    assert here is not None and here.holder == 0
+
+
+async def test_a_roamer_run_carried_to_the_lair_makes_the_rift_vanish(
+    player: Player,
+    content: GameContent,
+    characters: InMemoryCharacterRepository,
+    deltas: Any,
+    argus: Character,
+) -> None:
+    """Пройденное до логова подземелье осыпается и исчезает (ADR 0037)."""
+    allowance = stat_allowance(content, 12)
+    strong = replace(
+        argus,
+        level=12,
+        gold=1_000,
+        health=0,
+        allocated=StatBlock(STR=allowance // 2, END=allowance - allowance // 2),
+    )
+    await characters.save(strong)
+
+    node = await walk_to(player, content, NodeKind.GATHER)
+    await _seed_roamer(deltas, node)
+    await player.press("Осмотреться")
+    screen = await player.press("Спуститься в подземелье")
+
+    doors = ("Логово хозяина", "Дальше — схватка", "Дальше — затишье", "Дальше — крупный зверь")
+    for _ in range(200):
+        text = screen.text()
+        if "блуждающего подземелья больше нет" in text.casefold():
+            assert await deltas.roamer("farhold", 1, now=0) is None
+            return
+        if text.startswith("Поражение."):
+            pytest.skip("the run was lost; the rift stays for the next one")
+        if "Впереди развилка" in text or "Логово хозяина:" in text:
+            screen = await player.press(next(one for one in doors if one in text))
+            continue
+        screen = await player.press("Атака")
+    pytest.fail("the roamer run never reached the lair")
+
+
 def test_a_grim_descent_names_a_hazard_and_a_boon() -> None:
     """«Гиблый спуск» несёт два условия — одну беду и одно благо (ADR 0036)."""
     from mmorpg.domain.rules import dungeon as dungeon_rules

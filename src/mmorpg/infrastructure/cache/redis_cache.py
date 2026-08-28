@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
-from mmorpg.domain.entities.location import LocationState, NodeState, Presence
+from mmorpg.domain.entities.location import LocationState, NodeState, Presence, Roamer
 from mmorpg.domain.rules.nodes import refreshed, taken_one
 
 if TYPE_CHECKING:  # pragma: no cover - только для типов
@@ -76,6 +76,14 @@ class RedisLocationStateCache:
     @staticmethod
     def _people_key(city_id: str, slot: int) -> str:
         return f"loc:{city_id}:{slot}:who"
+
+    @staticmethod
+    def _roamer_key(city_id: str, slot: int) -> str:
+        return f"loc:{city_id}:{slot}:roamer"
+
+    @staticmethod
+    def _hold_key(city_id: str, slot: int) -> str:
+        return f"loc:{city_id}:{slot}:roamer:held"
 
     async def state(self, city_id: str, slot: int, *, now: int) -> LocationState:
         raw = await self._client.hgetall(self._state_key(city_id, slot))
@@ -143,6 +151,60 @@ class RedisLocationStateCache:
             await self._client.hdel(key, *stale)
         seen.sort(key=lambda item: item[1], reverse=True)
         return tuple(presence for presence, _ in seen)
+
+    # --- блуждающее подземелье (ADR 0037) ---
+
+    async def _holder(self, city_id: str, slot: int) -> int:
+        held = await self._client.get(self._hold_key(city_id, slot))
+        return int(_text(held)) if held else 0
+
+    async def roamer(self, city_id: str, slot: int, *, now: int) -> Roamer | None:
+        raw = await self._client.get(self._roamer_key(city_id, slot))
+        if not raw:
+            return None
+        data = json.loads(_text(raw))
+        return Roamer(
+            node=int(data["node"]),
+            group=bool(data["group"]),
+            difficulty=str(data["difficulty"]),
+            level=int(data["level"]),
+            stamp=int(data["stamp"]),
+            holder=await self._holder(city_id, slot),
+        )
+
+    async def spawn_roamer(self, city_id: str, slot: int, roamer: Roamer, *, ttl: int) -> Roamer:
+        key = self._roamer_key(city_id, slot)
+        payload = json.dumps(
+            {
+                "node": roamer.node,
+                "group": roamer.group,
+                "difficulty": roamer.difficulty,
+                "level": roamer.level,
+                "stamp": roamer.stamp,
+            },
+            ensure_ascii=False,
+        )
+        # NX: первый записавший выигрывает; остальным возвращаем то, что уже лежит.
+        await self._client.set(key, payload, ex=max(1, ttl), nx=True)
+        found = await self.roamer(city_id, slot, now=0)
+        return found if found is not None else roamer
+
+    async def claim_roamer(self, city_id: str, slot: int, character_id: int, *, ttl: int) -> bool:
+        key = self._hold_key(city_id, slot)
+        stored = await self._client.set(key, str(character_id), ex=max(1, ttl), nx=True)
+        if stored:
+            return True
+        return await self._holder(city_id, slot) == character_id
+
+    async def hold_roamer(self, city_id: str, slot: int, character_id: int, *, ttl: int) -> None:
+        if await self._holder(city_id, slot) in (0, character_id):
+            await self._client.set(self._hold_key(city_id, slot), str(character_id), ex=max(1, ttl))
+
+    async def release_roamer(self, city_id: str, slot: int) -> None:
+        await self._client.delete(self._hold_key(city_id, slot))
+
+    async def clear_roamer(self, city_id: str, slot: int) -> None:
+        await self._client.delete(self._roamer_key(city_id, slot), self._hold_key(city_id, slot))
 
 
 class RedisIdempotencyStore:

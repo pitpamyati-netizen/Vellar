@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 import pytest_asyncio
 
-from mmorpg.domain.entities.location import LocationState, NodeState, Presence
+from mmorpg.domain.entities.location import LocationState, NodeState, Presence, Roamer
 from mmorpg.domain.rules.nodes import RESPAWN_SECONDS
 from mmorpg.infrastructure.cache.redis_cache import (
     RedisIdempotencyStore,
@@ -133,6 +133,26 @@ async def test_a_stale_presence_is_forgotten(redis) -> None:
         TEST_CITY, 1, Presence(TEST_CHARACTER, "Мерла", 12, node=2), now=1000, ttl=600
     )
     assert await locations.others_at(TEST_CITY, 1, 2, exclude=0, now=1601, ttl=600) == ()
+
+
+async def test_a_roamer_spawns_once_and_only_one_party_holds_it(redis) -> None:
+    locations = RedisLocationStateCache(redis)
+    rift = Roamer(node=3, group=False, difficulty="delve", level=7, stamp=1)
+    first = await locations.spawn_roamer(TEST_CITY, 1, rift, ttl=60)
+    second = await locations.spawn_roamer(
+        TEST_CITY, 1, Roamer(node=5, group=True, difficulty="grim", level=7, stamp=2), ttl=60
+    )
+    assert first.node == second.node == 3
+
+    assert await locations.claim_roamer(TEST_CITY, 1, 7, ttl=60) is True
+    assert await locations.claim_roamer(TEST_CITY, 1, 8, ttl=60) is False
+    assert (await locations.roamer(TEST_CITY, 1, now=0)).holder == 7
+
+    await locations.release_roamer(TEST_CITY, 1)
+    assert await locations.claim_roamer(TEST_CITY, 1, 8, ttl=60) is True
+
+    await locations.clear_roamer(TEST_CITY, 1)
+    assert await locations.roamer(TEST_CITY, 1, now=0) is None
 
 
 # --- отсев повторов --------------------------------------------------------

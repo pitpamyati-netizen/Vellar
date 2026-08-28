@@ -32,6 +32,7 @@ from mmorpg.domain.entities.location import (
     EnemyRank,
     LocationState,
     NodeState,
+    Roamer,
 )
 from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
@@ -596,6 +597,18 @@ def all_screens(
             sample_location.exit_node,
             standing=emptied_location(sample_location),
             notice="Узел вычищен.",
+        ),
+        play.location_screen(
+            sample_location,
+            sample_location.node(1),
+            standing=emptied_location(sample_location),
+            roamer=Roamer(node=1, group=True, difficulty="delve", level=3, stamp=1),
+        ),
+        play.location_screen(
+            sample_location,
+            sample_location.entrance,
+            standing=emptied_location(sample_location),
+            roamer=Roamer(node=1, group=False, difficulty="grim", level=3, stamp=1, holder=42),
         ),
         play.character_screen(content, hero, derived_stats(content, hero)),
         play.character_screen(content, fighter, derived_stats(content, fighter)),
