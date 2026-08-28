@@ -516,6 +516,8 @@ async def _keeper_view(
             ScreenId.KEEPER_FIELD,
             ScreenId.KEEPER_BAN,
             ScreenId.KEEPER_TRADES,
+            ScreenId.KEEPER_TUNE,
+            ScreenId.KEEPER_AMOUNT,
         }
         and flow.keeper_target
     ):

@@ -36,7 +36,28 @@ POINTS_STEP = 5
 
 
 def grant_gold(character: Character, amount: int = GOLD_STEP) -> Character:
+    """Изменить золото на руках. Число со знаком: минус списывает, ноль не бывает."""
     return character.with_gold(amount)
+
+
+def set_bank_gold(character: Character, amount: int) -> Character:
+    """Выставить золото в ячейке. Ниже нуля не опускается."""
+    return replace(character, bank_gold=max(0, amount))
+
+
+def set_health(content: GameContent, character: Character, value: int) -> Character:
+    """Выставить здоровье в границах нынешнего максимума.
+
+    Число зажимается так же, как зажимается сохранённое (``Character.with_health``):
+    ниже единицы играть нельзя, выше максимума нечем.
+    """
+    maximum = derived_stats(content, character).max_health
+    return character.with_health(value, maximum)
+
+
+def rename(character: Character, name: str) -> Character:
+    """Сменить имя. Годность имени проверяет тот, кто принял набранное."""
+    return replace(character, name=name.strip())
 
 
 def raise_level(content: GameContent, character: Character) -> tuple[Character, LevelUp]:

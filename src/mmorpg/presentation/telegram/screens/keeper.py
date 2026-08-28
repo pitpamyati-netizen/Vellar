@@ -138,6 +138,7 @@ def keeper_screen(
             (labels.KEEPER_LOG,),
             (labels.KEEPER_GOLD, labels.KEEPER_LEVEL),
             (labels.KEEPER_HEAL, labels.KEEPER_POINTS),
+            (labels.KEEPER_TUNE,),
         ),
     )
 
@@ -473,6 +474,7 @@ def player_screen(
     rows: list[tuple[Label, ...]] = [
         (labels.KEEPER_GOLD, labels.KEEPER_LEVEL),
         (labels.KEEPER_HEAL, labels.KEEPER_POINTS),
+        (labels.KEEPER_TUNE,),
         (labels.KEEPER_MOVE, labels.KEEPER_TRADES),
         (labels.KEEPER_UNBAN,) if _under_ban(view) else (labels.KEEPER_BAN,),
         (labels.KEEPER_DELETE,),
@@ -509,6 +511,107 @@ def _right(view: KeeperView) -> str:
     if view.target_keeper:
         return "Права смотрителя: есть."
     return "Права смотрителя: нет."
+
+
+# --- точные правки ----------------------------------------------------
+
+#: Точные правки персонажа: те же выдачи, что быстрые кнопки, но числом или
+#: словом, а не фиксированным шагом. Ключ — то, чем правка лежит в состоянии
+#: автомата (``state.keeper_field``); порядок — то, в котором рисуются кнопки.
+TUNE_KEYS: tuple[str, ...] = (
+    "gold",
+    "bank",
+    "health",
+    "level",
+    "stat_points",
+    "skill_points",
+    "name",
+)
+
+_TUNE_LABEL: dict[str, Label] = {
+    "gold": labels.KEEPER_SET_GOLD,
+    "bank": labels.KEEPER_SET_BANK,
+    "health": labels.KEEPER_SET_HEALTH,
+    "level": labels.KEEPER_SET_LEVEL,
+    "stat_points": labels.KEEPER_ADD_STAT_POINTS,
+    "skill_points": labels.KEEPER_ADD_SKILL_POINTS,
+    "name": labels.KEEPER_RENAME,
+}
+
+#: Единственная правка, которую набирают словом, а не числом.
+TUNE_TEXT: frozenset[str] = frozenset({"name"})
+
+
+def tune_label(key: str) -> Label:
+    return _TUNE_LABEL[key]
+
+
+def tune_key_from_button(pressed: str) -> str | None:
+    return next((key for key in TUNE_KEYS if _TUNE_LABEL[key].matches(pressed)), None)
+
+
+def _tune_current(subject: Character, stats: DerivedStats, key: str) -> str:
+    match key:
+        case "gold":
+            return gold(subject.gold)
+        case "bank":
+            return gold(subject.bank_gold)
+        case "health":
+            return amount(subject.health_or(stats.max_health), stats.max_health)
+        case "level":
+            return str(subject.level)
+        case "stat_points":
+            return f"нераспределено {subject.unspent_stat_points}"
+        case "skill_points":
+            return f"нераспределено {subject.unspent_skill_points}"
+        case _:
+            return subject.name
+
+
+def _tune_how(key: str) -> str:
+    match key:
+        case "gold":
+            return "Наберите число со знаком: 500 добавит, -500 спишет."
+        case "bank" | "health":
+            return "Наберите число: оно станет новым значением."
+        case "level":
+            return "Наберите уровень: поднимется до него, по одному. Понизить нельзя."
+        case "stat_points" | "skill_points":
+            return "Наберите число: столько очков придёт сверх нынешних. Отнять нельзя."
+        case _:
+            return "Наберите новое имя сообщением."
+
+
+def tune_screen(subject: Character, stats: DerivedStats, *, own: bool, notice: str = "") -> Screen:
+    """Меню точных правок персонажа: то же, что быстрые кнопки, но числом."""
+    whose = "ваш персонаж" if own else subject.name
+    lines = (
+        notice or f"Задать точно: {whose}.",
+        f"Золото {gold(subject.gold)}, в ячейке {gold(subject.bank_gold)}. "
+        f"Здоровье {amount(subject.health_or(stats.max_health), stats.max_health)}. "
+        f"Уровень {subject.level}.",
+        f"Очков нераспределено: характеристик {subject.unspent_stat_points}, "
+        f"умений {subject.unspent_skill_points}.",
+        "Нажмите, что менять. Значение наберёте следующим сообщением.",
+    )
+    rows = tuple(
+        tuple(_TUNE_LABEL[key] for key in TUNE_KEYS[index : index + 2])
+        for index in range(0, len(TUNE_KEYS), 2)
+    )
+    return Screen(id=ScreenId.KEEPER_TUNE, lines=lines, rows=rows)
+
+
+def amount_screen(
+    key: str, subject: Character, stats: DerivedStats, *, own: bool, notice: str = ""
+) -> Screen:
+    """Одно значение точной правки: набрать число или имя сообщением."""
+    whose = "ваш персонаж" if own else subject.name
+    lines = (
+        notice or f"{_TUNE_LABEL[key].text}: {whose}.",
+        f"Сейчас: {_tune_current(subject, stats, key)}.",
+        _tune_how(key),
+    )
+    return Screen(id=ScreenId.KEEPER_AMOUNT, lines=lines)
 
 
 # --- блокировка --------------------------------------------------------

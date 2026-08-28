@@ -139,6 +139,16 @@ KEEPER_FORGET = label("Снять правку", "🧽")
 KEEPER_CLEAR = label("Очистить поле", "␡")
 KEEPER_RELOAD = label("Перечитать правки", "🔄")
 
+# Точные правки: то же, что быстрые выдачи, но числом, а не шагом.
+KEEPER_TUNE = label("Задать точно", "🎚")
+KEEPER_SET_GOLD = label("Золото: изменить на число", "🪙")
+KEEPER_SET_BANK = label("Ячейка: выставить число", "🏦")
+KEEPER_SET_HEALTH = label("Здоровье: выставить число", "🩸")
+KEEPER_SET_LEVEL = label("Уровень: поднять до числа", "🔼")
+KEEPER_ADD_STAT_POINTS = label("Выдать очки характеристик", "🎯")
+KEEPER_ADD_SKILL_POINTS = label("Выдать очки умений", "✨")
+KEEPER_RENAME = label("Переименовать", "✍")
+
 # Игроки.
 KEEPER_FIND = label("Найти по имени", "🔤")
 KEEPER_MOVE = label("Перевести в город", "🧭")

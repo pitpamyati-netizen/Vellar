@@ -88,6 +88,8 @@ class ScreenId(StrEnum):
     KEEPER_BAN = "keeper_ban"
     KEEPER_LOG = "keeper_log"
     KEEPER_TRADES = "keeper_trades"
+    KEEPER_TUNE = "keeper_tune"
+    KEEPER_AMOUNT = "keeper_amount"
     CREATE_NAME = "create_name"
     CREATE_RACE = "create_race"
     CREATE_RACE_DETAILS = "create_race_details"

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from mmorpg.application.dto.creation import validate_name
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, GameContent
 from mmorpg.domain.entities.moderation import KeeperAction, KeeperEntry
@@ -61,6 +62,8 @@ PANEL: frozenset[ScreenId] = frozenset(
         ScreenId.KEEPER_BAN,
         ScreenId.KEEPER_LOG,
         ScreenId.KEEPER_TRADES,
+        ScreenId.KEEPER_TUNE,
+        ScreenId.KEEPER_AMOUNT,
     }
 )
 SCREENS: frozenset[ScreenId] = PANEL | {ScreenId.NPCS, ScreenId.NPC}
@@ -109,6 +112,27 @@ def _spec(state: PlayState) -> FieldSpec | None:
 def _record(content: GameContent, state: PlayState, view: KeeperView) -> OverlayRecord:
     kind = OverlayKind(state.keeper_kind)
     return overlay_rules.effective(content, view.records, kind, state.keeper_entity)
+
+
+def _tune_subject(
+    character: Character, state: PlayState, view: KeeperView
+) -> tuple[Character | None, bool]:
+    """Кого правит точная правка: чужого персонажа с карточки или своего.
+
+    Различает их ``keeper_target``: на своей панели он ноль, на карточке игрока —
+    его идентификатор. Второе значение — ``own``: своя правка в журнал не пишется.
+    """
+    if state.keeper_target:
+        return view.target, False
+    return character, True
+
+
+def _to_int(text: str) -> int | None:
+    raw = text.strip().lstrip("+")
+    try:
+        return int(raw)
+    except ValueError:
+        return None
 
 
 # --- рисование ---------------------------------------------------------
@@ -169,6 +193,28 @@ def _render_panel(
             return keeper_screens.log_screen(view, state.notice)
         case ScreenId.KEEPER_TRADES if view.target is not None:
             return keeper_screens.trades_screen(view.target, view, state.notice)
+        case ScreenId.KEEPER_TUNE:
+            subject, own = _tune_subject(character, state, view)
+            if subject is None:
+                return keeper_screens.keeper_screen(
+                    content, character, stats, view, "Того персонажа больше нет."
+                )
+            return keeper_screens.tune_screen(
+                subject, derived_stats(content, subject), own=own, notice=state.notice
+            )
+        case ScreenId.KEEPER_AMOUNT:
+            subject, own = _tune_subject(character, state, view)
+            if subject is None or state.keeper_field not in keeper_screens.TUNE_KEYS:
+                return keeper_screens.keeper_screen(
+                    content, character, stats, view, "Той правки больше нет."
+                )
+            return keeper_screens.amount_screen(
+                state.keeper_field,
+                subject,
+                derived_stats(content, subject),
+                own=own,
+                notice=state.notice,
+            )
         case ScreenId.KEEPER:
             return keeper_screens.keeper_screen(content, character, stats, view, state.notice)
         case _:
@@ -202,6 +248,7 @@ def awaits_text(state: PlayState, command: Command) -> bool:
         return False
     return (
         (state.screen is ScreenId.KEEPER_FIELD and state.keeper_typing == TYPING_VALUE)
+        or (state.screen is ScreenId.KEEPER_AMOUNT and state.keeper_typing == TYPING_VALUE)
         or (state.screen is ScreenId.KEEPER_PLAYERS and state.keeper_typing == TYPING_NAME)
         or (state.screen is ScreenId.KEEPER_BAN and state.keeper_typing == TYPING_REASON)
     )
@@ -217,6 +264,8 @@ def typed(
         return state.with_notice("Это команда, а не значение. Наберите значение без косой черты.")
     if state.screen is ScreenId.KEEPER_PLAYERS:
         return _found(state, view, text)
+    if state.screen is ScreenId.KEEPER_AMOUNT:
+        return _tuned(content, character, state, view, text)
     if state.screen is ScreenId.KEEPER_BAN:
         return replace(state, keeper_typing="", keeper_reason=text.strip()).with_notice(
             f"Причина записана: {text.strip()}. Теперь нажмите срок."
@@ -286,6 +335,10 @@ def advance(
             return _step_ban(state, command, view)
         case ScreenId.KEEPER_TRADES:
             return _step_trades(state, command, view)
+        case ScreenId.KEEPER_TUNE:
+            return _step_tune(state, command)
+        case ScreenId.KEEPER_AMOUNT:
+            return _step_amount(state, command)
         case _:
             return state.with_notice("Здесь только чтение. Нажмите «Назад».")
 
@@ -328,6 +381,10 @@ def _step_panel(
         return state.at(ScreenId.KEEPER_SERVICE)
     if labels.KEEPER_LOG.matches(command.argument):
         return state.at(ScreenId.KEEPER_LOG)
+    if labels.KEEPER_TUNE.matches(command.argument):
+        return replace(state, keeper_target=0, keeper_field="", keeper_typing="").at(
+            ScreenId.KEEPER_TUNE
+        )
     return _grant(content, character, state, command, own=True)
 
 
@@ -612,6 +669,106 @@ def _step_move(
     ).with_notice(f"{view.target.name} переведён в город {city_name}.")
 
 
+def _step_tune(state: PlayState, command: Command) -> PlayState:
+    """Меню точных правок: нажать, что менять, — значение набирают следующим шагом."""
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите, что менять, или «Назад».")
+    key = keeper_screens.tune_key_from_button(command.argument)
+    if key is None:
+        return state.with_notice("Не узнал. Нажмите строку из списка.")
+    return replace(state, keeper_field=key, keeper_typing=TYPING_VALUE).at(ScreenId.KEEPER_AMOUNT)
+
+
+def _step_amount(state: PlayState, command: Command) -> PlayState:
+    """На экране значения нажимать нечего: значение набирают сообщением."""
+    return state.with_notice("Наберите значение сообщением или нажмите «Назад».")
+
+
+def _tuned(
+    content: GameContent, character: Character, state: PlayState, view: KeeperView, text: str
+) -> PlayState:
+    """Разобрать набранное значение точной правки и сложить её в ``PendingWrite``."""
+    key = state.keeper_field
+    if key not in keeper_screens.TUNE_KEYS:
+        return go_back(state).with_notice("Той правки больше нет.")
+    subject, own = _tune_subject(character, state, view)
+    if subject is None:
+        return go_back(state).with_notice("Того персонажа больше нет.")
+
+    if key == "name":
+        check = validate_name(text)
+        if not check.ok:
+            return state.with_notice(check.problem)
+        renamed = keeper_rules.rename(subject, text)
+        return _tune_store(state, own, renamed, KeeperAction.RENAME, f"Имя: {renamed.name}.")
+
+    value = _to_int(text)
+    if value is None:
+        return state.with_notice("Нужно целое число. Наберите ещё раз.")
+    if key in {"stat_points", "skill_points"} and value < 0:
+        return state.with_notice("Очки только выдают, не отнимают.")
+
+    match key:
+        case "gold":
+            changed = keeper_rules.grant_gold(subject, value)
+            return _tune_store(state, own, changed, KeeperAction.GOLD, f"Золото: {changed.gold}.")
+        case "bank":
+            changed = keeper_rules.set_bank_gold(subject, value)
+            return _tune_store(
+                state, own, changed, KeeperAction.GOLD, f"В ячейке: {changed.bank_gold}."
+            )
+        case "health":
+            changed = keeper_rules.set_health(content, subject, value)
+            return _tune_store(
+                state, own, changed, KeeperAction.HEAL, f"Здоровье: {changed.health}."
+            )
+        case "level":
+            changed, level_up = keeper_rules.set_level(content, subject, value)
+            if not level_up.levels_gained:
+                return state.with_notice("Уровень не изменился: понизить нельзя.")
+            said = (
+                f"Уровень {changed.level}. Очков характеристик: {level_up.stat_points}, "
+                f"умений: {level_up.skill_points}."
+            )
+            return _tune_store(state, own, changed, KeeperAction.LEVEL, said)
+        case "stat_points":
+            changed = keeper_rules.grant_points(subject, stat_points=value, skill_points=0)
+            return _tune_store(
+                state,
+                own,
+                changed,
+                KeeperAction.POINTS,
+                f"Очков характеристик всего: {changed.unspent_stat_points}.",
+            )
+        case _:
+            changed = keeper_rules.grant_points(subject, stat_points=0, skill_points=value)
+            return _tune_store(
+                state,
+                own,
+                changed,
+                KeeperAction.POINTS,
+                f"Очков умений всего: {changed.unspent_skill_points}.",
+            )
+
+
+def _tune_store(
+    state: PlayState, own: bool, changed: Character, action: KeeperAction, said: str
+) -> PlayState:
+    """Записать точную правку и вернуться в меню точных правок.
+
+    Своя правка не пишется в журнал — ровно как и быстрые выдачи себе (``_grant``).
+    """
+    walked = replace(state, keeper_typing="")
+    if walked.screen is ScreenId.KEEPER_AMOUNT:
+        walked = go_back(walked)
+    write = (
+        PendingWrite(character=changed)
+        if own
+        else PendingWrite(other=changed, note=_note(action, changed.name, said))
+    )
+    return walked.storing(write).with_notice(said)
+
+
 def _step_players(
     content: GameContent, state: PlayState, command: Command, view: KeeperView
 ) -> PlayState:
@@ -642,6 +799,8 @@ def _step_player(
         return replace(
             state, keeper_kind=PLAYER_MODE, keeper_field="city", keeper_page=PageState()
         ).at(ScreenId.KEEPER_FIELD)
+    if labels.KEEPER_TUNE.matches(command.argument):
+        return replace(state, keeper_typing="", keeper_field="").at(ScreenId.KEEPER_TUNE)
     if labels.KEEPER_TRADES.matches(command.argument):
         return replace(state, keeper_typing="").at(ScreenId.KEEPER_TRADES)
     if labels.KEEPER_BAN.matches(command.argument):

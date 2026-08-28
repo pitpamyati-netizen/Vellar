@@ -107,6 +107,32 @@ def test_the_ceiling_holds(content: GameContent, hero: Character) -> None:
     assert grown.level == MAX_LEVEL
 
 
+def test_gold_can_be_changed_by_an_arbitrary_signed_amount(hero: Character) -> None:
+    assert keeper.grant_gold(hero, 250).gold == 144 + 250
+    assert keeper.grant_gold(hero, -1000).gold == 0, "ниже нуля не бывает"
+
+
+def test_bank_gold_is_set_and_never_negative(hero: Character) -> None:
+    assert keeper.set_bank_gold(hero, 500).bank_gold == 500
+    assert keeper.set_bank_gold(hero, -20).bank_gold == 0
+
+
+def test_health_is_set_within_the_maximum(content: GameContent, hero: Character) -> None:
+    maximum = derived_stats(content, hero).max_health
+
+    assert keeper.set_health(content, hero, 5).health == 5
+    assert keeper.set_health(content, hero, 10_000).health == maximum
+    assert keeper.set_health(content, hero, -3).health == 1, "персонажем на нуле не играют"
+
+
+def test_renaming_touches_nothing_but_the_name(hero: Character) -> None:
+    renamed = keeper.rename(hero, "  Дорн  ")
+
+    assert renamed.name == "Дорн"
+    assert renamed.level == hero.level
+    assert renamed.gold == hero.gold
+
+
 def test_moving_a_character_changes_only_where_they_stand(hero: Character) -> None:
     moved = keeper.move_to(hero, "dusk_harbor")
 

@@ -583,6 +583,19 @@ def all_screens(
         keeper_screens.log_screen(keeper_view),
         keeper_screens.trades_screen(fighter, keeper_view),
         keeper_screens.trades_screen(fighter, keeper_screens.KeeperView()),
+        keeper_screens.tune_screen(fighter, derived_stats(content, fighter), own=True),
+        keeper_screens.tune_screen(
+            replace(fighter, unspent_stat_points=4, bank_gold=200),
+            derived_stats(content, fighter),
+            own=False,
+            notice="Золото: 1400.",
+        ),
+        *(
+            keeper_screens.amount_screen(
+                key, fighter, derived_stats(content, fighter), own=(key == "gold")
+            )
+            for key in keeper_screens.TUNE_KEYS
+        ),
         keeper_screens.stats_screen(keeper_view.census),
         keeper_screens.stats_screen(Census()),
         keeper_screens.service_screen(keeper_view),

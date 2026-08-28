@@ -621,6 +621,10 @@ def walk_to(panel: Panel, screen: ScreenId) -> Panel:
         case ScreenId.KEEPER_TRADES:
             walked = walk_to(panel, ScreenId.KEEPER_PLAYER)
             return walked.press(labels.KEEPER_TRADES.text)
+        case ScreenId.KEEPER_TUNE:
+            return panel.press(labels.KEEPER_TUNE.text)
+        case ScreenId.KEEPER_AMOUNT:
+            return panel.press(labels.KEEPER_TUNE.text, labels.KEEPER_SET_GOLD.text)
         case _:
             return panel.press(labels.KEEPER_SERVICE.text)
 
@@ -650,6 +654,91 @@ def test_the_service_row_works_on_every_panel_screen(
     panel = walk_to(Panel(content, keeper).press(labels.KEEPER.text), screen)
 
     assert panel.press("Главное меню").state.screen is ScreenId.MAIN_MENU
+
+
+# --- задать точно -----------------------------------------------------
+
+
+def _tune(with_players: Panel) -> Panel:
+    """Карточку чужого персонажа довести до меню точных правок."""
+    with_players.target = with_players.players[0]
+    with_players.press(labels.KEEPER_PLAYERS.text)
+    with_players.press(with_players.button_with("Мерла"))
+    return with_players.press(labels.KEEPER_TUNE.text)
+
+
+def test_exact_gold_is_a_signed_amount(with_players: Panel) -> None:
+    card = _tune(with_players)
+    card.press(labels.KEEPER_SET_GOLD.text, "250")
+    assert card.target is not None and card.target.gold == 250
+
+    card.press(labels.KEEPER_SET_GOLD.text, "-1000")
+    assert card.target.gold == 0, "ниже нуля не уходит"
+    assert card.state.screen is ScreenId.KEEPER_TUNE
+
+
+def test_exact_bank_is_set_outright(with_players: Panel) -> None:
+    card = _tune(with_players)
+    card.press(card.button_with("Ячейка"), "700")
+
+    assert card.target is not None and card.target.bank_gold == 700
+
+
+def test_exact_level_climbs_to_the_target_and_never_down(with_players: Panel) -> None:
+    card = _tune(with_players)
+    card.press(card.button_with("Уровень"), "9")
+    assert card.target is not None and card.target.level == 9
+
+    card.press(card.button_with("Уровень"), "2")
+    assert card.target.level == 9
+    assert card.state.notice
+
+
+def test_points_are_only_handed_out_never_taken(with_players: Panel) -> None:
+    card = _tune(with_players)
+    card.press(card.button_with("очки характеристик"), "-3")
+    assert card.target is not None and card.target.unspent_stat_points == 0
+    assert card.state.notice
+
+    card.press("Назад")
+    card.press(card.button_with("очки умений"), "5")
+    assert card.target.unspent_skill_points == 5
+
+
+def test_renaming_goes_through_the_name_check(with_players: Panel) -> None:
+    card = _tune(with_players)
+    card.press(labels.KEEPER_RENAME.text, "!!!")
+    assert card.target is not None and card.target.name == "Мерла"
+    assert card.state.notice
+
+    card.press("Назад")
+    card.press(labels.KEEPER_RENAME.text, "Дорн")
+    assert card.target.name == "Дорн"
+
+
+def test_an_exact_edit_of_another_player_is_written_down(with_players: Panel) -> None:
+    card = _tune(with_players)
+    card.press(labels.KEEPER_SET_GOLD.text, "100")
+
+    assert card.notes and card.notes[-1].action == KeeperAction.GOLD
+    assert card.notes[-1].target == "Мерла"
+
+
+def test_the_keeper_tunes_their_own_character_without_a_journal_line(panel: Panel) -> None:
+    panel.press(labels.KEEPER_TUNE.text, labels.KEEPER_SET_GOLD.text, "777")
+
+    assert panel.state.pending.character is not None
+    assert panel.state.pending.character.gold == 777
+    assert panel.notes == []
+
+
+def test_a_tune_value_that_is_not_a_number_is_refused(with_players: Panel) -> None:
+    card = _tune(with_players)
+    card.press(labels.KEEPER_SET_GOLD.text, "щедро")
+
+    assert card.state.screen is ScreenId.KEEPER_AMOUNT
+    assert card.state.notice
+    assert card.target is not None and card.target.gold == 0
 
 
 # --- блокировка --------------------------------------------------------
