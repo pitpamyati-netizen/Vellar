@@ -22,6 +22,7 @@ from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, GameContent
 from mmorpg.domain.entities.moderation import KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
+from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.rules import keeper as keeper_rules
 from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules import quests as quest_rules
@@ -64,6 +65,9 @@ PANEL: frozenset[ScreenId] = frozenset(
         ScreenId.KEEPER_TRADES,
         ScreenId.KEEPER_TUNE,
         ScreenId.KEEPER_AMOUNT,
+        ScreenId.KEEPER_GIVE,
+        ScreenId.KEEPER_GIVE_GEAR,
+        ScreenId.KEEPER_GIVE_ITEM,
     }
 )
 SCREENS: frozenset[ScreenId] = PANEL | {ScreenId.NPCS, ScreenId.NPC}
@@ -133,6 +137,14 @@ def _to_int(text: str) -> int | None:
         return int(raw)
     except ValueError:
         return None
+
+
+def _give_level(state: PlayState, view: KeeperView) -> int:
+    """Уровень собираемой вещи: набранный смотрителем или уровень игрока."""
+    typed_level = _to_int(state.keeper_field)
+    if typed_level is not None and typed_level >= 1:
+        return typed_level
+    return view.target.level if view.target is not None else 1
 
 
 # --- рисование ---------------------------------------------------------
@@ -215,6 +227,24 @@ def _render_panel(
                 own=own,
                 notice=state.notice,
             )
+        case ScreenId.KEEPER_GIVE if view.target is not None:
+            return keeper_screens.give_screen(content, view.target, state.keeper_page, state.notice)
+        case ScreenId.KEEPER_GIVE_GEAR if view.target is not None and content.has_gear_archetype(
+            state.keeper_entity
+        ):
+            return keeper_screens.give_gear_screen(
+                content,
+                view.target,
+                content.gear_archetype(state.keeper_entity),
+                _give_level(state, view),
+                state.notice,
+            )
+        case ScreenId.KEEPER_GIVE_ITEM if view.target is not None and content.has_item(
+            state.keeper_entity
+        ):
+            return keeper_screens.give_item_screen(
+                content.item(state.keeper_entity), view.target, state.notice
+            )
         case ScreenId.KEEPER:
             return keeper_screens.keeper_screen(content, character, stats, view, state.notice)
         case _:
@@ -249,6 +279,8 @@ def awaits_text(state: PlayState, command: Command) -> bool:
     return (
         (state.screen is ScreenId.KEEPER_FIELD and state.keeper_typing == TYPING_VALUE)
         or (state.screen is ScreenId.KEEPER_AMOUNT and state.keeper_typing == TYPING_VALUE)
+        or (state.screen is ScreenId.KEEPER_GIVE_GEAR and state.keeper_typing == TYPING_VALUE)
+        or (state.screen is ScreenId.KEEPER_GIVE_ITEM and state.keeper_typing == TYPING_VALUE)
         or (state.screen is ScreenId.KEEPER_PLAYERS and state.keeper_typing == TYPING_NAME)
         or (state.screen is ScreenId.KEEPER_BAN and state.keeper_typing == TYPING_REASON)
     )
@@ -266,6 +298,13 @@ def typed(
         return _found(state, view, text)
     if state.screen is ScreenId.KEEPER_AMOUNT:
         return _tuned(content, character, state, view, text)
+    if state.screen is ScreenId.KEEPER_GIVE_GEAR:
+        value = _to_int(text)
+        if value is None or value < 1:
+            return state.with_notice("Нужен номер уровня — целое число от единицы.")
+        return replace(state, keeper_field=str(value)).with_notice(f"Ступень по уровню {value}.")
+    if state.screen is ScreenId.KEEPER_GIVE_ITEM:
+        return _typed_give_item(content, state, view, text)
     if state.screen is ScreenId.KEEPER_BAN:
         return replace(state, keeper_typing="", keeper_reason=text.strip()).with_notice(
             f"Причина записана: {text.strip()}. Теперь нажмите срок."
@@ -339,6 +378,12 @@ def advance(
             return _step_tune(state, command)
         case ScreenId.KEEPER_AMOUNT:
             return _step_amount(state, command)
+        case ScreenId.KEEPER_GIVE:
+            return _step_give(content, state, command, view)
+        case ScreenId.KEEPER_GIVE_GEAR:
+            return _step_give_gear(content, state, command, view)
+        case ScreenId.KEEPER_GIVE_ITEM:
+            return _step_give_item(state, command)
         case _:
             return state.with_notice("Здесь только чтение. Нажмите «Назад».")
 
@@ -769,6 +814,88 @@ def _tune_store(
     return walked.storing(write).with_notice(said)
 
 
+def _step_give(
+    content: GameContent, state: PlayState, command: Command, view: KeeperView
+) -> PlayState:
+    """Список выдаваемого: вид снаряжения ведёт к ступени и редкости, вещь — к числу."""
+    if view.target is None:
+        return go_back(state).with_notice("Того персонажа больше нет.")
+    entries = keeper_screens.give_entries(content)
+    moved = page_move(command, state.keeper_page, total_pages(len(entries)))
+    if moved is not None:
+        return replace(state, keeper_page=moved, notice="")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите вид снаряжения или написанную вещь.")
+    picked = keeper_screens.give_from_button(content, command.argument)
+    if picked is None:
+        return state.with_notice("Не узнал. Нажмите строку из списка.")
+    kind, ident = picked
+    if kind == "gear":
+        return replace(state, keeper_entity=ident, keeper_field="", keeper_typing=TYPING_VALUE).at(
+            ScreenId.KEEPER_GIVE_GEAR
+        )
+    return replace(state, keeper_entity=ident, keeper_typing=TYPING_VALUE).at(
+        ScreenId.KEEPER_GIVE_ITEM
+    )
+
+
+def _step_give_gear(
+    content: GameContent, state: PlayState, command: Command, view: KeeperView
+) -> PlayState:
+    """Ступень набирают числом, редкость нажимают; на нажатии вещь собирается."""
+    if view.target is None or not content.has_gear_archetype(state.keeper_entity):
+        return go_back(state).with_notice("Той вещи больше нет.")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите редкость или наберите номер уровня.")
+    if labels.KEEPER_GIVE_AT_PLAYER_LEVEL.matches(command.argument):
+        return replace(state, keeper_field="").with_notice("Ступень — по уровню игрока.")
+    rarity = keeper_screens.rarity_from_button(content, command.argument)
+    if rarity is None:
+        return state.with_notice("Не узнал редкость. Нажмите строку из списка.")
+    archetype = content.gear_archetype(state.keeper_entity)
+    tier = item_procgen.tier_at(content, _give_level(state, view))
+    tier_level = tier.level if tier is not None else _give_level(state, view)
+    item = item_procgen.build(content, archetype, tier_level, rarity)
+    return _granted(state, view.target, item.id, 1, item.name)
+
+
+def _step_give_item(state: PlayState, command: Command) -> PlayState:
+    """На экране количества нажимать нечего: число набирают сообщением."""
+    return state.with_notice("Наберите количество сообщением или нажмите «Назад».")
+
+
+def _typed_give_item(
+    content: GameContent, state: PlayState, view: KeeperView, text: str
+) -> PlayState:
+    if view.target is None or not content.has_item(state.keeper_entity):
+        return go_back(state).with_notice("Той вещи больше нет.")
+    value = _to_int(text)
+    if value is None or value == 0:
+        return state.with_notice("Нужно ненулевое целое число.")
+    item = content.item(state.keeper_entity)
+    return _granted(state, view.target, item.id, value, item.name)
+
+
+def _granted(
+    state: PlayState, target: Character, item_id: str, delta: int, item_name: str
+) -> PlayState:
+    """Записать выдачу в сумку и вернуться на карточку игрока."""
+    walked = replace(state, keeper_typing="", keeper_field="", keeper_kind="")
+    give_screens = {
+        ScreenId.KEEPER_GIVE,
+        ScreenId.KEEPER_GIVE_GEAR,
+        ScreenId.KEEPER_GIVE_ITEM,
+    }
+    while walked.screen in give_screens:
+        walked = go_back(walked)
+    verb = "выдано" if delta > 0 else "убрано"
+    said = f"{item_name}: {verb} {abs(delta)}."
+    note = _note(KeeperAction.GRANT_ITEM, target.name, f"{item_name} ({delta:+d})")
+    return walked.storing(
+        PendingWrite(grant_item=(target.id, item_id, delta), note=note)
+    ).with_notice(said)
+
+
 def _step_players(
     content: GameContent, state: PlayState, command: Command, view: KeeperView
 ) -> PlayState:
@@ -801,6 +928,15 @@ def _step_player(
         ).at(ScreenId.KEEPER_FIELD)
     if labels.KEEPER_TUNE.matches(command.argument):
         return replace(state, keeper_typing="", keeper_field="").at(ScreenId.KEEPER_TUNE)
+    if labels.KEEPER_GIVE_ITEM.matches(command.argument):
+        return replace(
+            state,
+            keeper_kind="give",
+            keeper_entity="",
+            keeper_field="",
+            keeper_typing="",
+            keeper_page=PageState(),
+        ).at(ScreenId.KEEPER_GIVE)
     if labels.KEEPER_TRADES.matches(command.argument):
         return replace(state, keeper_typing="").at(ScreenId.KEEPER_TRADES)
     if labels.KEEPER_BAN.matches(command.argument):

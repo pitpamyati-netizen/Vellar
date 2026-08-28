@@ -92,6 +92,9 @@ class Play(StatesGroup):
     keeper_trades = State()
     keeper_tune = State()
     keeper_amount = State()
+    keeper_give = State()
+    keeper_give_gear = State()
+    keeper_give_item = State()
 
 
 # Какой экран какому состоянию принадлежит. По этому разборщик говорит игроку, где он на
@@ -166,6 +169,9 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.KEEPER_TRADES: Play.keeper_trades,
     ScreenId.KEEPER_TUNE: Play.keeper_tune,
     ScreenId.KEEPER_AMOUNT: Play.keeper_amount,
+    ScreenId.KEEPER_GIVE: Play.keeper_give,
+    ScreenId.KEEPER_GIVE_GEAR: Play.keeper_give_gear,
+    ScreenId.KEEPER_GIVE_ITEM: Play.keeper_give_item,
 }
 
 # Тот единственный шаг, куда ведёт «назад», для каждого экрана. Создание идёт назад по
@@ -242,6 +248,9 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.KEEPER_TRADES: ScreenId.KEEPER_PLAYER,
     ScreenId.KEEPER_TUNE: ScreenId.KEEPER,
     ScreenId.KEEPER_AMOUNT: ScreenId.KEEPER_TUNE,
+    ScreenId.KEEPER_GIVE: ScreenId.KEEPER_PLAYER,
+    ScreenId.KEEPER_GIVE_GEAR: ScreenId.KEEPER_GIVE,
+    ScreenId.KEEPER_GIVE_ITEM: ScreenId.KEEPER_GIVE,
 }
 
 CREATION_ORDER: tuple[ScreenId, ...] = (

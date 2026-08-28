@@ -518,6 +518,9 @@ async def _keeper_view(
             ScreenId.KEEPER_TRADES,
             ScreenId.KEEPER_TUNE,
             ScreenId.KEEPER_AMOUNT,
+            ScreenId.KEEPER_GIVE,
+            ScreenId.KEEPER_GIVE_GEAR,
+            ScreenId.KEEPER_GIVE_ITEM,
         }
         and flow.keeper_target
     ):
@@ -616,6 +619,12 @@ async def _serve(
         said.append(await _ban(write.ban, users, keeper_log, characters, stamp, now))
     if write.rollback:
         said.append(await _roll_back(write.rollback, trades, characters, inventory))
+    if write.grant_item is not None:
+        character_id, item_id, delta = write.grant_item
+        if delta > 0:
+            await inventory.add(character_id, item_id, delta)
+        elif delta < 0:
+            await inventory.remove(character_id, item_id, -delta)
     if write.service:
         swept = await _sweep(write.service, characters, users, bot, now)
         said.append(swept)

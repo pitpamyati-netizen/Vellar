@@ -596,6 +596,15 @@ def all_screens(
             )
             for key in keeper_screens.TUNE_KEYS
         ),
+        keeper_screens.give_screen(content, fighter, PageState()),
+        keeper_screens.give_screen(content, fighter, PageState(page=3), notice="Кому: Аргус."),
+        keeper_screens.give_gear_screen(
+            content, fighter, content.gear_archetype("sword"), fighter.level
+        ),
+        keeper_screens.give_gear_screen(
+            content, fighter, content.gear_archetype("heavy_body"), 1, notice="Ступень по уровню 1."
+        ),
+        keeper_screens.give_item_screen(content.item("small_healing_potion"), fighter),
         keeper_screens.stats_screen(keeper_view.census),
         keeper_screens.stats_screen(Census()),
         keeper_screens.service_screen(keeper_view),

@@ -625,6 +625,15 @@ def walk_to(panel: Panel, screen: ScreenId) -> Panel:
             return panel.press(labels.KEEPER_TUNE.text)
         case ScreenId.KEEPER_AMOUNT:
             return panel.press(labels.KEEPER_TUNE.text, labels.KEEPER_SET_GOLD.text)
+        case ScreenId.KEEPER_GIVE:
+            walked = walk_to(panel, ScreenId.KEEPER_PLAYER)
+            return walked.press(labels.KEEPER_GIVE_ITEM.text)
+        case ScreenId.KEEPER_GIVE_GEAR:
+            walked = walk_to(panel, ScreenId.KEEPER_GIVE)
+            return walked.press(walked.button_with("топор"))
+        case ScreenId.KEEPER_GIVE_ITEM:
+            walked = walk_to(panel, ScreenId.KEEPER_GIVE)
+            return walked.press(walked.button_with("сырьё"))
         case _:
             return panel.press(labels.KEEPER_SERVICE.text)
 
@@ -739,6 +748,67 @@ def test_a_tune_value_that_is_not_a_number_is_refused(with_players: Panel) -> No
     assert card.state.screen is ScreenId.KEEPER_AMOUNT
     assert card.state.notice
     assert card.target is not None and card.target.gold == 0
+
+
+# --- выдать вещь ------------------------------------------------------
+
+
+def _give(with_players: Panel) -> Panel:
+    with_players.target = with_players.players[0]
+    with_players.press(labels.KEEPER_PLAYERS.text)
+    with_players.press(with_players.button_with("Мерла"))
+    return with_players.press(labels.KEEPER_GIVE_ITEM.text)
+
+
+def test_assembled_gear_lands_in_the_bag(with_players: Panel) -> None:
+    card = _give(with_players)
+    card.press(card.button_with("топор"))
+    card.press(card.button_with("Обычный"))
+
+    assert card.state.pending.grant_item is not None
+    cid, item_id, delta = card.state.pending.grant_item
+    assert cid == 7 and delta == 1
+    assert item_id.startswith("axe@") and item_id.endswith("#common")
+    assert card.state.screen is ScreenId.KEEPER_PLAYER
+
+
+def test_gear_level_defaults_to_the_player_and_can_be_typed(with_players: Panel) -> None:
+    with_players.players = (replace(with_players.players[0], level=40),)
+    card = _give(with_players)
+    card.press(card.button_with("топор"))
+    assert "26" in card.screen().text(), "ступень по уровню игрока"
+
+    card.press("6")
+    card.press(card.button_with("Редкий"))
+
+    assert card.state.pending.grant_item is not None
+    assert card.state.pending.grant_item[1] == "axe@6#rare"
+
+
+def test_a_written_item_is_given_by_count(with_players: Panel) -> None:
+    card = _give(with_players)
+    card.press(card.button_with("сырьё"))
+    card.press("5")
+
+    assert card.state.pending.grant_item is not None
+    assert card.state.pending.grant_item[2] == 5
+
+
+def test_a_negative_count_removes_from_the_bag(with_players: Panel) -> None:
+    card = _give(with_players)
+    card.press(card.button_with("расходник"))
+    card.press("-2")
+
+    assert card.state.pending.grant_item is not None
+    assert card.state.pending.grant_item[2] == -2
+
+
+def test_giving_an_item_is_written_down(with_players: Panel) -> None:
+    card = _give(with_players)
+    card.press(card.button_with("сырьё"), "3")
+
+    assert card.notes and card.notes[-1].action == KeeperAction.GRANT_ITEM
+    assert card.notes[-1].target == "Мерла"
 
 
 # --- блокировка --------------------------------------------------------

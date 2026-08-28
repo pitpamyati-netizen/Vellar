@@ -149,6 +149,11 @@ KEEPER_ADD_STAT_POINTS = label("Выдать очки характеристик
 KEEPER_ADD_SKILL_POINTS = label("Выдать очки умений", "✨")
 KEEPER_RENAME = label("Переименовать", "✍")
 
+# Выдать вещь: собранное снаряжение по виду × ступени × редкости, или
+# написанный расходник/сырьё числом.
+KEEPER_GIVE_ITEM = label("Выдать вещь", "🎁")
+KEEPER_GIVE_AT_PLAYER_LEVEL = label("Ступень по уровню игрока", "📏")
+
 # Игроки.
 KEEPER_FIND = label("Найти по имени", "🔤")
 KEEPER_MOVE = label("Перевести в город", "🧭")

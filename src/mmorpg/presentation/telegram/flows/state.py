@@ -71,6 +71,9 @@ class PendingWrite:
     service: str = ""
     #: Какой расчёт откатить: строка журнала сделок. Ноль — никакой.
     rollback: int = 0
+    #: Что смотритель выдал в сумку: чей персонаж, вещь и сколько. Число со
+    #: знаком, как и у ``items``, но адрес здесь чужой, а не персонажа нажавшего.
+    grant_item: tuple[int, str, int] | None = None
     #: Перечитать правки из хранилища.
     reload: bool = False
     #: Почему изменился кошелёк: метка для денежного журнала
@@ -96,6 +99,7 @@ class PendingWrite:
             and self.note is None
             and not self.service
             and not self.rollback
+            and self.grant_item is None
             and not self.reload
             and self.node_take < 0
         )

@@ -21,11 +21,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import GameContent
+from mmorpg.domain.entities.content import GameContent, GearArchetype, Item, ItemKind, Rarity
 from mmorpg.domain.entities.moderation import Ban, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import OfferKind, TradeRecord, TradeStatus
 from mmorpg.domain.ports.repositories import Census
+from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.rules import moderation as moderation_rules
 from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules.keeper import GOLD_STEP, POINTS_STEP
@@ -474,7 +475,7 @@ def player_screen(
     rows: list[tuple[Label, ...]] = [
         (labels.KEEPER_GOLD, labels.KEEPER_LEVEL),
         (labels.KEEPER_HEAL, labels.KEEPER_POINTS),
-        (labels.KEEPER_TUNE,),
+        (labels.KEEPER_TUNE, labels.KEEPER_GIVE_ITEM),
         (labels.KEEPER_MOVE, labels.KEEPER_TRADES),
         (labels.KEEPER_UNBAN,) if _under_ban(view) else (labels.KEEPER_BAN,),
         (labels.KEEPER_DELETE,),
@@ -612,6 +613,113 @@ def amount_screen(
         _tune_how(key),
     )
     return Screen(id=ScreenId.KEEPER_AMOUNT, lines=lines)
+
+
+# --- выдать вещь -----------------------------------------------------
+
+_KIND_WORD: dict[ItemKind, str] = {
+    ItemKind.CONSUMABLE: "расходник",
+    ItemKind.MATERIAL: "сырьё",
+}
+
+
+def written_items(content: GameContent) -> tuple[Item, ...]:
+    """То, что в ``content`` пишут руками: расходники и сырьё."""
+    return tuple(item for item in content.items if item.kind is not ItemKind.EQUIPMENT)
+
+
+def _slot_word(content: GameContent, slot_id: str) -> str:
+    return content.slot(slot_id).name if content.has_slot(slot_id) else slot_id
+
+
+def give_entries(content: GameContent) -> tuple[tuple[str, str], ...]:
+    """Что можно выдать: сперва виды снаряжения, потом написанные вещи.
+
+    Ключ — ``gear:<вид>`` или ``item:<вещь>``: снаряжение собирается дальше из
+    ступени и редкости, написанная вещь даётся числом сразу.
+    """
+    gear = tuple(
+        (f"gear:{archetype.id}", f"{archetype.noun} — {_slot_word(content, archetype.slot)}")
+        for archetype in content.gear_archetypes
+    )
+    written = tuple(
+        (f"item:{item.id}", f"{item.name} — {_KIND_WORD.get(item.kind, 'вещь')}")
+        for item in written_items(content)
+    )
+    return (*gear, *written)
+
+
+def give_screen(
+    content: GameContent, player: Character, state: PageState, notice: str = ""
+) -> Screen:
+    """Список того, что смотритель может выдать в сумку игрока."""
+    entries = [
+        ListEntry(key=key, text=numbered(index, text))
+        for index, (key, text) in enumerate(give_entries(content), start=1)
+    ]
+    return paginated_screen(
+        screen_id=ScreenId.KEEPER_GIVE,
+        title="Выдать вещь",
+        entries=entries,
+        state=state,
+        lead_lines=(
+            notice or f"Выдать вещь: {player.name}. Нажмите вид снаряжения или написанную вещь.",
+            "Снаряжение соберётся из вида, ступени и редкости; расходник и сырьё дают числом.",
+        ),
+        show_filters=False,
+    )
+
+
+def give_from_button(content: GameContent, pressed: str) -> tuple[str, str] | None:
+    for index, (key, text) in enumerate(give_entries(content), start=1):
+        if pressed.strip() == numbered(index, text):
+            kind, _, ident = key.partition(":")
+            return kind, ident
+    return None
+
+
+def rarity_label(rarity: Rarity) -> Label:
+    return label(rarity.name)
+
+
+def rarity_from_button(content: GameContent, pressed: str) -> Rarity | None:
+    return next(
+        (rarity for rarity in content.rarities if rarity_label(rarity).matches(pressed)), None
+    )
+
+
+def give_gear_screen(
+    content: GameContent,
+    player: Character,
+    archetype: GearArchetype,
+    level: int,
+    notice: str = "",
+) -> Screen:
+    """Ступень и редкость для собираемой вещи. Ступень — по уровню игрока или числом."""
+    tier = item_procgen.tier_at(content, level)
+    tier_level = tier.level if tier is not None else level
+    named = f" ({tier.named(archetype.gender)})" if tier is not None else ""
+    lines = (
+        notice or f"Выдать: {archetype.noun}. Кому: {player.name}.",
+        f"Ступень: уровень {tier_level}{named}. Наберите номер уровня, чтобы сменить.",
+        "Нажмите редкость — вещь соберётся и ляжет в сумку.",
+    )
+    rarities = content.rarities
+    rows: list[tuple[Label, ...]] = [
+        tuple(rarity_label(rarity) for rarity in rarities[index : index + 2])
+        for index in range(0, len(rarities), 2)
+    ]
+    rows.append((labels.KEEPER_GIVE_AT_PLAYER_LEVEL,))
+    return Screen(id=ScreenId.KEEPER_GIVE_GEAR, lines=lines, rows=tuple(rows))
+
+
+def give_item_screen(item: Item, player: Character, notice: str = "") -> Screen:
+    """Сколько написанной вещи выдать. Отрицательное число — убрать из сумки."""
+    lines = (
+        notice or f"Выдать: {item.name}. Кому: {player.name}.",
+        "Наберите количество сообщением. Со знаком минус — убрать столько из сумки.",
+    )
+    return Screen(id=ScreenId.KEEPER_GIVE_ITEM, lines=lines)
 
 
 # --- блокировка --------------------------------------------------------
