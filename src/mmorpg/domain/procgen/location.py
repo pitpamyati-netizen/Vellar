@@ -36,19 +36,20 @@ from enum import StrEnum
 from mmorpg.domain.entities.location import GeneratedLocation, LocationNode, NodeKind
 from mmorpg.domain.procgen.seeds import epoch_seed, location_seed, node_seed, rng
 
-MIN_NODES = 12
-MAX_NODES = 24
-EXTRA_LINK_RATIO = 0.35
+MIN_NODES = 16
+MAX_NODES = 28
+EXTRA_LINK_RATIO = 0.5
 
 
 def approach_length(count: int) -> int:
     """Сколько эпических узлов-стражей стоит на подступе к боссу.
 
-    Растёт с размером локации: у самой маленькой один страж, у самой большой три.
-    Считается от числа узлов, а число узлов - часть скелета, поэтому длина подступа
-    тоже постоянна и переживает смену поколения.
+    Растёт с размером локации, но полого: у большинства локаций один страж, у
+    самых больших - два (ADR 0034). Считается от числа узлов, а число узлов -
+    часть скелета, поэтому длина подступа тоже постоянна и переживает смену
+    поколения.
     """
-    return 1 + (count - MIN_NODES) // 6
+    return 1 + (count - MIN_NODES) // 8
 
 
 class _Category(StrEnum):
@@ -63,22 +64,22 @@ class _Category(StrEnum):
 
 # Веса постоянных категорий среднего узла. Вход, выход, подступ и босс закреплены
 # отдельно, поэтому это касается только того, что между входом и подступом. Находок
-# теперь чуть больше боёв: на большой локации череда одинаковых стычек звучит
-# однообразно, а разнобой дел - это и есть то разнообразие, ради которого локацию
-# растили.
+# чуть больше боёв: на большой локации череда одинаковых стычек звучит однообразно,
+# а разнобой дел - это и есть то разнообразие, ради которого локацию растили.
 _INTERIOR_CATEGORIES: tuple[tuple[_Category, int], ...] = (
     (_Category.COMBAT, 45),
     (_Category.FINDING, 46),
     (_Category.SHRINE, 9),
 )
 
-# Какие конкретные виды и с каким весом принимает узел категории. Состав узлов
-# категории (сколько стычек, сколько сильных боёв) решается на скелете и
-# постоянен; поколение только переставляет, какой узел каким из них стал.
-# Эпических боёв в общем замесе стало больше: сильный одиночный противник - это
-# смена ритма посреди стай, и на длинной локации без него дорога плоская.
+# Какие конкретные виды и с каким весом принимает узел категории. Состав находок
+# (сколько сбора, сколько тайников) решается на скелете и постоянен - на него
+# завязаны задания (ADR 0032). Боевой состав (сколько стай, сколько сильных
+# одиночек) перекладывает поколение (``_relay_combat``, ADR 0034). Сильный
+# одиночка на случайном боевом узле теперь редок: подступа к боссу с его
+# вереницей стражей на смену ритма хватает, а стена эпиков утомляла.
 _CATEGORY_KINDS: dict[_Category, tuple[tuple[NodeKind, int], ...]] = {
-    _Category.COMBAT: ((NodeKind.BATTLE, 37), (NodeKind.ELITE_BATTLE, 14)),
+    _Category.COMBAT: ((NodeKind.BATTLE, 37), (NodeKind.ELITE_BATTLE, 6)),
     _Category.FINDING: ((NodeKind.GATHER, 15), (NodeKind.EVENT, 15), (NodeKind.CACHE, 14)),
     _Category.SHRINE: ((NodeKind.SHRINE, 1),),
     _Category.APPROACH: ((NodeKind.ELITE_BATTLE, 1),),
@@ -150,8 +151,9 @@ def generate_location(
 ) -> GeneratedLocation:
     """Собрать локацию в одном месте города, в её нынешнем поколении округи.
 
-    ``epoch`` меняет только виды узлов (в пределах их категорий) и короткие
-    тропы. При ``epoch == 0`` и без выработки округа стоит в исходном виде.
+    ``epoch`` меняет виды узлов (в пределах их категорий), боевой состав локации
+    (``_relay_combat``) и короткие тропы. При ``epoch == 0`` и без выработки
+    округа стоит в исходном виде.
     """
     seed = location_seed(world_seed, city_id, slot)
     skeleton = rng(seed)
@@ -165,6 +167,7 @@ def generate_location(
     tree = _spanning_tree(skeleton, count, approach_start)
 
     era = rng(epoch_seed(seed, epoch))
+    composition = _relay_combat(era, categories, composition)
     kinds = _lay_kinds(era, categories, composition)
     links = _lay_paths(era, count, tree, approach_start)
 
@@ -215,11 +218,13 @@ def _interior_categories(source: random.Random, count: int, approach: int) -> tu
 def _kind_composition(
     source: random.Random, categories: tuple[_Category, ...]
 ) -> dict[_Category, list[NodeKind]]:
-    """Постоянный состав видов внутри каждой категории.
+    """Состав видов внутри каждой категории на скелете.
 
     Локация с тремя узлами-находками держит, скажем, «сбор, сбор, тайник» во всех
     своих поколениях - меняется только то, какой из трёх узлов каким стал. Это и
-    держит задание «отработайте четыре схрона» выполнимым при любой перекладке.
+    держит задание «отработайте четыре схрона» выполнимым при любой перекладке
+    (ADR 0032). Боевой состав здесь только предварительный: поколение перекладывает
+    его заново (``_relay_combat``, ADR 0034).
     """
     composition: dict[_Category, list[NodeKind]] = {}
     for category in _Category:
@@ -232,12 +237,37 @@ def _kind_composition(
     return composition
 
 
+def _relay_combat(
+    era: random.Random,
+    categories: tuple[_Category, ...],
+    composition: dict[_Category, list[NodeKind]],
+) -> dict[_Category, list[NodeKind]]:
+    """Переложить боевой состав локации под нынешнее поколение округи (ADR 0034).
+
+    Сколько боевых узлов встретит стаю, а сколько - сильного одиночку, решает
+    поколение, а не скелет: это и есть смена ритма, которой не хватало, когда
+    расстановка боёв была заморожена навсегда. Находок и святилищ это не касается -
+    на них завязаны задания (ADR 0032), - а одна стая в локации есть всегда, иначе
+    в ней бывали бы только эпические бои.
+    """
+    slots = sum(1 for item in categories if item is _Category.COMBAT)
+    if not slots:
+        return composition
+    kinds = [kind for kind, _ in _CATEGORY_KINDS[_Category.COMBAT]]
+    weights = [weight for _, weight in _CATEGORY_KINDS[_Category.COMBAT]]
+    picked = era.choices(kinds, weights=weights, k=slots)
+    if NodeKind.BATTLE not in picked:
+        picked[era.randrange(slots)] = NodeKind.BATTLE
+    composition[_Category.COMBAT] = picked
+    return composition
+
+
 def _lay_kinds(
     era: random.Random,
     categories: tuple[_Category, ...],
     composition: dict[_Category, list[NodeKind]],
 ) -> tuple[NodeKind, ...]:
-    """Раздать постоянный состав видов по узлам категории, перемешав по поколению."""
+    """Раздать состав видов по узлам категории, перемешав места по поколению."""
     pools: dict[_Category, list[NodeKind]] = {}
     for category, kinds in composition.items():
         shuffled = list(kinds)

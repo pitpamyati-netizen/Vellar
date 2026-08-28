@@ -162,7 +162,7 @@ def test_the_boss_is_gated_by_a_chain_of_elites() -> None:
             location = build(slot=slot, epoch=epoch)
             boss, guards = _boss_and_guards(location)
             assert guards, "у подступа хотя бы один страж"
-            assert 1 <= len(guards) <= 3
+            assert 1 <= len(guards) <= 2
             for index in guards:
                 assert location.node(index).kind is NodeKind.ELITE_BATTLE, index
             # Босс висит только за последним стражем; стражи - линейная цепочка.
@@ -195,20 +195,66 @@ def test_no_shortcut_bypasses_the_approach() -> None:
             assert location.exit_node.index in seen, "а к выходу - есть, и мимо логова"
 
 
-def test_the_category_composition_is_permanent() -> None:
-    """Сколько в локации сбора, тайников и событий - постоянно; двигаются только места."""
+def test_the_finding_composition_is_permanent() -> None:
+    """Сколько в локации сбора, тайников и событий - постоянно; на них завязаны задания."""
+    finding = _FINDING_KINDS | {NodeKind.SHRINE}
     base = build(slot=2)
-    want = sorted(n.kind for n in base.nodes)
+    want = sorted(n.kind for n in base.nodes if n.kind in finding)
     for epoch in range(1, 15):
-        assert sorted(n.kind for n in build(slot=2, epoch=epoch).nodes) == want
+        later = sorted(n.kind for n in build(slot=2, epoch=epoch).nodes if n.kind in finding)
+        assert later == want
+
+
+def test_the_combat_mix_relays_with_the_epoch() -> None:
+    """Боевой состав локации перекладывается поколением (ADR 0034), но стая есть всегда."""
+    for slot in range(1, 6):
+        base = build(slot=slot)
+        combat_total = sum(1 for n in base.nodes if n.kind in _COMBAT_KINDS)
+        mixes = set()
+        for epoch in range(30):
+            combat = tuple(
+                n.kind for n in build(slot=slot, epoch=epoch).nodes if n.kind in _COMBAT_KINDS
+            )
+            assert len(combat) == combat_total, "число боёв постоянно"
+            assert NodeKind.BATTLE in combat, "хотя бы одна стая"
+            mixes.add(combat)
+        assert len(mixes) > 1, f"slot {slot}: боевой состав ни разу не переложился"
+
+
+def test_a_search_quest_target_is_stocked_in_its_location(content: GameContent) -> None:
+    """Задание «найдите четыре схрона» обязано быть выполнимым в любом поколении.
+
+    Состав находок постоянен (ADR 0032), но проверить это по живому содержимому
+    надёжнее, чем верить, что скелет случайно выдал достаточно узлов нужного вида.
+    """
+    from mmorpg.domain.entities.quest import ObjectiveKind
+
+    for quest in content.quests:
+        if quest.objective is not ObjectiveKind.SEARCH or not quest.target_kind:
+            continue
+        city = content.city(quest.city_id)
+        loc = city.location(quest.location_slot)
+        for epoch in (0, 1, 2, 5, 11):
+            built = generate_location(
+                world_seed=WORLD_SEED,
+                city_id=city.id,
+                slot=loc.slot,
+                name=loc.name,
+                biome=loc.biome,
+                level_min=loc.level_min,
+                level_max=loc.level_max,
+                epoch=epoch,
+            )
+            stocked = sum(1 for node in built.nodes if node.kind.value == quest.target_kind)
+            assert stocked >= quest.target_count, f"{quest.id}: {stocked} узлов {quest.target_kind}"
 
 
 def test_location_epoch_counts_by_wave_not_clock() -> None:
     assert node_rules.location_epoch(LocationState()) == 0
-    nodes = {i: NodeState(wave=w) for i, w in enumerate([10, 10, 10, 10])}
-    # 40 волн суммарно = ровно одно сменившееся поколение.
+    nodes = {i: NodeState(wave=w) for i, w in enumerate([3, 3, 3, 3])}
+    # 12 волн суммарно = ровно одно сменившееся поколение.
     assert node_rules.location_epoch(LocationState(nodes=nodes)) == 1
-    nodes[0] = NodeState(wave=9)
+    nodes[0] = NodeState(wave=2)
     assert node_rules.location_epoch(LocationState(nodes=nodes)) == 0
 
 
