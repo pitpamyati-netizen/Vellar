@@ -13,7 +13,7 @@ from types import MappingProxyType
 
 import pytest
 
-from mmorpg.domain.entities import Character, GameContent, SkillLoadout
+from mmorpg.domain.entities import Character, GameContent, InventoryEntry, SkillLoadout
 from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.ports.repositories import Census
@@ -68,6 +68,9 @@ class Panel:
         self.bans: list[tuple[int, str, str]] = []
         self.target_ban = Ban()
         self.notes: list[KeeperEntry] = []
+        # Сумка открытого игрока и её правки за проход.
+        self.target_bag: tuple[InventoryEntry, ...] = ()
+        self.bag_changes: list[tuple[str, int]] = []
 
     @property
     def view(self) -> KeeperView:
@@ -80,6 +83,7 @@ class Panel:
             target_keeper=self.target_keeper,
             target_locked=self.target_locked,
             target_ban=self.target_ban,
+            target_bag=self.target_bag,
             now=CLOCK.now,
         )
 
@@ -167,6 +171,8 @@ class Panel:
             self.notes.append(pending.note)
         if pending.service:
             self.services.append(pending.service)
+        if pending.bag_changes:
+            self.bag_changes.extend(pending.bag_changes)
         self.content = overlay_rules.apply(self.base, self.records)
 
 
@@ -679,6 +685,9 @@ def walk_to(panel: Panel, screen: ScreenId) -> Panel:
         case ScreenId.KEEPER_QUEST:
             walked = walk_to(panel, ScreenId.KEEPER_QUESTS)
             return walked.press(walked.button_with("Столбы на Тракте"))
+        case ScreenId.KEEPER_BAG:
+            walked = walk_to(panel, ScreenId.KEEPER_PLAYER)
+            return walked.press(labels.KEEPER_BAG_BTN.text)
         case _:
             return panel.press(labels.KEEPER_SERVICE.text)
 
@@ -979,7 +988,31 @@ def test_a_stat_edit_is_written_down(with_players: Panel) -> None:
     assert card.notes and card.notes[-1].action == KeeperAction.POINTS
 
 
-# --- задания игрока ------------------------------------------------
+# --- сумка и снаряжение игрока -------------------------------------
+
+
+def test_a_bag_item_is_equipped_and_a_slot_is_stripped(with_players: Panel) -> None:
+    dressed = replace(
+        with_players.players[0],
+        equipment=with_players.players[0].equipment.equip("weapon", "sword@1#common"),
+    )
+    with_players.players = (dressed,)
+    with_players.target = dressed
+    with_players.target_bag = (InventoryEntry("axe@1#common", 1),)
+    with_players.press(labels.KEEPER_PLAYERS.text)
+    with_players.press(with_players.button_with("Мерла"))
+    card = with_players.press(labels.KEEPER_BAG_BTN.text)
+
+    card.press(card.button_with("топор"))
+    assert card.target is not None
+    assert card.target.equipment.item_in("weapon") == "axe@1#common"
+    # надетый топор ушёл из сумки, снятый меч в неё вернулся
+    assert ("axe@1#common", -1) in card.bag_changes
+    assert ("sword@1#common", 1) in card.bag_changes
+
+    card.press(card.button_with("Снять: Оружие"))
+    assert card.target.equipment.item_in("weapon") is None
+    assert card.bag_changes[-1] == ("axe@1#common", 1)
 
 
 def _quests(with_players: Panel) -> Panel:

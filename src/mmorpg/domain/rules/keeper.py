@@ -118,6 +118,31 @@ def move_to(character: Character, city_id: str) -> Character:
     return replace(character, city_id=city_id)
 
 
+def equip_item(
+    content: GameContent, character: Character, item_id: str
+) -> tuple[Character, tuple[tuple[str, int], ...]] | None:
+    """Надеть вещь из сумки. Возвращает персонажа и правку сумки: −1 надетому,
+    +1 тому, что стояло в слоте раньше. ``None`` — это не снаряжение."""
+    if not content.has_item(item_id):
+        return None
+    item = content.item(item_id)
+    if not item.is_equipment:
+        return None
+    displaced = character.equipment.item_in(item.slot)
+    bag: list[tuple[str, int]] = [(item_id, -1)]
+    if displaced is not None and displaced != item_id:
+        bag.append((displaced, 1))
+    return replace(character, equipment=character.equipment.equip(item.slot, item_id)), tuple(bag)
+
+
+def unequip_slot(character: Character, slot: str) -> tuple[Character, str] | None:
+    """Снять вещь со слота — она уходит в сумку. ``None`` — слот и так пуст."""
+    item_id = character.equipment.item_in(slot)
+    if item_id is None:
+        return None
+    return replace(character, equipment=character.equipment.unequip(slot)), item_id
+
+
 def mark_quest_done(character: Character, quest_id: str) -> Character:
     """Затолкать задание в закрытые — когда оно застряло и сдать его нечем."""
     log = character.quests

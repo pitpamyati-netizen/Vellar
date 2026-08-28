@@ -35,7 +35,7 @@ from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.keeper import set_keeper, sync_keeper
 from mmorpg.application.services.party import PartyStore
 from mmorpg.config import Settings
-from mmorpg.domain.entities.character import Character
+from mmorpg.domain.entities.character import Character, InventoryEntry
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.location import LocationState, Presence, Roamer
 from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
@@ -200,6 +200,7 @@ async def play(
         registry,
         now,
         settings,
+        inventory,
     )
 
     party = await _party_view(flow, character, characters, parties)
@@ -329,7 +330,17 @@ async def play(
     company = await _company(updated, character, locations, now)
     counted = await _tally(content, updated, characters)
     shown = await _keeper_view(
-        updated, character, "", characters, users, keeper_log, trades, registry, now, settings
+        updated,
+        character,
+        "",
+        characters,
+        users,
+        keeper_log,
+        trades,
+        registry,
+        now,
+        settings,
+        inventory,
     )
     gathered = await _party_view(updated, character, characters, parties)
     guild_view = await _guild_view(updated, character, characters, guilds)
@@ -485,6 +496,7 @@ async def _keeper_view(
     registry: ContentRegistry,
     now: int,
     settings: Settings,
+    inventory: InventoryRepository | None = None,
 ) -> KeeperView:
     """Что панели показать. Для игрока это ноль запросов: ветка не выполняется.
 
@@ -529,6 +541,7 @@ async def _keeper_view(
             ScreenId.KEEPER_STATS_EDIT,
             ScreenId.KEEPER_QUESTS,
             ScreenId.KEEPER_QUEST,
+            ScreenId.KEEPER_BAG,
         }
         and flow.keeper_target
     ):
@@ -565,11 +578,16 @@ async def _keeper_view(
     if flow.screen is ScreenId.KEEPER_TRADES and target is not None:
         journal = await trades.journal(target.id, limit=keeper_screens.TRADES_SHOWN)
 
+    bag: tuple[InventoryEntry, ...] = ()
+    if flow.screen is ScreenId.KEEPER_BAG and target is not None and inventory is not None:
+        bag = await inventory.list_items(target.id)
+
     return KeeperView(
         records=registry.records,
         players=players,
         trades=journal,
         target=target,
+        target_bag=bag,
         census=census,
         granting=granting,
         target_keeper=target_keeper,
@@ -616,6 +634,11 @@ async def _serve(
         said.append(f"Правок перечитано: {await registry.reload(overlays)}.")
     if write.other is not None:
         await characters.save(write.other)
+        for item_id, delta in write.bag_changes:
+            if delta > 0:
+                await inventory.add(write.other.id, item_id, delta)
+            elif delta < 0:
+                await inventory.remove(write.other.id, item_id, -delta)
     if write.remove_character:
         await characters.delete(write.remove_character)
     if write.keeper_grant is not None and granting:

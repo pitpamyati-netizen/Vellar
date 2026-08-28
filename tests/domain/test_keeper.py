@@ -159,6 +159,24 @@ def test_a_stat_is_set_by_moving_the_difference_through_unspent_points(hero: Cha
     assert back is not None and back.unspent_stat_points == 9
 
 
+def test_equipping_from_the_bag_moves_the_displaced_item_back(
+    content: GameContent, hero: Character
+) -> None:
+    from mmorpg.domain.entities.character import Equipment
+
+    worn = replace(hero, equipment=Equipment().equip("weapon", "sword@1#common"))
+
+    changed, bag = keeper.equip_item(content, worn, "axe@1#common")
+    assert changed.equipment.item_in("weapon") == "axe@1#common"
+    assert ("axe@1#common", -1) in bag
+    assert ("sword@1#common", 1) in bag
+
+    back, spare = keeper.unequip_slot(changed, "weapon")
+    assert back.equipment.item_in("weapon") is None
+    assert spare == "axe@1#common"
+    assert keeper.unequip_slot(back, "weapon") is None
+
+
 def test_quest_state_is_forced_for_a_stuck_quest(hero: Character) -> None:
     from mmorpg.domain.entities.quest import QuestLog
 

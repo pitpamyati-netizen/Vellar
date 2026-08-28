@@ -74,6 +74,9 @@ class PendingWrite:
     #: Что смотритель выдал в сумку: чей персонаж, вещь и сколько. Число со
     #: знаком, как и у ``items``, но адрес здесь чужой, а не персонажа нажавшего.
     grant_item: tuple[int, str, int] | None = None
+    #: Правка сумки чужого персонажа, идущая рядом с правкой снаряжения (``other``):
+    #: снятое кладётся в сумку, надетое из неё убирается. Адрес — ``other.id``.
+    bag_changes: tuple[tuple[str, int], ...] = ()
     #: Перечитать правки из хранилища.
     reload: bool = False
     #: Почему изменился кошелёк: метка для денежного журнала
@@ -100,6 +103,7 @@ class PendingWrite:
             and not self.service
             and not self.rollback
             and self.grant_item is None
+            and not self.bag_changes
             and not self.reload
             and self.node_take < 0
         )

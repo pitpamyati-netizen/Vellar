@@ -19,6 +19,7 @@ from mmorpg.domain.entities import (
     Equipment,
     GameContent,
     GeneratedLocation,
+    InventoryEntry,
     QuestLog,
     SkillLoadout,
     StatBlock,
@@ -615,6 +616,13 @@ def all_screens(
         keeper_screens.skill_slot_screen(content, fighter, "warrior_rassechenie"),
         keeper_screens.stats_edit_screen(replace(fighter, unspent_stat_points=6)),
         keeper_screens.stats_edit_screen(fighter, chosen="STR", notice="Сила: 4."),
+        keeper_screens.bag_screen(
+            content,
+            replace(fighter, equipment=fighter.equipment.equip("weapon", "sword@1#common")),
+            (InventoryEntry("axe@1#common", 1), InventoryEntry("small_healing_potion", 3)),
+            PageState(),
+        ),
+        keeper_screens.bag_screen(content, hero, (), PageState(), notice="Сумка пуста."),
         keeper_screens.player_quests_screen(content, fighter, PageState()),
         keeper_screens.keeper_quest_screen(content, fighter, "farhold_tallies"),
         keeper_screens.keeper_quest_screen(

@@ -103,6 +103,7 @@ class Play(StatesGroup):
     keeper_stats_edit = State()
     keeper_quests = State()
     keeper_quest = State()
+    keeper_bag = State()
 
 
 # Какой экран какому состоянию принадлежит. По этому разборщик говорит игроку, где он на
@@ -188,6 +189,7 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.KEEPER_STATS_EDIT: Play.keeper_stats_edit,
     ScreenId.KEEPER_QUESTS: Play.keeper_quests,
     ScreenId.KEEPER_QUEST: Play.keeper_quest,
+    ScreenId.KEEPER_BAG: Play.keeper_bag,
 }
 
 # Тот единственный шаг, куда ведёт «назад», для каждого экрана. Создание идёт назад по
@@ -275,6 +277,7 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.KEEPER_STATS_EDIT: ScreenId.KEEPER_PLAYER,
     ScreenId.KEEPER_QUESTS: ScreenId.KEEPER_PLAYER,
     ScreenId.KEEPER_QUEST: ScreenId.KEEPER_QUESTS,
+    ScreenId.KEEPER_BAG: ScreenId.KEEPER_PLAYER,
 }
 
 CREATION_ORDER: tuple[ScreenId, ...] = (

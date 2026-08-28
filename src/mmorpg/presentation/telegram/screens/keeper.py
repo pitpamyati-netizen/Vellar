@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from mmorpg.domain.entities.character import Character
+from mmorpg.domain.entities.character import Character, InventoryEntry
 from mmorpg.domain.entities.content import (
     GameContent,
     GearArchetype,
@@ -103,6 +103,8 @@ class KeeperView:
     log: tuple[KeeperEntry, ...] = ()
     #: Последние сделки открытого игрока, свежие сначала.
     trades: tuple[TradeRecord, ...] = ()
+    #: Сумка открытого игрока. Читается только на экране «Сумка и снаряжение».
+    target_bag: tuple[InventoryEntry, ...] = ()
     #: Момент, которым меряется остаток срока. Ноль — сроков на экране нет.
     now: int = 0
 
@@ -488,9 +490,9 @@ def player_screen(
         (labels.KEEPER_GOLD, labels.KEEPER_LEVEL),
         (labels.KEEPER_HEAL, labels.KEEPER_POINTS),
         (labels.KEEPER_TUNE, labels.KEEPER_GIVE_ITEM),
-        (labels.KEEPER_SKILLS, labels.KEEPER_STATS_EDIT_BTN),
-        (labels.KEEPER_QUESTS_BTN, labels.KEEPER_MOVE),
-        (labels.KEEPER_TRADES,),
+        (labels.KEEPER_BAG_BTN, labels.KEEPER_SKILLS),
+        (labels.KEEPER_STATS_EDIT_BTN, labels.KEEPER_QUESTS_BTN),
+        (labels.KEEPER_MOVE, labels.KEEPER_TRADES),
         (labels.KEEPER_UNBAN,) if _under_ban(view) else (labels.KEEPER_BAN,),
         (labels.KEEPER_DELETE,),
     ]
@@ -928,6 +930,90 @@ def stat_from_button(pressed: str) -> str:
     for code in StatCode:
         if label(stat_name(code)).matches(pressed):
             return code.value
+    return ""
+
+
+# --- сумка и снаряжение игрока --------------------------------------
+
+
+def item_name(content: GameContent, item_id: str) -> str:
+    return content.item(item_id).name if content.has_item(item_id) else item_id
+
+
+def _equipped(content: GameContent, player: Character) -> tuple[tuple[str, str, str], ...]:
+    """Занятые слоты игрока: идентификатор слота, его имя, надетая вещь."""
+    return tuple(
+        (slot.id, slot.name, held)
+        for slot in content.slots
+        if (held := player.equipment.item_in(slot.id)) is not None
+    )
+
+
+def bag_screen(
+    content: GameContent,
+    player: Character,
+    bag: tuple[InventoryEntry, ...],
+    state: PageState,
+    notice: str = "",
+) -> Screen:
+    """Что надето и что в сумке. Слот — снять; вещь из сумки — надеть."""
+    worn = _equipped(content, player)
+    entries = [
+        ListEntry(
+            key=entry.item_id,
+            text=numbered(
+                index,
+                f"{item_name(content, entry.item_id)} ×{entry.quantity}"
+                + (
+                    " — снаряжение"
+                    if content.has_item(entry.item_id) and content.item(entry.item_id).is_equipment
+                    else ""
+                ),
+            ),
+        )
+        for index, entry in enumerate(bag, start=1)
+    ]
+    lead = [
+        notice or f"Сумка и снаряжение: {player.name}.",
+        (
+            "Надето: " + ", ".join(f"{name} — {item_name(content, held)}" for _, name, held in worn)
+            if worn
+            else "Надето: ничего."
+        ),
+        "Нажмите слот, чтобы снять вещь в сумку; вещь из списка — чтобы надеть.",
+    ]
+    rows = tuple((label(f"Снять: {name}"),) for _, name, _ in worn)
+    return paginated_screen(
+        screen_id=ScreenId.KEEPER_BAG,
+        title="Сумка и снаряжение",
+        entries=entries,
+        state=state,
+        lead_lines=tuple(lead),
+        empty_text="Сумка пуста.",
+        extra_rows=rows,
+        show_filters=False,
+    )
+
+
+def bag_slot_from_button(content: GameContent, player: Character, pressed: str) -> str:
+    for slot_id, name, _ in _equipped(content, player):
+        if label(f"Снять: {name}").matches(pressed):
+            return slot_id
+    return ""
+
+
+def bag_item_from_button(
+    content: GameContent, bag: tuple[InventoryEntry, ...], pressed: str
+) -> str:
+    for index, entry in enumerate(bag, start=1):
+        equipped = (
+            " — снаряжение"
+            if content.has_item(entry.item_id) and content.item(entry.item_id).is_equipment
+            else ""
+        )
+        line = f"{item_name(content, entry.item_id)} ×{entry.quantity}{equipped}"
+        if pressed.strip() == numbered(index, line):
+            return entry.item_id
     return ""
 
 

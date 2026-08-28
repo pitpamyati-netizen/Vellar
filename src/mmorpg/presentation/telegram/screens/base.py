@@ -101,6 +101,7 @@ class ScreenId(StrEnum):
     KEEPER_STATS_EDIT = "keeper_stats_edit"
     KEEPER_QUESTS = "keeper_quests"
     KEEPER_QUEST = "keeper_quest"
+    KEEPER_BAG = "keeper_bag"
     CREATE_NAME = "create_name"
     CREATE_RACE = "create_race"
     CREATE_RACE_DETAILS = "create_race_details"

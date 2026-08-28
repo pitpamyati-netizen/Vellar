@@ -78,6 +78,7 @@ PANEL: frozenset[ScreenId] = frozenset(
         ScreenId.KEEPER_STATS_EDIT,
         ScreenId.KEEPER_QUESTS,
         ScreenId.KEEPER_QUEST,
+        ScreenId.KEEPER_BAG,
     }
 )
 SCREENS: frozenset[ScreenId] = PANEL | {ScreenId.NPCS, ScreenId.NPC}
@@ -306,6 +307,10 @@ def _render_panel(
                 counting=state.keeper_typing == TYPING_VALUE,
                 notice=state.notice,
             )
+        case ScreenId.KEEPER_BAG if view.target is not None:
+            return keeper_screens.bag_screen(
+                content, view.target, view.target_bag, state.keeper_page, state.notice
+            )
         case ScreenId.KEEPER:
             return keeper_screens.keeper_screen(content, character, stats, view, state.notice)
         case _:
@@ -467,6 +472,8 @@ def advance(
             return _step_player_quests(content, state, command, view)
         case ScreenId.KEEPER_QUEST:
             return _step_keeper_quest(content, state, command, view)
+        case ScreenId.KEEPER_BAG:
+            return _step_bag(content, state, command, view)
         case _:
             return state.with_notice("Здесь только чтение. Нажмите «Назад».")
 
@@ -1175,6 +1182,50 @@ def _typed_stat(content: GameContent, state: PlayState, view: KeeperView, text: 
     )
 
 
+def _step_bag(
+    content: GameContent, state: PlayState, command: Command, view: KeeperView
+) -> PlayState:
+    """Слот — снять вещь в сумку; вещь из сумки — надеть."""
+    if view.target is None:
+        return go_back(state).with_notice("Того персонажа больше нет.")
+    moved = page_move(command, state.keeper_page, total_pages(len(view.target_bag)))
+    if moved is not None:
+        return replace(state, keeper_page=moved, notice="")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите слот или вещь из сумки.")
+
+    slot = keeper_screens.bag_slot_from_button(content, view.target, command.argument)
+    if slot:
+        taken_off = keeper_rules.unequip_slot(view.target, slot)
+        if taken_off is None:
+            return state.with_notice("Этот слот и так пуст.")
+        changed, item_id = taken_off
+        name = keeper_screens.item_name(content, item_id)
+        return _bag_write(state, changed, ((item_id, 1),), f"{name}: снято в сумку.")
+
+    item_id = keeper_screens.bag_item_from_button(content, view.target_bag, command.argument)
+    if not item_id:
+        return state.with_notice("Не узнал вещь. Нажмите строку из списка.")
+    put_on = keeper_rules.equip_item(content, view.target, item_id)
+    if put_on is None:
+        return state.with_notice("Это не снаряжение — надеть нельзя.")
+    changed, bag_changes = put_on
+    name = keeper_screens.item_name(content, item_id)
+    return _bag_write(state, changed, bag_changes, f"{name}: надето.")
+
+
+def _bag_write(
+    state: PlayState,
+    changed: Character,
+    bag_changes: tuple[tuple[str, int], ...],
+    said: str,
+) -> PlayState:
+    note = _note(KeeperAction.GRANT_ITEM, changed.name, said)
+    return state.storing(
+        PendingWrite(other=changed, bag_changes=bag_changes, note=note)
+    ).with_notice(said)
+
+
 def _quest_write(state: PlayState, changed: Character, detail: str, said: str) -> PlayState:
     note = _note(KeeperAction.QUEST, changed.name, detail)
     return state.storing(PendingWrite(other=changed, note=note)).with_notice(said)
@@ -1287,6 +1338,8 @@ def _step_player(
         return replace(
             state, keeper_kind="quest", keeper_field="", keeper_typing="", keeper_page=PageState()
         ).at(ScreenId.KEEPER_QUESTS)
+    if labels.KEEPER_BAG_BTN.matches(command.argument):
+        return replace(state, keeper_typing="", keeper_page=PageState()).at(ScreenId.KEEPER_BAG)
     if labels.KEEPER_TRADES.matches(command.argument):
         return replace(state, keeper_typing="").at(ScreenId.KEEPER_TRADES)
     if labels.KEEPER_BAN.matches(command.argument):
