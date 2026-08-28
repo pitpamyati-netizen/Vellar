@@ -570,11 +570,12 @@ def test_the_descent_asks_for_a_fight(
 ) -> None:
     dungeon = step(content, hero, in_city, "Подземелья")
     assert dungeon.screen is ScreenId.DUNGEON
-    assert "3 схватки подряд" in render(content, hero, dungeon, world_seed=WORLD_SEED).text()
+    assert "около 3 схваток" in render(content, hero, dungeon, world_seed=WORLD_SEED).text()
 
-    down = step(content, hero, dungeon, "Спуститься")
+    down = step(content, hero, dungeon, "Спуск: разведка")
     assert down.fight == "dungeon"
-    assert down.descent.depth == 1
+    assert down.descent.layer == 0
+    assert down.descent.difficulty == "recon"
     assert down.descent.city_id == "farhold"
 
 
@@ -642,16 +643,17 @@ def test_a_city_has_a_second_deeper_descent(content: GameContent, hero: Characte
     early = step(content, hero, begin(hero), "Мир", "Дубно", "Подземелья")
     early_text = render(content, hero, early, world_seed=WORLD_SEED).text()
     assert deep.name in early_text
-    assert "нужен уровень 22" in early_text
-    assert step(content, hero, early, "В глубокий спуск").fight != "dungeon"
+    assert "с уровня 22" in early_text
+    assert step(content, hero, early, "Глубокий спуск: разведка").fight != "dungeon"
 
     # Двадцать второй - дорос: кнопка есть, и она уводит в спуск второго яруса.
     ready = replace(hero, level=22)
     screen = step(content, ready, begin(ready), "Мир", "Дубно", "Подземелья")
     assert deep.flavour in render(content, ready, screen, world_seed=WORLD_SEED).text()
-    down = step(content, ready, screen, "В глубокий спуск")
+    down = step(content, ready, screen, "Глубокий спуск: тёмный ход")
     assert down.fight == "dungeon"
     assert down.descent.tier == 2
+    assert down.descent.difficulty == "delve"
     assert down.descent.level == city.level_max
 
 

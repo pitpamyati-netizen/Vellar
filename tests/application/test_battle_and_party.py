@@ -56,6 +56,48 @@ def a_battle(content: GameContent, *, live_defender: bool = True) -> battle_serv
     return session
 
 
+def test_opening_effects_land_on_the_right_side(content: GameContent) -> None:
+    """Условия захода в данж ложатся на бойцов ещё до первого хода (ADR 0036)."""
+    from mmorpg.domain.entities.effects import ActiveEffect
+    from mmorpg.domain.entities.location import Enemy, EnemyKind
+
+    hazard = ActiveEffect(
+        id="dungeon:gloom",
+        name="Промозглая тьма",
+        modifiers={"initiative_percent": -15.0},
+        turns_left=1,
+        beneficial=False,
+        permanent=True,
+    )
+    enemy = Enemy(
+        archetype_id="grey_wolf",
+        name="Серый волк",
+        kind=EnemyKind.BEAST,
+        level=12,
+        max_health=80,
+        damage=10,
+        armor=5,
+        initiative=9.0,
+        loot=(),
+        gold=5,
+    )
+    session, _ = battle_service.begin(
+        content,
+        battle_id="dungeon-1",
+        attackers=[(a_hero("Аргус", 1), True)],
+        enemies=[enemy],
+        seed=SEED,
+        kind=battle_service.BattleKind.DESCENT,
+        owner=1,
+        depth=1,
+        opening_effects={0: [hazard]},
+    )
+    hero_side = [one for one in session.state.combatants if one.is_hero]
+    foe_side = [one for one in session.state.combatants if not one.is_hero]
+    assert hero_side and all("dungeon:gloom" in one.effects for one in hero_side)
+    assert foe_side and all("dungeon:gloom" not in one.effects for one in foe_side)
+
+
 # --- запись боя --------------------------------------------------------
 
 

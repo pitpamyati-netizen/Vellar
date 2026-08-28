@@ -135,4 +135,4 @@ def test_the_descent_screen_counts_the_layers_a_seal_opened(
     sealed = replace(elder, seals=2)
     below = step(content, sealed, begin(sealed), "Мир", "Дубно", "Подземелья")
     shown = render(content, sealed, below, world_seed=WORLD_SEED)
-    assert f"{turning_rules.descent_depth(sealed)} схваток подряд" in shown.text()
+    assert f"около {turning_rules.descent_depth(sealed)} схваток" in shown.text()

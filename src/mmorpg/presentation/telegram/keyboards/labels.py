@@ -91,10 +91,22 @@ SELL = label("Продать вещи", "💱")
 DEPOSIT = label("Положить в банк", "📥")
 WITHDRAW = label("Забрать из банка", "📤")
 FORGET_SKILL = label("Забыть умение", "🧠")
-DUNGEON_ENTER = label("Спуститься", "🕳")
-DUNGEON_ENTER_DEEP = label("В глубокий спуск", "🕳")
-DUNGEON_DEEPER = label("Идти глубже", "⬇️")
-DUNGEON_LEAVE = label("Выйти на воздух", "🚪")
+# Заход в подземелье: сперва спуск (обычный/глубокий, ADR 0028), потом
+# сложность (``domain/rules/dungeon.Difficulty``, ADR 0036). Одна кнопка на
+# пару, потому что маршрут идёт по точному тексту.
+DUNGEON_RECON = label("Спуск: разведка", "🕳")
+DUNGEON_DELVE = label("Спуск: тёмный ход", "🕳")
+DUNGEON_GRIM = label("Спуск: гиблый спуск", "🕳")
+DUNGEON_DEEP_RECON = label("Глубокий спуск: разведка", "🕳")
+DUNGEON_DEEP_DELVE = label("Глубокий спуск: тёмный ход", "🕳")
+DUNGEON_DEEP_GRIM = label("Глубокий спуск: гиблый спуск", "🕳")
+
+# Развилка после комнаты: в какую из соседних идти дальше. Назад пути нет.
+ROOM_SKIRMISH = label("Дальше — схватка", "⚔️")
+ROOM_BEAST = label("Дальше — крупный зверь", "🐗")
+ROOM_HOLLOW = label("Дальше — затишье", "🕯")
+ROOM_LAIR = label("Логово хозяина", "💀")
+ROOM_STAIRS = label("Ход наверх", "🚪")
 
 # --- Перерождение (эндгейм, ``domain/rules/turning.py``) ---
 

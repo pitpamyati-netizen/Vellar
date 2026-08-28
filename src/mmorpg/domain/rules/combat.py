@@ -2213,6 +2213,7 @@ def _spoils(
         * sum(
             experience_reward(enemy_level=one.enemy.level, character_level=level)
             * RANK_FACTORS[one.enemy.rank].experience
+            * one.enemy.stakes
             for one in fallen
             if one.enemy is not None
         )

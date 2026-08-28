@@ -160,21 +160,27 @@ class LocationSession:
 
 @dataclass(frozen=True, slots=True)
 class Descent:
-    """Незаконченный спуск в подземелья города.
+    """Незаконченный заход в подземелья города (ADR 0036).
 
-    ``started_at`` - момент, когда спуск начался; он входит в сид, поэтому два
-    спуска подряд - это два разных спуска.
+    ``started_at`` - момент, когда заход начался; он входит в сид, поэтому два
+    захода подряд - это два разных подземелья.
 
     ``tier`` - какой из двух спусков города: 1 - обычный, 2 - глубокий
-    (``city.deep_dungeon``, ADR 0028). В сид он тоже входит: два хода вниз - это
-    два разных места, а не одно и то же на другой глубине.
+    (``city.deep_dungeon``, ADR 0028). ``difficulty`` - выбранная сложность
+    (``domain/rules/dungeon.Difficulty``). Оба входят в сид.
+
+    ``layer`` - на каком слое заход стоит сейчас (0 - вход); ``room`` - вид
+    комнаты этого слоя (``domain/rules/dungeon.RoomKind``). Карта нигде не
+    хранится: и то и другое - чистая функция от сида захода и номера слоя.
     """
 
     city_id: str = ""
     level: int = 0
-    depth: int = 0
+    layer: int = 0
     started_at: int = 0
     tier: int = 1
+    difficulty: str = "recon"
+    room: str = "skirmish"
 
     @property
     def active(self) -> bool:
@@ -276,9 +282,11 @@ class PlayState:
                 "descent": [
                     self.descent.city_id,
                     self.descent.level,
-                    self.descent.depth,
+                    self.descent.layer,
                     self.descent.started_at,
                     self.descent.tier,
+                    self.descent.difficulty,
+                    self.descent.room,
                 ],
                 "pick": self.pick_slot,
                 "edge": self.edge_skill,
@@ -313,13 +321,16 @@ class PlayState:
         # старого образца называла ещё поколение и маску пройденного.
         session_parts = [*data.get("session", []), "", 0, 0][:3]
         city_id, slot, node = session_parts
-        # Хвост читается с запасом: запись старого образца не называла ``tier``.
+        # Хвост читается с запасом: запись старого образца не называла ни
+        # ``tier``, ни сложность, ни вид комнаты.
         raw_descent = data.get("descent", [])
         descent_city = raw_descent[0] if len(raw_descent) > 0 else ""
         descent_level = raw_descent[1] if len(raw_descent) > 1 else 0
-        depth = raw_descent[2] if len(raw_descent) > 2 else 0
+        descent_layer = raw_descent[2] if len(raw_descent) > 2 else 0
         descent_started = raw_descent[3] if len(raw_descent) > 3 else 0
         descent_tier = raw_descent[4] if len(raw_descent) > 4 else 1
+        descent_difficulty = raw_descent[5] if len(raw_descent) > 5 else "recon"
+        descent_room = raw_descent[6] if len(raw_descent) > 6 else "skirmish"
         # Раньше здесь лежала пара [вид, слот]: пассивные умения тоже клали в
         # слоты. Сохранённая пара читается как её второй член - номер слота.
         pick_raw = data.get("pick", 0)
@@ -342,9 +353,11 @@ class PlayState:
             descent=Descent(
                 city_id=descent_city,
                 level=int(descent_level),
-                depth=int(depth),
+                layer=int(descent_layer),
                 started_at=int(descent_started),
                 tier=int(descent_tier) or 1,
+                difficulty=str(descent_difficulty) or "recon",
+                room=str(descent_room) or "skirmish",
             ),
             list_page=PageState(
                 page=int(list_page),

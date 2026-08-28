@@ -37,7 +37,8 @@ from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import ActionKind, BattleAction, Combatant, EventKind, Verdict
 from mmorpg.domain.entities.content import GameContent, ItemKind
-from mmorpg.domain.entities.location import EnemyRank, LocationState
+from mmorpg.domain.entities.effects import ActiveEffect
+from mmorpg.domain.entities.location import LocationState
 from mmorpg.domain.ports.repositories import (
     CharacterRepository,
     InventoryRepository,
@@ -47,6 +48,7 @@ from mmorpg.domain.ports.repositories import (
 from mmorpg.domain.procgen.seeds import derive, rng
 from mmorpg.domain.rules import adventure, progression
 from mmorpg.domain.rules import arena as arena_rules
+from mmorpg.domain.rules import dungeon as dungeon_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import party as party_rules
 from mmorpg.domain.rules import pvp as pvp_rules
@@ -60,6 +62,7 @@ from mmorpg.presentation.telegram.flows import combat as fight_flow
 from mmorpg.presentation.telegram.flows.play import (
     build_location,
     descent_fight_seed,
+    dungeon_run_seed,
     location_known,
     node_fight_seed,
     visit_seed,
@@ -70,6 +73,7 @@ from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.messaging import push_screen, send_screen, send_text
 from mmorpg.presentation.telegram.screens import arena as arena_screens
 from mmorpg.presentation.telegram.screens import combat as combat_screens
+from mmorpg.presentation.telegram.screens import dungeon as dungeon_screens
 from mmorpg.presentation.telegram.screens import tutorial as tutorial_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.play import level_up_report
@@ -248,21 +252,22 @@ async def _spawn(
     if flow.fight == "dungeon" or flow.descent.active:
         descent = flow.descent
         city = content.city(descent.city_id)
-        # Спуск занимает биом самой глубокой локации города: это та же земля,
-        # только ниже.
+        # Данж занимает биом самой глубокой локации города: та же земля, ниже.
         biome = city.locations[-1].biome
+        difficulty = dungeon_rules.difficulty_of(descent.difficulty)
+        spec = dungeon_rules.spec_of(difficulty)
+        room = dungeon_rules.room_of(descent.room)
+        run_seed = dungeon_run_seed(settings.world_seed, descent)
         seed = descent_fight_seed(settings.world_seed, descent)
+        conditions = dungeon_rules.conditions_for(run_seed, difficulty)
         enemies = fight_flow.spawn_for_node(
             content,
             seed=seed,
             biome=biome,
             level=descent.level,
-            # Последний этаж - то, ради чего спуск и затевался.
-            rank=(
-                EnemyRank.ELITE
-                if descent.depth >= turning_rules.descent_depth(character)
-                else EnemyRank.NORMAL
-            ),
+            rank=room.rank,
+            stakes=spec.stakes * dungeon_rules.ROOM_STAKES[room],
+            bounty=dungeon_rules.bounty_of(conditions),
         )
         return begin(
             content,
@@ -272,7 +277,8 @@ async def _spawn(
             seed=seed,
             kind=BattleKind.DESCENT,
             owner=character.id,
-            depth=descent.depth,
+            depth=descent.layer + 1,
+            opening_effects=_dungeon_opening_effects(conditions),
         )
 
     location = build_location(
@@ -732,19 +738,16 @@ async def _finish(
     if owner is not None and session.state.verdict_for(owner.id) is Verdict.VICTORY:
         payout = payouts.get(session.owner, Payout())
         if session.in_descent:
-            next_flow = _after_descent(session, flow, payout, updated.get(session.owner))
-            if session.depth >= turning_rules.descent_depth(
-                updated.get(session.owner, roster[owner.id])
-            ):
-                bottom = await _pay_the_bottom(
-                    content,
-                    updated[session.owner],
-                    session,
-                    payout,
-                    inventory,
-                    level=max(1, flow.descent.level),
-                )
-                updated[session.owner] = bottom
+            next_flow = await _after_dungeon_room(
+                content,
+                settings,
+                session,
+                flow,
+                payout,
+                updated,
+                inventory,
+                character=updated.get(session.owner, roster[owner.id]),
+            )
         elif session.kind is BattleKind.NODE:
             line = await _take_node(content, session, locations, settings)
             if line:
@@ -929,20 +932,89 @@ def _settle_arena(
         payouts[one.character_id].extra.append(arena_screens.round_line(result))
 
 
-def _after_descent(
-    session: BattleSession, flow: PlayState, payout: Payout, character: Character | None
+def _dungeon_opening_effects(
+    conditions: tuple[dungeon_rules.Condition, ...],
+) -> dict[int, list[ActiveEffect]]:
+    """Условия захода как эффекты по сторонам: 0 - герой, 1 - враги (ADR 0036)."""
+    hero: list[ActiveEffect] = []
+    foes: list[ActiveEffect] = []
+    for one in conditions:
+        hero.extend(one.hero_effects)
+        foes.extend(one.enemy_effects)
+    result: dict[int, list[ActiveEffect]] = {}
+    if hero:
+        result[0] = hero
+    if foes:
+        result[1] = foes
+    return result
+
+
+def _heal_room_winners(
+    content: GameContent, session: BattleSession, updated: dict[int, Character], percent: int
+) -> None:
+    """Победа в комнате латает раны: пассивного восстановления в данже нет."""
+    if percent <= 0:
+        return
+    for one in session.participants():
+        if session.state.verdict_for(one.id) is not Verdict.VICTORY:
+            continue
+        character = updated.get(one.character_id)
+        if character is None:
+            continue
+        stats = derived_stats(content, character)
+        current = character.health_or(stats.max_health)
+        if current >= stats.max_health:
+            continue
+        restored = min(stats.max_health - current, max(1, stats.max_health * percent // 100))
+        updated[one.character_id] = character.with_health(current + restored, stats.max_health)
+
+
+async def _after_dungeon_room(
+    content: GameContent,
+    settings: Settings,
+    session: BattleSession,
+    flow: PlayState,
+    payout: Payout,
+    updated: dict[int, Character],
+    inventory: InventoryRepository,
+    *,
+    character: Character,
 ) -> PlayState:
-    """Предложить следующий этаж спуска. Узел считает своё в другом месте."""
-    if character is None:  # pragma: no cover
-        return flow
-    depth = turning_rules.descent_depth(character)
-    if session.depth >= depth:
-        payout.extra.append("Спуск пройден до дна. Дальше только камень.")
+    """Что даёт выигранная комната и куда развилка ведёт дальше (ADR 0036)."""
+    descent = flow.descent
+    difficulty = dungeon_rules.difficulty_of(descent.difficulty)
+    room = dungeon_rules.room_of(descent.room)
+    final = dungeon_rules.final_layer(turning_rules.descent_depth(character), difficulty)
+
+    _heal_room_winners(content, session, updated, dungeon_rules.ROOM_HEAL_PERCENT[room])
+
+    if room is dungeon_rules.RoomKind.LAIR:
+        bottom = await _pay_the_bottom(
+            content,
+            updated.get(session.owner, character),
+            session,
+            payout,
+            inventory,
+            level=max(1, descent.level),
+            bounty=dungeon_rules.spec_of(difficulty).stakes,
+        )
+        updated[session.owner] = bottom
+        payout.extra.append("Логово пройдено. Заход окончен — наверх, к свету.")
         return replace(flow, descent=Descent())
 
-    payout.extra.append(f"Пройдено схваток: {session.depth} из {depth}.")
-    payout.rows.append((labels.DUNGEON_DEEPER, labels.DUNGEON_LEAVE))
-    return replace(flow, descent=replace(flow.descent, depth=session.depth + 1))
+    run_seed = dungeon_run_seed(settings.world_seed, descent)
+    next_layer = descent.layer + 1
+    options = dungeon_rules.room_options(run_seed, next_layer, final)
+    payout.extra.append(f"Пройдено комнат: {descent.layer + 1}. Впереди развилка.")
+    if descent.layer == 0:
+        # На входе называем, что несёт этот заход: дальше о том же напомнит
+        # список состояний в панели боя.
+        payout.extra.extend(
+            dungeon_screens.condition_lines(dungeon_rules.conditions_for(run_seed, difficulty))
+        )
+    payout.extra.extend(dungeon_screens.fork_lines(options))
+    payout.rows.extend(dungeon_screens.fork_rows(options))
+    return flow
 
 
 async def _pay_the_bottom(
@@ -953,17 +1025,19 @@ async def _pay_the_bottom(
     inventory: InventoryRepository,
     *,
     level: int,
+    bounty: float = 1.0,
 ) -> Character:
-    """Выдать то, ради чего спуск и затевался.
+    """Выдать то, ради чего заход и затевался.
 
-    Платит дно по уровню спуска, а не по уровню вошедшего: глубокий спуск идёт
-    выше по полосе, поэтому и дно у него богаче (ADR 0019, ADR 0028).
+    Платит дно по уровню спуска, а не по уровню вошедшего (ADR 0019, ADR 0028);
+    ``bounty`` - множитель сложности: гиблый спуск и дно платит вдвое (ADR 0036).
     """
     prize = adventure.descent_prize(
         content,
         character,
         level=level,
         seed=derive("descent-prize", session.id, session.depth),
+        bounty=bounty,
     )
     economy_log.record(economy_log.DESCENT, prize.gold, character_id=prize.character.id)
     if prize.item_id and content.has_item(prize.item_id):
@@ -1090,22 +1164,57 @@ async def _after_the_fight(
         await render_play(message, content, settings, home, character)
         return
 
-    if labels.DUNGEON_DEEPER.matches(text) and flow.descent.active:
-        await state.update_data({STATE_KEY: ""})
-        await open_fight(
-            message,
-            state,
-            content=content,
-            settings=settings,
-            character=character,
-            flow=replace(flow, fight="dungeon"),
-            characters=characters,
-            state_cache=state_cache,
-            parties=parties,
-            storage=_storage_of(state),
-        )
-        return
+    if flow.descent.active:
+        picked = _dungeon_fork(content, settings, character, flow, text)
+        if picked is not None:
+            if picked.descent.room == dungeon_rules.RoomKind.STAIRS.value:
+                # Ход наверх - это не бой: заход кончается с тем, что уже взято.
+                await state.update_data({STATE_KEY: ""})
+                await _leave_to_play(
+                    message, state, content, settings, replace(flow, descent=Descent()), character
+                )
+                return
+            await state.update_data({STATE_KEY: ""})
+            await open_fight(
+                message,
+                state,
+                content=content,
+                settings=settings,
+                character=character,
+                flow=replace(picked, fight="dungeon"),
+                characters=characters,
+                state_cache=state_cache,
+                parties=parties,
+                storage=_storage_of(state),
+            )
+            return
     await _leave_to_play(message, state, content, settings, flow, character)
+
+
+def _dungeon_fork(
+    content: GameContent,
+    settings: Settings,
+    character: Character,
+    flow: PlayState,
+    text: str,
+) -> PlayState | None:
+    """Разобрать нажатую дверь развилки. ``None`` - нажали не её.
+
+    Возможные двери этого слоя считаются заново из сида захода, поэтому чужую
+    кнопку (со старой клавиатуры, с другого слоя) не примут: слой можно пройти
+    только вперёд и только в одну из тех комнат, что игра предложила.
+    """
+    descent = flow.descent
+    difficulty = dungeon_rules.difficulty_of(descent.difficulty)
+    final = dungeon_rules.final_layer(turning_rules.descent_depth(character), difficulty)
+    next_layer = descent.layer + 1
+    options = dungeon_rules.room_options(
+        dungeon_run_seed(settings.world_seed, descent), next_layer, final
+    )
+    for kind in options:
+        if dungeon_screens.room_label(kind).matches(text):
+            return replace(flow, descent=replace(descent, layer=next_layer, room=kind.value))
+    return None
 
 
 async def _leave_to_play(

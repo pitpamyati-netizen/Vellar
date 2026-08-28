@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, GameContent, Npc
-from mmorpg.domain.rules import adventure
+from mmorpg.domain.rules import dungeon as dungeon_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.economy import inn_price, mentor_price
@@ -17,8 +17,9 @@ from mmorpg.domain.rules.quests import ready_to_hand_in
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
+from mmorpg.presentation.telegram.screens import dungeon as dungeon_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
-from mmorpg.presentation.telegram.screens.format import amount, gold, head, plural
+from mmorpg.presentation.telegram.screens.format import amount, gold, head
 from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
     PageState,
@@ -176,68 +177,58 @@ def dungeon_screen(
     level: int,
     deep_level: int,
     deep_open: bool,
-    depth: int,
-    active_tier: int,
-    total: int,
+    base_depth: int,
     notice: str = "",
 ) -> Screen:
-    """Спуск: бои подряд, без выхода посередине без потерь.
+    """Данж: выбор спуска и сложности перед заходом (ADR 0028, ADR 0036).
 
-    У города два спуска (ADR 0028). Обычный берёт уровень от самой глубокой
-    локации, до которой дорос игрок; глубокий (``city.deep_dungeon``) идёт по
-    верху полосы города и открыт тому, кто добрался до последней локации. Ниже
-    того и другого дна Печати Палаты кладут ещё по схватке, поэтому число
-    называют, а не подразумевают (``domain/rules/turning.py``).
+    У города два спуска. Обычный берёт уровень от самой глубокой локации, до
+    которой дорос игрок; глубокий (``city.deep_dungeon``) идёт по верху полосы
+    города и открыт тому, кто добрался до последней локации. Поверх спуска
+    выбирают сложность: она домножает силу врагов и плату, а всё, что выше
+    «разведки», несёт случайные условия захода (``domain/rules/dungeon.py``).
     """
     stats = derived_stats(content, character)
     health = character.health_or(stats.max_health)
-    fights = f"{total} {plural(total, 'схватка', 'схватки', 'схваток')} подряд, без передышки"
+    depth = dungeon_rules.final_layer(base_depth, dungeon_rules.Difficulty.RECON)
     lines = [
         *head(f"Подземелья города {city.name}.", notice),
-        "Ход вниз, сквозняк, вода по щиколотку.",
-        f"{fights}. Здоровье между ними не восстанавливается.",
-        f"Здоровье: {amount(health, stats.max_health)}.",
-        "Дно платит только тем, кто до него дошёл: уйти на середине — уйти со "
-        "взятым в схватках и без этого.",
+        "Комната за комнатой, после каждой — развилка: куда дальше, назад пути нет.",
+        f"Здоровье между боями не растёт (только зелья да передышки). У вас "
+        f"{amount(health, stats.max_health)}.",
+        f"До логова около {depth} схваток. Дно за боссом платит лишь тому, кто до него дошёл.",
+        "Сложность домножает силу врагов и плату:",
     ]
-    if depth:
-        lines.insert(1, f"Пройдено схваток: {depth} из {total}.")
-
-    def bottom_line(at: int) -> str:
-        return (
-            f"Последний внизу — сильный противник, и за ним дно: "
-            f"{adventure.descent_gold(at)} золота, опыт и находка."
+    for difficulty in dungeon_screens.DIFFICULTY_ORDER:
+        lines.append(
+            f"— {dungeon_screens.DIFFICULTY_NAMES[difficulty]}: "
+            f"{dungeon_screens.DIFFICULTY_FLAVOUR[difficulty]}"
         )
 
-    rows: list[tuple[Label, ...]] = []
-    if active_tier == 2:
-        deep = city.deep_dungeon
+    def tier_block(tier: int, at: int, title: str) -> list[tuple[Label, ...]]:
+        lines.append("")
+        outgrew = (
+            " — вы переросли этот спуск, платит он по своему уровню"
+            if tier == 1 and character.level > at
+            else ""
+        )
+        lines.append(f"{title}: уровень {at}, ваш {character.level}{outgrew}.")
+        return [
+            (dungeon_screens.enter_label(tier, difficulty),)
+            for difficulty in dungeon_screens.DIFFICULTY_ORDER
+        ]
+
+    rows: list[tuple[Label, ...]] = tier_block(1, level, "Спуск")
+
+    deep = city.deep_dungeon
+    if deep_open:
+        lines.append("")
         lines.append(f"{deep.name}. {deep.flavour}")
-        lines.append(f"Спуск рассчитан на уровень {deep_level}. Ваш уровень: {character.level}.")
-        lines.append(bottom_line(deep_level))
-        rows.append((labels.DUNGEON_ENTER_DEEP,))
-        return Screen(id=ScreenId.DUNGEON, lines=tuple(lines), rows=tuple(rows))
-
-    lines.append(f"Спуск рассчитан на уровень {level}. Ваш уровень: {character.level}.")
-    lines.append(bottom_line(level))
-    # Спуск — место, а не зеркало: он не растёт вместе с вошедшим (``flows/play.
-    # dungeon_level``). Кто перерос город, тот и его обычный спуск перерос.
-    if character.level > level:
-        lines.append("Вы переросли этот спуск: платит он по своему уровню, а не по вашему.")
-    rows.append((labels.DUNGEON_ENTER,))
-
-    if not depth:
-        deep = city.deep_dungeon
-        if deep_open:
-            lines.append(f"Ниже — {deep.name}. {deep.flavour}")
-            lines.append(
-                f"Этот спуск идёт по уровню {deep_level} и с вами не растёт — дно у него богаче."
-            )
-            rows.append((labels.DUNGEON_ENTER_DEEP,))
-        else:
-            need = city.locations[-1].level_min
-            lines.append(
-                f"Ниже есть ещё ход, {deep.name}, но он открыт тем, кто добрался до "
-                f"последней локации города: нужен уровень {need}."
-            )
+        rows.extend(tier_block(2, deep_level, "Глубокий спуск"))
+    else:
+        need = city.locations[-1].level_min
+        lines.append("")
+        lines.append(
+            f"Ниже — {deep.name}, но он открыт с уровня {need} (последняя локация города)."
+        )
     return Screen(id=ScreenId.DUNGEON, lines=tuple(lines), rows=tuple(rows))

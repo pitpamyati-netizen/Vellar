@@ -758,13 +758,14 @@ async def test_a_descent_pays_at_the_bottom_and_not_before(
     characters: InMemoryCharacterRepository,
     argus: Character,
 ) -> None:
-    """Три боя подряд когда-то стоили трёх боёв.
+    """Заход - это комнаты с развилками, а дно платит лишь дошедшему до логова.
 
-    Экран обещал награду «внизу»; в игре её не платило ничто. Теперь дно отдаёт
-    золото, опыт и то, что можно вынести, — и только тому, кто до него дошёл.
+    Экран обещал награду «внизу»; в игре её не платило ничто. Теперь каждая
+    комната платит за себя, а логово сверх того отдаёт дно — золото, опыт и
+    находку (ADR 0036).
     """
-    # Очки потрачены так, как их потратил бы игрок: дно спуска - эпический противник, и
-    # голому персонажу двенадцатого уровня выигрывать там нечего.
+    # Очки потрачены так, как их потратил бы игрок: логово - босс, и голому
+    # персонажу двенадцатого уровня выигрывать там нечего.
     allowance = stat_allowance(content, 12)
     strong = replace(
         argus,
@@ -781,24 +782,42 @@ async def test_a_descent_pays_at_the_bottom_and_not_before(
     assert screen.id is ScreenId.DUNGEON
     assert "дно" in screen.text().casefold()
 
-    screen = await player.press("Спуститься")
+    screen = await player.press("Спуск: разведка")
+    doors = ("Логово хозяина", "Дальше — схватка", "Дальше — затишье", "Дальше — крупный зверь")
     bottom = ""
-    for _ in range(120):
+    for _ in range(200):
         text = screen.text()
-        if "Дно спуска:" in text:
+        if "Логово пройдено" in text:
             bottom = text
             break
         if text.startswith("Поражение."):
             pytest.skip("the descent was lost; the prize is for whoever gets down")
-        button = "Идти глубже" if "Пройдено схваток:" in text else "Атака"
-        screen = await player.press(button)
-    else:  # pragma: no cover - спуск, который не кончается, и есть та ошибка, которую это ловит
+        if "Впереди развилка" in text or "Логово хозяина:" in text:
+            door = next(one for one in doors if one in text)
+            screen = await player.press(door)
+            continue
+        screen = await player.press("Атака")
+    else:  # pragma: no cover - заход, который не кончается, и есть та ошибка, которую это ловит
         pytest.fail("the descent never reached the bottom")
 
-    assert "Спуск пройден до дна" in bottom
+    assert "Дно спуска:" in bottom
     stored = await characters.get_active(ACCOUNT)
     assert stored is not None
     assert stored.gold > strong.gold
+
+
+def test_a_grim_descent_names_a_hazard_and_a_boon() -> None:
+    """«Гиблый спуск» несёт два условия — одну беду и одно благо (ADR 0036)."""
+    from mmorpg.domain.rules import dungeon as dungeon_rules
+    from mmorpg.presentation.telegram.screens import dungeon as dungeon_screens
+
+    seed = dungeon_rules.run_seed("vellar-test", "farhold", 1, dungeon_rules.Difficulty.GRIM, 7)
+    conditions = dungeon_rules.conditions_for(seed, dungeon_rules.Difficulty.GRIM)
+    lines = dungeon_screens.condition_lines(conditions)
+    assert len(lines) == 2
+    assert any(line.startswith("Беда «") for line in lines)
+    assert any(line.startswith("Благо «") for line in lines)
+    assert dungeon_screens.condition_lines(()) == ()
 
 
 async def test_a_round_of_the_circle_is_fought_and_paid_out(

@@ -32,6 +32,7 @@ from mmorpg.domain.procgen.seeds import derive, location_seed
 from mmorpg.domain.rules import adventure, economy
 from mmorpg.domain.rules import arena as arena_rules
 from mmorpg.domain.rules import crafts as craft_rules
+from mmorpg.domain.rules import dungeon as dungeon_rules
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import pvp as pvp_rules
@@ -61,6 +62,7 @@ from mmorpg.presentation.telegram.screens import arena as arena_screens
 from mmorpg.presentation.telegram.screens import chamber as chamber_screens
 from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import crafts as craft_screens
+from mmorpg.presentation.telegram.screens import dungeon as dungeon_screens
 from mmorpg.presentation.telegram.screens import format as format_screens
 from mmorpg.presentation.telegram.screens import guild as guild_screens
 from mmorpg.presentation.telegram.screens import items as item_screens
@@ -198,10 +200,20 @@ def node_fight_seed(world_seed: str, session: LocationSession, wave: int) -> byt
     return derive(visit_seed(world_seed, session), "fight", session.node, wave)
 
 
-def descent_fight_seed(world_seed: str, descent: Descent) -> bytes:
-    return derive(
-        world_seed, "descent", descent.city_id, descent.tier, descent.started_at, descent.depth
+def dungeon_run_seed(world_seed: str, descent: Descent) -> bytes:
+    """Сид всего захода: из него растут и развилки, и условия (ADR 0036)."""
+    return dungeon_rules.run_seed(
+        world_seed,
+        descent.city_id,
+        descent.tier,
+        dungeon_rules.difficulty_of(descent.difficulty),
+        descent.started_at,
     )
+
+
+def descent_fight_seed(world_seed: str, descent: Descent) -> bytes:
+    """Сид боя в комнате нынешнего слоя."""
+    return derive(dungeon_run_seed(world_seed, descent), "room", descent.layer)
 
 
 def deep_dungeon_open(city: City, character: Character) -> bool:
@@ -486,9 +498,7 @@ def render(
                 level=dungeon_level(content, character, city.id),
                 deep_level=dungeon_level(content, character, city.id, deep=True),
                 deep_open=deep_dungeon_open(city, character),
-                depth=state.descent.depth if state.descent.city_id == city.id else 0,
-                active_tier=state.descent.tier if state.descent.city_id == city.id else 0,
-                total=turning_rules.descent_depth(character),
+                base_depth=turning_rules.descent_depth(character),
                 notice=state.notice,
             )
         case _:
@@ -1664,21 +1674,31 @@ def _handle_dungeon(
     clock: Clock,
 ) -> PlayState:
     if command.intent is not Intent.SELECT:
-        return state.with_notice("Нажмите «Спуститься» или «Назад».")
+        return state.with_notice("Нажмите кнопку спуска или «Назад».")
     city = known_city(content, state.city_id, character.city_id)
-    if labels.DUNGEON_ENTER.matches(command.argument):
-        deep = False
-    elif labels.DUNGEON_ENTER_DEEP.matches(command.argument) and deep_dungeon_open(city, character):
-        deep = True
-    else:
-        return state.with_notice("Нажмите «Спуститься» или «Назад».")
+
+    chosen: tuple[int, dungeon_rules.Difficulty] | None = None
+    for tier in (1, 2):
+        for difficulty in dungeon_screens.DIFFICULTY_ORDER:
+            if dungeon_screens.enter_label(tier, difficulty).matches(command.argument):
+                chosen = (tier, difficulty)
+    if chosen is None:
+        return state.with_notice("Нажмите кнопку спуска или «Назад».")
+
+    tier, difficulty = chosen
+    if tier == 2 and not deep_dungeon_open(city, character):
+        return state.with_notice(
+            "Глубокий спуск ещё не открыт: дойдите до последней локации города."
+        )
 
     descent = Descent(
         city_id=city.id,
-        level=dungeon_level(content, character, city.id, deep=deep),
-        depth=1,
+        level=dungeon_level(content, character, city.id, deep=tier == 2),
+        layer=0,
         started_at=clock.now,
-        tier=2 if deep else 1,
+        tier=tier,
+        difficulty=difficulty.value,
+        room=dungeon_rules.RoomKind.SKIRMISH.value,
     )
     return replace(state, descent=descent, fight="dungeon").at(ScreenId.COMBAT)
 

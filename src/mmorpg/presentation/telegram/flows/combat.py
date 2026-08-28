@@ -41,8 +41,14 @@ def spawn_for_node(
     biome: str,
     level: int,
     rank: EnemyRank = EnemyRank.NORMAL,
+    stakes: float = 1.0,
+    bounty: float = 1.0,
 ) -> tuple[Enemy, ...]:
-    """Кто стоит в этом узле. То же семя - те же противники, всегда."""
+    """Кто стоит в этом узле. То же семя - те же противники, всегда.
+
+    ``stakes`` и ``bounty`` поднимают ставку боя: в локации они всегда единица,
+    а в данже их задаёт выбранная сложность (``domain/rules/dungeon.py``).
+    """
     return generate_group(
         seed,
         archetypes=content.enemy_archetypes,
@@ -50,6 +56,8 @@ def spawn_for_node(
         level=level,
         rank=rank,
         elite_titles=content.elite_titles,
+        stakes=stakes,
+        bounty=bounty,
     )
 
 

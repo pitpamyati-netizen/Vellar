@@ -254,21 +254,34 @@ def descent_gold(level: int) -> int:
 
 
 def descent_prize(
-    content: GameContent, character: Character, *, level: int, seed: bytes
+    content: GameContent,
+    character: Character,
+    *,
+    level: int,
+    seed: bytes,
+    bounty: float = 1.0,
 ) -> DescentPrize:
-    """Заплатить за спуск, пройденный до дна. Определяется сидом.
+    """Заплатить за заход, пройденный до логова. Определяется сидом.
 
     Находка никогда не бывает сырьём: дно ямы в земле - это место, где лежит вещь, а
     не место, где растут травы, и спуск, заплативший волчьими шкурами, читался бы
     как ошибка.
+
+    ``bounty`` - множитель сложности данжа: на гиблом спуске дно платит вдвое
+    (``domain/rules/dungeon.py``, ADR 0036).
     """
     source = rng(seed)
-    gold = descent_gold(level)
+    gold = max(1, round(descent_gold(level) * bounty))
     item_id = _pick_item(content, source, level, materials_only=False)
     experience = max(
         1,
-        DESCENT_EXPERIENCE_BASE
-        + experience_reward(enemy_level=max(1, level), character_level=character.level),
+        round(
+            (
+                DESCENT_EXPERIENCE_BASE
+                + experience_reward(enemy_level=max(1, level), character_level=character.level)
+            )
+            * bounty
+        ),
     )
     paid = character.with_gold(gold)
     grown, level_up = grant_experience(content, paid, experience)

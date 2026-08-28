@@ -423,7 +423,17 @@ def test_state_survives_a_round_trip(
 def test_a_deep_descent_survives_a_round_trip(hero: Character) -> None:
     from mmorpg.presentation.telegram.flows.state import Descent
 
-    deep = PlayState(descent=Descent(city_id="farhold", level=30, depth=2, started_at=7, tier=2))
+    deep = PlayState(
+        descent=Descent(
+            city_id="farhold",
+            level=30,
+            layer=2,
+            started_at=7,
+            tier=2,
+            difficulty="grim",
+            room="beast",
+        )
+    )
     restored = PlayState.deserialise(deep.serialise())
     assert restored.descent == deep.descent
     assert restored.descent.deep

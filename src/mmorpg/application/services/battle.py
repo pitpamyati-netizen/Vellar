@@ -120,6 +120,7 @@ def begin(
     node: int = 0,
     wave: int = 0,
     depth: int = 0,
+    opening_effects: Mapping[int, Sequence[ActiveEffect]] | None = None,
 ) -> tuple[BattleSession, dict[int, Character]]:
     """Собрать бой из тех, кто в нём участвует.
 
@@ -127,7 +128,12 @@ def begin(
     слепок противника на арене ходит сам, но дерётся своими умениями. Второй
     член ответа - персонажи по номерам бойцов: по нему движок читает умения и
     оружие (``domain/rules/combat.act``).
+
+    ``opening_effects`` - эффекты, навешиваемые на каждого бойца стороны
+    (0 - нападающие, 1 - защита) ещё до первого хода: так условия захода в
+    данж ложатся на весь бой (``domain/rules/dungeon.py``, ADR 0036).
     """
+    by_side = opening_effects or {}
     combatants: list[Combatant] = []
     roster: dict[int, Character] = {}
     next_id = 1
@@ -162,6 +168,12 @@ def begin(
         combatants.append(monster_combatant(enemy, combatant_id=next_id, side=1))
         next_id += 1
 
+    if by_side:
+        combatants = [
+            replace(one, effects=_with_opening(one.effects, by_side.get(one.side, ())))
+            for one in combatants
+        ]
+
     state = open_battle(content, roster, combatants, seed)
     session = BattleSession(
         id=battle_id,
@@ -176,6 +188,13 @@ def begin(
         depth=depth,
     )
     return session, roster
+
+
+def _with_opening(stack: EffectStack, effects: Sequence[ActiveEffect]) -> EffectStack:
+    """Навесить на бойца эффекты, с которыми он входит в бой."""
+    for effect in effects:
+        stack = stack.apply(effect)
+    return stack
 
 
 def roster_for(session: BattleSession, characters: Mapping[int, Character]) -> dict[int, Character]:
@@ -304,6 +323,7 @@ def _enemy_to_json(enemy: Enemy) -> dict[str, object]:
         "loot": list(enemy.loot),
         "gold": enemy.gold,
         "element": enemy.element.value,
+        "stakes": enemy.stakes,
     }
 
 
@@ -321,6 +341,7 @@ def _enemy_from_json(raw: Mapping[str, Any]) -> Enemy:
         loot=tuple(raw["loot"]),
         gold=int(raw["gold"]),
         element=DamageType(raw.get("element", DamageType.SLASHING.value)),
+        stakes=float(raw.get("stakes", 1.0)),
     )
 
 

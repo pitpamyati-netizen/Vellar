@@ -121,6 +121,10 @@ class Enemy:
     gold: int
     rank: EnemyRank = EnemyRank.NORMAL
     element: DamageType = DamageType.SLASHING
+    #: Во сколько раз этот противник крепче и щедрее обычного своего уровня.
+    #: Единица - обычная встреча; выше единицы бывает только в данже, где
+    #: ставку поднимает выбранная сложность (``domain/rules/dungeon.py``).
+    stakes: float = 1.0
 
     @property
     def is_elite(self) -> bool:

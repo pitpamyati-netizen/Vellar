@@ -118,11 +118,18 @@ def generate_enemy(
     rank: EnemyRank = EnemyRank.NORMAL,
     elite_titles: Sequence[str] = (),
     members: int = 1,
+    stakes: float = 1.0,
+    bounty: float = 1.0,
 ) -> Enemy:
     """Собрать одного противника. Тот же сид - тот же противник, до последней жизни.
 
     ``members`` - сколько их стоит рядом, вместе с ним самим: стая делит бюджет
     одного боя, поэтому каждый из троих слабее одиночки.
+
+    ``stakes`` поднимает всю ставку разом - здоровье, урон, золото, - и это
+    единственное, чем сложность данжа делает бой тяжелее (``domain/rules/
+    dungeon.py``). ``bounty`` домножает только золото: им условие захода
+    «богатая порода» делает вылазку выгоднее, не делая её опаснее.
     """
     pool = candidates(archetypes, biome)
     if not pool:
@@ -141,6 +148,7 @@ def generate_enemy(
         * spread
         * factors.health
         * share
+        * stakes
     )
     damage = (
         (DAMAGE_BASE + DAMAGE_PER_LEVEL * level)
@@ -148,10 +156,11 @@ def generate_enemy(
         * spread
         * factors.damage
         * share
+        * stakes
     )
     armor = ARMOR_PER_LEVEL * level * archetype.armor * factors.armor
     initiative = (INITIATIVE_BASE + INITIATIVE_PER_LEVEL * level) * archetype.initiative
-    gold = (GOLD_BASE + GOLD_PER_LEVEL * level) * spread * factors.gold * share
+    gold = (GOLD_BASE + GOLD_PER_LEVEL * level) * spread * factors.gold * share * stakes * bounty
 
     return Enemy(
         archetype_id=archetype.id,
@@ -166,6 +175,7 @@ def generate_enemy(
         gold=max(1, round(gold)),
         rank=rank,
         element=element_of(archetype),
+        stakes=stakes,
     )
 
 
@@ -202,11 +212,16 @@ def generate_group(
     rank: EnemyRank = EnemyRank.NORMAL,
     elite_titles: Sequence[str] = (),
     max_size: int = 3,
+    stakes: float = 1.0,
+    bounty: float = 1.0,
 ) -> tuple[Enemy, ...]:
     """От одного до ``max_size`` противников. Долгий бой - всегда бой с одним.
 
     Эпический противник и босс стоят в одиночку, потому что вся их цена меряется
     ходами: двое рядом удвоили бы бой, который и так задуман самым долгим в игре.
+
+    ``stakes`` и ``bounty`` уходят каждому противнику: сложность данжа и его
+    условия поднимают ставку всей стаи разом (``domain/rules/dungeon.py``).
     """
     from mmorpg.domain.procgen.seeds import derive  # local: держит работу с сидом в одном месте
 
@@ -219,6 +234,8 @@ def generate_group(
                 level=level,
                 rank=rank,
                 elite_titles=elite_titles,
+                stakes=stakes,
+                bounty=bounty,
             ),
         )
 
@@ -232,6 +249,8 @@ def generate_group(
             level=level,
             elite_titles=elite_titles,
             members=size,
+            stakes=stakes,
+            bounty=bounty,
         )
         for index in range(size)
     )
