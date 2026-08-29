@@ -34,6 +34,10 @@ class OverlayKind(StrEnum):
     TRAIT = "trait"
     CRAFT = "craft"
     RECIPE = "recipe"
+    #: Опорные числа игры (``content.rules``): цена рангов, ступени ветви, очки
+    #: за уровень. Единственная разновидность без множества сущностей — она
+    #: одна, и завести вторую нельзя.
+    META = "meta"
 
 
 #: С чего начинаются идентификаторы, выданные смотрителем. Отдельный префикс
@@ -87,6 +91,20 @@ class OverlayRecord:
         """Поле-перечисление: «луга, лес» — два значения, пустое — ни одного."""
         raw = self.fields.get(key, "")
         return tuple(part.strip() for part in raw.split(",") if part.strip())
+
+    def numbers(self, key: str) -> tuple[int, ...]:
+        """Поле «список чисел»: «1, 2, 2, 3» — четыре числа.
+
+        Нечисло среди частей просто выпадает, а ругается на это валидатор
+        (``rules/overlay.problems``), как и на всём, что приходит строкой.
+        """
+        found: list[int] = []
+        for part in self.listed(key):
+            try:
+                found.append(int(part))
+            except ValueError:
+                continue
+        return tuple(found)
 
     def pairs(self, key: str) -> tuple[tuple[str, str], ...]:
         """Поле «ключ=число»: «stat_STR=2, armor_percent=-5» — две пары.

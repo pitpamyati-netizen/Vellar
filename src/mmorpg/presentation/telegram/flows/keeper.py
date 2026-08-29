@@ -750,6 +750,8 @@ def _step_entity(
             .with_notice("Правка снята. Осталось то, что записано в content.")
         )
     if labels.KEEPER_REMOVE.matches(command.argument):
+        if record.kind in overlay_rules.NON_REMOVABLE:
+            return state.with_notice("Опорные числа есть всегда: их правят, а не убирают.")
         return state.storing(
             PendingWrite(
                 edit=replace(record, removed=True),
@@ -769,7 +771,14 @@ def _step_entity(
         return state.with_notice("Не узнал поле. Нажмите строку из списка.")
     typing = (
         TYPING_VALUE
-        if spec.kind in {FieldKind.TEXT, FieldKind.NUMBER, FieldKind.RATE, FieldKind.PAIRS}
+        if spec.kind
+        in {
+            FieldKind.TEXT,
+            FieldKind.NUMBER,
+            FieldKind.RATE,
+            FieldKind.PAIRS,
+            FieldKind.NUMBERS,
+        }
         else ""
     )
     return replace(state, keeper_field=spec.key, keeper_typing=typing, keeper_page=PageState()).at(

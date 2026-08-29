@@ -20,9 +20,17 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from itertools import pairwise
 from types import MappingProxyType
 
-from mmorpg.domain.entities.content import City, GameContent, Location, Npc, Trait
+from mmorpg.domain.entities.content import (
+    City,
+    GameContent,
+    Location,
+    Npc,
+    ProgressionRules,
+    Trait,
+)
 from mmorpg.domain.entities.craft import Craft, CraftKind, Recipe, RecipeInput
 from mmorpg.domain.entities.damage import DamageType
 from mmorpg.domain.entities.location import EnemyArchetype, EnemyKind
@@ -47,6 +55,18 @@ NAME_LIMIT = 48
 #: Узлы, которые задание может считать без боя. Те же слова, что в ``quests.toml``.
 SEARCHABLE_NODES: tuple[str, ...] = ("gather", "cache", "shrine", "event")
 
+#: Ключ единственной сущности разновидности ``META``. Опорные числа в игре одни,
+#: и правит их одна карточка.
+META_ID = "rules"
+
+#: Потолок для скалярного опорного числа. Тюнинг — это сдвиг на проценты, а не
+#: замена правил: очко характеристик за уровень больше сотни — это уже не тюнинг.
+META_CEILING = 100
+
+#: Сколько чисел влезает в поле-список опорных чисел (цена рангов, ступени ветви).
+#: Двенадцать — с большим запасом от пяти рангов и четырёх ступеней.
+META_LIST_LIMIT = 12
+
 
 class FieldKind(StrEnum):
     """Как поле набирают.
@@ -61,6 +81,9 @@ class FieldKind(StrEnum):
     FLAG = "flag"
     CHOICE = "choice"
     LIST = "list"
+    #: Поле «список чисел»: целые через запятую, «1, 2, 2, 3, 4». Цена рангов и
+    #: ступени ветви — обе такие.
+    NUMBERS = "numbers"
     #: Поле «ключ=число»: набор пар, где ключ выбирается из известного списка, а
     #: значение набирают. Прибавки черты и состав рецепта — обе такие.
     PAIRS = "pairs"
@@ -115,7 +138,12 @@ TITLES: Mapping[OverlayKind, tuple[str, str]] = {
     OverlayKind.TRAIT: ("Черта", "Черты"),
     OverlayKind.CRAFT: ("Ремесло", "Ремёсла"),
     OverlayKind.RECIPE: ("Рецепт", "Рецепты"),
+    OverlayKind.META: ("Опорные числа", "Опорные числа"),
 }
+
+#: Разновидности, которые нельзя убрать из игры: без них игра не собирается.
+#: Опорные числа есть всегда — «убрать» их значения не имеет.
+NON_REMOVABLE: frozenset[OverlayKind] = frozenset({OverlayKind.META})
 
 #: Разновидности, которые смотритель заводит с нуля. Города и локации приходят из
 #: ``world.toml`` вместе с проверкой уровней, и заводить город кнопкой — значит
@@ -259,6 +287,44 @@ FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
         FieldSpec("output", "Что выходит", FieldKind.CHOICE, source=Source.ITEM, required=True),
         FieldSpec("output_count", "Сколько за раз", FieldKind.NUMBER, required=True),
         FieldSpec("experience", "Опыт за работу", FieldKind.NUMBER),
+    ),
+    # Опорные числа: белый список ``ProgressionRules``. Только то, что двигает
+    # баланс числом, — не то, что держит дорогу (число уровней, счёт слотов,
+    # уровни развилок): такое остаётся за файлами (``Claude.md``, правило 7).
+    OverlayKind.META: (
+        FieldSpec(
+            "base_stat_value",
+            "Базовая характеристика",
+            FieldKind.NUMBER,
+            hint="с чего начинается каждая характеристика",
+        ),
+        FieldSpec(
+            "free_points_at_creation",
+            "Свободные очки при создании",
+            FieldKind.NUMBER,
+        ),
+        FieldSpec(
+            "stat_points_per_level",
+            "Очков характеристик за уровень",
+            FieldKind.NUMBER,
+        ),
+        FieldSpec(
+            "skill_point_per_level",
+            "Очков умений за уровень",
+            FieldKind.NUMBER,
+        ),
+        FieldSpec(
+            "rank_costs",
+            "Цена рангов умений",
+            FieldKind.NUMBERS,
+            hint="1, 2, 2, 3, 4 — по одному числу на ранг",
+        ),
+        FieldSpec(
+            "branch_gates",
+            "Очки на ступени ветви",
+            FieldKind.NUMBERS,
+            hint="0, 6, 14, 24 — первая ступень открыта сразу",
+        ),
     ),
 }
 
@@ -454,6 +520,9 @@ def shown(content: GameContent, spec: FieldSpec, record: OverlayRecord) -> str:
                 for key, val in record.pairs(spec.key)
             ]
             return ", ".join(shown_pairs) if shown_pairs else "не заполнено"
+        case FieldKind.NUMBERS:
+            listed = record.listed(spec.key)
+            return ", ".join(listed) if listed else "не заполнено"
         case _:
             return value or "не заполнено"
 
@@ -497,6 +566,8 @@ def listing(content: GameContent, kind: OverlayKind) -> tuple[tuple[str, str], .
             )
         case OverlayKind.RECIPE:
             return tuple((recipe.id, _recipe_title(content, recipe)) for recipe in content.recipes)
+        case OverlayKind.META:
+            return ((META_ID, "Опорные числа игры"),)
         case _:
             return tuple(
                 (city.id, f"{city.name} — уровни с {city.level_min} по {city.level_max}")
@@ -545,6 +616,8 @@ def snapshot(content: GameContent, kind: OverlayKind, entity_id: str) -> dict[st
         case OverlayKind.RECIPE:
             recipe = next((r for r in content.recipes if r.id == entity_id), None)
             return _recipe_fields(recipe) if recipe is not None else {}
+        case OverlayKind.META:
+            return _meta_fields(content.rules)
         case _:
             return {}
 
@@ -637,6 +710,17 @@ def _recipe_fields(recipe: Recipe) -> dict[str, str]:
         "output": recipe.output_id,
         "output_count": str(recipe.output_count),
         "experience": str(recipe.experience),
+    }
+
+
+def _meta_fields(rules: ProgressionRules) -> dict[str, str]:
+    return {
+        "base_stat_value": str(rules.base_stat_value),
+        "free_points_at_creation": str(rules.free_points_at_creation),
+        "stat_points_per_level": str(rules.stat_points_per_level),
+        "skill_point_per_level": str(rules.skill_point_per_level),
+        "rank_costs": ", ".join(str(cost) for cost in rules.rank_costs),
+        "branch_gates": ", ".join(str(gate) for gate in rules.branch_gates),
     }
 
 
@@ -743,6 +827,17 @@ def _field_problems(
                 return [f"{spec.name}: неизвестно — {clipped(', '.join(unknown), MAX_TEXT // 2)}."]
         case FieldKind.PAIRS:
             return _pairs_problems(content, record, spec, value)
+        case FieldKind.NUMBERS:
+            return _numbers_problems(spec, value)
+    return []
+
+
+def _numbers_problems(spec: FieldSpec, value: str) -> list[str]:
+    parts = [part.strip() for part in value.split(",") if part.strip()]
+    if not parts or any(not _is_number(part) for part in parts):
+        return [f"{spec.name}: нужны целые числа через запятую, а стоит «{clipped(value)}»."]
+    if len(parts) > META_LIST_LIMIT:
+        return [f"{spec.name}: не больше {META_LIST_LIMIT} чисел."]
     return []
 
 
@@ -791,7 +886,41 @@ def _shape_problems(content: GameContent, record: OverlayRecord) -> list[str]:
             return _craft_problems(record)
         case OverlayKind.RECIPE:
             return _recipe_problems(content, record)
+        case OverlayKind.META:
+            return _meta_problems(content, record)
     return []
+
+
+def _meta_problems(content: GameContent, record: OverlayRecord) -> list[str]:
+    """Опорное число можно двигать, но не ломать: отрицательных нет, потолок есть,
+    а цена рангов должна покрыть все ранги.
+    """
+    found: list[str] = []
+    for spec in FIELDS[OverlayKind.META]:
+        raw = record.value(spec.key).strip()
+        if not raw:
+            continue
+        if spec.kind is FieldKind.NUMBER:
+            number = record.number(spec.key)
+            if number < 0:
+                found.append(f"{spec.name}: меньше нуля не бывает.")
+            elif number > META_CEILING:
+                found.append(f"{spec.name}: больше {META_CEILING} — это уже не тюнинг.")
+            continue
+        listed = record.numbers(spec.key)
+        if any(one < 0 for one in listed):
+            found.append(f"{spec.name}: отрицательных чисел здесь нет.")
+        if spec.key == "rank_costs" and 0 < len(listed) < content.rules.max_rank:
+            found.append(
+                f"Цена рангов умений: нужно хотя бы {content.rules.max_rank} чисел — "
+                "по одному на ранг."
+            )
+        if spec.key == "branch_gates":
+            if listed and listed[0] != 0:
+                found.append("Очки на ступени ветви: первое число всегда 0 — она открыта сразу.")
+            if any(earlier > later for earlier, later in pairwise(listed)):
+                found.append("Очки на ступени ветви: числа идут по возрастанию.")
+    return found
 
 
 def _craft_problems(record: OverlayRecord) -> list[str]:
@@ -859,7 +988,11 @@ def _location_problems(content: GameContent, record: OverlayRecord) -> list[str]
 
 
 def _removal_problems(content: GameContent, record: OverlayRecord) -> tuple[str, ...]:
-    """Убрать можно почти всё. Почти — это не последняя локация города."""
+    """Убрать можно почти всё. Почти — это не последняя локация города и не
+    опорные числа: без них игра не собирается вовсе.
+    """
+    if record.kind in NON_REMOVABLE:
+        return ("Опорные числа есть всегда: их правят, а не убирают.",)
     if record.kind is not OverlayKind.LOCATION:
         return ()
     for city in content.cities:
@@ -900,22 +1033,30 @@ def apply(content: GameContent, records: Sequence[OverlayRecord]) -> GameContent
     if not records:
         return content
 
-    # Черты и ремёсла ни от чего не зависят — встают первыми. Рецепты зависят и от
-    # ремёсел (вешаются на «работу»), и от вещей, поэтому идут после ремёсел.
+    # Опорные числа, черты и ремёсла ни от чего не зависят — встают первыми.
+    # Рецепты зависят и от ремёсел (вешаются на «работу»), и от вещей, поэтому
+    # идут после ремёсел.
+    rules = _apply_meta(content, _good(content, records, OverlayKind.META))
     traits = _apply_traits(content, _good(content, records, OverlayKind.TRAIT))
     crafts = _apply_crafts(content, _good(content, records, OverlayKind.CRAFT))
 
     cities = _apply_cities(content, _good(content, records, OverlayKind.CITY))
     cities = _apply_locations(cities, _good(content, records, OverlayKind.LOCATION))
     npcs = _apply_npcs(content, _good(content, records, OverlayKind.NPC))
-    staged = _rebuilt(content, cities=cities, npcs=npcs, traits=traits, crafts=crafts)
+    staged = _rebuilt(content, cities=cities, npcs=npcs, traits=traits, crafts=crafts, rules=rules)
 
     enemies = _apply_enemies(content, _good(staged, records, OverlayKind.ENEMY))
     # Противники встают до заданий, а не рядом с ними: задание может заказывать
     # именно того противника, которого смотритель завёл этой же панелью, и
     # проверять такое задание надо против мира, в котором тот уже есть.
     staged = _rebuilt(
-        content, cities=cities, npcs=npcs, traits=traits, crafts=crafts, enemies=enemies
+        content,
+        cities=cities,
+        npcs=npcs,
+        traits=traits,
+        crafts=crafts,
+        enemies=enemies,
+        rules=rules,
     )
     quests = _apply_quests(staged, npcs, _good(staged, records, OverlayKind.QUEST))
     recipes = _apply_recipes(staged, _good(staged, records, OverlayKind.RECIPE))
@@ -928,6 +1069,7 @@ def apply(content: GameContent, records: Sequence[OverlayRecord]) -> GameContent
         quests=quests,
         enemies=enemies,
         recipes=recipes,
+        rules=rules,
     )
 
 
@@ -949,6 +1091,7 @@ def _rebuilt(
     traits: Sequence[Trait] | None = None,
     crafts: Sequence[Craft] | None = None,
     recipes: Sequence[Recipe] | None = None,
+    rules: ProgressionRules | None = None,
 ) -> GameContent:
     return GameContent.build(
         races=content.races,
@@ -970,7 +1113,7 @@ def _rebuilt(
         elite_titles=content.elite_titles,
         trait_categories=content.trait_categories,
         inverted_modifiers=content.inverted_modifiers,
-        rules=content.rules,
+        rules=content.rules if rules is None else rules,
         craft_rules=content.craft_rules,
         quests=content.quests if quests is None else quests,
         crafts=content.crafts if crafts is None else crafts,
@@ -1124,6 +1267,40 @@ def _apply_enemies(
             loot=record.listed("loot"),
         )
     return tuple(by_id.values())
+
+
+def _apply_meta(content: GameContent, records: Sequence[OverlayRecord]) -> ProgressionRules:
+    """Опорные числа с правками. Правок больше одной не бывает (сущность одна),
+    но цикл всё равно проходит все: последняя запись побеждает, как и везде.
+    """
+    rules = content.rules
+    for record in records:
+        if record.removed:
+            continue
+        rules = _rules_from(rules, record)
+    return rules
+
+
+def _rules_from(rules: ProgressionRules, record: OverlayRecord) -> ProgressionRules:
+    """Опорные числа из записи. Незаполненное поле оставляет то, что в файлах —
+    правка меняет ровно названное. Поля те же, что в ``FIELDS[META]``.
+    """
+
+    def num(key: str, current: int) -> int:
+        return record.number(key, current) if record.value(key).strip() else current
+
+    def nums(key: str, current: tuple[int, ...]) -> tuple[int, ...]:
+        return record.numbers(key) if record.value(key).strip() else current
+
+    return replace(
+        rules,
+        base_stat_value=num("base_stat_value", rules.base_stat_value),
+        free_points_at_creation=num("free_points_at_creation", rules.free_points_at_creation),
+        stat_points_per_level=num("stat_points_per_level", rules.stat_points_per_level),
+        skill_point_per_level=num("skill_point_per_level", rules.skill_point_per_level),
+        rank_costs=nums("rank_costs", rules.rank_costs),
+        branch_gates=nums("branch_gates", rules.branch_gates),
+    )
 
 
 def _apply_traits(content: GameContent, records: Sequence[OverlayRecord]) -> tuple[Trait, ...]:

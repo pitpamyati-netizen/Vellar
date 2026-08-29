@@ -82,6 +82,7 @@ KINDS: tuple[OverlayKind, ...] = (
     OverlayKind.TRAIT,
     OverlayKind.CRAFT,
     OverlayKind.RECIPE,
+    OverlayKind.META,
 )
 
 
@@ -299,9 +300,9 @@ def entity_screen(
         if len(why) > PROBLEMS_SHOWN:
             lead.append(f"И ещё причин: {len(why) - PROBLEMS_SHOWN}.")
 
-    rows: list[tuple[Label, ...]] = [
-        (labels.KEEPER_RETURN,) if record.removed else (labels.KEEPER_REMOVE,)
-    ]
+    rows: list[tuple[Label, ...]] = []
+    if record.kind not in overlay_rules.NON_REMOVABLE:
+        rows.append((labels.KEEPER_RETURN,) if record.removed else (labels.KEEPER_REMOVE,))
     if stored is not None:
         rows.append((labels.KEEPER_FORGET,))
     return paginated_screen(
@@ -390,6 +391,8 @@ def _how_to_fill(spec: FieldSpec) -> str:
                 "Наберите «ключ=число» сообщением: новая пара добавится, та же — "
                 "заменится. Нажмите строку из списка, чтобы её убрать."
             )
+        case FieldKind.NUMBERS:
+            return "Наберите целые числа через запятую сообщением: они заменят то, что стоит."
         case _:
             return "Наберите значение сообщением. Оно заменит то, что стоит сейчас."
 

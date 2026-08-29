@@ -404,6 +404,27 @@ async def test_a_recipe_is_created_and_its_composition_typed_in(
     assert made.output_id == "iron_scrap"
 
 
+async def test_a_keeper_tunes_a_meta_number_from_the_panel(
+    keeper: Keeper, overlays: InMemoryContentOverlayRepository, registry: ContentRegistry
+) -> None:
+    """Опорные числа — карточка на одну сущность: править, но не заводить и не убирать."""
+    before = registry.current.rules.stat_points_per_level
+    field = next(
+        s for s in overlay_rules.FIELDS[OverlayKind.META] if s.key == "stat_points_per_level"
+    )
+
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_WORLD.text, "Опорные числа")
+    await keeper.press(keeper.button_with("Опорные числа игры"))
+    assert not any(labels.KEEPER_ADD.matches(text) for text in keeper.buttons())
+    assert not any(labels.KEEPER_REMOVE.matches(text) for text in keeper.buttons())
+
+    await keeper.press(keeper.button_with(field.name), str(before + 2))
+
+    assert registry.current.rules.stat_points_per_level == before + 2
+    stored = [record for record in await overlays.all() if record.kind is OverlayKind.META]
+    assert stored and stored[0].value("stat_points_per_level") == str(before + 2)
+
+
 # --- чужой персонаж ----------------------------------------------------
 
 
