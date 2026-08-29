@@ -932,6 +932,34 @@ async def test_a_mute_is_stored_on_the_account_and_written_down(
     assert (await keeper_log.latest())[0].action == KeeperAction.UNMUTE
 
 
+async def test_a_content_list_narrows_to_a_substring_and_opens_the_match(keeper: Keeper) -> None:
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_WORLD.text, "Задания")
+
+    await keeper.press("/поиск")
+    narrowed = await keeper.press("тракт")
+
+    assert "Ищу «тракт»" in narrowed.text()
+    shown = [b for b in keeper.buttons() if ". " in b]
+    assert shown and all("тракт" in b.lower() for b in shown)
+
+    # Нажатие по отфильтрованной строке всё равно открывает верную карточку.
+    card = await keeper.press(keeper.button_with("Столбы на Тракте"))
+    assert card.id is ScreenId.KEEPER_ENTITY
+    assert "Столбы на Тракте" in card.text()
+
+
+async def test_resetting_the_content_search_shows_the_whole_list_again(keeper: Keeper) -> None:
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_WORLD.text, "Задания")
+    await keeper.press("/поиск")
+    await keeper.press("тракт")
+    before = len([b for b in keeper.buttons() if ". " in b])
+
+    await keeper.press(labels.RESET_FILTERS.text)
+    after = len([b for b in keeper.buttons() if ". " in b])
+
+    assert after > before
+
+
 async def test_the_gold_flow_card_shows_the_slice_by_kind(
     keeper: Keeper, gold_flow: InMemoryGoldFlowRepository, merla: Character
 ) -> None:

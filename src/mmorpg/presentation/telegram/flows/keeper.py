@@ -50,7 +50,12 @@ from mmorpg.presentation.telegram.screens import play as play_screens
 from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.keeper import KeeperView
-from mmorpg.presentation.telegram.screens.paginated import PageState, total_pages
+from mmorpg.presentation.telegram.screens.paginated import (
+    SEARCH_PROMPT,
+    ListFilters,
+    PageState,
+    total_pages,
+)
 
 #: Экраны, которые рисует и обрабатывает этот модуль.
 PANEL: frozenset[ScreenId] = frozenset(
@@ -359,7 +364,12 @@ def _render_field(content: GameContent, state: PlayState, view: KeeperView) -> S
 
 def awaits_text(state: PlayState, command: Command) -> bool:
     """Ждёт ли этот экран набранного значения, а не нажатой кнопки."""
-    if command.intent is not Intent.UNKNOWN or not state.keeper_typing:
+    if command.intent is not Intent.UNKNOWN:
+        return False
+    # Строка поиска по списку содержимого — набирают её так же, как ищут в игре.
+    if state.screen is ScreenId.KEEPER_LIST and state.searching:
+        return True
+    if not state.keeper_typing:
         return False
     return (
         (state.screen is ScreenId.KEEPER_FIELD and state.keeper_typing == TYPING_VALUE)
@@ -385,6 +395,8 @@ def typed(
         return state.at(ScreenId.MAIN_MENU).with_notice(LOST_RIGHT)
     if text.startswith("/"):
         return state.with_notice("Это команда, а не значение. Наберите значение без косой черты.")
+    if state.screen is ScreenId.KEEPER_LIST and state.searching:
+        return _searched_content(state, text)
     if state.screen is ScreenId.KEEPER_PLAYERS:
         return _found(state, view, text)
     if state.screen is ScreenId.KEEPER_AMOUNT:
@@ -407,6 +419,20 @@ def typed(
             f"Причина записана: {text.strip()}. Теперь нажмите срок."
         )
     return _value(content, state, view, text)
+
+
+def _searched_content(state: PlayState, text: str) -> PlayState:
+    """Строка поиска по списку содержимого. Пустая строка снимает поиск.
+
+    Живёт она в фильтрах ``keeper_page`` — там же, где страница, — потому что и
+    страницу, и поиск правит один и тот же список.
+    """
+    query = text.strip()
+    page = PageState(filters=replace(state.keeper_page.filters, query=query))
+    walked = replace(state, keeper_page=page, searching=False)
+    if not query:
+        return walked.with_notice("Поиск снят, список показан целиком.")
+    return walked.with_notice(f"Ищу «{query}».")
 
 
 def _found(state: PlayState, view: KeeperView, name: str) -> PlayState:
@@ -651,10 +677,17 @@ def _step_list(
     if state.keeper_kind not in KINDS:
         return state.at(ScreenId.KEEPER_CONTENT).with_notice("Выберите раздел заново.")
     kind = OverlayKind(state.keeper_kind)
-    listed = overlay_rules.listing(content, kind)
+    query = state.keeper_page.filters.query
+    listed = keeper_screens.filtered_listing(content, kind, query)
     moved = page_move(command, state.keeper_page, total_pages(len(listed)))
     if moved is not None:
         return replace(state, keeper_page=moved, notice="")
+    if command.intent is Intent.SEARCH:
+        return replace(state, searching=True).with_notice(SEARCH_PROMPT)
+    if command.intent is Intent.RESET_FILTERS:
+        return replace(
+            state, keeper_page=PageState(filters=ListFilters()), searching=False
+        ).with_notice("Поиск снят, список показан целиком.")
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите запись из списка.")
 
@@ -670,7 +703,7 @@ def _step_list(
             .with_notice(f"{single} заведён. Заполните поля — пока он в игре не появится.")
         )
 
-    entity_id = keeper_screens.entity_from_button(content, kind, command.argument)
+    entity_id = keeper_screens.entity_from_button(content, kind, command.argument, query)
     if not entity_id:
         return state.with_notice("Не узнал запись. Нажмите строку из списка.")
     return replace(state, keeper_entity=entity_id, list_page=PageState()).at(ScreenId.KEEPER_ENTITY)

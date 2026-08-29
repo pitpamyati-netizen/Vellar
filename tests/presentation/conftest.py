@@ -561,6 +561,13 @@ def all_screens(
             for kind in keeper_screens.KINDS
         ),
         keeper_screens.list_screen(edited, OverlayKind.QUEST, PageState(page=2), keeper_view),
+        # Список содержимого, суженный поиском, и поиск, не нашедший ничего.
+        keeper_screens.list_screen(
+            edited, OverlayKind.QUEST, PageState(filters=ListFilters(query="столб")), keeper_view
+        ),
+        keeper_screens.list_screen(
+            edited, OverlayKind.NPC, PageState(filters=ListFilters(query="нет такого")), keeper_view
+        ),
         *(
             keeper_screens.entity_screen(
                 edited,

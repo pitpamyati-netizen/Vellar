@@ -221,6 +221,23 @@ def numbered(index: int, text: str) -> str:
     return f"{index}. {text}"
 
 
+def filtered_listing(
+    content: GameContent, kind: OverlayKind, query: str = ""
+) -> tuple[tuple[str, str], ...]:
+    """Записи раздела, суженные подстрокой поиска (без учёта регистра).
+
+    Список жителей или заданий за пятнадцать городов не пролистать на слух —
+    поэтому у него есть «Поиск», как и у списков игры. Нумерация строк идёт по
+    *отфильтрованному* списку, поэтому фильтр применяется в одном месте, а не в
+    каждом обработчике по отдельности.
+    """
+    listed = overlay_rules.listing(content, kind)
+    needle = query.strip().casefold()
+    if not needle:
+        return listed
+    return tuple((entity_id, title) for entity_id, title in listed if needle in title.casefold())
+
+
 def list_screen(
     content: GameContent,
     kind: OverlayKind,
@@ -228,12 +245,19 @@ def list_screen(
     view: KeeperView = KeeperView(),
     notice: str = "",
 ) -> Screen:
+    query = state.filters.query
     entries = [
         ListEntry(key=entity_id, text=numbered(index, title))
-        for index, (entity_id, title) in enumerate(overlay_rules.listing(content, kind), start=1)
+        for index, (entity_id, title) in enumerate(filtered_listing(content, kind, query), start=1)
     ]
     edited = sum(1 for record in view.records if record.kind is kind)
     single, many = overlay_rules.TITLES[kind]
+    lead = [
+        notice or f"{many}. Нажмите запись, чтобы открыть карточку.",
+        f"Правок в этом разделе: {edited}.",
+    ]
+    if query:
+        lead.append(f"Показаны только те, где встречается «{query}».")
     rows: tuple[tuple[Label, ...], ...] = (
         ((labels.KEEPER_ADD,),) if kind in overlay_rules.CREATABLE else ()
     )
@@ -242,19 +266,25 @@ def list_screen(
         title=many,
         entries=entries,
         state=state,
-        lead_lines=(
-            notice or f"{many}. Нажмите запись, чтобы открыть карточку.",
-            f"Правок в этом разделе: {edited}.",
+        lead_lines=tuple(lead),
+        empty_text=(
+            f"По запросу «{query}» ничего нет."
+            if query
+            else f"Ни одной записи. {single} можно добавить кнопкой ниже."
         ),
-        empty_text=f"Ни одной записи. {single} можно добавить кнопкой ниже.",
         extra_rows=rows,
-        show_filters=False,
+        show_filters=True,
     )
 
 
-def entity_from_button(content: GameContent, kind: OverlayKind, pressed: str) -> str:
-    """Идентификатор сущности по нажатой строке списка. Пусто - не узнали."""
-    for index, (entity_id, title) in enumerate(overlay_rules.listing(content, kind), start=1):
+def entity_from_button(
+    content: GameContent, kind: OverlayKind, pressed: str, query: str = ""
+) -> str:
+    """Идентификатор сущности по нажатой строке списка. Пусто - не узнали.
+
+    Нумерация — по тому же отфильтрованному списку, что рисует ``list_screen``.
+    """
+    for index, (entity_id, title) in enumerate(filtered_listing(content, kind, query), start=1):
         if pressed.strip() == numbered(index, title):
             return entity_id
     return ""
