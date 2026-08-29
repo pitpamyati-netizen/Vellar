@@ -465,3 +465,24 @@ def test_a_dot_reveals_the_unseen(content: GameContent) -> None:
     assert StatusKind.UNSEEN in held(foe(afflicted))
     ticked = spend_dot(afflicted, target.id)
     assert StatusKind.UNSEEN not in held(foe(ticked)), "долетевший дот выдаёт"
+
+
+def test_a_flash_grenade_reveals_everyone_and_blinds_them(content: GameContent) -> None:
+    warrior = caster("warrior", "warrior_sekushchiy_roscherk")
+    state = start(content, warrior, count=2)
+    for index in range(2):
+        one = foe(state, index)
+        state = state.replace_combatant(
+            replace(one, effects=one.effects.apply(status_effect(StatusKind.UNSEEN, turns=3)))
+        )
+    after = act(
+        content,
+        {1: warrior},
+        state,
+        BattleAction(kind=ActionKind.ITEM, item_id="flash_grenade"),
+        b"\x09" * 16,
+    )
+    for index in range(2):
+        blinded = foe(after, index)
+        assert StatusKind.UNSEEN not in held(blinded), "вспышка выдаёт всех"
+        assert blinded.effects.modifiers().get("accuracy_percent", 0.0) < 0, "и слепит всех"

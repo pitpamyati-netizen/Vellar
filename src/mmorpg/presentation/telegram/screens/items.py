@@ -143,6 +143,12 @@ def effect_line(item: Item) -> str:
             return f"Восстанавливает {round(item.effect.power)} здоровья."
         case "heal_percent":
             return f"Восстанавливает {percent(item.effect.power)} здоровья."
+        case "flashbang":
+            span = f" на {item.effect.turns} хода" if item.effect.turns else ""
+            return (
+                f"Вспышка по всем врагам: точность ниже на {percent(item.effect.power)}{span} "
+                "и выдаёт ушедших из виду."
+            )
         case _:
             turns = item.effect.turns
             span = f" на {turns} хода" if turns else ""

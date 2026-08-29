@@ -165,6 +165,14 @@ output = { item = "resource_draught", count = 1 }
 experience = 38
 
 [[recipe]]
+id = "alchemy_flash_grenade"
+craft = "alchemy"
+rank = 3
+inputs = [{ item = "meadow_herbs", count = 2 }, { item = "cave_crystal", count = 1 }]
+output = { item = "flash_grenade", count = 1 }
+experience = 40
+
+[[recipe]]
 id = "leather_jacket"
 craft = "leatherwork"
 rank = 1

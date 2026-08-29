@@ -2071,6 +2071,44 @@ def _use_item(
                     turns=max(1, item.effect.turns),
                 )
             )
+        case "flashbang":
+            # Летит во всех врагов сразу, цель не выбирают: слепит вспышкой и
+            # выдаёт ушедших из виду (ADR 0043). Незаметность снимается прямо,
+            # а не через ``_shed_on_hit``: урона у гранаты нет.
+            span = max(1, item.effect.turns)
+            for foe in working.foes_of(actor.id):
+                one = working.by_id(foe.id)
+                if one is None:
+                    continue
+                effects = one.effects.without(StatusKind.UNSEEN)
+                effects = effects.apply(
+                    ActiveEffect(
+                        id=f"item:{item.id}",
+                        name=item.name,
+                        modifiers={"accuracy_percent": -item.effect.power},
+                        turns_left=span,
+                        beneficial=False,
+                    )
+                )
+                working = working.replace_combatant(replace(one, effects=effects))
+                if one.effects.has(StatusKind.UNSEEN):
+                    working = working.with_events(
+                        BattleEvent(
+                            kind=EventKind.STATUS_ENDED,
+                            actor_id=one.id,
+                            actor=one.name,
+                            effect_name=status_spec(StatusKind.UNSEEN).name,
+                        )
+                    )
+                working = working.with_events(
+                    BattleEvent(
+                        kind=EventKind.EFFECT_APPLIED,
+                        target_id=one.id,
+                        target=one.name,
+                        effect_name=item.name,
+                        turns=span,
+                    )
+                )
     return working
 
 

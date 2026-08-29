@@ -399,6 +399,17 @@ price = 50
 stack = 10
 effect = { kind = "buff_damage_percent", power = 15, turns = 3 }
 
+[[item]]
+id = "flash_grenade"
+name = "Световая граната"
+kind = "consumable"
+slot = "none"
+rarity = "uncommon"
+level = 20
+price = 140
+stack = 5
+effect = { kind = "flashbang", power = 20, turns = 2 }
+
 # --- Materials ---
 #
 # source: что это за сырьё. По нему узел решает, что в нём вообще может лежать:
