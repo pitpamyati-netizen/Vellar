@@ -526,9 +526,24 @@ async def _keeper_view(
     granting = settings.is_admin(character.user_id)
 
     log: tuple[KeeperEntry, ...] = ()
+    log_total = 0
+    log_target = ""
 
     if flow.screen is ScreenId.KEEPER_LOG:
-        log = await keeper_log.latest(limit=keeper_screens.LOG_SHOWN)
+        if flow.keeper_target:
+            whose = await characters.get(flow.keeper_target)
+            if whose is not None:
+                log_target = whose.name
+        log_total = await keeper_log.count(target=log_target)
+        # Страницу берём уже подрезанной под журнал: экран её тоже подрежет, но
+        # тогда бы он показывал не ту порцию, что запросили из хранилища.
+        pages = max(1, -(-log_total // keeper_screens.LOG_SHOWN))
+        page = min(max(1, flow.keeper_page.page), pages)
+        log = await keeper_log.latest(
+            limit=keeper_screens.LOG_SHOWN,
+            offset=(page - 1) * keeper_screens.LOG_SHOWN,
+            target=log_target,
+        )
     if flow.screen is ScreenId.KEEPER_PLAYERS:
         players = await characters.newest(limit=PLAYERS_SHOWN)
         # Имя набирают сообщением, и ищет его тот, у кого есть хранилище: автомат
@@ -642,6 +657,8 @@ async def _keeper_view(
         target_locked=target_locked,
         target_ban=target_ban,
         log=log,
+        log_total=log_total,
+        log_target=log_target,
         now=now,
     )
 

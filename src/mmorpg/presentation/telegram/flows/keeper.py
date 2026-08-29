@@ -238,7 +238,7 @@ def _render_panel(
         case ScreenId.KEEPER_BAN if view.target is not None:
             return keeper_screens.ban_screen(view.target, view, state.keeper_reason, state.notice)
         case ScreenId.KEEPER_LOG:
-            return keeper_screens.log_screen(view, state.notice)
+            return keeper_screens.log_screen(view, state.keeper_page, state.notice)
         case ScreenId.KEEPER_TRADES if view.target is not None:
             return keeper_screens.trades_screen(view.target, view, state.notice)
         case ScreenId.KEEPER_TUNE:
@@ -477,6 +477,8 @@ def advance(
             return _step_players(content, state, command, view)
         case ScreenId.KEEPER_PLAYER:
             return _step_player(content, state, command, view)
+        case ScreenId.KEEPER_LOG:
+            return _step_log(state, command, view)
         case ScreenId.KEEPER_SERVICE:
             return _step_service(state, command)
         case ScreenId.KEEPER_BAN:
@@ -556,7 +558,7 @@ def _step_panel(
     if labels.KEEPER_SERVICE.matches(command.argument):
         return state.at(ScreenId.KEEPER_SERVICE)
     if labels.KEEPER_LOG.matches(command.argument):
-        return state.at(ScreenId.KEEPER_LOG)
+        return replace(state, keeper_target=0, keeper_page=PageState()).at(ScreenId.KEEPER_LOG)
     if labels.KEEPER_TUNE.matches(command.argument):
         return replace(state, keeper_target=0, keeper_field="", keeper_typing="").at(
             ScreenId.KEEPER_TUNE
@@ -1533,6 +1535,9 @@ def _step_player(
         return replace(state, keeper_typing="", keeper_page=PageState()).at(ScreenId.KEEPER_BAG)
     if labels.KEEPER_TRADES.matches(command.argument):
         return replace(state, keeper_typing="").at(ScreenId.KEEPER_TRADES)
+    if labels.KEEPER_PLAYER_LOG.matches(command.argument):
+        # Тот же журнал, но сужен до этого игрока: ``keeper_target`` остаётся.
+        return replace(state, keeper_typing="", keeper_page=PageState()).at(ScreenId.KEEPER_LOG)
     if labels.KEEPER_PARTY_BTN.matches(command.argument) and view.target_party is not None:
         return replace(state, keeper_typing="").at(ScreenId.KEEPER_PARTY)
     if labels.KEEPER_GUILD_BTN.matches(command.argument) and view.target_guild is not None:
@@ -1684,6 +1689,15 @@ def _delete(state: PlayState, view: KeeperView) -> PlayState:
         )
         .with_notice(f"{target.name} удалён вместе с сумкой.")
     )
+
+
+def _step_log(state: PlayState, command: Command, view: KeeperView) -> PlayState:
+    """Журнал только листается: записей за всё время больше, чем в одном сообщении."""
+    total = view.log_total or len(view.log)
+    moved = page_move(command, state.keeper_page, total_pages(total, keeper_screens.LOG_SHOWN))
+    if moved is not None:
+        return replace(state, keeper_page=moved, notice="")
+    return state.with_notice("Здесь только чтение. Нажмите «Назад» или лист страниц.")
 
 
 def _step_service(state: PlayState, command: Command) -> PlayState:

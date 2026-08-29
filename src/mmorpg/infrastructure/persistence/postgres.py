@@ -282,12 +282,25 @@ class PostgresKeeperLogRepository:
             entry.detail,
         )
 
-    async def latest(self, *, limit: int = 20) -> tuple[KeeperEntry, ...]:
-        rows = await self._pool.fetch(
-            "SELECT at, keeper_id, keeper_name, action, target, detail"
-            " FROM keeper_log ORDER BY at DESC, id DESC LIMIT $1",
-            limit,
-        )
+    async def latest(
+        self, *, limit: int = 20, offset: int = 0, target: str = ""
+    ) -> tuple[KeeperEntry, ...]:
+        if target:
+            rows = await self._pool.fetch(
+                "SELECT at, keeper_id, keeper_name, action, target, detail"
+                " FROM keeper_log WHERE lower(target) = lower($1)"
+                " ORDER BY at DESC, id DESC LIMIT $2 OFFSET $3",
+                target,
+                limit,
+                offset,
+            )
+        else:
+            rows = await self._pool.fetch(
+                "SELECT at, keeper_id, keeper_name, action, target, detail"
+                " FROM keeper_log ORDER BY at DESC, id DESC LIMIT $1 OFFSET $2",
+                limit,
+                offset,
+            )
         return tuple(
             KeeperEntry(
                 at=row["at"],
@@ -299,6 +312,15 @@ class PostgresKeeperLogRepository:
             )
             for row in rows
         )
+
+    async def count(self, *, target: str = "") -> int:
+        if target:
+            value = await self._pool.fetchval(
+                "SELECT count(*) FROM keeper_log WHERE lower(target) = lower($1)", target
+            )
+        else:
+            value = await self._pool.fetchval("SELECT count(*) FROM keeper_log")
+        return int(value or 0)
 
 
 class PostgresPrivacyRepository:

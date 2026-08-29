@@ -435,6 +435,13 @@ async def merla(characters: InMemoryCharacterRepository) -> Character:
     )
 
 
+@pytest.fixture
+async def argus(characters: InMemoryCharacterRepository) -> Character:
+    return await characters.create(
+        Character(id=0, user_id=900_002, name="Аргус", race_id="human", class_id="warrior", level=4)
+    )
+
+
 async def test_a_player_is_found_by_name_and_paid(
     keeper: Keeper, characters: InMemoryCharacterRepository, merla: Character
 ) -> None:
@@ -870,6 +877,25 @@ async def test_the_journal_shows_what_was_done_and_by_whom(
     assert screen.id is ScreenId.KEEPER_LOG
     assert "Смотритель выдал золото Мерла" in screen.text()
     assert (await keeper_log.latest())[0].keeper_id == KEEPER_ACCOUNT
+
+
+async def test_the_journal_from_a_player_card_is_scoped_to_that_player(
+    keeper: Keeper, merla: Character, argus: Character
+) -> None:
+    # Правим двоих, потом открываем журнал с карточки одного.
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(keeper.button_with("Мерла"))
+    await keeper.press(labels.KEEPER_GOLD.text)
+    await keeper.press(labels.MAIN_MENU.text, labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(keeper.button_with("Аргус"))
+    await keeper.press(labels.KEEPER_HEAL.text)
+
+    scoped = await keeper.press(labels.KEEPER_PLAYER_LOG.text)
+
+    assert scoped.id is ScreenId.KEEPER_LOG
+    assert "по цели «Аргус»" in scoped.text()
+    assert "залечил раны" in scoped.text()
+    assert "выдал золото" not in scoped.text()
 
 
 async def test_the_panel_counts_who_is_banned(

@@ -666,6 +666,14 @@ def all_screens(
         keeper_screens.ban_screen(fighter, banned_view, "ругался в группе"),
         keeper_screens.log_screen(banned_view),
         keeper_screens.log_screen(keeper_view),
+        # Журнал со страницами и журнал, сужённый до одного игрока.
+        keeper_screens.log_screen(
+            replace(banned_view, log_total=25), PageState(page=2), notice="Страница 2."
+        ),
+        keeper_screens.log_screen(
+            replace(banned_view, log_total=2, log_target="Мерла"), PageState()
+        ),
+        keeper_screens.log_screen(replace(keeper_view, log=(), log_total=0, log_target="Аргус")),
         keeper_screens.trades_screen(fighter, keeper_view),
         keeper_screens.trades_screen(fighter, keeper_screens.KeeperView()),
         keeper_screens.tune_screen(fighter, derived_stats(content, fighter), own=True),

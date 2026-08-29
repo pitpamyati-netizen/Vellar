@@ -91,8 +91,21 @@ class InMemoryKeeperLogRepository:
     async def record(self, entry: KeeperEntry) -> None:
         self._entries.append(entry)
 
-    async def latest(self, *, limit: int = 20) -> tuple[KeeperEntry, ...]:
-        return tuple(reversed(self._entries[-limit:]))
+    async def latest(
+        self, *, limit: int = 20, offset: int = 0, target: str = ""
+    ) -> tuple[KeeperEntry, ...]:
+        chosen = self._matching(target)
+        ordered = list(reversed(chosen))
+        return tuple(ordered[offset : offset + limit])
+
+    async def count(self, *, target: str = "") -> int:
+        return len(self._matching(target))
+
+    def _matching(self, target: str) -> list[KeeperEntry]:
+        if not target:
+            return self._entries
+        wanted = target.casefold()
+        return [entry for entry in self._entries if entry.target.casefold() == wanted]
 
 
 class InMemoryPrivacyRepository:

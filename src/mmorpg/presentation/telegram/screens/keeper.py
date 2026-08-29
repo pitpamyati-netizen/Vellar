@@ -109,8 +109,12 @@ class KeeperView:
     target_locked: bool = False
     #: Что висит на аккаунте открытого игрока. Пустая — не заблокирован.
     target_ban: Ban = field(default_factory=Ban)
-    #: Последние записи журнала смотрителя, свежие сначала.
+    #: Последние записи журнала смотрителя, свежие сначала, — уже одна страница.
     log: tuple[KeeperEntry, ...] = ()
+    #: Сколько записей в журнале всего (с учётом фильтра): по нему считают страницы.
+    log_total: int = 0
+    #: Имя цели, по которой сужен журнал. Пусто — журнал за всех.
+    log_target: str = ""
     #: Последние сделки открытого игрока, свежие сначала.
     trades: tuple[TradeRecord, ...] = ()
     #: Сумка открытого игрока. Читается только на экране «Сумка и снаряжение».
@@ -568,6 +572,7 @@ def player_screen(
         (labels.KEEPER_BAG_BTN, labels.KEEPER_SKILLS),
         (labels.KEEPER_STATS_EDIT_BTN, labels.KEEPER_QUESTS_BTN),
         (labels.KEEPER_MOVE, labels.KEEPER_TRADES),
+        (labels.KEEPER_PLAYER_LOG,),
         (labels.KEEPER_UNBAN,) if _under_ban(view) else (labels.KEEPER_BAN,),
         (labels.KEEPER_DELETE,),
     ]
@@ -582,7 +587,7 @@ def player_screen(
         if present
     ]
     if group_row:
-        rows.insert(6, tuple(group_row))
+        rows.insert(7, tuple(group_row))
     if view.granting:
         lines.append(_right(view))
         if not view.target_locked:
@@ -1397,25 +1402,36 @@ def log_entry(entry: KeeperEntry, now: int) -> str:
     return f"{who} {said}{about} {ago}.{detail}"
 
 
-def log_screen(view: KeeperView, notice: str = "") -> Screen:
-    """Что смотрители делали. Только чтение, и ни одной кнопки.
+def log_screen(view: KeeperView, page: PageState | None = None, notice: str = "") -> Screen:
+    """Что смотрители делали. Только чтение, и единственная кнопка — лист страниц.
 
     Журнал существует потому, что смотрителей больше одного (право раздаётся из
     панели), а панель раздаёт золото, уровни и блокировки. Работа, которую нельзя
     посмотреть, — это работа, за которую некому отвечать.
 
-    Кнопок нет нарочно: нажимать здесь нечего, а кнопка, которая ничего не
-    делает, для слушающего экран — обещание, которого никто не сдержит.
+    Записей за всё время накапливается больше, чем влезает в сообщение, поэтому
+    журнал листается страницами, а с карточки игрока — сужается до него одного
+    (``log_target``). Кнопок под записями по-прежнему нет: нажимать там нечего.
     """
-    shown = view.log[:LOG_SHOWN]
+    total = view.log_total or len(view.log)
+    pages = total_pages(total, LOG_SHOWN)
+    state = (page or PageState()).clamped(pages)
+    scope = f" по цели «{view.log_target}»" if view.log_target else ""
     lines = [
-        notice or "Журнал смотрителя. Свежие записи сначала.",
-        f"Показано записей: {len(shown)}. Записи не правятся и не стираются.",
+        notice or f"Журнал смотрителя{scope}. Свежие записи сначала.",
+        f"Записей: {total}."
+        + (f" Страница {state.page} из {pages}." if pages > 1 else "")
+        + " Записи не правятся и не стираются.",
     ]
-    if not shown:
-        lines.append("Записей нет: пока никто ничего не делал.")
-    lines.extend(log_entry(entry, view.now) for entry in shown)
-    return Screen(id=ScreenId.KEEPER_LOG, lines=tuple(lines))
+    if not view.log:
+        lines.append(
+            f"По цели «{view.log_target}» записей нет."
+            if view.log_target
+            else "Записей нет: пока никто ничего не делал."
+        )
+    lines.extend(log_entry(entry, view.now) for entry in view.log)
+    rows: tuple[tuple[Label, ...], ...] = (paging_row(state.page, pages),) if pages > 1 else ()
+    return Screen(id=ScreenId.KEEPER_LOG, lines=tuple(lines), rows=rows)
 
 
 # --- статистика и обслуживание -----------------------------------------

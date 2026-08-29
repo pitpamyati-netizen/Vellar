@@ -902,14 +902,17 @@ async def test_the_keeper_journal_is_written_and_read_from_the_end(pool, clean_u
     # Журнал ничем не убирается изнутри игры - в том и смысл, - поэтому свои
     # строки тест убирает сам, и до записи тоже: прошлый прогон писал те же.
     await pool.execute("DELETE FROM keeper_log WHERE keeper_id = $1", clean_user)
-    for step, action in enumerate((KeeperAction.GOLD, KeeperAction.BAN), start=1):
+    for step, (action, who) in enumerate(
+        ((KeeperAction.GOLD, "Мерла"), (KeeperAction.BAN, "Мерла"), (KeeperAction.HEAL, "Аргус")),
+        start=1,
+    ):
         await log.record(
             KeeperEntry(
                 at=NOW + step,
                 keeper_id=clean_user,
                 keeper_name="Смотритель",
                 action=action,
-                target="Мерла",
+                target=who,
                 detail=f"шаг {step}",
             )
         )
@@ -917,9 +920,21 @@ async def test_the_keeper_journal_is_written_and_read_from_the_end(pool, clean_u
     latest = await log.latest(limit=50)
 
     mine = [entry for entry in latest if entry.keeper_id == clean_user]
-    assert [entry.action for entry in mine] == [KeeperAction.BAN, KeeperAction.GOLD]
+    assert [entry.action for entry in mine] == [
+        KeeperAction.HEAL,
+        KeeperAction.BAN,
+        KeeperAction.GOLD,
+    ]
     assert mine[0].keeper_name == "Смотритель"
-    assert mine[0].detail == "шаг 2"
+    assert mine[0].detail == "шаг 3"
+
+    # Фильтр по цели — без учёта регистра — и страница вглубь по ней же.
+    about_merla = await log.latest(limit=50, target="мЕрЛа")
+    assert [entry.detail for entry in about_merla] == ["шаг 2", "шаг 1"]
+    deeper = await log.latest(limit=1, offset=1, target="Мерла")
+    assert deeper[0].detail == "шаг 1"
+    assert await log.count(target="Мерла") == 2
+    assert await log.count() >= 3
     await pool.execute("DELETE FROM keeper_log WHERE keeper_id = $1", clean_user)
 
 

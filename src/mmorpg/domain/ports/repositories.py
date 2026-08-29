@@ -134,8 +134,18 @@ class KeeperLogRepository(Protocol):
 
     async def record(self, entry: KeeperEntry) -> None: ...
 
-    async def latest(self, *, limit: int = 20) -> tuple[KeeperEntry, ...]:
-        """Последние записи, свежие сначала."""
+    async def latest(
+        self, *, limit: int = 20, offset: int = 0, target: str = ""
+    ) -> tuple[KeeperEntry, ...]:
+        """Последние записи, свежие сначала.
+
+        ``offset`` листает журнал вглубь страницами, ``target`` сужает его до
+        одной цели (без учёта регистра): карточка игрока показывает только то,
+        что делали с ним.
+        """
+
+    async def count(self, *, target: str = "") -> int:
+        """Сколько всего записей в журнале — или по одной цели, если она названа."""
 
 
 @runtime_checkable
