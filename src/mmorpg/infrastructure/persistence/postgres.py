@@ -145,7 +145,7 @@ class PostgresUserRepository:
     async def get(self, telegram_id: int) -> User | None:
         row = await self._pool.fetchrow(
             "SELECT telegram_id, username, emoji, verbose_descriptions, page_size, keeper,"
-            " banned_until, ban_reason"
+            " banned_until, ban_reason, warnings"
             " FROM users WHERE telegram_id = $1",
             telegram_id,
         )
@@ -163,6 +163,7 @@ class PostgresUserRepository:
             ),
             keeper=row["keeper"],
             ban=Ban(until=row["banned_until"], reason=row["ban_reason"] or ""),
+            warnings=row["warnings"],
         )
 
     async def upsert(self, user: User) -> User:
@@ -250,6 +251,21 @@ class PostgresUserRepository:
         """Истёкший срок никто не снимает: он просто перестаёт считаться."""
         value = await self._pool.fetchval(
             "SELECT count(*) FROM users WHERE banned_until < 0 OR banned_until > $1", now
+        )
+        return int(value or 0)
+
+    async def warn(self, telegram_id: int, *, delta: int = 1) -> int:
+        """Счётчик двигается условным ``UPDATE`` и не уходит в минус."""
+        value = await self._pool.fetchval(
+            """
+            INSERT INTO users (telegram_id, warnings)
+            VALUES ($1, GREATEST(0, $2))
+            ON CONFLICT (telegram_id) DO UPDATE
+                SET warnings = GREATEST(0, users.warnings + $2)
+            RETURNING warnings
+            """,
+            telegram_id,
+            delta,
         )
         return int(value or 0)
 

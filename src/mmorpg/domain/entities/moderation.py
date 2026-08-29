@@ -32,6 +32,7 @@ class KeeperAction(StrEnum):
     DEMOTE = "demote"
     BAN = "ban"
     UNBAN = "unban"
+    WARN = "warn"
     EDIT = "edit"
     FORGET = "forget"
     SWEEP = "sweep"

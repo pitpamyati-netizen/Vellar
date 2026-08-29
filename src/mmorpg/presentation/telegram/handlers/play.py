@@ -595,12 +595,16 @@ async def _keeper_view(
     target_keeper = False
     target_locked = False
     target_ban = Ban()
+    target_warnings = 0
     if target is not None:
         account = await users.get(target.user_id)
-        # Блокировку читают всегда, когда открыт чужой персонаж: она стоит на
-        # карточке строкой, а раздача права - только у того, кто его раздаёт.
-        if account is not None and moderation_rules.is_banned(account.ban, now=now):
-            target_ban = account.ban
+        # Блокировку и предупреждения читают всегда, когда открыт чужой персонаж:
+        # они стоят на карточке строкой, а раздача права - только у того, кто его
+        # раздаёт.
+        if account is not None:
+            target_warnings = account.warnings
+            if moderation_rules.is_banned(account.ban, now=now):
+                target_ban = account.ban
         if granting:
             target_locked = settings.is_admin(target.user_id)
             target_keeper = target_locked or (account is not None and account.keeper)
@@ -656,6 +660,7 @@ async def _keeper_view(
         target_keeper=target_keeper,
         target_locked=target_locked,
         target_ban=target_ban,
+        target_warnings=target_warnings,
         log=log,
         log_total=log_total,
         log_target=log_target,
@@ -727,6 +732,9 @@ async def _serve(
         await set_keeper(users, characters, account, keeper=keeper, settings=settings)
     if write.ban is not None:
         said.append(await _ban(write.ban, users, keeper_log, characters, stamp, now))
+    if write.warn is not None:
+        telegram_id, delta = write.warn
+        await users.warn(telegram_id, delta=delta)
     if write.rollback:
         said.append(await _roll_back(write.rollback, trades, characters, inventory))
     if write.grant_item is not None:

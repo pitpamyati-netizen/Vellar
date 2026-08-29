@@ -67,6 +67,8 @@ class PendingWrite:
     #: и причина. Пустой срок — снять блокировку. Сам момент конца считает
     #: хендлер: у автомата часов нет.
     ban: tuple[int, str, str] | None = None
+    #: Кому изменить счётчик предупреждений: аккаунт и шаг (``+1`` или ``-1``).
+    warn: tuple[int, int] | None = None
     #: Что записать в журнал смотрителя. Момент и имя проставляет хендлер.
     note: KeeperEntry | None = None
     #: Какую уборку выполнить (``application/services/keeper_panel.py``).
@@ -112,6 +114,7 @@ class PendingWrite:
             and not self.remove_character
             and self.keeper_grant is None
             and self.ban is None
+            and self.warn is None
             and self.note is None
             and not self.service
             and not self.rollback

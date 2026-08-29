@@ -98,6 +98,18 @@ async def test_settings_can_be_saved_for_an_unknown_user() -> None:
     assert stored.settings.emoji is True
 
 
+async def test_warnings_count_up_from_an_unknown_account_and_never_go_negative() -> None:
+    users = InMemoryUserRepository()
+
+    assert await users.warn(9) == 1
+    assert await users.warn(9) == 2
+    assert await users.warn(9, delta=-1) == 1
+    assert await users.warn(9, delta=-5) == 0
+
+    stored = await users.get(9)
+    assert stored is not None and stored.warnings == 0
+
+
 # --- персонажи -------------------------------------------------------
 
 

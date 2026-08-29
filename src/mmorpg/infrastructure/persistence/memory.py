@@ -73,6 +73,12 @@ class InMemoryUserRepository:
     async def banned_count(self, *, now: int) -> int:
         return sum(1 for user in self._users.values() if user.ban.forever or user.ban.until > now)
 
+    async def warn(self, telegram_id: int, *, delta: int = 1) -> int:
+        user = self._users.get(telegram_id) or User(telegram_id=telegram_id)
+        now_count = max(0, user.warnings + delta)
+        self._users[telegram_id] = replace(user, warnings=now_count)
+        return now_count
+
     async def purge_blocked(self) -> int:
         gone = tuple(self._blocked)
         for telegram_id in gone:

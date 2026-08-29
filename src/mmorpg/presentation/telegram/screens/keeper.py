@@ -109,6 +109,8 @@ class KeeperView:
     target_locked: bool = False
     #: Что висит на аккаунте открытого игрока. Пустая — не заблокирован.
     target_ban: Ban = field(default_factory=Ban)
+    #: Сколько предупреждений вынесено аккаунту открытого игрока.
+    target_warnings: int = 0
     #: Последние записи журнала смотрителя, свежие сначала, — уже одна страница.
     log: tuple[KeeperEntry, ...] = ()
     #: Сколько записей в журнале всего (с учётом фильтра): по нему считают страницы.
@@ -562,7 +564,7 @@ def player_screen(
         f"очков умений {player.unspent_skill_points}.",
         f"Заданий закрыто: {len(player.quests.done)}. "
         f"Арена: {player.arena_wins} побед, {player.arena_losses} поражений.",
-        ban_line(view.target_ban, view.now),
+        f"{ban_line(view.target_ban, view.now)} Предупреждений: {view.target_warnings}.",
         "Уровень поднимается по одному и только вверх: очки уже вложены.",
     ]
     rows: list[tuple[Label, ...]] = [
@@ -573,6 +575,9 @@ def player_screen(
         (labels.KEEPER_STATS_EDIT_BTN, labels.KEEPER_QUESTS_BTN),
         (labels.KEEPER_MOVE, labels.KEEPER_TRADES),
         (labels.KEEPER_PLAYER_LOG,),
+        (labels.KEEPER_WARN, labels.KEEPER_UNWARN)
+        if view.target_warnings
+        else (labels.KEEPER_WARN,),
         (labels.KEEPER_UNBAN,) if _under_ban(view) else (labels.KEEPER_BAN,),
         (labels.KEEPER_DELETE,),
     ]
@@ -587,7 +592,7 @@ def player_screen(
         if present
     ]
     if group_row:
-        rows.insert(7, tuple(group_row))
+        rows.insert(8, tuple(group_row))
     if view.granting:
         lines.append(_right(view))
         if not view.target_locked:

@@ -450,6 +450,7 @@ def banned_view(keeper_view: keeper_screens.KeeperView) -> keeper_screens.Keeper
     return replace(
         keeper_view,
         target_ban=Ban(until=NOW + 2 * 24 * 60 * 60, reason="ругался в группе"),
+        target_warnings=2,
         log=(
             KeeperEntry(
                 at=NOW - 600,

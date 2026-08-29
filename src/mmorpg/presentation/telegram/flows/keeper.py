@@ -1546,6 +1546,12 @@ def _step_player(
         return replace(state, keeper_typing="", keeper_reason="").at(ScreenId.KEEPER_BAN)
     if labels.KEEPER_UNBAN.matches(command.argument):
         return _unban(state, view)
+    if labels.KEEPER_WARN.matches(command.argument):
+        return _warn(state, view, +1)
+    if labels.KEEPER_UNWARN.matches(command.argument):
+        if not view.target_warnings:
+            return state.with_notice("Предупреждений и так нет.")
+        return _warn(state, view, -1)
     if labels.KEEPER_DELETE.matches(command.argument):
         return _delete(state, view)
 
@@ -1585,6 +1591,22 @@ def _right(state: PlayState, command: Command, view: KeeperView) -> PlayState | 
         )
         .with_notice(said)
     )
+
+
+def _warn(state: PlayState, view: KeeperView, delta: int) -> PlayState:
+    """Вынести предупреждение или снять его. Счётчик считает хендлер: домен без базы."""
+    target = view.target
+    if target is None:  # pragma: no cover - проверено вызывающим
+        return state
+    now = view.target_warnings + delta
+    verb = "вынесено" if delta > 0 else "снято"
+    said = f"Предупреждение {verb}. Теперь их: {max(0, now)}."
+    return state.storing(
+        PendingWrite(
+            warn=(target.user_id, delta),
+            note=_note(KeeperAction.WARN, target.name, f"{delta:+d}, теперь {max(0, now)}"),
+        )
+    ).with_notice(said)
 
 
 def _unban(state: PlayState, view: KeeperView) -> PlayState:

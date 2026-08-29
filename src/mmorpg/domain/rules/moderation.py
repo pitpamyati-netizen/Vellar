@@ -58,6 +58,7 @@ ACTIONS: Mapping[KeeperAction, str] = {
     KeeperAction.DEMOTE: "убрал из смотрителей",
     KeeperAction.BAN: "заблокировал",
     KeeperAction.UNBAN: "снял блокировку",
+    KeeperAction.WARN: "изменил предупреждения",
     KeeperAction.EDIT: "правил содержимое",
     KeeperAction.FORGET: "снял правку",
     KeeperAction.SWEEP: "убрался в базе",

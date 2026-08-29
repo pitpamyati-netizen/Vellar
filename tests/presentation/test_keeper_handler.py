@@ -478,6 +478,28 @@ async def test_a_player_is_moved_and_the_move_is_stored(
     assert stored is not None and stored.city_id != merla.city_id
 
 
+async def test_a_warning_is_counted_on_the_account_and_written_down(
+    keeper: Keeper,
+    users: InMemoryUserRepository,
+    keeper_log: InMemoryKeeperLogRepository,
+    merla: Character,
+) -> None:
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(keeper.button_with("Мерла"))
+
+    await keeper.press(labels.KEEPER_WARN.text)
+    account = await users.get(merla.user_id)
+    assert account is not None and account.warnings == 1
+    assert (await keeper_log.latest())[0].action == KeeperAction.WARN
+
+    # Снять — счётчик вернулся к нулю, и кнопки «Снять предупреждение» больше нет.
+    card = await keeper.press(labels.KEEPER_UNWARN.text)
+    account = await users.get(merla.user_id)
+    assert account is not None and account.warnings == 0
+    assert "Предупреждений: 0" in card.text()
+    assert not any(labels.KEEPER_UNWARN.matches(text) for text in keeper.buttons())
+
+
 async def test_deleting_a_player_takes_two_presses_and_then_really_deletes(
     keeper: Keeper, characters: InMemoryCharacterRepository, merla: Character
 ) -> None:

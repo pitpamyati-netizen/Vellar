@@ -887,6 +887,18 @@ async def test_a_ban_is_stored_read_back_and_lifted(pool, clean_user) -> None:
     assert lifted is not None and lifted.ban == Ban()
 
 
+async def test_warnings_count_up_and_stop_at_zero(pool, clean_user) -> None:
+    users = PostgresUserRepository(pool)
+
+    # Строку заводит сам ``warn``: предупреждение выносят и незнакомому аккаунту.
+    assert await users.warn(clean_user) == 1
+    assert await users.warn(clean_user) == 2
+    assert await users.warn(clean_user, delta=-3) == 0
+
+    account = await users.get(clean_user)
+    assert account is not None and account.warnings == 0
+
+
 async def test_a_ban_without_an_end_is_counted_whenever_it_is_asked(pool, clean_user) -> None:
     users = PostgresUserRepository(pool)
     await users.upsert(User(telegram_id=clean_user))
