@@ -17,7 +17,12 @@ from mmorpg.domain.entities.character import Character, InventoryEntry
 from mmorpg.domain.entities.moderation import Ban, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, TradeRecord, TradeStatus
-from mmorpg.domain.ports.repositories import AccessibilitySettings, Census, User
+from mmorpg.domain.ports.repositories import (
+    AccessibilitySettings,
+    Census,
+    GoldFlowSlice,
+    User,
+)
 from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
 from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
 from mmorpg.domain.rules.party import Party
@@ -116,6 +121,28 @@ class InMemoryKeeperLogRepository:
             return self._entries
         wanted = target.casefold()
         return [entry for entry in self._entries if entry.target.casefold() == wanted]
+
+
+class InMemoryGoldFlowRepository:
+    """Денежный журнал в списке. Срез — сумма по видам для одного игрока (ADR 0044)."""
+
+    def __init__(self) -> None:
+        self._rows: list[tuple[int, str, int, int, str]] = []
+
+    async def record(
+        self, *, at: int, flow: str, amount: int, character_id: int, detail: str = ""
+    ) -> None:
+        self._rows.append((at, flow, amount, character_id, detail))
+
+    async def slice(self, character_id: int, *, since: int = 0) -> GoldFlowSlice:
+        mine = [row for row in self._rows if row[3] == character_id and row[0] >= since]
+        by_flow: dict[str, int] = {}
+        for _, flow, amount, _, _ in mine:
+            by_flow[flow] = by_flow.get(flow, 0) + amount
+        ordered = dict(sorted(by_flow.items(), key=lambda pair: -abs(pair[1])))
+        return GoldFlowSlice(
+            by_flow=ordered, rows=len(mine), net=sum(by_flow.values()), since=since
+        )
 
 
 class InMemoryPrivacyRepository:

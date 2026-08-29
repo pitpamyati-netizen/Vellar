@@ -172,6 +172,13 @@ N из цели / не в журнале). Карточка задания: от
 числом — «не хватило золота: 95», — и остаток смотритель выдаёт руками. Всё это
 пишется в `keeper_log` и в денежный журнал (`gold_flow flow=trade_rollback`).
 
+**Движения золота** — кнопка на карточке игрока: откуда у него золото и куда
+делось, сумма по видам за всё время и net одной строкой (ADR 0044). Это отчёт, а
+не правило: `economy_log` пишет ту же строку, что и раньше, но ещё и в таблицу
+`gold_flow` (миграция `0020`), мимо повторов и не дожидаясь записи. Строка может
+отстать или потеряться — числа примерные. В режиме `local` таблица не пишется, и
+экран честно об этом говорит.
+
 ## Блокировка и журнал
 
 Блокировка — пауза, а не штраф: персонаж, вещи и золото остаются на месте, а бот
@@ -247,9 +254,10 @@ N из цели / не в журнале). Карточка задания: от
 | Запись правки, реестр мира | `application/services/{keeper_panel,content}.py` |
 | Выдачи персонажу, отряд и гильдия игрока | `domain/rules/keeper.py` |
 | Откат сделки | `application/services/group_trade.py` (`roll_back`), `domain/rules/economy.py` (`refund`) |
+| Денежный журнал и его таблица | `economy_log.py` (`use_sink`), `infrastructure/persistence/*` (`*GoldFlowRepository`) |
 | Сроки блокировки, журнал | `domain/rules/moderation.py`, `application/services/moderation.py` |
 | Дверь для заблокированного | `presentation/telegram/middlewares/moderation.py` |
 | Экраны и ветка автомата | `presentation/telegram/{screens,flows}/keeper.py` |
 | Уборка и сбор данных | `presentation/telegram/handlers/play.py` |
-| Таблицы | `migrations/versions/{0009_keeper_panel,0011_keeper_grants,0013_moderation,0014_trade_rollback,0018_warnings,0019_group_mute}.py` |
+| Таблицы | `migrations/versions/{0009_keeper_panel,0011_keeper_grants,0013_moderation,0014_trade_rollback,0018_warnings,0019_group_mute,0020_gold_flow}.py` |
 | Тесты | `tests/presentation/test_keeper_{panel,handler,flow}.py`, `test_ban_gate.py`, `tests/domain/test_moderation.py` |

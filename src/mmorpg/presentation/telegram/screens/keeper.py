@@ -35,7 +35,7 @@ from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.quest import Quest
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.entities.trade import OfferKind, TradeRecord, TradeStatus
-from mmorpg.domain.ports.repositories import Census
+from mmorpg.domain.ports.repositories import Census, GoldFlowSlice
 from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.rules import moderation as moderation_rules
 from mmorpg.domain.rules import overlay as overlay_rules
@@ -131,6 +131,9 @@ class KeeperView:
     #: первым. ``None`` — он не в гильдии.
     target_guild: Guild | None = None
     target_guild_members: tuple[tuple[int, str, GuildRank], ...] = ()
+    #: Движения золота открытого игрока, сложенные по видам (ADR 0044). Читается
+    #: только на экране «Движения золота».
+    target_gold_flow: GoldFlowSlice = field(default_factory=GoldFlowSlice)
     #: Момент, которым меряется остаток срока. Ноль — сроков на экране нет.
     now: int = 0
 
@@ -577,7 +580,7 @@ def player_screen(
         (labels.KEEPER_BAG_BTN, labels.KEEPER_SKILLS),
         (labels.KEEPER_STATS_EDIT_BTN, labels.KEEPER_QUESTS_BTN),
         (labels.KEEPER_MOVE, labels.KEEPER_TRADES),
-        (labels.KEEPER_PLAYER_LOG,),
+        (labels.KEEPER_PLAYER_LOG, labels.KEEPER_GOLD_FLOW_BTN),
         (labels.KEEPER_WARN, labels.KEEPER_UNWARN)
         if view.target_warnings
         else (labels.KEEPER_WARN,),
@@ -1452,6 +1455,57 @@ def log_entry(entry: KeeperEntry, now: int) -> str:
     about = f" {entry.target}," if entry.target else ""
     detail = f" {entry.detail}." if entry.detail else ""
     return f"{who} {said}{about} {ago}.{detail}"
+
+
+#: Виды движений золота по-русски. Ключи — константы ``mmorpg.economy_log``.
+FLOW_NAMES: dict[str, str] = {
+    "fight": "с побеждённых",
+    "search": "находки без боя",
+    "descent": "со дна вылазок",
+    "quest": "плата по заданиям",
+    "defeat": "потеряно в проигранных боях",
+    "duel": "поединки с игроками",
+    "arena_stake": "ставки арены",
+    "arena_payout": "выплаты арены",
+    "trade_price": "сделки в группе",
+    "trade_duty": "пошлина сделок",
+    "trade_rollback": "откаты сделок",
+    "shop": "лавка",
+    "service": "услуги городов",
+    "tutorial": "награды обучения",
+    "guild_vault": "казна гильдии",
+    "keeper": "выдачи смотрителя",
+}
+
+
+def signed_gold(value: int) -> str:
+    """Сумма со знаком словом: «плюс 124 золота», «минус 90 золота»."""
+    word = "плюс" if value >= 0 else "минус"
+    return f"{word} {abs(value)} золота"
+
+
+def gold_flow_screen(player: Character, view: KeeperView, notice: str = "") -> Screen:
+    """Откуда у игрока золото и куда делось — сумма по видам за всё время (ADR 0044).
+
+    Это отчёт, а не правило: числа примерные, строка денежного журнала могла
+    отстать или потеряться. Кнопок нет — как и в журнале, нажимать тут нечего.
+    """
+    data = view.target_gold_flow
+    lines = [
+        notice or f"Движения золота: {player.name}. За всё время.",
+    ]
+    if not data.rows:
+        lines.append(
+            "Учтённых движений нет: либо игрок новый, либо денежный журнал в базу "
+            "не пишется (так в режиме local)."
+        )
+    else:
+        lines.append(f"Строк учтено: {data.rows}. Итого: {signed_gold(data.net)}.")
+        lines.extend(
+            f"{FLOW_NAMES.get(flow, flow)}: {signed_gold(total)}"
+            for flow, total in data.by_flow.items()
+        )
+    return Screen(id=ScreenId.KEEPER_GOLD_FLOW, lines=tuple(lines))
 
 
 def log_screen(view: KeeperView, page: PageState | None = None, notice: str = "") -> Screen:

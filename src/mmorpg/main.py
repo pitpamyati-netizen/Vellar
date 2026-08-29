@@ -32,6 +32,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.base import BaseStorage
 from aiogram.fsm.storage.memory import MemoryStorage
 
+from mmorpg import economy_log
 from mmorpg.application.services.content import ContentRegistry
 from mmorpg.application.services.group_trade import release_expired_offers
 from mmorpg.application.services.guild import GuildStore
@@ -53,6 +54,7 @@ from mmorpg.infrastructure.content import load_content
 from mmorpg.infrastructure.persistence import (
     InMemoryCharacterRepository,
     InMemoryContentOverlayRepository,
+    InMemoryGoldFlowRepository,
     InMemoryGuildRepository,
     InMemoryInventoryRepository,
     InMemoryKeeperLogRepository,
@@ -212,6 +214,9 @@ async def _build_adapters(
             trades=InMemoryTradeRepository(),
             privacy=InMemoryPrivacyRepository(),
             keeper_log=InMemoryKeeperLogRepository(),
+            # В local денежный журнал в базу не пишется (ADR 0044): пустой срез
+            # на карточке — не беда, а само хранилище живёт вместе с процессом.
+            gold_flow=InMemoryGoldFlowRepository(),
             state_cache=memory_cache,
             locations=InMemoryLocationStateCache(),
             overlays=InMemoryContentOverlayRepository(),
@@ -227,6 +232,7 @@ async def _build_adapters(
     from mmorpg.infrastructure.persistence.postgres import (
         PostgresCharacterRepository,
         PostgresContentOverlayRepository,
+        PostgresGoldFlowRepository,
         PostgresGuildRepository,
         PostgresInventoryRepository,
         PostgresKeeperLogRepository,
@@ -250,6 +256,19 @@ async def _build_adapters(
         max_wait=settings.reconnect_max_delay_seconds,
     )
 
+    gold_flow = PostgresGoldFlowRepository(pool)
+    # Второй приёмник денежного журнала: та же строка, что в economy_log, но в
+    # базе (ADR 0044). Мимо повторов и не дожидаясь записи — терять её можно.
+    economy_log.use_sink(
+        lambda flow, amount, character_id, detail: gold_flow.record(
+            at=int(time.time()),
+            flow=flow,
+            amount=amount,
+            character_id=character_id,
+            detail=detail,
+        )
+    )
+
     dependencies = Dependencies(
         settings=settings,
         registry=registry,
@@ -259,6 +278,7 @@ async def _build_adapters(
         trades=PostgresTradeRepository(pool),
         privacy=PostgresPrivacyRepository(pool),
         keeper_log=PostgresKeeperLogRepository(pool),
+        gold_flow=gold_flow,
         state_cache=state_cache,
         locations=locations,
         overlays=PostgresContentOverlayRepository(pool),

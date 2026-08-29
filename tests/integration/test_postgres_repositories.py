@@ -29,6 +29,7 @@ from mmorpg.domain.rules.party import Party as PlayerParty
 from mmorpg.infrastructure.persistence.postgres import (
     PostgresCharacterRepository,
     PostgresContentOverlayRepository,
+    PostgresGoldFlowRepository,
     PostgresGuildRepository,
     PostgresInventoryRepository,
     PostgresKeeperLogRepository,
@@ -885,6 +886,25 @@ async def test_a_ban_is_stored_read_back_and_lifted(pool, clean_user) -> None:
     await users.set_ban(clean_user, Ban())
     lifted = await users.get(clean_user)
     assert lifted is not None and lifted.ban == Ban()
+
+
+async def test_the_gold_flow_table_sums_one_players_movements_by_kind(pool, clean_user) -> None:
+    flow = PostgresGoldFlowRepository(pool)
+    await pool.execute("DELETE FROM gold_flow WHERE character_id = $1", clean_user)
+    for at, kind, amount in (
+        (NOW + 1, "fight", 100),
+        (NOW + 2, "fight", 40),
+        (NOW + 3, "shop", -90),
+    ):
+        await flow.record(at=at, flow=kind, amount=amount, character_id=clean_user)
+
+    whole = await flow.slice(clean_user)
+
+    assert dict(whole.by_flow) == {"fight": 140, "shop": -90}
+    assert whole.rows == 3
+    assert whole.net == 50
+    assert (await flow.slice(clean_user, since=NOW + 2)).by_flow["fight"] == 40
+    await pool.execute("DELETE FROM gold_flow WHERE character_id = $1", clean_user)
 
 
 async def test_a_mute_is_stored_read_back_and_lifted_apart_from_the_ban(pool, clean_user) -> None:

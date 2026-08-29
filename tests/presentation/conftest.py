@@ -38,7 +38,7 @@ from mmorpg.domain.entities.location import (
 from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeRecord, TradeStatus
-from mmorpg.domain.ports.repositories import Census
+from mmorpg.domain.ports.repositories import Census, GoldFlowSlice
 from mmorpg.domain.procgen import generate_location, location_seed
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import overlay as overlay_rules
@@ -680,6 +680,16 @@ def all_screens(
         keeper_screens.ban_screen(fighter, banned_view, "ругался в группе"),
         keeper_screens.mute_screen(fighter, keeper_view),
         keeper_screens.mute_screen(fighter, muted_view, "флудил в группе"),
+        keeper_screens.gold_flow_screen(fighter, keeper_view),
+        keeper_screens.gold_flow_screen(
+            fighter,
+            replace(
+                keeper_view,
+                target_gold_flow=GoldFlowSlice(
+                    by_flow={"fight": 1240, "shop": -430, "service": -90}, rows=42, net=720
+                ),
+            ),
+        ),
         keeper_screens.log_screen(banned_view),
         keeper_screens.log_screen(keeper_view),
         # Журнал со страницами и журнал, сужённый до одного игрока.

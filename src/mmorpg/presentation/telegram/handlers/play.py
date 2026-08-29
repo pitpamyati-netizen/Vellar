@@ -45,6 +45,8 @@ from mmorpg.domain.entities.trade import TradeRecord
 from mmorpg.domain.ports.repositories import (
     CharacterRepository,
     ContentOverlayRepository,
+    GoldFlowRepository,
+    GoldFlowSlice,
     InventoryRepository,
     KeeperLogRepository,
     LocationStateCache,
@@ -145,6 +147,7 @@ async def play(
     guilds: GuildStore,
     privacy: PrivacyRepository | None = None,
     user: User | None = None,
+    gold_flow: GoldFlowRepository | None = None,
 ) -> None:
     if message.from_user is None or message.text is None:
         return
@@ -203,6 +206,7 @@ async def play(
         inventory,
         parties,
         guilds,
+        gold_flow,
     )
 
     party = await _party_view(flow, character, characters, parties)
@@ -347,6 +351,7 @@ async def play(
         inventory,
         parties,
         guilds,
+        gold_flow,
     )
     gathered = await _party_view(updated, character, characters, parties)
     guild_view = await _guild_view(updated, character, characters, guilds)
@@ -511,6 +516,7 @@ async def _keeper_view(
     inventory: InventoryRepository | None = None,
     parties: PartyStore | None = None,
     guilds: GuildStore | None = None,
+    gold_flow: GoldFlowRepository | None = None,
 ) -> KeeperView:
     """Что панели показать. Для игрока это ноль запросов: ветка не выполняется.
 
@@ -557,6 +563,7 @@ async def _keeper_view(
             ScreenId.KEEPER_FIELD,
             ScreenId.KEEPER_BAN,
             ScreenId.KEEPER_MUTE,
+            ScreenId.KEEPER_GOLD_FLOW,
             ScreenId.KEEPER_TRADES,
             ScreenId.KEEPER_TUNE,
             ScreenId.KEEPER_AMOUNT,
@@ -621,6 +628,10 @@ async def _keeper_view(
     if flow.screen is ScreenId.KEEPER_BAG and target is not None and inventory is not None:
         bag = await inventory.list_items(target.id)
 
+    gold_flow_slice = GoldFlowSlice()
+    if flow.screen is ScreenId.KEEPER_GOLD_FLOW and target is not None and gold_flow is not None:
+        gold_flow_slice = await gold_flow.slice(target.id)
+
     # Отряд и гильдия открытого игрока: на карточке от них зависит, рисовать ли
     # кнопку, а на самих экранах нужен и состав. Имена резолвятся здесь - домену
     # их взять неоткуда, - и только там, где их показывают.
@@ -666,6 +677,7 @@ async def _keeper_view(
         target_ban=target_ban,
         target_mute=target_mute,
         target_warnings=target_warnings,
+        target_gold_flow=gold_flow_slice,
         log=log,
         log_total=log_total,
         log_target=log_target,

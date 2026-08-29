@@ -35,6 +35,7 @@ from mmorpg.infrastructure.cache import (
 )
 from mmorpg.infrastructure.persistence import (
     InMemoryCharacterRepository,
+    InMemoryGoldFlowRepository,
     InMemoryGuildRepository,
     InMemoryInventoryRepository,
     InMemoryPartyRepository,
@@ -97,6 +98,22 @@ async def test_settings_can_be_saved_for_an_unknown_user() -> None:
     stored = await users.get(7)
     assert stored is not None
     assert stored.settings.emoji is True
+
+
+async def test_the_gold_flow_slice_sums_by_kind_with_a_sign() -> None:
+    flow = InMemoryGoldFlowRepository()
+    await flow.record(at=10, flow="fight", amount=100, character_id=1)
+    await flow.record(at=20, flow="fight", amount=40, character_id=1)
+    await flow.record(at=30, flow="shop", amount=-90, character_id=1)
+    await flow.record(at=30, flow="fight", amount=999, character_id=2)  # чужой
+
+    whole = await flow.slice(1)
+    assert dict(whole.by_flow) == {"fight": 140, "shop": -90}
+    assert whole.rows == 3
+    assert whole.net == 50
+
+    since = await flow.slice(1, since=15)
+    assert dict(since.by_flow) == {"fight": 40, "shop": -90}
 
 
 async def test_a_mute_is_stored_and_lifted_apart_from_the_ban() -> None:

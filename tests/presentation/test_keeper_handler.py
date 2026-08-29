@@ -45,6 +45,7 @@ from mmorpg.infrastructure.cache.memory import (
 from mmorpg.infrastructure.persistence.memory import (
     InMemoryCharacterRepository,
     InMemoryContentOverlayRepository,
+    InMemoryGoldFlowRepository,
     InMemoryGuildRepository,
     InMemoryInventoryRepository,
     InMemoryKeeperLogRepository,
@@ -139,6 +140,7 @@ class Keeper:
                 self.deps["cache"],
                 self.deps["parties"],
                 self.deps["guilds"],
+                gold_flow=self.deps["gold_flow"],
             )
         return self.sent.last
 
@@ -210,6 +212,7 @@ async def keeper(
     trades: InMemoryTradeRepository,
     telegram: FakeTelegram,
     cache: InMemoryStateCache,
+    gold_flow: InMemoryGoldFlowRepository,
 ) -> Keeper:
     await characters.create(
         Character(
@@ -242,7 +245,13 @@ async def keeper(
         cache=cache,
         parties=PartyStore(InMemoryPartyRepository(), cache),
         guilds=GuildStore(InMemoryGuildRepository(), cache),
+        gold_flow=gold_flow,
     )
+
+
+@pytest.fixture
+def gold_flow() -> InMemoryGoldFlowRepository:
+    return InMemoryGoldFlowRepository()
 
 
 # --- правка доходит до хранилища и до мира ------------------------------
@@ -921,6 +930,32 @@ async def test_a_mute_is_stored_on_the_account_and_written_down(
     assert account is not None and account.mute.until == 0
     assert "Замолчан в группе: нет" in card.text()
     assert (await keeper_log.latest())[0].action == KeeperAction.UNMUTE
+
+
+async def test_the_gold_flow_card_shows_the_slice_by_kind(
+    keeper: Keeper, gold_flow: InMemoryGoldFlowRepository, merla: Character
+) -> None:
+    await gold_flow.record(at=1, flow="fight", amount=120, character_id=merla.id)
+    await gold_flow.record(at=2, flow="shop", amount=-70, character_id=merla.id)
+
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(keeper.button_with("Мерла"))
+    card = await keeper.press(labels.KEEPER_GOLD_FLOW_BTN.text)
+
+    assert card.id is ScreenId.KEEPER_GOLD_FLOW
+    assert "с побеждённых: плюс 120 золота" in card.text()
+    assert "лавка: минус 70 золота" in card.text()
+    assert "Итого: плюс 50 золота" in card.text()
+
+
+async def test_the_gold_flow_card_is_honest_when_there_is_nothing(
+    keeper: Keeper, merla: Character
+) -> None:
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(keeper.button_with("Мерла"))
+    card = await keeper.press(labels.KEEPER_GOLD_FLOW_BTN.text)
+
+    assert "Учтённых движений нет" in card.text()
 
 
 async def test_the_journal_from_a_player_card_is_scoped_to_that_player(

@@ -144,6 +144,39 @@ class UserRepository(Protocol):
         """Убрать тех, кто заблокировал бота, вместе со всем, что им принадлежит."""
 
 
+@dataclass(frozen=True, slots=True)
+class GoldFlowSlice:
+    """Движения золота одного игрока, сложенные по видам (ADR 0044).
+
+    ``by_flow`` — вид движения (``fight``, ``shop``, …) → сумма со знаком: плюс,
+    когда золото пришло, минус — когда ушло. ``rows`` — сколько строк вошло в
+    срез, ``net`` — их сумма. Это отчёт, не правило: числа примерные, строка
+    журнала могла отстать или потеряться.
+    """
+
+    by_flow: Mapping[str, int] = field(default_factory=dict)
+    rows: int = 0
+    net: int = 0
+    since: int = 0
+
+
+@runtime_checkable
+class GoldFlowRepository(Protocol):
+    """Второй приёмник денежного журнала: та же строка, что в ``economy_log``,
+    но в базе, чтобы смотритель видел срез по одному игроку (ADR 0044).
+
+    Не источник истины: запись идёт мимо повторов (ADR 0009), строка может
+    отстать, потеряться или продублироваться — как и у журнальной строки.
+    """
+
+    async def record(
+        self, *, at: int, flow: str, amount: int, character_id: int, detail: str = ""
+    ) -> None: ...
+
+    async def slice(self, character_id: int, *, since: int = 0) -> GoldFlowSlice:
+        """Движения этого игрока, сложенные по видам. ``since`` — от какого момента."""
+
+
 @runtime_checkable
 class KeeperLogRepository(Protocol):
     """Журнал того, что смотрители сделали.

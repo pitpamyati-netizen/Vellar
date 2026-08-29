@@ -66,6 +66,7 @@ PANEL: frozenset[ScreenId] = frozenset(
         ScreenId.KEEPER_SERVICE,
         ScreenId.KEEPER_BAN,
         ScreenId.KEEPER_MUTE,
+        ScreenId.KEEPER_GOLD_FLOW,
         ScreenId.KEEPER_LOG,
         ScreenId.KEEPER_TRADES,
         ScreenId.KEEPER_TUNE,
@@ -240,6 +241,8 @@ def _render_panel(
             return keeper_screens.ban_screen(view.target, view, state.keeper_reason, state.notice)
         case ScreenId.KEEPER_MUTE if view.target is not None:
             return keeper_screens.mute_screen(view.target, view, state.keeper_reason, state.notice)
+        case ScreenId.KEEPER_GOLD_FLOW if view.target is not None:
+            return keeper_screens.gold_flow_screen(view.target, view, state.notice)
         case ScreenId.KEEPER_LOG:
             return keeper_screens.log_screen(view, state.keeper_page, state.notice)
         case ScreenId.KEEPER_TRADES if view.target is not None:
@@ -491,6 +494,8 @@ def advance(
             return _step_ban(state, command, view)
         case ScreenId.KEEPER_MUTE:
             return _step_mute(state, command, view)
+        case ScreenId.KEEPER_GOLD_FLOW:
+            return state.with_notice("Здесь только чтение. Нажмите «Назад».")
         case ScreenId.KEEPER_TRADES:
             return _step_trades(state, command, view)
         case ScreenId.KEEPER_TUNE:
@@ -1546,6 +1551,8 @@ def _step_player(
     if labels.KEEPER_PLAYER_LOG.matches(command.argument):
         # Тот же журнал, но сужен до этого игрока: ``keeper_target`` остаётся.
         return replace(state, keeper_typing="", keeper_page=PageState()).at(ScreenId.KEEPER_LOG)
+    if labels.KEEPER_GOLD_FLOW_BTN.matches(command.argument):
+        return replace(state, keeper_typing="").at(ScreenId.KEEPER_GOLD_FLOW)
     if labels.KEEPER_PARTY_BTN.matches(command.argument) and view.target_party is not None:
         return replace(state, keeper_typing="").at(ScreenId.KEEPER_PARTY)
     if labels.KEEPER_GUILD_BTN.matches(command.argument) and view.target_guild is not None:

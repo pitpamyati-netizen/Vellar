@@ -3,6 +3,8 @@
 from mmorpg.domain.ports.repositories import (
     AccessibilitySettings,
     CharacterRepository,
+    GoldFlowRepository,
+    GoldFlowSlice,
     GuildRepository,
     IdempotencyStore,
     InventoryRepository,
@@ -17,6 +19,8 @@ from mmorpg.domain.ports.repositories import (
 __all__ = [
     "AccessibilitySettings",
     "CharacterRepository",
+    "GoldFlowRepository",
+    "GoldFlowSlice",
     "GuildRepository",
     "IdempotencyStore",
     "InventoryRepository",

@@ -3,6 +3,7 @@
 from mmorpg.infrastructure.persistence.memory import (
     InMemoryCharacterRepository,
     InMemoryContentOverlayRepository,
+    InMemoryGoldFlowRepository,
     InMemoryGuildRepository,
     InMemoryInventoryRepository,
     InMemoryKeeperLogRepository,
@@ -15,6 +16,7 @@ from mmorpg.infrastructure.persistence.memory import (
 __all__ = [
     "InMemoryCharacterRepository",
     "InMemoryContentOverlayRepository",
+    "InMemoryGoldFlowRepository",
     "InMemoryGuildRepository",
     "InMemoryInventoryRepository",
     "InMemoryKeeperLogRepository",

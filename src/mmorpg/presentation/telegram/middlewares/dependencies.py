@@ -21,6 +21,7 @@ from mmorpg.config import Settings
 from mmorpg.domain.ports.repositories import (
     CharacterRepository,
     ContentOverlayRepository,
+    GoldFlowRepository,
     InventoryRepository,
     KeeperLogRepository,
     LocationStateCache,
@@ -44,6 +45,7 @@ class Dependencies:
     trades: TradeRepository
     privacy: PrivacyRepository
     keeper_log: KeeperLogRepository
+    gold_flow: GoldFlowRepository
     state_cache: StateCache
     locations: LocationStateCache
     overlays: ContentOverlayRepository
@@ -65,6 +67,7 @@ class Dependencies:
             "trades": self.trades,
             "privacy": self.privacy,
             "keeper_log": self.keeper_log,
+            "gold_flow": self.gold_flow,
             "state_cache": self.state_cache,
             "locations": self.locations,
             "overlays": self.overlays,

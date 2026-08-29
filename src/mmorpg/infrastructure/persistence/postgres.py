@@ -20,7 +20,12 @@ from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatBlock
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeRecord, TradeStatus
-from mmorpg.domain.ports.repositories import AccessibilitySettings, Census, User
+from mmorpg.domain.ports.repositories import (
+    AccessibilitySettings,
+    Census,
+    GoldFlowSlice,
+    User,
+)
 from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
 from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
 from mmorpg.domain.rules.party import Party as PlayerParty
@@ -353,6 +358,42 @@ class PostgresKeeperLogRepository:
         else:
             value = await self._pool.fetchval("SELECT count(*) FROM keeper_log")
         return int(value or 0)
+
+
+class PostgresGoldFlowRepository:
+    """Денежный журнал в базе: строка на движение, срез по одному игроку (ADR 0044)."""
+
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        self._pool = pool
+
+    async def record(
+        self, *, at: int, flow: str, amount: int, character_id: int, detail: str = ""
+    ) -> None:
+        await self._pool.execute(
+            "INSERT INTO gold_flow (at, flow, amount, character_id, detail)"
+            " VALUES ($1, $2, $3, $4, $5)",
+            at,
+            flow,
+            amount,
+            character_id,
+            detail,
+        )
+
+    async def slice(self, character_id: int, *, since: int = 0) -> GoldFlowSlice:
+        rows = await self._pool.fetch(
+            "SELECT flow, sum(amount) AS total, count(*) AS n"
+            " FROM gold_flow WHERE character_id = $1 AND at >= $2"
+            " GROUP BY flow ORDER BY sum(abs(amount)) DESC",
+            character_id,
+            since,
+        )
+        by_flow = {row["flow"]: int(row["total"] or 0) for row in rows}
+        return GoldFlowSlice(
+            by_flow=by_flow,
+            rows=sum(int(row["n"]) for row in rows),
+            net=sum(by_flow.values()),
+            since=since,
+        )
 
 
 class PostgresPrivacyRepository:
