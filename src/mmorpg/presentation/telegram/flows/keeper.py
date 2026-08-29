@@ -20,6 +20,7 @@ from dataclasses import replace
 from mmorpg.application.dto.creation import validate_name
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, GameContent
+from mmorpg.domain.entities.craft import CraftKind
 from mmorpg.domain.entities.moderation import KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.stats import StatCode
@@ -411,9 +412,30 @@ def _value(content: GameContent, state: PlayState, view: KeeperView, text: str) 
     if spec is None:
         return go_back(state).with_notice("Такого поля больше нет.")
     record = _record(content, state, view)
+    if spec.kind is FieldKind.PAIRS:
+        return _paired_value(state, record, spec, text)
     edited = record.with_field(spec.key, text)
     said = f"{spec.name}: {text}."
     return _stored(state, edited, said)
+
+
+def _paired_value(state: PlayState, record: OverlayRecord, spec: FieldSpec, text: str) -> PlayState:
+    """Набранное «ключ=число» ложится парой, не заменяя поле целиком.
+
+    Экран поля не разматывается: за одной парой обычно набирают следующую.
+    """
+    key, sep, raw = text.partition("=")
+    key, raw = key.strip(), raw.strip()
+    if not sep or not key:
+        return state.with_notice("Наберите «ключ=число»: ключ, знак равенства, значение.")
+    kept = [(name, value) for name, value in record.pairs(spec.key) if name != key]
+    kept.append((key, raw))
+    edited = record.with_field(spec.key, ", ".join(f"{name}={value}" for name, value in kept))
+    note = _note(KeeperAction.EDIT, edited.entity_id, f"{spec.name}: {key}={raw}")
+    stay = replace(state, keeper_page=PageState())
+    return stay.storing(PendingWrite(edit=edited, note=note)).with_notice(
+        f"{spec.name}: {key} = {raw}. Ещё пара — наберите, или «Назад»."
+    )
 
 
 def _stored(state: PlayState, record: OverlayRecord, said: str) -> PlayState:
@@ -681,6 +703,18 @@ def _blank(
                 "armor": "1",
                 "initiative": "1",
             }
+        case OverlayKind.TRAIT:
+            fields = {"category": next(iter(content.trait_categories), "")}
+        case OverlayKind.CRAFT:
+            fields = {"kind": CraftKind.MAKING.value, "stat": StatCode.STR.value}
+        case OverlayKind.RECIPE:
+            making = content.crafts_of_kind(CraftKind.MAKING)
+            fields = {
+                "craft": making[0].id if making else "",
+                "rank": "1",
+                "output_count": "1",
+                "experience": "10",
+            }
         case _:
             pass
     return OverlayRecord(
@@ -733,7 +767,11 @@ def _step_entity(
     spec = keeper_screens.field_from_button(record, command.argument)
     if spec is None:
         return state.with_notice("Не узнал поле. Нажмите строку из списка.")
-    typing = TYPING_VALUE if spec.kind in {FieldKind.TEXT, FieldKind.NUMBER, FieldKind.RATE} else ""
+    typing = (
+        TYPING_VALUE
+        if spec.kind in {FieldKind.TEXT, FieldKind.NUMBER, FieldKind.RATE, FieldKind.PAIRS}
+        else ""
+    )
     return replace(state, keeper_field=spec.key, keeper_typing=typing, keeper_page=PageState()).at(
         ScreenId.KEEPER_FIELD
     )
@@ -754,6 +792,10 @@ def _step_field(
         moved = page_move(command, state.keeper_page, pages)
         if moved is not None:
             return replace(state, keeper_page=moved, notice="")
+    if spec.kind is FieldKind.PAIRS:
+        moved = page_move(command, state.keeper_page, total_pages(len(record.pairs(spec.key))))
+        if moved is not None:
+            return replace(state, keeper_page=moved, notice="")
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите вариант или наберите значение.")
 
@@ -762,6 +804,14 @@ def _step_field(
     if spec.kind is FieldKind.FLAG:
         answer = "да" if command.argument.casefold() == "да" else "нет"
         return _stored(state, record.with_field(spec.key, answer), f"{spec.name}: {answer}.")
+
+    if spec.kind is FieldKind.PAIRS:
+        removed = keeper_screens.pair_from_button(content, record, spec, command.argument)
+        if removed is None:
+            return state.with_notice("Не узнал пару. Наберите «ключ=число» или нажмите строку.")
+        kept = [(key, val) for key, val in record.pairs(spec.key) if key != removed]
+        edited = record.with_field(spec.key, ", ".join(f"{key}={val}" for key, val in kept))
+        return _stored(state, edited, f"{spec.name}: убрано «{removed}».")
 
     chosen = keeper_screens.option_from_button(content, record, spec, command.argument)
     if chosen is None:

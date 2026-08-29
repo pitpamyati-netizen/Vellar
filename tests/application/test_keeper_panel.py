@@ -75,6 +75,26 @@ async def test_dropping_an_edit_that_was_not_there_says_so(
     assert await keeper_panel.drop_edit(overlays, registry, OverlayKind.NPC, "нет такого") is False
 
 
+async def test_a_trait_bonus_edit_is_visible_without_a_restart(
+    registry: ContentRegistry, overlays: InMemoryContentOverlayRepository
+) -> None:
+    record = OverlayRecord(
+        kind=OverlayKind.TRAIT,
+        entity_id="berserker",
+        fields={
+            "name": registry.base.trait("berserker").name,
+            "category": registry.base.trait("berserker").category,
+            "modifiers": "damage_percent=30",
+        },
+    )
+
+    why = await keeper_panel.save_edit(overlays, registry, record)
+
+    assert why == ()
+    assert registry.current.trait("berserker").modifiers["damage_percent"] == 30
+    assert registry.base.trait("berserker").modifiers["damage_percent"] != 30
+
+
 async def test_a_half_written_edit_is_stored_together_with_its_reason(
     registry: ContentRegistry, overlays: InMemoryContentOverlayRepository
 ) -> None:

@@ -772,6 +772,9 @@ class GameContent:
     def trait(self, trait_id: str) -> Trait:
         return self._traits_by_id[trait_id]
 
+    def has_trait(self, trait_id: str) -> bool:
+        return trait_id in self._traits_by_id
+
     def item(self, item_id: str) -> Item:
         return self._items_by_id[item_id]
 

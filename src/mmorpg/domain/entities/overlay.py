@@ -31,6 +31,9 @@ class OverlayKind(StrEnum):
     LOCATION = "location"
     ENEMY = "enemy"
     CITY = "city"
+    TRAIT = "trait"
+    CRAFT = "craft"
+    RECIPE = "recipe"
 
 
 #: С чего начинаются идентификаторы, выданные смотрителем. Отдельный префикс
@@ -84,6 +87,21 @@ class OverlayRecord:
         """Поле-перечисление: «луга, лес» — два значения, пустое — ни одного."""
         raw = self.fields.get(key, "")
         return tuple(part.strip() for part in raw.split(",") if part.strip())
+
+    def pairs(self, key: str) -> tuple[tuple[str, str], ...]:
+        """Поле «ключ=число»: «stat_STR=2, armor_percent=-5» — две пары.
+
+        Разбор не падает на кривом: сегмент без «=» и сегмент с пустым ключом
+        просто выпадают, а ругается на это валидатор (``rules/overlay.problems``),
+        как и на всём остальном, что приходит строкой из базы.
+        """
+        found: list[tuple[str, str]] = []
+        for part in self.fields.get(key, "").split(","):
+            name, sep, value = part.partition("=")
+            if not sep or not name.strip():
+                continue
+            found.append((name.strip(), value.strip()))
+        return tuple(found)
 
     def with_field(self, key: str, value: str) -> OverlayRecord:
         return replace(self, fields=MappingProxyType({**self.fields, key: value}))

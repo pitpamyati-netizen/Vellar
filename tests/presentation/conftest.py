@@ -630,6 +630,30 @@ def all_screens(
             overlay_rules.FIELDS[OverlayKind.LOCATION][-1],
             PageState(),
         ),
+        # Черты, ремёсла и рецепты: карточка и каждое поле, в том числе «ключ=число».
+        *(
+            keeper_screens.entity_screen(
+                edited,
+                overlay_rules.effective(
+                    edited, keeper_view.records, kind, overlay_rules.listing(edited, kind)[0][0]
+                ),
+                PageState(),
+                keeper_view,
+            )
+            for kind in (OverlayKind.TRAIT, OverlayKind.CRAFT, OverlayKind.RECIPE)
+        ),
+        *(
+            keeper_screens.field_screen(
+                edited,
+                overlay_rules.effective(
+                    edited, keeper_view.records, kind, overlay_rules.listing(edited, kind)[0][0]
+                ),
+                spec,
+                PageState(),
+            )
+            for kind in (OverlayKind.TRAIT, OverlayKind.CRAFT, OverlayKind.RECIPE)
+            for spec in overlay_rules.FIELDS[kind]
+        ),
         keeper_screens.players_screen(edited, keeper_view, PageState()),
         keeper_screens.players_screen(
             edited, keeper_screens.KeeperView(), PageState(), notice="Никого не нашли."

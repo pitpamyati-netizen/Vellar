@@ -22,11 +22,14 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from types import MappingProxyType
 
-from mmorpg.domain.entities.content import City, GameContent, Location, Npc
+from mmorpg.domain.entities.content import City, GameContent, Location, Npc, Trait
+from mmorpg.domain.entities.craft import Craft, CraftKind, Recipe, RecipeInput
 from mmorpg.domain.entities.damage import DamageType
 from mmorpg.domain.entities.location import EnemyArchetype, EnemyKind
 from mmorpg.domain.entities.overlay import KEEPER_PREFIX, OverlayKind, OverlayRecord
 from mmorpg.domain.entities.quest import ObjectiveKind, Quest
+from mmorpg.domain.entities.stats import StatCode
+from mmorpg.domain.rules.modifiers import EFFECTIVE_KEYS
 
 #: Сколько мест под локации в городе. Пять кладёт содержимое, остальное — запас
 #: смотрителя: город, в котором некуда добавить, — город, который нельзя править.
@@ -58,6 +61,9 @@ class FieldKind(StrEnum):
     FLAG = "flag"
     CHOICE = "choice"
     LIST = "list"
+    #: Поле «ключ=число»: набор пар, где ключ выбирается из известного списка, а
+    #: значение набирают. Прибавки черты и состав рецепта — обе такие.
+    PAIRS = "pairs"
 
 
 class Source(StrEnum):
@@ -70,6 +76,13 @@ class Source(StrEnum):
     ITEM = "item"
     QUEST = "quest"
     LOCATION = "location"
+    #: Ключи прибавок, которые движок и правда считает (``modifiers.EFFECTIVE_KEYS``),
+    #: а не широкий словарь ``traits.toml`` (``Claude.md``, правило 7).
+    MODIFIER = "modifier"
+    #: Ремёсла вида «работа»: рецепт вешают только на них.
+    CRAFT = "craft"
+    #: Разделы черт (``content.trait_categories``).
+    TRAIT_CATEGORY = "trait_category"
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +99,9 @@ class FieldSpec:
     #: Сколько знаков сюда влезает. Меньше общего потолка там, где значение
     #: окажется на кнопке, а кнопка — это одна строка.
     limit: int = MAX_TEXT
+    #: Чем считать значение пары у поля ``PAIRS``: ``NUMBER`` — счёт в рецепте
+    #: (целое, не меньше единицы), ``RATE`` — прибавка черты (доля, знак допустим).
+    pair_value: FieldKind = FieldKind.NUMBER
 
 
 #: Как разновидность называется в единственном и множественном числе. Первое —
@@ -96,13 +112,24 @@ TITLES: Mapping[OverlayKind, tuple[str, str]] = {
     OverlayKind.LOCATION: ("Локация", "Локации"),
     OverlayKind.ENEMY: ("Противник", "Противники"),
     OverlayKind.CITY: ("Город", "Города"),
+    OverlayKind.TRAIT: ("Черта", "Черты"),
+    OverlayKind.CRAFT: ("Ремесло", "Ремёсла"),
+    OverlayKind.RECIPE: ("Рецепт", "Рецепты"),
 }
 
 #: Разновидности, которые смотритель заводит с нуля. Города и локации приходят из
 #: ``world.toml`` вместе с проверкой уровней, и заводить город кнопкой — значит
 #: обойти эту проверку; локацию в существующем городе добавить можно.
 CREATABLE: frozenset[OverlayKind] = frozenset(
-    {OverlayKind.NPC, OverlayKind.QUEST, OverlayKind.LOCATION, OverlayKind.ENEMY}
+    {
+        OverlayKind.NPC,
+        OverlayKind.QUEST,
+        OverlayKind.LOCATION,
+        OverlayKind.ENEMY,
+        OverlayKind.TRAIT,
+        OverlayKind.CRAFT,
+        OverlayKind.RECIPE,
+    }
 )
 
 FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
@@ -183,6 +210,56 @@ FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
         FieldSpec("name", "Название", required=True, limit=NAME_LIMIT),
         FieldSpec("description", "Описание"),
     ),
+    OverlayKind.TRAIT: (
+        FieldSpec("name", "Название", required=True, limit=NAME_LIMIT),
+        FieldSpec(
+            "category", "Раздел", FieldKind.CHOICE, source=Source.TRAIT_CATEGORY, required=True
+        ),
+        FieldSpec("text", "Что обещает", hint="одна фраза при выборе"),
+        FieldSpec(
+            "modifiers",
+            "Прибавки",
+            FieldKind.PAIRS,
+            source=Source.MODIFIER,
+            pair_value=FieldKind.RATE,
+            required=True,
+            hint="stat_STR=1, crit_chance_percent=5",
+        ),
+    ),
+    OverlayKind.CRAFT: (
+        FieldSpec("name", "Название", required=True, limit=NAME_LIMIT),
+        FieldSpec(
+            "kind",
+            "Что делает",
+            FieldKind.CHOICE,
+            choices=tuple(one.value for one in CraftKind),
+            required=True,
+        ),
+        FieldSpec(
+            "stat",
+            "На чём держится",
+            FieldKind.CHOICE,
+            choices=tuple(code.value for code in StatCode),
+            required=True,
+        ),
+        FieldSpec("description", "Чем занимаются"),
+    ),
+    OverlayKind.RECIPE: (
+        FieldSpec("craft", "Ремесло", FieldKind.CHOICE, source=Source.CRAFT, required=True),
+        FieldSpec("rank", "С какого ранга", FieldKind.NUMBER, required=True),
+        FieldSpec(
+            "inputs",
+            "Из чего",
+            FieldKind.PAIRS,
+            source=Source.ITEM,
+            pair_value=FieldKind.NUMBER,
+            required=True,
+            hint="iron_scrap=2, oak_plank=1",
+        ),
+        FieldSpec("output", "Что выходит", FieldKind.CHOICE, source=Source.ITEM, required=True),
+        FieldSpec("output_count", "Сколько за раз", FieldKind.NUMBER, required=True),
+        FieldSpec("experience", "Опыт за работу", FieldKind.NUMBER),
+    ),
 }
 
 #: Порода противника и узлы поиска — разные списки, и какой из них нужен, зависит
@@ -260,6 +337,12 @@ def options(content: GameContent, spec: FieldSpec, record: OverlayRecord) -> tup
             if not content.has_city(city):
                 return ()
             return tuple(str(location.slot) for location in content.city(city).locations)
+        case Source.MODIFIER:
+            return tuple(sorted(EFFECTIVE_KEYS))
+        case Source.CRAFT:
+            return tuple(craft.id for craft in content.crafts_of_kind(CraftKind.MAKING))
+        case Source.TRAIT_CATEGORY:
+            return tuple(content.trait_categories)
         case _:
             return spec.choices
 
@@ -306,6 +389,12 @@ def option_name(
             return content.quest(value).name if content.has_quest(value) else value
         case Source.LOCATION:
             return _location_name(content, value, record)
+        case Source.CRAFT:
+            return content.craft(value).name if content.has_craft(value) else value
+        case Source.TRAIT_CATEGORY:
+            return content.trait_categories.get(value, value)
+        case Source.MODIFIER:
+            return value
         case _:
             return _WORDS.get(value, value)
 
@@ -359,6 +448,12 @@ def shown(content: GameContent, spec: FieldSpec, record: OverlayRecord) -> str:
         case FieldKind.LIST:
             named = [option_name(content, spec, part, record) for part in record.listed(spec.key)]
             return ", ".join(named) if named else "не выбрано"
+        case FieldKind.PAIRS:
+            shown_pairs = [
+                f"{option_name(content, spec, key, record)} {val}"
+                for key, val in record.pairs(spec.key)
+            ]
+            return ", ".join(shown_pairs) if shown_pairs else "не заполнено"
         case _:
             return value or "не заполнено"
 
@@ -390,11 +485,34 @@ def listing(content: GameContent, kind: OverlayKind) -> tuple[tuple[str, str], .
                 (enemy.id, f"{enemy.name} — {_WORDS.get(enemy.kind.value, enemy.kind.value)}")
                 for enemy in content.enemy_archetypes
             )
+        case OverlayKind.TRAIT:
+            return tuple(
+                (trait.id, f"{trait.name} — {content.trait_categories.get(trait.category, '—')}")
+                for trait in content.traits
+            )
+        case OverlayKind.CRAFT:
+            return tuple(
+                (craft.id, f"{craft.name} — {'сбор' if craft.gathers else 'работа'}")
+                for craft in content.crafts
+            )
+        case OverlayKind.RECIPE:
+            return tuple((recipe.id, _recipe_title(content, recipe)) for recipe in content.recipes)
         case _:
             return tuple(
                 (city.id, f"{city.name} — уровни с {city.level_min} по {city.level_max}")
                 for city in content.cities
             )
+
+
+def _recipe_title(content: GameContent, recipe: Recipe) -> str:
+    out = recipe.output_id
+    if content.has_item(recipe.output_id):
+        out = content.item(recipe.output_id).name
+    craft = recipe.craft_id
+    if content.has_craft(recipe.craft_id):
+        craft = content.craft(recipe.craft_id).name
+    tail = f" ×{recipe.output_count}" if recipe.output_count != 1 else ""
+    return f"{out}{tail} — {craft}"
 
 
 def _city_name(content: GameContent, city_id: str) -> str:
@@ -420,6 +538,13 @@ def snapshot(content: GameContent, kind: OverlayKind, entity_id: str) -> dict[st
         case OverlayKind.CITY if content.has_city(entity_id):
             city = content.city(entity_id)
             return {"name": city.name, "description": city.description}
+        case OverlayKind.TRAIT if content.has_trait(entity_id):
+            return _trait_fields(content.trait(entity_id))
+        case OverlayKind.CRAFT if content.has_craft(entity_id):
+            return _craft_fields(content.craft(entity_id))
+        case OverlayKind.RECIPE:
+            recipe = next((r for r in content.recipes if r.id == entity_id), None)
+            return _recipe_fields(recipe) if recipe is not None else {}
         case _:
             return {}
 
@@ -479,6 +604,40 @@ def _enemy_fields(enemy: EnemyArchetype) -> dict[str, str]:
 
 def _rate(value: float) -> str:
     return f"{value:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
+def _pairs_str(items: Iterable[tuple[str, str]]) -> str:
+    """Пары обратно в строку поля: «ключ=значение, ключ=значение»."""
+    return ", ".join(f"{key}={value}" for key, value in items)
+
+
+def _trait_fields(trait: Trait) -> dict[str, str]:
+    return {
+        "name": trait.name,
+        "category": trait.category,
+        "text": trait.text,
+        "modifiers": _pairs_str((key, _rate(value)) for key, value in trait.modifiers.items()),
+    }
+
+
+def _craft_fields(craft: Craft) -> dict[str, str]:
+    return {
+        "name": craft.name,
+        "kind": craft.kind.value,
+        "stat": craft.stat.value,
+        "description": craft.description,
+    }
+
+
+def _recipe_fields(recipe: Recipe) -> dict[str, str]:
+    return {
+        "craft": recipe.craft_id,
+        "rank": str(recipe.rank),
+        "inputs": _pairs_str((part.item_id, str(part.count)) for part in recipe.inputs),
+        "output": recipe.output_id,
+        "output_count": str(recipe.output_count),
+        "experience": str(recipe.experience),
+    }
 
 
 def held(
@@ -582,7 +741,30 @@ def _field_problems(
             unknown = [clipped(part) for part in record.listed(spec.key) if part not in allowed]
             if unknown:
                 return [f"{spec.name}: неизвестно — {clipped(', '.join(unknown), MAX_TEXT // 2)}."]
+        case FieldKind.PAIRS:
+            return _pairs_problems(content, record, spec, value)
     return []
+
+
+def _pairs_problems(
+    content: GameContent, record: OverlayRecord, spec: FieldSpec, value: str
+) -> list[str]:
+    raw_pairs = record.pairs(spec.key)
+    if not raw_pairs:
+        return [f"{spec.name}: нужны пары вида «ключ=число», а стоит «{clipped(value)}»."]
+    allowed = options(content, spec, record)
+    found: list[str] = []
+    unknown = [clipped(key) for key, _ in raw_pairs if key not in allowed]
+    if unknown:
+        found.append(f"{spec.name}: неизвестно — {clipped(', '.join(unknown), MAX_TEXT // 2)}.")
+    for key, val in raw_pairs:
+        if spec.pair_value is FieldKind.RATE and not _is_rate(val):
+            found.append(f"{spec.name}: у «{clipped(key)}» нужна доля, а стоит «{clipped(val)}».")
+        elif spec.pair_value is FieldKind.NUMBER and not _is_number(val):
+            found.append(
+                f"{spec.name}: у «{clipped(key)}» нужно целое число, а стоит «{clipped(val)}»."
+            )
+    return found
 
 
 def _shape_problems(content: GameContent, record: OverlayRecord) -> list[str]:
@@ -601,7 +783,47 @@ def _shape_problems(content: GameContent, record: OverlayRecord) -> list[str]:
         case OverlayKind.ENEMY:
             if not record.listed("biomes"):
                 return ["Противнику негде водиться: выберите хотя бы одну местность."]
+        case OverlayKind.TRAIT:
+            category = record.value("category")
+            if category and category not in content.trait_categories:
+                return [f"Раздел: «{clipped(category)}» такого нет."]
+        case OverlayKind.CRAFT:
+            return _craft_problems(record)
+        case OverlayKind.RECIPE:
+            return _recipe_problems(content, record)
     return []
+
+
+def _craft_problems(record: OverlayRecord) -> list[str]:
+    if record.value("kind") and record.value("kind") not in {one.value for one in CraftKind}:
+        return ["Что делает: выберите «сбор» или «работа»."]
+    if record.value("stat") and record.value("stat") not in {code.value for code in StatCode}:
+        return ["На чём держится: выберите характеристику из списка."]
+    return []
+
+
+def _recipe_problems(content: GameContent, record: OverlayRecord) -> list[str]:
+    found: list[str] = []
+    craft_id = record.value("craft")
+    if craft_id and not content.has_craft(craft_id):
+        found.append(f"Ремесло: «{clipped(craft_id)}» такого нет.")
+    elif craft_id and content.craft(craft_id).gathers:
+        found.append("Ремесло: рецепт вешают на работу, а это сбор.")
+    if record.value("output") and not content.has_item(record.value("output")):
+        found.append(f"Что выходит: «{clipped(record.value('output'))}» такой вещи нет.")
+    rank = record.number("rank")
+    if not 1 <= rank <= content.craft_rules.max_rank:
+        found.append(f"С какого ранга: от 1 до {content.craft_rules.max_rank}, а стоит {rank}.")
+    if record.value("output_count") and record.number("output_count") < 1:
+        found.append("Сколько за раз: меньше одного не выйдет.")
+    for key, raw in record.pairs("inputs"):
+        try:
+            count = int(raw)
+        except ValueError:
+            continue
+        if count < 1:
+            found.append(f"Из чего: «{clipped(key)}» — меньше одного не берут.")
+    return found
 
 
 def _quest_place_problems(content: GameContent, record: OverlayRecord) -> list[str]:
@@ -678,18 +900,35 @@ def apply(content: GameContent, records: Sequence[OverlayRecord]) -> GameContent
     if not records:
         return content
 
+    # Черты и ремёсла ни от чего не зависят — встают первыми. Рецепты зависят и от
+    # ремёсел (вешаются на «работу»), и от вещей, поэтому идут после ремёсел.
+    traits = _apply_traits(content, _good(content, records, OverlayKind.TRAIT))
+    crafts = _apply_crafts(content, _good(content, records, OverlayKind.CRAFT))
+
     cities = _apply_cities(content, _good(content, records, OverlayKind.CITY))
     cities = _apply_locations(cities, _good(content, records, OverlayKind.LOCATION))
     npcs = _apply_npcs(content, _good(content, records, OverlayKind.NPC))
-    staged = _rebuilt(content, cities=cities, npcs=npcs)
+    staged = _rebuilt(content, cities=cities, npcs=npcs, traits=traits, crafts=crafts)
 
     enemies = _apply_enemies(content, _good(staged, records, OverlayKind.ENEMY))
     # Противники встают до заданий, а не рядом с ними: задание может заказывать
     # именно того противника, которого смотритель завёл этой же панелью, и
     # проверять такое задание надо против мира, в котором тот уже есть.
-    staged = _rebuilt(content, cities=cities, npcs=npcs, enemies=enemies)
+    staged = _rebuilt(
+        content, cities=cities, npcs=npcs, traits=traits, crafts=crafts, enemies=enemies
+    )
     quests = _apply_quests(staged, npcs, _good(staged, records, OverlayKind.QUEST))
-    return _rebuilt(content, cities=cities, npcs=npcs, quests=quests, enemies=enemies)
+    recipes = _apply_recipes(staged, _good(staged, records, OverlayKind.RECIPE))
+    return _rebuilt(
+        content,
+        cities=cities,
+        npcs=npcs,
+        traits=traits,
+        crafts=crafts,
+        quests=quests,
+        enemies=enemies,
+        recipes=recipes,
+    )
 
 
 def _good(
@@ -707,11 +946,14 @@ def _rebuilt(
     npcs: Sequence[Npc],
     quests: Sequence[Quest] | None = None,
     enemies: Sequence[EnemyArchetype] | None = None,
+    traits: Sequence[Trait] | None = None,
+    crafts: Sequence[Craft] | None = None,
+    recipes: Sequence[Recipe] | None = None,
 ) -> GameContent:
     return GameContent.build(
         races=content.races,
         classes=content.classes,
-        traits=content.traits,
+        traits=content.traits if traits is None else traits,
         items=content.items,
         skills=content.skills,
         cities=cities,
@@ -719,6 +961,11 @@ def _rebuilt(
         slots=content.slots,
         weapon_types=content.weapon_types,
         armor_types=content.armor_types,
+        # Всё, что раньше молча терялось при любой правке: снаряжение глубокого
+        # спуска собиралось из этих справочников, а Палата спрашивала из turnings.
+        gear_tiers=content.gear_tiers,
+        gear_archetypes=content.gear_archetypes,
+        special_properties=content.special_properties,
         enemy_archetypes=content.enemy_archetypes if enemies is None else enemies,
         elite_titles=content.elite_titles,
         trait_categories=content.trait_categories,
@@ -726,9 +973,11 @@ def _rebuilt(
         rules=content.rules,
         craft_rules=content.craft_rules,
         quests=content.quests if quests is None else quests,
-        crafts=content.crafts,
-        recipes=content.recipes,
+        crafts=content.crafts if crafts is None else crafts,
+        recipes=content.recipes if recipes is None else recipes,
         npcs=npcs,
+        turnings=content.turnings,
+        open_turning_id=content.open_turning_id,
     )
 
 
@@ -875,6 +1124,84 @@ def _apply_enemies(
             loot=record.listed("loot"),
         )
     return tuple(by_id.values())
+
+
+def _apply_traits(content: GameContent, records: Sequence[OverlayRecord]) -> tuple[Trait, ...]:
+    dropped = {record.entity_id for record in records if record.removed}
+    by_id = {trait.id: trait for trait in content.traits if trait.id not in dropped}
+    for record in records:
+        if record.removed:
+            continue
+        by_id[record.entity_id] = _trait_from(content, record)
+    return tuple(by_id.values())
+
+
+def _trait_from(content: GameContent, record: OverlayRecord) -> Trait:
+    # Теги черты движок правил не читает (только её прибавки), но у написанной
+    # черты они есть, и правка имени их не роняет.
+    tags = content.trait(record.entity_id).tags if content.has_trait(record.entity_id) else ()
+    modifiers = {
+        key: float(raw.replace(",", ".")) for key, raw in record.pairs("modifiers") if _is_rate(raw)
+    }
+    return Trait(
+        id=record.entity_id,
+        name=record.value("name"),
+        category=record.value("category"),
+        tags=tags,
+        modifiers=modifiers,
+        text=record.value("text"),
+    )
+
+
+def _apply_crafts(content: GameContent, records: Sequence[OverlayRecord]) -> tuple[Craft, ...]:
+    dropped = {record.entity_id for record in records if record.removed}
+    by_id = {craft.id: craft for craft in content.crafts if craft.id not in dropped}
+    for record in records:
+        if record.removed:
+            continue
+        by_id[record.entity_id] = _craft_from(content, record)
+    return tuple(by_id.values())
+
+
+def _craft_from(content: GameContent, record: OverlayRecord) -> Craft:
+    # Находки сбора — вложенные списки биомов, их правят в ``crafts.toml``; правка
+    # из панели их сохраняет, а заведённое смотрителем ремесло начинается без них.
+    yields = content.craft(record.entity_id).yields if content.has_craft(record.entity_id) else ()
+    return Craft(
+        id=record.entity_id,
+        name=record.value("name"),
+        kind=CraftKind(record.value("kind")),
+        stat=StatCode(record.value("stat")),
+        description=record.value("description"),
+        yields=yields,
+    )
+
+
+def _apply_recipes(content: GameContent, records: Sequence[OverlayRecord]) -> tuple[Recipe, ...]:
+    dropped = {record.entity_id for record in records if record.removed}
+    by_id = {recipe.id: recipe for recipe in content.recipes if recipe.id not in dropped}
+    for record in records:
+        if record.removed:
+            continue
+        by_id[record.entity_id] = _recipe_from(record)
+    return tuple(by_id.values())
+
+
+def _recipe_from(record: OverlayRecord) -> Recipe:
+    inputs = tuple(
+        RecipeInput(item_id=item_id, count=int(raw))
+        for item_id, raw in record.pairs("inputs")
+        if _is_number(raw)
+    )
+    return Recipe(
+        id=record.entity_id,
+        craft_id=record.value("craft"),
+        rank=record.number("rank", 1),
+        inputs=inputs,
+        output_id=record.value("output"),
+        output_count=record.number("output_count", 1),
+        experience=record.number("experience"),
+    )
 
 
 def orphaned_biomes(content: GameContent) -> tuple[str, ...]:

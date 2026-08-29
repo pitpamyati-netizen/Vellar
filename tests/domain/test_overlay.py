@@ -15,6 +15,7 @@ from mmorpg.domain.entities import Character, GameContent
 from mmorpg.domain.entities.location import Enemy, EnemyKind
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.quest import ObjectiveKind, QuestLog
+from mmorpg.domain.rules import modifiers as modifier_rules
 from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules.overlay import FieldKind
@@ -590,3 +591,137 @@ def test_the_name_of_the_employer_is_asked_only_when_nobody_gives_it(
 
     alone = [spec.key for spec in overlay_rules.fields_for(_hunt(npc=""))]
     assert "giver" in alone
+
+
+# --- черты, ремёсла и рецепты -----------------------------------------
+
+
+def _trait_edit(content: GameContent, trait_id: str, **fields: str) -> OverlayRecord:
+    """Правка существующей черты: снимок плюс перечисленные поля."""
+    return OverlayRecord(
+        kind=OverlayKind.TRAIT,
+        entity_id=trait_id,
+        fields={**overlay_rules.snapshot(content, OverlayKind.TRAIT, trait_id), **fields},
+    )
+
+
+def test_a_keeper_edits_a_trait_bonus_and_the_engine_counts_it(content: GameContent) -> None:
+    edited = apply(content, _trait_edit(content, "berserker", modifiers="damage_percent=25"))
+
+    bundle = modifier_rules.trait_modifiers(edited, ["berserker"])
+    assert bundle["damage_percent"] == pytest.approx(25.0)
+
+
+def test_an_unknown_modifier_key_on_a_trait_is_refused(content: GameContent) -> None:
+    wrong = _trait_edit(content, "berserker", modifiers="damage_percent=10, moxie=5")
+
+    assert refused_for(content, wrong, "неизвестно")
+    # Ключ из EFFECTIVE_KEYS проходит, придуманный — нет.
+    assert accepted(content, _trait_edit(content, "berserker", modifiers="crit_chance_percent=5"))
+
+
+def test_a_keeper_invents_a_whole_trait(content: GameContent) -> None:
+    fresh = OverlayRecord(
+        kind=OverlayKind.TRAIT,
+        entity_id="keeper_trait_1",
+        fields={
+            "name": "Клеймо заставы",
+            "category": "combat",
+            "text": "Рука помнит стену.",
+            "modifiers": "accuracy_percent=4, dodge_percent=-2",
+        },
+    )
+    world = apply(content, fresh)
+
+    assert world.has_trait("keeper_trait_1")
+    assert "keeper_trait_1" in {trait.id for trait in world.traits_in_category("combat")}
+    assert modifier_rules.trait_modifiers(world, ["keeper_trait_1"])["accuracy_percent"] == 4
+
+
+def test_renaming_a_craft_keeps_its_gathering_yields(content: GameContent) -> None:
+    assert content.craft("mining").yields
+
+    snap = overlay_rules.snapshot(content, OverlayKind.CRAFT, "mining")
+    renamed = OverlayRecord(
+        kind=OverlayKind.CRAFT, entity_id="mining", fields={**snap, "name": "Рудокопство"}
+    )
+    world = apply(content, renamed)
+
+    assert world.craft("mining").name == "Рудокопство"
+    assert world.craft("mining").yields == content.craft("mining").yields
+
+
+def _recipe(**fields: str) -> OverlayRecord:
+    base = {
+        "craft": "smithing",
+        "rank": "2",
+        "inputs": "iron_scrap=3",
+        "output": "whetstone",
+        "output_count": "1",
+        "experience": "15",
+    }
+    return OverlayRecord(kind=OverlayKind.RECIPE, entity_id="keeper_recipe_1", fields=base | fields)
+
+
+def test_a_keeper_adds_a_recipe(content: GameContent) -> None:
+    world = apply(content, _recipe())
+
+    added = next(r for r in world.recipes_of("smithing") if r.id == "keeper_recipe_1")
+    assert added.output_id == "whetstone"
+    assert [(part.item_id, part.count) for part in added.inputs] == [("iron_scrap", 3)]
+
+
+def test_a_recipe_with_an_unknown_ingredient_is_refused(content: GameContent) -> None:
+    assert refused_for(content, _recipe(inputs="moondust=1"), "неизвестно")
+    assert "keeper_recipe_1" not in {
+        r.id for r in apply(content, _recipe(inputs="moondust=1")).recipes
+    }
+
+
+def test_a_recipe_cannot_hang_on_a_gathering_craft(content: GameContent) -> None:
+    assert refused_for(content, _recipe(craft="mining"), "сбор")
+
+
+def test_a_recipe_rank_stays_inside_the_ladder(content: GameContent) -> None:
+    assert refused_for(content, _recipe(rank="9"), "С какого ранга")
+    assert accepted(content, _recipe(rank=str(content.craft_rules.max_rank)))
+
+
+def test_a_recipe_names_its_other_bad_values(content: GameContent) -> None:
+    assert refused_for(content, _recipe(output="лунная пыль"), "такой вещи нет")
+    assert refused_for(content, _recipe(inputs="iron_scrap=0"), "меньше одного")
+    assert refused_for(content, _recipe(craft="кузня"), "такого нет")
+
+
+def test_a_craft_refuses_a_made_up_kind_or_stat(content: GameContent) -> None:
+    good = OverlayRecord(
+        kind=OverlayKind.CRAFT,
+        entity_id="keeper_craft_1",
+        fields={"name": "Дублёж", "kind": "making", "stat": "STR", "description": ""},
+    )
+    assert accepted(content, good)
+    assert refused_for(content, good.with_field("kind", "колдовство"), "сбор» или «работа")
+    assert refused_for(content, good.with_field("stat", "МОЩЬ"), "характеристику из списка")
+
+
+def test_a_trait_refuses_a_category_that_is_not_there(content: GameContent) -> None:
+    assert refused_for(content, _trait_edit(content, "berserker", category="небыль"), "такого нет")
+
+
+def test_a_pairs_field_is_shown_key_by_value(content: GameContent) -> None:
+    spec = next(s for s in overlay_rules.FIELDS[OverlayKind.TRAIT] if s.key == "modifiers")
+    record = _trait_edit(content, "berserker", modifiers="crit_chance_percent=5")
+
+    assert overlay_rules.shown(content, spec, record) == "crit_chance_percent 5"
+    empty = OverlayRecord(kind=OverlayKind.TRAIT, entity_id="keeper_trait_9")
+    assert overlay_rules.shown(content, spec, empty) == "не заполнено"
+
+
+def test_any_edit_keeps_turnings_and_deep_dungeon_gear(content: GameContent) -> None:
+    """Пересборка мира с правкой не роняет то, что в неё не передавали явно."""
+    world = apply(content, DOVEN)
+
+    assert world.turnings == content.turnings
+    assert world.open_turning_id == content.open_turning_id
+    assert world.gear_archetypes == content.gear_archetypes
+    assert world.gear_tiers == content.gear_tiers

@@ -36,6 +36,7 @@ from mmorpg.domain.entities.moderation import KeeperAction
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeStatus
 from mmorpg.domain.ports.repositories import User as Account
+from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules.keeper import GOLD_STEP
 from mmorpg.infrastructure.cache.memory import (
     InMemoryLocationStateCache,
@@ -339,6 +340,68 @@ async def test_rereading_the_edits_reports_how_many_there_are(
 
     assert registry.current.has_npc("keeper_npc_7")
     assert "Правок перечитано: 1." in keeper.sent.last.text()
+
+
+# --- черты, ремёсла и рецепты ----------------------------------------
+
+
+def _trait_field(key: str) -> str:
+    spec = next(s for s in overlay_rules.FIELDS[OverlayKind.TRAIT] if s.key == key)
+    return spec.name
+
+
+async def test_a_trait_bonus_is_typed_in_as_a_pair(
+    keeper: Keeper, registry: ContentRegistry, content: GameContent
+) -> None:
+    """Поле «ключ=число»: набранная пара ложится, не заменяя прибавки целиком."""
+    before = dict(content.trait("berserker").modifiers)
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_WORLD.text, "Черты")
+    await keeper.press(keeper.button_with(content.trait("berserker").name))
+    await keeper.press(keeper.button_with(_trait_field("modifiers")))
+    await keeper.press("crit_chance_percent=7")
+
+    mods = dict(registry.current.trait("berserker").modifiers)
+    assert mods["crit_chance_percent"] == 7
+    # Старые прибавки на месте: снимок их пред­заполнил, пара их не стёрла.
+    assert mods["damage_percent"] == before["damage_percent"]
+
+
+async def test_a_pair_is_taken_off_by_pressing_its_row(
+    keeper: Keeper, registry: ContentRegistry, content: GameContent
+) -> None:
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_WORLD.text, "Черты")
+    await keeper.press(keeper.button_with(content.trait("berserker").name))
+    await keeper.press(keeper.button_with(_trait_field("modifiers")))
+    await keeper.press("armor_percent=3")
+    assert registry.current.trait("berserker").modifiers.get("armor_percent") == 3
+
+    await keeper.press(keeper.button_with("armor_percent = 3"))
+
+    assert "armor_percent" not in registry.current.trait("berserker").modifiers
+
+
+async def test_a_recipe_is_created_and_its_composition_typed_in(
+    keeper: Keeper,
+    overlays: InMemoryContentOverlayRepository,
+    registry: ContentRegistry,
+    content: GameContent,
+) -> None:
+    inputs_field = next(s for s in overlay_rules.FIELDS[OverlayKind.RECIPE] if s.key == "inputs")
+    output_field = next(s for s in overlay_rules.FIELDS[OverlayKind.RECIPE] if s.key == "output")
+    out_name = content.item("iron_scrap").name
+
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_WORLD.text, "Рецепты")
+    await keeper.press(labels.KEEPER_ADD.text)
+    await keeper.press(keeper.button_with(inputs_field.name), "iron_scrap=2")
+    # Поле «ключ=число» не разматывается само — за парой набирают следующую.
+    await keeper.press(labels.BACK.text)
+    await keeper.press(keeper.button_with(output_field.name))
+    await keeper.press(keeper.button_with(out_name))
+
+    stored = [record for record in await overlays.all() if record.kind is OverlayKind.RECIPE]
+    assert stored and stored[0].pairs("inputs") == (("iron_scrap", "2"),)
+    made = next(r for r in registry.current.recipes_of("smithing") if r.id == stored[0].entity_id)
+    assert made.output_id == "iron_scrap"
 
 
 # --- чужой персонаж ----------------------------------------------------

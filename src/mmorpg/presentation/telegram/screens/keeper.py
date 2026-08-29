@@ -79,6 +79,9 @@ KINDS: tuple[OverlayKind, ...] = (
     OverlayKind.LOCATION,
     OverlayKind.ENEMY,
     OverlayKind.CITY,
+    OverlayKind.TRAIT,
+    OverlayKind.CRAFT,
+    OverlayKind.RECIPE,
 )
 
 
@@ -359,6 +362,8 @@ def field_screen(
 
     if spec.kind in {FieldKind.CHOICE, FieldKind.LIST}:
         return _choice_screen(content, record, spec, state, lead)
+    if spec.kind is FieldKind.PAIRS:
+        return _pairs_screen(content, record, spec, state, lead)
 
     rows: list[tuple[Label, ...]] = []
     if spec.kind is FieldKind.FLAG:
@@ -380,6 +385,11 @@ def _how_to_fill(spec: FieldSpec) -> str:
             return "Нажимайте варианты: нажатое добавляется, нажатое второй раз убирается."
         case FieldKind.CHOICE:
             return "Нажмите вариант из списка."
+        case FieldKind.PAIRS:
+            return (
+                "Наберите «ключ=число» сообщением: новая пара добавится, та же — "
+                "заменится. Нажмите строку из списка, чтобы её убрать."
+            )
         case _:
             return "Наберите значение сообщением. Оно заменит то, что стоит сейчас."
 
@@ -433,6 +443,54 @@ def option_from_button(
         name = overlay_rules.option_name(content, spec, value, record)
         if option_button(index, name, chosen=value in picked).matches(pressed):
             return value
+    return None
+
+
+def _pair_button(
+    content: GameContent,
+    spec: FieldSpec,
+    record: OverlayRecord,
+    index: int,
+    key: str,
+    value: str,
+) -> Label:
+    name = overlay_rules.option_name(content, spec, key, record)
+    return label(numbered(index, f"{name} = {value}"))
+
+
+def _pairs_screen(
+    content: GameContent,
+    record: OverlayRecord,
+    spec: FieldSpec,
+    state: PageState,
+    lead: Sequence[str],
+) -> Screen:
+    entries = [
+        ListEntry(
+            key=key,
+            text=_pair_button(content, spec, record, index, key, value).text,
+        )
+        for index, (key, value) in enumerate(record.pairs(spec.key), start=1)
+    ]
+    return paginated_screen(
+        screen_id=ScreenId.KEEPER_FIELD,
+        title=spec.name,
+        entries=entries,
+        state=state,
+        lead_lines=tuple(lead),
+        empty_text="Пар пока нет. Наберите «ключ=число» сообщением.",
+        extra_rows=(),
+        show_filters=False,
+    )
+
+
+def pair_from_button(
+    content: GameContent, record: OverlayRecord, spec: FieldSpec, pressed: str
+) -> str | None:
+    """Ключ пары, по кнопке которой нажали, — чтобы её убрать."""
+    for index, (key, value) in enumerate(record.pairs(spec.key), start=1):
+        if _pair_button(content, spec, record, index, key, value).matches(pressed):
+            return key
     return None
 
 
