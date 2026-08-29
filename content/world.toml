@@ -6,6 +6,9 @@
 #   - внутри города границы растут монотонно, между локациями нет пробелов
 #   - полосы городов перекрываются, поэтому всегда есть и где подкопить, и куда
 #     рваться
+#   - у каждого города список [[city.dungeon]]: не меньше четырёх обычных
+#     вразброс по его полосе и ровно одно "deep = true" на level_max (ADR 0041);
+#     id подземелья - замороженный ключ, кормит сид захода
 #
 # Четвёртая локация каждого города - вольная: там игроки могут нападать друг на
 # друга ("pvp = true"), а правила этого лежат в domain/rules/pvp.py. Всякая другая
@@ -34,9 +37,41 @@ unlock_level = 1
 unlock_requires = []
 services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "chamber"]
 
-[city.deep_dungeon]
+[[city.dungeon]]
+id = "farhold_badger_runs"
+name = "Барсучьи ходы"
+flavour = "Звериные норы, которые расширили те, кто прятал в них припас."
+biome = "рудник"
+level = 5
+
+[[city.dungeon]]
+id = "farhold_first_adit"
+name = "Первая штольня"
+flavour = "Её били ещё до Договора и бросили, когда порода пошла пустая."
+biome = "штольни"
+level = 12
+
+[[city.dungeon]]
+id = "farhold_roadside_vaults"
+name = "Придорожные склепы"
+flavour = "Хоронили обозников, не доехавших до заставы; за оградой давно не смотрят."
+biome = "катакомбы"
+level = 19
+
+[[city.dungeon]]
+id = "farhold_wet_galleries"
+name = "Мокрые галереи"
+flavour = "Вода точит известняк, и ходы уводят глубже, чем кто-либо мерил."
+biome = "глубокие пещеры"
+level = 26
+
+[[city.dungeon]]
+id = "farhold_flooded_drift"
 name = "Затопленный штрек"
 flavour = "Нижняя выработка ушла под воду; воздух в ней держат помпой, и то не везде."
+biome = "затопленные ходы"
+level = 30
+deep = true
 
 [[city.location]]
 id = "quiet_meadows"
@@ -90,9 +125,41 @@ unlock_level = 24
 unlock_requires = ["city:farhold"]
 services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "chamber"]
 
-[city.deep_dungeon]
+[[city.dungeon]]
+id = "dusk_harbor_bilge_ways"
+name = "Трюмные ходы"
+flavour = "Прорыты между затопленных складов; вода стоит по колено и не уходит."
+biome = "затопленные ходы"
+level = 28
+
+[[city.dungeon]]
+id = "dusk_harbor_drowned_vaults"
+name = "Подмытые склепы"
+flavour = "Море подобралось к старому кладбищу, и часть плит ушла под воду."
+biome = "катакомбы"
+level = 35
+
+[[city.dungeon]]
+id = "dusk_harbor_smuggler_caves"
+name = "Пещеры мимо весов"
+flavour = "В них держали товар, пока на заставе считали другой."
+biome = "глубокие пещеры"
+level = 43
+
+[[city.dungeon]]
+id = "dusk_harbor_cliff_adits"
+name = "Штольни в Обрыве"
+flavour = "Били за солью и известью; крепь местами держит, местами нет."
+biome = "штольни"
+level = 50
+
+[[city.dungeon]]
+id = "dusk_harbor_grottos"
 name = "Гроты под Обрывом"
 flavour = "Ходы, в которых прятали товар мимо весов; часть завалило, часть нет."
+biome = "глубокие пещеры"
+level = 54
+deep = true
 
 [[city.location]]
 id = "fisher_piers"
@@ -146,9 +213,41 @@ unlock_level = 48
 unlock_requires = ["city:dusk_harbor"]
 services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "chamber"]
 
-[city.deep_dungeon]
+[[city.dungeon]]
+id = "stonedale_upper_adits"
+name = "Верхние штольни"
+flavour = "Ближние к дневному свету; порода тут выбрана до пустого."
+biome = "штольни"
+level = 52
+
+[[city.dungeon]]
+id = "stonedale_granite_pit"
+name = "Гранитный забой"
+flavour = "Камень отсюда шёл на ступени; теперь берут только те, кому больше негде."
+biome = "рудник"
+level = 58
+
+[[city.dungeon]]
+id = "stonedale_wind_hollows"
+name = "Полости Ущелья"
+flavour = "Ветер выл в них так, что артель ушла, не докопав."
+biome = "глубокие пещеры"
+level = 65
+
+[[city.dungeon]]
+id = "stonedale_miners_rest"
+name = "Покой Рудокопов"
+flavour = "Здесь клали тех, кого завалило; ниши идут в три яруса."
+biome = "катакомбы"
+level = 72
+
+[[city.dungeon]]
+id = "stonedale_abandoned_adits"
 name = "Брошенные штольни"
 flavour = "Крепь сгнила, породу отсюда больше не берут — а спускаются всё равно."
+biome = "штольни"
+level = 76
+deep = true
 
 [[city.location]]
 id = "dale_screes"
@@ -202,9 +301,41 @@ unlock_level = 70
 unlock_requires = ["city:stonedale"]
 services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "chamber"]
 
-[city.deep_dungeon]
+[[city.dungeon]]
+id = "copper_cross_ore_drifts"
+name = "Рудные штреки"
+flavour = "Медь тут ещё есть, но возить её дороже, чем она стоит."
+biome = "рудник"
+level = 73
+
+[[city.dungeon]]
+id = "copper_cross_old_workings"
+name = "Старые выработки"
+flavour = "Их бросили, когда рядом пробили новый ствол."
+biome = "штольни"
+level = 80
+
+[[city.dungeon]]
+id = "copper_cross_undertown"
+name = "Подмостье"
+flavour = "Литейщики жили под цехами, чтобы не ходить на мороз; жильё осталось, люди нет."
+biome = "подземный город"
+level = 87
+
+[[city.dungeon]]
+id = "copper_cross_slag_caves"
+name = "Шлаковые пещеры"
+flavour = "Горячий шлак сливали в карст, и порода в них до сих пор тёплая."
+biome = "глубокие пещеры"
+level = 94
+
+[[city.dungeon]]
+id = "copper_cross_lower_furnaces"
 name = "Нижние печи"
 flavour = "Литейные ямы под остывшими плавильнями; шлак местами ещё тёплый."
+biome = "штольни"
+level = 98
+deep = true
 
 [[city.location]]
 id = "trade_road"
@@ -258,9 +389,41 @@ unlock_level = 92
 unlock_requires = ["city:copper_cross"]
 services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "chamber"]
 
-[city.deep_dungeon]
+[[city.dungeon]]
+id = "quiet_fords_river_drains"
+name = "Водоотводы"
+flavour = "Их били, чтобы отвести реку от полей; река нашла другой путь."
+biome = "затопленные ходы"
+level = 95
+
+[[city.dungeon]]
+id = "quiet_fords_bank_barrows"
+name = "Курганные ходы"
+flavour = "Насыпи связаны подземными переходами; кто и зачем — не записано."
+biome = "катакомбы"
+level = 102
+
+[[city.dungeon]]
+id = "quiet_fords_karst_sink"
+name = "Провальные пещеры"
+flavour = "Река ушла под землю, и за ней ушли те, кто её ловил."
+biome = "глубокие пещеры"
+level = 109
+
+[[city.dungeon]]
+id = "quiet_fords_sunken_ward"
+name = "Затопленный квартал"
+flavour = "Нижний посад ушёл под воду за одну весну; крыши ещё торчат."
+biome = "подземный город"
+level = 115
+
+[[city.dungeon]]
+id = "quiet_fords_temple_crypt"
 name = "Крипта под Храмом"
 flavour = "Вода стоит по грудь, свод держится на трёх колоннах из семи."
+biome = "катакомбы"
+level = 118
+deep = true
 
 [[city.location]]
 id = "willow_shoals"
@@ -314,9 +477,41 @@ unlock_level = 113
 unlock_requires = ["city:quiet_fords"]
 services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "chamber"]
 
-[city.deep_dungeon]
+[[city.dungeon]]
+id = "salt_ridge_chalk_adits"
+name = "Меловые штольни"
+flavour = "Мел брали на побелку; ходы белые и крошатся под рукой."
+biome = "штольни"
+level = 116
+
+[[city.dungeon]]
+id = "salt_ridge_brine_pit"
+name = "Рассольный забой"
+flavour = "Соль тут добывают выпаркой, а раньше рубили киркой — забой остался."
+biome = "рудник"
+level = 122
+
+[[city.dungeon]]
+id = "salt_ridge_salt_caves"
+name = "Соляные пещеры"
+flavour = "Вода выела в извести залы, где стены на вкус горькие."
+biome = "глубокие пещеры"
+level = 128
+
+[[city.dungeon]]
+id = "salt_ridge_caravan_tombs"
+name = "Гробницы Водовозов"
+flavour = "Погибших на тракте солили и клали здесь до весны; иных не забрали."
+biome = "катакомбы"
+level = 134
+
+[[city.dungeon]]
+id = "salt_ridge_salt_ways"
 name = "Соляные ходы"
 flavour = "Выедены водой в извести; соль отсюда возят до сих пор, только глубже."
+biome = "штольни"
+level = 138
+deep = true
 
 [[city.location]]
 id = "chalk_terraces"
@@ -370,9 +565,41 @@ unlock_level = 133
 unlock_requires = ["city:salt_ridge"]
 services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "chamber"]
 
-[city.deep_dungeon]
+[[city.dungeon]]
+id = "crimson_wharf_hull_ways"
+name = "Ходы в остовах"
+flavour = "Корпуса легли друг на друга, и внутри держится воздух и вода."
+biome = "затопленные ходы"
+level = 136
+
+[[city.dungeon]]
+id = "crimson_wharf_drowned_yard"
+name = "Подтопленный погост"
+flavour = "Хоронили у самой воды; теперь до плит добираются вплавь."
+biome = "катакомбы"
+level = 142
+
+[[city.dungeon]]
+id = "crimson_wharf_tide_caves"
+name = "Приливные пещеры"
+flavour = "Их заливает дважды в день, и между приливами есть время дойти и вернуться."
+biome = "глубокие пещеры"
+level = 148
+
+[[city.dungeon]]
+id = "crimson_wharf_underwharf"
+name = "Подпирсье"
+flavour = "Грузчики жили под настилом; часть свай сгнила, часть держит."
+biome = "подземный город"
+level = 153
+
+[[city.dungeon]]
+id = "crimson_wharf_reef_hulks"
 name = "Остовы на Рифах"
 flavour = "Разбитые корпуса легли друг на друга, и внутри ещё держится воздух."
+biome = "затопленные ходы"
+level = 157
+deep = true
 
 [[city.location]]
 id = "tar_docks"
@@ -426,9 +653,41 @@ unlock_level = 152
 unlock_requires = ["city:crimson_wharf"]
 services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "chamber"]
 
-[city.deep_dungeon]
+[[city.dungeon]]
+id = "glass_hollow_fused_caves"
+name = "Спёкшиеся пещеры"
+flavour = "Жар оплавил породу, и стены в них гладкие, как лёд."
+biome = "глубокие пещеры"
+level = 155
+
+[[city.dungeon]]
+id = "glass_hollow_prospect_adits"
+name = "Разведочные штольни"
+flavour = "Их били в поисках стекла, годного на продажу; годного мало."
+biome = "штольни"
+level = 161
+
+[[city.dungeon]]
+id = "glass_hollow_crater_tombs"
+name = "Склепы у Воронки"
+flavour = "Клали тех, кто искал в кратере и не вернулся."
+biome = "катакомбы"
+level = 167
+
+[[city.dungeon]]
+id = "glass_hollow_underhollow"
+name = "Осколье"
+flavour = "Артель зимовала под землёй целыми семьями; печи ещё стоят."
+biome = "подземный город"
+level = 172
+
+[[city.dungeon]]
+id = "glass_hollow_glass_cavities"
 name = "Стеклянные полости"
-flavour = "Пустоты в спёкшейся породе; края режут не хуже ножа."
+flavour = "Полости в спёкшейся породе; края режут не хуже ножа."
+biome = "глубокие пещеры"
+level = 176
+deep = true
 
 [[city.location]]
 id = "glass_fields"
@@ -482,9 +741,41 @@ unlock_level = 171
 unlock_requires = ["city:glass_hollow"]
 services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "chamber"]
 
-[city.deep_dungeon]
+[[city.dungeon]]
+id = "winter_march_meltways"
+name = "Талые ходы"
+flavour = "Летом их топит, зимой сковывает; проходят по льду."
+biome = "затопленные ходы"
+level = 174
+
+[[city.dungeon]]
+id = "winter_march_frost_adits"
+name = "Мёрзлые штольни"
+flavour = "Порода в них не оттаивает даже у входа."
+biome = "штольни"
+level = 179
+
+[[city.dungeon]]
+id = "winter_march_ice_caves"
+name = "Ледяные пещеры"
+flavour = "Их держит мороз; в оттепель свод трещит."
+biome = "глубокие пещеры"
+level = 185
+
+[[city.dungeon]]
+id = "winter_march_garrison_vaults"
+name = "Караульные склепы"
+flavour = "Гарнизон не хоронил мёртвых в мёрзлой земле — складывал под казармой."
+biome = "катакомбы"
+level = 190
+
+[[city.dungeon]]
+id = "winter_march_underice"
 name = "Подлёдные галереи"
 flavour = "Пробиты во льду и держатся, пока держит мороз."
+biome = "глубокие пещеры"
+level = 194
+deep = true
 
 [[city.location]]
 id = "snow_dells"
@@ -538,9 +829,41 @@ unlock_level = 189
 unlock_requires = ["city:winter_march"]
 services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "chamber"]
 
-[city.deep_dungeon]
+[[city.dungeon]]
+id = "ashen_gates_cinder_adits"
+name = "Пепельные штольни"
+flavour = "Уголь и серу брали отсюда на кузни; воздух сухой и колючий."
+biome = "штольни"
+level = 192
+
+[[city.dungeon]]
+id = "ashen_gates_slag_pit"
+name = "Шлаковый забой"
+flavour = "Руду плавили на месте; забой затянут коркой остывшего металла."
+biome = "рудник"
+level = 198
+
+[[city.dungeon]]
+id = "ashen_gates_burn_hollows"
+name = "Прогарные полости"
+flavour = "Огонь ушёл под землю и выел ходы, кое-где ещё дышащие жаром."
+biome = "глубокие пещеры"
+level = 204
+
+[[city.dungeon]]
+id = "ashen_gates_forge_undercroft"
+name = "Подкузнечье"
+flavour = "Кузнецы жили при печах, чтобы не гасить их на ночь."
+biome = "подземный город"
+level = 209
+
+[[city.dungeon]]
+id = "ashen_gates_burnways"
 name = "Прогары"
 flavour = "Огонь ушёл под землю и выел в породе ходы; кое-где они ещё дышат жаром."
+biome = "глубокие пещеры"
+level = 213
+deep = true
 
 [[city.location]]
 id = "ash_fields"
@@ -594,9 +917,41 @@ unlock_level = 208
 unlock_requires = ["city:ashen_gates"]
 services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "chamber"]
 
-[city.deep_dungeon]
+[[city.dungeon]]
+id = "thunder_range_ledge_adits"
+name = "Штольни в Уступах"
+flavour = "Били вдоль полок скалы; ветер выдувает из них лампы."
+biome = "штольни"
+level = 211
+
+[[city.dungeon]]
+id = "thunder_range_split_caves"
+name = "Пещеры в Расколе"
+flavour = "Гора треснула, и в трещину ушли ходы старой выработки."
+biome = "глубокие пещеры"
+level = 216
+
+[[city.dungeon]]
+id = "thunder_range_iron_pit"
+name = "Железный забой"
+flavour = "Молнии бьют в жилу так часто, что руда в ней спёкшаяся."
+biome = "рудник"
+level = 221
+
+[[city.dungeon]]
+id = "thunder_range_watch_tombs"
+name = "Склепы Дозорных"
+flavour = "Тех, кто следил за перевалом, клали в скалу рядом с постом."
+biome = "катакомбы"
+level = 226
+
+[[city.dungeon]]
+id = "thunder_range_peak_cavities"
 name = "Полости в Пике"
 flavour = "Пещеры внутри расколотой горы, куда бьёт с обеих сторон."
+biome = "глубокие пещеры"
+level = 230
+deep = true
 
 [[city.location]]
 id = "storm_ledges"
@@ -650,9 +1005,41 @@ unlock_level = 226
 unlock_requires = ["city:thunder_range"]
 services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "chamber"]
 
-[city.deep_dungeon]
+[[city.dungeon]]
+id = "azure_halls_clerks_undercroft"
+name = "Подпалатье"
+flavour = "Писцы жили под галереями, чтобы не носить списки по лестницам."
+biome = "подземный город"
+level = 229
+
+[[city.dungeon]]
+id = "azure_halls_ledger_vaults"
+name = "Склепы Учёта"
+flavour = "Здесь клали чиновников вместе с их печатями; печати ценят до сих пор."
+biome = "катакомбы"
+level = 234
+
+[[city.dungeon]]
+id = "azure_halls_foundation_adits"
+name = "Штольни Основания"
+flavour = "Их били, проверяя скалу под башнями; проверка затянулась на век."
+biome = "штольни"
+level = 239
+
+[[city.dungeon]]
+id = "azure_halls_cistern_caves"
+name = "Пещеры Водохранилища"
+flavour = "Город берёт воду отсюда; вниз по течению за ней уже не ходят."
+biome = "глубокие пещеры"
+level = 244
+
+[[city.dungeon]]
+id = "azure_halls_chamber_cellars"
 name = "Подвалы Палаты"
 flavour = "Списки, которые не сожгли и наверх не подняли."
+biome = "подземный город"
+level = 248
+deep = true
 
 [[city.location]]
 id = "azure_terraces"
@@ -706,9 +1093,41 @@ unlock_level = 244
 unlock_requires = ["city:azure_halls"]
 services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "chamber"]
 
-[city.deep_dungeon]
+[[city.dungeon]]
+id = "bone_marches_spoil_vaults"
+name = "Склепы Отвалов"
+flavour = "Кости из отвалов складывали обратно в землю, но глубже."
+biome = "катакомбы"
+level = 247
+
+[[city.dungeon]]
+id = "bone_marches_undermarch"
+name = "Подмостье Мглина"
+flavour = "Нижний город строили над ямами и под ними разом."
+biome = "подземный город"
+level = 252
+
+[[city.dungeon]]
+id = "bone_marches_pit_drains"
+name = "Водоотводы Ям"
+flavour = "Их били, чтобы моровая вода не поднималась к жилью."
+biome = "затопленные ходы"
+level = 257
+
+[[city.dungeon]]
+id = "bone_marches_lime_caves"
+name = "Известковые пещеры"
+flavour = "Известью пересыпали умерших; в пещерах её брали до сих пор."
+biome = "глубокие пещеры"
+level = 262
+
+[[city.dungeon]]
+id = "bone_marches_pit_ways"
 name = "Ходы под Ямами"
 flavour = "Копали под моровыми ямами, чтобы возить, не поднимая на воздух."
+biome = "подземный город"
+level = 266
+deep = true
 
 [[city.location]]
 id = "bone_fields"
@@ -762,9 +1181,41 @@ unlock_level = 262
 unlock_requires = ["city:bone_marches"]
 services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "chamber"]
 
-[city.deep_dungeon]
+[[city.dungeon]]
+id = "obsidian_throne_stair_adits"
+name = "Штольни под Ступенями"
+flavour = "Их били, укрепляя парадный вход; укрепили не везде."
+biome = "штольни"
+level = 265
+
+[[city.dungeon]]
+id = "obsidian_throne_hall_caves"
+name = "Пещеры под Анфиладами"
+flavour = "Полости в скале, на которые давят верхние залы."
+biome = "глубокие пещеры"
+level = 270
+
+[[city.dungeon]]
+id = "obsidian_throne_undercourt"
+name = "Подтронье"
+flavour = "Двор жил под двором: прислуга, кузни, склады — всё под полом."
+biome = "подземный город"
+level = 275
+
+[[city.dungeon]]
+id = "obsidian_throne_court_tombs"
+name = "Склепы Двора"
+flavour = "Знать клали ближе к залу, чем к небу."
+biome = "катакомбы"
+level = 279
+
+[[city.dungeon]]
+id = "obsidian_throne_hall_sink"
 name = "Провал под Залом"
 flavour = "Тронный зал просел, и под ним открылось то, на чём он стоял."
+biome = "глубокие пещеры"
+level = 283
+deep = true
 
 [[city.location]]
 id = "grand_stairs"
@@ -818,9 +1269,41 @@ unlock_level = 279
 unlock_requires = ["city:obsidian_throne"]
 services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "chamber"]
 
-[city.deep_dungeon]
+[[city.dungeon]]
+id = "last_beacon_cape_adits"
+name = "Штольни Мыса"
+flavour = "Их били в скале под маяком, чтобы знать, на чём он стоит."
+biome = "штольни"
+level = 282
+
+[[city.dungeon]]
+id = "last_beacon_rift_caves"
+name = "Пещеры Разлома"
+flavour = "Старый разлом уходит вниз дальше, чем светит любая лампа."
+biome = "глубокие пещеры"
+level = 287
+
+[[city.dungeon]]
+id = "last_beacon_sea_ways"
+name = "Морские ходы"
+flavour = "Их заливает в шторм; между штормами по ним возят то, что не хотят показывать."
+biome = "затопленные ходы"
+level = 292
+
+[[city.dungeon]]
+id = "last_beacon_keepers_vaults"
+name = "Склепы Смотрителей"
+flavour = "Тех, кто держал маяк, клали у его основания."
+biome = "катакомбы"
+level = 296
+
+[[city.dungeon]]
+id = "last_beacon_base_ways"
 name = "Основание Маяка"
 flavour = "Ходы в скале, на которой держится последняя башня дороги."
+biome = "штольни"
+level = 300
+deep = true
 
 [[city.location]]
 id = "last_cape"

@@ -59,7 +59,7 @@ from mmorpg.domain.entities.dice import Dice
 from mmorpg.domain.entities.effects import ActiveEffect, EffectStack, status_effect
 from mmorpg.domain.entities.location import Enemy
 from mmorpg.domain.entities.stats import StatCode
-from mmorpg.domain.entities.statuses import StatusKind, status_spec
+from mmorpg.domain.entities.statuses import DOT_STATUSES, StatusKind, status_spec
 from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.procgen.enemies import RANK_FACTORS, group_scale
 from mmorpg.domain.procgen.seeds import derive, rng, to_int
@@ -1570,8 +1570,9 @@ def _accuracy_of(content: GameContent, roster: Mapping[int, Character], one: Com
 def _dodge_of(content: GameContent, roster: Mapping[int, Character], one: Combatant) -> float:
     if one.is_hero and (character := roster.get(one.id)) is not None:
         return derived_stats(content, character, one.effects).dodge
-    # У породы уклонения нет: её защита - броня и здоровье.
-    return 0.0
+    # У породы своего уклонения нет: её защита - броня и здоровье. Прозвище
+    # («Верткий» и подобные) может его дать эффектом (ADR 0042).
+    return one.effects.modifiers().get("dodge_percent", 0.0)
 
 
 def _armor_of(content: GameContent, roster: Mapping[int, Character], one: Combatant) -> float:
@@ -1833,6 +1834,11 @@ def _strike(
             True,
         )
 
+    if not answering and actor.enemy is not None and actor.enemy.affixes:
+        working = _affix_on_hit(
+            content, working, attacker=actor, target=hurt, amount=amount, source=source
+        )
+
     if not answering and lost:
         working = _answered(
             content,
@@ -1845,6 +1851,48 @@ def _strike(
             source=source,
         )
     return working, True
+
+
+def _affix_on_hit(
+    content: GameContent,
+    state: BattleState,
+    *,
+    attacker: Combatant,
+    target: Combatant,
+    amount: int,
+    source: random.Random,
+) -> BattleState:
+    """Прозвище-модификатор породы, срабатывающее по попаданию (ADR 0042).
+
+    «Гнилозубый» травит, «Стылый» студит, «Измождённый» вешает немощь - и только
+    на состоявшийся удар, а не на ответный (``answering``): размен статусов не
+    должен множиться.
+    """
+    if attacker.enemy is None:
+        return state
+    working = state
+    for affix_id in attacker.enemy.affixes:
+        if not content.has_affix(affix_id):
+            continue
+        affix = content.affix(affix_id)
+        if affix.on_hit_status is None:
+            continue
+        if source.uniform(0, 100) >= affix.on_hit_chance:
+            continue
+        if affix.on_hit_status in DOT_STATUSES:
+            magnitude = affix.on_hit_magnitude or max(1.0, amount * DOT_SHARE)
+        else:
+            magnitude = affix.on_hit_magnitude
+        working = _inflicted(
+            working,
+            target.id,
+            Inflict(kind=affix.on_hit_status, turns=max(1, affix.on_hit_turns)),
+            power=0.0,
+            skill_name=affix.adjective,
+            source_code=f"affix:{affix_id}",
+            magnitude=magnitude,
+        )
+    return working
 
 
 def _answered(

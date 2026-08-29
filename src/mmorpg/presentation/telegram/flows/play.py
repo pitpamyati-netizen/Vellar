@@ -18,7 +18,7 @@ from dataclasses import replace
 
 from mmorpg import economy_log
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import City, GameContent, Item
+from mmorpg.domain.entities.content import City, Dungeon, GameContent, Item
 from mmorpg.domain.entities.location import (
     GeneratedLocation,
     LocationState,
@@ -218,7 +218,7 @@ def dungeon_run_seed(world_seed: str, descent: Descent) -> bytes:
     return dungeon_rules.run_seed(
         world_seed,
         descent.city_id,
-        descent.tier,
+        descent.dungeon_id,
         dungeon_rules.difficulty_of(descent.difficulty),
         descent.started_at,
     )
@@ -229,45 +229,25 @@ def descent_fight_seed(world_seed: str, descent: Descent) -> bytes:
     return derive(dungeon_run_seed(world_seed, descent), "room", descent.layer)
 
 
-def deep_dungeon_open(city: City, character: Character) -> bool:
-    """Открыт ли глубокий спуск: тому, кто добрался до последней локации города.
+def dungeon_open(city: City, character: Character, dungeon: Dungeon) -> bool:
+    """Открыт ли этот спуск игроку (ADR 0041).
 
-    Не зеркало игрока (ADR 0019): у глубокого спуска свой уровень -
-    ``city.level_max``, - а порог входа - та же земля, самая глубокая локация
-    города. Пока до неё не дорос, ниже прежнего дна ходить незачем и не по чему.
+    У глубокого спуска порог - не его уровень, а та же земля, самая глубокая
+    локация города (ADR 0019): пока до неё не дорос, ниже прежнего дна ходить
+    незачем и не по чему. Обычный спуск открывает своё ``unlock_level`` - у
+    большинства это ноль, то есть он открыт вместе с городом.
     """
-    return character.level >= city.locations[-1].level_min
+    return dungeon_rules.dungeon_unlocked(
+        deep=dungeon.deep,
+        unlock_level=dungeon.unlock_level,
+        char_level=character.level,
+        deep_threshold=city.locations[-1].level_min,
+    )
 
 
-def dungeon_level(
-    content: GameContent, character: Character, city_id: str, *, deep: bool = False
-) -> int:
-    """Уровень спуска. Его решает город, а не тот, кто в него спускается.
-
-    Спуск был зеркалом: ``character.level + 1``, всегда на голову выше игрока и
-    всегда внутри полосы города. Из-за этого штраф за бой ниже своего уровня —
-    единственный тормоз, который есть у опыта (``progression.experience_reward``),
-    — в подземелье не срабатывал никогда: противник рос ровно так же быстро, как
-    игрок. Считанное по живой игре: девяносто четыре процента опыта одного
-    персонажа пришло из спусков, тридцать уровней за сутки, не выходя из одного
-    города, — а пятнадцать городов и их пороги входа при этом ничего не решали.
-
-    Теперь спуск идёт по земле самой глубокой локации города, до которой игрок
-    дорос: у него свой уровень, как у локации, и вырасти вместе с игроком он не
-    может. Пока игрок внутри полосы — спуск ему по росту; как только он её
-    перерос, спуск платит ровно столько, сколько платит переросшая локация, и
-    дорога ведёт в следующий город. Ниже уровня игрока спуск бывает, выше —
-    нет: три схватки подряд без передышки опасны сами по себе.
-    """
-    city = content.city(city_id)
-    if deep:
-        # Глубокий спуск идёт по верхней границе полосы города и с игроком не
-        # растёт: он тут ровно за тем, чтобы платить по своему уровню, а не по
-        # уровню вошедшего (ADR 0028).
-        return city.level_max
-    reached = [place for place in city.locations if character.level >= place.level_min]
-    deepest = reached[-1] if reached else city.locations[0]
-    return max(city.level_min, min(city.level_max, deepest.level_min))
+def open_dungeons(city: City, character: Character) -> tuple[Dungeon, ...]:
+    """Подземелья города, открытые этому игроку."""
+    return tuple(one for one in city.dungeons if dungeon_open(city, character, one))
 
 
 # --- отрисовка --------------------------------------------------------
@@ -551,14 +531,31 @@ def _render(
         case ScreenId.BANK:
             return city_screens.bank_screen(content, character, city, state.notice)
         case ScreenId.DUNGEON:
-            return city_screens.dungeon_screen(
+            return city_screens.dungeon_list_screen(
                 content,
                 character,
                 city,
-                level=dungeon_level(content, character, city.id),
-                deep_level=dungeon_level(content, character, city.id, deep=True),
-                deep_open=deep_dungeon_open(city, character),
+                page=state.list_page,
                 base_depth=turning_rules.descent_depth(character),
+                notice=state.notice,
+            )
+        case ScreenId.DUNGEON_PICK:
+            base_depth = turning_rules.descent_depth(character)
+            if not city.has_dungeon(state.dungeon_pick):
+                return city_screens.dungeon_list_screen(
+                    content,
+                    character,
+                    city,
+                    page=state.list_page,
+                    base_depth=base_depth,
+                    notice="Это подземелье пропало. Выберите заново.",
+                )
+            return city_screens.dungeon_pick_screen(
+                content,
+                character,
+                city,
+                city.dungeon(state.dungeon_pick),
+                base_depth=base_depth,
                 notice=state.notice,
             )
         case _:
@@ -867,7 +864,9 @@ def advance(
         case ScreenId.BANK:
             return _handle_bank(content, character, state, command)
         case ScreenId.DUNGEON:
-            return _handle_dungeon(content, character, state, command, clock=ticking)
+            return _handle_dungeon(content, character, state, command)
+        case ScreenId.DUNGEON_PICK:
+            return _handle_dungeon_pick(content, character, state, command, clock=ticking)
         case ScreenId.PARTY:
             return state.with_notice("Нажмите кнопку отряда.")
         case ScreenId.PARTY_INVITE:
@@ -1745,37 +1744,48 @@ def _handle_dungeon(
     character: Character,
     state: PlayState,
     command: Command,
+) -> PlayState:
+    """Выбор подземелья из списка. Сложность спрашивают на следующем экране."""
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите подземелье или «Назад».")
+    city = known_city(content, state.city_id, character.city_id)
+    for one in open_dungeons(city, character):
+        if labels.label(one.name).matches(command.argument):
+            return replace(state, dungeon_pick=one.id).at(ScreenId.DUNGEON_PICK)
+    return state.with_notice("Не узнал это подземелье.")
+
+
+def _handle_dungeon_pick(
+    content: GameContent,
+    character: Character,
+    state: PlayState,
+    command: Command,
     *,
     clock: Clock,
 ) -> PlayState:
+    """Выбор сложности и заход в выбранное подземелье (ADR 0041, ADR 0036)."""
     if command.intent is not Intent.SELECT:
-        return state.with_notice("Нажмите кнопку спуска или «Назад».")
+        return state.with_notice("Выберите сложность или «Назад».")
     city = known_city(content, state.city_id, character.city_id)
+    if not city.has_dungeon(state.dungeon_pick):
+        return state.at(ScreenId.DUNGEON).with_notice("Это подземелье пропало. Выберите заново.")
+    dungeon = city.dungeon(state.dungeon_pick)
+    if not dungeon_open(city, character, dungeon):
+        return state.at(ScreenId.DUNGEON).with_notice("Этот спуск ещё не открыт.")
 
-    chosen: tuple[int, dungeon_rules.Difficulty] | None = None
-    for tier in (1, 2):
-        for difficulty in dungeon_screens.DIFFICULTY_ORDER:
-            if dungeon_screens.enter_label(tier, difficulty).matches(command.argument):
-                chosen = (tier, difficulty)
-    if chosen is None:
-        return state.with_notice("Нажмите кнопку спуска или «Назад».")
-
-    tier, difficulty = chosen
-    if tier == 2 and not deep_dungeon_open(city, character):
-        return state.with_notice(
-            "Глубокий спуск ещё не открыт: дойдите до последней локации города."
-        )
-
-    descent = Descent(
-        city_id=city.id,
-        level=dungeon_level(content, character, city.id, deep=tier == 2),
-        layer=0,
-        started_at=clock.now,
-        tier=tier,
-        difficulty=difficulty.value,
-        room=dungeon_rules.RoomKind.SKIRMISH.value,
-    )
-    return replace(state, descent=descent, fight="dungeon").at(ScreenId.COMBAT)
+    for difficulty in dungeon_screens.DIFFICULTY_ORDER:
+        if dungeon_screens.difficulty_label(difficulty).matches(command.argument):
+            descent = Descent(
+                city_id=city.id,
+                dungeon_id=dungeon.id,
+                level=dungeon.level,
+                layer=0,
+                started_at=clock.now,
+                difficulty=difficulty.value,
+                room=dungeon_rules.RoomKind.SKIRMISH.value,
+            )
+            return replace(state, descent=descent, fight="dungeon").at(ScreenId.COMBAT)
+    return state.with_notice("Выберите сложность или «Назад».")
 
 
 # --- локации ----------------------------------------------------------

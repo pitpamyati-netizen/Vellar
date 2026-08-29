@@ -53,10 +53,14 @@ def spoken(content: GameContent) -> Iterator[tuple[str, str]]:
         yield archetype.id, archetype.name
     for title in content.elite_titles:
         yield "elite_title", title
+    for affix in content.affixes:
+        yield affix.id, affix.adjective
     for city in content.cities:
         yield city.id, f"{city.name} {city.description}"
         for location in city.locations:
             yield location.id, location.name
+        for dungeon in city.dungeons:
+            yield dungeon.id, f"{dungeon.name} {dungeon.flavour}"
     yield from content.trait_categories.items()
 
 

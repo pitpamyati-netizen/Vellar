@@ -782,7 +782,8 @@ async def test_a_descent_pays_at_the_bottom_and_not_before(
     assert screen.id is ScreenId.DUNGEON
     assert "дно" in screen.text().casefold()
 
-    screen = await player.press("Спуск: разведка")
+    await player.press("Первая штольня")
+    screen = await player.press("Разведка")
     doors = ("Логово хозяина", "Дальше — схватка", "Дальше — затишье", "Дальше — крупный зверь")
     bottom = ""
     for _ in range(200):
@@ -832,7 +833,8 @@ async def test_leaving_a_descent_leaves_it_behind(
     await player.press("Мир")
     await player.press("Дубно")
     await player.press("Подземелья")
-    screen = await player.press("Спуск: разведка")
+    await player.press("Первая штольня")
+    screen = await player.press("Разведка")
     for _ in range(200):
         text = screen.text()
         if "Впереди развилка" in text:
@@ -961,7 +963,9 @@ def test_a_grim_descent_names_a_hazard_and_a_boon() -> None:
     from mmorpg.domain.rules import dungeon as dungeon_rules
     from mmorpg.presentation.telegram.screens import dungeon as dungeon_screens
 
-    seed = dungeon_rules.run_seed("vellar-test", "farhold", 1, dungeon_rules.Difficulty.GRIM, 7)
+    seed = dungeon_rules.run_seed(
+        "vellar-test", "farhold", "farhold_first_adit", dungeon_rules.Difficulty.GRIM, 7
+    )
     conditions = dungeon_rules.conditions_for(seed, dungeon_rules.Difficulty.GRIM)
     lines = dungeon_screens.condition_lines(conditions)
     assert len(lines) == 2

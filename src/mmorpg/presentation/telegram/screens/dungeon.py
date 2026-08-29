@@ -1,15 +1,16 @@
-"""Строки и кнопки данжа: сложности и развилки.
+"""Строки и кнопки подземелий: список, сложности, развилки, прозвища.
 
-Механику сложностей и комнат держит ``domain/rules/dungeon.py``; здесь только
-то, как она звучит для игрока. Имена сложностей стоят рядом с ``RANK_NAMES``
-из ``screens/combat.py`` по смыслу - это отображение фиксированного перечня,
-а не правимый контент.
+Механику держат ``domain/rules/dungeon.py`` и ``domain/procgen/enemies.py``;
+здесь только то, как она звучит для игрока. Имена сложностей и прозвищ стоят
+рядом с ``RANK_NAMES`` из ``screens/combat.py`` по смыслу - это отображение
+фиксированного перечня, а не правимый контент.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 
+from mmorpg.domain.entities.content import EnemyAffix
 from mmorpg.domain.rules.dungeon import Condition, Difficulty, RoomKind
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label
@@ -25,17 +26,19 @@ DIFFICULTY_NAMES: dict[Difficulty, str] = {
 
 DIFFICULTY_FLAVOUR: dict[Difficulty, str] = {
     Difficulty.RECON: "налегке, без условий",
-    Difficulty.DELVE: "враги крепче, плата щедрее, одно случайное условие",
-    Difficulty.GRIM: "враги вдвое опаснее, плата вдвое выше, два условия — беда и благо",
+    Difficulty.DELVE: (
+        "враги крепче, плата щедрее, одно случайное условие; кое-кто из тварей с прозвищем"
+    ),
+    Difficulty.GRIM: (
+        "враги вдвое опаснее, плата вдвое выше, два условия — беда и благо; "
+        "прозвища у тварей чаще и по два"
+    ),
 }
 
-_ENTER_LABELS: dict[tuple[int, Difficulty], Label] = {
-    (1, Difficulty.RECON): labels.DUNGEON_RECON,
-    (1, Difficulty.DELVE): labels.DUNGEON_DELVE,
-    (1, Difficulty.GRIM): labels.DUNGEON_GRIM,
-    (2, Difficulty.RECON): labels.DUNGEON_DEEP_RECON,
-    (2, Difficulty.DELVE): labels.DUNGEON_DEEP_DELVE,
-    (2, Difficulty.GRIM): labels.DUNGEON_DEEP_GRIM,
+_DIFFICULTY_LABELS: dict[Difficulty, Label] = {
+    Difficulty.RECON: labels.DIFFICULTY_RECON,
+    Difficulty.DELVE: labels.DIFFICULTY_DELVE,
+    Difficulty.GRIM: labels.DIFFICULTY_GRIM,
 }
 
 ROOM_LABELS: dict[RoomKind, Label] = {
@@ -54,9 +57,22 @@ ROOM_HINTS: dict[RoomKind, str] = {
     RoomKind.STAIRS: "выход: заход кончится с тем, что уже взято",
 }
 
+#: Что делает каждое прозвище, словами игрока (ADR 0042). Ключ - ``EnemyAffix.id``.
+AFFIX_HINTS: dict[str, str] = {
+    "ironhide": "бьёт по нему слабее: шкура держит удар",
+    "thornback": "часть полученного урона возвращается бьющему",
+    "bloodletter": "лечится от нанесённых вам ран",
+    "venombite": "по попаданию травит ядом",
+    "hoarfrost": "по попаданию студит: цель ходит реже",
+    "sapping": "по попаданию вешает немощь: удар цели слабее",
+    "brutish": "крепче и бьёт тяжелее обычного",
+    "nimble": "успевает раньше и в ход, и в ответ",
+    "broodkeeper": "приводит с собой лишние тела",
+}
 
-def enter_label(tier: int, difficulty: Difficulty) -> Label:
-    return _ENTER_LABELS[(tier, difficulty)]
+
+def difficulty_label(difficulty: Difficulty) -> Label:
+    return _DIFFICULTY_LABELS[difficulty]
 
 
 def room_label(kind: RoomKind) -> Label:
@@ -78,3 +94,9 @@ def condition_lines(conditions: Sequence[Condition]) -> tuple[str, ...]:
     return tuple(
         f"{'Благо' if one.good else 'Беда'} «{one.name}»: {one.text}" for one in conditions
     )
+
+
+def affix_line(affix: EnemyAffix) -> str:
+    """Строка о прозвище врага: прилагательное и что оно даёт."""
+    hint = AFFIX_HINTS.get(affix.id, "дерётся не как обычная тварь")
+    return f"{affix.adjective}: {hint}."

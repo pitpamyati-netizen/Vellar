@@ -23,7 +23,6 @@ from mmorpg.presentation.telegram.flows.play import (
     PlayState,
     advance,
     begin,
-    dungeon_level,
     render,
 )
 from mmorpg.presentation.telegram.screens import city as city_screens
@@ -565,45 +564,43 @@ def test_the_strongbox_refuses_what_is_not_there(
     assert "В ячейке только" in refused.notice
 
 
-def test_the_descent_asks_for_a_fight(
+def test_the_descent_lists_dungeons_then_asks_for_difficulty(
     content: GameContent, hero: Character, in_city: PlayState
 ) -> None:
     dungeon = step(content, hero, in_city, "Подземелья")
     assert dungeon.screen is ScreenId.DUNGEON
-    assert "около 3 схваток" in render(content, hero, dungeon, world_seed=WORLD_SEED).text()
+    listed = render(content, hero, dungeon, world_seed=WORLD_SEED).text()
+    assert "Барсучьи ходы" in listed and "Первая штольня" in listed
 
-    down = step(content, hero, dungeon, "Спуск: разведка")
+    picked = step(content, hero, dungeon, "Первая штольня")
+    assert picked.screen is ScreenId.DUNGEON_PICK
+    assert picked.dungeon_pick == "farhold_first_adit"
+    assert "около 3 схваток" in render(content, hero, picked, world_seed=WORLD_SEED).text()
+
+    down = step(content, hero, picked, "Разведка")
     assert down.fight == "dungeon"
     assert down.descent.layer == 0
     assert down.descent.difficulty == "recon"
+    assert down.descent.dungeon_id == "farhold_first_adit"
     assert down.descent.city_id == "farhold"
+    assert down.descent.level == 12
 
 
-def test_the_descent_is_a_place_and_not_a_mirror(content: GameContent, hero: Character) -> None:
-    """Спуск не растёт вместе с тем, кто в него спускается.
-
-    Уровень спуска был ``character.level + 1``: содержимое, всегда ровно по
-    игроку, а значит опыт без конца — штраф за бой ниже своего уровня в таком
-    спуске не срабатывал никогда. Один персонаж взял так тридцать уровней за
-    сутки, не выходя из одного города (``Roadmap.md``, аномалия роста уровней).
-    """
-    ladder = [
-        dungeon_level(content, replace(hero, level=level), "farhold")
-        for level in (1, 5, 12, 22, 30, 60, 150)
-    ]
-    # Растёт ступенями мира, а не вслед за игроком, и упирается в потолок города.
-    assert ladder == sorted(ladder)
-    deepest = content.city("farhold").locations[-1]
-    assert max(ladder) == deepest.level_min
-    assert dungeon_level(content, replace(hero, level=150), "farhold") < 150
+def test_a_dungeon_is_a_place_and_not_a_mirror(content: GameContent) -> None:
+    """У подземелья свой фиксированный уровень, не растущий с игроком (ADR 0041)."""
+    city = content.city("farhold")
+    levels = sorted(one.level for one in city.regular_dungeons)
+    assert levels[0] <= city.level_min + 8
+    assert city.deep_dungeon.level == city.level_max
+    assert all(city.level_min <= one.level <= city.level_max for one in city.dungeons)
 
 
-def test_a_descent_you_outgrew_says_so_before_you_walk_in(
+def test_a_dungeon_you_outgrew_says_so_before_you_walk_in(
     content: GameContent, hero: Character
 ) -> None:
     grown = replace(hero, level=150)
-    dungeon = step(content, grown, begin(grown), "Мир", "Дубно", "Подземелья")
-    text = render(content, grown, dungeon, world_seed=WORLD_SEED).text()
+    picked = step(content, grown, begin(grown), "Мир", "Дубно", "Подземелья", "Барсучьи ходы")
+    text = render(content, grown, picked, world_seed=WORLD_SEED).text()
     assert "переросли этот спуск" in text
 
 
@@ -628,31 +625,32 @@ def test_a_service_the_city_does_not_offer_answers_instead_of_a_stub(
     assert "нет такой службы" in answered.notice
 
 
-def test_a_city_has_a_second_deeper_descent(content: GameContent, hero: Character) -> None:
-    """Ниже обычного дна у города есть второй ход - глубокий спуск (ADR 0028).
-
-    Он не зеркало игрока: идёт по верху полосы города, с вошедшим не растёт, и
-    открыт тому, кто добрался до последней локации.
+def test_a_city_has_a_deep_dungeon_open_only_to_the_grown(
+    content: GameContent, hero: Character
+) -> None:
+    """Глубокое подземелье идёт по верху полосы города и открыто дошедшему до
+    последней локации (ADR 0041, ADR 0019).
     """
     city = content.city("farhold")
     deep = city.deep_dungeon
-    assert dungeon_level(content, hero, "farhold", deep=True) == city.level_max
+    assert deep.level == city.level_max
 
-    # Двенадцатый уровень до последней локации Дубно (22) не дорос: глубокий ход
-    # назван, но кнопки не получает.
+    # Третий уровень до последней локации Дубно (22) не дорос: глубокий ход
+    # назван строкой, но кнопки не получает.
     early = step(content, hero, begin(hero), "Мир", "Дубно", "Подземелья")
     early_text = render(content, hero, early, world_seed=WORLD_SEED).text()
-    assert deep.name in early_text
-    assert "с уровня 22" in early_text
-    assert step(content, hero, early, "Глубокий спуск: разведка").fight != "dungeon"
+    assert deep.name in early_text and "закрыт до уровня 22" in early_text
+    assert step(content, hero, early, deep.name).screen is ScreenId.DUNGEON
 
-    # Двадцать второй - дорос: кнопка есть, и она уводит в спуск второго яруса.
+    # Двадцать второй - дорос: кнопка есть, и она уводит в глубокий спуск.
     ready = replace(hero, level=22)
     screen = step(content, ready, begin(ready), "Мир", "Дубно", "Подземелья")
-    assert deep.flavour in render(content, ready, screen, world_seed=WORLD_SEED).text()
-    down = step(content, ready, screen, "Глубокий спуск: тёмный ход")
+    picked = step(content, ready, screen, deep.name)
+    assert picked.screen is ScreenId.DUNGEON_PICK
+    assert deep.flavour in render(content, ready, picked, world_seed=WORLD_SEED).text()
+    down = step(content, ready, picked, "Тёмный ход")
     assert down.fight == "dungeon"
-    assert down.descent.tier == 2
+    assert down.descent.dungeon_id == deep.id
     assert down.descent.difficulty == "delve"
     assert down.descent.level == city.level_max
 

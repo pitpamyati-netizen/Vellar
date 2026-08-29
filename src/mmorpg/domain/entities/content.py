@@ -19,9 +19,11 @@ from mmorpg.domain.entities.combat import ActionTag
 from mmorpg.domain.entities.craft import Craft, CraftKind, CraftRules, Recipe
 from mmorpg.domain.entities.damage import DamageType
 from mmorpg.domain.entities.dice import MAX_SPREAD, Dice
+from mmorpg.domain.entities.effects import ActiveEffect
 from mmorpg.domain.entities.location import EnemyArchetype
 from mmorpg.domain.entities.quest import Quest
 from mmorpg.domain.entities.stats import StatBlock, StatCode
+from mmorpg.domain.entities.statuses import StatusKind
 
 
 class SkillKind(StrEnum):
@@ -524,19 +526,26 @@ class Location:
 
 
 @dataclass(frozen=True, slots=True)
-class DeepDungeon:
-    """Второй спуск города - ход ниже прежнего дна.
+class Dungeon:
+    """Одно названное подземелье города (ADR 0041).
 
-    У города два подземелья, не одно. Первое (``dungeons`` в ``world.toml`` не
-    объявляют - оно безымянное и берёт уровень от самой глубокой локации, до
-    которой дорос игрок) для тех, кто ещё в полосе. Это, глубокое, идёт по
-    ``city.level_max`` и открывается тому, кто добрался до последней локации
-    города: не зеркало игрока, а место (ADR 0019, ADR 0028). Механики новой в
-    нём нет - тот же движок спуска, только уровень выше и дно богаче.
+    У города не два спуска, а список: несколько обычных подземелий вразброс по
+    его полосе и одно глубокое (``deep``) на самом верху - по ``city.level_max``,
+    открытое тому, кто добрался до последней локации. У каждого свой уровень, и
+    он не растёт вместе с игроком: подземелье - это место, а не его зеркало
+    (ADR 0019). ``biome`` - из dungeon-ростера (``content/enemies.toml``,
+    ``dungeon = true``), поэтому под землёй свои твари.
     """
 
+    id: str
     name: str
     flavour: str
+    biome: str
+    level: int
+    deep: bool = False
+    #: С какого уровня открыт. Ноль - открыт вместе с городом. Глубокое
+    #: подземелье живёт по своему правилу (последняя локация города).
+    unlock_level: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -551,7 +560,7 @@ class City:
     unlock_requires: tuple[str, ...]
     services: tuple[str, ...]
     locations: tuple[Location, ...]
-    deep_dungeon: DeepDungeon
+    dungeons: tuple[Dungeon, ...]
 
     def location(self, slot: int) -> Location:
         for location in self.locations:
@@ -571,6 +580,75 @@ class City:
         решают, какое собирающее ремесло здесь работает (``domain/rules/crafts``).
         """
         return frozenset(location.biome for location in self.locations)
+
+    def dungeon(self, dungeon_id: str) -> Dungeon:
+        for one in self.dungeons:
+            if one.id == dungeon_id:
+                return one
+        msg = f"city {self.id} has no dungeon {dungeon_id!r}"
+        raise KeyError(msg)
+
+    def has_dungeon(self, dungeon_id: str) -> bool:
+        return any(one.id == dungeon_id for one in self.dungeons)
+
+    @property
+    def regular_dungeons(self) -> tuple[Dungeon, ...]:
+        """Все подземелья, кроме глубокого."""
+        return tuple(one for one in self.dungeons if not one.deep)
+
+    @property
+    def deep_dungeon(self) -> Dungeon:
+        """Глубокое подземелье города - единственное с ``deep = true``."""
+        for one in self.dungeons:
+            if one.deep:
+                return one
+        msg = f"city {self.id} has no deep dungeon"
+        raise KeyError(msg)
+
+
+@dataclass(frozen=True, slots=True)
+class EnemyAffix:
+    """Прозвище-модификатор противника в духе Морровинда (ADR 0042).
+
+    Прозвище - прилагательное перед именем породы («Иглистый ползун из штрека»).
+    Множители запекаются в числа при сборке, как ``Enemy.stakes``. Механика
+    делится надвое: ``modifiers`` (ключи из ``modifiers.EFFECTIVE_KEYS``)
+    навешиваются эффектом на бойца в начале боя - отражение, вампиризм, лишняя
+    броня, - а ``on_hit_status`` движок вешает на цель после состоявшегося удара
+    породы.
+    """
+
+    id: str
+    adjective: str
+    weight: int = 1
+    health: float = 1.0
+    damage: float = 1.0
+    armor: float = 1.0
+    initiative: float = 1.0
+    gold: float = 1.0
+    #: Сколько лишних тел прибавить к стае. «Выводковый» так делает вылазку
+    #: гуще, не трогая силу одного противника.
+    pack_bonus: int = 0
+    modifiers: Mapping[str, float] = field(default_factory=lambda: MappingProxyType({}))
+    on_hit_status: StatusKind | None = None
+    on_hit_turns: int = 0
+    on_hit_chance: float = 0.0
+    #: Величина навешиваемого состояния. Для яда - урон за ход, для слабости -
+    #: проценты урона, для замедления - проценты инициативы (``entities/statuses``).
+    on_hit_magnitude: float = 0.0
+
+    def effect(self) -> ActiveEffect | None:
+        """Постоянная прибавка на весь бой - или ``None``, если механика в ударе."""
+        if not self.modifiers:
+            return None
+        return ActiveEffect(
+            id=f"affix:{self.id}",
+            name=self.adjective,
+            modifiers=MappingProxyType(dict(self.modifiers)),
+            turns_left=1,
+            beneficial=True,
+            permanent=True,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -640,6 +718,7 @@ class GameContent:
     rarities: tuple[Rarity, ...]
     enemy_archetypes: tuple[EnemyArchetype, ...]
     elite_titles: tuple[str, ...]
+    affixes: tuple[EnemyAffix, ...]
     slots: tuple[EquipSlot, ...]
     weapon_types: tuple[WeaponType, ...]
     armor_types: tuple[ArmorType, ...]
@@ -665,6 +744,7 @@ class GameContent:
     _skills_by_code: Mapping[str, Skill]
     _skills_by_owner: Mapping[str, tuple[Skill, ...]]
     _cities_by_id: Mapping[str, City]
+    _affixes_by_id: Mapping[str, EnemyAffix]
     _rarities_by_id: Mapping[str, Rarity]
     _slots_by_id: Mapping[str, EquipSlot]
     _gear_by_id: Mapping[str, GearArchetype]
@@ -690,6 +770,7 @@ class GameContent:
         enemy_archetypes: Sequence[EnemyArchetype],
         elite_titles: Sequence[str],
         trait_categories: Mapping[str, str],
+        affixes: Sequence[EnemyAffix] = (),
         inverted_modifiers: frozenset[str],
         rules: ProgressionRules,
         craft_rules: CraftRules,
@@ -721,6 +802,7 @@ class GameContent:
             rarities=tuple(rarities),
             enemy_archetypes=tuple(enemy_archetypes),
             elite_titles=tuple(elite_titles),
+            affixes=tuple(affixes),
             slots=tuple(slots),
             weapon_types=tuple(weapon_types),
             armor_types=tuple(armor_types),
@@ -746,6 +828,7 @@ class GameContent:
                 {owner: tuple(found) for owner, found in by_owner.items()}
             ),
             _cities_by_id=MappingProxyType({city.id: city for city in cities}),
+            _affixes_by_id=MappingProxyType({affix.id: affix for affix in affixes}),
             _rarities_by_id=MappingProxyType({rarity.id: rarity for rarity in rarities}),
             _slots_by_id=MappingProxyType({slot.id: slot for slot in slots}),
             _gear_by_id=MappingProxyType({gear.id: gear for gear in gear_archetypes}),
@@ -789,6 +872,12 @@ class GameContent:
 
     def has_city(self, city_id: str) -> bool:
         return city_id in self._cities_by_id
+
+    def affix(self, affix_id: str) -> EnemyAffix:
+        return self._affixes_by_id[affix_id]
+
+    def has_affix(self, affix_id: str) -> bool:
+        return affix_id in self._affixes_by_id
 
     def rarity(self, rarity_id: str) -> Rarity:
         return self._rarities_by_id[rarity_id]

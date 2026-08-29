@@ -11,6 +11,7 @@ import random
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from mmorpg.domain.entities.content import EnemyAffix
 from mmorpg.domain.entities.damage import DamageType
 from mmorpg.domain.entities.location import (
     DEFAULT_DAMAGE_TYPES,
@@ -18,7 +19,7 @@ from mmorpg.domain.entities.location import (
     EnemyArchetype,
     EnemyRank,
 )
-from mmorpg.domain.procgen.seeds import rng
+from mmorpg.domain.procgen.seeds import derive, rng
 
 # Основание по уровням. «Средняя» порода (все множители 1.0) пользуется этими
 # значениями. Здоровье выставлено против стандартного удара персонажа того же уровня
@@ -101,12 +102,40 @@ RANK_FACTORS: dict[EnemyRank, RankFactors] = {
 VARIANCE = 0.12
 
 
-def candidates(archetypes: Sequence[EnemyArchetype], biome: str) -> tuple[EnemyArchetype, ...]:
-    """Породы, подходящие биому, с откатом к тем, что годятся везде."""
-    fitting = tuple(archetype for archetype in archetypes if archetype.fits(biome))
+def _roll_affixes(
+    seed: bytes, affixes: Sequence[EnemyAffix], chance: float, count: int
+) -> tuple[EnemyAffix, ...]:
+    """Прозвища этой стаи. Бросок один на всю стаю (ADR 0042)."""
+    if not affixes or chance <= 0.0 or count <= 0:
+        return ()
+    source = rng(derive(seed, "affix"))
+    if source.random() >= chance:
+        return ()
+    pool = list(affixes)
+    weights = [affix.weight for affix in pool]
+    picked: list[EnemyAffix] = []
+    for _ in range(min(count, len(pool))):
+        chosen = source.choices(pool, weights=weights, k=1)[0]
+        index = pool.index(chosen)
+        pool.pop(index)
+        weights.pop(index)
+        picked.append(chosen)
+    return tuple(picked)
+
+
+def candidates(
+    archetypes: Sequence[EnemyArchetype], biome: str, *, dungeon: bool = False
+) -> tuple[EnemyArchetype, ...]:
+    """Породы, подходящие биому, с откатом к тем, что годятся везде.
+
+    ``dungeon`` разводит два пула (ADR 0042): заход в подземелье берёт только
+    ``dungeon``-породы, дорога - только остальные, и у каждого свой ``*``-запас.
+    """
+    pool = tuple(archetype for archetype in archetypes if archetype.dungeon is dungeon)
+    fitting = tuple(archetype for archetype in pool if archetype.fits(biome))
     if fitting:
         return fitting
-    return tuple(archetype for archetype in archetypes if "*" in archetype.biomes)
+    return tuple(archetype for archetype in pool if "*" in archetype.biomes)
 
 
 def generate_enemy(
@@ -120,6 +149,8 @@ def generate_enemy(
     members: int = 1,
     stakes: float = 1.0,
     bounty: float = 1.0,
+    dungeon: bool = False,
+    affixes_applied: Sequence[EnemyAffix] = (),
 ) -> Enemy:
     """Собрать одного противника. Тот же сид - тот же противник, до последней жизни.
 
@@ -130,8 +161,12 @@ def generate_enemy(
     единственное, чем сложность данжа делает бой тяжелее (``domain/rules/
     dungeon.py``). ``bounty`` домножает только золото: им условие захода
     «богатая порода» делает вылазку выгоднее, не делая её опаснее.
+
+    ``affixes_applied`` - прозвища этой стаи (ADR 0042): их множители запекаются
+    в числа здесь же, а id-шники ложатся на ``Enemy.affixes``, чтобы бой навесил
+    их эффекты и механики.
     """
-    pool = candidates(archetypes, biome)
+    pool = candidates(archetypes, biome, dungeon=dungeon)
     if not pool:
         msg = f"no enemy archetype fits biome {biome!r}"
         raise LookupError(msg)
@@ -142,6 +177,18 @@ def generate_enemy(
     factors = RANK_FACTORS[rank]
     share = group_scale(members)
 
+    affix_health = 1.0
+    affix_damage = 1.0
+    affix_armor = 1.0
+    affix_initiative = 1.0
+    affix_gold = 1.0
+    for affix in affixes_applied:
+        affix_health *= affix.health
+        affix_damage *= affix.damage
+        affix_armor *= affix.armor
+        affix_initiative *= affix.initiative
+        affix_gold *= affix.gold
+
     health = (
         (HEALTH_BASE + HEALTH_PER_LEVEL * level)
         * archetype.health
@@ -149,6 +196,7 @@ def generate_enemy(
         * factors.health
         * share
         * stakes
+        * affix_health
     )
     damage = (
         (DAMAGE_BASE + DAMAGE_PER_LEVEL * level)
@@ -157,14 +205,25 @@ def generate_enemy(
         * factors.damage
         * share
         * stakes
+        * affix_damage
     )
-    armor = ARMOR_PER_LEVEL * level * archetype.armor * factors.armor
-    initiative = (INITIATIVE_BASE + INITIATIVE_PER_LEVEL * level) * archetype.initiative
-    gold = (GOLD_BASE + GOLD_PER_LEVEL * level) * spread * factors.gold * share * stakes * bounty
+    armor = ARMOR_PER_LEVEL * level * archetype.armor * factors.armor * affix_armor
+    initiative = (
+        (INITIATIVE_BASE + INITIATIVE_PER_LEVEL * level) * archetype.initiative * affix_initiative
+    )
+    gold = (
+        (GOLD_BASE + GOLD_PER_LEVEL * level)
+        * spread
+        * factors.gold
+        * share
+        * stakes
+        * bounty
+        * affix_gold
+    )
 
     return Enemy(
         archetype_id=archetype.id,
-        name=_name_for(archetype, rank, elite_titles, random_source),
+        name=_name_for(archetype, rank, elite_titles, random_source, affixes_applied),
         kind=archetype.kind,
         level=level,
         max_health=max(1, round(health)),
@@ -176,6 +235,7 @@ def generate_enemy(
         rank=rank,
         element=element_of(archetype),
         stakes=stakes,
+        affixes=tuple(affix.id for affix in affixes_applied),
     )
 
 
@@ -191,16 +251,22 @@ def _name_for(
     rank: EnemyRank,
     elite_titles: Sequence[str],
     random_source: random.Random,
+    affixes_applied: Sequence[EnemyAffix] = (),
 ) -> str:
-    """Имя с прозвищем для ступеней долгого боя.
+    """Имя с приставками: прозвища-модификаторы, затем прозвище долгого боя.
 
-    Прозвище не называет ступень - её словами называет боевой экран. Оно говорит
-    только, что перед тобой не обычный зверь.
+    Ни то ни другое не называет ступень - её словами называет боевой экран.
+    «Иглистый матёрый упырь»: сперва то, чем стая опасна, потом то, что это не
+    обычный зверь.
     """
-    if rank is EnemyRank.NORMAL or not elite_titles:
+    prefix = " ".join(affix.adjective for affix in affixes_applied)
+    title = ""
+    if rank is not EnemyRank.NORMAL and elite_titles:
+        title = elite_titles[random_source.randrange(len(elite_titles))]
+    if not prefix and not title:
         return archetype.name
-    title = elite_titles[random_source.randrange(len(elite_titles))]
-    return f"{title} {archetype.name.lower()}"
+    core = archetype.name if not (prefix or title) else archetype.name.lower()
+    return " ".join(part for part in (prefix, title, core) if part)
 
 
 def generate_group(
@@ -214,6 +280,10 @@ def generate_group(
     max_size: int = 3,
     stakes: float = 1.0,
     bounty: float = 1.0,
+    dungeon: bool = False,
+    affixes: Sequence[EnemyAffix] = (),
+    affix_chance: float = 0.0,
+    affix_count: int = 1,
 ) -> tuple[Enemy, ...]:
     """От одного до ``max_size`` противников. Долгий бой - всегда бой с одним.
 
@@ -222,8 +292,11 @@ def generate_group(
 
     ``stakes`` и ``bounty`` уходят каждому противнику: сложность данжа и его
     условия поднимают ставку всей стаи разом (``domain/rules/dungeon.py``).
+
+    ``affixes``/``affix_chance``/``affix_count`` - прозвища-модификаторы: бросок
+    один на всю стаю (ADR 0042), и «выводковый» так прибавляет тел.
     """
-    from mmorpg.domain.procgen.seeds import derive  # local: держит работу с сидом в одном месте
+    rolled = _roll_affixes(seed, affixes, affix_chance, affix_count)
 
     if rank.is_long_fight:
         return (
@@ -236,11 +309,16 @@ def generate_group(
                 elite_titles=elite_titles,
                 stakes=stakes,
                 bounty=bounty,
+                dungeon=dungeon,
+                affixes_applied=rolled,
             ),
         )
 
+    pack_bonus = sum(affix.pack_bonus for affix in rolled)
+    ceiling = max_size + pack_bonus
+    weights = [6, 3, 1, 1, 1, 1, 1][:ceiling] or [1]
     size_source = rng(derive(seed, "group"))
-    size = size_source.choices(range(1, max_size + 1), weights=[6, 3, 1][:max_size])[0]
+    size = size_source.choices(range(1, ceiling + 1), weights=weights)[0]
     return tuple(
         generate_enemy(
             derive(seed, "member", index),
@@ -251,6 +329,8 @@ def generate_group(
             members=size,
             stakes=stakes,
             bounty=bounty,
+            dungeon=dungeon,
+            affixes_applied=rolled,
         )
         for index in range(size)
     )

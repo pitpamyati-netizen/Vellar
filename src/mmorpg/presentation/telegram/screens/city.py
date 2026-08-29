@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import City, GameContent, Npc
+from mmorpg.domain.entities.content import City, Dungeon, GameContent, Npc
 from mmorpg.domain.rules import dungeon as dungeon_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import skills as skill_rules
@@ -169,34 +169,80 @@ def npc_screen(content: GameContent, character: Character, npc: Npc, notice: str
     )
 
 
-def dungeon_screen(
+def dungeon_list_screen(
     content: GameContent,
     character: Character,
     city: City,
     *,
-    level: int,
-    deep_level: int,
-    deep_open: bool,
+    page: PageState,
     base_depth: int,
     notice: str = "",
 ) -> Screen:
-    """Данж: выбор спуска и сложности перед заходом (ADR 0028, ADR 0036).
+    """Список подземелий города: сперва выбирают куда, потом сложность (ADR 0041).
 
-    У города два спуска. Обычный берёт уровень от самой глубокой локации, до
-    которой дорос игрок; глубокий (``city.deep_dungeon``) идёт по верху полосы
-    города и открыт тому, кто добрался до последней локации. Поверх спуска
-    выбирают сложность: она домножает силу врагов и плату, а всё, что выше
-    «разведки», несёт случайные условия захода (``domain/rules/dungeon.py``).
+    У города несколько названных подземелий вразброс по его полосе и одно
+    глубокое на самом верху, открытое дошедшему до последней локации. У каждого
+    свой уровень, и он не растёт вместе с игроком: подземелье - это место
+    (ADR 0019). Закрытые в список не попадают - только строкой.
     """
+    depth = dungeon_rules.final_layer(base_depth, dungeon_rules.Difficulty.RECON)
+    threshold = city.locations[-1].level_min
+
+    lead = [
+        "Комната за комнатой, после каждой — развилка: куда дальше, назад пути нет.",
+        "Здоровье между боями не растёт — только зелья да передышки.",
+        f"До логова около {depth} схваток. Дно за боссом платит лишь тому, кто дошёл.",
+    ]
+    entries: list[ListEntry] = []
+    for one in city.dungeons:
+        if not dungeon_rules.dungeon_unlocked(
+            deep=one.deep,
+            unlock_level=one.unlock_level,
+            char_level=character.level,
+            deep_threshold=threshold,
+        ):
+            need = threshold if one.deep else one.unlock_level
+            lead.append(f"{one.name} — закрыт до уровня {need}.")
+            continue
+        note = " — вы его переросли" if not one.deep and character.level > one.level else ""
+        entries.append(
+            ListEntry(key=one.id, text=one.name, detail=f"уровень {one.level}{note}"),
+        )
+
+    return paginated_screen(
+        screen_id=ScreenId.DUNGEON,
+        title=f"Подземелья города {city.name}",
+        entries=entries,
+        state=page,
+        lead_lines=tuple(lead) if not notice else (notice, *lead),
+        empty_text="Ни одного подземелья вам ещё не открыто.",
+        show_filters=False,
+    )
+
+
+def dungeon_pick_screen(
+    content: GameContent,
+    character: Character,
+    city: City,
+    dungeon: Dungeon,
+    *,
+    base_depth: int,
+    notice: str = "",
+) -> Screen:
+    """Одно подземелье и три сложности (ADR 0041, ADR 0036)."""
     stats = derived_stats(content, character)
     health = character.health_or(stats.max_health)
     depth = dungeon_rules.final_layer(base_depth, dungeon_rules.Difficulty.RECON)
+    outgrew = (
+        " — вы переросли этот спуск, платит он по своему уровню"
+        if not dungeon.deep and character.level > dungeon.level
+        else ""
+    )
     lines = [
-        *head(f"Подземелья города {city.name}.", notice),
-        "Комната за комнатой, после каждой — развилка: куда дальше, назад пути нет.",
-        f"Здоровье между боями не растёт (только зелья да передышки). У вас "
-        f"{amount(health, stats.max_health)}.",
-        f"До логова около {depth} схваток. Дно за боссом платит лишь тому, кто до него дошёл.",
+        *head(f"{dungeon.name}.", notice),
+        dungeon.flavour,
+        f"Уровень спуска {dungeon.level}, ваш {character.level}{outgrew}.",
+        f"До логова около {depth} схваток. У вас {amount(health, stats.max_health)} здоровья.",
         "Сложность домножает силу врагов и плату:",
     ]
     for difficulty in dungeon_screens.DIFFICULTY_ORDER:
@@ -204,31 +250,8 @@ def dungeon_screen(
             f"— {dungeon_screens.DIFFICULTY_NAMES[difficulty]}: "
             f"{dungeon_screens.DIFFICULTY_FLAVOUR[difficulty]}"
         )
-
-    def tier_block(tier: int, at: int, title: str) -> list[tuple[Label, ...]]:
-        lines.append("")
-        outgrew = (
-            " — вы переросли этот спуск, платит он по своему уровню"
-            if tier == 1 and character.level > at
-            else ""
-        )
-        lines.append(f"{title}: уровень {at}, ваш {character.level}{outgrew}.")
-        return [
-            (dungeon_screens.enter_label(tier, difficulty),)
-            for difficulty in dungeon_screens.DIFFICULTY_ORDER
-        ]
-
-    rows: list[tuple[Label, ...]] = tier_block(1, level, "Спуск")
-
-    deep = city.deep_dungeon
-    if deep_open:
-        lines.append("")
-        lines.append(f"{deep.name}. {deep.flavour}")
-        rows.extend(tier_block(2, deep_level, "Глубокий спуск"))
-    else:
-        need = city.locations[-1].level_min
-        lines.append("")
-        lines.append(
-            f"Ниже — {deep.name}, но он открыт с уровня {need} (последняя локация города)."
-        )
-    return Screen(id=ScreenId.DUNGEON, lines=tuple(lines), rows=tuple(rows))
+    rows = [
+        (dungeon_screens.difficulty_label(difficulty),)
+        for difficulty in dungeon_screens.DIFFICULTY_ORDER
+    ]
+    return Screen(id=ScreenId.DUNGEON_PICK, lines=tuple(lines), rows=tuple(rows))

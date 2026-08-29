@@ -165,12 +165,14 @@ def test_the_losing_turn_is_read_out(
             assert line in text, "экран поражения молчит о последнем ходе"
 
 
-def test_the_waiting_screen_says_whose_turn_it_is(duel_fight: BattleState) -> None:
+def test_the_waiting_screen_says_whose_turn_it_is(
+    content: GameContent, duel_fight: BattleState
+) -> None:
     """Ожидание чужого хода - это экран, а не тишина (ADR 0021)."""
     current = duel_fight.active
     assert current is not None
     watcher = next(one for one in duel_fight.combatants if one.id != current.id)
-    screen = combat_screens.waiting_screen(duel_fight, watcher.id)
+    screen = combat_screens.waiting_screen(content, duel_fight, watcher.id)
     text = screen.text()
     assert current.name in text
     assert "Ждём" in text

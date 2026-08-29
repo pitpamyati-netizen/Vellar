@@ -99,5 +99,7 @@ def test_run_seed_is_stable_and_unlike_the_city_descent() -> None:
     mine = roamer.run_seed(WORLD_SEED, "farhold", 1, 7, dungeon.Difficulty.DELVE)
     assert mine == roamer.run_seed(WORLD_SEED, "farhold", 1, 7, dungeon.Difficulty.DELVE)
     assert mine != roamer.run_seed(WORLD_SEED, "farhold", 1, 8, dungeon.Difficulty.DELVE)
-    city = dungeon.run_seed(WORLD_SEED, "farhold", 1, dungeon.Difficulty.DELVE, 7)
+    city = dungeon.run_seed(
+        WORLD_SEED, "farhold", "farhold_first_adit", dungeon.Difficulty.DELVE, 7
+    )
     assert mine != city

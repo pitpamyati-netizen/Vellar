@@ -23,7 +23,7 @@ def test_difficulty_of_falls_back_to_recon() -> None:
 
 
 def test_recon_is_the_only_difficulty_without_conditions() -> None:
-    seed = dungeon.run_seed("world", "farhold", 1, dungeon.Difficulty.RECON, 7)
+    seed = dungeon.run_seed("world", "farhold", "d1", dungeon.Difficulty.RECON, 7)
     assert dungeon.conditions_for(seed, dungeon.Difficulty.RECON) == ()
     assert len(dungeon.conditions_for(seed, dungeon.Difficulty.DELVE)) == 1
     grim = dungeon.conditions_for(seed, dungeon.Difficulty.GRIM)
@@ -34,7 +34,7 @@ def test_recon_is_the_only_difficulty_without_conditions() -> None:
 
 
 def test_conditions_are_deterministic_by_seed() -> None:
-    seed = dungeon.run_seed("world", "farhold", 2, dungeon.Difficulty.GRIM, 99)
+    seed = dungeon.run_seed("world", "farhold", "d2", dungeon.Difficulty.GRIM, 99)
     first = dungeon.conditions_for(seed, dungeon.Difficulty.GRIM)
     second = dungeon.conditions_for(seed, dungeon.Difficulty.GRIM)
     assert [one.id for one in first] == [one.id for one in second]
@@ -46,7 +46,7 @@ def test_conditions_are_deterministic_by_seed() -> None:
     started=st.integers(min_value=0, max_value=10_000),
 )
 def test_fork_options_are_forward_only_and_distinct(layer: int, final: int, started: int) -> None:
-    seed = dungeon.run_seed("world", "farhold", 1, dungeon.Difficulty.DELVE, started)
+    seed = dungeon.run_seed("world", "farhold", "d1", dungeon.Difficulty.DELVE, started)
     options = dungeon.room_options(seed, layer, final)
     assert len(options) == len(set(options)), "две двери с одной надписью читались бы одной строкой"
     if layer <= 0:
@@ -60,7 +60,7 @@ def test_fork_options_are_forward_only_and_distinct(layer: int, final: int, star
 
 
 def test_fork_options_repeat_for_the_same_seed() -> None:
-    seed = dungeon.run_seed("world", "farhold", 1, dungeon.Difficulty.GRIM, 5)
+    seed = dungeon.run_seed("world", "farhold", "d1", dungeon.Difficulty.GRIM, 5)
     assert dungeon.room_options(seed, 2, 6) == dungeon.room_options(seed, 2, 6)
 
 
@@ -76,6 +76,24 @@ def test_room_rank_maps_to_enemy_rank() -> None:
     assert dungeon.RoomKind.HOLLOW.rank is EnemyRank.NORMAL
     assert dungeon.RoomKind.BEAST.rank is EnemyRank.ELITE
     assert dungeon.RoomKind.LAIR.rank is EnemyRank.BOSS
+
+
+def test_difficulty_carries_an_affix_budget() -> None:
+    """Разведка - без прозвищ, гиблый спуск - по два (ADR 0042)."""
+    assert dungeon.spec_of(dungeon.Difficulty.RECON).affix_chance == 0.0
+    assert dungeon.spec_of(dungeon.Difficulty.RECON).affix_count == 0
+    assert dungeon.spec_of(dungeon.Difficulty.DELVE).affix_count == 1
+    assert dungeon.spec_of(dungeon.Difficulty.GRIM).affix_count == 2
+    assert (
+        dungeon.spec_of(dungeon.Difficulty.GRIM).affix_chance
+        > dungeon.spec_of(dungeon.Difficulty.DELVE).affix_chance
+    )
+
+
+def test_affix_odds_only_touch_elites_and_bosses() -> None:
+    assert dungeon.affix_odds(EnemyRank.NORMAL) == dungeon.AffixOdds(0.0, 0)
+    assert dungeon.affix_odds(EnemyRank.ELITE).chance > 0.0
+    assert dungeon.affix_odds(EnemyRank.BOSS).chance > dungeon.affix_odds(EnemyRank.ELITE).chance
 
 
 def test_bounty_multiplies_across_conditions() -> None:

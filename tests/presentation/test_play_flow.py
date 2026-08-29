@@ -420,7 +420,7 @@ def test_state_survives_a_round_trip(
     assert restored.stack == in_location.stack
 
 
-def test_a_deep_descent_survives_a_round_trip(hero: Character) -> None:
+def test_a_descent_survives_a_round_trip(hero: Character) -> None:
     from mmorpg.presentation.telegram.flows.state import Descent
 
     deep = PlayState(
@@ -429,14 +429,28 @@ def test_a_deep_descent_survives_a_round_trip(hero: Character) -> None:
             level=30,
             layer=2,
             started_at=7,
-            tier=2,
+            dungeon_id="farhold_flooded_drift",
             difficulty="grim",
             room="beast",
         )
     )
     restored = PlayState.deserialise(deep.serialise())
     assert restored.descent == deep.descent
-    assert restored.descent.deep
+    assert restored.descent.dungeon_id == "farhold_flooded_drift"
+
+
+def test_an_old_descent_blob_with_a_numeric_tier_reads_harmlessly(hero: Character) -> None:
+    """Запись старого образца держала на месте ``dungeon_id`` числовой tier."""
+    import json
+
+    from mmorpg.presentation.telegram.flows.state import Descent
+
+    raw = PlayState(descent=Descent(city_id="farhold", level=12, started_at=7)).serialise()
+    data = json.loads(raw)
+    data["descent"][4] = 2  # старый tier
+    restored = PlayState.deserialise(json.dumps(data))
+    assert restored.descent.dungeon_id == "2"
+    assert restored.descent.city_id == "farhold"
 
 
 # --- состояние, пришедшее от прежнего выпуска -------------------------  Хранилище

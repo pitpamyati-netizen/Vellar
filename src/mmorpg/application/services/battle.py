@@ -170,7 +170,15 @@ def begin(
         next_id += 1
 
     for enemy in enemies:
-        combatants.append(monster_combatant(enemy, combatant_id=next_id, side=1))
+        one = monster_combatant(enemy, combatant_id=next_id, side=1)
+        # Прозвища-модификаторы ложатся эффектом прямо на этого бойца, а не через
+        # ``opening_effects`` (те по стороне): отражение, вампиризм, лишняя броня
+        # (ADR 0042). Механику в ударе (яд, стужа) движок читает из
+        # ``enemy.affixes`` сам.
+        for affix_id in enemy.affixes:
+            if content.has_affix(affix_id) and (effect := content.affix(affix_id).effect()):
+                one = replace(one, effects=one.effects.apply(effect))
+        combatants.append(one)
         next_id += 1
 
     if by_side:
@@ -330,6 +338,7 @@ def _enemy_to_json(enemy: Enemy) -> dict[str, object]:
         "gold": enemy.gold,
         "element": enemy.element.value,
         "stakes": enemy.stakes,
+        "affixes": list(enemy.affixes),
     }
 
 
@@ -348,6 +357,7 @@ def _enemy_from_json(raw: Mapping[str, Any]) -> Enemy:
         gold=int(raw["gold"]),
         element=DamageType(raw.get("element", DamageType.SLASHING.value)),
         stakes=float(raw.get("stakes", 1.0)),
+        affixes=tuple(str(one) for one in raw.get("affixes", ())),
     )
 
 

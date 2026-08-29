@@ -253,6 +253,16 @@ def test_an_enemy_needs_somewhere_to_live(content: GameContent) -> None:
     assert refused_for(content, WOLF.with_field("biomes", ""), "негде водиться")
 
 
+def test_the_dungeon_flag_survives_an_enemy_overlay_round_trip(content: GameContent) -> None:
+    """Правка не должна молча вытащить подземную породу на дорогу (ADR 0042)."""
+    snap = overlay_rules.snapshot(content, OverlayKind.ENEMY, "rockjaw")
+    assert snap["dungeon"] == "да"
+    record = OverlayRecord(kind=OverlayKind.ENEMY, entity_id="rockjaw", fields=snap)
+    edited = apply(content, record)
+    kept = next(one for one in edited.enemy_archetypes if one.id == "rockjaw")
+    assert kept.dungeon is True
+
+
 def test_an_unknown_biome_is_refused(content: GameContent) -> None:
     """Известная половина не спасает: перечисление годится целиком или никак."""
     assert refused_for(content, WOLF.with_field("biomes", "луга, изнанка"), "изнанка")

@@ -20,11 +20,42 @@ def test_each_city_has_five_locations(content: GameContent) -> None:
         assert [location.slot for location in city.locations] == [1, 2, 3, 4, 5]
 
 
-def test_each_city_has_a_named_deep_dungeon(content: GameContent) -> None:
-    """Второй спуск города - содержимое: имя и строка на каждый город (ADR 0028)."""
+def test_each_city_has_one_deep_dungeon_at_its_ceiling(content: GameContent) -> None:
+    """Ровно одно глубокое подземелье, названное, на верху полосы города (ADR 0041)."""
     for city in content.cities:
-        assert city.deep_dungeon.name, city.id
-        assert city.deep_dungeon.flavour, city.id
+        deep = [one for one in city.dungeons if one.deep]
+        assert len(deep) == 1, city.id
+        assert deep[0].name and deep[0].flavour, city.id
+        assert deep[0].level == city.level_max, city.id
+        assert city.deep_dungeon is deep[0]
+
+
+def test_each_city_has_at_least_four_regular_dungeons(content: GameContent) -> None:
+    for city in content.cities:
+        assert len(city.regular_dungeons) >= 4, city.id
+
+
+def test_regular_dungeon_levels_span_the_city_band(content: GameContent) -> None:
+    """Список подземелий покрывает полосу города, а не пару точек (ADR 0041)."""
+    for city in content.cities:
+        levels = sorted(one.level for one in city.regular_dungeons)
+        band = city.level_max - city.level_min
+        step = max(1, band // len(levels))
+        assert levels[0] <= city.level_min + 2 * step, city.id
+        assert levels[-1] >= city.level_max - 2 * step, city.id
+        for lower, higher in itertools.pairwise(levels):
+            assert higher - lower <= 2 * step, city.id
+
+
+def test_every_dungeon_level_sits_inside_its_city_band(content: GameContent) -> None:
+    for city in content.cities:
+        for one in city.dungeons:
+            assert city.level_min <= one.level <= city.level_max, one.id
+
+
+def test_dungeon_ids_are_globally_unique(content: GameContent) -> None:
+    ids = [one.id for city in content.cities for one in city.dungeons]
+    assert len(ids) == len(set(ids))
 
 
 def test_every_level_is_covered(content: GameContent) -> None:

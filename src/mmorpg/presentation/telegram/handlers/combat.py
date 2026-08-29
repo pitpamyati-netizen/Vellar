@@ -268,8 +268,14 @@ async def _spawn(
             if not descent.group:
                 side = [(character, True)]
         else:
-            # Данж занимает биом самой глубокой локации города: та же земля, ниже.
-            biome = city.locations[-1].biome
+            # Биом задаёт выбранное подземелье (ADR 0041). Запись старого образца
+            # могла назвать подземелье, которого нет (числовой tier): заход от
+            # этого не падает, а идёт по самой глубокой земле города (правило 8).
+            biome = (
+                city.dungeon(descent.dungeon_id).biome
+                if city.has_dungeon(descent.dungeon_id)
+                else city.locations[-1].biome
+            )
             group_stakes = 1.0
         difficulty = dungeon_rules.difficulty_of(descent.difficulty)
         spec = dungeon_rules.spec_of(difficulty)
@@ -285,6 +291,11 @@ async def _spawn(
             rank=room.rank,
             stakes=spec.stakes * dungeon_rules.ROOM_STAKES[room] * group_stakes,
             bounty=dungeon_rules.bounty_of(conditions) * group_stakes,
+            # Городской спуск тянет своих подземных тварей; блуждающее подземелье
+            # осело в локации и населено её живностью (ADR 0037, ADR 0042).
+            dungeon=not descent.roamer,
+            affix_chance=spec.affix_chance,
+            affix_count=spec.affix_count,
         )
         return begin(
             content,
@@ -314,12 +325,17 @@ async def _spawn(
     # Волна и то, сколько из неё уже выбито, обе в семени: вторая стая в узле -
     # не первая заново (``domain/rules/nodes.py``).
     seed = derive(node_fight_seed(settings.world_seed, flow.session, left.wave), left.taken)
+    # Прозвище-модификатор бывает только у сильного одиночки и хозяина логова, и
+    # никогда у обычной стаи (ADR 0042); эпиков в локации мало (ADR 0034).
+    odds = dungeon_rules.affix_odds(node.kind.rank)
     enemies = fight_flow.spawn_for_node(
         content,
         seed=seed,
         biome=location.biome,
         level=max(1, node.level),
         rank=node.kind.rank,
+        affix_chance=odds.chance,
+        affix_count=odds.count,
     )
     return begin(
         content,

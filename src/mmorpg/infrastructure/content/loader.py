@@ -22,8 +22,9 @@ from mmorpg.domain.entities.content import (
     CharacterClass,
     City,
     ClassResource,
-    DeepDungeon,
+    Dungeon,
     EdgeEffect,
+    EnemyAffix,
     EquipSlot,
     GameContent,
     GearArchetype,
@@ -61,6 +62,7 @@ from mmorpg.domain.entities.dice import MAX_SPREAD, MIN_SPREAD, Dice
 from mmorpg.domain.entities.location import EnemyArchetype, EnemyKind
 from mmorpg.domain.entities.quest import ObjectiveKind, Quest
 from mmorpg.domain.entities.stats import StatBlock, StatCode
+from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.rules.equipment import WEAPON_SLOT
 from mmorpg.domain.rules.modifiers import EFFECTIVE_KEYS
@@ -156,7 +158,7 @@ def load_content(content_dir: Path) -> GameContent:
     item_ids = {item.id for item in written} | item_procgen.catalogue_ids(
         gear.gear_archetypes, gear.gear_tiers, gear.rarities
     )
-    enemies, elite_titles = _parse_enemies(raw["enemies.toml"], item_ids, problems)
+    enemies, elite_titles, affixes = _parse_enemies(raw["enemies.toml"], item_ids, problems)
     _validate_enemies(enemies, cities, problems)
     quests = _parse_quests(
         raw["quests.toml"], item_ids, cities, {enemy.id for enemy in enemies}, problems
@@ -189,6 +191,7 @@ def load_content(content_dir: Path) -> GameContent:
         "special_properties": gear.special_properties,
         "enemy_archetypes": enemies,
         "elite_titles": elite_titles,
+        "affixes": affixes,
         "quests": quests,
         "crafts": crafts,
         "recipes": recipes,
@@ -1189,7 +1192,7 @@ def _parse_enemies(
     raw: Mapping[str, Any],
     item_ids: set[str],
     problems: list[str],
-) -> tuple[tuple[EnemyArchetype, ...], tuple[str, ...]]:
+) -> tuple[tuple[EnemyArchetype, ...], tuple[str, ...], tuple[EnemyAffix, ...]]:
     meta = raw.get("meta", {})
     elite_titles = tuple(str(title) for title in meta.get("elite_titles", ()))
     known_kinds = {kind.value for kind in EnemyKind}
@@ -1226,10 +1229,84 @@ def _parse_enemies(
                 initiative=float(entry.get("initiative", 1.0)),
                 loot=loot,
                 element=DamageType(element_raw) if element_raw else None,
+                dungeon=bool(entry.get("dungeon", False)),
             )
         )
     _check_unique((enemy.id for enemy in parsed), "enemies.toml", problems)
-    return tuple(parsed), elite_titles
+    affixes = _parse_affixes(raw, problems)
+    return tuple(parsed), elite_titles, affixes
+
+
+#: Меньше этого числа прозвищ - и «тёмный ход» с «гиблым спуском» звучат одним и
+#: тем же врагом раз за разом.
+MINIMUM_AFFIXES = 6
+
+
+def _parse_affixes(raw: Mapping[str, Any], problems: list[str]) -> tuple[EnemyAffix, ...]:
+    """Прочитать ``[[affix]]`` - прозвища-модификаторы противников (ADR 0042)."""
+    known_statuses = {one.value for one in StatusKind}
+    parsed: list[EnemyAffix] = []
+    for entry in raw.get("affix", ()):
+        affix_id = str(entry.get("id", ""))
+        adjective = str(entry.get("adjective", ""))
+        if not affix_id:
+            problems.append("enemies.toml: an affix has no id")
+            continue
+        if not adjective:
+            problems.append(f"enemies.toml: affix {affix_id} has no adjective")
+
+        raw_modifiers = entry.get("modifiers", {})
+        modifiers = {str(key): float(value) for key, value in raw_modifiers.items()}
+        ignored = sorted(set(modifiers) - EFFECTIVE_KEYS)
+        if ignored:
+            problems.append(
+                f"enemies.toml: affix {affix_id} promises keys the engine ignores: {ignored}"
+            )
+
+        status_raw = str(entry.get("on_hit_status", ""))
+        if status_raw and status_raw not in known_statuses:
+            problems.append(
+                f"enemies.toml: affix {affix_id} has unknown on_hit_status {status_raw!r}"
+            )
+            status_raw = ""
+
+        weight = int(entry.get("weight", 1))
+        if weight < 1:
+            problems.append(f"enemies.toml: affix {affix_id} needs a positive weight")
+        for key in ("health", "damage", "armor", "initiative", "gold"):
+            value = float(entry.get(key, 1.0))
+            if not 0.5 <= value <= 2.5:
+                problems.append(
+                    f"enemies.toml: affix {affix_id} {key} множитель {value} вне 0.5..2.5"
+                )
+        chance = float(entry.get("on_hit_chance", 0.0))
+        if not 0.0 <= chance <= 100.0:
+            problems.append(f"enemies.toml: affix {affix_id} on_hit_chance {chance} вне 0..100")
+
+        parsed.append(
+            EnemyAffix(
+                id=affix_id,
+                adjective=adjective,
+                weight=max(1, weight),
+                health=float(entry.get("health", 1.0)),
+                damage=float(entry.get("damage", 1.0)),
+                armor=float(entry.get("armor", 1.0)),
+                initiative=float(entry.get("initiative", 1.0)),
+                gold=float(entry.get("gold", 1.0)),
+                pack_bonus=max(0, int(entry.get("pack_bonus", 0))),
+                modifiers=MappingProxyType(modifiers),
+                on_hit_status=StatusKind(status_raw) if status_raw else None,
+                on_hit_turns=max(0, int(entry.get("on_hit_turns", 0))),
+                on_hit_chance=chance,
+                on_hit_magnitude=float(entry.get("on_hit_magnitude", 0.0)),
+            )
+        )
+    _check_unique((affix.id for affix in parsed), "enemies.toml affixes", problems)
+    if len(parsed) < MINIMUM_AFFIXES:
+        problems.append(
+            f"enemies.toml: нужно хотя бы {MINIMUM_AFFIXES} прозвищ, а объявлено {len(parsed)}"
+        )
+    return tuple(parsed)
 
 
 def _parse_turnings(raw: Mapping[str, Any], problems: list[str]) -> tuple[tuple[Turning, ...], str]:
@@ -1385,10 +1462,22 @@ def _validate_enemies(
     if not enemies:
         problems.append("enemies.toml: no enemy archetypes defined")
         return
+    overworld = [enemy for enemy in enemies if not enemy.dungeon]
+    underground = [enemy for enemy in enemies if enemy.dungeon]
+
     biomes = {location.biome for city in cities for location in city.locations}
     for biome in sorted(biomes):
-        if not any(enemy.fits(biome) for enemy in enemies):
-            problems.append(f"enemies.toml: biome {biome!r} has no enemy archetype")
+        if not any(enemy.fits(biome) for enemy in overworld):
+            problems.append(f"enemies.toml: biome {biome!r} has no overworld enemy archetype")
+
+    dungeon_biomes = {
+        dungeon.biome for city in cities for dungeon in city.dungeons if dungeon.biome
+    }
+    for biome in sorted(dungeon_biomes):
+        if not any(enemy.fits(biome) for enemy in underground):
+            problems.append(f"enemies.toml: dungeon biome {biome!r} has no dungeon enemy archetype")
+    if not any("*" in enemy.biomes for enemy in underground):
+        problems.append("enemies.toml: no dungeon enemy archetype fits every biome")
 
 
 # --- world -----------------------------------------------------------
@@ -1411,10 +1500,17 @@ def _parse_world(raw: Mapping[str, Any], problems: list[str]) -> tuple[City, ...
             )
             for loc in entry.get("location", ())
         )
-        raw_deep = entry.get("deep_dungeon", {})
-        deep = DeepDungeon(
-            name=str(raw_deep.get("name", "")),
-            flavour=str(raw_deep.get("flavour", "")),
+        dungeons = tuple(
+            Dungeon(
+                id=str(d["id"]),
+                name=str(d.get("name", "")),
+                flavour=str(d.get("flavour", "")),
+                biome=str(d.get("biome", "")),
+                level=int(d["level"]),
+                deep=bool(d.get("deep", False)),
+                unlock_level=int(d.get("unlock_level", 0)),
+            )
+            for d in entry.get("dungeon", ())
         )
         parsed.append(
             City(
@@ -1428,10 +1524,62 @@ def _parse_world(raw: Mapping[str, Any], problems: list[str]) -> tuple[City, ...
                 unlock_requires=tuple(str(item) for item in entry.get("unlock_requires", ())),
                 services=tuple(str(item) for item in entry.get("services", ())),
                 locations=locations,
-                deep_dungeon=deep,
+                dungeons=dungeons,
             )
         )
     return tuple(parsed)
+
+
+#: Сколько обычных подземелий у города, чтобы список покрывал его полосу, а не
+#: пару точек (ADR 0041).
+MINIMUM_REGULAR_DUNGEONS = 4
+
+
+def _validate_city_dungeons(city: City, problems: list[str]) -> None:
+    """Список подземелий города: одно глубокое на верху полосы, четыре вразброс."""
+    deep = [one for one in city.dungeons if one.deep]
+    if len(deep) != 1:
+        problems.append(
+            f"world.toml: {city.id} must have exactly one deep dungeon, has {len(deep)}"
+        )
+    elif not deep[0].name or not deep[0].flavour:
+        problems.append(f"world.toml: {city.id} deep dungeon is missing name/flavour")
+    elif deep[0].level != city.level_max:
+        problems.append(
+            f"world.toml: {city.id} deep dungeon level {deep[0].level} != city.level_max "
+            f"{city.level_max}"
+        )
+
+    regular = sorted(one.level for one in city.dungeons if not one.deep)
+    if len(regular) < MINIMUM_REGULAR_DUNGEONS:
+        problems.append(
+            f"world.toml: {city.id} has {len(regular)} regular dungeons, "
+            f"expected at least {MINIMUM_REGULAR_DUNGEONS}"
+        )
+
+    for one in city.dungeons:
+        if not one.name:
+            problems.append(f"world.toml: dungeon {one.id} has no name")
+        if not one.biome:
+            problems.append(f"world.toml: dungeon {one.id} has no biome")
+        if not city.level_min <= one.level <= city.level_max:
+            problems.append(
+                f"world.toml: dungeon {one.id} level {one.level} outside city band "
+                f"[{city.level_min}, {city.level_max}]"
+            )
+
+    if regular:
+        band = city.level_max - city.level_min
+        step = max(1, band // len(regular))
+        if regular[0] > city.level_min + 2 * step:
+            problems.append(f"world.toml: {city.id} has no low dungeon near its floor")
+        if regular[-1] < city.level_max - 2 * step:
+            problems.append(f"world.toml: {city.id} regular dungeons stop short of its ceiling")
+        for lower, higher in itertools.pairwise(regular):
+            if higher - lower > 2 * step:
+                problems.append(
+                    f"world.toml: {city.id} leaves a gap between dungeons {lower} and {higher}"
+                )
 
 
 def _validate_world(cities: Sequence[City], rules: ProgressionRules, problems: list[str]) -> None:
@@ -1441,8 +1589,14 @@ def _validate_world(cities: Sequence[City], rules: ProgressionRules, problems: l
 
     known_ids = {city.id for city in cities}
     covered: set[int] = set()
+    _check_unique(
+        (dungeon.id for city in cities for dungeon in city.dungeons),
+        "world.toml dungeons",
+        problems,
+    )
 
     for city in cities:
+        _validate_city_dungeons(city, problems)
         if len(city.locations) != LOCATIONS_PER_CITY:
             problems.append(
                 f"world.toml: {city.id} has {len(city.locations)} locations, "
@@ -1451,9 +1605,6 @@ def _validate_world(cities: Sequence[City], rules: ProgressionRules, problems: l
         slots = [location.slot for location in city.locations]
         if slots != list(range(1, len(city.locations) + 1)):
             problems.append(f"world.toml: {city.id} has non-sequential location slots {slots}")
-
-        if not city.deep_dungeon.name or not city.deep_dungeon.flavour:
-            problems.append(f"world.toml: {city.id} is missing [city.deep_dungeon] name/flavour")
 
         for requirement in city.unlock_requires:
             if (

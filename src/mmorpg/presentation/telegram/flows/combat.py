@@ -43,11 +43,18 @@ def spawn_for_node(
     rank: EnemyRank = EnemyRank.NORMAL,
     stakes: float = 1.0,
     bounty: float = 1.0,
+    dungeon: bool = False,
+    affix_chance: float = 0.0,
+    affix_count: int = 0,
 ) -> tuple[Enemy, ...]:
     """Кто стоит в этом узле. То же семя - те же противники, всегда.
 
     ``stakes`` и ``bounty`` поднимают ставку боя: в локации они всегда единица,
     а в данже их задаёт выбранная сложность (``domain/rules/dungeon.py``).
+
+    ``dungeon`` разводит два пула пород; ``affix_chance``/``affix_count`` -
+    прозвища-модификаторы, которые вешает выбранная сложность или ступень узла
+    (``domain/rules/dungeon.py``, ADR 0042).
     """
     return generate_group(
         seed,
@@ -58,6 +65,10 @@ def spawn_for_node(
         elite_titles=content.elite_titles,
         stakes=stakes,
         bounty=bounty,
+        dungeon=dungeon,
+        affixes=content.affixes,
+        affix_chance=affix_chance,
+        affix_count=affix_count,
     )
 
 
@@ -100,7 +111,7 @@ def render(
             current = state.active
             if current is not None and current.id == viewer_id:
                 return screens.battle_screen(content, character, state, viewer_id, notice)
-            return screens.waiting_screen(state, viewer_id, notice)
+            return screens.waiting_screen(content, state, viewer_id, notice)
 
 
 def action_for(

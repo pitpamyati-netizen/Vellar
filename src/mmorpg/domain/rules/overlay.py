@@ -233,6 +233,9 @@ FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
             hint="не выбрано — по породе",
         ),
         FieldSpec("loot", "Что падает", FieldKind.LIST, source=Source.ITEM),
+        # Только под землёй: порода уходит в dungeon-пул захода и пропадает из
+        # встреч на дороге (ADR 0042).
+        FieldSpec("dungeon", "Только подземелья", FieldKind.FLAG),
     ),
     OverlayKind.CITY: (
         FieldSpec("name", "Название", required=True, limit=NAME_LIMIT),
@@ -671,7 +674,9 @@ def _enemy_fields(enemy: EnemyArchetype) -> dict[str, str]:
         "damage": _rate(enemy.damage),
         "armor": _rate(enemy.armor),
         "initiative": _rate(enemy.initiative),
+        "element": enemy.element.value if enemy.element is not None else "",
         "loot": ", ".join(enemy.loot),
+        "dungeon": "да" if enemy.dungeon else "нет",
     }
 
 
@@ -1111,6 +1116,7 @@ def _rebuilt(
         special_properties=content.special_properties,
         enemy_archetypes=content.enemy_archetypes if enemies is None else enemies,
         elite_titles=content.elite_titles,
+        affixes=content.affixes,
         trait_categories=content.trait_categories,
         inverted_modifiers=content.inverted_modifiers,
         rules=content.rules if rules is None else rules,
@@ -1265,6 +1271,7 @@ def _apply_enemies(
             initiative=record.rate("initiative"),
             element=(DamageType(chosen) if (chosen := record.value("element")) else None),
             loot=record.listed("loot"),
+            dungeon=record.flag("dungeon"),
         )
     return tuple(by_id.values())
 

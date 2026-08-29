@@ -8,6 +8,10 @@
 # У каждого биома, который встречается в world.toml, обязано быть хотя бы три
 # кандидата - проверяет tests/content/test_enemies.py.
 #
+# dungeon = true: порода живёт только под землёй (ADR 0042). Заход в подземелье
+# тянет противников из dungeon-пород по dungeon-биому ([[city.dungeon]] в
+# world.toml), дорога - из остальных; пулы не пересекаются, у каждого свой "*".
+#
 # element: каким родом урона этот противник бьёт. Физические четыре - piercing,
 # slashing, bludgeoning, rending - и магические одиннадцать; полный список в
 # entities/damage.py. Не объявлено - решает порода: зверь рвёт, гуманоид рубит,
@@ -321,3 +325,276 @@ damage = 1.3
 armor = 1.5
 initiative = 0.8
 loot = ["iron_scrap"]
+
+# --- породы подземелий (dungeon = true, ADR 0042) --------------------------
+# Биомы отсюда - dungeon-биомы из [[city.dungeon]]: рудник, штольни, катакомбы,
+# глубокие пещеры, затопленные ходы, подземный город. У каждого не меньше трёх
+# кандидатов; "hollow_howler" - запас на любой биом.
+
+[[enemy]]
+id = "rockjaw"
+name = "Камнеед"
+kind = "aberration"
+element = "bludgeoning"
+biomes = ["штольни", "глубокие пещеры", "рудник"]
+health = 1.4
+damage = 1.0
+armor = 1.4
+initiative = 0.6
+loot = ["iron_scrap"]
+dungeon = true
+
+[[enemy]]
+id = "drift_crawler"
+name = "Ползун из штрека"
+kind = "beast"
+element = "poison"
+biomes = ["рудник", "штольни", "глубокие пещеры"]
+health = 0.9
+damage = 1.2
+armor = 0.6
+initiative = 1.3
+loot = ["grove_resin"]
+dungeon = true
+
+[[enemy]]
+id = "blind_hound"
+name = "Слепой пёс"
+kind = "beast"
+biomes = ["рудник", "катакомбы", "подземный город"]
+health = 1.0
+damage = 1.2
+armor = 0.7
+initiative = 1.4
+loot = ["wolf_pelt"]
+dungeon = true
+
+[[enemy]]
+id = "grave_warden"
+name = "Могильный сторож"
+kind = "undead"
+biomes = ["катакомбы", "подземный город"]
+health = 1.1
+damage = 1.0
+armor = 1.1
+initiative = 0.8
+loot = ["iron_scrap"]
+dungeon = true
+
+[[enemy]]
+id = "bone_picker"
+name = "Костяник"
+kind = "undead"
+element = "negative"
+biomes = ["катакомбы", "затопленные ходы"]
+health = 0.8
+damage = 1.3
+armor = 0.6
+initiative = 1.1
+loot = []
+dungeon = true
+
+[[enemy]]
+id = "crypt_moth"
+name = "Склепная моль"
+kind = "beast"
+biomes = ["катакомбы", "глубокие пещеры"]
+health = 0.7
+damage = 1.1
+armor = 0.5
+initiative = 1.6
+loot = []
+dungeon = true
+
+[[enemy]]
+id = "drowned_digger"
+name = "Утопший рудокоп"
+kind = "undead"
+element = "cold"
+biomes = ["затопленные ходы", "рудник"]
+health = 1.2
+damage = 0.9
+armor = 0.9
+initiative = 0.7
+loot = []
+dungeon = true
+
+[[enemy]]
+id = "sump_lurker"
+name = "Тварь из отстойника"
+kind = "aberration"
+element = "poison"
+biomes = ["затопленные ходы", "глубокие пещеры"]
+health = 1.3
+damage = 1.1
+armor = 1.0
+initiative = 0.8
+loot = ["grove_resin"]
+dungeon = true
+
+[[enemy]]
+id = "deep_digger"
+name = "Подземный копач"
+kind = "humanoid"
+biomes = ["рудник", "штольни", "подземный город"]
+health = 0.9
+damage = 1.0
+armor = 0.9
+initiative = 1.1
+loot = ["iron_scrap"]
+dungeon = true
+
+[[enemy]]
+id = "drift_thief"
+name = "Штрековый тать"
+kind = "humanoid"
+biomes = ["рудник", "штольни", "подземный город"]
+health = 1.0
+damage = 1.1
+armor = 1.0
+initiative = 1.1
+loot = ["iron_scrap"]
+dungeon = true
+
+[[enemy]]
+id = "lantern_wretch"
+name = "Фонарщик"
+kind = "humanoid"
+biomes = ["подземный город", "катакомбы"]
+health = 0.9
+damage = 1.2
+armor = 0.8
+initiative = 1.0
+loot = []
+dungeon = true
+
+[[enemy]]
+id = "pit_sentinel"
+name = "Рудничный страж"
+kind = "elemental"
+element = "bludgeoning"
+biomes = ["штольни", "подземный город", "рудник"]
+health = 1.6
+damage = 1.1
+armor = 1.6
+initiative = 0.6
+loot = ["iron_scrap"]
+dungeon = true
+
+[[enemy]]
+id = "firedamp_spark"
+name = "Рудничный огонёк"
+kind = "elemental"
+element = "fire"
+biomes = ["рудник", "штольни", "затопленные ходы"]
+health = 1.0
+damage = 1.4
+armor = 0.7
+initiative = 1.2
+loot = []
+dungeon = true
+
+[[enemy]]
+id = "hollow_howler"
+name = "Гулкий вой"
+kind = "aberration"
+element = "mental"
+biomes = ["*"]
+health = 1.1
+damage = 1.3
+armor = 0.9
+initiative = 1.2
+loot = []
+dungeon = true
+
+# --- прозвища-модификаторы (ADR 0042) ------------------------------------
+# adjective приклеивается перед именем породы («Иглистый ползун из штрека»).
+# Множители запекаются в числа при сборке, как stakes. modifiers - ключи из
+# modifiers.EFFECTIVE_KEYS, вешаются эффектом на весь бой. on_hit_status движок
+# вешает на цель после состоявшегося удара породы; on_hit_magnitude в 0 для яда
+# значит «от силы удара».
+
+[[affix]]
+id = "ironhide"
+adjective = "Броненосный"
+weight = 5
+health = 1.15
+armor = 1.6
+initiative = 0.9
+gold = 1.3
+modifiers = { damage_taken_percent = -12.0 }
+
+[[affix]]
+id = "thornback"
+adjective = "Иглистый"
+weight = 4
+health = 1.1
+gold = 1.4
+modifiers = { reflect_percent = 25.0 }
+
+[[affix]]
+id = "bloodletter"
+adjective = "Жиловатый"
+weight = 4
+damage = 1.15
+gold = 1.4
+modifiers = { lifesteal_percent = 30.0 }
+
+[[affix]]
+id = "venombite"
+adjective = "Гнилозубый"
+weight = 4
+damage = 1.05
+gold = 1.35
+on_hit_status = "poison"
+on_hit_turns = 3
+on_hit_chance = 55.0
+
+[[affix]]
+id = "hoarfrost"
+adjective = "Стылый"
+weight = 4
+damage = 1.05
+initiative = 1.1
+gold = 1.35
+on_hit_status = "slow"
+on_hit_turns = 2
+on_hit_chance = 55.0
+on_hit_magnitude = 20.0
+
+[[affix]]
+id = "sapping"
+adjective = "Измождённый"
+weight = 3
+damage = 1.1
+gold = 1.35
+on_hit_status = "weakness"
+on_hit_turns = 2
+on_hit_chance = 45.0
+on_hit_magnitude = 25.0
+
+[[affix]]
+id = "brutish"
+adjective = "Кряжистый"
+weight = 5
+health = 1.35
+damage = 1.2
+gold = 1.5
+
+[[affix]]
+id = "nimble"
+adjective = "Верткий"
+weight = 4
+damage = 1.1
+initiative = 1.35
+gold = 1.3
+modifiers = { initiative_percent = 20.0 }
+
+[[affix]]
+id = "broodkeeper"
+adjective = "Выводковый"
+weight = 2
+health = 0.9
+damage = 0.95
+gold = 1.6
+pack_bonus = 2

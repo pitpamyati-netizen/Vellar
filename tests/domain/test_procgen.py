@@ -411,6 +411,89 @@ def test_groups_hold_between_one_and_three_enemies(content: GameContent) -> None
     assert sizes == {1, 2, 3}, "all group sizes should occur across many seeds"
 
 
+def test_dungeon_pool_only_yields_dungeon_archetypes(content: GameContent) -> None:
+    """Заход в подземелье не выставит дорожную стаю (ADR 0042)."""
+    for attempt in range(40):
+        seed = enemy_seed(location_seed(WORLD_SEED, f"pit-{attempt}", 1), 0)
+        group = generate_group(
+            seed, archetypes=content.enemy_archetypes, biome="рудник", level=40, dungeon=True
+        )
+        for enemy in group:
+            fits = next(a for a in content.enemy_archetypes if a.id == enemy.archetype_id)
+            assert fits.dungeon, enemy.archetype_id
+
+
+def test_affix_roll_is_seed_deterministic_and_optional(content: GameContent) -> None:
+    seed = b"same-room"
+    first = generate_group(
+        seed,
+        archetypes=content.enemy_archetypes,
+        biome="рудник",
+        level=30,
+        dungeon=True,
+        affixes=content.affixes,
+        affix_chance=1.0,
+        affix_count=2,
+    )
+    second = generate_group(
+        seed,
+        archetypes=content.enemy_archetypes,
+        biome="рудник",
+        level=30,
+        dungeon=True,
+        affixes=content.affixes,
+        affix_chance=1.0,
+        affix_count=2,
+    )
+    assert [e.affixes for e in first] == [e.affixes for e in second]
+    assert all(e.affixes for e in first)
+
+    plain = generate_group(
+        seed, archetypes=content.enemy_archetypes, biome="рудник", level=30, dungeon=True
+    )
+    assert all(e.affixes == () for e in plain)
+
+
+def test_affix_bakes_multipliers_and_prefixes_the_name(content: GameContent) -> None:
+    seed = b"steady"
+    plain = generate_group(
+        seed, archetypes=content.enemy_archetypes, biome="рудник", level=30, dungeon=True
+    )
+    brutish = next(a for a in content.affixes if a.id == "brutish")
+    named = generate_group(
+        seed,
+        archetypes=content.enemy_archetypes,
+        biome="рудник",
+        level=30,
+        dungeon=True,
+        affixes=(brutish,),
+        affix_chance=1.0,
+        affix_count=1,
+    )
+    assert sum(e.max_health for e in named) > sum(e.max_health for e in plain)
+    assert all(e.name.startswith("Кряжистый") for e in named)
+
+
+def test_broodkeeper_grows_the_pack(content: GameContent) -> None:
+    brood = next(a for a in content.affixes if a.id == "broodkeeper")
+    seen_big = False
+    for attempt in range(60):
+        seed = enemy_seed(location_seed(WORLD_SEED, f"brood-{attempt}", 1), 0)
+        group = generate_group(
+            seed,
+            archetypes=content.enemy_archetypes,
+            biome="рудник",
+            level=20,
+            dungeon=True,
+            affixes=(brood,),
+            affix_chance=1.0,
+            affix_count=1,
+        )
+        assert len(group) <= 5
+        seen_big = seen_big or len(group) >= 4
+    assert seen_big
+
+
 def test_generation_never_touches_the_global_random(content: GameContent) -> None:
     """Забредший ``random.random()`` сделал бы мир невоспроизводимым."""
     import random

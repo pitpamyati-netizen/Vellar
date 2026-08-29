@@ -6,10 +6,10 @@
 босса и ходом наверх. Карта нигде не хранится: и вид комнаты каждого слоя, и
 её развилка - чистая функция от сида захода и номера слоя.
 
-Сложность - множитель поверх места. Уровень спуска задаёт город (``tier``,
-ADR 0028), а сложность домножает силу врагов и плату и, на всём, что выше
-«разведки», бросает на весь заход одно-два случайных условия - и беды, и
-блага (ADR 0036).
+Сложность - множитель поверх места. Уровень спуска задаёт выбранное подземелье
+(``[[city.dungeon]]``, ADR 0041), а сложность домножает силу врагов и плату и,
+на всём, что выше «разведки», бросает на весь заход одно-два случайных условия
+и прозвище-модификатор на стаю (ADR 0036, ADR 0042).
 
 Всё здесь чистое: ни времени, ни ввода-вывода. Сид и номер слоя приходят
 аргументом.
@@ -70,6 +70,10 @@ class DifficultySpec:
     extra_layers: int
     #: Сколько случайных условий бросает на весь заход.
     conditions: int
+    #: С какой вероятностью у стаи будет прозвище-модификатор (ADR 0042).
+    affix_chance: float = 0.0
+    #: Сколько прозвищ вешать на стаю, когда бросок прошёл.
+    affix_count: int = 0
 
 
 DIFFICULTIES: Mapping[Difficulty, DifficultySpec] = MappingProxyType(
@@ -78,11 +82,48 @@ DIFFICULTIES: Mapping[Difficulty, DifficultySpec] = MappingProxyType(
             Difficulty.RECON, stakes=1.0, extra_layers=0, conditions=0
         ),
         Difficulty.DELVE: DifficultySpec(
-            Difficulty.DELVE, stakes=1.5, extra_layers=1, conditions=1
+            Difficulty.DELVE,
+            stakes=1.5,
+            extra_layers=1,
+            conditions=1,
+            affix_chance=0.35,
+            affix_count=1,
         ),
-        Difficulty.GRIM: DifficultySpec(Difficulty.GRIM, stakes=2.1, extra_layers=2, conditions=2),
+        Difficulty.GRIM: DifficultySpec(
+            Difficulty.GRIM,
+            stakes=2.1,
+            extra_layers=2,
+            conditions=2,
+            affix_chance=0.70,
+            affix_count=2,
+        ),
     }
 )
+
+
+@dataclass(frozen=True, slots=True)
+class AffixOdds:
+    """Шанс и число прозвищ для стаи вне выбора сложности захода."""
+
+    chance: float
+    count: int
+
+
+#: Прозвища на узлах локации: только у сильного одиночки и хозяина логова, и
+#: никогда у обычной стаи (ADR 0042). Эпиков в локации и так мало (ADR 0034),
+#: так что прозвище тут - редкая встреча, а не общий фон.
+NODE_AFFIX_ODDS: Mapping[EnemyRank, AffixOdds] = MappingProxyType(
+    {
+        EnemyRank.ELITE: AffixOdds(chance=0.50, count=1),
+        EnemyRank.BOSS: AffixOdds(chance=0.90, count=1),
+    }
+)
+
+
+def affix_odds(rank: EnemyRank) -> AffixOdds:
+    """Шанс прозвища для противника этой ступени на узле локации."""
+    return NODE_AFFIX_ODDS.get(rank, AffixOdds(chance=0.0, count=0))
+
 
 #: Насколько бой в комнате этого вида слабее обычного. Логово и зверь крепче
 #: не здесь, а ступенью (``RoomKind.rank``); «затишье» - лёгкий бой и передышка.
@@ -120,6 +161,20 @@ _FORK_ROOMS: tuple[tuple[RoomKind, int], ...] = (
 MIN_FINAL_LAYER = 2
 
 
+def dungeon_unlocked(
+    *, deep: bool, unlock_level: int, char_level: int, deep_threshold: int
+) -> bool:
+    """Открыт ли этот спуск игроку (ADR 0041).
+
+    Глубокий спуск открывает не его уровень, а та же земля - самая глубокая
+    локация города (``deep_threshold``); обычный - своё ``unlock_level``
+    (у большинства это ноль).
+    """
+    if deep:
+        return char_level >= deep_threshold
+    return char_level >= unlock_level
+
+
 def difficulty_of(value: str) -> Difficulty:
     """Сложность по ключу; неизвестное читается как «разведка» (правило 8)."""
     try:
@@ -151,10 +206,14 @@ def final_layer(base_depth: int, difficulty: Difficulty) -> int:
 
 
 def run_seed(
-    world_seed: str, city_id: str, tier: int, difficulty: Difficulty, started_at: int
+    world_seed: str, city_id: str, dungeon_id: str, difficulty: Difficulty, started_at: int
 ) -> bytes:
-    """Сид одного захода: два спуска подряд - два разных подземелья."""
-    return derive(world_seed, "dungeon", city_id, tier, difficulty.value, started_at)
+    """Сид одного захода: два захода подряд - два разных подземелья.
+
+    ``dungeon_id`` - какое из названных подземелий города (ADR 0041): у каждого
+    свой сид, поэтому «Барсучьи ходы» и «Затопленный штрек» никогда не совпадут.
+    """
+    return derive(world_seed, "dungeon", city_id, dungeon_id, difficulty.value, started_at)
 
 
 def room_options(seed: bytes, layer: int, final: int) -> tuple[RoomKind, ...]:

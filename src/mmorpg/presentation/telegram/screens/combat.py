@@ -534,12 +534,34 @@ def turn_lines(state: BattleState, viewer_id: int = 0) -> tuple[str, ...]:
 # --- сам экран --------------------------------------------------------
 
 
-def _sides(state: BattleState, viewer: Combatant) -> list[str]:
+def affix_lines(content: GameContent, state: BattleState, viewer: Combatant) -> list[str]:
+    """Что несёт каждое прозвище живых врагов, словами (ADR 0042).
+
+    Имя врага уже с приставкой; здесь - что она делает, по одной строке на
+    уникальное прозвище.
+    """
+    from mmorpg.presentation.telegram.screens import dungeon as dungeon_screens
+
+    seen: set[str] = set()
+    lines: list[str] = []
+    for one in state.combatants:
+        if one.side == viewer.side or not one.alive or one.enemy is None:
+            continue
+        for affix_id in one.enemy.affixes:
+            if affix_id in seen or not content.has_affix(affix_id):
+                continue
+            seen.add(affix_id)
+            lines.append(dungeon_screens.affix_line(content.affix(affix_id)))
+    return lines
+
+
+def _sides(content: GameContent, state: BattleState, viewer: Combatant) -> list[str]:
     lines: list[str] = []
     foes = tuple(one for one in state.combatants if one.side != viewer.side and one.alive)
     if foes:
         lines.append("Против вас:")
         lines.extend(foe_line(state, one) for one in foes)
+        lines.extend(affix_lines(content, state, viewer))
     allies = tuple(
         one for one in state.combatants if one.side == viewer.side and one.id != viewer.id
     )
@@ -564,10 +586,10 @@ def battle_screen(
     """Панель боя того, чей сейчас ход."""
     viewer = state.by_id(viewer_id)
     if viewer is None:  # pragma: no cover - зритель всегда участник
-        return waiting_screen(state, viewer_id, notice)
+        return waiting_screen(content, state, viewer_id, notice)
 
     lines = list(head(f"Бой. Круг {state.round}.", notice))
-    lines.extend(_sides(state, viewer))
+    lines.extend(_sides(content, state, viewer))
     lines.append(trace_line(viewer.trace))
     lines.extend(turn_lines(state, viewer_id))
     target = state.target_for(viewer_id)
@@ -601,7 +623,9 @@ def battle_screen(
     return Screen(id=ScreenId.COMBAT, lines=tuple(lines), rows=tuple(rows))
 
 
-def waiting_screen(state: BattleState, viewer_id: int, notice: str = "") -> Screen:
+def waiting_screen(
+    content: GameContent, state: BattleState, viewer_id: int, notice: str = ""
+) -> Screen:
     """Экран того, чей ход ещё не наступил.
 
     Ждать приходится только живого игрока: за породу ходит движок, и его ходы
@@ -614,7 +638,7 @@ def waiting_screen(state: BattleState, viewer_id: int, notice: str = "") -> Scre
     who = current.name if current is not None else ""
     lines = list(head(f"Бой. Круг {state.round}. Ход: {who}.", notice))
     if viewer is not None:
-        lines.extend(_sides(state, viewer))
+        lines.extend(_sides(content, state, viewer))
     lines.extend(turn_lines(state, viewer_id))
     lines.append("Ждём его хода. Таймера нет: сколько нужно, столько и ждём.")
     lines.append("«Что там в бою» — перечитать, «Сдаться» — отдать бой и выйти.")

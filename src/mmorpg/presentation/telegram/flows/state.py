@@ -186,13 +186,13 @@ class LocationSession:
 
 @dataclass(frozen=True, slots=True)
 class Descent:
-    """Незаконченный заход в подземелья города (ADR 0036).
+    """Незаконченный заход в подземелья города (ADR 0036, ADR 0041).
 
     ``started_at`` - момент, когда заход начался; он входит в сид, поэтому два
     захода подряд - это два разных подземелья.
 
-    ``tier`` - какой из двух спусков города: 1 - обычный, 2 - глубокий
-    (``city.deep_dungeon``, ADR 0028). ``difficulty`` - выбранная сложность
+    ``dungeon_id`` - какое из названных подземелий города (``[[city.dungeon]]``,
+    ADR 0041). ``difficulty`` - выбранная сложность
     (``domain/rules/dungeon.Difficulty``). Оба входят в сид.
 
     ``layer`` - на каком слое заход стоит сейчас (0 - вход); ``room`` - вид
@@ -204,12 +204,12 @@ class Descent:
     level: int = 0
     layer: int = 0
     started_at: int = 0
-    tier: int = 1
+    dungeon_id: str = ""
     difficulty: str = "recon"
     room: str = "skirmish"
     #: Это блуждающее подземелье в локации (ADR 0037), а не городской спуск. Тогда
     #: ``slot`` называет локацию, ``stamp`` - окно появления подземелья, и оба
-    #: входят в сид захода вместо города и ``tier``.
+    #: входят в сид захода вместо города и ``dungeon_id``.
     roamer: bool = False
     slot: int = 0
     stamp: int = 0
@@ -218,10 +218,6 @@ class Descent:
     @property
     def active(self) -> bool:
         return bool(self.city_id)
-
-    @property
-    def deep(self) -> bool:
-        return self.tier == 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,11 +234,12 @@ class PlayState:
     skill_page: PageState = field(default_factory=PageState)
     mentor_page: PageState = field(default_factory=PageState)
     board_page: PageState = field(default_factory=PageState)
-    # Что игрок сейчас выбирает: слот, грань, задание.
+    # Что игрок сейчас выбирает: слот, грань, задание, подземелье.
     pick_slot: int = 0
     edge_skill: str = ""
     quest_id: str = ""
     craft_id: str = ""
+    dungeon_pick: str = ""
     npc_id: str = ""
     # Момент, на который открыли экран ремесла: строка отката не должна тикать, пока
     # игрок ещё читает тот экран, на котором она напечатана.
@@ -317,7 +314,7 @@ class PlayState:
                     self.descent.level,
                     self.descent.layer,
                     self.descent.started_at,
-                    self.descent.tier,
+                    self.descent.dungeon_id,
                     self.descent.difficulty,
                     self.descent.room,
                     self.descent.roamer,
@@ -326,6 +323,7 @@ class PlayState:
                     self.descent.group,
                 ],
                 "pick": self.pick_slot,
+                "dungeon_pick": self.dungeon_pick,
                 "edge": self.edge_skill,
                 "quest": self.quest_id,
                 "npc": self.npc_id,
@@ -359,13 +357,15 @@ class PlayState:
         session_parts = [*data.get("session", []), "", 0, 0][:3]
         city_id, slot, node = session_parts
         # Хвост читается с запасом: запись старого образца не называла ни
-        # ``tier``, ни сложность, ни вид комнаты.
+        # подземелье, ни сложность, ни вид комнаты. На месте ``dungeon_id`` там
+        # лежал числовой ``tier`` (1/2): ``str(1)`` не совпадёт ни с одним id,
+        # и заход развалится в город (``Claude.md``, правило 8, ADR 0041).
         raw_descent = data.get("descent", [])
         descent_city = raw_descent[0] if len(raw_descent) > 0 else ""
         descent_level = raw_descent[1] if len(raw_descent) > 1 else 0
         descent_layer = raw_descent[2] if len(raw_descent) > 2 else 0
         descent_started = raw_descent[3] if len(raw_descent) > 3 else 0
-        descent_tier = raw_descent[4] if len(raw_descent) > 4 else 1
+        descent_dungeon = raw_descent[4] if len(raw_descent) > 4 else ""
         descent_difficulty = raw_descent[5] if len(raw_descent) > 5 else "recon"
         descent_room = raw_descent[6] if len(raw_descent) > 6 else "skirmish"
         descent_roamer = raw_descent[7] if len(raw_descent) > 7 else False
@@ -396,7 +396,7 @@ class PlayState:
                 level=int(descent_level),
                 layer=int(descent_layer),
                 started_at=int(descent_started),
-                tier=int(descent_tier) or 1,
+                dungeon_id=str(descent_dungeon),
                 difficulty=str(descent_difficulty) or "recon",
                 room=str(descent_room) or "skirmish",
                 roamer=bool(descent_roamer),
@@ -411,6 +411,7 @@ class PlayState:
             skill_page=PageState(page=int(skill_page)),
             board_page=PageState(page=int(board_page)),
             pick_slot=int(pick_slot),
+            dungeon_pick=str(data.get("dungeon_pick", "")),
             edge_skill=data.get("edge", ""),
             quest_id=data.get("quest", ""),
             npc_id=data.get("npc", ""),
@@ -470,6 +471,7 @@ LIST_PAGE_FIELD: dict[ScreenId, str] = {
     ScreenId.TRANSFER_TO: "list_page",
     ScreenId.TRANSFER_ITEM: "list_page",
     ScreenId.SKILL_PICK: "list_page",
+    ScreenId.DUNGEON: "list_page",
     ScreenId.CHAMBER_PLEDGE: "list_page",
     ScreenId.SKILLS: "skill_page",
     ScreenId.MENTOR: "mentor_page",
