@@ -395,6 +395,20 @@ class BattleState:
             return ()
         return tuple(other for other in self.living() if other.side != one.side)
 
+    def visible_foes_of(self, combatant_id: int) -> tuple[Combatant, ...]:
+        """Враги, которых этот боец может выбрать целью: без ушедших из виду.
+
+        Отдельно от ``foes_of`` нарочно: на нём держится определение «сторона
+        повержена», а спрятавшийся живой враг сторону не освобождает. Выбрать
+        незаметного нельзя, но удар по всем его находит, и находит его же дот
+        (``rules/combat``, ADR 0043).
+        """
+        return tuple(
+            other
+            for other in self.foes_of(combatant_id)
+            if not other.effects.has(StatusKind.UNSEEN)
+        )
+
     def allies_of(self, combatant_id: int, *, include_self: bool = True) -> tuple[Combatant, ...]:
         one = self.by_id(combatant_id)
         if one is None:
@@ -416,9 +430,14 @@ class BattleState:
         if one is None:
             return None
         chosen = self.by_id(one.focus)
-        if chosen is not None and chosen.alive and chosen.side != one.side:
+        if (
+            chosen is not None
+            and chosen.alive
+            and chosen.side != one.side
+            and not chosen.effects.has(StatusKind.UNSEEN)
+        ):
             return chosen
-        foes = self.foes_of(combatant_id)
+        foes = self.visible_foes_of(combatant_id)
         return foes[0] if foes else None
 
     def verdict_for(self, combatant_id: int) -> Verdict:

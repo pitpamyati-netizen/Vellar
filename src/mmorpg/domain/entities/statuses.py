@@ -32,7 +32,7 @@ from mmorpg.domain.entities.damage import DamageType
 
 
 class StatusKind(StrEnum):
-    """Двадцать два состояния игры. Больше их не бывает."""
+    """Двадцать три состояния игры. Больше их не бывает."""
 
     SILENCE = "silence"
     BURNING = "burning"
@@ -61,6 +61,10 @@ class StatusKind(StrEnum):
     #: переключать некого, поэтому провокация несёт с собой ещё и то, что видно
     #: и там: провокатор прикрывается броней (ADR 0027).
     TAUNT = "taunt"
+    #: Ушёл из виду: этого бойца нельзя выбрать целью, пока он сам не сделает
+    #: что-то, кроме защиты. Удар по всем его находит и снимает незаметность,
+    #: и снимает её же долетевший дот (``rules/combat``, ADR 0043).
+    UNSEEN = "unseen"
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,6 +184,11 @@ STATUSES: Mapping[StatusKind, StatusSpec] = MappingProxyType(
         # провокатора (``rules/combat._forced_target``). Величина у неё - номер
         # провокатора, а не проценты, поэтому ``modifiers`` пусты.
         StatusKind.TAUNT: _spec(StatusKind.TAUNT, "Провокация"),
+        # Незаметность тоже ничего не прибавляет: она держит носителя вне списка
+        # целей, а спадает от первого же долетевшего удара - как страх (ADR 0043).
+        StatusKind.UNSEEN: _spec(
+            StatusKind.UNSEEN, "Незаметность", beneficial=True, broken_by_damage=True
+        ),
     }
 )
 

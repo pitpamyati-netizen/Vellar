@@ -122,6 +122,7 @@ active_effects = [
     "buff_reflect",
     "buff_resource_regen",
     "buff_second_wind",
+    "buff_vanish",
     "cleanse",
     "cleanse_barrier",
     "cleanse_dodge",
@@ -211,7 +212,6 @@ active_effects = [
     "debuff_freeze",
     "debuff_heal_block",
     "debuff_poison",
-    "debuff_resource_block",
     "debuff_root",
     "debuff_silence",
     "debuff_slow",
@@ -3507,11 +3507,11 @@ level = 90
 cost = 13
 cooldown = 5
 target = "self"
-effect = "buff_evade_full"
+effect = "buff_vanish"
 power = 100
 scaling = "AGI"
 tag = "guard"
-text = "Вы уходите от следующего удара по вам."
+text = "Вас нельзя выбрать целью, пока вы не сделаете что-то, кроме защиты. Удар по всем и раны выдают вас."
 edges = [
     { name = "Быстрее вернуться", text = "Откат короче на 2 хода.", cooldown = -2 },
     { name = "И стряхнуть", text = "Кроме того, снимает с вас 2 отрицательных эффекта.", cleanse = 2 },
@@ -4289,22 +4289,22 @@ edges = [
 ]
 
 [[skill]]
-code = "mage_razryv_potoka"
-name = "Разрыв потока"
+code = "mage_nevidimost"
+name = "Невидимость"
 owner = "class:mage"
 kind = "active"
 level = 105
-cost = 14
+cost = 13
 cooldown = 5
-target = "enemy"
-effect = "debuff_resource_block"
+target = "self"
+effect = "buff_vanish"
 power = 100
 scaling = "INT"
-tag = "precision"
-text = "Цель не восстанавливает силы 3 хода."
+tag = "guard"
+text = "Вас нельзя выбрать целью, пока вы не сделаете что-то, кроме защиты. Удар по всем и раны выдают вас."
 edges = [
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Быстрее наложить", text = "Откат короче на 2 хода.", cooldown = -2 },
+    { name = "Реже мелькать", text = "Откат короче на 2 хода.", cooldown = -2 },
+    { name = "И развеять", text = "Кроме того, снимает с вас 2 отрицательных эффекта.", cleanse = 2 },
 ]
 
 [[skill]]

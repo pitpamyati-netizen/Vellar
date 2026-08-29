@@ -471,6 +471,9 @@ def _take_turn(
     # Очарованный дерётся против своих, спутанный бьёт куда попало. Ход у них
     # есть - они просто не решают, куда он уйдёт.
     action = _hijacked(state, actor, action, seed)
+    # Незаметность, с которой боец вошёл в ход: тот ход, на котором её и повесили,
+    # её не снимает - иначе умение гасило бы само себя (ADR 0043).
+    was_unseen = actor.effects.has(StatusKind.UNSEEN)
 
     tempo = _tempo(content, roster, state, actor, action)
     working = _announce_tempo(state, actor, tempo)
@@ -478,9 +481,23 @@ def _take_turn(
 
     updated = working.by_id(actor_id)
     if updated is not None:
-        working = working.replace_combatant(
-            replace(updated, trace=_advanced_trace(updated.trace, tempo))
-        )
+        updated = replace(updated, trace=_advanced_trace(updated.trace, tempo))
+        if (
+            was_unseen
+            and action.kind is not ActionKind.DEFEND
+            and updated.effects.has(StatusKind.UNSEEN)
+        ):
+            # Всякое действие, кроме защиты, выдаёт ушедшего из виду (ADR 0043).
+            updated = replace(updated, effects=updated.effects.without(StatusKind.UNSEEN))
+            working = working.with_events(
+                BattleEvent(
+                    kind=EventKind.STATUS_ENDED,
+                    actor_id=updated.id,
+                    actor=updated.name,
+                    effect_name=status_spec(StatusKind.UNSEEN).name,
+                )
+            )
+        working = working.replace_combatant(updated)
 
     working = _check_outcome(content, roster, working, source)
     if working.is_over:
@@ -719,7 +736,7 @@ def _strays(actor: Combatant) -> bool:
 def _target_of(state: BattleState, actor: Combatant, requested: int) -> Combatant | None:
     """Цель этого удара: названная в действии, потом выбранная, потом любая."""
     named = state.by_id(requested)
-    if named is not None and named.alive:
+    if named is not None and named.alive and not named.effects.has(StatusKind.UNSEEN):
         strayed = _strays(actor) and named.id != actor.id
         if named.side != actor.side or strayed:
             return named
@@ -748,8 +765,12 @@ def _basic_attack(
     source: random.Random,
 ) -> BattleState:
     target = _target_of(state, actor, requested)
-    if target is None:  # pragma: no cover - бой без целей уже кончен
-        return state.with_events(BattleEvent(kind=EventKind.NO_TARGET))
+    if target is None:
+        # Бой не кончен, а бить некого: все враги ушли из виду (ADR 0043). Ход
+        # уходит впустую - это и есть выигрыш незаметности в одиночном бою.
+        return state.with_events(
+            BattleEvent(kind=EventKind.NO_TARGET, actor_id=actor.id, actor=actor.name)
+        )
 
     if actor.is_hero:
         character = roster.get(actor.id)
@@ -1656,6 +1677,27 @@ def incoming_damage_factor(modifiers: Mapping[str, float], damage: DamageType) -
     return max(0.0, 1.0 - resisted / 100.0)
 
 
+def _shed_on_hit(one: Combatant) -> tuple[Combatant, tuple[str, ...]]:
+    """Снять с бойца всё, что спадает от первого же долетевшего удара.
+
+    Раньше так снимался только страх, отдельной строкой в ``_strike``. Теперь у
+    состояния есть пометка ``broken_by_damage`` (страх и незаметность), и разлив
+    один на всех, кто её несёт (ADR 0043). Второй член - имена снятого, для
+    события ``STATUS_ENDED``.
+    """
+    shed = tuple(
+        effect.status
+        for effect in one.effects.statuses()
+        if effect.status is not None and status_spec(effect.status).broken_by_damage
+    )
+    if not shed:
+        return one, ()
+    effects = one.effects
+    for kind in shed:
+        effects = effects.without(kind)
+    return replace(one, effects=effects), tuple(status_spec(kind).name for kind in shed)
+
+
 def _strike(
     content: GameContent,
     roster: Mapping[int, Character],
@@ -1789,10 +1831,9 @@ def _strike(
 
     amount = max(1, round(raw))
     hurt, lost = target.damaged(amount)
-    # Испуганного приводит в чувство первый же удар: тем страх и отличается от
-    # оглушения, которое надо переждать.
-    if hurt.effects.has(StatusKind.FEAR):
-        hurt = replace(hurt, effects=hurt.effects.without(StatusKind.FEAR))
+    # Испуганного приводит в чувство первый же удар, а ушедшего из виду - выдаёт:
+    # оба спадают от долетевшего удара (``_shed_on_hit``).
+    hurt, revealed = _shed_on_hit(hurt)
     if tempo.breached(target.id):
         hurt = replace(hurt, breached=True)
     # Пока держится «Последний рубеж», боец не падает.
@@ -1810,6 +1851,15 @@ def _strike(
             skill_name=skill_name,
         )
     )
+    for name in revealed:
+        working = working.with_events(
+            BattleEvent(
+                kind=EventKind.STATUS_ENDED,
+                actor_id=hurt.id,
+                actor=hurt.name,
+                effect_name=name,
+            )
+        )
 
     if spec is not None and spec.stun_turns and hurt.alive:
         working = _inflicted(
@@ -2186,6 +2236,8 @@ def spend_dot(
         damage = spec.damage if spec.damage is not None else UNARMED
         toll = max(1, round(held * incoming_damage_factor(current.effects.modifiers(), damage)))
         hurt = replace(current, health=max(0, current.health - toll))
+        # Долетевший дот выдаёт ушедшего из виду так же, как обычный удар.
+        hurt, revealed = _shed_on_hit(hurt)
         working = working.replace_combatant(hurt).with_events(
             BattleEvent(
                 kind=EventKind.DAMAGE,
@@ -2193,7 +2245,16 @@ def spend_dot(
                 target=hurt.name,
                 amount=toll,
                 effect_name=spec.name,
-            )
+            ),
+            *(
+                BattleEvent(
+                    kind=EventKind.STATUS_ENDED,
+                    actor_id=hurt.id,
+                    actor=hurt.name,
+                    effect_name=name,
+                )
+                for name in revealed
+            ),
         )
         if not hurt.alive:
             working = working.with_events(
@@ -2356,7 +2417,7 @@ def _weakest_foe(state: BattleState, actor: Combatant) -> Combatant | None:
     удар с раненого, - провокация: она названа кнопкой, и за неё платят ходом
     (``_forced_target``, ADR 0027).
     """
-    foes = state.foes_of(actor.id)
+    foes = state.visible_foes_of(actor.id)
     if not foes:
         return None
     return min(foes, key=lambda one: (one.health / max(1, one.max_health), one.id))
@@ -2374,6 +2435,10 @@ def _forced_target(state: BattleState, actor: Combatant) -> Combatant | None:
         return None
     caller = state.by_id(round(actor.effects.magnitude_of(StatusKind.TAUNT)))
     if caller is None or not caller.alive or caller.side == actor.side:
+        return None
+    if caller.effects.has(StatusKind.UNSEEN):
+        # Провокатор успел уйти из виду: пока он невидим, вести на него удар
+        # некого - незаметность сильнее провокации (ADR 0043).
         return None
     return caller
 

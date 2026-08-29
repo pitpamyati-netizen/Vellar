@@ -341,6 +341,9 @@ def foe_line(state: BattleState, one: Combatant) -> str:
         line = f"{line}, барьер {one.barrier}"
     if held := status_line(one):
         line = f"{line}, {held}"
+    if one.effects.has(StatusKind.UNSEEN):
+        # Ушёл из виду: в бою он есть, а выбрать целью нельзя, пока не проявится.
+        return f"{line}. Ушёл из виду: не выбрать, пока сам не проявится."
     intent = intent_of(state, one)
     if intent is None:
         return f"{line}. Ещё не бил: намерения не видно."
@@ -502,6 +505,8 @@ def describe_event(event: BattleEvent, viewer_id: int = 0) -> str:
             return event.effect_name
         case EventKind.EMPTY_SLOT:
             return "Слот пуст. Наберите умения в меню, вне боя."
+        case EventKind.NO_TARGET if event.actor and not you_hit:
+            return f"{event.actor} не находит цели: бить некого."
         case EventKind.NO_TARGET:
             return "Этой цели в бою нет."
         case EventKind.TURN_SKIPPED if you_hit:
@@ -611,10 +616,11 @@ def battle_screen(
     )
     if racial_skill(content, character) is not None:
         rows.append((racial_label(content, character, viewer),))
-    foes = state.foes_of(viewer_id)
+    foes = state.visible_foes_of(viewer_id)
     if len(foes) > 1:
         # Выбор цели ходом не считается: он ничего не делает с боем, кроме того,
-        # что игра начинает целиться туда, куда сказали.
+        # что игра начинает целиться туда, куда сказали. Ушедшего из виду в
+        # списке нет - его не выбрать, пока он сам не проявится (ADR 0043).
         rows.extend((target_label(one),) for one in foes)
     rows.append((labels.BAG, labels.FLEE))
     if _has_live_foes(state, viewer):

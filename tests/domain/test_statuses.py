@@ -1,4 +1,4 @@
-"""Двадцать одно состояние: что каждое из них делает на самом деле.
+"""Двадцать три состояния: что каждое из них делает на самом деле.
 
 Раньше половина этого была признаком внутри бойца - ``stunned`` считал ходы, а
 горение отличалось от кровотечения только названием умения. Здесь проверяется,
@@ -105,8 +105,8 @@ def held(one: Combatant) -> set[StatusKind]:
 # --- сам список -------------------------------------------------------
 
 
-def test_there_are_twenty_two_statuses_and_every_one_is_described() -> None:
-    assert len(StatusKind) == 22
+def test_there_are_twenty_three_statuses_and_every_one_is_described() -> None:
+    assert len(StatusKind) == 23
     for kind in StatusKind:
         spec = STATUSES[kind]
         assert spec.name, kind
@@ -375,3 +375,93 @@ def test_undying_promise_also_clears_what_would_take_the_turn(content: GameConte
     assert not any(
         event.kind is EventKind.TURN_SKIPPED and event.actor_id == 1 for event in after.events
     )
+
+
+# --- уход из виду: нельзя выбрать целью, пока не проявился (ADR 0043) --
+
+
+def _vanished(content: GameContent) -> tuple[Character, BattleState]:
+    rogue = caster("rogue", "rogue_ischeznovenie")
+    state = start(content, rogue)
+    hidden = use(content, rogue, state, slot=0)
+    assert StatusKind.UNSEEN in held(hero(hidden)), "«Исчезновение» вешает незаметность"
+    return rogue, hidden
+
+
+def test_vanish_takes_the_hero_off_the_target_list(content: GameContent) -> None:
+    rogue = caster("rogue", "rogue_ischeznovenie")
+    state = start(content, rogue)
+    before = hero(state).health
+    after = use(content, rogue, state, slot=0)
+
+    # Противник в бою остаётся, но выбрать героя не может - и бьёт впустую.
+    assert foe(after).alive
+    assert after.visible_foes_of(foe(after).id) == ()
+    assert any(
+        event.kind is EventKind.NO_TARGET and event.actor_id == foe(after).id
+        for event in after.events
+    )
+    assert hero(after).health == before
+
+
+def test_defence_keeps_the_hero_unseen_but_any_other_action_reveals(
+    content: GameContent,
+) -> None:
+    rogue, hidden = _vanished(content)
+
+    guarded = act(content, {1: rogue}, hidden, BattleAction(kind=ActionKind.DEFEND), b"\x07" * 16)
+    assert StatusKind.UNSEEN in held(hero(guarded)), "защита незаметность не снимает"
+
+    struck = act(content, {1: rogue}, guarded, BattleAction(kind=ActionKind.ATTACK), b"\x08" * 16)
+    assert StatusKind.UNSEEN not in held(hero(struck)), "всякое другое действие выдаёт"
+    assert any(
+        event.kind is EventKind.STATUS_ENDED
+        and event.effect_name == STATUSES[StatusKind.UNSEEN].name
+        for event in struck.events
+    )
+
+
+def test_the_cast_that_hides_you_does_not_immediately_reveal_you(content: GameContent) -> None:
+    """Тот ход, на котором незаметность повесили, её не снимает."""
+    _rogue, hidden = _vanished(content)
+    assert StatusKind.UNSEEN in held(hero(hidden))
+
+
+def test_an_area_blow_finds_the_unseen_and_reveals_them(content: GameContent) -> None:
+    rogue = caster("rogue", "rogue_veer_klinkov")
+    rogue = replace(rogue, loadout=replace(rogue.loadout, ranks={"rogue_veer_klinkov": 1}))
+    state = start(content, rogue, count=2)
+    marked = foe(state, 0)
+    state = state.replace_combatant(
+        replace(marked, effects=marked.effects.apply(status_effect(StatusKind.UNSEEN, turns=3)))
+    )
+    for seed in range(40):
+        after = act(
+            content,
+            {1: rogue},
+            state,
+            BattleAction(kind=ActionKind.SKILL, slot=0),
+            seed.to_bytes(16, "big"),
+        )
+        struck = after.by_id(marked.id)
+        if struck is not None and struck.health < marked.health:
+            assert StatusKind.UNSEEN not in held(struck), "удар по всем находит и выдаёт"
+            return
+    pytest.fail("веер клинков ни разу не задел ушедшего за 40 семян")
+
+
+def test_a_dot_reveals_the_unseen(content: GameContent) -> None:
+    warrior = caster("warrior", "warrior_sekushchiy_roscherk")
+    state = start(content, warrior)
+    target = foe(state)
+    afflicted = state.replace_combatant(
+        replace(
+            target,
+            effects=target.effects.apply(status_effect(StatusKind.UNSEEN, turns=3)).apply(
+                status_effect(StatusKind.POISON, turns=3, magnitude=50)
+            ),
+        )
+    )
+    assert StatusKind.UNSEEN in held(foe(afflicted))
+    ticked = spend_dot(afflicted, target.id)
+    assert StatusKind.UNSEEN not in held(foe(ticked)), "долетевший дот выдаёт"

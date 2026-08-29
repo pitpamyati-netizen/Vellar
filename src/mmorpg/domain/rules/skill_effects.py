@@ -347,6 +347,10 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
     "buff_invulnerable": _buff(
         duration=1, holds=(S(StatusKind.INVULNERABILITY, 1),), recharges=True
     ),
+    # Уход из виду: держится, пока боец не сделает что-то, кроме защиты, и спадает
+    # от первого же долетевшего удара (``combat``, ADR 0043). Умение «да или нет»,
+    # поэтому ``recharges``: сила ранга ложится в откат.
+    "buff_vanish": _buff(duration=3, holds=(S(StatusKind.UNSEEN, 3),), recharges=True),
     "buff_health_regen": _buff(holds=(S(StatusKind.HEALTH_REGEN, 4),)),
     "buff_resource_regen": _buff(holds=(S(StatusKind.RESOURCE_REGEN, 4),)),
     "buff_second_wind": _buff(
@@ -373,7 +377,6 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
     "debuff_weakness": _debuff(inflicts=(S(StatusKind.WEAKNESS, 3),)),
     "debuff_slow": _debuff(inflicts=(S(StatusKind.SLOW, 3),)),
     "debuff_heal_block": _debuff(inflicts=(S(StatusKind.HEAL_BLOCK, 3),), recharges=True),
-    "debuff_resource_block": _debuff(inflicts=(S(StatusKind.RESOURCE_BLOCK, 3),), recharges=True),
     "debuff_burning": _debuff(aoe=True, dot_turns=3, dot_status=StatusKind.BURNING, tags=("fire",)),
     "debuff_poison": _debuff(dot_turns=4, dot_status=StatusKind.POISON, tags=("poison",)),
     "debuff_bleeding": _debuff(dot_turns=4, dot_status=StatusKind.BLEEDING, tags=("rending",)),
