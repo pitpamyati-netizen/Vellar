@@ -65,6 +65,7 @@ PANEL: frozenset[ScreenId] = frozenset(
         ScreenId.KEEPER_STATS,
         ScreenId.KEEPER_SERVICE,
         ScreenId.KEEPER_BAN,
+        ScreenId.KEEPER_MUTE,
         ScreenId.KEEPER_LOG,
         ScreenId.KEEPER_TRADES,
         ScreenId.KEEPER_TUNE,
@@ -237,6 +238,8 @@ def _render_panel(
             return keeper_screens.service_screen(view, state.notice)
         case ScreenId.KEEPER_BAN if view.target is not None:
             return keeper_screens.ban_screen(view.target, view, state.keeper_reason, state.notice)
+        case ScreenId.KEEPER_MUTE if view.target is not None:
+            return keeper_screens.mute_screen(view.target, view, state.keeper_reason, state.notice)
         case ScreenId.KEEPER_LOG:
             return keeper_screens.log_screen(view, state.keeper_page, state.notice)
         case ScreenId.KEEPER_TRADES if view.target is not None:
@@ -364,7 +367,10 @@ def awaits_text(state: PlayState, command: Command) -> bool:
         or (state.screen is ScreenId.KEEPER_QUEST and state.keeper_typing == TYPING_VALUE)
         or (state.screen is ScreenId.KEEPER_GUILD and state.keeper_typing == TYPING_VALUE)
         or (state.screen is ScreenId.KEEPER_PLAYERS and state.keeper_typing == TYPING_NAME)
-        or (state.screen is ScreenId.KEEPER_BAN and state.keeper_typing == TYPING_REASON)
+        or (
+            state.screen in {ScreenId.KEEPER_BAN, ScreenId.KEEPER_MUTE}
+            and state.keeper_typing == TYPING_REASON
+        )
     )
 
 
@@ -393,7 +399,7 @@ def typed(
         return _typed_quest_count(content, state, view, text)
     if state.screen is ScreenId.KEEPER_GUILD:
         return _typed_vault(state, view, text)
-    if state.screen is ScreenId.KEEPER_BAN:
+    if state.screen in {ScreenId.KEEPER_BAN, ScreenId.KEEPER_MUTE}:
         return replace(state, keeper_typing="", keeper_reason=text.strip()).with_notice(
             f"Причина записана: {text.strip()}. Теперь нажмите срок."
         )
@@ -483,6 +489,8 @@ def advance(
             return _step_service(state, command)
         case ScreenId.KEEPER_BAN:
             return _step_ban(state, command, view)
+        case ScreenId.KEEPER_MUTE:
+            return _step_mute(state, command, view)
         case ScreenId.KEEPER_TRADES:
             return _step_trades(state, command, view)
         case ScreenId.KEEPER_TUNE:
@@ -1546,6 +1554,10 @@ def _step_player(
         return replace(state, keeper_typing="", keeper_reason="").at(ScreenId.KEEPER_BAN)
     if labels.KEEPER_UNBAN.matches(command.argument):
         return _unban(state, view)
+    if labels.KEEPER_MUTE.matches(command.argument):
+        return replace(state, keeper_typing="", keeper_reason="").at(ScreenId.KEEPER_MUTE)
+    if labels.KEEPER_UNMUTE.matches(command.argument):
+        return _unmute(state, view)
     if labels.KEEPER_WARN.matches(command.argument):
         return _warn(state, view, +1)
     if labels.KEEPER_UNWARN.matches(command.argument):
@@ -1648,6 +1660,44 @@ def _step_ban(state: PlayState, command: Command, view: KeeperView) -> PlayState
     said = "навсегда" if sentence.forever else sentence.name.lower()
     return walked.storing(PendingWrite(ban=(target.user_id, sentence.key, reason))).with_notice(
         f"{target.name} заблокирован {said}."
+    )
+
+
+def _unmute(state: PlayState, view: KeeperView) -> PlayState:
+    """Вернуть слово в группе. Одним нажатием, без вопросов — как и снятие блокировки."""
+    target = view.target
+    if target is None:  # pragma: no cover - проверено вызывающим
+        return state
+    walked = replace(state, keeper_typing="", keeper_reason="")
+    if walked.screen is ScreenId.KEEPER_MUTE:
+        walked = go_back(walked)
+    return walked.storing(PendingWrite(mute=(target.user_id, "", ""))).with_notice(
+        f"{target.name}: слово в группе возвращено."
+    )
+
+
+def _step_mute(state: PlayState, command: Command, view: KeeperView) -> PlayState:
+    """Как ``_step_ban``, но мягче: мьют стирает сказанное в группе, игре не мешает."""
+    target = view.target
+    if target is None:
+        return go_back(state).with_notice("Того персонажа больше нет.")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите срок или «Указать причину».")
+    if labels.KEEPER_REASON.matches(command.argument):
+        return replace(state, keeper_typing=TYPING_REASON).with_notice(
+            "Наберите причину сообщением. Её прочитает замолчавший, если спросит в личке."
+        )
+    if labels.KEEPER_UNMUTE.matches(command.argument):
+        return _unmute(state, view)
+
+    sentence = keeper_screens.sentence_from_button(command.argument)
+    if sentence is None:
+        return state.with_notice("Не узнал срок. Нажмите строку из списка.")
+    reason = state.keeper_reason
+    walked = replace(go_back(state), keeper_typing="", keeper_reason="")
+    said = "навсегда" if sentence.forever else sentence.name.lower()
+    return walked.storing(PendingWrite(mute=(target.user_id, sentence.key, reason))).with_notice(
+        f"{target.name} замолчан в группе {said}."
     )
 
 

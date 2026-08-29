@@ -901,6 +901,28 @@ async def test_the_journal_shows_what_was_done_and_by_whom(
     assert (await keeper_log.latest())[0].keeper_id == KEEPER_ACCOUNT
 
 
+async def test_a_mute_is_stored_on_the_account_and_written_down(
+    keeper: Keeper,
+    users: InMemoryUserRepository,
+    keeper_log: InMemoryKeeperLogRepository,
+    merla: Character,
+) -> None:
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_PLAYERS.text)
+    await keeper.press(keeper.button_with("Мерла"))
+    await keeper.press(labels.KEEPER_MUTE.text, "На сутки")
+
+    account = await users.get(merla.user_id)
+    assert account is not None and account.mute.until > 0
+    assert account.ban.until == 0, "мьют не блокировка"
+    assert (await keeper_log.latest())[0].action == KeeperAction.MUTE
+
+    card = await keeper.press(labels.KEEPER_UNMUTE.text)
+    account = await users.get(merla.user_id)
+    assert account is not None and account.mute.until == 0
+    assert "Замолчан в группе: нет" in card.text()
+    assert (await keeper_log.latest())[0].action == KeeperAction.UNMUTE
+
+
 async def test_the_journal_from_a_player_card_is_scoped_to_that_player(
     keeper: Keeper, merla: Character, argus: Character
 ) -> None:

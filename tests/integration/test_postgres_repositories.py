@@ -887,6 +887,22 @@ async def test_a_ban_is_stored_read_back_and_lifted(pool, clean_user) -> None:
     assert lifted is not None and lifted.ban == Ban()
 
 
+async def test_a_mute_is_stored_read_back_and_lifted_apart_from_the_ban(pool, clean_user) -> None:
+    users = PostgresUserRepository(pool)
+    await users.upsert(User(telegram_id=clean_user))
+
+    await users.set_mute(clean_user, Ban(until=NOW + 3600, reason="флуд в группе"))
+
+    account = await users.get(clean_user)
+    assert account is not None
+    assert account.mute == Ban(until=NOW + 3600, reason="флуд в группе")
+    assert account.ban == Ban(), "мьют колонку блокировки не трогает"
+
+    await users.set_mute(clean_user, Ban())
+    lifted = await users.get(clean_user)
+    assert lifted is not None and lifted.mute == Ban()
+
+
 async def test_warnings_count_up_and_stop_at_zero(pool, clean_user) -> None:
     users = PostgresUserRepository(pool)
 

@@ -556,6 +556,7 @@ async def _keeper_view(
             ScreenId.KEEPER_PLAYER,
             ScreenId.KEEPER_FIELD,
             ScreenId.KEEPER_BAN,
+            ScreenId.KEEPER_MUTE,
             ScreenId.KEEPER_TRADES,
             ScreenId.KEEPER_TUNE,
             ScreenId.KEEPER_AMOUNT,
@@ -595,16 +596,19 @@ async def _keeper_view(
     target_keeper = False
     target_locked = False
     target_ban = Ban()
+    target_mute = Ban()
     target_warnings = 0
     if target is not None:
         account = await users.get(target.user_id)
-        # Блокировку и предупреждения читают всегда, когда открыт чужой персонаж:
-        # они стоят на карточке строкой, а раздача права - только у того, кто его
-        # раздаёт.
+        # Блокировку, мьют и предупреждения читают всегда, когда открыт чужой
+        # персонаж: они стоят на карточке строкой, а раздача права - только у
+        # того, кто его раздаёт.
         if account is not None:
             target_warnings = account.warnings
             if moderation_rules.is_banned(account.ban, now=now):
                 target_ban = account.ban
+            if moderation_rules.is_muted(account.mute, now=now):
+                target_mute = account.mute
         if granting:
             target_locked = settings.is_admin(target.user_id)
             target_keeper = target_locked or (account is not None and account.keeper)
@@ -660,6 +664,7 @@ async def _keeper_view(
         target_keeper=target_keeper,
         target_locked=target_locked,
         target_ban=target_ban,
+        target_mute=target_mute,
         target_warnings=target_warnings,
         log=log,
         log_total=log_total,
@@ -732,6 +737,8 @@ async def _serve(
         await set_keeper(users, characters, account, keeper=keeper, settings=settings)
     if write.ban is not None:
         said.append(await _ban(write.ban, users, keeper_log, characters, stamp, now))
+    if write.mute is not None:
+        said.append(await _mute(write.mute, users, keeper_log, characters, stamp, now))
     if write.warn is not None:
         telegram_id, delta = write.warn
         await users.warn(telegram_id, delta=delta)
@@ -801,6 +808,32 @@ async def _ban(
     if not key:
         return f"{named}: блокировка снята."
     return f"{named}: блокировка наложена."
+
+
+async def _mute(
+    order: tuple[int, str, str],
+    users: UserRepository,
+    keeper_log: KeeperLogRepository,
+    characters: CharacterRepository,
+    stamp: KeeperEntry,
+    now: int,
+) -> str:
+    """Замолчать в группе или вернуть слово. Срок считается здесь, как и у ``_ban``."""
+    account, key, reason = order
+    sentence = moderation_rules.sentence_of(key) if key else None
+    if key and sentence is None:
+        return "Такого срока нет, мьют не наложен."
+    mute = (
+        moderation_rules.imposed(sentence, reason, now=now)
+        if sentence is not None
+        else moderation_rules.lifted()
+    )
+    played = await characters.list_for_user(account)
+    named = played[0].name if played else str(account)
+    await moderation.set_mute(users, keeper_log, account, mute, by=stamp, target=named)
+    if not key:
+        return f"{named}: слово в группе возвращено."
+    return f"{named}: замолчан в группе."
 
 
 async def _roll_back(

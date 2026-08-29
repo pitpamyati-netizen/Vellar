@@ -33,6 +33,8 @@ class KeeperAction(StrEnum):
     BAN = "ban"
     UNBAN = "unban"
     WARN = "warn"
+    MUTE = "mute"
+    UNMUTE = "unmute"
     EDIT = "edit"
     FORGET = "forget"
     SWEEP = "sweep"

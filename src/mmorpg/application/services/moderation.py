@@ -51,6 +51,25 @@ async def set_ban(
     await log.record(replace(by, action=action, target=target, detail=ban.reason))
 
 
+async def set_mute(
+    users: UserRepository,
+    log: KeeperLogRepository,
+    telegram_id: int,
+    mute: Ban,
+    *,
+    by: KeeperEntry,
+    target: str,
+) -> None:
+    """Замолчать аккаунт в группе или вернуть ему слово, и записать это.
+
+    То же, что :func:`set_ban`, но мягче: мьют стирает сказанное в группе,
+    остальной игре не мешает.
+    """
+    await users.set_mute(telegram_id, mute)
+    action = KeeperAction.MUTE if mute.until else KeeperAction.UNMUTE
+    await log.record(replace(by, action=action, target=target, detail=mute.reason))
+
+
 async def note(log: KeeperLogRepository, entry: KeeperEntry) -> None:
     """Записать в журнал одно действие смотрителя."""
     await log.record(entry)

@@ -70,6 +70,10 @@ class InMemoryUserRepository:
         user = self._users.get(telegram_id) or User(telegram_id=telegram_id)
         self._users[telegram_id] = replace(user, ban=ban)
 
+    async def set_mute(self, telegram_id: int, mute: Ban) -> None:
+        user = self._users.get(telegram_id) or User(telegram_id=telegram_id)
+        self._users[telegram_id] = replace(user, mute=mute)
+
     async def banned_count(self, *, now: int) -> int:
         return sum(1 for user in self._users.values() if user.ban.forever or user.ban.until > now)
 

@@ -67,6 +67,9 @@ class PendingWrite:
     #: и причина. Пустой срок — снять блокировку. Сам момент конца считает
     #: хендлер: у автомата часов нет.
     ban: tuple[int, str, str] | None = None
+    #: Кого замолчать в группе: аккаунт, срок и причина. Пустой срок — снять.
+    #: Момент конца считает хендлер, как и у ``ban``.
+    mute: tuple[int, str, str] | None = None
     #: Кому изменить счётчик предупреждений: аккаунт и шаг (``+1`` или ``-1``).
     warn: tuple[int, int] | None = None
     #: Что записать в журнал смотрителя. Момент и имя проставляет хендлер.
@@ -114,6 +117,7 @@ class PendingWrite:
             and not self.remove_character
             and self.keeper_grant is None
             and self.ban is None
+            and self.mute is None
             and self.warn is None
             and self.note is None
             and not self.service

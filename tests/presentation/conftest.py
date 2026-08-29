@@ -472,6 +472,15 @@ def banned_view(keeper_view: keeper_screens.KeeperView) -> keeper_screens.Keeper
 
 
 @pytest.fixture(scope="session")
+def muted_view(keeper_view: keeper_screens.KeeperView) -> keeper_screens.KeeperView:
+    """Та же панель, но открытый игрок замолчан в группе."""
+    return replace(
+        keeper_view,
+        target_mute=Ban(until=NOW + 6 * 60 * 60, reason="флудил в группе"),
+    )
+
+
+@pytest.fixture(scope="session")
 def sample_stock(content: GameContent) -> tuple[Item, ...]:
     return roll_assortment(
         content, world_seed="vellar-test", city_id="farhold", rotation=100, character_level=8
@@ -507,6 +516,7 @@ def all_screens(
     edited: GameContent,
     keeper_view: keeper_screens.KeeperView,
     banned_view: keeper_screens.KeeperView,
+    muted_view: keeper_screens.KeeperView,
 ) -> list[Screen]:
     """Каждый экран игры, нарисованный на образцовых данных.
 
@@ -663,8 +673,13 @@ def all_screens(
         keeper_screens.player_screen(
             edited, fighter, derived_stats(content, fighter), view=banned_view
         ),
+        keeper_screens.player_screen(
+            edited, fighter, derived_stats(content, fighter), view=muted_view
+        ),
         keeper_screens.ban_screen(fighter, keeper_view),
         keeper_screens.ban_screen(fighter, banned_view, "ругался в группе"),
+        keeper_screens.mute_screen(fighter, keeper_view),
+        keeper_screens.mute_screen(fighter, muted_view, "флудил в группе"),
         keeper_screens.log_screen(banned_view),
         keeper_screens.log_screen(keeper_view),
         # Журнал со страницами и журнал, сужённый до одного игрока.

@@ -12,6 +12,7 @@ import pytest
 
 from mmorpg.domain.entities import Character, StatBlock
 from mmorpg.domain.entities.location import LocationState, NodeState, Presence, Roamer
+from mmorpg.domain.entities.moderation import Ban
 from mmorpg.domain.ports import (
     AccessibilitySettings,
     CharacterRepository,
@@ -96,6 +97,19 @@ async def test_settings_can_be_saved_for_an_unknown_user() -> None:
     stored = await users.get(7)
     assert stored is not None
     assert stored.settings.emoji is True
+
+
+async def test_a_mute_is_stored_and_lifted_apart_from_the_ban() -> None:
+    users = InMemoryUserRepository()
+
+    await users.set_mute(5, Ban(until=100, reason="флуд"))
+    stored = await users.get(5)
+    assert stored is not None and stored.mute == Ban(until=100, reason="флуд")
+    assert stored.ban == Ban(), "мьют и блокировка не одно и то же"
+
+    await users.set_mute(5, Ban())
+    lifted = await users.get(5)
+    assert lifted is not None and lifted.mute == Ban()
 
 
 async def test_warnings_count_up_from_an_unknown_account_and_never_go_negative() -> None:

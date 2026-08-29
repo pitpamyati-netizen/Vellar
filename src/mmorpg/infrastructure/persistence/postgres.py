@@ -145,7 +145,7 @@ class PostgresUserRepository:
     async def get(self, telegram_id: int) -> User | None:
         row = await self._pool.fetchrow(
             "SELECT telegram_id, username, emoji, verbose_descriptions, page_size, keeper,"
-            " banned_until, ban_reason, warnings"
+            " banned_until, ban_reason, warnings, muted_until, mute_reason"
             " FROM users WHERE telegram_id = $1",
             telegram_id,
         )
@@ -164,6 +164,7 @@ class PostgresUserRepository:
             keeper=row["keeper"],
             ban=Ban(until=row["banned_until"], reason=row["ban_reason"] or ""),
             warnings=row["warnings"],
+            mute=Ban(until=row["muted_until"], reason=row["mute_reason"] or ""),
         )
 
     async def upsert(self, user: User) -> User:
@@ -245,6 +246,21 @@ class PostgresUserRepository:
             telegram_id,
             ban.until,
             ban.reason,
+        )
+
+    async def set_mute(self, telegram_id: int, mute: Ban) -> None:
+        """Замолчать в группе и того, кто ни разу не трогал настройки, поэтому upsert."""
+        await self._pool.execute(
+            """
+            INSERT INTO users (telegram_id, muted_until, mute_reason)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (telegram_id) DO UPDATE
+                SET muted_until = EXCLUDED.muted_until,
+                    mute_reason = EXCLUDED.mute_reason
+            """,
+            telegram_id,
+            mute.until,
+            mute.reason,
         )
 
     async def banned_count(self, *, now: int) -> int:

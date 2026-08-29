@@ -35,6 +35,16 @@ class Answers:
         self.said.append(text)
 
 
+class Deletes:
+    """Заглушка ``message.delete``: помнит, звали ли её."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def __call__(self, **kwargs: Any) -> None:
+        self.calls += 1
+
+
 def message_from(account: int, *, private: bool = True) -> tuple[Message, Answers]:
     said = Answers()
     message = Message(
@@ -45,6 +55,7 @@ def message_from(account: int, *, private: bool = True) -> tuple[Message, Answer
         text="Главное меню",
     )
     object.__setattr__(message, "answer", said)
+    object.__setattr__(message, "delete", Deletes())
     return message, said
 
 
@@ -126,3 +137,28 @@ async def test_an_account_nobody_stored_anything_about_passes(
 
     assert await BanMiddleware()(handler, message, {"users": users}) == "прошёл"
     assert handler.reached == 1
+
+
+async def test_a_muted_player_has_the_group_message_wiped_and_goes_no_further(
+    users: InMemoryUserRepository,
+) -> None:
+    await users.upsert(Account(telegram_id=ACCOUNT))
+    await users.set_mute(ACCOUNT, Ban(until=int(time.time()) + DAY, reason="флуд"))
+    message, said = message_from(ACCOUNT, private=False)
+    handler = Doorman()
+
+    assert await BanMiddleware()(handler, message, {"users": users}) is None
+    assert handler.reached == 0
+    assert message.delete.calls == 1  # type: ignore[attr-defined]
+    assert said.said == []  # в группе о наказаниях молчат
+
+
+async def test_a_muted_player_plays_normally_in_private(users: InMemoryUserRepository) -> None:
+    await users.upsert(Account(telegram_id=ACCOUNT))
+    await users.set_mute(ACCOUNT, Ban(until=int(time.time()) + DAY))
+    message, _ = message_from(ACCOUNT)
+    handler = Doorman()
+
+    assert await BanMiddleware()(handler, message, {"users": users}) == "прошёл"
+    assert handler.reached == 1
+    assert message.delete.calls == 0  # type: ignore[attr-defined]

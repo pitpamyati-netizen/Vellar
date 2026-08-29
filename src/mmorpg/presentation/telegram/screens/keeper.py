@@ -111,6 +111,8 @@ class KeeperView:
     target_ban: Ban = field(default_factory=Ban)
     #: Сколько предупреждений вынесено аккаунту открытого игрока.
     target_warnings: int = 0
+    #: Замолчан ли аккаунт открытого игрока в группе. Пустой ``Ban`` — нет.
+    target_mute: Ban = field(default_factory=Ban)
     #: Последние записи журнала смотрителя, свежие сначала, — уже одна страница.
     log: tuple[KeeperEntry, ...] = ()
     #: Сколько записей в журнале всего (с учётом фильтра): по нему считают страницы.
@@ -565,6 +567,7 @@ def player_screen(
         f"Заданий закрыто: {len(player.quests.done)}. "
         f"Арена: {player.arena_wins} побед, {player.arena_losses} поражений.",
         f"{ban_line(view.target_ban, view.now)} Предупреждений: {view.target_warnings}.",
+        mute_line(view.target_mute, view.now),
         "Уровень поднимается по одному и только вверх: очки уже вложены.",
     ]
     rows: list[tuple[Label, ...]] = [
@@ -579,6 +582,7 @@ def player_screen(
         if view.target_warnings
         else (labels.KEEPER_WARN,),
         (labels.KEEPER_UNBAN,) if _under_ban(view) else (labels.KEEPER_BAN,),
+        (labels.KEEPER_UNMUTE,) if _muted(view) else (labels.KEEPER_MUTE,),
         (labels.KEEPER_DELETE,),
     ]
     # Кнопка появляется только у того, кто и правда в отряде или гильдии: пустая
@@ -604,6 +608,10 @@ def player_screen(
 
 def _under_ban(view: KeeperView) -> bool:
     return moderation_rules.is_banned(view.target_ban, now=view.now)
+
+
+def _muted(view: KeeperView) -> bool:
+    return moderation_rules.is_muted(view.target_mute, now=view.now)
 
 
 def ban_line(ban: Ban, now: int) -> str:
@@ -1218,6 +1226,45 @@ def ban_screen(player: Character, view: KeeperView, reason: str = "", notice: st
     if _under_ban(view):
         rows.append((labels.KEEPER_UNBAN,))
     return Screen(id=ScreenId.KEEPER_BAN, lines=tuple(lines), rows=tuple(rows))
+
+
+def mute_line(mute: Ban, now: int) -> str:
+    """Одна строка о мьюте, по образцу ``ban_line``."""
+    if not moderation_rules.is_muted(mute, now=now):
+        return "Замолчан в группе: нет."
+    left = (
+        "навсегда"
+        if mute.forever
+        else f"осталось {duration(moderation_rules.remaining(mute, now=now))}"
+    )
+    because = f" Причина: {mute.reason}." if mute.reason else ""
+    return f"Замолчан в группе: да, {left}.{because}"
+
+
+def mute_screen(player: Character, view: KeeperView, reason: str = "", notice: str = "") -> Screen:
+    """Срок и причина мьюта. Тот же список сроков, что у блокировки, но мягче.
+
+    Замолчавший играет как обычно везде, кроме игровой группы: там бот удаляет
+    сказанное им. В личку ему ничего не пишут — он там не замолчан.
+    """
+    lines = [
+        notice or f"Замолчать в группе: {player.name}.",
+        "Замолчавший играет как обычно. В игровой группе бот удаляет его "
+        "сообщения, пока срок не выйдет.",
+        mute_line(view.target_mute, view.now),
+        f"Причина для следующего мьюта: {reason or 'не названа'}.",
+        "Нажмите срок — мьют ляжет сразу.",
+    ]
+    rows: list[tuple[Label, ...]] = [
+        tuple(
+            sentence_button(sentence) for sentence in moderation_rules.SENTENCES[index : index + 2]
+        )
+        for index in range(0, len(moderation_rules.SENTENCES), 2)
+    ]
+    rows.append((labels.KEEPER_REASON,))
+    if moderation_rules.is_muted(view.target_mute, now=view.now):
+        rows.append((labels.KEEPER_UNMUTE,))
+    return Screen(id=ScreenId.KEEPER_MUTE, lines=tuple(lines), rows=tuple(rows))
 
 
 # --- сделки ------------------------------------------------------------

@@ -59,6 +59,8 @@ ACTIONS: Mapping[KeeperAction, str] = {
     KeeperAction.BAN: "заблокировал",
     KeeperAction.UNBAN: "снял блокировку",
     KeeperAction.WARN: "изменил предупреждения",
+    KeeperAction.MUTE: "замолчал в группе",
+    KeeperAction.UNMUTE: "вернул слово в группе",
     KeeperAction.EDIT: "правил содержимое",
     KeeperAction.FORGET: "снял правку",
     KeeperAction.SWEEP: "убрался в базе",
@@ -94,6 +96,11 @@ def lifted() -> Ban:
 
 def is_banned(ban: Ban, *, now: int) -> bool:
     return ban.forever or ban.until > now
+
+
+def is_muted(mute: Ban, *, now: int) -> bool:
+    """Замолчан ли аккаунт в группе. Окно времени то же, что у блокировки."""
+    return is_banned(mute, now=now)
 
 
 def remaining(ban: Ban, *, now: int) -> int:
