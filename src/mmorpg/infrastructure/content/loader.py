@@ -1299,6 +1299,7 @@ def _parse_affixes(raw: Mapping[str, Any], problems: list[str]) -> tuple[EnemyAf
                 on_hit_turns=max(0, int(entry.get("on_hit_turns", 0))),
                 on_hit_chance=chance,
                 on_hit_magnitude=float(entry.get("on_hit_magnitude", 0.0)),
+                recloak=max(0, int(entry.get("recloak", 0))),
             )
         )
     _check_unique((affix.id for affix in parsed), "enemies.toml affixes", problems)

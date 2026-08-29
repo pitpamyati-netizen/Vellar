@@ -20,6 +20,7 @@ on_hit_turns = 3
 on_hit_chance = 55.0
 # on_hit_magnitude = 20.0   # величина состояния; для яда (DOT) 0 = «от силы удара»
 # pack_bonus = 2            # «выводковый»: лишние тела в стае
+# recloak = 2               # «неуловимый»: заходит незаметным, прячется снова
 # [affix.modifiers]         # прибавки на весь бой; ключи только из EFFECTIVE_KEYS
 # reflect_percent = 25.0
 ```
@@ -41,6 +42,11 @@ on_hit_chance = 55.0
   (`poison`/`bleeding`/`burning`) — от силы удара, если `on_hit_magnitude` не
   задан; для прочих (`slow`, `weakness`) — из `on_hit_magnitude`.
 - **`pack_bonus`** → `generate_group` прибавляет тел к стае (потолок 5).
+- **`recloak`** → `combat._recloaked` (ADR 0043). Стая заходит в бой с
+  `StatusKind.UNSEEN` (`battle.begin`), и через `recloak` её ходов после того,
+  как её выдали, уходит из виду снова — откатом `affix:recloak`. Тот ход, где её
+  выдал собственный удар, окна не отнимает (`was_unseen`). Контра — удар по
+  всем, дот и световая граната (`flash_grenade`).
 
 ## Кто бросает и где
 

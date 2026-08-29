@@ -11,9 +11,9 @@ from __future__ import annotations
 from dataclasses import replace
 
 from mmorpg.domain.entities import Character, GameContent
-from mmorpg.domain.entities.combat import ActionKind, BattleAction, BattleState
+from mmorpg.domain.entities.combat import ActionKind, BattleAction, BattleState, EventKind
 from mmorpg.domain.entities.location import Enemy, EnemyKind
-from mmorpg.domain.entities.statuses import StatusKind
+from mmorpg.domain.entities.statuses import StatusKind, status_name
 from mmorpg.domain.rules.combat import act, hero_combatant, monster_combatant, open_battle
 
 SEED = b"affix-seed-0001"
@@ -137,3 +137,40 @@ def test_a_monster_dodges_more_with_an_evasive_modifier(
         return state.by_id(2).health
 
     assert health_after(evasive=True) > health_after(evasive=False)
+
+
+def _recloaks_within(content: GameContent, enemy: Enemy, hero: Character, turns: int) -> bool:
+    roster = {1: hero}
+    foe = monster_combatant(enemy, combatant_id=2, side=1)
+    hero_one = hero_combatant(content, hero, combatant_id=1, side=0, live=True)
+    state = open_battle(content, roster, [hero_one, foe], SEED)
+    for turn in range(turns):
+        if state.is_over:
+            break
+        state = act(
+            content,
+            roster,
+            state,
+            BattleAction(kind=ActionKind.ATTACK, target=2),
+            turn.to_bytes(16, "big"),
+        )
+        if any(
+            event.kind is EventKind.STATUS_APPLIED
+            and event.actor_id == 2
+            and event.effect_name == status_name(StatusKind.UNSEEN)
+            for event in state.events
+        ):
+            return True
+    return False
+
+
+def test_a_stalking_pack_goes_back_out_of_sight_after_it_strikes(
+    content: GameContent, warrior: Character
+) -> None:
+    hero = replace(warrior, level=20)
+    assert _recloaks_within(content, _enemy(affixes=("stalking",), health=8_000), hero, turns=16)
+
+
+def test_a_plain_pack_never_goes_out_of_sight(content: GameContent, warrior: Character) -> None:
+    hero = replace(warrior, level=20)
+    assert not _recloaks_within(content, _enemy(health=8_000), hero, turns=16)

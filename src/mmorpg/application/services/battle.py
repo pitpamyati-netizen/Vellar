@@ -35,7 +35,7 @@ from mmorpg.domain.entities.combat import (
 )
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.damage import DamageType
-from mmorpg.domain.entities.effects import ActiveEffect, EffectStack
+from mmorpg.domain.entities.effects import ActiveEffect, EffectStack, status_effect
 from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
 from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.ports.repositories import StateCache
@@ -176,8 +176,20 @@ def begin(
         # (ADR 0042). Механику в ударе (яд, стужа) движок читает из
         # ``enemy.affixes`` сам.
         for affix_id in enemy.affixes:
-            if content.has_affix(affix_id) and (effect := content.affix(affix_id).effect()):
+            if not content.has_affix(affix_id):
+                continue
+            affix = content.affix(affix_id)
+            if effect := affix.effect():
                 one = replace(one, effects=one.effects.apply(effect))
+            if affix.recloak:
+                # «Соглядатай» бьёт из темноты: стая заходит в бой незаметной и
+                # уходит из виду снова через ``recloak`` своих ходов (ADR 0043).
+                one = replace(
+                    one,
+                    effects=one.effects.apply(
+                        status_effect(StatusKind.UNSEEN, turns=affix.recloak + 1)
+                    ),
+                )
         combatants.append(one)
         next_id += 1
 

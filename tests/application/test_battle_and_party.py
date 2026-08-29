@@ -98,6 +98,39 @@ def test_opening_effects_land_on_the_right_side(content: GameContent) -> None:
     assert foe_side and all("dungeon:gloom" not in one.effects for one in foe_side)
 
 
+def test_a_stalking_affix_enters_the_battle_out_of_sight(content: GameContent) -> None:
+    """«Неуловимый» заходит в бой незаметным (ADR 0043)."""
+    from mmorpg.domain.entities.location import Enemy, EnemyKind
+    from mmorpg.domain.entities.statuses import StatusKind
+
+    enemy = Enemy(
+        archetype_id="grey_wolf",
+        name="Серый волк",
+        kind=EnemyKind.BEAST,
+        level=12,
+        max_health=800,
+        damage=4,
+        armor=5,
+        initiative=0.5,
+        loot=(),
+        gold=5,
+        affixes=("stalking",),
+    )
+    session, _ = battle_service.begin(
+        content,
+        battle_id="stalk-1",
+        attackers=[(a_hero("Аргус", 1), True)],
+        enemies=[enemy],
+        seed=SEED,
+        kind=battle_service.BattleKind.DESCENT,
+        owner=1,
+        depth=1,
+    )
+    foe = next(one for one in session.state.combatants if not one.is_hero)
+    assert foe.effects.has(StatusKind.UNSEEN)
+    assert session.state.visible_foes_of(1) == ()
+
+
 # --- запись боя --------------------------------------------------------
 
 

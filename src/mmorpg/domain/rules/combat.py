@@ -497,7 +497,18 @@ def _take_turn(
                     effect_name=status_spec(StatusKind.UNSEEN).name,
                 )
             )
+        updated, recloaked = _recloaked(content, updated, was_unseen)
         working = working.replace_combatant(updated)
+        if recloaked:
+            working = working.with_events(
+                BattleEvent(
+                    kind=EventKind.STATUS_APPLIED,
+                    actor_id=updated.id,
+                    actor=updated.name,
+                    effect_name=status_spec(StatusKind.UNSEEN).name,
+                    turns=updated.effects.turns_of(StatusKind.UNSEEN),
+                )
+            )
 
     working = _check_outcome(content, roster, working, source)
     if working.is_over:
@@ -1675,6 +1686,31 @@ def incoming_damage_factor(modifiers: Mapping[str, float], damage: DamageType) -
     """
     resisted = modifiers.get(damage.resist_key, 0.0) + modifiers.get(damage.half_resist_key, 0.0)
     return max(0.0, 1.0 - resisted / 100.0)
+
+
+def _recloaked(content: GameContent, one: Combatant, was_unseen: bool) -> tuple[Combatant, bool]:
+    """Стая-«соглядатай» уходит из виду снова после того, как её выдали (ADR 0043).
+
+    Только когда она вошла в ход уже видимой: ход, на котором её выдал
+    собственный удар, окна игроку не отнимает - незаметность возвращается через
+    ``recloak`` её ходов, отсчитанных откатом ``affix:recloak``.
+    """
+    if was_unseen or one.enemy is None or one.effects.has(StatusKind.UNSEEN):
+        return one, False
+    period = max(
+        (
+            content.affix(affix_id).recloak
+            for affix_id in one.enemy.affixes
+            if content.has_affix(affix_id)
+        ),
+        default=0,
+    )
+    if not period or one.cooldown_of("affix:recloak") > 0:
+        return one, False
+    hidden = replace(
+        one, effects=one.effects.apply(status_effect(StatusKind.UNSEEN, turns=period + 1))
+    ).with_cooldown("affix:recloak", period)
+    return hidden, True
 
 
 def _shed_on_hit(one: Combatant) -> tuple[Combatant, tuple[str, ...]]:
