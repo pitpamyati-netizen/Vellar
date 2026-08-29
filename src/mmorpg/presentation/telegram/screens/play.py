@@ -424,7 +424,7 @@ def location_screen(
     if boss is not None and not left_at(boss.index).empty:
         lines.append(
             f"Хозяин логова стоит в узле {boss.index}, уровень {boss.level}, в "
-            "самой глубине. Мимо его логова путь к выходу есть: драться с хозином "
+            "самой глубине. Мимо его логова путь к выходу есть: драться с хозяином "
             "необязательно."
         )
     if roamer is not None and roamer_here is None:

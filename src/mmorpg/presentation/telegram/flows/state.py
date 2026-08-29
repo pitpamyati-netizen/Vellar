@@ -466,6 +466,7 @@ LIST_PAGE_FIELD: dict[ScreenId, str] = {
     ScreenId.INVENTORY: "list_page",
     ScreenId.SHOP: "list_page",
     ScreenId.SELL: "list_page",
+    ScreenId.GUILD_ROSTER: "list_page",
     ScreenId.TRANSFER_TO: "list_page",
     ScreenId.TRANSFER_ITEM: "list_page",
     ScreenId.SKILL_PICK: "list_page",

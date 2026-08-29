@@ -259,6 +259,57 @@ async def test_an_invite_is_answered_by_the_one_who_was_called_and_ranks_flow(
     assert guild is not None and guild.rank_of(mirna_character.id) is GuildRank.OFFICER
 
 
+async def test_a_crowded_roster_is_read_page_by_page(
+    table: tuple[Player, Player, Character, Character],
+    characters: InMemoryCharacterRepository,
+    guilds: GuildStore,
+) -> None:
+    """Состав большой гильдии режется на страницы, а не валится одним куском.
+
+    В гильдию помещается тридцать человек, и тридцать строк со званиями и
+    тридцатью рядами кнопок в одно сообщение не читаются
+    (``docs/accessibility.md``, правила 7 и 11). Кнопка несёт имя, поэтому
+    выгнать можно и того, кто на второй странице.
+    """
+    argus, _mirna, argus_character, _mirna_character = table
+    await _found(argus)
+
+    guild = await guilds.of(argus_character.id)
+    assert guild is not None
+    crowd = guild
+    for number in range(1, 12):
+        one = await characters.create(
+            Character(
+                id=0,
+                user_id=630_000 + number,
+                name=f"Соклановец{number:02d}",
+                race_id="human",
+                class_id="warrior",
+                level=20,
+            )
+        )
+        crowd = crowd.with_member(one.id, GuildRank.MEMBER)
+    await guilds.save(crowd)
+
+    first = await argus.press(labels.GUILD_ROSTER.text)
+    assert first.id is ScreenId.GUILD_ROSTER
+    assert first.fits_message_limit(), f"{len(first.text())} знаков в одном сообщении"
+    assert "страница 1 из 2" in first.text()
+    assert labels.NEXT_PAGE.text in buttons(first)
+    assert "Соклановец01 — участник." in first.text()
+    assert "Соклановец11 — участник." not in first.text()
+
+    second = await argus.press(labels.NEXT_PAGE.text)
+    assert second.fits_message_limit()
+    assert "Соклановец11 — участник." in second.text()
+
+    # Со второй страницы выгоняют так же, как с первой: кнопка несёт имя.
+    kicked = await argus.press(labels.guild_kick_label("Соклановец11").text)
+    assert "исключён из гильдии" in kicked.text()
+    left = await guilds.of(argus_character.id)
+    assert left is not None and left.size == crowd.size - 1
+
+
 async def test_the_vault_takes_from_officers_and_only_deposits_from_members(
     table: tuple[Player, Player, Character, Character],
     characters: InMemoryCharacterRepository,

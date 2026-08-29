@@ -383,6 +383,40 @@ _group_view = keeper_screens.KeeperView(
 )
 
 
+#: Гильдия, набитая до отказа: тридцать человек с длинными именами. Экран состава
+#: обязан читаться и таким, а он не читался - тридцать строк и тридцать рядов
+#: кнопок не влезали в сообщение (``docs/accessibility.md``, правила 7 и 11).
+_CROWD: tuple[tuple[int, str, GuildRank], ...] = tuple(
+    (
+        number,
+        f"Соклановец{number:02d}Длинноимённый",
+        GuildRank.FOUNDER
+        if number == 1
+        else (GuildRank.OFFICER if number <= 5 else GuildRank.MEMBER),
+    )
+    for number in range(1, 31)
+)
+
+_crowded_view = keeper_screens.KeeperView(
+    target_guild=Guild(
+        id=2,
+        name="Серебряный оплот",
+        founder_id=1,
+        members=tuple(GuildMember(one, rank) for one, _, rank in _CROWD),
+        vault_gold=98_765,
+    ),
+    target_guild_members=_CROWD,
+    now=NOW,
+)
+
+_crowded_roster = guild_screens.GuildView(
+    name="Серебряный оплот",
+    my_rank=GuildRank.FOUNDER,
+    members=tuple((name, rank) for _, name, rank in _CROWD),
+    vault_gold=98_765,
+)
+
+
 @pytest.fixture(scope="session")
 def keeper_view(edits: tuple[OverlayRecord, ...], fighter: Character) -> keeper_screens.KeeperView:
     return keeper_screens.KeeperView(
@@ -657,6 +691,8 @@ def all_screens(
         keeper_screens.keeper_party_screen(_group_view),
         keeper_screens.keeper_guild_screen(_group_view),
         keeper_screens.keeper_guild_screen(_group_view, counting=True, notice="Казна: 500."),
+        keeper_screens.keeper_guild_screen(_crowded_view),
+        keeper_screens.keeper_guild_screen(_crowded_view, PageState(page=4)),
         keeper_screens.player_screen(
             edited, fighter, derived_stats(content, fighter), view=_group_view
         ),
@@ -767,6 +803,8 @@ def all_screens(
                 members=(("Аргус", GuildRank.FOUNDER), ("Мирна", GuildRank.MEMBER)),
             )
         ),
+        guild_screens.roster_screen(_crowded_roster),
+        guild_screens.roster_screen(_crowded_roster, PageState(page=4)),
         guild_screens.vault_screen(
             guild_screens.GuildView(
                 name="Стая", my_rank=GuildRank.OFFICER, vault_gold=800, my_gold=250

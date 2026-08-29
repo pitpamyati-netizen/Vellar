@@ -318,7 +318,10 @@ def _render_panel(
             return keeper_screens.keeper_party_screen(view, state.notice)
         case ScreenId.KEEPER_GUILD if view.target is not None and view.target_guild is not None:
             return keeper_screens.keeper_guild_screen(
-                view, counting=state.keeper_typing == TYPING_VALUE, notice=state.notice
+                view,
+                state.keeper_page,
+                counting=state.keeper_typing == TYPING_VALUE,
+                notice=state.notice,
             )
         case ScreenId.KEEPER:
             return keeper_screens.keeper_screen(content, character, stats, view, state.notice)
@@ -1267,12 +1270,16 @@ def _step_keeper_party(state: PlayState, command: Command, view: KeeperView) -> 
         )
 
     number = keeper_screens.group_kick_number(len(members), command.argument)
-    if number <= 1:
+    if not number:
         return state.with_notice("Не узнал. Нажмите строку из списка.")
     member_id, member_name = members[number - 1]
     changed = keeper_rules.remove_from_party(party, member_id)
     if changed is None:
-        return state.with_notice("Так из отряда не вывести.")
+        # Первый в списке - собравший (``Party.__post_init__``), и это
+        # единственный, кого не выводят: отряд без него расформировывают целиком.
+        return state.with_notice(
+            "Собравшего из отряда не выводят: отряд без него расформировывают целиком."
+        )
     note = _note(KeeperAction.GROUP, member_name, "выведен из отряда")
     return state.storing(PendingWrite(party_save=changed, note=note)).with_notice(
         f"{member_name} выведен из отряда."
@@ -1282,10 +1289,15 @@ def _step_keeper_party(state: PlayState, command: Command, view: KeeperView) -> 
 def _step_keeper_guild(state: PlayState, command: Command, view: KeeperView) -> PlayState:
     if view.target is None or view.target_guild is None:
         return go_back(state).with_notice("Этот игрок больше не в гильдии.")
+    members = view.target_guild_members
+    moved = page_move(
+        command, state.keeper_page, total_pages(len(members), keeper_screens.GUILD_PAGE)
+    )
+    if moved is not None:
+        return replace(state, keeper_page=moved, notice="")
     if command.intent is not Intent.SELECT:
         return state.with_notice(PRESS_A_BUTTON)
     guild = view.target_guild
-    members = view.target_guild_members
 
     if labels.KEEPER_GUILD_DISBAND.matches(command.argument):
         note = _note(KeeperAction.GROUP, guild.name, "гильдия распущена")
@@ -1465,7 +1477,7 @@ def _step_player(
     if labels.KEEPER_PARTY_BTN.matches(command.argument) and view.target_party is not None:
         return replace(state, keeper_typing="").at(ScreenId.KEEPER_PARTY)
     if labels.KEEPER_GUILD_BTN.matches(command.argument) and view.target_guild is not None:
-        return replace(state, keeper_typing="").at(ScreenId.KEEPER_GUILD)
+        return replace(state, keeper_typing="", keeper_page=PageState()).at(ScreenId.KEEPER_GUILD)
     if labels.KEEPER_BAN.matches(command.argument):
         return replace(state, keeper_typing="", keeper_reason="").at(ScreenId.KEEPER_BAN)
     if labels.KEEPER_UNBAN.matches(command.argument):

@@ -15,6 +15,7 @@ from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import amount, gold, head
+from mmorpg.presentation.telegram.screens.paginated import PageState, paging_row, total_pages
 
 #: Суммы, которыми двигают казну - те же, что у банка.
 VAULT_STEPS: tuple[int, ...] = (50, 250, 1000)
@@ -100,14 +101,37 @@ def invite_screen(view: GuildView, notice: str = "") -> Screen:
     return Screen(id=ScreenId.GUILD_INVITE, lines=tuple(lines), rows=())
 
 
-def roster_screen(view: GuildView, notice: str = "") -> Screen:
+#: Сколько человек показывает одна страница состава. В гильдии их до тридцати, а
+#: одним сообщением тридцать имён со званиями и тридцатью рядами кнопок не
+#: читаются: список режется, как режется всякий длинный список в игре
+#: (``docs/accessibility.md``, правило 7).
+ROSTER_PAGE = 8
+
+
+def roster_screen(view: GuildView, page: PageState | None = None, notice: str = "") -> Screen:
+    """Состав гильдии, страницами. Кнопки - только у тех, кто на этой странице.
+
+    Звание раздаёт основатель, выгоняет и офицер; кнопки несут имя, поэтому
+    страница их не путает: человек остаётся собой на любой странице.
+    """
+    pages = total_pages(len(view.members), ROSTER_PAGE)
+    state = (page or PageState()).clamped(pages)
+    first = (state.page - 1) * ROSTER_PAGE
+    visible = view.members[first : first + ROSTER_PAGE]
+
     lines = [*head(f"Состав гильдии «{view.name}».", notice)]
+    lines.append(
+        f"В гильдии: {amount(len(view.members), MAX_MEMBERS, with_percent=False)}, "
+        f"страница {state.page} из {pages}."
+        if pages > 1
+        else f"В гильдии: {amount(len(view.members), MAX_MEMBERS, with_percent=False)}."
+    )
     rows: list[tuple[Label, ...]] = []
-    for name, rank in view.members:
+    for name, rank in visible:
         lines.append(f"{name} — {rank.title}.")
     if view.founder:
         lines.append("Вы основатель: можно поднять до офицера, опустить до участника, выгнать.")
-        for name, rank in view.members:
+        for name, rank in visible:
             if rank is GuildRank.FOUNDER:
                 continue
             controls: list[Label] = []
@@ -119,12 +143,21 @@ def roster_screen(view: GuildView, notice: str = "") -> Screen:
             rows.append(tuple(controls))
     elif view.officer:
         lines.append("Вы офицер: можно выгнать участника.")
-        for name, rank in view.members:
+        for name, rank in visible:
             if rank is GuildRank.MEMBER:
                 rows.append((labels.guild_kick_label(name),))
     else:
         lines.append("Звания раздаёт основатель.")
-    return Screen(id=ScreenId.GUILD_ROSTER, lines=tuple(lines), rows=tuple(rows))
+    if pages > 1:
+        rows.append(paging_row(state.page, pages))
+    # Число страниц объявляет сам экран: по нему их листает общий разбор
+    # (``flows/play.advance``, ``LIST_PAGE_FIELD``), и второй раз его никто не считает.
+    return Screen(
+        id=ScreenId.GUILD_ROSTER,
+        lines=tuple(lines),
+        rows=tuple(rows),
+        metadata={"page": str(state.page), "pages": str(pages), "count": str(len(view.members))},
+    )
 
 
 def vault_screen(view: GuildView, notice: str = "") -> Screen:

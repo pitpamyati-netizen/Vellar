@@ -56,6 +56,8 @@ from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
     PageState,
     paginated_screen,
+    paging_row,
+    total_pages,
 )
 
 #: Сколько полей карточки на одной странице и сколько знаков значения видно в
@@ -1259,28 +1261,49 @@ def keeper_party_screen(view: KeeperView, notice: str = "") -> Screen:
     return Screen(id=ScreenId.KEEPER_PARTY, lines=tuple(lines), rows=tuple(rows))
 
 
-def keeper_guild_screen(view: KeeperView, *, counting: bool = False, notice: str = "") -> Screen:
+#: Сколько человек показывает одна страница состава гильдии в панели. Тридцать
+#: имён со званиями и тридцатью рядами кнопок в одно сообщение не читаются.
+GUILD_PAGE = 8
+
+
+def keeper_guild_screen(
+    view: KeeperView,
+    page: PageState | None = None,
+    *,
+    counting: bool = False,
+    notice: str = "",
+) -> Screen:
     """Гильдия открытого игрока: звание, вывод из состава, казна числом, роспуск.
 
     Основателя не трогают - ни звание, ни вывод: второго основателя не бывает, а
     гильдию без него распускают. Казну двигает хендлер условным ``UPDATE``.
+
+    Номер участника - сквозной по всему составу, а не по странице: двенадцатый
+    остаётся двенадцатым, на какой бы странице его ни открыли
+    (``Claude.md``, правило 9), и по этому же номеру его находит автомат.
     """
     guild = view.target_guild
     members = view.target_guild_members
     name = guild.name if guild is not None else "—"
     vault = guild.vault_gold if guild is not None else 0
+    pages = total_pages(len(members), GUILD_PAGE)
+    state = (page or PageState()).clamped(pages)
+    first = (state.page - 1) * GUILD_PAGE
+    visible = members[first : first + GUILD_PAGE]
+    counted = amount(len(members), GUILD_MAX_MEMBERS, with_percent=False)
     lines = [
         notice or f"Гильдия «{name}».",
-        f"В гильдии: {amount(len(members), GUILD_MAX_MEMBERS, with_percent=False)}. "
-        f"В казне: {gold(vault)}.",
+        f"В гильдии: {counted}. В казне: {gold(vault)}."
+        + (f" Страница {state.page} из {pages}." if pages > 1 else ""),
     ]
     rows: list[tuple[Label, ...]] = []
-    for number, (_, member_name, rank) in enumerate(members, start=1):
-        lines.append(f"{number}. {member_name} — {rank.title}.")
+    for offset, (_, member_name, rank) in enumerate(visible):
+        lines.append(f"{first + offset + 1}. {member_name} — {rank.title}.")
     lines.append("Основателя не выводят и звания ему не меняют: гильдию без него распускают.")
-    for number, (_, _, rank) in enumerate(members, start=1):
+    for offset, (_, _, rank) in enumerate(visible):
         if rank is GuildRank.FOUNDER:
             continue
+        number = first + offset + 1
         step = (
             labels.keeper_rank_up_label(number)
             if rank is GuildRank.MEMBER
@@ -1289,6 +1312,8 @@ def keeper_guild_screen(view: KeeperView, *, counting: bool = False, notice: str
         rows.append((step, labels.keeper_group_kick_label(number)))
     if counting:
         lines.append("Наберите новое число казны сообщением.")
+    if pages > 1:
+        rows.append(paging_row(state.page, pages))
     rows.append((labels.KEEPER_VAULT_SET,))
     rows.append((labels.KEEPER_GUILD_DISBAND,))
     return Screen(id=ScreenId.KEEPER_GUILD, lines=tuple(lines), rows=tuple(rows))

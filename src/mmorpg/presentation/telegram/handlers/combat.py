@@ -256,7 +256,14 @@ async def _spawn(
         if descent.roamer:
             # Подземелье осело прямо в локации: биом её, а не самой глубокой
             # локации города, и одиночке спутников с собой не брать (ADR 0037).
-            biome = city.location(descent.slot).biome
+            # Локацию могли убрать правкой, пока игрок был внутри: заход от этого
+            # не падает, а идёт по самой глубокой земле города
+            # (``Claude.md``, правило 8).
+            biome = (
+                city.location(descent.slot).biome
+                if city.has_location(descent.slot)
+                else city.locations[-1].biome
+            )
             group_stakes = roamer_rules.GROUP_STAKES if descent.group else 1.0
             if not descent.group:
                 side = [(character, True)]
@@ -1048,6 +1055,8 @@ async def _after_dungeon_room(
     difficulty = dungeon_rules.difficulty_of(descent.difficulty)
     room = dungeon_rules.room_of(descent.room)
     final = dungeon_rules.final_layer(turning_rules.descent_depth(character), difficulty)
+    run_seed = dungeon_run_seed(settings.world_seed, descent)
+    conditions = dungeon_rules.conditions_for(run_seed, difficulty)
 
     _heal_room_winners(content, session, updated, dungeon_rules.ROOM_HEAL_PERCENT[room])
 
@@ -1059,22 +1068,21 @@ async def _after_dungeon_room(
             payout,
             inventory,
             level=max(1, descent.level),
-            bounty=dungeon_rules.spec_of(difficulty).stakes,
+            # «Богатая порода» обещает золото со всего захода, а дно - его часть:
+            # без множителя условия обещание кончалось у порога логова.
+            bounty=dungeon_rules.spec_of(difficulty).stakes * dungeon_rules.bounty_of(conditions),
         )
         updated[session.owner] = bottom
         payout.extra.append("Логово пройдено. Заход окончен — наверх, к свету.")
         return replace(flow, descent=Descent())
 
-    run_seed = dungeon_run_seed(settings.world_seed, descent)
     next_layer = descent.layer + 1
     options = dungeon_rules.room_options(run_seed, next_layer, final)
     payout.extra.append(f"Пройдено комнат: {descent.layer + 1}. Впереди развилка.")
     if descent.layer == 0:
         # На входе называем, что несёт этот заход: дальше о том же напомнит
         # список состояний в панели боя.
-        payout.extra.extend(
-            dungeon_screens.condition_lines(dungeon_rules.conditions_for(run_seed, difficulty))
-        )
+        payout.extra.extend(dungeon_screens.condition_lines(conditions))
     payout.extra.extend(dungeon_screens.fork_lines(options))
     payout.rows.extend(dungeon_screens.fork_rows(options))
     return flow
@@ -1159,7 +1167,14 @@ async def _land_everyone(
         if one.character_id == session.owner:
             landing = _back_to_city(flow, character) if lost else next_flow
         else:
-            landing = _back_to_city(flow, character) if lost else replace(flow, fight="")
+            # Заход принадлежит тому, кто его начал: спутник идёт с ним, но
+            # своего захода не ведёт. Оставленный спутнику ``descent`` собрал бы
+            # его следующий бой как комнату чужого данжа (``_spawn``).
+            landing = (
+                _back_to_city(flow, character)
+                if lost
+                else replace(flow, fight="", descent=Descent())
+            )
         if message.from_user is not None and one.user_id == message.from_user.id:
             await state.update_data({PLAY_KEY: landing.serialise()})
             continue
@@ -1299,6 +1314,11 @@ async def _leave_to_play(
     # других (ADR 0037).
     if flow.descent.roamer and locations is not None:
         await locations.release_roamer(flow.descent.city_id, flow.descent.slot)
+    # Уйти из боя - это и кончить заход: продолжают его только дверью развилки на
+    # экране итога, и другого пути внутрь нет. Незакрытый заход, оставшийся в
+    # состоянии, следующий бой - хоть в узле, хоть на арене - собирал бы как
+    # комнату данжа (``_spawn`` смотрит на ``descent.active``).
+    if flow.descent.active:
         flow = replace(flow, descent=Descent())
 
     stack, previous = flow.stack.pop()

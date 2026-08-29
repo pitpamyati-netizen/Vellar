@@ -356,7 +356,7 @@ def _render(
         case ScreenId.GUILD_INVITE:
             return guild_screens.invite_screen(guild or GuildView(), state.notice)
         case ScreenId.GUILD_ROSTER:
-            return guild_screens.roster_screen(guild or GuildView(), state.notice)
+            return guild_screens.roster_screen(guild or GuildView(), state.list_page, state.notice)
         case ScreenId.GUILD_VAULT:
             return guild_screens.vault_screen(guild or GuildView(), state.notice)
         case ScreenId.TRANSFER_TO:
@@ -1840,7 +1840,10 @@ def _guild_intent(state: PlayState, command: Command) -> PlayState | None:
     """Шаг гильдии, откуда бы его ни сделали. ``None`` - это был не он."""
     screen = _GUILD_SCREENS.get(command.intent)
     if screen is not None:
-        return state.at(screen)
+        # Состав открывается с первой страницы: список, открытый на середине
+        # чужого списка, - это чужая страница (``docs/accessibility.md``).
+        opened = replace(state, list_page=PageState()) if screen is ScreenId.GUILD_ROSTER else state
+        return opened.at(screen)
     action = _GUILD_ACTIONS.get(command.intent)
     if action is None:
         return None
@@ -1863,6 +1866,8 @@ def _guild_pick(command: Command, prefix: str) -> str:
 
 
 def _handle_guild_roster(state: PlayState, command: Command) -> PlayState:
+    # Страницы состава листает общий разбор в ``advance``: экран объявляет их
+    # число в ``metadata``, а ``LIST_PAGE_FIELD`` называет, где оно лежит.
     for prefix, action in (("Повысить", "promote"), ("Понизить", "demote"), ("Выгнать", "kick")):
         if name := _guild_pick(command, prefix):
             return replace(state, guild_action=action, guild_arg=name)

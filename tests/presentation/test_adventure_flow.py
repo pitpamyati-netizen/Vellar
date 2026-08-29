@@ -806,6 +806,51 @@ async def test_a_descent_pays_at_the_bottom_and_not_before(
     assert stored.gold > strong.gold
 
 
+async def test_leaving_a_descent_leaves_it_behind(
+    player: Player,
+    content: GameContent,
+    characters: InMemoryCharacterRepository,
+    argus: Character,
+) -> None:
+    """Уйти из захода - значит кончить его.
+
+    Заход продолжают только дверью развилки на экране итога, и другого пути
+    внутрь нет. Незакрытый ``descent``, оставшийся в состоянии, собирал бы
+    следующий бой - хоть в узле локации - как комнату данжа
+    (``handlers/combat._spawn`` смотрит на ``descent.active``).
+    """
+    allowance = stat_allowance(content, 12)
+    strong = replace(
+        argus,
+        level=12,
+        gold=1_000,
+        health=0,
+        allocated=StatBlock(STR=allowance // 2, END=allowance - allowance // 2),
+    )
+    await characters.save(strong)
+
+    await player.press("Мир")
+    await player.press("Дубно")
+    await player.press("Подземелья")
+    screen = await player.press("Спуск: разведка")
+    for _ in range(200):
+        text = screen.text()
+        if "Впереди развилка" in text:
+            break
+        if text.startswith("Поражение."):
+            pytest.skip("the run was lost; leaving is then decided by the defeat")
+        screen = await player.press("Атака")
+    else:  # pragma: no cover - заход, который не кончается, ловится соседним тестом
+        pytest.fail("the descent never offered a fork")
+
+    assert (await player.flow()).descent.active, "заход должен стоять, пока игрок в нём"
+
+    await player.press("Назад")
+    left = await player.flow()
+    assert left.descent.active is False
+    assert left.fight == ""
+
+
 # --- блуждающее подземелье (ADR 0037) -----------------------------------
 
 
