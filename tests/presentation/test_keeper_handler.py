@@ -932,6 +932,27 @@ async def test_a_mute_is_stored_on_the_account_and_written_down(
     assert (await keeper_log.latest())[0].action == KeeperAction.UNMUTE
 
 
+async def test_a_keeper_adds_a_turning_and_edits_its_answers(
+    keeper: Keeper, registry: ContentRegistry
+) -> None:
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_WORLD.text, "Голосования Палаты")
+    await keeper.press(labels.KEEPER_ADD.text)
+    await keeper.press(keeper.button_with("Название"))
+    await keeper.press("Мосты")
+    await keeper.press(keeper.button_with("Вопрос Палаты"))
+    await keeper.press("Чинить ли мосты?")
+
+    await keeper.press(keeper.button_with("Ответы"))
+    await keeper.press("fix | Чинить | Дороже, но целее")
+    await keeper.press("skip | Не чинить | Дешевле")
+
+    added = next(t for t in registry.current.turnings if t.id.startswith("keeper_turning"))
+    assert added.question == "Чинить ли мосты?"
+    assert {"fix", "skip"} <= {one.id for one in added.options}
+    fix = next(one for one in added.options if one.id == "fix")
+    assert fix.name == "Чинить" and fix.text == "Дороже, но целее"
+
+
 async def test_maintenance_mode_is_toggled_from_the_ops_screen(
     keeper: Keeper, cache: InMemoryStateCache
 ) -> None:

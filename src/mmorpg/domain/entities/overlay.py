@@ -38,6 +38,9 @@ class OverlayKind(StrEnum):
     #: за уровень. Единственная разновидность без множества сущностей — она
     #: одна, и завести вторую нельзя.
     META = "meta"
+    #: Голосование Дорожной палаты (``content.turnings``): вопрос и ответы
+    #: вложенным списком (ADR 0046).
+    TURNING = "turning"
 
 
 #: С чего начинаются идентификаторы, выданные смотрителем. Отдельный префикс
@@ -104,6 +107,22 @@ class OverlayRecord:
                 found.append(int(part))
             except ValueError:
                 continue
+        return tuple(found)
+
+    def rows(self, key: str) -> tuple[tuple[str, ...], ...]:
+        """Поле-таблица (ADR 0046): строки через перевод, колонки через «|».
+
+        «toll_low | Брать меньше | Дешевле» — одна строка из трёх колонок. Пустой
+        первый столбец роняет строку; хвостовые пустые колонки сохраняются, чтобы
+        «id | имя |» не теряло того, что имя есть, а текста нет.
+        """
+        found: list[tuple[str, ...]] = []
+        for line in self.fields.get(key, "").split("\n"):
+            if not line.strip():
+                continue
+            cells = tuple(cell.strip() for cell in line.split("|"))
+            if cells[0]:
+                found.append(cells)
         return tuple(found)
 
     def pairs(self, key: str) -> tuple[tuple[str, str], ...]:

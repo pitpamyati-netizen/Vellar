@@ -598,6 +598,8 @@ def all_screens(
                 (OverlayKind.LOCATION, "quiet_meadows", 1),
                 (OverlayKind.ENEMY, "grey_wolf", 1),
                 (OverlayKind.CITY, "farhold", 1),
+                (OverlayKind.TURNING, "toll", 1),
+                (OverlayKind.CRAFT, "mining", 1),
             )
         ),
         keeper_screens.entity_screen(
@@ -651,6 +653,19 @@ def all_screens(
                 PageState(),
             )
             for spec in overlay_rules.FIELDS[OverlayKind.ENEMY]
+        ),
+        # Поле-таблица (ROWS, ADR 0046): список ответов Палаты и находок сбора.
+        *(
+            keeper_screens.field_screen(
+                edited,
+                overlay_rules.effective(edited, keeper_view.records, kind, entity_id),
+                overlay_rules.spec_of(kind, field_key),
+                PageState(),
+            )
+            for kind, entity_id, field_key in (
+                (OverlayKind.TURNING, "toll", "options"),
+                (OverlayKind.CRAFT, "mining", "yields"),
+            )
         ),
         keeper_screens.field_screen(
             edited,

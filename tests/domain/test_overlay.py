@@ -857,3 +857,70 @@ def test_a_resident_edit_has_no_file_home(content: GameContent) -> None:
 
     assert "в content/ не хранятся" in overlay_rules.to_toml(apply(content, DOVEN), resident)
     assert OverlayKind.NPC not in overlay_rules.EXPORTABLE
+
+
+# --- голосования Палаты и находки сбора: вложенные списки (ADR 0046) --
+
+
+def _turning(**fields: str) -> OverlayRecord:
+    base = {
+        "name": "Мосты",
+        "question": "Чинить ли мосты на перевале?",
+        "options": "yes | Чинить | Дороже, но целее\nno | Не чинить | Дешевле, объезд длиннее",
+    }
+    return OverlayRecord(
+        kind=OverlayKind.TURNING, entity_id="keeper_turning_1", fields=base | fields
+    )
+
+
+def test_a_keeper_adds_a_turning_with_its_options(content: GameContent) -> None:
+    world = apply(content, _turning())
+
+    added = next((t for t in world.turnings if t.id == "keeper_turning_1"), None)
+    assert added is not None
+    assert [one.id for one in added.options] == ["yes", "no"]
+    assert added.options[0].name == "Чинить"
+
+
+def test_a_turning_with_one_answer_is_refused(content: GameContent) -> None:
+    assert refused_for(content, _turning(options="only | Единственный"), "меньше двух")
+
+
+def test_the_open_flag_makes_the_turning_the_one_being_asked(content: GameContent) -> None:
+    world = apply(content, _turning(open="да"))
+
+    assert world.open_turning_id == "keeper_turning_1"
+
+
+def test_a_turning_edit_exports_with_nested_option_tables(content: GameContent) -> None:
+    edited = overlay_rules.effective(
+        content, (_turning(),), OverlayKind.TURNING, "keeper_turning_1"
+    )
+
+    fragment = overlay_rules.to_toml(content, edited)
+
+    assert "[[turning]]" in fragment and "[[turning.options]]" in fragment
+    parsed = _toml_entry(fragment, "turning")
+    assert parsed["question"].startswith("Чинить")
+    assert [one["id"] for one in parsed["options"]] == ["yes", "no"]
+
+
+def _mining_with_yields(content: GameContent, yields: str) -> OverlayRecord:
+    """Как это делает панель: открыть карточку (свести с файлом), поправить поле."""
+    card = overlay_rules.effective(content, (), OverlayKind.CRAFT, "mining")
+    return card.with_field("yields", yields)
+
+
+def test_craft_yields_are_edited_from_the_same_card(content: GameContent) -> None:
+    edit = _mining_with_yields(content, "iron_scrap | 1 | луга\nbog_iron | 4")
+
+    world = apply(content, edit)
+
+    mining = world.craft("mining")
+    assert {one.item_id for one in mining.yields} == {"iron_scrap", "bog_iron"}
+    scrap = next(one for one in mining.yields if one.item_id == "iron_scrap")
+    assert scrap.level == 1 and scrap.biomes == ("луга",)
+
+
+def test_craft_yields_reject_an_unknown_item(content: GameContent) -> None:
+    assert refused_for(content, _mining_with_yields(content, "нет_такой | 1"), "нет")

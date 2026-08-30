@@ -490,9 +490,32 @@ def _value(content: GameContent, state: PlayState, view: KeeperView, text: str) 
     record = _record(content, state, view)
     if spec.kind is FieldKind.PAIRS:
         return _paired_value(state, record, spec, text)
+    if spec.kind is FieldKind.ROWS:
+        return _row_value(state, record, spec, text)
     edited = record.with_field(spec.key, text)
     said = f"{spec.name}: {text}."
     return _stored(state, edited, said)
+
+
+def _row_value(state: PlayState, record: OverlayRecord, spec: FieldSpec, text: str) -> PlayState:
+    """Набранная строка «a | b | c» ложится в таблицу по первому столбцу (ADR 0046).
+
+    Экран поля не разматывается: за одной строкой обычно набирают следующую.
+    """
+    cells = [cell.strip() for cell in text.split("|")]
+    if not cells or not cells[0]:
+        return state.with_notice(
+            f"Наберите «{' | '.join(spec.row_columns) or 'ключ | значение'}»: первым — ключ."
+        )
+    kept = [row for row in record.rows(spec.key) if row[0] != cells[0]]
+    kept.append(tuple(cells))
+    edited = record.with_field(spec.key, "\n".join(" | ".join(row) for row in kept))
+    note = _note(KeeperAction.EDIT, edited.entity_id, f"{spec.name}: {cells[0]}")
+    return (
+        replace(state, keeper_page=PageState())
+        .storing(PendingWrite(edit=edited, note=note))
+        .with_notice(f"{spec.name}: строка «{cells[0]}». Ещё — наберите, или «Назад».")
+    )
 
 
 def _paired_value(state: PlayState, record: OverlayRecord, spec: FieldSpec, text: str) -> PlayState:
@@ -861,6 +884,8 @@ def _blank(
                 "output_count": "1",
                 "experience": "10",
             }
+        case OverlayKind.TURNING:
+            fields = {"options": "yes | Да\nno | Нет"}
         case _:
             pass
     return OverlayRecord(
@@ -924,6 +949,7 @@ def _step_entity(
             FieldKind.RATE,
             FieldKind.PAIRS,
             FieldKind.NUMBERS,
+            FieldKind.ROWS,
         }
         else ""
     )
@@ -951,6 +977,10 @@ def _step_field(
         moved = page_move(command, state.keeper_page, total_pages(len(record.pairs(spec.key))))
         if moved is not None:
             return replace(state, keeper_page=moved, notice="")
+    if spec.kind is FieldKind.ROWS:
+        moved = page_move(command, state.keeper_page, total_pages(len(record.rows(spec.key))))
+        if moved is not None:
+            return replace(state, keeper_page=moved, notice="")
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите вариант или наберите значение.")
 
@@ -967,6 +997,16 @@ def _step_field(
         kept = [(key, val) for key, val in record.pairs(spec.key) if key != removed]
         edited = record.with_field(spec.key, ", ".join(f"{key}={val}" for key, val in kept))
         return _stored(state, edited, f"{spec.name}: убрано «{removed}».")
+
+    if spec.kind is FieldKind.ROWS:
+        dropped = keeper_screens.row_from_button(record, spec, command.argument)
+        if not dropped:
+            return state.with_notice(
+                "Не узнал строку. Наберите новую или нажмите строку из списка."
+            )
+        kept_rows = [row for row in record.rows(spec.key) if row[0] != dropped]
+        edited = record.with_field(spec.key, "\n".join(" | ".join(row) for row in kept_rows))
+        return _stored(state, edited, f"{spec.name}: убрано «{dropped}».")
 
     chosen = keeper_screens.option_from_button(content, record, spec, command.argument)
     if chosen is None:

@@ -82,6 +82,7 @@ KINDS: tuple[OverlayKind, ...] = (
     OverlayKind.TRAIT,
     OverlayKind.CRAFT,
     OverlayKind.RECIPE,
+    OverlayKind.TURNING,
     OverlayKind.META,
 )
 
@@ -487,6 +488,8 @@ def field_screen(
         return _choice_screen(content, record, spec, state, lead)
     if spec.kind is FieldKind.PAIRS:
         return _pairs_screen(content, record, spec, state, lead)
+    if spec.kind is FieldKind.ROWS:
+        return _rows_screen(record, spec, state, lead)
 
     rows: list[tuple[Label, ...]] = []
     if spec.kind is FieldKind.FLAG:
@@ -515,6 +518,12 @@ def _how_to_fill(spec: FieldSpec) -> str:
             )
         case FieldKind.NUMBERS:
             return "Наберите целые числа через запятую сообщением: они заменят то, что стоит."
+        case FieldKind.ROWS:
+            cols = " | ".join(spec.row_columns) or "колонка | колонка"
+            return (
+                f"Наберите строку сообщением: «{cols}». Первый столбец — ключ: та же "
+                "строка заменяется, новая добавляется. Нажмите строку из списка, чтобы её убрать."
+            )
         case _:
             return "Наберите значение сообщением. Оно заменит то, что стоит сейчас."
 
@@ -617,6 +626,37 @@ def pair_from_button(
         if _pair_button(content, spec, record, index, key, value).matches(pressed):
             return key
     return None
+
+
+def _row_button(index: int, cells: tuple[str, ...]) -> Label:
+    return label(numbered(index, " | ".join(cell for cell in cells if cell)))
+
+
+def _rows_screen(
+    record: OverlayRecord, spec: FieldSpec, state: PageState, lead: Sequence[str]
+) -> Screen:
+    entries = [
+        ListEntry(key=cells[0], text=_row_button(index, cells).text)
+        for index, cells in enumerate(record.rows(spec.key), start=1)
+    ]
+    return paginated_screen(
+        screen_id=ScreenId.KEEPER_FIELD,
+        title=spec.name,
+        entries=entries,
+        state=state,
+        lead_lines=tuple(lead),
+        empty_text="Строк пока нет. Наберите первую сообщением.",
+        extra_rows=(),
+        show_filters=False,
+    )
+
+
+def row_from_button(record: OverlayRecord, spec: FieldSpec, pressed: str) -> str:
+    """Ключ строки, по кнопке которой нажали, — чтобы её убрать. Пусто — не она."""
+    for index, cells in enumerate(record.rows(spec.key), start=1):
+        if _row_button(index, cells).matches(pressed):
+            return cells[0]
+    return ""
 
 
 # --- игроки ------------------------------------------------------------

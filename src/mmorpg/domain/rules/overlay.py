@@ -30,8 +30,10 @@ from mmorpg.domain.entities.content import (
     Npc,
     ProgressionRules,
     Trait,
+    Turning,
+    TurningOption,
 )
-from mmorpg.domain.entities.craft import Craft, CraftKind, Recipe, RecipeInput
+from mmorpg.domain.entities.craft import Craft, CraftKind, CraftYield, Recipe, RecipeInput
 from mmorpg.domain.entities.damage import DamageType
 from mmorpg.domain.entities.location import EnemyArchetype, EnemyKind
 from mmorpg.domain.entities.overlay import KEEPER_PREFIX, OverlayKind, OverlayRecord
@@ -87,6 +89,9 @@ class FieldKind(StrEnum):
     #: Поле «ключ=число»: набор пар, где ключ выбирается из известного списка, а
     #: значение набирают. Прибавки черты и состав рецепта — обе такие.
     PAIRS = "pairs"
+    #: Поле-таблица (ADR 0046): список строк, у каждой несколько колонок, строку
+    #: набирают одним сообщением «a | b | c». Ответы Палаты и находки сбора.
+    ROWS = "rows"
 
 
 class Source(StrEnum):
@@ -125,6 +130,10 @@ class FieldSpec:
     #: Чем считать значение пары у поля ``PAIRS``: ``NUMBER`` — счёт в рецепте
     #: (целое, не меньше единицы), ``RATE`` — прибавка черты (доля, знак допустим).
     pair_value: FieldKind = FieldKind.NUMBER
+    #: Имена колонок у поля ``ROWS`` — для подсказки и проверки.
+    row_columns: tuple[str, ...] = ()
+    #: Сколько первых колонок ``ROWS`` обязательны.
+    row_required: int = 1
 
 
 #: Как разновидность называется в единственном и множественном числе. Первое —
@@ -139,6 +148,7 @@ TITLES: Mapping[OverlayKind, tuple[str, str]] = {
     OverlayKind.CRAFT: ("Ремесло", "Ремёсла"),
     OverlayKind.RECIPE: ("Рецепт", "Рецепты"),
     OverlayKind.META: ("Опорные числа", "Опорные числа"),
+    OverlayKind.TURNING: ("Голосование Палаты", "Голосования Палаты"),
 }
 
 #: Разновидности, которые нельзя убрать из игры: без них игра не собирается.
@@ -157,6 +167,7 @@ CREATABLE: frozenset[OverlayKind] = frozenset(
         OverlayKind.TRAIT,
         OverlayKind.CRAFT,
         OverlayKind.RECIPE,
+        OverlayKind.TURNING,
     }
 )
 
@@ -274,6 +285,15 @@ FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
             required=True,
         ),
         FieldSpec("description", "Чем занимаются"),
+        FieldSpec(
+            "yields",
+            "Находки сбора",
+            FieldKind.ROWS,
+            row_columns=("вещь", "уровень", "биомы через запятую"),
+            row_required=2,
+            limit=MAX_TEXT * 4,
+            hint="iron_scrap | 1 | луга, лес   (пустые биомы — везде)",
+        ),
     ),
     OverlayKind.RECIPE: (
         FieldSpec("craft", "Ремесло", FieldKind.CHOICE, source=Source.CRAFT, required=True),
@@ -290,6 +310,22 @@ FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
         FieldSpec("output", "Что выходит", FieldKind.CHOICE, source=Source.ITEM, required=True),
         FieldSpec("output_count", "Сколько за раз", FieldKind.NUMBER, required=True),
         FieldSpec("experience", "Опыт за работу", FieldKind.NUMBER),
+    ),
+    OverlayKind.TURNING: (
+        FieldSpec("name", "Название", required=True, limit=NAME_LIMIT),
+        FieldSpec("question", "Вопрос Палаты", required=True),
+        FieldSpec("text", "Как объясняют"),
+        FieldSpec("open", "Открыть его сейчас", FieldKind.FLAG),
+        FieldSpec(
+            "options",
+            "Ответы",
+            FieldKind.ROWS,
+            row_columns=("ключ", "имя", "как объясняют"),
+            row_required=2,
+            required=True,
+            limit=MAX_TEXT * 6,
+            hint="toll_low | Брать меньше | Дешевле — больше сделок",
+        ),
     ),
     # Опорные числа: белый список ``ProgressionRules``. Только то, что двигает
     # баланс числом, — не то, что держит дорогу (число уровней, счёт слотов,
@@ -526,6 +562,9 @@ def shown(content: GameContent, spec: FieldSpec, record: OverlayRecord) -> str:
         case FieldKind.NUMBERS:
             listed = record.listed(spec.key)
             return ", ".join(listed) if listed else "не заполнено"
+        case FieldKind.ROWS:
+            rows = record.rows(spec.key)
+            return "; ".join(" | ".join(cells) for cells in rows) if rows else "не заполнено"
         case _:
             return value or "не заполнено"
 
@@ -571,6 +610,15 @@ def listing(content: GameContent, kind: OverlayKind) -> tuple[tuple[str, str], .
             return tuple((recipe.id, _recipe_title(content, recipe)) for recipe in content.recipes)
         case OverlayKind.META:
             return ((META_ID, "Опорные числа игры"),)
+        case OverlayKind.TURNING:
+            return tuple(
+                (
+                    turning.id,
+                    f"{turning.name}"
+                    + (" — открыто" if turning.id == content.open_turning_id else ""),
+                )
+                for turning in content.turnings
+            )
         case _:
             return tuple(
                 (city.id, f"{city.name} — уровни с {city.level_min} по {city.level_max}")
@@ -621,6 +669,9 @@ def snapshot(content: GameContent, kind: OverlayKind, entity_id: str) -> dict[st
             return _recipe_fields(recipe) if recipe is not None else {}
         case OverlayKind.META:
             return _meta_fields(content.rules)
+        case OverlayKind.TURNING:
+            vote = next((t for t in content.turnings if t.id == entity_id), None)
+            return _turning_fields(content, vote) if vote is not None else {}
         case _:
             return {}
 
@@ -698,12 +749,30 @@ def _trait_fields(trait: Trait) -> dict[str, str]:
     }
 
 
+def _rows_str(rows: Iterable[tuple[str, ...]]) -> str:
+    """Строки таблицы обратно в одно поле: колонки через «|», строки через перевод."""
+    return "\n".join(" | ".join(cells) for cells in rows)
+
+
 def _craft_fields(craft: Craft) -> dict[str, str]:
     return {
         "name": craft.name,
         "kind": craft.kind.value,
         "stat": craft.stat.value,
         "description": craft.description,
+        "yields": _rows_str(
+            (one.item_id, str(one.level), ", ".join(one.biomes)) for one in craft.yields
+        ),
+    }
+
+
+def _turning_fields(content: GameContent, turning: Turning) -> dict[str, str]:
+    return {
+        "name": turning.name,
+        "question": turning.question,
+        "text": turning.text,
+        "open": "да" if turning.id == content.open_turning_id else "нет",
+        "options": _rows_str((one.id, one.name, one.text) for one in turning.options),
     }
 
 
@@ -834,7 +903,25 @@ def _field_problems(
             return _pairs_problems(content, record, spec, value)
         case FieldKind.NUMBERS:
             return _numbers_problems(spec, value)
+        case FieldKind.ROWS:
+            return _rows_problems(spec, record)
     return []
+
+
+def _rows_problems(spec: FieldSpec, record: OverlayRecord) -> list[str]:
+    rows = record.rows(spec.key)
+    if not rows:
+        return [f"{spec.name}: ни одной строки. Наберите «{' | '.join(spec.row_columns)}»."]
+    found: list[str] = []
+    for cells in rows:
+        filled = list(cells[: spec.row_required])
+        if len(filled) < spec.row_required or any(not cell for cell in filled):
+            need = " и ".join(spec.row_columns[: spec.row_required])
+            found.append(f"{spec.name}: у строки «{clipped(cells[0])}» не хватает: {need}.")
+    keys = [cells[0] for cells in rows]
+    if len(keys) != len(set(keys)):
+        found.append(f"{spec.name}: два ключа совпадают — строка была бы недостижима.")
+    return found
 
 
 def _numbers_problems(spec: FieldSpec, value: str) -> list[str]:
@@ -888,12 +975,36 @@ def _shape_problems(content: GameContent, record: OverlayRecord) -> list[str]:
             if category and category not in content.trait_categories:
                 return [f"Раздел: «{clipped(category)}» такого нет."]
         case OverlayKind.CRAFT:
-            return _craft_problems(record)
+            return [*_craft_problems(record), *_yields_problems(content, record)]
         case OverlayKind.RECIPE:
             return _recipe_problems(content, record)
         case OverlayKind.META:
             return _meta_problems(content, record)
+        case OverlayKind.TURNING:
+            return _turning_problems(record)
     return []
+
+
+def _turning_problems(record: OverlayRecord) -> list[str]:
+    options = record.rows("options")
+    if 0 < len(options) < 2:
+        return ["Ответов: голосование считает голоса между ответами, а их меньше двух."]
+    return []
+
+
+def _yields_problems(content: GameContent, record: OverlayRecord) -> list[str]:
+    found: list[str] = []
+    known = frozenset(biomes(content))
+    for cells in record.rows("yields"):
+        item_id = cells[0]
+        if not content.has_item(item_id):
+            found.append(f"Находки сбора: вещи «{clipped(item_id)}» нет.")
+        if len(cells) > 1 and cells[1] and not _is_number(cells[1]):
+            found.append(f"Находки сбора: у «{clipped(item_id)}» уровень не число.")
+        for biome in cells[2].split(",") if len(cells) > 2 else []:
+            if biome.strip() and biome.strip() not in known:
+                found.append(f"Находки сбора: местности «{clipped(biome.strip())}» нет.")
+    return found
 
 
 def _meta_problems(content: GameContent, record: OverlayRecord) -> list[str]:
@@ -1065,6 +1176,9 @@ def apply(content: GameContent, records: Sequence[OverlayRecord]) -> GameContent
     )
     quests = _apply_quests(staged, npcs, _good(staged, records, OverlayKind.QUEST))
     recipes = _apply_recipes(staged, _good(staged, records, OverlayKind.RECIPE))
+    turnings, open_turning_id = _apply_turnings(
+        content, _good(content, records, OverlayKind.TURNING)
+    )
     return _rebuilt(
         content,
         cities=cities,
@@ -1075,6 +1189,8 @@ def apply(content: GameContent, records: Sequence[OverlayRecord]) -> GameContent
         enemies=enemies,
         recipes=recipes,
         rules=rules,
+        turnings=turnings,
+        open_turning_id=open_turning_id,
     )
 
 
@@ -1097,6 +1213,8 @@ def _rebuilt(
     crafts: Sequence[Craft] | None = None,
     recipes: Sequence[Recipe] | None = None,
     rules: ProgressionRules | None = None,
+    turnings: Sequence[Turning] | None = None,
+    open_turning_id: str | None = None,
 ) -> GameContent:
     return GameContent.build(
         races=content.races,
@@ -1125,8 +1243,8 @@ def _rebuilt(
         crafts=content.crafts if crafts is None else crafts,
         recipes=content.recipes if recipes is None else recipes,
         npcs=npcs,
-        turnings=content.turnings,
-        open_turning_id=content.open_turning_id,
+        turnings=content.turnings if turnings is None else turnings,
+        open_turning_id=(content.open_turning_id if open_turning_id is None else open_turning_id),
     )
 
 
@@ -1348,9 +1466,25 @@ def _apply_crafts(content: GameContent, records: Sequence[OverlayRecord]) -> tup
 
 
 def _craft_from(content: GameContent, record: OverlayRecord) -> Craft:
-    # Находки сбора — вложенные списки биомов, их правят в ``crafts.toml``; правка
-    # из панели их сохраняет, а заведённое смотрителем ремесло начинается без них.
-    yields = content.craft(record.entity_id).yields if content.has_craft(record.entity_id) else ()
+    # Находки сбора: поле-таблица правит их с той же карточки (ADR 0046). Поле не
+    # трогали — берём то, что в файле, чтобы правка имени их не роняла.
+    if record.value("yields").strip():
+        yields = tuple(
+            CraftYield(
+                item_id=cells[0],
+                level=int(cells[1]) if len(cells) > 1 and _is_number(cells[1]) else 1,
+                biomes=tuple(
+                    part.strip()
+                    for part in (cells[2].split(",") if len(cells) > 2 else [])
+                    if part.strip()
+                ),
+            )
+            for cells in record.rows("yields")
+        )
+    elif content.has_craft(record.entity_id):
+        yields = content.craft(record.entity_id).yields
+    else:
+        yields = ()
     return Craft(
         id=record.entity_id,
         name=record.value("name"),
@@ -1358,6 +1492,41 @@ def _craft_from(content: GameContent, record: OverlayRecord) -> Craft:
         stat=StatCode(record.value("stat")),
         description=record.value("description"),
         yields=yields,
+    )
+
+
+def _apply_turnings(
+    content: GameContent, records: Sequence[OverlayRecord]
+) -> tuple[tuple[Turning, ...], str]:
+    """Голосования Палаты с правками. Флаг ``open`` у любой правки делает её
+    голосование открытым; иначе открытое остаётся тем, что назвал ``[meta].open``.
+    """
+    dropped = {record.entity_id for record in records if record.removed}
+    by_id = {t.id: t for t in content.turnings if t.id not in dropped}
+    open_id = content.open_turning_id if content.open_turning_id not in dropped else ""
+    for record in records:
+        if record.removed:
+            continue
+        by_id[record.entity_id] = _turning_from(record)
+        if record.flag("open"):
+            open_id = record.entity_id
+    return tuple(by_id.values()), open_id
+
+
+def _turning_from(record: OverlayRecord) -> Turning:
+    return Turning(
+        id=record.entity_id,
+        name=record.value("name"),
+        question=record.value("question"),
+        text=record.value("text"),
+        options=tuple(
+            TurningOption(
+                id=cells[0],
+                name=cells[1] if len(cells) > 1 else cells[0],
+                text=cells[2] if len(cells) > 2 else "",
+            )
+            for cells in record.rows("options")
+        ),
     )
 
 
@@ -1408,6 +1577,7 @@ EXPORTABLE: frozenset[OverlayKind] = frozenset(
         OverlayKind.CRAFT,
         OverlayKind.RECIPE,
         OverlayKind.META,
+        OverlayKind.TURNING,
     }
 )
 
@@ -1420,6 +1590,7 @@ _TOML_FILE: Mapping[OverlayKind, str] = {
     OverlayKind.CRAFT: "content/crafts.toml",
     OverlayKind.RECIPE: "content/crafts.toml",
     OverlayKind.META: "нескольких файлов [meta] по одному числу",
+    OverlayKind.TURNING: "content/turnings.toml",
 }
 
 _TOML_SECTION: Mapping[OverlayKind, str] = {
@@ -1430,6 +1601,7 @@ _TOML_SECTION: Mapping[OverlayKind, str] = {
     OverlayKind.TRAIT: "[[trait]]",
     OverlayKind.CRAFT: "[[craft]]",
     OverlayKind.RECIPE: "[[recipe]]",
+    OverlayKind.TURNING: "[[turning]]",
 }
 
 
@@ -1455,6 +1627,8 @@ def to_toml(content: GameContent, record: OverlayRecord) -> str:
         return "# Жители в content/ не хранятся — эта правка так и живёт в базе."
     if record.kind is OverlayKind.META:
         return _meta_toml(content, record)
+    if record.kind is OverlayKind.TURNING:
+        return _turning_toml(record)
 
     header = (
         f"# правка {record.entity_id} — проверьте и вставьте в {_TOML_FILE[record.kind]}\n"
@@ -1471,6 +1645,28 @@ def to_toml(content: GameContent, record: OverlayRecord) -> str:
     }
     body = builders[record.kind](content, record)
     return "\n".join([header, f"id = {_toml_str(record.entity_id)}", *body])
+
+
+def _turning_toml(record: OverlayRecord) -> str:
+    lines = [
+        f"# правка {record.entity_id} — проверьте и вставьте в content/turnings.toml",
+        "[[turning]]",
+        f"id = {_toml_str(record.entity_id)}",
+        f"name = {_toml_str(record.value('name'))}",
+        f"question = {_toml_str(record.value('question'))}",
+    ]
+    if record.value("text"):
+        lines.append(f"text = {_toml_str(record.value('text'))}")
+    if record.flag("open"):
+        lines.append(f"# и в [meta]: open = {_toml_str(record.entity_id)}")
+    for cells in record.rows("options"):
+        lines.append("")
+        lines.append("[[turning.options]]")
+        lines.append(f"id = {_toml_str(cells[0])}")
+        lines.append(f"name = {_toml_str(cells[1] if len(cells) > 1 else cells[0])}")
+        if len(cells) > 2 and cells[2]:
+            lines.append(f"text = {_toml_str(cells[2])}")
+    return "\n".join(lines)
 
 
 def _quest_toml(content: GameContent, record: OverlayRecord) -> list[str]:
@@ -1546,7 +1742,22 @@ def _craft_toml(content: GameContent, record: OverlayRecord) -> list[str]:
     ]
     if record.value("description"):
         lines.append(f"description = {_toml_str(record.value('description'))}")
+    yields = record.rows("yields")
+    if yields:
+        lines.append("yields = [" + ", ".join(_yield_table(cells) for cells in yields) + "]")
     return lines
+
+
+def _yield_table(cells: tuple[str, ...]) -> str:
+    parts = [
+        f"item = {_toml_str(cells[0])}",
+        f"level = {_toml_num(cells[1] if len(cells) > 1 else '1')}",
+    ]
+    biomes_raw = cells[2] if len(cells) > 2 else ""
+    if biomes_raw.strip():
+        got = [part.strip() for part in biomes_raw.split(",") if part.strip()]
+        parts.append(f"biomes = {_toml_list(got)}")
+    return "{ " + ", ".join(parts) + " }"
 
 
 def _recipe_toml(content: GameContent, record: OverlayRecord) -> list[str]:
