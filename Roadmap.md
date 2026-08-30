@@ -19,9 +19,10 @@
   Колва переписаны, спорная локация переименована.
 - `+` `quests.toml` — акт I переписан под службу Дому Порубежья, каркас
   актов II–V — блок-комментарием.
-- `-` `turning.py` + `screens/chamber.py` + `endgame.md` + `turnings.toml` —
-  ремонт вместо Печати, Большой совет; миграция `remorts`/`title`, удаление
-  `seals`/`pledges`. Свой ADR.
+- `+` `turning.py` + `screens/chamber.py` + `endgame.md` + `turnings.toml` —
+  «новое имя» (сброс до 1 + очки + титул) вместо Печати, Большой совет вместо
+  голосования Палаты; миграция `0021` (`remorts` вместо `seals`, `pledges`
+  убран). ADR 0048.
 - `-` `houses.toml` + `domain/rules/houses.py` + миграция `house_id`/`house_rep`
   — техника дома, вступление, репутация. Свой ADR.
 - `-` `economy` — `TRADE_TAX_PERCENT` под «сбор с сделки» (только текст).

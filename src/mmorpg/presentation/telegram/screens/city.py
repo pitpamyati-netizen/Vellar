@@ -110,10 +110,10 @@ def withdraw_label(sum_: int) -> Label:
 def bank_screen(content: GameContent, character: Character, city: City, notice: str = "") -> Screen:
     """Золото в сундуке не при тебе, а проигранный бой берёт только то, что при тебе."""
     lines = [
-        *head(f"Банк Палаты, {city.name}.", notice),
+        *head(f"Городской банк, {city.name}.", notice),
         "Стойка, весы и книга, в которую записывают всё до монеты.",
         f"На руках: {gold(character.gold)}. В ячейке: {gold(character.bank_gold)}.",
-        "За саму ячейку не берут: Палате важнее знать, у кого сколько.",
+        "За саму ячейку не берут: управе важнее знать, у кого сколько.",
         "Проигранный бой забирает десятую часть того, что на руках. Ячейку он не трогает.",
     ]
     rows: list[tuple[Label, ...]] = [

@@ -1,14 +1,13 @@
-"""Палата: перерождение, Печать и голосование.
+"""Управа: новое имя и голос в Большом совете.
 
-Три экрана, по делу на каждый. Палата говорит, что берёт и что за это открывает;
-заклад — список того, что можно отдать; голосование — сам вопрос, счёт голосов
-по нему и кнопка на каждый ответ. Вопрос вынесен отдельно не для порядка: у него
-столько строк, сколько ответов, и в одном сообщении с Палатой он бы туда не влез
-(``docs/accessibility.md``, правило 11).
+Три экрана. Управа говорит, кто ты сейчас и о чём спрашивает совет. Новое имя —
+это одна кнопка и предупреждение перед ней: уровень падает до первого.
+Голосование вынесено отдельно не для порядка — у вопроса столько строк, сколько
+ответов, и в одном сообщении с управой он бы туда не влез (``docs/accessibility.md``,
+правило 11).
 
-Всё, что решается вещами, названо до нажатия: чего Палата просит сейчас, сколько
-у вас Печатей, насколько глубже стал спуск и на каком ранге теперь открывается
-грань (``domain/rules/turning.py``).
+Всё, что случится по нажатию, названо до него: сколько уровней теряешь, что
+остаётся, сколько очков и какой титул прибавит уход (``domain/rules/turning.py``).
 """
 
 from __future__ import annotations
@@ -17,42 +16,24 @@ from collections.abc import Mapping
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
-from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules import turning as turning_rules
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import head, plural
-from mmorpg.presentation.telegram.screens.paginated import (
-    ListEntry,
-    PageState,
-    paginated_screen,
-)
-
-#: Как заклад назван на кнопке: разновидность видна до нажатия.
-ITEM_PREFIX = "Вещь: "
-EDGE_PREFIX = "Грань: "
 
 
 def answer_label(option_name: str) -> Label:
     return label(f"Ответить: {option_name}")
 
 
-def seals_line(character: Character) -> str:
-    count = character.seals
-    word = plural(count, "Печать", "Печати", "Печатей")
-    return f"У вас {count} {word}."
-
-
-def opened_lines(content: GameContent, character: Character) -> tuple[str, ...]:
-    """Что Печати уже открыли. Пусто у того, кто ни одного перерождения не совершил."""
-    if character.seals <= 0:
-        return ()
-    return (
-        f"Спуск идёт глубже: схваток подряд {turning_rules.descent_depth(character)}.",
-        f"Грань умения открывается с ранга {skill_rules.edge_rank_for(content, character)}.",
-        "Характеристики Печать не растит и не растила: она открывает доступы.",
-    )
+def standing_line(character: Character) -> str:
+    """Кто игрок для Престола: сколько уходов и под каким титулом."""
+    count = character.remorts
+    if count <= 0:
+        return "Нового имени вы ещё не просили."
+    word = plural(count, "уход", "ухода", "уходов")
+    return f"Уходов за плечами: {count} {word}. Титул: {turning_rules.title(count)}."
 
 
 def chamber_screen(
@@ -60,26 +41,22 @@ def chamber_screen(
     character: Character,
     notice: str = "",
 ) -> Screen:
-    """Палата: что она берёт, что открывает и о чём сейчас спрашивает."""
+    """Управа: кто ты для Престола и о чём спрашивает совет."""
     turning = content.open_turning()
     refused = turning_rules.refusal(character)
-    wanted = turning_rules.asking(character.seals)
 
     lines = [
-        *head("Дорожная палата.", notice),
-        "Весы, книга и печать, которую признают все пятнадцать городов.",
-        "Перерождение — это заклад: вы отдаёте надетую вещь или грань умения и получаете "
-        "Печать. Уровень и опыт остаются при вас.",
-        seals_line(character),
-        *opened_lines(content, character),
-        f"Сейчас Палата примет вещь не ниже уровня {wanted} или грань умения "
-        f"полного ранга {turning_rules.PLEDGE_EDGE_RANK}.",
-        "Заложенное не возвращают и второй раз не принимают.",
+        *head("Управа.", notice),
+        "Престольная контора: книга, печать и вопросы совета.",
+        "Новое имя просят с трёхсотого уровня: уровень падает до первого, а золото, "
+        "вещи и изученные умения остаются при вас. За уход дают очки характеристик "
+        "и титул.",
+        standing_line(character),
     ]
     if turning is None:
-        lines.append("Голосования сейчас нет: Палата считает прошлый цикл.")
+        lines.append("Совет сейчас ни о чём не спрашивает.")
     else:
-        lines.append(f"Открыто голосование: {turning.name}. {turning.question}")
+        lines.append(f"Открыт вопрос совета: {turning.name}. {turning.question}")
     if refused:
         lines.append(refused)
 
@@ -91,6 +68,40 @@ def chamber_screen(
     return Screen(id=ScreenId.CHAMBER, lines=tuple(lines), rows=tuple(rows))
 
 
+def remort_screen(
+    content: GameContent,
+    character: Character,
+    notice: str = "",
+) -> Screen:
+    """Новое имя: что теряешь, что остаётся, что прибавит. Кнопка тут необратима."""
+    refused = turning_rules.refusal(character)
+    if refused:
+        return Screen(id=ScreenId.CHAMBER_REMORT, lines=(refused,))
+
+    gift = turning_rules.stat_gift(character.remorts)
+    next_title = turning_rules.title(character.remorts + 1)
+    gift_line = (
+        f"Нераспределённых очков характеристик станет на {gift} больше."
+        if gift
+        else "Очков характеристик этот уход уже не прибавит: потолок прибавки взят."
+    )
+    lines = (
+        *head("Новое имя.", notice),
+        "Уровень упадёт до первого, опыт обнулится. Дорогу с первого до трёхсотого "
+        "предстоит пройти заново.",
+        "Останутся при вас: золото и банк, всё снаряжение, дерево умений с рангами "
+        "и гранями, черты, ремёсла, задания и счёт арены.",
+        gift_line,
+        f"Титул после ухода: {next_title}.",
+        "Нажмёте «Подтвердить» — уход совершится сразу.",
+    )
+    return Screen(
+        id=ScreenId.CHAMBER_REMORT,
+        lines=lines,
+        rows=((labels.CONFIRM,),),
+    )
+
+
 def turning_screen(
     content: GameContent,
     character: Character,
@@ -98,16 +109,15 @@ def turning_screen(
     tally: Mapping[str, int] | None = None,
     notice: str = "",
 ) -> Screen:
-    """Голосование: сам вопрос, счёт по нему и кнопка на каждый ответ."""
+    """Голосование совета: сам вопрос, счёт по нему и кнопка на каждый ответ."""
     turning = content.open_turning()
     counted = tally or {}
     if turning is None:
         return Screen(
             id=ScreenId.TURNING,
             lines=(
-                notice or "Голосования сейчас нет.",
-                "Палата считает прошлый цикл. Перерождения совершают и без вопроса: "
-                "Печати остаются при вас и голос свой не теряют.",
+                notice or "Совет сейчас ни о чём не спрашивает.",
+                "Совет считает прошлый цикл. Новое имя берут и без вопроса: голос за ним остаётся.",
             ),
         )
 
@@ -116,7 +126,7 @@ def turning_screen(
         *head(f"Голосование: {turning.name}.", notice),
         turning.question,
         turning.text,
-        f"Подано голосов: {total}. Голос весит столько, сколько перерождений за ним.",
+        f"Подано голосов: {total}. Голос весит столько, сколько за ним уходов.",
     ]
     lines.extend(
         f"{option.name}: голосов {counted.get(option.id, 0)}. {option.text}"
@@ -135,7 +145,7 @@ def turning_screen(
     elif turning_rules.may_answer(character):
         lines.append("Ваш голос ещё не подан.")
     else:
-        lines.append("Голос дают за перерождение: пока Печати нет, Палата слушает, но не считает.")
+        lines.append("Голос дают за уход: пока нового имени нет, совет слушает, но не считает.")
 
     rows: tuple[tuple[Label, ...], ...] = ()
     if turning_rules.may_answer(character):
@@ -143,71 +153,7 @@ def turning_screen(
     return Screen(id=ScreenId.TURNING, lines=tuple(lines), rows=rows)
 
 
-def pledge_entries(content: GameContent, character: Character) -> tuple[ListEntry, ...]:
-    """Всё, что Палата примет прямо сейчас, одним списком."""
-    entries = [
-        ListEntry(
-            key=turning_rules.pledge_key(turning_rules.ITEM_PLEDGE, item.id),
-            text=f"{ITEM_PREFIX}{item.name}",
-            detail=f"уровень {item.level}",
-        )
-        for item in turning_rules.pledgeable_items(content, character)
-    ]
-    entries.extend(
-        ListEntry(
-            key=turning_rules.pledge_key(turning_rules.EDGE_PLEDGE, skill.code),
-            text=f"{EDGE_PREFIX}{skill.name}",
-            detail=_edge_detail(character, skill.code, content),
-        )
-        for skill in turning_rules.pledgeable_edges(content, character)
-    )
-    return tuple(entries)
-
-
-def _edge_detail(character: Character, skill_code: str, content: GameContent) -> str:
-    edge_code = character.loadout.edge_of(skill_code)
-    if edge_code is None:
-        return "грань не выбрана"
-    return f"грань «{content.skill(skill_code).edge(edge_code).name}»"
-
-
-def pledge_screen(
-    content: GameContent,
-    character: Character,
-    state: PageState,
-    notice: str = "",
-) -> Screen:
-    """Что отдать. Нажатие здесь — это уже перерождение, и экран говорит об этом до него."""
-    entries = pledge_entries(content, character)
-    return paginated_screen(
-        screen_id=ScreenId.CHAMBER_PLEDGE,
-        title="Заклад Палате",
-        entries=entries,
-        state=state,
-        lead_lines=(
-            notice or "Выбранное уходит Палате сразу: подтверждения не спросят.",
-            f"Вещь принимают не ниже уровня {turning_rules.asking(character.seals)}, "
-            f"грань — с ранга {turning_rules.PLEDGE_EDGE_RANK}.",
-        ),
-        empty_text=(
-            "Отдать сейчас нечего. Наденьте вещь нужного уровня или доведите "
-            "умение с выбранной гранью до полного ранга."
-        ),
-        show_filters=False,
-    )
-
-
-def entry_for(content: GameContent, character: Character, pressed: str) -> str:
-    """Ключ заклада, который назвала нажатая кнопка. Пусто — не назвала ничего."""
-    for entry in pledge_entries(content, character):
-        if entry.as_label().matches(pressed):
-            return entry.key
-    return ""
-
-
-def sealed_line(result: turning_rules.Sealed) -> str:
-    """Что сказать про совершённое перерождение, в одну строку."""
-    return (
-        f"Перерождение совершено. Палата приняла: {result.given}. "
-        f"{seals_line(result.character)} Уровень остался прежним."
-    )
+def reborn_line(result: turning_rules.Reborn) -> str:
+    """Что сказать про совершённый уход, в одну строку."""
+    got = f" Очков характеристик прибавилось: {result.stat_points}." if result.stat_points else ""
+    return f"Новое имя взято. Престол вписал вас как «{result.title}». Уровень: 1.{got}"

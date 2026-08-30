@@ -1311,7 +1311,7 @@ def _parse_affixes(raw: Mapping[str, Any], problems: list[str]) -> tuple[EnemyAf
 
 
 def _parse_turnings(raw: Mapping[str, Any], problems: list[str]) -> tuple[tuple[Turning, ...], str]:
-    """Голосования Палаты и то из них, что открыто сейчас.
+    """Голосования Большого совета и то из них, что открыто сейчас.
 
     Вопрос без ответов - это тупик на экране, поэтому их требуется не меньше
     двух. Открытым может быть только вопрос, который в файле есть: имя, за

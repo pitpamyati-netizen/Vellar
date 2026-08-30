@@ -66,7 +66,7 @@ class DifficultySpec:
     kind: Difficulty
     #: Во сколько раз крепче враги и щедрее их плата.
     stakes: float
-    #: Сколько слоёв прибавляет к базовой глубине (три и по одной за Печать).
+    #: Сколько слоёв прибавляет к базовой глубине (``DESCENT_DEPTH``).
     extra_layers: int
     #: Сколько случайных условий бросает на весь заход.
     conditions: int
@@ -160,6 +160,12 @@ _FORK_ROOMS: tuple[tuple[RoomKind, int], ...] = (
 #: Меньше двух слоёв заход не бывает: слой входа плюс логово.
 MIN_FINAL_LAYER = 2
 
+#: Сколько схваток в спуске до того, как сложность добавит свои слои. Коротко
+#: настолько, чтобы держать в голове, и длинно настолько, чтобы входить туда
+#: раненым было решением (Roadmap 1.5). Прежде росло за каждую Печать Палаты;
+#: Печати больше нет (ADR 0048), число снова одно на всех.
+DESCENT_DEPTH = 3
+
 
 def dungeon_unlocked(
     *, deep: bool, unlock_level: int, char_level: int, deep_threshold: int
@@ -198,9 +204,8 @@ def room_of(value: str) -> RoomKind:
 def final_layer(base_depth: int, difficulty: Difficulty) -> int:
     """Номер последнего слоя - логова и хода наверх. Слои идут 0..final_layer.
 
-    ``base_depth`` - сколько схваток в спуске у этого персонажа
-    (``turning.descent_depth``: три и по одной за Печать). Сложность
-    добавляет свои слои сверху.
+    ``base_depth`` - сколько схваток в спуске до добавок (``DESCENT_DEPTH``).
+    Сложность добавляет свои слои сверху.
     """
     return max(MIN_FINAL_LAYER, base_depth + spec_of(difficulty).extra_layers)
 

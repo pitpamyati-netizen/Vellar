@@ -473,8 +473,8 @@ def _render(
             return chamber_screens.turning_screen(
                 content, character, tally=tally or {}, notice=state.notice
             )
-        case ScreenId.CHAMBER_PLEDGE:
-            return chamber_screens.pledge_screen(content, character, state.list_page, state.notice)
+        case ScreenId.CHAMBER_REMORT:
+            return chamber_screens.remort_screen(content, character, state.notice)
         case ScreenId.SKILLS:
             return skill_screens.skills_screen(content, character, state.skill_page, state.notice)
         case ScreenId.SKILL_SLOTS:
@@ -536,11 +536,11 @@ def _render(
                 character,
                 city,
                 page=state.list_page,
-                base_depth=turning_rules.descent_depth(character),
+                base_depth=dungeon_rules.DESCENT_DEPTH,
                 notice=state.notice,
             )
         case ScreenId.DUNGEON_PICK:
-            base_depth = turning_rules.descent_depth(character)
+            base_depth = dungeon_rules.DESCENT_DEPTH
             if not city.has_dungeon(state.dungeon_pick):
                 return city_screens.dungeon_list_screen(
                     content,
@@ -817,8 +817,8 @@ def advance(
             return _handle_chamber(content, character, state, command)
         case ScreenId.TURNING:
             return _handle_turning(content, character, state, command)
-        case ScreenId.CHAMBER_PLEDGE:
-            return _handle_pledge(content, character, state, command)
+        case ScreenId.CHAMBER_REMORT:
+            return _handle_remort(content, character, state, command)
         case ScreenId.INVENTORY:
             return _handle_inventory(content, character, state, command, shelf)
         case ScreenId.ITEM:
@@ -942,14 +942,14 @@ def _handle_arena(character: Character, state: PlayState, command: Command) -> P
 def _handle_chamber(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    """Палата: две двери — заклад и голосование."""
+    """Управа: две двери — новое имя и голосование."""
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите кнопку из списка или «Назад».")
     if labels.TURNING.matches(command.argument):
         refused = turning_rules.refusal(character)
         if refused:
             return state.with_notice(refused)
-        return replace(state, list_page=PageState()).at(ScreenId.CHAMBER_PLEDGE)
+        return state.at(ScreenId.CHAMBER_REMORT)
     if labels.TURNING_QUESTION.matches(command.argument):
         return state.at(ScreenId.TURNING)
     return state.with_notice("Нажмите кнопку из списка или «Назад».")
@@ -958,50 +958,41 @@ def _handle_chamber(
 def _handle_turning(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    """Голосование: по кнопке на ответ, и голос весит столько, сколько Печатей."""
+    """Голосование: по кнопке на ответ, и голос весит столько, сколько уходов."""
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите ответ или «Назад».")
     turning = content.open_turning()
     if turning is None:
-        return state.with_notice("Палата сейчас ни о чём не спрашивает.")
+        return state.with_notice("Совет сейчас ни о чём не спрашивает.")
     for option in turning.options:
         if not chamber_screens.answer_label(option.name).matches(command.argument):
             continue
         voted = turning_rules.answer(character, turning, option.id)
         if voted is None:
             if not turning_rules.may_answer(character):
-                return state.with_notice("Голос дают за перерождение: сперва Печать, потом ответ.")
+                return state.with_notice("Голос дают за уход: сперва новое имя, потом ответ.")
             return state.with_notice(f"Ваш голос уже отдан за: {option.name}.")
         weight = turning_rules.voice(voted)
         return state.storing(PendingWrite(character=voted)).with_notice(
             f"Голос отдан за: {option.name}. Он весит {weight} "
-            f"{format_screens.plural(weight, 'Печать', 'Печати', 'Печатей')}."
+            f"{format_screens.plural(weight, 'уход', 'ухода', 'уходов')}."
         )
     return state.with_notice("Нажмите ответ или «Назад».")
 
 
-def _handle_pledge(
+def _handle_remort(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    """Заклад. Нажатие здесь совершает перерождение: экран предупреждал об этом."""
-    entries = chamber_screens.pledge_entries(content, character)
-    if command.intent is not Intent.SELECT or not entries:
-        return state.with_notice("Нажмите, что отдать, или «Назад».")
-
-    key = chamber_screens.entry_for(content, character, command.argument)
-    if not key:
-        return state.with_notice("Нажмите, что отдать, или «Назад».")
-    kind, _, entity_id = key.partition(":")
-    if kind == turning_rules.ITEM_PLEDGE:
-        sealed = turning_rules.pledge_item(content, character, entity_id)
-    else:
-        sealed = turning_rules.pledge_edge(content, character, entity_id)
-    if sealed is None:
-        return state.with_notice("Палата это уже не примет. Выберите другое.")
+    """Новое имя. Нажатие здесь сбрасывает уровень до первого: экран предупреждал."""
+    if command.intent is not Intent.SELECT or not labels.CONFIRM.matches(command.argument):
+        return state.with_notice("Нажмите «Подтвердить» или «Назад».")
+    reborn = turning_rules.become(character)
+    if reborn is None:
+        return state.at(ScreenId.CHAMBER).with_notice(turning_rules.refusal(character))
     return (
-        state.storing(PendingWrite(character=sealed.character))
+        state.storing(PendingWrite(character=reborn.character))
         .at(ScreenId.CHAMBER)
-        .with_notice(chamber_screens.sealed_line(sealed))
+        .with_notice(chamber_screens.reborn_line(reborn))
     )
 
 
@@ -1658,7 +1649,7 @@ def _handle_offer(
     if labels.QUEST_ASK.matches(command.argument):
         return state.with_notice(
             f"Платит {quest.giver}, из своего кармана, после счёта. "
-            f"Палата берёт своё с торговли, а не с задания."
+            f"Сбор берут с торговли, а не с задания."
         )
     if labels.QUEST_LEAVE.matches(command.argument):
         # Отказ никогда не закрывает задание насовсем (Narrative.md, раздел 4).

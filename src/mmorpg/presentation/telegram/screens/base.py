@@ -61,7 +61,7 @@ class ScreenId(StrEnum):
     DUNGEON_PICK = "dungeon_pick"
     ARENA = "arena"
     CHAMBER = "chamber"
-    CHAMBER_PLEDGE = "chamber_pledge"
+    CHAMBER_REMORT = "chamber_remort"
     TURNING = "turning"
     NPCS = "npcs"
     NPC = "npc"

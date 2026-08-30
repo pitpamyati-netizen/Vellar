@@ -30,6 +30,7 @@ from mmorpg.domain.ports.repositories import (
 from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
 from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
 from mmorpg.domain.rules.party import Party as PlayerParty
+from mmorpg.domain.rules.turning import COUNCIL_VOTE_CAP
 
 if TYPE_CHECKING:  # pragma: no cover - только для типов
     import asyncpg
@@ -39,7 +40,7 @@ CHARACTER_COLUMNS = """
     stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
     trait_ids, loadout, equipment, city_id, unspent_stat_points, unspent_skill_points,
     health, bank_gold, quests, crafts, tutorial, arena_wins, arena_losses,
-    arena_credit, seals, pledges, turning_cycle, turning_answer, is_admin
+    arena_credit, remorts, turning_cycle, turning_answer, is_admin
 """
 
 TRADE_COLUMNS = """
@@ -90,8 +91,7 @@ def _character_from_row(row: Any) -> Character:
         arena_wins=row["arena_wins"],
         arena_losses=row["arena_losses"],
         arena_credit=row["arena_credit"],
-        seals=row["seals"],
-        pledges=tuple(json.loads(row["pledges"]) if row["pledges"] else ()),
+        remorts=row["remorts"],
         turning_cycle=row["turning_cycle"],
         turning_answer=row["turning_answer"],
         is_admin=bool(row["is_admin"]),
@@ -497,11 +497,11 @@ class PostgresCharacterRepository:
                 trait_ids, loadout, equipment, city_id,
                 unspent_stat_points, unspent_skill_points,
                 health, bank_gold, quests, crafts, tutorial, arena_wins, arena_losses,
-                arena_credit, seals, pledges, turning_cycle, turning_answer, is_admin
+                arena_credit, remorts, turning_cycle, turning_answer, is_admin
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                     $15, $16::jsonb, $17::jsonb, $18, $19, $20, $21, $22, $23::jsonb,
-                    $24::jsonb, $25, $26, $27, $28, $29, $30::jsonb, $31, $32, $33)
+                    $24::jsonb, $25, $26, $27, $28, $29, $30, $31, $32)
             RETURNING id
             """,
             character.user_id,
@@ -532,8 +532,7 @@ class PostgresCharacterRepository:
             character.arena_wins,
             character.arena_losses,
             character.arena_credit,
-            character.seals,
-            json.dumps(list(character.pledges), ensure_ascii=False),
+            character.remorts,
             character.turning_cycle,
             character.turning_answer,
             character.is_admin,
@@ -551,9 +550,9 @@ class PostgresCharacterRepository:
                 city_id = $15, unspent_stat_points = $16, unspent_skill_points = $17,
                 health = $18, bank_gold = $19, quests = $20::jsonb,
                 crafts = $21::jsonb, tutorial = $22, arena_wins = $23,
-                arena_losses = $24, arena_credit = $25, seals = $26,
-                pledges = $27::jsonb, turning_cycle = $28, turning_answer = $29,
-                is_admin = $30, updated_at = now()
+                arena_losses = $24, arena_credit = $25, remorts = $26,
+                turning_cycle = $27, turning_answer = $28,
+                is_admin = $29, updated_at = now()
             WHERE id = $1
             """,
             character.id,
@@ -581,8 +580,7 @@ class PostgresCharacterRepository:
             character.arena_wins,
             character.arena_losses,
             character.arena_credit,
-            character.seals,
-            json.dumps(list(character.pledges), ensure_ascii=False),
+            character.remorts,
             character.turning_cycle,
             character.turning_answer,
             character.is_admin,
@@ -652,16 +650,18 @@ class PostgresCharacterRepository:
         return tuple(_character_from_row(row) for row in rows)
 
     async def turning_tally(self, cycle_id: str) -> Mapping[str, int]:
-        """Голоса за открытый вопрос: ответ и сколько Печатей за ним стоит.
+        """Голоса за открытый вопрос: ответ и сколько уходов за ним стоит.
 
         Считается запросом, а не счётчиком: счётчик, живущий отдельно от того,
         что он считает, однажды с ним расходится (``Claude.md``, правило 8).
+        Вес голоса зажат потолком совета, как ``turning.voice``.
         """
         rows = await self._pool.fetch(
-            """
-            SELECT turning_answer AS option, coalesce(sum(seals), 0)::int AS voices
+            f"""
+            SELECT turning_answer AS option,
+                   coalesce(sum(least(remorts, {COUNCIL_VOTE_CAP})), 0)::int AS voices
             FROM characters
-            WHERE turning_cycle = $1 AND turning_answer <> '' AND seals > 0
+            WHERE turning_cycle = $1 AND turning_answer <> '' AND remorts > 0
             GROUP BY turning_answer
             """,
             cycle_id,

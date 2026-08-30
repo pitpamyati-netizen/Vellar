@@ -90,7 +90,7 @@ class FieldKind(StrEnum):
     #: значение набирают. Прибавки черты и состав рецепта — обе такие.
     PAIRS = "pairs"
     #: Поле-таблица (ADR 0046): список строк, у каждой несколько колонок, строку
-    #: набирают одним сообщением «a | b | c». Ответы Палаты и находки сбора.
+    #: набирают одним сообщением «a | b | c». Ответы совета и находки сбора.
     ROWS = "rows"
 
 
@@ -148,7 +148,7 @@ TITLES: Mapping[OverlayKind, tuple[str, str]] = {
     OverlayKind.CRAFT: ("Ремесло", "Ремёсла"),
     OverlayKind.RECIPE: ("Рецепт", "Рецепты"),
     OverlayKind.META: ("Опорные числа", "Опорные числа"),
-    OverlayKind.TURNING: ("Голосование Палаты", "Голосования Палаты"),
+    OverlayKind.TURNING: ("Вопрос совета", "Вопросы совета"),
 }
 
 #: Разновидности, которые нельзя убрать из игры: без них игра не собирается.
@@ -313,7 +313,7 @@ FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
     ),
     OverlayKind.TURNING: (
         FieldSpec("name", "Название", required=True, limit=NAME_LIMIT),
-        FieldSpec("question", "Вопрос Палаты", required=True),
+        FieldSpec("question", "Вопрос совета", required=True),
         FieldSpec("text", "Как объясняют"),
         FieldSpec("open", "Открыть его сейчас", FieldKind.FLAG),
         FieldSpec(
@@ -1228,7 +1228,7 @@ def _rebuilt(
         weapon_types=content.weapon_types,
         armor_types=content.armor_types,
         # Всё, что раньше молча терялось при любой правке: снаряжение глубокого
-        # спуска собиралось из этих справочников, а Палата спрашивала из turnings.
+        # спуска собиралось из этих справочников, а совет спрашивал из turnings.
         gear_tiers=content.gear_tiers,
         gear_archetypes=content.gear_archetypes,
         special_properties=content.special_properties,
@@ -1498,7 +1498,7 @@ def _craft_from(content: GameContent, record: OverlayRecord) -> Craft:
 def _apply_turnings(
     content: GameContent, records: Sequence[OverlayRecord]
 ) -> tuple[tuple[Turning, ...], str]:
-    """Голосования Палаты с правками. Флаг ``open`` у любой правки делает её
+    """Голосования совета с правками. Флаг ``open`` у любой правки делает её
     голосование открытым; иначе открытое остаётся тем, что назвал ``[meta].open``.
     """
     dropped = {record.entity_id for record in records if record.removed}

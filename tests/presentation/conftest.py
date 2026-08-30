@@ -240,16 +240,15 @@ def boss_fight(content: GameContent, fighter: Character) -> BattleState:
 
 @pytest.fixture(scope="session")
 def sealbearer(fighter: Character) -> Character:
-    """Тот, кто дошёл до конца: триста уровней, одна Печать и есть что заложить.
+    """Тот, кто дошёл до конца и уже брал новое имя: один уход, свой голос.
 
-    На нём надета вещь выше запроса Палаты и доведено до полного ранга умение с
-    выбранной гранью, поэтому экран заклада показывает оба вида заклада разом.
+    Титул «Вписанный», голос в совете за ним есть, и на открытый вопрос он уже
+    ответил.
     """
     return replace(
         fighter,
         level=300,
-        seals=1,
-        pledges=("item:seers_circlet",),
+        remorts=1,
         turning_cycle="toll",
         turning_answer="toll_keep",
         equipment=Equipment(
@@ -948,12 +947,11 @@ def all_screens(
         tutorial_screens.tutorial_screen(replace(hero, tutorial=0b111111)),
         _with_tutorial_hint(skill_screens.slots_screen(content, hero), ScreenId.SKILL_SLOTS, hero),
         chamber_screens.chamber_screen(content, fighter),
-        chamber_screens.chamber_screen(content, sealbearer, notice="Перерождение совершено."),
+        chamber_screens.chamber_screen(content, sealbearer, notice="Новое имя взято."),
+        chamber_screens.remort_screen(content, sealbearer),
         chamber_screens.turning_screen(content, fighter),
         chamber_screens.turning_screen(content, sealbearer),
         chamber_screens.turning_screen(content, sealbearer, tally={"toll_low": 3, "toll_keep": 3}),
-        chamber_screens.pledge_screen(content, sealbearer, PageState()),
-        chamber_screens.pledge_screen(content, fighter, PageState()),
         arena_screens.arena_screen(fighter),
         arena_screens.arena_screen(
             replace(fighter, arena_wins=4, arena_losses=2),

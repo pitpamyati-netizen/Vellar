@@ -62,7 +62,7 @@ LOCATIONS = label("Локации", "🌲")
 # Не «данжи»: в Велларе это подземелья, и экран за кнопкой зовёт их так же.
 DUNGEONS = label("Подземелья", "⛓")
 ARENA = label("Арена", "🥊")
-CHAMBER = label("Палата", "🏛")
+CHAMBER = label("Управа", "🏛")
 TAVERN = label("Таверна", "🍺")
 MENTOR = label("Наставник", "📖")
 BANK = label("Банк", "💰")
@@ -109,9 +109,9 @@ ROOM_HOLLOW = label("Дальше — затишье", "🕯")
 ROOM_LAIR = label("Логово хозяина", "💀")
 ROOM_STAIRS = label("Ход наверх", "🚪")
 
-# --- Перерождение (эндгейм, ``domain/rules/turning.py``) ---
+# --- Новое имя (эндгейм, ``domain/rules/turning.py``) ---
 
-TURNING = label("Совершить перерождение", "🏵")
+TURNING = label("Просить новое имя", "🏵")
 TURNING_QUESTION = label("Голосование", "🧮")
 
 # --- смотритель (только ADMIN_IDS; обычные игроки этого ряда не видят) ---

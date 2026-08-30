@@ -63,7 +63,7 @@ class Play(StatesGroup):
     dungeon_pick = State()
     arena = State()
     chamber = State()
-    chamber_pledge = State()
+    chamber_remort = State()
     turning = State()
     npcs = State()
     npc = State()
@@ -158,7 +158,7 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.DUNGEON_PICK: Play.dungeon_pick,
     ScreenId.ARENA: Play.arena,
     ScreenId.CHAMBER: Play.chamber,
-    ScreenId.CHAMBER_PLEDGE: Play.chamber_pledge,
+    ScreenId.CHAMBER_REMORT: Play.chamber_remort,
     ScreenId.TURNING: Play.turning,
     ScreenId.NPCS: Play.npcs,
     ScreenId.NPC: Play.npc,
@@ -253,7 +253,7 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.DUNGEON_PICK: ScreenId.DUNGEON,
     ScreenId.ARENA: ScreenId.CITY,
     ScreenId.CHAMBER: ScreenId.CITY,
-    ScreenId.CHAMBER_PLEDGE: ScreenId.CHAMBER,
+    ScreenId.CHAMBER_REMORT: ScreenId.CHAMBER,
     ScreenId.TURNING: ScreenId.CHAMBER,
     ScreenId.NPCS: ScreenId.CITY,
     ScreenId.NPC: ScreenId.NPCS,

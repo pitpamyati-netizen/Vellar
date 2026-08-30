@@ -141,13 +141,11 @@ class Character:
     arena_wins: int = 0
     arena_losses: int = 0
     arena_credit: int = 0
-    # Конец пути и единственное в игре, за что платят тем, что у персонажа уже есть
-    # (``domain/rules/turning.py``). ``seals`` - сколько перерождений он совершил;
-    # ``pledges`` - что в них ушло, чтобы ничто не закладывалось дважды;
-    # ``turning_cycle``/``turning_answer`` - ответ, который он дал на открытый вопрос
-    # Палаты, и на какой именно вопрос.
-    seals: int = 0
-    pledges: tuple[str, ...] = ()
+    # Конец пути (``domain/rules/turning.py``). ``remorts`` - сколько раз игрок
+    # брал у Престола новое имя: каждый уход сбрасывал уровень до первого и оставлял
+    # нажитое. ``turning_cycle``/``turning_answer`` - ответ, который он дал на
+    # открытый вопрос Большого совета, и на какой именно вопрос.
+    remorts: int = 0
     turning_cycle: str = ""
     turning_answer: str = ""
     # Какие шаги обучения уже позади, битовой маской (``mmorpg.domain.rules.tutorial``).
@@ -197,17 +195,6 @@ class Character:
     def with_arena_credit(self, held: int) -> Character:
         """Записать, сколько с тебя держит арена. Никогда не меньше нуля."""
         return replace(self, arena_credit=max(0, held))
-
-    def with_seal(self, pledge: str) -> Character:
-        """Что делает совершённое перерождение: Печать прибавляется, заклад записан.
-
-        Уровень, опыт и характеристики не трогаются вовсе - Печать открывает
-        доступы, а не силу (``Narrative.md``, раздел 6).
-        """
-        return replace(self, seals=self.seals + 1, pledges=(*self.pledges, pledge))
-
-    def has_pledged(self, pledge: str) -> bool:
-        return pledge in self.pledges
 
     def with_turning_answer(self, cycle: str, option: str) -> Character:
         """Ответить на голосование. Ответ всегда назван вместе с вопросом:

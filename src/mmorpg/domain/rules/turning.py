@@ -1,25 +1,14 @@
-"""Перерождение: что делают на трёхсотом уровне и чем за это платят.
+"""Новое имя на 300 уровне и голос в Большом совете.
 
-Уровень кончается, игра — нет. Перерождение — единственное место, где растут не за
-счёт мира, а за счёт себя: приключенец отдаёт Палате вещь со своего плеча или
-грань собственного умения и получает **Печать Палаты**. Уровень остаётся тем же,
-опыт не трогают, характеристики от Печати не растут вовсе — Печать открывает
-доступы (``Narrative.md``, раздел 6).
+Уровень кончается, игра — нет. Дойдя до потолка, приключенец идёт в управу и
+просит у Престола новое имя: уровень падает до первого, а золото, вещи и
+изученные умения остаются при нём (``Narrative.md``, раздел 6). За уход дают
+нераспределённые очки характеристик — с потолком, чтобы лестница после трёхсотого
+не пошла вверх без края (ADR 0011, 0048), — и титул, растущий с каждым разом.
 
-Что она открывает:
-
-- **спуск идёт глубже**. Каждая Печать добавляет городским подземельям ещё один
-  слой узлов ниже прежнего дна: было три схватки подряд, стало четыре;
-- **грань открывается раньше**. Обычно грань выбирают на третьем ранге; с
-  Печатью — на ранг раньше за каждую (``domain/rules/skills.edge_rank_for``);
-- **голос в голосовании**. Печать — это голос, и весит он ровно столько
-  перерождений, сколько человек их совершил. Палата спрашивает — про пошлину, про
-  ворота, про цену воды, — а ответ считают по тем, кто за него заплатил делом.
-
-Заклад не возвращается и не закладывается дважды: что ушло в перерождение, записано на
-персонаже (``Character.pledges``). Без этого грань можно было бы заложить и
-выбрать заново — грань выбирают бесплатно, — и Печати печатались бы из воздуха
-ровно так же, как арена когда-то печатала золото.
+Титул — это ещё и голос: в Большом совете он весит столько уходов, сколько за ним
+стоит (до потолка). Совет спрашивает — про долю в казну, про дороги, про патент
+на магию, — а ответ считают по тем, кто прошёл дорогу не по одному разу.
 
 Всё здесь чистое: функция возвращает нового персонажа или ``None``, а словами
 отказ объясняет экран.
@@ -31,137 +20,92 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import GameContent, Item, Skill, Turning
-from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.entities.content import Turning
 from mmorpg.domain.rules.progression import MAX_LEVEL
 
-#: С какого уровня совершают перерождение. Он же последний: дальше расти некуда.
+#: С какого уровня берут новое имя. Он же последний: дальше расти некуда.
 MIN_LEVEL = MAX_LEVEL
 
-#: Уровень вещи, которую Палата примет в первое перерождение, и насколько он растёт с
-#: каждым следующим. Дешёвая вещь — дешёвая Печать, поэтому запрос растёт.
-PLEDGE_LEVEL_BASE = 20
-PLEDGE_LEVEL_STEP = 20
+#: Сколько нераспределённых очков характеристик даёт один уход и за сколько первых
+#: уходов их вообще дают. Потолок держит прибавку конечной: +50 и не больше.
+STAT_GIFT_PER_REMORT = 10
+STAT_GIFT_CAP = 5
 
-#: Ранг, ниже которого грань в заклад не берут: грань умения, брошенного на
-#: втором ранге, отдать не жалко, а перерождение — это про жалко.
-PLEDGE_EDGE_RANK = 5
+#: Насколько тяжёлым может стать голос в совете. Больше шести уходов силы голосу
+#: не добавляют.
+COUNCIL_VOTE_CAP = 6
 
-#: Сколько схваток в спуске у того, кто ни одного перерождения не совершил. Коротко
-#: настолько, чтобы держать в голове, и длинно настолько, чтобы входить туда
-#: раненым было решением (Roadmap 1.5).
-BASE_DESCENT_DEPTH = 3
-
-ITEM_PLEDGE = "item"
-EDGE_PLEDGE = "edge"
-
-
-def pledge_key(kind: str, entity_id: str) -> str:
-    """Как заклад записан на персонаже: разновидность и то, что отдали."""
-    return f"{kind}:{entity_id}"
+#: Титул за уход, по порядку. Больше титулов, чем ступеней, — остаётся последняя.
+TITLES: tuple[str, ...] = (
+    "Вписанный",
+    "Примеченный",
+    "Признанный",
+    "Именитый",
+    "Ближний",
+    "Наречённый",
+)
 
 
-def asking(seals: int) -> int:
-    """Уровень вещи, которую Палата примет в следующее перерождение."""
-    return PLEDGE_LEVEL_BASE + PLEDGE_LEVEL_STEP * max(0, seals)
+def title(remorts: int) -> str:
+    """Титул того, кто брал новое имя ``remorts`` раз. Пусто — ни разу не брал."""
+    if remorts <= 0:
+        return ""
+    return TITLES[min(remorts, len(TITLES)) - 1]
 
 
-def descent_depth(character: Character) -> int:
-    """Сколько схваток в спуске у этого персонажа: три и по одной за Печать."""
-    return BASE_DESCENT_DEPTH + max(0, character.seals)
+def stat_gift(remorts: int) -> int:
+    """Сколько очков даст следующий уход тому, у кого уже ``remorts`` за плечами."""
+    return STAT_GIFT_PER_REMORT if remorts < STAT_GIFT_CAP else 0
 
 
 def refusal(character: Character) -> str:
-    """Пусто, когда перерождение можно совершить, иначе — почему нельзя."""
+    """Пусто, когда новое имя можно взять, иначе — почему нельзя."""
     if character.level < MIN_LEVEL:
         return (
-            f"Перерождение совершают с {MIN_LEVEL} уровня. Ваш уровень: {character.level}. "
-            "До этого Палата смотрит подорожную и не более того."
+            f"Новое имя просят с {MIN_LEVEL} уровня. Ваш уровень: {character.level}. "
+            "До этого в управе смотрят на уровень и не более того."
         )
     return ""
 
 
-def pledgeable_items(content: GameContent, character: Character) -> tuple[Item, ...]:
-    """Вещи, которые Палата примет: надетые, не ниже запроса, ещё не заложенные.
-
-    Только надетые: отдать то, что лежит в сумке про запас, — не заклад.
-    """
-    wanted = asking(character.seals)
-    found = [
-        content.item(item_id)
-        for item_id in character.equipment.item_ids()
-        if content.has_item(item_id) and not character.has_pledged(pledge_key(ITEM_PLEDGE, item_id))
-    ]
-    return tuple(sorted((item for item in found if item.level >= wanted), key=lambda i: i.name))
-
-
-def pledgeable_edges(content: GameContent, character: Character) -> tuple[Skill, ...]:
-    """Грани, которые Палата примет: выбранные, на полном ранге, не заложенные."""
-    return tuple(
-        content.skill(code)
-        for code in sorted(skill_rules.known_codes(character))
-        if content.has_skill(code)
-        and character.loadout.edge_of(code) is not None
-        and character.loadout.rank_of(code) >= PLEDGE_EDGE_RANK
-        and not character.has_pledged(pledge_key(EDGE_PLEDGE, code))
-    )
-
-
 @dataclass(frozen=True, slots=True)
-class Sealed:
-    """Совершённое перерождение: кем персонаж стал и что он за это отдал."""
+class Reborn:
+    """Тот, кто взял новое имя: кем он стал и что за это получил."""
 
     character: Character
-    #: Как называется отданное, словами игрока.
-    given: str
-    #: Вещь, которая ушла из слота. Пусто, если закладывали грань.
-    item_id: str = ""
+    #: Титул после ухода, словами игрока.
+    title: str
+    #: Сколько нераспределённых очков характеристик прибавил этот уход.
+    stat_points: int
 
 
-def pledge_item(content: GameContent, character: Character, item_id: str) -> Sealed | None:
-    """Отдать надетую вещь. Она уходит из слота и не попадает в сумку."""
+def become(character: Character) -> Reborn | None:
+    """Взять новое имя. Уровень падает до первого, нажитое остаётся."""
     if refusal(character):
         return None
-    if all(item.id != item_id for item in pledgeable_items(content, character)):
-        return None
-    slot = next(
-        (name for name, worn in character.equipment.items.items() if worn == item_id),
-        None,
+    gift = stat_gift(character.remorts)
+    reborn = replace(
+        character,
+        level=1,
+        experience=0,
+        health=0,
+        remorts=character.remorts + 1,
+        unspent_stat_points=character.unspent_stat_points + gift,
     )
-    if slot is None:
-        return None
-    stripped = replace(character, equipment=character.equipment.unequip(slot))
-    return Sealed(
-        character=stripped.with_seal(pledge_key(ITEM_PLEDGE, item_id)),
-        given=content.item(item_id).name,
-        item_id=item_id,
-    )
+    return Reborn(character=reborn, title=title(reborn.remorts), stat_points=gift)
 
 
-def pledge_edge(content: GameContent, character: Character, skill_code: str) -> Sealed | None:
-    """Отдать грань умения. Само умение и его ранг остаются при вас."""
-    if refusal(character):
-        return None
-    if all(skill.code != skill_code for skill in pledgeable_edges(content, character)):
-        return None
-    skill = content.skill(skill_code)
-    edge_code = character.loadout.edge_of(skill_code)
-    given = f"{skill.name}, грань «{skill.edge(edge_code).name}»" if edge_code else skill.name
-    cleared = skill_rules.clear_edge(character, skill)
-    return Sealed(character=cleared.with_seal(pledge_key(EDGE_PLEDGE, skill_code)), given=given)
-
-
-# --- голосование ---------------------------------------------------
+# --- Большой совет ------------------------------------------------------
 
 
 def may_answer(character: Character) -> bool:
-    """Голос есть у того, кто заплатил за него перерождением."""
-    return character.seals > 0
+    """Голос есть у того, кто хоть раз брал новое имя."""
+    return character.remorts > 0
 
 
 def voice(character: Character) -> int:
-    """Сколько весит его голос: по Печати за перерождение."""
-    return max(0, character.seals)
+    """Сколько весит его голос: по уходу за каждый, до потолка."""
+    return min(max(0, character.remorts), COUNCIL_VOTE_CAP)
 
 
 def answered(character: Character, turning: Turning) -> str:

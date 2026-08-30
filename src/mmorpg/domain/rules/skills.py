@@ -169,14 +169,14 @@ def learnable(content: GameContent, character: Character, skill: Skill) -> bool:
     return is_known(character, skill.code) or gate_met(content, character, skill)
 
 
-def edge_rank_for(content: GameContent, character: Character) -> int:
-    """Ранг, на котором этому персонажу открывается грань.
+def edge_rank_for(content: GameContent) -> int:
+    """Ранг, на котором открывается грань. Одно число на всю игру.
 
-    Обычно третий. Печать Палаты открывает её на ранг раньше за каждое перерождение -
-    это и есть «Печать открывает грани умений» (``domain/rules/turning.py``).
-    Ниже первого не опускается: грань у неизученного умения выбирать не на чем.
+    Прежде Печать Палаты сдвигала его на ранг раньше за перерождение; Печати
+    больше нет (ADR 0048), и грань открывается на том ранге, что назван в
+    ``skills.toml``.
     """
-    return max(1, content.rules.edge_rank - max(0, character.seals))
+    return content.rules.edge_rank
 
 
 def needs_edge(content: GameContent, character: Character, skill: Skill) -> bool:
@@ -185,7 +185,7 @@ def needs_edge(content: GameContent, character: Character, skill: Skill) -> bool
         return False
     if character.loadout.edge_of(skill.code) is not None:
         return False
-    return character.loadout.rank_of(skill.code) >= edge_rank_for(content, character)
+    return character.loadout.rank_of(skill.code) >= edge_rank_for(content)
 
 
 def learn(content: GameContent, character: Character, skill: Skill) -> Character | None:

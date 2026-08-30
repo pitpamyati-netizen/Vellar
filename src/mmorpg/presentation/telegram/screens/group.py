@@ -221,10 +221,10 @@ def accepted_text(offer: Offer, tax: int = 0) -> str:
 
 
 def _duty(price: int, tax: int) -> str:
-    """Дорожная палата берёт свою долю с каждой сделки (``Narrative.md``, раздел 1)."""
+    """Престол берёт сбор с каждой сделки (``Narrative.md``, раздел 9)."""
     if tax <= 0:
         return ""
-    return f"Пошлина Палаты: {gold(tax)}. Продавцу на руки: {gold(price - tax)}."
+    return f"Сбор с сделки: {gold(tax)}. Продавцу на руки: {gold(price - tax)}."
 
 
 def refusal_text(outcome: GroupOutcome) -> str:

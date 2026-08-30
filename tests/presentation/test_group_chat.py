@@ -619,7 +619,7 @@ def test_an_offer_says_what_it_holds_and_what_the_duty_costs(content: GameConten
         GroupOutcome(result=GroupResult.OFFER_MADE, offer=offer(), tax=trade_tax(100)),
     )
 
-    assert "Пошлина Палаты: 5 золотых" in reply.text
+    assert "Сбор с сделки: 5 золотых" in reply.text
     assert "Продавцу на руки: 95 золотых" in reply.text
     assert "Вещь отложена до ответа." in reply.text
 
@@ -640,7 +640,7 @@ def test_a_settled_trade_repeats_the_duty_it_charged(content: GameContent) -> No
     )
 
     assert "принято" in reply.text
-    assert "Пошлина Палаты: 5 золотых" in reply.text
+    assert "Сбор с сделки: 5 золотых" in reply.text
 
 
 def test_a_declined_offer_says_the_stake_came_back(content: GameContent) -> None:

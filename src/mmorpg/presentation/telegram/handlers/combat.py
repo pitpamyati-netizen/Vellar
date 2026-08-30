@@ -53,7 +53,6 @@ from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import party as party_rules
 from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import roamer as roamer_rules
-from mmorpg.domain.rules import turning as turning_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
 from mmorpg.domain.rules.combat import act
 from mmorpg.domain.rules.stats import derived_stats
@@ -1070,7 +1069,7 @@ async def _after_dungeon_room(
     descent = flow.descent
     difficulty = dungeon_rules.difficulty_of(descent.difficulty)
     room = dungeon_rules.room_of(descent.room)
-    final = dungeon_rules.final_layer(turning_rules.descent_depth(character), difficulty)
+    final = dungeon_rules.final_layer(dungeon_rules.DESCENT_DEPTH, difficulty)
     run_seed = dungeon_run_seed(settings.world_seed, descent)
     conditions = dungeon_rules.conditions_for(run_seed, difficulty)
 
@@ -1303,7 +1302,7 @@ def _dungeon_fork(
     """
     descent = flow.descent
     difficulty = dungeon_rules.difficulty_of(descent.difficulty)
-    final = dungeon_rules.final_layer(turning_rules.descent_depth(character), difficulty)
+    final = dungeon_rules.final_layer(dungeon_rules.DESCENT_DEPTH, difficulty)
     next_layer = descent.layer + 1
     options = dungeon_rules.room_options(
         dungeon_run_seed(settings.world_seed, descent), next_layer, final

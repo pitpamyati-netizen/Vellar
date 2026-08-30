@@ -218,7 +218,7 @@ def set_skill_rank(
             ),
         )
     updated = loadout.with_rank(code, wanted)
-    if wanted < skill_rules.edge_rank_for(content, character) and loadout.edge_of(code) is not None:
+    if wanted < skill_rules.edge_rank_for(content) and loadout.edge_of(code) is not None:
         updated = replace(
             updated, edges={key: value for key, value in updated.edges.items() if key != code}
         )

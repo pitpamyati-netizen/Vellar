@@ -935,11 +935,11 @@ async def test_a_mute_is_stored_on_the_account_and_written_down(
 async def test_a_keeper_adds_a_turning_and_edits_its_answers(
     keeper: Keeper, registry: ContentRegistry
 ) -> None:
-    await keeper.press(labels.KEEPER.text, labels.KEEPER_WORLD.text, "Голосования Палаты")
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_WORLD.text, "Вопросы совета")
     await keeper.press(labels.KEEPER_ADD.text)
     await keeper.press(keeper.button_with("Название"))
     await keeper.press("Мосты")
-    await keeper.press(keeper.button_with("Вопрос Палаты"))
+    await keeper.press(keeper.button_with("Вопрос совета"))
     await keeper.press("Чинить ли мосты?")
 
     await keeper.press(keeper.button_with("Ответы"))

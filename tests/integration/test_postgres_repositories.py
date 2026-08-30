@@ -118,8 +118,7 @@ def a_character(
         arena_wins=3,
         arena_losses=1,
         arena_credit=120,
-        seals=2,
-        pledges=("item:ashen_signet", "edge:cleave"),
+        remorts=2,
         turning_cycle="toll",
         turning_answer="toll_keep",
         is_admin=True,
@@ -301,10 +300,8 @@ async def test_a_character_survives_a_round_trip(pool, clean_user) -> None:
     # То, что держит Круг, - тоже сохранённое золото: без него победе после перезапуска
     # не из чего было бы платиться (``domain/rules/arena.py``).
     assert (read.arena_wins, read.arena_losses, read.arena_credit) == (3, 1, 120)
-    # Печати и заклады тоже хранятся: без списка закладов грань, отданную в
-    # перерождение, можно было бы выбрать заново (``domain/rules/turning.py``).
-    assert read.seals == 2
-    assert read.pledges == ("item:ashen_signet", "edge:cleave")
+    # Число уходов и голос в совете тоже хранятся (``domain/rules/turning.py``).
+    assert read.remorts == 2
     assert (read.turning_cycle, read.turning_answer) == ("toll", "toll_keep")
 
 
@@ -327,8 +324,7 @@ async def test_saving_a_character_updates_every_column(pool, clean_user) -> None
                 MappingProxyType({"smithing": CraftProgress(experience=40, gathered_at=0)})
             ),
             arena_credit=60,
-            seals=3,
-            pledges=("item:ashen_signet",),
+            remorts=3,
             turning_cycle="gates",
             turning_answer="gates_one",
             is_admin=True,
@@ -345,20 +341,19 @@ async def test_saving_a_character_updates_every_column(pool, clean_user) -> None
     assert read.crafts.progress("smithing").experience == 40
     assert read.crafts.progress("mining").experience == 0, "the whole document is replaced"
     assert read.arena_credit == 60
-    assert read.seals == 3
-    assert read.pledges == ("item:ashen_signet",)
+    assert read.remorts == 3
     assert (read.turning_cycle, read.turning_answer) == ("gates", "gates_one")
 
 
-async def test_the_tally_counts_seals_and_only_of_this_cycle(pool, clean_user) -> None:
-    """Голос весит столько, сколько Печатей за ним, и считается по своему циклу."""
+async def test_the_tally_counts_new_names_and_only_of_this_cycle(pool, clean_user) -> None:
+    """Голос весит столько, сколько уходов за ним, и считается по своему циклу."""
     await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user, username="tester"))
     characters = PostgresCharacterRepository(pool)
 
     await characters.create(
         replace(
             a_character(clean_user, name=f"Голос{clean_user}"),
-            seals=2,
+            remorts=2,
             turning_cycle="toll",
             turning_answer="toll_low",
         )
@@ -366,7 +361,7 @@ async def test_the_tally_counts_seals_and_only_of_this_cycle(pool, clean_user) -
     await characters.create(
         replace(
             a_character(clean_user, name=f"Второй{clean_user}"),
-            seals=1,
+            remorts=1,
             turning_cycle="toll",
             turning_answer="toll_low",
         )
@@ -375,16 +370,16 @@ async def test_the_tally_counts_seals_and_only_of_this_cycle(pool, clean_user) -
     await characters.create(
         replace(
             a_character(clean_user, name=f"Прошлый{clean_user}"),
-            seals=5,
+            remorts=5,
             turning_cycle="gates",
             turning_answer="gates_one",
         )
     )
-    # Печати нет - голоса нет, даже если ответ записан.
+    # Уходов нет - голоса нет, даже если ответ записан.
     await characters.create(
         replace(
             a_character(clean_user, name=f"Немой{clean_user}"),
-            seals=0,
+            remorts=0,
             turning_cycle="toll",
             turning_answer="toll_high",
         )

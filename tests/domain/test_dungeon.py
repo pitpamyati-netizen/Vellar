@@ -64,7 +64,8 @@ def test_fork_options_repeat_for_the_same_seed() -> None:
     assert dungeon.room_options(seed, 2, 6) == dungeon.room_options(seed, 2, 6)
 
 
-def test_final_layer_grows_with_seals_and_difficulty() -> None:
+def test_final_layer_grows_with_base_depth_and_difficulty() -> None:
+    assert dungeon.final_layer(dungeon.DESCENT_DEPTH, dungeon.Difficulty.RECON) == 3
     assert dungeon.final_layer(3, dungeon.Difficulty.RECON) == 3
     assert dungeon.final_layer(3, dungeon.Difficulty.DELVE) == 4
     assert dungeon.final_layer(5, dungeon.Difficulty.GRIM) == 7

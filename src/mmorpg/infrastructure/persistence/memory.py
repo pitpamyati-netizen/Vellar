@@ -24,6 +24,7 @@ from mmorpg.domain.ports.repositories import (
     PlayerFilter,
     User,
 )
+from mmorpg.domain.rules import turning as turning_rules
 from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
 from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
 from mmorpg.domain.rules.party import Party
@@ -270,9 +271,9 @@ class InMemoryCharacterRepository:
         for character in self._characters.values():
             if character.turning_cycle != cycle_id or not character.turning_answer:
                 continue
-            if character.seals <= 0:
+            if not turning_rules.may_answer(character):
                 continue
-            counted[character.turning_answer] += character.seals
+            counted[character.turning_answer] += turning_rules.voice(character)
         return MappingProxyType(dict(counted))
 
     async def find_by_name(self, name: str) -> Character | None:

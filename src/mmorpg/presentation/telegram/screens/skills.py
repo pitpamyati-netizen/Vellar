@@ -308,7 +308,7 @@ def edge_screen(content: GameContent, character: Character, skill: Skill) -> Scr
         id=ScreenId.SKILL_EDGE,
         lines=(
             f"Грань умения {skill.name}. Выбирается один раз, на ранге "
-            f"{skill_rules.edge_rank_for(content, character)}.",
+            f"{skill_rules.edge_rank_for(content)}.",
             f"{first.name}: {first.text}",
             f"{second.name}: {second.text}",
             "Выбор грани ранга не повышает: ранг растёт за очко умений, как и раньше.",
