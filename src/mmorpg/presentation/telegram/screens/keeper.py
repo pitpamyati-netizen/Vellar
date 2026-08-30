@@ -134,6 +134,8 @@ class KeeperView:
     #: Движения золота открытого игрока, сложенные по видам (ADR 0044). Читается
     #: только на экране «Движения золота».
     target_gold_flow: GoldFlowSlice = field(default_factory=GoldFlowSlice)
+    #: Причина режима обслуживания, если он включён. Пусто — игра открыта (ADR 0045).
+    maintenance: str = ""
     #: Момент, которым меряется остаток срока. Ноль — сроков на экране нет.
     now: int = 0
 
@@ -179,7 +181,7 @@ def keeper_screen(
         rows=(
             (labels.KEEPER_WORLD, labels.KEEPER_PLAYERS),
             (labels.KEEPER_STATS, labels.KEEPER_SERVICE),
-            (labels.KEEPER_LOG,),
+            (labels.KEEPER_LOG, labels.KEEPER_OPS_BTN),
             (labels.KEEPER_GOLD, labels.KEEPER_LEVEL),
             (labels.KEEPER_HEAL, labels.KEEPER_POINTS),
             (labels.KEEPER_TUNE,),
@@ -1775,3 +1777,50 @@ def service_screen(view: KeeperView, notice: str = "") -> Screen:
             (labels.KEEPER_DROP_BLOCKED,),
         ),
     )
+
+
+#: Поля живых операций, которые набирают: ключ (он же ``keeper_typing``), кнопка,
+#: подсказка. Режим обслуживания нажимают, объявление подтверждают вторым нажатием.
+OPS_TYPED: tuple[tuple[str, Label, str], ...] = (
+    ("ops_announce", labels.KEEPER_OPS_ANNOUNCE, "текст объявления"),
+    ("ops_free", labels.KEEPER_OPS_FREE_BATTLE, "имя персонажа"),
+    ("ops_reset_player", labels.KEEPER_OPS_RESET_PLAYER, "имя персонажа"),
+    ("ops_reset_loc", labels.KEEPER_OPS_RESET_LOC, "«ключ_города номер», например farhold 1"),
+)
+
+#: Метка взведённого объявления в ``keeper_typing``.
+OPS_ANNOUNCE_ARMED = "ops_announce_armed"
+
+
+def ops_field_from_button(pressed: str) -> str:
+    return next((key for key, one, _ in OPS_TYPED if one.matches(pressed)), "")
+
+
+def ops_screen(
+    view: KeeperView,
+    *,
+    typing: str = "",
+    armed_announce: str = "",
+    notice: str = "",
+) -> Screen:
+    """Живые операции (ADR 0045). Всё необратимо в одну сторону и безобидно в другую."""
+    lines = [
+        notice or "Живые операции. Всё здесь чинит застрявшее и снимается обратно.",
+        (
+            f"Режим обслуживания: включён. Причина: {view.maintenance}"
+            if view.maintenance
+            else "Режим обслуживания: снят, игра открыта всем."
+        ),
+    ]
+    prompt = next((how for key, _, how in OPS_TYPED if key == typing), "")
+    if prompt:
+        lines.append(f"Наберите сообщением: {prompt}.")
+    if armed_announce:
+        lines.append(f"Объявить «{armed_announce}»? Нажмите «Объявить в канал» ещё раз.")
+    rows: list[tuple[Label, ...]] = [
+        (labels.KEEPER_OPS_MAINT_OFF,) if view.maintenance else (labels.KEEPER_OPS_MAINT_ON,),
+        (labels.KEEPER_OPS_ANNOUNCE,),
+        (labels.KEEPER_OPS_FREE_BATTLE, labels.KEEPER_OPS_RESET_PLAYER),
+        (labels.KEEPER_OPS_RESET_LOC,),
+    ]
+    return Screen(id=ScreenId.KEEPER_OPS, lines=tuple(lines), rows=tuple(rows))

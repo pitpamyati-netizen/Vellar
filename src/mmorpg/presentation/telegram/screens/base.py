@@ -89,6 +89,7 @@ class ScreenId(StrEnum):
     KEEPER_PLAYER = "keeper_player"
     KEEPER_STATS = "keeper_stats"
     KEEPER_SERVICE = "keeper_service"
+    KEEPER_OPS = "keeper_ops"
     KEEPER_BAN = "keeper_ban"
     KEEPER_MUTE = "keeper_mute"
     KEEPER_GOLD_FLOW = "keeper_gold_flow"

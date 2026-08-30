@@ -155,6 +155,20 @@ async def test_a_roamer_spawns_once_and_only_one_party_holds_it(redis) -> None:
     assert await locations.roamer(TEST_CITY, 1, now=0) is None
 
 
+async def test_the_keeper_resets_a_location_wiping_waves_and_the_roamer(redis) -> None:
+    locations = RedisLocationStateCache(redis)
+    await locations.take(TEST_CITY, 1, 3, wave=0, size=1, now=0, ttl=60)
+    await locations.spawn_roamer(
+        TEST_CITY, 1, Roamer(node=2, group=False, difficulty="delve", level=7, stamp=9), ttl=60
+    )
+    await locations.claim_roamer(TEST_CITY, 1, 7, ttl=60)
+
+    await locations.reset(TEST_CITY, 1)
+
+    assert (await locations.state(TEST_CITY, 1, now=0)).nodes == {}
+    assert await locations.roamer(TEST_CITY, 1, now=0) is None
+
+
 # --- отсев повторов --------------------------------------------------------
 
 

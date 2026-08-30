@@ -162,3 +162,37 @@ async def test_a_muted_player_plays_normally_in_private(users: InMemoryUserRepos
     assert await BanMiddleware()(handler, message, {"users": users}) == "прошёл"
     assert handler.reached == 1
     assert message.delete.calls == 0  # type: ignore[attr-defined]
+
+
+async def _maintenance_data(users: InMemoryUserRepository, *, admin: bool) -> dict[str, Any]:
+    from mmorpg.application.services.keeper_panel import MAINTENANCE_KEY
+    from mmorpg.config import Settings
+    from mmorpg.infrastructure.cache.memory import InMemoryStateCache
+
+    cache = InMemoryStateCache()
+    await cache.set(MAINTENANCE_KEY, "Чиним арену.", 3600)
+    settings = Settings(  # type: ignore[call-arg]
+        _env_file=None, bot_token="0:test", admin_ids=str(ACCOUNT) if admin else ""
+    )
+    return {"users": users, "settings": settings, "state_cache": cache}
+
+
+async def test_maintenance_mode_turns_ordinary_players_away(
+    users: InMemoryUserRepository,
+) -> None:
+    data = await _maintenance_data(users, admin=False)
+    message, said = message_from(ACCOUNT)
+    handler = Doorman()
+
+    assert await BanMiddleware()(handler, message, data) is None
+    assert handler.reached == 0
+    assert "обслуживании" in said.said[0] and "Чиним арену" in said.said[0]
+
+
+async def test_maintenance_mode_lets_the_keeper_through(users: InMemoryUserRepository) -> None:
+    data = await _maintenance_data(users, admin=True)
+    message, _ = message_from(ACCOUNT)
+    handler = Doorman()
+
+    assert await BanMiddleware()(handler, message, data) == "прошёл"
+    assert handler.reached == 1

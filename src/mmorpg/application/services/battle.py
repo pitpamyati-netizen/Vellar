@@ -294,6 +294,16 @@ class BattleStore:
             if one.character_id:
                 await self._cache.delete(self.key_for_character(one.character_id))
 
+    async def free(self, character_id: int) -> bool:
+        """Смотритель снимает замок застрявшего боя (ADR 0045).
+
+        Убирает только занятость этого персонажа; сама запись боя дотлевает по
+        сроку. ``True`` — замок был и снят.
+        """
+        battle_id = await self._cache.get(self.key_for_character(character_id))
+        await self._cache.delete(self.key_for_character(character_id))
+        return bool(battle_id)
+
 
 # --- дорога через хранилище -------------------------------------------
 #

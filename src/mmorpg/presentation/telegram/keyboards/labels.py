@@ -225,6 +225,15 @@ def keeper_rank_down_label(number: int) -> Label:
 
 
 # Обслуживание.
+# Живые операции (ADR 0045).
+KEEPER_OPS_BTN = label("Живые операции", "🛠")
+KEEPER_OPS_MAINT_ON = label("Включить режим обслуживания", "🚧")
+KEEPER_OPS_MAINT_OFF = label("Снять режим обслуживания", "🟢")
+KEEPER_OPS_ANNOUNCE = label("Объявить в канал", "📣")
+KEEPER_OPS_FREE_BATTLE = label("Снять замок боя", "⚔")
+KEEPER_OPS_RESET_PLAYER = label("Сбросить экран игрока", "🔄")
+KEEPER_OPS_RESET_LOC = label("Сбросить локацию", "🌲")
+
 KEEPER_SWEEP_DRAFTS = label("Убрать брошенных", "🧺")
 KEEPER_CHECK_BLOCKED = label("Проверить, кто заблокировал", "📮")
 KEEPER_DROP_BLOCKED = label("Убрать заблокировавших", "🚮")

@@ -206,6 +206,14 @@ class RedisLocationStateCache:
     async def clear_roamer(self, city_id: str, slot: int) -> None:
         await self._client.delete(self._roamer_key(city_id, slot), self._hold_key(city_id, slot))
 
+    async def reset(self, city_id: str, slot: int) -> None:
+        """Смотритель форсит свежую волну: узлы, роамер и его замок стёрты разом."""
+        await self._client.delete(
+            self._state_key(city_id, slot),
+            self._roamer_key(city_id, slot),
+            self._hold_key(city_id, slot),
+        )
+
 
 class RedisIdempotencyStore:
     """SET NX - и вся реализация: первый записавший выигрывает, остальные повторы."""

@@ -453,6 +453,18 @@ async def test_clearing_the_roamer_removes_it_completely() -> None:
     assert await cache.claim_roamer("farhold", 1, 8, ttl=600) is True
 
 
+async def test_reset_wipes_node_waves_and_the_roamer_at_once() -> None:
+    cache = InMemoryLocationStateCache()
+    await cache.take("farhold", 1, 3, wave=0, size=1, now=0, ttl=600)
+    await cache.spawn_roamer("farhold", 1, _roamer(), ttl=600)
+    await cache.claim_roamer("farhold", 1, 7, ttl=600)
+
+    await cache.reset("farhold", 1)
+
+    assert (await cache.state("farhold", 1, now=0)).nodes == {}
+    assert await cache.roamer("farhold", 1, now=0) is None
+
+
 async def test_an_abandoned_hold_expires_on_its_own() -> None:
     clock = FakeClock()
     cache = InMemoryLocationStateCache(clock=clock)

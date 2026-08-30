@@ -160,6 +160,17 @@ async def test_both_sides_are_marked_busy(content: GameContent, cache: InMemoryS
     assert await store.busy(3) is None
 
 
+async def test_the_keeper_frees_a_stuck_battle_lock(
+    content: GameContent, cache: InMemoryStateCache
+) -> None:
+    store = battle_service.BattleStore(cache)
+    await store.save(a_battle(content))
+
+    assert await store.free(1) is True  # замок был
+    assert await store.busy(1) is None
+    assert await store.free(1) is False  # и его больше нет
+
+
 async def test_a_finished_battle_frees_everybody_but_stays_readable(
     content: GameContent, cache: InMemoryStateCache
 ) -> None:

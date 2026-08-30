@@ -785,6 +785,11 @@ def all_screens(
         keeper_screens.player_screen(
             edited, fighter, derived_stats(content, fighter), view=_group_view
         ),
+        keeper_screens.ops_screen(keeper_view),
+        keeper_screens.ops_screen(
+            replace(keeper_view, maintenance="Чиним арену."), typing="ops_free"
+        ),
+        keeper_screens.ops_screen(keeper_view, armed_announce="Сервер вернулся."),
         keeper_screens.stats_screen(keeper_view.census),
         keeper_screens.stats_screen(Census()),
         keeper_screens.service_screen(keeper_view),

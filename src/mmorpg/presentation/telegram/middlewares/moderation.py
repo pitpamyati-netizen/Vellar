@@ -15,6 +15,10 @@
 Мьют мягче: замолчавший играет как обычно везде, кроме игровой группы, где бот
 удаляет сказанное им и не пускает дальше. Ничего ему при этом не отвечают — ни
 в личке (там он не замолчан), ни в группе.
+
+Здесь же стоп-кран: пока в кэше висит флаг режима обслуживания (ADR 0045), бот
+отвечает всем, кроме смотрителей, одной строкой и не пускает дальше — той же
+дверью, что и блокировка.
 """
 
 from __future__ import annotations
@@ -29,15 +33,19 @@ from aiogram.enums import ChatType
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import Message, ReplyKeyboardRemove, TelegramObject
 
-from mmorpg.domain.ports.repositories import UserRepository
+from mmorpg.application.services.keeper_panel import MAINTENANCE_KEY
+from mmorpg.config import Settings
+from mmorpg.domain.ports.repositories import StateCache, UserRepository
 from mmorpg.domain.rules import moderation as rules
 from mmorpg.presentation.telegram.middlewares.audit import note_of
-from mmorpg.presentation.telegram.screens.moderation import banned_text
+from mmorpg.presentation.telegram.screens.moderation import banned_text, maintenance_text
 
 #: Исход, под которым закрытая дверь попадает в журнал действий.
 BANNED = "banned"
 #: Исход стёртого в группе сообщения замолчавшего.
 MUTED = "muted"
+#: Исход сообщения, отбитого режимом обслуживания.
+MAINTENANCE = "maintenance"
 
 _GROUPS = frozenset({ChatType.GROUP, ChatType.SUPERGROUP})
 
@@ -78,5 +86,27 @@ class BanMiddleware(BaseMiddleware):
             with suppress(TelegramAPIError):
                 await message.delete()
             return None
+
+        # Стоп-кран: смотрители проходят, остальные слышат одну строку и стоят.
+        settings: Settings | None = data.get("settings")
+        cache: StateCache | None = data.get("state_cache")
+        if (
+            settings is not None
+            and cache is not None
+            and not settings.is_admin(message.from_user.id)
+        ):
+            reason = await cache.get(MAINTENANCE_KEY)
+            if reason is not None:
+                note = note_of(data)
+                if note is not None:
+                    note.done(MAINTENANCE)
+                if message.chat.type == ChatType.PRIVATE:
+                    with suppress(TelegramAPIError):
+                        await message.answer(
+                            maintenance_text(reason),
+                            reply_markup=ReplyKeyboardRemove(),
+                            parse_mode=None,
+                        )
+                return None
 
         return await handler(event, data)

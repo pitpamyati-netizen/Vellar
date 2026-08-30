@@ -70,6 +70,7 @@ ACTIONS: Mapping[KeeperAction, str] = {
     KeeperAction.SKILL: "правил умения",
     KeeperAction.QUEST: "правил задание",
     KeeperAction.GROUP: "правил отряд или гильдию",
+    KeeperAction.OPS: "живая операция",
 }
 
 

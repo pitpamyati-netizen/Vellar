@@ -560,6 +560,11 @@ class LocationStateCache(Protocol):
     async def clear_roamer(self, city_id: str, slot: int) -> None:
         """Убрать подземелье целиком: его прошли до логова, оно осыпалось."""
 
+    async def reset(self, city_id: str, slot: int) -> None:
+        """Смотритель форсит локацию заново: волны узлов, роамер и его замок
+        стёрты разом (ADR 0045). Следующий заход видит свежую волну.
+        """
+
 
 @runtime_checkable
 class StateCache(Protocol):

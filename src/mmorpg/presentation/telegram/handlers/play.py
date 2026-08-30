@@ -70,6 +70,8 @@ from mmorpg.domain.rules.economy import buy_price, roll_assortment
 from mmorpg.domain.rules.modifiers import collect_modifiers
 from mmorpg.domain.rules.stats import derived_stats, primary_stats
 from mmorpg.logging import get_logger
+from mmorpg.presentation.telegram import broadcast
+from mmorpg.presentation.telegram.broadcast import ChannelBroadcaster
 from mmorpg.presentation.telegram.flows import keeper as keeper_flow
 from mmorpg.presentation.telegram.flows.play import (
     advance,
@@ -148,6 +150,7 @@ async def play(
     privacy: PrivacyRepository | None = None,
     user: User | None = None,
     gold_flow: GoldFlowRepository | None = None,
+    broadcasts: ChannelBroadcaster | None = None,
 ) -> None:
     if message.from_user is None or message.text is None:
         return
@@ -182,6 +185,12 @@ async def play(
 
     data = await state.get_data()
     flow = PlayState.deserialise(data[STATE_KEY]) if data.get(STATE_KEY) else begin(character)
+    # Смотритель мог попросить сбросить этого игрока на главный экран (ADR 0045):
+    # флаг живёт в кэше, снимается здесь и роняет сохранённый экран.
+    reset_key = keeper_panel.player_reset_key(message.from_user.id)
+    if await state_cache.get(reset_key) is not None:
+        await state_cache.delete(reset_key)
+        flow = begin(character)
 
     now = int(time.time())
     clock = Clock(
@@ -207,6 +216,7 @@ async def play(
         parties,
         guilds,
         gold_flow,
+        state_cache,
     )
 
     party = await _party_view(flow, character, characters, parties)
@@ -287,6 +297,9 @@ async def play(
         acting=character,
         parties=parties,
         guilds=guilds,
+        state_cache=state_cache,
+        locations=locations,
+        broadcasts=broadcasts,
         granting=settings.is_admin(message.from_user.id),
     )
     if served:
@@ -352,6 +365,7 @@ async def play(
         parties,
         guilds,
         gold_flow,
+        state_cache,
     )
     gathered = await _party_view(updated, character, characters, parties)
     guild_view = await _guild_view(updated, character, characters, guilds)
@@ -517,6 +531,7 @@ async def _keeper_view(
     parties: PartyStore | None = None,
     guilds: GuildStore | None = None,
     gold_flow: GoldFlowRepository | None = None,
+    state_cache: StateCache | None = None,
 ) -> KeeperView:
     """Что панели показать. Для игрока это ноль запросов: ветка не выполняется.
 
@@ -550,6 +565,10 @@ async def _keeper_view(
             offset=(page - 1) * keeper_screens.LOG_SHOWN,
             target=log_target,
         )
+    maintenance = ""
+    if flow.screen is ScreenId.KEEPER_OPS and state_cache is not None:
+        maintenance = await state_cache.get(keeper_panel.MAINTENANCE_KEY) or ""
+
     if flow.screen is ScreenId.KEEPER_PLAYERS:
         criteria = flow.keeper_player_filter
         if criteria.any:
@@ -698,6 +717,7 @@ async def _keeper_view(
         target_mute=target_mute,
         target_warnings=target_warnings,
         target_gold_flow=gold_flow_slice,
+        maintenance=maintenance,
         log=log,
         log_total=log_total,
         log_target=log_target,
@@ -721,6 +741,9 @@ async def _serve(
     acting: Character,
     parties: PartyStore,
     guilds: GuildStore,
+    state_cache: StateCache,
+    locations: LocationStateCache,
+    broadcasts: ChannelBroadcaster | None = None,
     granting: bool = False,
 ) -> str:
     """Сделать то, о чём попросила панель, и сказать числом, что получилось.
@@ -774,6 +797,19 @@ async def _serve(
     if write.warn is not None:
         telegram_id, delta = write.warn
         await users.warn(telegram_id, delta=delta)
+    if write.ops is not None:
+        said.append(
+            await _live_op(
+                write.ops,
+                characters=characters,
+                state_cache=state_cache,
+                locations=locations,
+                broadcasts=broadcasts,
+                keeper_log=keeper_log,
+                stamp=stamp,
+                content=registry.current,
+            )
+        )
     if write.rollback:
         said.append(await _roll_back(write.rollback, trades, characters, inventory))
     if write.grant_item is not None:
@@ -794,6 +830,64 @@ async def _serve(
             ),
         )
     return " ".join(said)
+
+
+async def _live_op(
+    order: tuple[str, str],
+    *,
+    characters: CharacterRepository,
+    state_cache: StateCache,
+    locations: LocationStateCache,
+    broadcasts: ChannelBroadcaster | None,
+    keeper_log: KeeperLogRepository,
+    stamp: KeeperEntry,
+    content: GameContent,
+) -> str:
+    """Живая операция смотрителя (ADR 0045). Каждая пишется в журнал."""
+    action, arg = order
+
+    async def logged(detail: str, target: str = "") -> None:
+        await moderation.note(
+            keeper_log, replace(stamp, action=KeeperAction.OPS, target=target, detail=detail)
+        )
+
+    if action == "maint_on":
+        await state_cache.set(
+            keeper_panel.MAINTENANCE_KEY,
+            arg.strip() or "Скоро вернёмся.",
+            keeper_panel.MAINTENANCE_TTL,
+        )
+        await logged("режим обслуживания включён")
+        return "Режим обслуживания включён: игроки стоят, смотрители проходят."
+    if action == "maint_off":
+        await state_cache.delete(keeper_panel.MAINTENANCE_KEY)
+        await logged("режим обслуживания снят")
+        return "Режим обслуживания снят."
+    if action == "announce":
+        posted = await broadcast.announce_service(broadcasts, arg)
+        await logged(f"объявление в канал: {arg.strip()}")
+        return "Объявление отправлено в канал." if posted else "Канал не настроен — не ушло."
+    if action in {"free_battle", "reset_player"}:
+        target = await characters.find_by_name(arg)
+        if target is None:
+            return f"Персонажа «{arg.strip()}» в игре нет."
+        if action == "free_battle":
+            freed = await BattleStore(state_cache).free(target.id)
+            await logged("снят замок боя", target=target.name)
+            return f"{target.name}: замок боя {'снят' if freed else 'и так не стоял'}."
+        await state_cache.set(
+            keeper_panel.player_reset_key(target.user_id), "1", keeper_panel.PLAYER_RESET_TTL
+        )
+        await logged("сброс экрана", target=target.name)
+        return f"{target.name}: экран сбросится на следующем нажатии."
+    # reset_location: «город слот»
+    city_id, _, slot_raw = arg.strip().partition(" ")
+    if not content.has_city(city_id) or not slot_raw.strip().isdigit():
+        return "Наберите «ключ_города номер_локации», например farhold 1."
+    slot = int(slot_raw.strip())
+    await locations.reset(city_id, slot)
+    await logged(f"сброс локации {city_id} {slot}")
+    return f"Локация {content.city(city_id).name}, место {slot}: волны и замки сброшены."
 
 
 async def _set_vault(guilds: GuildStore, guild_id: int, amount: int) -> None:

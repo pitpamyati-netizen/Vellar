@@ -155,6 +155,12 @@ class InMemoryLocationStateCache:
         self._roamers.pop(key, None)
         self._holds.pop(key, None)
 
+    async def reset(self, city_id: str, slot: int) -> None:
+        key = self._key(city_id, slot)
+        self._states.pop(key, None)
+        self._roamers.pop(key, None)
+        self._holds.pop(key, None)
+
 
 class InMemoryIdempotencyStore:
     def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:

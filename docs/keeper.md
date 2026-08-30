@@ -250,6 +250,19 @@ N из цели / не в журнале). Карточка задания: от
 Непонятная ошибка Telegram считается «читает»: моргнувшая сеть — не повод стирать
 человека. Каждое действие отвечает числом.
 
+## Живые операции
+
+Кнопка «Живые операции» с главной панели (`KEEPER_OPS`, ADR 0045). Всё здесь
+чинит застрявшее и снимается обратно; каждая операция пишется в `keeper_log`.
+
+| Кнопка | Что делает |
+| --- | --- |
+| Включить / снять режим обслуживания | флаг `keeper:maintenance` в кэше со сроком: бот отвечает всем, кроме смотрителей, одной строкой (`screens/moderation.maintenance_text`) и не пускает дальше — той же дверью, что блокировка. В `solo`/`local` — в памяти процесса, перезапуск его снимает |
+| Объявить в канал | набранная строка → подтверждение вторым нажатием → служебное объявление (`broadcast.announce_service`). Рассылка в личку всем игрокам отложена — это фоновая задача, не нажатие |
+| Снять замок боя | по имени: `BattleStore.free` убирает занятость персонажа, сама запись боя дотлевает по сроку |
+| Сбросить экран игрока | по имени: ставит `keeper:reset:<id>` в кэше, и на следующем нажатии игрок оказывается в главном меню |
+| Сбросить локацию | по «ключ_города номер»: `LocationStateCache.reset` стирает волны узлов и роамера — следующий заход видит свежую волну и свободный вход |
+
 ## Правила, которые здесь держатся
 
 - **Ничего не выдаётся мимо домена.** Уровень — опытом через
@@ -276,7 +289,8 @@ N из цели / не в журнале). Карточка задания: от
 | Откат сделки | `application/services/group_trade.py` (`roll_back`), `domain/rules/economy.py` (`refund`) |
 | Денежный журнал и его таблица | `economy_log.py` (`use_sink`), `infrastructure/persistence/*` (`*GoldFlowRepository`) |
 | Сроки блокировки, журнал | `domain/rules/moderation.py`, `application/services/moderation.py` |
-| Дверь для заблокированного | `presentation/telegram/middlewares/moderation.py` |
+| Дверь для заблокированного и режим обслуживания | `presentation/telegram/middlewares/moderation.py` |
+| Живые операции | `keeper_panel.py` (ключи), `services/battle.py` (`free`), кэш локаций (`reset`) |
 | Экраны и ветка автомата | `presentation/telegram/{screens,flows}/keeper.py` |
 | Уборка и сбор данных | `presentation/telegram/handlers/play.py` |
 | Таблицы | `migrations/versions/{0009_keeper_panel,0011_keeper_grants,0013_moderation,0014_trade_rollback,0018_warnings,0019_group_mute,0020_gold_flow}.py` |

@@ -22,3 +22,9 @@ def banned_text(ban: Ban, *, now: int) -> str:
     )
     because = f" Причина: {ban.reason}." if ban.reason else " Причина не названа."
     return f"Вы заблокированы смотрителем. {left}{because} Игра продолжится, когда срок выйдет."
+
+
+def maintenance_text(reason: str = "") -> str:
+    """Одна строка на время обслуживания. Её слышат все, кроме смотрителей."""
+    tail = f" {reason.strip()}" if reason.strip() else ""
+    return f"Игра на обслуживании, зайдите чуть позже.{tail}"

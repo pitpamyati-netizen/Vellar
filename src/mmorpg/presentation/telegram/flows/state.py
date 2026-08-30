@@ -70,6 +70,10 @@ class PendingWrite:
     #: Кого замолчать в группе: аккаунт, срок и причина. Пустой срок — снять.
     #: Момент конца считает хендлер, как и у ``ban``.
     mute: tuple[int, str, str] | None = None
+    #: Живая операция смотрителя (ADR 0045): ``(действие, аргумент)``. Действия —
+    #: ``maint_on``, ``maint_off``, ``announce``, ``free_battle``,
+    #: ``reset_player``, ``reset_location``.
+    ops: tuple[str, str] | None = None
     #: Кому изменить счётчик предупреждений: аккаунт и шаг (``+1`` или ``-1``).
     warn: tuple[int, int] | None = None
     #: Что записать в журнал смотрителя. Момент и имя проставляет хендлер.
@@ -118,6 +122,7 @@ class PendingWrite:
             and self.keeper_grant is None
             and self.ban is None
             and self.mute is None
+            and self.ops is None
             and self.warn is None
             and self.note is None
             and not self.service

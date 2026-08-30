@@ -200,6 +200,18 @@ def service(headline: str, *details: str) -> BroadcastEvent:
     return BroadcastEvent(kind=BroadcastKind.SERVICE, headline=headline, details=details)
 
 
+async def announce_service(broadcaster: ChannelBroadcaster | None, headline: str) -> bool:
+    """Служебное объявление смотрителя в канал (ADR 0045).
+
+    Это не игровое событие: пост делает не игра за игрока, а смотритель нарочно.
+    Живёт здесь, а не в хендлере, потому что ``.announce`` из ``handlers/`` —
+    механически запрещённый вызов (``tests/presentation/test_broadcast.py``).
+    """
+    if broadcaster is None or not headline.strip():
+        return False
+    return await broadcaster.announce(service(headline.strip()))
+
+
 def changelog(
     version: str,
     *,

@@ -629,6 +629,7 @@ async def test_what_one_player_took_is_gone_for_everybody(
     inventory: InMemoryInventoryRepository,
     users: InMemoryUserRepository,
     deltas: Any,
+    cache: Any,
     parties: Any,
     guilds: Any,
     overlays: InMemoryContentOverlayRepository,

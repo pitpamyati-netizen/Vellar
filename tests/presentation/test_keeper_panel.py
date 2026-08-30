@@ -663,6 +663,8 @@ def walk_to(panel: Panel, screen: ScreenId) -> Panel:
             return walked.press(walked.button_with("Мерла"))
         case ScreenId.KEEPER_STATS:
             return panel.press(labels.KEEPER_STATS.text)
+        case ScreenId.KEEPER_OPS:
+            return panel.press(labels.KEEPER_OPS_BTN.text)
         case ScreenId.KEEPER_LOG:
             return panel.press(labels.KEEPER_LOG.text)
         case ScreenId.KEEPER_BAN:

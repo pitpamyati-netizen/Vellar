@@ -44,6 +44,7 @@ class KeeperAction(StrEnum):
     SKILL = "skill"
     QUEST = "quest"
     GROUP = "group"
+    OPS = "ops"
 
 
 @dataclass(frozen=True, slots=True)

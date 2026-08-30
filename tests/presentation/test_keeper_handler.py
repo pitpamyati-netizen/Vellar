@@ -932,6 +932,48 @@ async def test_a_mute_is_stored_on_the_account_and_written_down(
     assert (await keeper_log.latest())[0].action == KeeperAction.UNMUTE
 
 
+async def test_maintenance_mode_is_toggled_from_the_ops_screen(
+    keeper: Keeper, cache: InMemoryStateCache
+) -> None:
+    from mmorpg.application.services.keeper_panel import MAINTENANCE_KEY
+
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_OPS_BTN.text)
+
+    await keeper.press(labels.KEEPER_OPS_MAINT_ON.text)
+    assert await cache.get(MAINTENANCE_KEY) is not None
+
+    screen = await keeper.press(labels.KEEPER_OPS_MAINT_OFF.text)
+    assert await cache.get(MAINTENANCE_KEY) is None
+    assert "снят" in screen.text().lower()
+
+
+async def test_the_ops_screen_asks_a_player_to_reset_and_frees_a_battle(
+    keeper: Keeper, cache: InMemoryStateCache, merla: Character
+) -> None:
+    from mmorpg.application.services.keeper_panel import player_reset_key
+
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_OPS_BTN.text)
+
+    await keeper.press(labels.KEEPER_OPS_RESET_PLAYER.text)
+    await keeper.press("Мерла")
+    assert await cache.get(player_reset_key(merla.user_id)) is not None
+
+    await keeper.press(labels.KEEPER_OPS_FREE_BATTLE.text)
+    done = await keeper.press("Мерла")
+    assert "замок боя" in done.text().lower()
+
+
+async def test_a_channel_announcement_wants_a_second_press(keeper: Keeper) -> None:
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_OPS_BTN.text)
+    await keeper.press(labels.KEEPER_OPS_ANNOUNCE.text)
+    armed = await keeper.press("Сервер вернулся.")
+    assert "ещё раз" in armed.text()
+
+    sent = await keeper.press(labels.KEEPER_OPS_ANNOUNCE.text)
+    # Канал в тесте не настроен — объявление не уходит, но операция отвечает.
+    assert "канал" in sent.text().lower()
+
+
 async def test_all_edits_are_listed_and_one_exports_to_toml(
     keeper: Keeper, overlays: InMemoryContentOverlayRepository
 ) -> None:

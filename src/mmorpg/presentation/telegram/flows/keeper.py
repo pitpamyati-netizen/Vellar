@@ -73,6 +73,7 @@ PANEL: frozenset[ScreenId] = frozenset(
         ScreenId.KEEPER_PLAYER,
         ScreenId.KEEPER_STATS,
         ScreenId.KEEPER_SERVICE,
+        ScreenId.KEEPER_OPS,
         ScreenId.KEEPER_BAN,
         ScreenId.KEEPER_MUTE,
         ScreenId.KEEPER_GOLD_FLOW,
@@ -259,6 +260,17 @@ def _render_panel(
             return keeper_screens.stats_screen(view.census, state.notice)
         case ScreenId.KEEPER_SERVICE:
             return keeper_screens.service_screen(view, state.notice)
+        case ScreenId.KEEPER_OPS:
+            return keeper_screens.ops_screen(
+                view,
+                typing=state.keeper_typing,
+                armed_announce=(
+                    state.keeper_reason
+                    if state.keeper_typing == keeper_screens.OPS_ANNOUNCE_ARMED
+                    else ""
+                ),
+                notice=state.notice,
+            )
         case ScreenId.KEEPER_BAN if view.target is not None:
             return keeper_screens.ban_screen(view.target, view, state.keeper_reason, state.notice)
         case ScreenId.KEEPER_MUTE if view.target is not None:
@@ -392,6 +404,10 @@ def awaits_text(state: PlayState, command: Command) -> bool:
         key for key, _, _ in keeper_screens.PF_TYPED
     }:
         return True
+    if state.screen is ScreenId.KEEPER_OPS and state.keeper_typing in {
+        key for key, _, _ in keeper_screens.OPS_TYPED
+    }:
+        return True
     return (
         (state.screen is ScreenId.KEEPER_FIELD and state.keeper_typing == TYPING_VALUE)
         or (state.screen is ScreenId.KEEPER_AMOUNT and state.keeper_typing == TYPING_VALUE)
@@ -420,6 +436,8 @@ def typed(
         return _searched_content(state, text)
     if state.screen is ScreenId.KEEPER_PLAYER_FILTERS:
         return _typed_player_filter(content, state, text)
+    if state.screen is ScreenId.KEEPER_OPS:
+        return _typed_ops(state, text)
     if state.screen is ScreenId.KEEPER_PLAYERS:
         return _found(state, view, text)
     if state.screen is ScreenId.KEEPER_AMOUNT:
@@ -543,6 +561,8 @@ def advance(
             return _step_player(content, state, command, view)
         case ScreenId.KEEPER_LOG:
             return _step_log(state, command, view)
+        case ScreenId.KEEPER_OPS:
+            return _step_ops(state, command)
         case ScreenId.KEEPER_SERVICE:
             return _step_service(state, command)
         case ScreenId.KEEPER_BAN:
@@ -625,6 +645,8 @@ def _step_panel(
         return state.at(ScreenId.KEEPER_STATS)
     if labels.KEEPER_SERVICE.matches(command.argument):
         return state.at(ScreenId.KEEPER_SERVICE)
+    if labels.KEEPER_OPS_BTN.matches(command.argument):
+        return replace(state, keeper_typing="", keeper_reason="").at(ScreenId.KEEPER_OPS)
     if labels.KEEPER_LOG.matches(command.argument):
         return replace(state, keeper_target=0, keeper_page=PageState()).at(ScreenId.KEEPER_LOG)
     if labels.KEEPER_TUNE.matches(command.argument):
@@ -1972,6 +1994,66 @@ def _step_log(state: PlayState, command: Command, view: KeeperView) -> PlayState
     if moved is not None:
         return replace(state, keeper_page=moved, notice="")
     return state.with_notice("Здесь только чтение. Нажмите «Назад» или лист страниц.")
+
+
+_OPS_ACTION: dict[str, str] = {
+    "ops_free": "free_battle",
+    "ops_reset_player": "reset_player",
+    "ops_reset_loc": "reset_location",
+}
+
+
+def _step_ops(state: PlayState, command: Command) -> PlayState:
+    """Живые операции (ADR 0045): режим обслуживания нажимают, объявление
+    подтверждают вторым нажатием, остальное набирают."""
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите операцию или наберите значение.")
+    arg = command.argument
+    if labels.KEEPER_OPS_MAINT_ON.matches(arg):
+        return (
+            replace(state, keeper_typing="")
+            .storing(PendingWrite(ops=("maint_on", "")))
+            .with_notice("Режим обслуживания:")
+        )
+    if labels.KEEPER_OPS_MAINT_OFF.matches(arg):
+        return (
+            replace(state, keeper_typing="")
+            .storing(PendingWrite(ops=("maint_off", "")))
+            .with_notice("Режим обслуживания:")
+        )
+    if labels.KEEPER_OPS_ANNOUNCE.matches(arg):
+        if state.keeper_typing == keeper_screens.OPS_ANNOUNCE_ARMED and state.keeper_reason:
+            return (
+                replace(state, keeper_typing="", keeper_reason="")
+                .storing(PendingWrite(ops=("announce", state.keeper_reason)))
+                .with_notice("Объявление:")
+            )
+        return replace(state, keeper_typing="ops_announce").with_notice(
+            "Наберите текст объявления сообщением."
+        )
+    field_key = keeper_screens.ops_field_from_button(arg)
+    if field_key in _OPS_ACTION:
+        return replace(state, keeper_typing=field_key).with_notice("Наберите значение сообщением.")
+    return state.with_notice(PRESS_A_BUTTON)
+
+
+def _typed_ops(state: PlayState, text: str) -> PlayState:
+    value = text.strip()
+    key = state.keeper_typing
+    if key == "ops_announce":
+        if not value:
+            return state.with_notice("Пустое объявление ничего не скажет.")
+        return replace(state, keeper_typing=keeper_screens.OPS_ANNOUNCE_ARMED, keeper_reason=value)
+    action = _OPS_ACTION.get(key, "")
+    if not action:
+        return replace(state, keeper_typing="").with_notice("Такой операции нет.")
+    if not value:
+        return replace(state, keeper_typing="").with_notice("Пусто — ничего не делаю.")
+    return (
+        replace(state, keeper_typing="")
+        .storing(PendingWrite(ops=(action, value)))
+        .with_notice("Операция:")
+    )
 
 
 def _step_service(state: PlayState, command: Command) -> PlayState:
