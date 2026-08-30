@@ -637,6 +637,14 @@ def walk_to(panel: Panel, screen: ScreenId) -> Panel:
             return panel.press(labels.KEEPER_WORLD.text)
         case ScreenId.KEEPER_LIST:
             return panel.press(labels.KEEPER_WORLD.text, "Жители")
+        case ScreenId.KEEPER_EDITS:
+            _add_npc(panel)
+            return panel.press(labels.MAIN_MENU.text, labels.KEEPER.text).press(
+                labels.KEEPER_WORLD.text, labels.KEEPER_EDITS_BTN.text
+            )
+        case ScreenId.KEEPER_EDIT:
+            walked = walk_to(panel, ScreenId.KEEPER_EDITS)
+            return walked.press(walked.button_with("Довен"))
         case ScreenId.KEEPER_ENTITY:
             return _add_npc(panel)
         case ScreenId.KEEPER_FIELD:

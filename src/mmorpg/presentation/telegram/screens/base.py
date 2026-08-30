@@ -79,6 +79,8 @@ class ScreenId(StrEnum):
     TUTORIAL = "tutorial"
     KEEPER = "keeper"
     KEEPER_CONTENT = "keeper_content"
+    KEEPER_EDITS = "keeper_edits"
+    KEEPER_EDIT = "keeper_edit"
     KEEPER_LIST = "keeper_list"
     KEEPER_ENTITY = "keeper_entity"
     KEEPER_FIELD = "keeper_field"

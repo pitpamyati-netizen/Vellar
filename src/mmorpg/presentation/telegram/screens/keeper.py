@@ -204,11 +204,90 @@ def content_screen(content: GameContent, view: KeeperView, notice: str = "") -> 
         tuple(kind_label(kind) for kind in KINDS[index : index + 2])
         for index in range(0, len(KINDS), 2)
     ]
-    rows.append((labels.KEEPER_RELOAD,))
+    broken = sum(1 for record in view.records if overlay_rules.problems(content, record))
+    if broken:
+        lines.append(f"Из них не работают: {broken}.")
+    rows.append((labels.KEEPER_EDITS_BTN, labels.KEEPER_RELOAD))
     return Screen(id=ScreenId.KEEPER_CONTENT, lines=tuple(lines), rows=tuple(rows))
 
 
-# --- список сущностей --------------------------------------------------
+# --- все правки: список и выгрузка -----------------------------------
+
+
+def _edit_status(content: GameContent, record: OverlayRecord) -> str:
+    if record.removed:
+        return "убрано из игры"
+    if overlay_rules.problems(content, record):
+        return "не работает"
+    return "в игре"
+
+
+def _edit_line(content: GameContent, record: OverlayRecord) -> str:
+    single = overlay_rules.TITLES[record.kind][0]
+    name = overlay_rules.clipped(record.value("name")) or record.entity_id
+    return f"{single}: {name} — {_edit_status(content, record)}"
+
+
+def edits_screen(
+    content: GameContent, view: KeeperView, state: PageState, notice: str = ""
+) -> Screen:
+    """Все правки в одном списке: что стоит поверх content и работает ли оно."""
+    entries = [
+        ListEntry(
+            key=f"{record.kind.value}:{record.entity_id}",
+            text=numbered(index, _edit_line(content, record)),
+        )
+        for index, record in enumerate(view.records, start=1)
+    ]
+    return paginated_screen(
+        screen_id=ScreenId.KEEPER_EDITS,
+        title="Все правки",
+        entries=entries,
+        state=state,
+        lead_lines=(
+            notice or "Все правки поверх content. Нажмите, чтобы выгрузить в файл и снять.",
+            "Правка живёт в базе, пока её не перенесут в content: там ей и место.",
+        ),
+        empty_text="Правок нет: мир ровно такой, как в файлах.",
+        show_filters=False,
+    )
+
+
+def edit_from_button(
+    content: GameContent, view: KeeperView, pressed: str
+) -> tuple[str, str] | None:
+    for index, record in enumerate(view.records, start=1):
+        if pressed.strip() == numbered(index, _edit_line(content, record)):
+            return record.kind.value, record.entity_id
+    return None
+
+
+def edit_screen(content: GameContent, record: OverlayRecord, notice: str = "") -> Screen:
+    """Одна правка: её состояние, фрагмент TOML для файла и кнопка снять.
+
+    Фрагмент печатается только для рабочей правки экспортируемой разновидности:
+    недописанную сначала доводят на карточке, а жителей в content/ нет вовсе.
+    """
+    single = overlay_rules.TITLES[record.kind][0]
+    why = overlay_rules.problems(content, record)
+    lines = [
+        notice
+        or f"Правка: {single} «{overlay_rules.clipped(record.value('name')) or record.entity_id}».",
+        f"Ключ: {record.entity_id}. Сейчас: {_edit_status(content, record)}.",
+    ]
+    if record.kind not in overlay_rules.EXPORTABLE:
+        lines.append(overlay_rules.to_toml(content, record))
+    elif why:
+        lines.append("Правка не работает — допишите её на карточке, потом выгружайте:")
+        lines.extend(why[:PROBLEMS_SHOWN])
+    else:
+        lines.append("Вставьте это в файл, проверьте, затем снимите правку:")
+        lines.append(overlay_rules.to_toml(content, record))
+    rows: tuple[tuple[Label, ...], ...] = (
+        (labels.KEEPER_OPEN_CARD,),
+        (labels.KEEPER_FORGET,),
+    )
+    return Screen(id=ScreenId.KEEPER_EDIT, lines=tuple(lines), rows=rows)
 
 
 def numbered(index: int, text: str) -> str:

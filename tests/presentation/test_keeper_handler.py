@@ -932,6 +932,33 @@ async def test_a_mute_is_stored_on_the_account_and_written_down(
     assert (await keeper_log.latest())[0].action == KeeperAction.UNMUTE
 
 
+async def test_all_edits_are_listed_and_one_exports_to_toml(
+    keeper: Keeper, overlays: InMemoryContentOverlayRepository
+) -> None:
+    # Заводим противника и дописываем его до рабочего состояния.
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_WORLD.text, "Противники")
+    await keeper.press(labels.KEEPER_ADD.text)
+    await keeper.press(keeper.button_with("Название"))
+    await keeper.press("Тестозверь")
+    await keeper.press(keeper.button_with("Где водится"))
+    first_biome = next(b for b in keeper.buttons() if b.startswith("1. "))
+    await keeper.press(first_biome)
+
+    await keeper.press(labels.MAIN_MENU.text, labels.KEEPER.text, labels.KEEPER_WORLD.text)
+    listed = await keeper.press(labels.KEEPER_EDITS_BTN.text)
+    assert listed.id is ScreenId.KEEPER_EDITS
+    assert any("Тестозверь" in b for b in keeper.buttons())
+
+    detail = await keeper.press(keeper.button_with("Тестозверь"))
+    assert detail.id is ScreenId.KEEPER_EDIT
+    assert "content/enemies.toml" in detail.text()
+    assert "[[enemy]]" in detail.text()
+
+    # Снять правку с этого же экрана.
+    await keeper.press(labels.KEEPER_FORGET.text)
+    assert await overlays.all() == ()
+
+
 async def test_players_are_filtered_by_level_and_city(
     keeper: Keeper, characters: InMemoryCharacterRepository
 ) -> None:

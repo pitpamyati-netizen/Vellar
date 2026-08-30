@@ -63,6 +63,8 @@ PANEL: frozenset[ScreenId] = frozenset(
     {
         ScreenId.KEEPER,
         ScreenId.KEEPER_CONTENT,
+        ScreenId.KEEPER_EDITS,
+        ScreenId.KEEPER_EDIT,
         ScreenId.KEEPER_LIST,
         ScreenId.KEEPER_ENTITY,
         ScreenId.KEEPER_FIELD,
@@ -225,6 +227,10 @@ def _render_panel(
     match state.screen:
         case ScreenId.KEEPER_CONTENT:
             return keeper_screens.content_screen(content, view, state.notice)
+        case ScreenId.KEEPER_EDITS:
+            return keeper_screens.edits_screen(content, view, state.keeper_page, state.notice)
+        case ScreenId.KEEPER_EDIT if state.keeper_kind in KINDS:
+            return keeper_screens.edit_screen(content, _record(content, state, view), state.notice)
         case ScreenId.KEEPER_LIST if state.keeper_kind in KINDS:
             kind = OverlayKind(state.keeper_kind)
             return keeper_screens.list_screen(content, kind, state.keeper_page, view, state.notice)
@@ -519,6 +525,10 @@ def advance(
             return _step_panel(content, character, state, command)
         case ScreenId.KEEPER_CONTENT:
             return _step_content(state, command)
+        case ScreenId.KEEPER_EDITS:
+            return _step_edits(content, state, command, view)
+        case ScreenId.KEEPER_EDIT:
+            return _step_edit(content, state, command, view)
         case ScreenId.KEEPER_LIST:
             return _step_list(content, character, state, command, view)
         case ScreenId.KEEPER_ENTITY:
@@ -680,10 +690,57 @@ def _step_content(state: PlayState, command: Command) -> PlayState:
         return state.with_notice(PRESS_A_BUTTON)
     if labels.KEEPER_RELOAD.matches(command.argument):
         return state.storing(PendingWrite(reload=True))
+    if labels.KEEPER_EDITS_BTN.matches(command.argument):
+        return replace(state, keeper_page=PageState()).at(ScreenId.KEEPER_EDITS)
     kind = keeper_screens.kind_from_button(command.argument)
     if kind is None:
         return state.with_notice(PRESS_A_BUTTON)
-    return replace(state, keeper_kind=kind.value, keeper_page=PageState()).at(ScreenId.KEEPER_LIST)
+    return replace(state, keeper_kind=kind.value, keeper_page=PageState(filters=ListFilters())).at(
+        ScreenId.KEEPER_LIST
+    )
+
+
+def _step_edits(
+    content: GameContent, state: PlayState, command: Command, view: KeeperView
+) -> PlayState:
+    moved = page_move(command, state.keeper_page, total_pages(len(view.records)))
+    if moved is not None:
+        return replace(state, keeper_page=moved, notice="")
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите правку из списка.")
+    picked = keeper_screens.edit_from_button(content, view, command.argument)
+    if picked is None:
+        return state.with_notice("Не узнал правку. Нажмите строку из списка.")
+    kind, entity_id = picked
+    return replace(state, keeper_kind=kind, keeper_entity=entity_id, list_page=PageState()).at(
+        ScreenId.KEEPER_EDIT
+    )
+
+
+def _step_edit(
+    content: GameContent, state: PlayState, command: Command, view: KeeperView
+) -> PlayState:
+    if state.keeper_kind not in KINDS:
+        return go_back(state).with_notice("Такой правки больше нет.")
+    record = _record(content, state, view)
+    if command.intent is not Intent.SELECT:
+        return state.with_notice(PRESS_A_BUTTON)
+    if labels.KEEPER_OPEN_CARD.matches(command.argument):
+        return replace(state, list_page=PageState()).at(ScreenId.KEEPER_ENTITY)
+    if labels.KEEPER_FORGET.matches(command.argument):
+        if overlay_rules.held(view.records, record.kind, record.entity_id) is None:
+            return state.with_notice("Снимать нечего: у этой сущности правки нет.")
+        return (
+            go_back(state)
+            .storing(
+                PendingWrite(
+                    forget=(record.kind.value, record.entity_id),
+                    note=_note(KeeperAction.FORGET, record.entity_id),
+                )
+            )
+            .with_notice("Правка снята. Осталось то, что записано в content.")
+        )
+    return state.with_notice(PRESS_A_BUTTON)
 
 
 def _step_list(

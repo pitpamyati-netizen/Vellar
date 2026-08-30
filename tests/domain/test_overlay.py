@@ -799,3 +799,61 @@ def test_meta_cannot_be_removed_from_the_game(content: GameContent) -> None:
     gone = OverlayRecord(kind=OverlayKind.META, entity_id=overlay_rules.META_ID, removed=True)
 
     assert refused_for(content, gone, "правят, а не убирают")
+
+
+# --- выгрузка правки в content/ (Roadmap: навигация и экспорт) --------
+
+
+def _toml_entry(fragment: str, section: str) -> dict:
+    """Разобрать фрагмент как TOML и достать первую таблицу секции ``[[section]]``."""
+    import tomllib
+
+    body = "\n".join(line for line in fragment.splitlines() if not line.lstrip().startswith("#"))
+    parsed = tomllib.loads(body)
+    top = section.split(".")[0]
+    inner: object = parsed[top]
+    for part in section.split(".")[1:]:
+        inner = inner[part]  # type: ignore[index]
+    return inner[0]  # type: ignore[index]
+
+
+def test_a_quest_edit_exports_as_a_toml_fragment(content: GameContent) -> None:
+    edited = overlay_rules.effective(
+        apply(content, DOVEN), (DOVEN, TALLY), OverlayKind.QUEST, TALLY.entity_id
+    )
+
+    fragment = overlay_rules.to_toml(apply(content, DOVEN), edited)
+
+    assert "content/quests.toml" in fragment
+    quest = _toml_entry(fragment, "quest")
+    assert quest["city"] == "farhold"
+    assert quest["objective"] == "search"
+    assert quest["target_count"] == 3
+    assert quest["giver"].startswith("Довен")  # имя (с занятием) берётся у жителя, не id
+
+
+def test_an_enemy_edit_exports_with_its_biomes_and_rates(content: GameContent) -> None:
+    wolf = overlay_rules.effective(content, (), OverlayKind.ENEMY, "grey_wolf")
+
+    enemy = _toml_entry(overlay_rules.to_toml(content, wolf), "enemy")
+
+    assert enemy["kind"] == "beast"
+    assert "луга" in enemy["biomes"]
+    assert isinstance(enemy["health"], float)
+
+
+def test_a_trait_edit_exports_its_modifiers_as_an_inline_table(content: GameContent) -> None:
+    berserker = overlay_rules.effective(content, (), OverlayKind.TRAIT, "berserker")
+
+    trait = _toml_entry(overlay_rules.to_toml(content, berserker), "trait")
+
+    assert trait["modifiers"]["damage_percent"] == 10
+
+
+def test_a_resident_edit_has_no_file_home(content: GameContent) -> None:
+    resident = overlay_rules.effective(
+        apply(content, DOVEN), (DOVEN,), OverlayKind.NPC, DOVEN.entity_id
+    )
+
+    assert "в content/ не хранятся" in overlay_rules.to_toml(apply(content, DOVEN), resident)
+    assert OverlayKind.NPC not in overlay_rules.EXPORTABLE

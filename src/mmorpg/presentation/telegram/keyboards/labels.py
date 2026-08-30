@@ -135,6 +135,8 @@ KEEPER_RETURN = label("Вернуть в игру", "↩️")
 KEEPER_FORGET = label("Снять правку", "🧽")
 KEEPER_CLEAR = label("Очистить поле", "␡")
 KEEPER_RELOAD = label("Перечитать правки", "🔄")
+KEEPER_EDITS_BTN = label("Все правки", "📋")
+KEEPER_OPEN_CARD = label("Открыть карточку", "📇")
 
 # Точные правки: то же, что быстрые выдачи, но числом, а не шагом.
 KEEPER_TUNE = label("Задать точно", "🎚")

@@ -556,6 +556,18 @@ def all_screens(
             notice="Выдано 1000 золота.",
         ),
         keeper_screens.content_screen(edited, keeper_view),
+        keeper_screens.edits_screen(edited, keeper_view, PageState()),
+        keeper_screens.edits_screen(edited, keeper_screens.KeeperView(), PageState()),
+        *(
+            keeper_screens.edit_screen(
+                edited, overlay_rules.effective(edited, keeper_view.records, kind, entity_id)
+            )
+            for kind, entity_id in (
+                (OverlayKind.QUEST, "keeper_quest_1"),
+                (OverlayKind.NPC, "keeper_npc_1"),
+                (OverlayKind.ENEMY, "grey_wolf"),
+            )
+        ),
         *(
             keeper_screens.list_screen(edited, kind, PageState(), keeper_view)
             for kind in keeper_screens.KINDS

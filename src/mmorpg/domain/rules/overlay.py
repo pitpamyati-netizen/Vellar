@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from itertools import pairwise
@@ -1385,6 +1385,221 @@ def _recipe_from(record: OverlayRecord) -> Recipe:
         output_id=record.value("output"),
         output_count=record.number("output_count", 1),
         experience=record.number("experience"),
+    )
+
+
+# --- выгрузка в content/ ---------------------------------------------------
+#
+# Правка живёт в базе (``content_overlay``), и снять её начисто можно только
+# перенеся в файл. Эти функции печатают фрагмент TOML в форме нужного файла —
+# как ``scripts/broadcast.py`` печатает changelog, — чтобы смотритель вставил
+# его руками, проверил и снял правку. Round-trip тут не самоцель: это заготовка,
+# а не генератор.
+
+#: У какой разновидности есть дом в ``content/``. У жителей его нет вовсе
+#: (``docs/keeper.md``), поэтому их правка так и остаётся в базе.
+EXPORTABLE: frozenset[OverlayKind] = frozenset(
+    {
+        OverlayKind.QUEST,
+        OverlayKind.LOCATION,
+        OverlayKind.ENEMY,
+        OverlayKind.CITY,
+        OverlayKind.TRAIT,
+        OverlayKind.CRAFT,
+        OverlayKind.RECIPE,
+        OverlayKind.META,
+    }
+)
+
+_TOML_FILE: Mapping[OverlayKind, str] = {
+    OverlayKind.QUEST: "content/quests.toml",
+    OverlayKind.LOCATION: "content/world.toml (под нужный [[city]])",
+    OverlayKind.ENEMY: "content/enemies.toml",
+    OverlayKind.CITY: "content/world.toml (правкой существующего [[city]])",
+    OverlayKind.TRAIT: "content/traits.toml",
+    OverlayKind.CRAFT: "content/crafts.toml",
+    OverlayKind.RECIPE: "content/crafts.toml",
+    OverlayKind.META: "нескольких файлов [meta] по одному числу",
+}
+
+_TOML_SECTION: Mapping[OverlayKind, str] = {
+    OverlayKind.QUEST: "[[quest]]",
+    OverlayKind.LOCATION: "[[city.location]]",
+    OverlayKind.ENEMY: "[[enemy]]",
+    OverlayKind.CITY: "[[city]]",
+    OverlayKind.TRAIT: "[[trait]]",
+    OverlayKind.CRAFT: "[[craft]]",
+    OverlayKind.RECIPE: "[[recipe]]",
+}
+
+
+def _toml_str(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ") + '"'
+
+
+def _toml_list(values: Iterable[str]) -> str:
+    return "[" + ", ".join(_toml_str(one) for one in values) + "]"
+
+
+def _toml_num(value: str) -> str:
+    return value.strip() or "0"
+
+
+def to_toml(content: GameContent, record: OverlayRecord) -> str:
+    """Фрагмент TOML для правки — заготовка, которую смотритель вставит в файл.
+
+    ``record`` — уже сведённая запись (``effective``). Жители возвращают короткую
+    строку: их в ``content/`` нет.
+    """
+    if record.kind is OverlayKind.NPC:
+        return "# Жители в content/ не хранятся — эта правка так и живёт в базе."
+    if record.kind is OverlayKind.META:
+        return _meta_toml(content, record)
+
+    header = (
+        f"# правка {record.entity_id} — проверьте и вставьте в {_TOML_FILE[record.kind]}\n"
+        f"{_TOML_SECTION[record.kind]}"
+    )
+    builders: Mapping[OverlayKind, Callable[[GameContent, OverlayRecord], list[str]]] = {
+        OverlayKind.QUEST: _quest_toml,
+        OverlayKind.ENEMY: _enemy_toml,
+        OverlayKind.TRAIT: _trait_toml,
+        OverlayKind.CRAFT: _craft_toml,
+        OverlayKind.RECIPE: _recipe_toml,
+        OverlayKind.LOCATION: _location_toml,
+        OverlayKind.CITY: _city_toml,
+    }
+    body = builders[record.kind](content, record)
+    return "\n".join([header, f"id = {_toml_str(record.entity_id)}", *body])
+
+
+def _quest_toml(content: GameContent, record: OverlayRecord) -> list[str]:
+    lines = [
+        f"city = {_toml_str(record.value('city'))}",
+        f"level = {_toml_num(record.value('level') or '1')}",
+        f"name = {_toml_str(record.value('name'))}",
+    ]
+    giver_id = record.value("npc")
+    giver = content.npc(giver_id).title if content.has_npc(giver_id) else record.value("giver")
+    if giver:
+        lines.append(f"giver = {_toml_str(giver)}")
+    if record.value("intro"):
+        lines.append(f"intro = {_toml_str(record.value('intro'))}")
+    lines.append(f"terms = {_toml_str(record.value('terms'))}")
+    lines.append(f"objective = {_toml_str(record.value('objective'))}")
+    if record.value("target_kind"):
+        lines.append(f"target_kind = {_toml_str(record.value('target_kind'))}")
+    if record.value("location_slot"):
+        lines.append(f"location = {_toml_num(record.value('location_slot'))}")
+    lines.append(f"target_count = {_toml_num(record.value('target_count') or '1')}")
+    for key, name in (
+        ("reward_gold", "reward_gold"),
+        ("reward_experience", "reward_experience"),
+    ):
+        if record.value(key):
+            lines.append(f"{name} = {_toml_num(record.value(key))}")
+    if record.value("reward_item"):
+        lines.append(f"reward_item = {_toml_str(record.value('reward_item'))}")
+    if record.value("follows"):
+        lines.append(f"follows = {_toml_str(record.value('follows'))}")
+    return lines
+
+
+def _enemy_toml(content: GameContent, record: OverlayRecord) -> list[str]:
+    lines = [
+        f"name = {_toml_str(record.value('name'))}",
+        f"kind = {_toml_str(record.value('kind'))}",
+        f"biomes = {_toml_list(record.listed('biomes'))}",
+    ]
+    for key in ("health", "damage", "armor", "initiative"):
+        if record.value(key):
+            lines.append(f"{key} = {record.value(key).replace(',', '.')}")
+    if record.value("element"):
+        lines.append(f"element = {_toml_str(record.value('element'))}")
+    if record.listed("loot"):
+        lines.append(f"loot = {_toml_list(record.listed('loot'))}")
+    if record.flag("dungeon"):
+        lines.append("dungeon = true")
+    return lines
+
+
+def _trait_toml(content: GameContent, record: OverlayRecord) -> list[str]:
+    tags = content.trait(record.entity_id).tags if content.has_trait(record.entity_id) else ()
+    pairs = ", ".join(f"{key} = {val.replace(',', '.')}" for key, val in record.pairs("modifiers"))
+    lines = [
+        f"name = {_toml_str(record.value('name'))}",
+        f"category = {_toml_str(record.value('category'))}",
+    ]
+    if tags:
+        lines.append(f"tags = {_toml_list(tags)}")
+    lines.append("modifiers = { " + pairs + " }")
+    if record.value("text"):
+        lines.append(f"text = {_toml_str(record.value('text'))}")
+    return lines
+
+
+def _craft_toml(content: GameContent, record: OverlayRecord) -> list[str]:
+    lines = [
+        f"name = {_toml_str(record.value('name'))}",
+        f"kind = {_toml_str(record.value('kind'))}",
+        f"stat = {_toml_str(record.value('stat'))}",
+    ]
+    if record.value("description"):
+        lines.append(f"description = {_toml_str(record.value('description'))}")
+    return lines
+
+
+def _recipe_toml(content: GameContent, record: OverlayRecord) -> list[str]:
+    inputs = ", ".join(
+        f"{{ item = {_toml_str(item_id)}, count = {_toml_num(raw)} }}"
+        for item_id, raw in record.pairs("inputs")
+    )
+    return [
+        f"craft = {_toml_str(record.value('craft'))}",
+        f"rank = {_toml_num(record.value('rank') or '1')}",
+        f"inputs = [{inputs}]",
+        "output = { item = "
+        + _toml_str(record.value("output"))
+        + ", count = "
+        + _toml_num(record.value("output_count") or "1")
+        + " }",
+        f"experience = {_toml_num(record.value('experience') or '0')}",
+    ]
+
+
+def _location_toml(content: GameContent, record: OverlayRecord) -> list[str]:
+    lines = [
+        f"slot = {_toml_num(record.value('slot') or '1')}",
+        f"name = {_toml_str(record.value('name'))}",
+        f"biome = {_toml_str(record.value('biome'))}",
+        f"level_min = {_toml_num(record.value('level_min') or '1')}",
+        f"level_max = {_toml_num(record.value('level_max') or '1')}",
+    ]
+    if record.flag("pvp"):
+        lines.append("pvp = true")
+    return lines
+
+
+def _city_toml(content: GameContent, record: OverlayRecord) -> list[str]:
+    return [
+        f"name = {_toml_str(record.value('name'))}",
+        f"description = {_toml_str(record.value('description'))}",
+    ]
+
+
+def _meta_toml(content: GameContent, record: OverlayRecord) -> str:
+    """Опорные числа правятся не одним блоком — печатаем их построчно с адресом."""
+    rules = _rules_from(content.rules, record)
+    return "\n".join(
+        [
+            "# опорные числа лежат по разным файлам [meta] — перенесите нужные строки:",
+            f"# content/skills.toml   rank_costs = {list(rules.rank_costs)}",
+            f"# content/skills.toml   branch_gates = {list(rules.branch_gates)}",
+            f"# content/classes.toml  stat_points_per_level = {rules.stat_points_per_level}",
+            f"# content/classes.toml  skill_point_per_level = {rules.skill_point_per_level}",
+            f"# base_stat_value = {rules.base_stat_value}  "
+            f"free_points_at_creation = {rules.free_points_at_creation}",
+        ]
     )
 
 
