@@ -18,6 +18,7 @@ from mmorpg.domain.entities.effects import EffectStack
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.rules import edges as edge_rules
 from mmorpg.domain.rules import equipment as gear
+from mmorpg.domain.rules import houses as house_rules
 from mmorpg.domain.rules import skills as skill_rules
 
 STAT_MODIFIER_PREFIX = "stat_"
@@ -107,6 +108,15 @@ def trait_modifiers(content: GameContent, trait_ids: Iterable[str]) -> dict[str,
     return merge(*(content.trait(trait_id).modifiers for trait_id in trait_ids))
 
 
+def house_modifiers(content: GameContent, character: Character) -> Mapping[str, float]:
+    """Что даёт техника дома, в котором игрок состоит. Пусто — он ни в каком.
+
+    Ровно как расовая способность: пассивный свёрток, включённый членством
+    (``domain/rules/houses.py``, ADR 0049).
+    """
+    return house_rules.technique_modifiers(content, character)
+
+
 def race_modifiers(content: GameContent, character: Character) -> Mapping[str, float]:
     """Что даёт расовая пассивная способность.
 
@@ -183,6 +193,7 @@ def collect_modifiers(
     return merge(
         trait_modifiers(content, character.trait_ids),
         race_modifiers(content, character),
+        house_modifiers(content, character),
         passive_modifiers(content, character),
         equipment_modifiers(content, character.equipment.item_ids(), character.level),
         # Чужая вещь не запрещена — она дорога, и цена берётся здесь же, вместе

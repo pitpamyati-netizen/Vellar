@@ -63,6 +63,7 @@ class ScreenId(StrEnum):
     CHAMBER = "chamber"
     CHAMBER_REMORT = "chamber_remort"
     TURNING = "turning"
+    HOUSE = "house"
     NPCS = "npcs"
     NPC = "npc"
     PARTY = "party"

@@ -63,6 +63,7 @@ LOCATIONS = label("Локации", "🌲")
 DUNGEONS = label("Подземелья", "⛓")
 ARENA = label("Арена", "🥊")
 CHAMBER = label("Управа", "🏛")
+HOUSE = label("Двор дома", "🏰")
 TAVERN = label("Таверна", "🍺")
 MENTOR = label("Наставник", "📖")
 BANK = label("Банк", "💰")
@@ -302,6 +303,12 @@ GUILD_LEAVE = label("Выйти из гильдии", "🚪")
 GUILD_ROSTER = label("Состав гильдии", "📋")
 GUILD_VAULT = label("Казна гильдии", "💰")
 GUILD_TRANSFER = label("Передать соклановцу", "🎁")
+
+
+# --- великие дома (``domain/rules/houses.py``) ---
+
+HOUSE_JOIN = label("Вступить в дом", "🏰")
+HOUSE_LEAVE = label("Уйти из дома", "🚪")
 
 
 # --- передача вещей в отряде и гильдии (``handlers/play._transfer_step``) ---

@@ -197,6 +197,31 @@ class Race:
 
 
 @dataclass(frozen=True, slots=True)
+class HouseTechnique:
+    """Фирменный приём дома: пассивный свёрток прибавок, как расовая способность.
+
+    Активных умений и слотов не трогает. Ключи ``modifiers`` — из того же
+    словаря, что у особенностей и рас, и проверяются по ``EFFECTIVE_KEYS``:
+    прибавка, которой движок не считает, — обещание, а не механика (ADR 0049).
+    """
+
+    id: str
+    name: str
+    text: str
+    modifiers: Mapping[str, float] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class House:
+    """Один из семи великих домов. ``seats`` — два города, которые он держит."""
+
+    id: str
+    name: str
+    seats: tuple[str, ...]
+    technique: HouseTechnique
+
+
+@dataclass(frozen=True, slots=True)
 class ClassResource:
     """Ресурс класса - доблесть, ярость, мана и так далее."""
 
@@ -738,6 +763,7 @@ class GameContent:
     rules: ProgressionRules
     npcs: tuple[Npc, ...]
     turnings: tuple[Turning, ...]
+    houses: tuple[House, ...]
     #: Какое голосование открыто сейчас. Пусто - совет ничего не спрашивает.
     open_turning_id: str
 
@@ -759,6 +785,8 @@ class GameContent:
     _recipes_by_id: Mapping[str, Recipe]
     _npcs_by_id: Mapping[str, Npc]
     _turnings_by_id: Mapping[str, Turning]
+    _houses_by_id: Mapping[str, House]
+    _house_by_city: Mapping[str, House]
 
     @classmethod
     def build(
@@ -789,6 +817,7 @@ class GameContent:
         recipes: Sequence[Recipe] = (),
         npcs: Sequence[Npc] = (),
         turnings: Sequence[Turning] = (),
+        houses: Sequence[House] = (),
         open_turning_id: str = "",
     ) -> GameContent:
         """Собрать реестр и его указатели."""
@@ -822,6 +851,7 @@ class GameContent:
             rules=rules,
             npcs=tuple(npcs),
             turnings=tuple(turnings),
+            houses=tuple(houses),
             open_turning_id=open_turning_id,
             _races_by_id=MappingProxyType({race.id: race for race in races}),
             _classes_by_id=MappingProxyType({klass.id: klass for klass in classes}),
@@ -843,6 +873,10 @@ class GameContent:
             _recipes_by_id=MappingProxyType({recipe.id: recipe for recipe in recipes}),
             _npcs_by_id=MappingProxyType({npc.id: npc for npc in npcs}),
             _turnings_by_id=MappingProxyType({turning.id: turning for turning in turnings}),
+            _houses_by_id=MappingProxyType({house.id: house for house in houses}),
+            _house_by_city=MappingProxyType(
+                {city_id: house for house in houses for city_id in house.seats}
+            ),
         )
 
     # --- указатели ---------------------------------------------------
@@ -966,6 +1000,18 @@ class GameContent:
         if not self.open_turning_id or not self.has_turning(self.open_turning_id):
             return None
         return self.turning(self.open_turning_id)
+
+    # --- дома ------------------------------------------------------------
+
+    def house(self, house_id: str) -> House:
+        return self._houses_by_id[house_id]
+
+    def has_house(self, house_id: str) -> bool:
+        return house_id in self._houses_by_id
+
+    def house_of_city(self, city_id: str) -> House | None:
+        """Дом, который держит этот город, или ``None`` (Гнездно — ничей)."""
+        return self._house_by_city.get(city_id)
 
     def craft(self, craft_id: str) -> Craft:
         return self._crafts_by_id[craft_id]

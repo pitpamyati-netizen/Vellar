@@ -141,6 +141,9 @@ class Character:
     arena_wins: int = 0
     arena_losses: int = 0
     arena_credit: int = 0
+    # В каком великом доме состоит игрок (``domain/rules/houses.py``, ADR 0049).
+    # Пусто - ни в каком. Даёт доступ к технике дома; уход под новое имя не трогает.
+    house_id: str = ""
     # Конец пути (``domain/rules/turning.py``). ``remorts`` - сколько раз игрок
     # брал у Престола новое имя: каждый уход сбрасывал уровень до первого и оставлял
     # нажитое. ``turning_cycle``/``turning_answer`` - ответ, который он дал на
@@ -195,6 +198,10 @@ class Character:
     def with_arena_credit(self, held: int) -> Character:
         """Записать, сколько с тебя держит арена. Никогда не меньше нуля."""
         return replace(self, arena_credit=max(0, held))
+
+    def with_house(self, house_id: str) -> Character:
+        """Вступить в дом или (пустой ``house_id``) выйти из него."""
+        return replace(self, house_id=house_id)
 
     def with_turning_answer(self, cycle: str, option: str) -> Character:
         """Ответить на голосование. Ответ всегда назван вместе с вопросом:

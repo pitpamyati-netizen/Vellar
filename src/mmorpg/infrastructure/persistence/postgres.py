@@ -40,7 +40,7 @@ CHARACTER_COLUMNS = """
     stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
     trait_ids, loadout, equipment, city_id, unspent_stat_points, unspent_skill_points,
     health, bank_gold, quests, crafts, tutorial, arena_wins, arena_losses,
-    arena_credit, remorts, turning_cycle, turning_answer, is_admin
+    arena_credit, remorts, turning_cycle, turning_answer, house_id, is_admin
 """
 
 TRADE_COLUMNS = """
@@ -94,6 +94,7 @@ def _character_from_row(row: Any) -> Character:
         remorts=row["remorts"],
         turning_cycle=row["turning_cycle"],
         turning_answer=row["turning_answer"],
+        house_id=row["house_id"],
         is_admin=bool(row["is_admin"]),
     )
 
@@ -497,11 +498,11 @@ class PostgresCharacterRepository:
                 trait_ids, loadout, equipment, city_id,
                 unspent_stat_points, unspent_skill_points,
                 health, bank_gold, quests, crafts, tutorial, arena_wins, arena_losses,
-                arena_credit, remorts, turning_cycle, turning_answer, is_admin
+                arena_credit, remorts, turning_cycle, turning_answer, house_id, is_admin
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                     $15, $16::jsonb, $17::jsonb, $18, $19, $20, $21, $22, $23::jsonb,
-                    $24::jsonb, $25, $26, $27, $28, $29, $30, $31, $32)
+                    $24::jsonb, $25, $26, $27, $28, $29, $30, $31, $32, $33)
             RETURNING id
             """,
             character.user_id,
@@ -535,6 +536,7 @@ class PostgresCharacterRepository:
             character.remorts,
             character.turning_cycle,
             character.turning_answer,
+            character.house_id,
             character.is_admin,
         )
         return replace(character, id=row["id"])
@@ -552,7 +554,7 @@ class PostgresCharacterRepository:
                 crafts = $21::jsonb, tutorial = $22, arena_wins = $23,
                 arena_losses = $24, arena_credit = $25, remorts = $26,
                 turning_cycle = $27, turning_answer = $28,
-                is_admin = $29, updated_at = now()
+                is_admin = $29, house_id = $30, updated_at = now()
             WHERE id = $1
             """,
             character.id,
@@ -584,6 +586,7 @@ class PostgresCharacterRepository:
             character.turning_cycle,
             character.turning_answer,
             character.is_admin,
+            character.house_id,
         )
 
     async def spend_gold(self, character_id: int, amount: int) -> bool:

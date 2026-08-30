@@ -23,9 +23,12 @@
   «новое имя» (сброс до 1 + очки + титул) вместо Печати, Большой совет вместо
   голосования Палаты; миграция `0021` (`remorts` вместо `seals`, `pledges`
   убран). ADR 0048.
-- `-` `houses.toml` + `domain/rules/houses.py` + миграция `house_id`/`house_rep`
-  — техника дома, вступление, репутация. Свой ADR.
-- `-` `economy` — `TRADE_TAX_PERCENT` под «сбор с сделки» (только текст).
+- `+` `houses.toml` + `domain/rules/houses.py` + миграция `0022` (`house_id`) —
+  семь домов, вступление (уровень 20 + взнос 300), техника дома пассивным
+  свёртком прибавок в `collect_modifiers`. ADR 0049. Репутация и задание при
+  вступлении отложены.
+- `+` `economy` — `TRADE_TAX_PERCENT` под «сбор Престола» (текст в `economy.py`,
+  `group.py`, `arena.py`, `city.py`, `creation.py`).
 - `-` `races.toml`/`classes.toml`, `docs/*`, `Claude.md` — вычистить
   Договор/Палату/подорожную/Печать по мере смены подсистем.
 - `-` `content/changelog.toml` — запись уйдёт тем коммитом, что первым сменит

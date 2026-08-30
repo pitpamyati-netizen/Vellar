@@ -65,6 +65,7 @@ class Play(StatesGroup):
     chamber = State()
     chamber_remort = State()
     turning = State()
+    house = State()
     npcs = State()
     npc = State()
     party = State()
@@ -160,6 +161,7 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.CHAMBER: Play.chamber,
     ScreenId.CHAMBER_REMORT: Play.chamber_remort,
     ScreenId.TURNING: Play.turning,
+    ScreenId.HOUSE: Play.house,
     ScreenId.NPCS: Play.npcs,
     ScreenId.NPC: Play.npc,
     ScreenId.PARTY: Play.party,
@@ -255,6 +257,7 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.CHAMBER: ScreenId.CITY,
     ScreenId.CHAMBER_REMORT: ScreenId.CHAMBER,
     ScreenId.TURNING: ScreenId.CHAMBER,
+    ScreenId.HOUSE: ScreenId.CITY,
     ScreenId.NPCS: ScreenId.CITY,
     ScreenId.NPC: ScreenId.NPCS,
     ScreenId.PARTY: ScreenId.MAIN_MENU,

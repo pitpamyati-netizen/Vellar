@@ -121,6 +121,7 @@ def a_character(
         remorts=2,
         turning_cycle="toll",
         turning_answer="toll_keep",
+        house_id="borderland",
         is_admin=True,
     )
 
@@ -302,6 +303,7 @@ async def test_a_character_survives_a_round_trip(pool, clean_user) -> None:
     assert (read.arena_wins, read.arena_losses, read.arena_credit) == (3, 1, 120)
     # Число уходов и голос в совете тоже хранятся (``domain/rules/turning.py``).
     assert read.remorts == 2
+    assert read.house_id == "borderland"
     assert (read.turning_cycle, read.turning_answer) == ("toll", "toll_keep")
 
 
@@ -327,6 +329,7 @@ async def test_saving_a_character_updates_every_column(pool, clean_user) -> None
             remorts=3,
             turning_cycle="gates",
             turning_answer="gates_one",
+            house_id="stone",
             is_admin=True,
         )
     )
@@ -342,6 +345,7 @@ async def test_saving_a_character_updates_every_column(pool, clean_user) -> None
     assert read.crafts.progress("mining").experience == 0, "the whole document is replaced"
     assert read.arena_credit == 60
     assert read.remorts == 3
+    assert read.house_id == "stone"
     assert (read.turning_cycle, read.turning_answer) == ("gates", "gates_one")
 
 

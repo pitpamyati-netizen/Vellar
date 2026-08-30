@@ -34,6 +34,7 @@ from mmorpg.domain.rules import arena as arena_rules
 from mmorpg.domain.rules import crafts as craft_rules
 from mmorpg.domain.rules import dungeon as dungeon_rules
 from mmorpg.domain.rules import equipment as gear
+from mmorpg.domain.rules import houses as house_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import quests as quest_rules
@@ -66,6 +67,7 @@ from mmorpg.presentation.telegram.screens import crafts as craft_screens
 from mmorpg.presentation.telegram.screens import dungeon as dungeon_screens
 from mmorpg.presentation.telegram.screens import format as format_screens
 from mmorpg.presentation.telegram.screens import guild as guild_screens
+from mmorpg.presentation.telegram.screens import house as house_screens
 from mmorpg.presentation.telegram.screens import items as item_screens
 from mmorpg.presentation.telegram.screens import party as party_screens
 from mmorpg.presentation.telegram.screens import play as screens
@@ -102,6 +104,7 @@ SERVICES: dict[str, tuple[str, ScreenId]] = {
     labels.DUNGEONS.text: ("dungeons", ScreenId.DUNGEON),
     labels.ARENA.text: ("arena", ScreenId.ARENA),
     labels.CHAMBER.text: ("chamber", ScreenId.CHAMBER),
+    labels.HOUSE.text: ("house", ScreenId.HOUSE),
     labels.TAVERN.text: ("tavern", ScreenId.TAVERN),
     labels.MENTOR.text: ("mentor", ScreenId.MENTOR),
     labels.BANK.text: ("bank", ScreenId.BANK),
@@ -475,6 +478,8 @@ def _render(
             )
         case ScreenId.CHAMBER_REMORT:
             return chamber_screens.remort_screen(content, character, state.notice)
+        case ScreenId.HOUSE:
+            return house_screens.house_screen(content, character, city, state.notice)
         case ScreenId.SKILLS:
             return skill_screens.skills_screen(content, character, state.skill_page, state.notice)
         case ScreenId.SKILL_SLOTS:
@@ -815,6 +820,8 @@ def advance(
             return _handle_arena(character, state, command)
         case ScreenId.CHAMBER:
             return _handle_chamber(content, character, state, command)
+        case ScreenId.HOUSE:
+            return _handle_house(content, character, state, command)
         case ScreenId.TURNING:
             return _handle_turning(content, character, state, command)
         case ScreenId.CHAMBER_REMORT:
@@ -952,6 +959,36 @@ def _handle_chamber(
         return state.at(ScreenId.CHAMBER_REMORT)
     if labels.TURNING_QUESTION.matches(command.argument):
         return state.at(ScreenId.TURNING)
+    return state.with_notice("Нажмите кнопку из списка или «Назад».")
+
+
+def _handle_house(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    """Двор дома: вступить за взнос или уйти бесплатно."""
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите кнопку из списка или «Назад».")
+    city = known_city(content, state.city_id, character.city_id)
+    if labels.HOUSE_JOIN.matches(command.argument):
+        joined = house_rules.join(content, character, city.id)
+        if joined is None:
+            return state.with_notice(house_rules.join_refusal(content, character, city.id))
+        house = house_rules.house_of_city(content, city.id)
+        assert house is not None
+        fee = format_screens.gold(house_rules.JOIN_FEE)
+        return state.storing(
+            PendingWrite(character=joined).because(economy_log.SERVICE)
+        ).with_notice(
+            f"Вы вступили в дом: {house.name}. Взнос {fee} ушёл. "
+            f"Техника «{house.technique.name}» при вас."
+        )
+    if labels.HOUSE_LEAVE.matches(command.argument):
+        left = house_rules.leave(character)
+        if left is None:
+            return state.with_notice("Вы ни в каком доме не состоите.")
+        return state.storing(PendingWrite(character=left)).with_notice(
+            "Вы ушли из дома. Техника закрылась."
+        )
     return state.with_notice("Нажмите кнопку из списка или «Назад».")
 
 

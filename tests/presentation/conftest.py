@@ -56,6 +56,7 @@ from mmorpg.presentation.telegram.screens import combat as combat_screens
 from mmorpg.presentation.telegram.screens import crafts as craft_screens
 from mmorpg.presentation.telegram.screens import creation, play, shop
 from mmorpg.presentation.telegram.screens import guild as guild_screens
+from mmorpg.presentation.telegram.screens import house as house_screens
 from mmorpg.presentation.telegram.screens import items as item_screens
 from mmorpg.presentation.telegram.screens import keeper as keeper_screens
 from mmorpg.presentation.telegram.screens import party as party_screens
@@ -952,6 +953,14 @@ def all_screens(
         chamber_screens.turning_screen(content, fighter),
         chamber_screens.turning_screen(content, sealbearer),
         chamber_screens.turning_screen(content, sealbearer, tally={"toll_low": 3, "toll_keep": 3}),
+        house_screens.house_screen(content, fighter, content.city("farhold")),
+        house_screens.house_screen(content, hero, content.city("farhold")),
+        house_screens.house_screen(
+            content, replace(fighter, house_id="borderland"), content.city("farhold")
+        ),
+        house_screens.house_screen(
+            content, replace(fighter, house_id="stone"), content.city("farhold")
+        ),
         arena_screens.arena_screen(fighter),
         arena_screens.arena_screen(
             replace(fighter, arena_wins=4, arena_losses=2),

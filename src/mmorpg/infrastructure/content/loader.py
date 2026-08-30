@@ -30,6 +30,8 @@ from mmorpg.domain.entities.content import (
     GearArchetype,
     GearTier,
     HealthCurve,
+    House,
+    HouseTechnique,
     Item,
     ItemEffect,
     ItemKind,
@@ -78,6 +80,7 @@ CONTENT_FILES = (
     "quests.toml",
     "crafts.toml",
     "turnings.toml",
+    "houses.toml",
 )
 
 # Виды узлов, которые может попросить задание на поиск. Держатся строками, а не импортом
@@ -87,6 +90,9 @@ SEARCHABLE_NODES = frozenset({"gather", "cache", "shrine", "event"})
 MINIMUM_CRAFTS = 4
 EXPECTED_RACES = 16
 EXPECTED_CLASSES = 8
+EXPECTED_HOUSES = 7
+#: Столица державы: Престол, не удел. Дом её не держит (ADR 0047).
+THRONE_CITY = "obsidian_throne"
 
 #: Сколько умений у класса. Двадцать боевых на шесть слотов панели - это выбор;
 #: сорок пассивных - то, во что уходит очко между боевыми (``docs/skills.md``).
@@ -166,10 +172,12 @@ def load_content(content_dir: Path) -> GameContent:
     craft_rules = _build_craft_rules(raw["crafts.toml"], problems)
     crafts, recipes = _parse_crafts(raw["crafts.toml"], item_ids, craft_rules, problems)
     turnings, open_turning_id = _parse_turnings(raw["turnings.toml"], problems)
+    houses = _parse_houses(raw["houses.toml"], problems)
 
     rules = _build_rules(raw, problems)
 
     _validate_races(races, problems)
+    _validate_houses(houses, cities, problems)
     _validate_classes(classes, skills, rules, problems)
     _validate_traits(traits, problems)
     _validate_world(cities, rules, problems)
@@ -200,6 +208,7 @@ def load_content(content_dir: Path) -> GameContent:
         "inverted_modifiers": inverted_modifiers,
         "rules": rules,
         "turnings": turnings,
+        "houses": houses,
         "open_turning_id": open_turning_id,
     }
 
@@ -574,6 +583,71 @@ def _validate_races(races: Sequence[Race], problems: list[str]) -> None:
             )
         if not race.passive.name:
             problems.append(f"races.toml: {race.id} has no passive ability")
+
+
+# --- дома ----------------------------------------------------------
+
+
+def _parse_houses(raw: Mapping[str, Any], problems: list[str]) -> tuple[House, ...]:
+    parsed: list[House] = []
+    for entry in raw.get("house", ()):
+        house_id = str(entry.get("id", ""))
+        tech_raw = entry.get("technique", {})
+        tech_id = str(tech_raw.get("id", ""))
+        modifiers: dict[str, float] = {}
+        for key, value in dict(tech_raw.get("modifiers", {})).items():
+            if key not in EFFECTIVE_KEYS:
+                problems.append(
+                    f"houses.toml: {house_id} technique {tech_id!r} promises {key!r}, "
+                    "and nothing in the engine counts it"
+                )
+                continue
+            modifiers[key] = float(value)
+        if not modifiers:
+            problems.append(
+                f"houses.toml: {house_id} technique {tech_id!r} does nothing: "
+                "a named technique with no modifiers is a promise, not a technique"
+            )
+        parsed.append(
+            House(
+                id=house_id,
+                name=str(entry.get("name", "")),
+                seats=tuple(str(seat) for seat in entry.get("seats", ())),
+                technique=HouseTechnique(
+                    id=tech_id,
+                    name=str(tech_raw.get("name", "")),
+                    text=str(tech_raw.get("text", "")),
+                    modifiers=modifiers,
+                ),
+            )
+        )
+    return tuple(parsed)
+
+
+def _validate_houses(houses: Sequence[House], cities: Sequence[City], problems: list[str]) -> None:
+    if len(houses) != EXPECTED_HOUSES:
+        problems.append(f"houses.toml: expected {EXPECTED_HOUSES} houses, found {len(houses)}")
+    _check_unique((house.id for house in houses), "houses.toml", problems)
+    _check_unique((house.name for house in houses), "houses.toml (names)", problems)
+
+    known = {city.id for city in cities}
+    held: dict[str, str] = {}
+    for house in houses:
+        if len(house.seats) != 2:
+            problems.append(f"houses.toml: {house.id} must hold exactly two cities")
+        for seat in house.seats:
+            if seat not in known:
+                problems.append(f"houses.toml: {house.id} holds unknown city {seat!r}")
+            elif seat == THRONE_CITY:
+                problems.append(f"houses.toml: {house.id} holds the throne city {seat!r}")
+            elif seat in held:
+                problems.append(
+                    f"houses.toml: {seat!r} is held by both {held[seat]} and {house.id}"
+                )
+            else:
+                held[seat] = house.id
+        if not house.technique.name:
+            problems.append(f"houses.toml: {house.id} has no technique")
 
 
 # --- классы ---------------------------------------------------------

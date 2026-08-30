@@ -1,0 +1,56 @@
+# Семь великих домов державы (ADR 0047, 0049).
+#
+# Каждый дом держит два города (`seats`, id из world.toml) и землю между ними.
+# Гнездно — Престол, не удел: его не держит никто.
+#
+# `technique` — фирменный приём дома, пассивный свёрток прибавок, ровно как
+# расовая способность. Пока `character.house_id == house.id`, свёрток идёт в
+# `collect_modifiers`. Ключи `modifiers` — только из `modifiers.EFFECTIVE_KEYS`.
+#
+# Идентификаторы (`id` дома и `technique.id`) заморожены: на них показывают
+# персонажи в базе. Видимые имена и текст менять можно; загляните в Narrative.md.
+#
+# Числа техник — первый набросок: правятся по gold_flow и разыгранным боям, как и
+# всё в игре (Roadmap.md). Проверяет tests/content/test_houses.py.
+
+[[house]]
+id = "borderland"
+name = "Дом Порубежья"
+seats = ["farhold", "dusk_harbor"]
+technique = { id = "borderland_first_strike", name = "Первым на меже", text = "Инициатива выше на 8 процентов, а первый ваш удар в бою сильнее на 8.", modifiers = { initiative_percent = 8, first_turn_damage_percent = 8 } }
+
+[[house]]
+id = "stone"
+name = "Дом Камня"
+seats = ["stonedale", "copper_cross"]
+technique = { id = "stone_footing", name = "Каменная стойка", text = "Броня крепче на 10 процентов, а получаемый урон ниже на 5.", modifiers = { armor_percent = 10, damage_taken_percent = -5 } }
+
+[[house]]
+id = "crossings"
+name = "Дом Переправ"
+seats = ["quiet_fords", "salt_ridge"]
+technique = { id = "crossings_patience", name = "Терпение перевозчика", text = "Точность выше на 8 процентов, а урон ядом, огнём и кровью — на 12.", modifiers = { accuracy_percent = 8, dot_damage_percent = 12 } }
+
+[[house]]
+id = "free_haven"
+name = "Дом Вольной Гавани"
+seats = ["crimson_wharf", "glass_hollow"]
+technique = { id = "free_haven_boarding", name = "Абордаж", text = "Урон выше на 6 процентов, а по раненой цели — ещё на 10.", modifiers = { damage_percent = 6, wounded_target_damage_percent = 10 } }
+
+[[house]]
+id = "garrison"
+name = "Дом Заставы"
+seats = ["winter_march", "ashen_gates"]
+technique = { id = "garrison_line", name = "Строй", text = "Запас здоровья больше на 8 процентов, и вы держите ещё 30 брони числом.", modifiers = { health_percent = 8, armor_flat = 30 } }
+
+[[house]]
+id = "measures"
+name = "Дом Мер"
+seats = ["thunder_range", "azure_halls"]
+technique = { id = "measures_patent", name = "Патентная выучка", text = "Магический урон выше на 8 процентов, а запас ресурса — на 12.", modifiers = { magic_damage_percent = 8, resource_percent = 12 } }
+
+[[house]]
+id = "barrows"
+name = "Дом Курганов"
+seats = ["bone_marches", "last_beacon"]
+technique = { id = "barrows_cold_hand", name = "Холодная рука", text = "Шанс крита выше на 6 процентов, а урон по нежити — на 12.", modifiers = { crit_chance_percent = 6, undead_damage_percent = 12 } }
