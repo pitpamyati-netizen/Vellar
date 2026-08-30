@@ -1703,7 +1703,7 @@ FLOW_NAMES: dict[str, str] = {
     "arena_stake": "ставки арены",
     "arena_payout": "выплаты арены",
     "trade_price": "сделки в группе",
-    "trade_duty": "пошлина сделок",
+    "trade_duty": "сбор со сделок",
     "trade_rollback": "откаты сделок",
     "shop": "лавка",
     "service": "услуги городов",
