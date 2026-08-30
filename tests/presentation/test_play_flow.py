@@ -420,6 +420,23 @@ def test_state_survives_a_round_trip(
     assert restored.stack == in_location.stack
 
 
+def test_a_keeper_player_filter_survives_a_round_trip() -> None:
+    from mmorpg.domain.ports.repositories import PlayerFilter
+
+    kept = PlayState(
+        keeper_player_filter=PlayerFilter(
+            level_min=5,
+            level_max=40,
+            city_id="farhold",
+            guild="Клинки",
+            banned=True,
+            active_since=1,
+        )
+    )
+    restored = PlayState.deserialise(kept.serialise())
+    assert restored.keeper_player_filter == kept.keeper_player_filter
+
+
 def test_a_descent_survives_a_round_trip(hero: Character) -> None:
     from mmorpg.presentation.telegram.flows.state import Descent
 

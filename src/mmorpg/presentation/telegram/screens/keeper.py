@@ -35,7 +35,7 @@ from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.quest import Quest
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.entities.trade import OfferKind, TradeRecord, TradeStatus
-from mmorpg.domain.ports.repositories import Census, GoldFlowSlice
+from mmorpg.domain.ports.repositories import Census, GoldFlowSlice, PlayerFilter
 from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.rules import moderation as moderation_rules
 from mmorpg.domain.rules import overlay as overlay_rules
@@ -546,26 +546,110 @@ def player_entry(content: GameContent, index: int, player: Character) -> str:
     return numbered(index, f"{player.name} — уровень {player.level}, {city}")
 
 
+def _city_name(content: GameContent, city_id: str) -> str:
+    return content.city(city_id).name if content.has_city(city_id) else city_id
+
+
+def describe_player_filter(content: GameContent, criteria: PlayerFilter) -> str:
+    """Фильтр игроков словами. Пусто — ничего не задано."""
+    parts: list[str] = []
+    if criteria.level_min or criteria.level_max:
+        parts.append(f"уровни с {criteria.level_min or 1} по {criteria.level_max or 300}")
+    if criteria.city_id:
+        parts.append(f"город {_city_name(content, criteria.city_id)}")
+    if criteria.guild:
+        parts.append(f"гильдия «{criteria.guild}»")
+    if criteria.banned:
+        parts.append("только заблокированные")
+    if criteria.active_since:
+        parts.append("заходил за сутки")
+    return ", ".join(parts)
+
+
 def players_screen(
-    content: GameContent, view: KeeperView, state: PageState, notice: str = ""
+    content: GameContent,
+    view: KeeperView,
+    state: PageState,
+    notice: str = "",
+    criteria: PlayerFilter = PlayerFilter(),
 ) -> Screen:
     entries = [
         ListEntry(key=str(player.id), text=player_entry(content, index, player))
         for index, player in enumerate(view.players, start=1)
+    ]
+    described = describe_player_filter(content, criteria)
+    lead = [
+        notice
+        or (
+            "Игроки под фильтр, по убыванию уровня."
+            if criteria.any
+            else "Последние заведённые персонажи. Кого нет в списке — ищите по имени."
+        ),
+        f"Фильтр: {described}." if described else "Имя набирается после «Найти по имени».",
     ]
     return paginated_screen(
         screen_id=ScreenId.KEEPER_PLAYERS,
         title="Игроки",
         entries=entries,
         state=state,
-        lead_lines=(
-            notice or "Последние заведённые персонажи. Кого нет в списке — ищите по имени.",
-            "Имя набирается сообщением после нажатия «Найти по имени».",
+        lead_lines=tuple(lead),
+        empty_text=(
+            "Под этот фильтр никто не подошёл." if criteria.any else "Ни одного персонажа."
         ),
-        empty_text="Ни одного персонажа.",
-        extra_rows=((labels.KEEPER_FIND,),),
+        extra_rows=((labels.KEEPER_FIND, labels.KEEPER_PLAYER_FILTERS_BTN),),
         show_filters=False,
     )
+
+
+#: Поля фильтра игроков: ключ (он же ``keeper_typing``), кнопка, как набирают.
+PF_TYPED: tuple[tuple[str, Label, str], ...] = (
+    ("pf_level_min", labels.KEEPER_PF_LEVEL_MIN, "целое число"),
+    ("pf_level_max", labels.KEEPER_PF_LEVEL_MAX, "целое число"),
+    ("pf_city", labels.KEEPER_PF_CITY, "название или ключ города"),
+    ("pf_guild", labels.KEEPER_PF_GUILD, "часть названия гильдии"),
+)
+
+
+def pf_field_from_button(pressed: str) -> str:
+    return next((key for key, label_, _ in PF_TYPED if label_.matches(pressed)), "")
+
+
+def player_filters_screen(
+    content: GameContent,
+    criteria: PlayerFilter,
+    *,
+    typing: str = "",
+    notice: str = "",
+) -> Screen:
+    """Чем сузить список игроков. Числа и названия набирают, флаги нажимают."""
+    described = describe_player_filter(content, criteria)
+    lines = [
+        notice or "Фильтры игроков.",
+        f"Сейчас: {described}." if described else "Сейчас ничего не задано.",
+    ]
+    prompt = next((how for key, _, how in PF_TYPED if key == typing), "")
+    if prompt:
+        lines.append(f"Наберите значение сообщением: {prompt}. Пустое сообщение снимает поле.")
+    rows: list[tuple[Label, ...]] = [
+        (labels.KEEPER_PF_LEVEL_MIN, labels.KEEPER_PF_LEVEL_MAX),
+        (labels.KEEPER_PF_CITY, labels.KEEPER_PF_GUILD),
+        (
+            label(f"{labels.KEEPER_PF_BANNED.text}: {'да' if criteria.banned else 'нет'}"),
+            label(f"{labels.KEEPER_PF_FRESH.text}: {'да' if criteria.active_since else 'нет'}"),
+        ),
+        (labels.KEEPER_PF_APPLY,),
+        (labels.KEEPER_PF_CLEAR,),
+    ]
+    return Screen(id=ScreenId.KEEPER_PLAYER_FILTERS, lines=tuple(lines), rows=tuple(rows))
+
+
+def pf_toggle_from_button(criteria: PlayerFilter, pressed: str) -> str:
+    """Какой флаг фильтра нажали. Надпись несёт текущее состояние, поэтому сверяем обе."""
+    for key, base in (("banned", labels.KEEPER_PF_BANNED), ("fresh", labels.KEEPER_PF_FRESH)):
+        on = criteria.banned if key == "banned" else bool(criteria.active_since)
+        if label(f"{base.text}: {'да' if on else 'нет'}").matches(pressed):
+            return key
+    return ""
 
 
 def player_from_button(content: GameContent, view: KeeperView, pressed: str) -> Character | None:

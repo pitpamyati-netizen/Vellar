@@ -21,6 +21,7 @@ from mmorpg.domain.ports import (
     InventoryRepository,
     LocationStateCache,
     PartyRepository,
+    PlayerFilter,
     StateCache,
     User,
     UserRepository,
@@ -56,8 +57,18 @@ class FakeClock:
         self.now += seconds
 
 
-def a_character(user_id: int = 42, name: str = "Тест") -> Character:
-    return Character(id=0, user_id=user_id, name=name, race_id="human", class_id="warrior")
+def a_character(
+    user_id: int = 42, name: str = "Тест", *, level: int = 1, city_id: str = ""
+) -> Character:
+    return Character(
+        id=0,
+        user_id=user_id,
+        name=name,
+        race_id="human",
+        class_id="warrior",
+        level=level,
+        city_id=city_id,
+    )
 
 
 # --- адаптеры отвечают портам --------------------------------------
@@ -98,6 +109,31 @@ async def test_settings_can_be_saved_for_an_unknown_user() -> None:
     stored = await users.get(7)
     assert stored is not None
     assert stored.settings.emoji is True
+
+
+async def test_players_are_searched_by_level_and_city() -> None:
+    characters = InMemoryCharacterRepository()
+    await characters.create(a_character(name="Мал", level=3, city_id="farhold"))
+    await characters.create(a_character(name="Сред", level=20, city_id="farhold"))
+    await characters.create(a_character(name="Даль", level=25, city_id="surozh"))
+
+    by_level = await characters.search(PlayerFilter(level_min=10))
+    assert [one.name for one in by_level] == ["Даль", "Сред"]  # по убыванию уровня
+
+    by_city = await characters.search(PlayerFilter(city_id="farhold"))
+    assert {one.name for one in by_city} == {"Мал", "Сред"}
+
+    both = await characters.search(PlayerFilter(level_min=10, city_id="farhold"))
+    assert [one.name for one in both] == ["Сред"]
+
+
+async def test_banned_ids_are_only_the_currently_banned() -> None:
+    users = InMemoryUserRepository()
+    await users.set_ban(1, Ban(until=100))
+    await users.set_ban(2, Ban(until=-1))
+    await users.set_ban(3, Ban(until=5))  # истёк
+
+    assert await users.banned_ids(now=50) == frozenset({1, 2})
 
 
 async def test_the_gold_flow_slice_sums_by_kind_with_a_sign() -> None:

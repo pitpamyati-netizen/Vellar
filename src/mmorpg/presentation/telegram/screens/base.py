@@ -83,6 +83,7 @@ class ScreenId(StrEnum):
     KEEPER_ENTITY = "keeper_entity"
     KEEPER_FIELD = "keeper_field"
     KEEPER_PLAYERS = "keeper_players"
+    KEEPER_PLAYER_FILTERS = "keeper_player_filters"
     KEEPER_PLAYER = "keeper_player"
     KEEPER_STATS = "keeper_stats"
     KEEPER_SERVICE = "keeper_service"

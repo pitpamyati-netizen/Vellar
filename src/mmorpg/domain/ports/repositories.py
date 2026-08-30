@@ -143,6 +143,48 @@ class UserRepository(Protocol):
     async def purge_blocked(self) -> int:
         """Убрать тех, кто заблокировал бота, вместе со всем, что им принадлежит."""
 
+    async def banned_ids(self, *, now: int) -> frozenset[int]:
+        """Аккаунты, заблокированные прямо сейчас. Истёкшие не считаются.
+
+        Множество, а не счётчик: по нему смотритель отбирает игроков, а список
+        заблокированных всегда короткий.
+        """
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerFilter:
+    """Чем смотритель сужает список игроков.
+
+    ``level_min``/``level_max`` — по уровню, ноль не ограничивает; ``city_id`` —
+    где стоит; ``guild`` — подстрока имени гильдии (без учёта регистра);
+    ``banned`` — только заблокированные прямо сейчас; ``active_since`` — заходил
+    не раньше этого момента (unix-секунды). Автомат часов не знает, поэтому от
+    него сюда приходит ``1`` как «за последние сутки», а точную границу
+    подставляет вызывающий, у которого момент есть.
+
+    ``CharacterRepository`` отвечает на уровень, город и активность одним
+    запросом; заблокированность и гильдию досовмещает вызывающий, у которого
+    есть остальные хранилища (тот же приём, что у ``census``).
+    """
+
+    level_min: int = 0
+    level_max: int = 0
+    city_id: str = ""
+    guild: str = ""
+    banned: bool = False
+    active_since: int = 0
+
+    @property
+    def any(self) -> bool:
+        return bool(
+            self.level_min
+            or self.level_max
+            or self.city_id
+            or self.guild
+            or self.banned
+            or self.active_since
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class GoldFlowSlice:
@@ -283,6 +325,13 @@ class CharacterRepository(Protocol):
 
     async def newest(self, *, limit: int = 8) -> tuple[Character, ...]:
         """Кого завели последними: с этого списка смотритель обычно и начинает."""
+
+    async def search(self, criteria: PlayerFilter, *, limit: int = 24) -> tuple[Character, ...]:
+        """Игроки по уровню, городу и активности — по убыванию уровня.
+
+        Заблокированность и гильдию этот запрос не знает: их досовмещает
+        вызывающий (``PlayerFilter``).
+        """
 
     async def census(self, *, day: int, week: int, stale: int) -> Census:
         """Игра в числах на этот момент. Границы приходят снаружи: домен без часов."""

@@ -24,6 +24,7 @@ from mmorpg.domain.ports.repositories import (
     AccessibilitySettings,
     Census,
     GoldFlowSlice,
+    PlayerFilter,
     User,
 )
 from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
@@ -274,6 +275,12 @@ class PostgresUserRepository:
             "SELECT count(*) FROM users WHERE banned_until < 0 OR banned_until > $1", now
         )
         return int(value or 0)
+
+    async def banned_ids(self, *, now: int) -> frozenset[int]:
+        rows = await self._pool.fetch(
+            "SELECT telegram_id FROM users WHERE banned_until < 0 OR banned_until > $1", now
+        )
+        return frozenset(row["telegram_id"] for row in rows)
 
     async def warn(self, telegram_id: int, *, delta: int = 1) -> int:
         """Счётчик двигается условным ``UPDATE`` и не уходит в минус."""
@@ -672,6 +679,30 @@ class PostgresCharacterRepository:
         rows = await self._pool.fetch(
             f"SELECT {CHARACTER_COLUMNS} FROM characters ORDER BY id DESC LIMIT $1",
             limit,
+        )
+        return tuple(_character_from_row(row) for row in rows)
+
+    async def search(self, criteria: PlayerFilter, *, limit: int = 24) -> tuple[Character, ...]:
+        clauses: list[str] = []
+        args: list[object] = []
+        if criteria.level_min:
+            args.append(criteria.level_min)
+            clauses.append(f"level >= ${len(args)}")
+        if criteria.level_max:
+            args.append(criteria.level_max)
+            clauses.append(f"level <= ${len(args)}")
+        if criteria.city_id:
+            args.append(criteria.city_id)
+            clauses.append(f"city_id = ${len(args)}")
+        if criteria.active_since:
+            args.append(criteria.active_since)
+            clauses.append(f"updated_at >= to_timestamp(${len(args)})")
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        args.append(limit)
+        rows = await self._pool.fetch(
+            f"SELECT {CHARACTER_COLUMNS} FROM characters{where}"
+            f" ORDER BY level DESC, name LIMIT ${len(args)}",
+            *args,
         )
         return tuple(_character_from_row(row) for row in rows)
 

@@ -21,6 +21,7 @@ from mmorpg.domain.ports.repositories import (
     AccessibilitySettings,
     Census,
     GoldFlowSlice,
+    PlayerFilter,
     User,
 )
 from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
@@ -81,6 +82,13 @@ class InMemoryUserRepository:
 
     async def banned_count(self, *, now: int) -> int:
         return sum(1 for user in self._users.values() if user.ban.forever or user.ban.until > now)
+
+    async def banned_ids(self, *, now: int) -> frozenset[int]:
+        return frozenset(
+            user.telegram_id
+            for user in self._users.values()
+            if user.ban.forever or user.ban.until > now
+        )
 
     async def warn(self, telegram_id: int, *, delta: int = 1) -> int:
         user = self._users.get(telegram_id) or User(telegram_id=telegram_id)
@@ -277,6 +285,21 @@ class InMemoryCharacterRepository:
     async def newest(self, *, limit: int = 8) -> tuple[Character, ...]:
         ordered = sorted(self._characters.values(), key=lambda character: -character.id)
         return tuple(ordered[:limit])
+
+    async def search(self, criteria: PlayerFilter, *, limit: int = 24) -> tuple[Character, ...]:
+        chosen = [
+            character
+            for character in self._characters.values()
+            if (not criteria.level_min or character.level >= criteria.level_min)
+            and (not criteria.level_max or character.level <= criteria.level_max)
+            and (not criteria.city_id or character.city_id == criteria.city_id)
+            and (
+                not criteria.active_since
+                or self._touched.get(character.id, 0) >= criteria.active_since
+            )
+        ]
+        chosen.sort(key=lambda character: (-character.level, character.name))
+        return tuple(chosen[:limit])
 
     async def census(self, *, day: int, week: int, stale: int) -> Census:
         everybody = tuple(self._characters.values())

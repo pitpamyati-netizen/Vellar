@@ -38,7 +38,7 @@ from mmorpg.domain.entities.location import (
 from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeRecord, TradeStatus
-from mmorpg.domain.ports.repositories import Census, GoldFlowSlice
+from mmorpg.domain.ports.repositories import Census, GoldFlowSlice, PlayerFilter
 from mmorpg.domain.procgen import generate_location, location_seed
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import overlay as overlay_rules
@@ -675,6 +675,18 @@ def all_screens(
         keeper_screens.players_screen(edited, keeper_view, PageState()),
         keeper_screens.players_screen(
             edited, keeper_screens.KeeperView(), PageState(), notice="Никого не нашли."
+        ),
+        keeper_screens.players_screen(
+            edited,
+            keeper_view,
+            PageState(),
+            criteria=PlayerFilter(level_min=10, city_id="farhold", banned=True, active_since=1),
+        ),
+        keeper_screens.player_filters_screen(edited, PlayerFilter()),
+        keeper_screens.player_filters_screen(
+            edited,
+            PlayerFilter(level_min=5, level_max=40, guild="Клинки", banned=True),
+            typing="pf_city",
         ),
         keeper_screens.player_screen(edited, fighter, derived_stats(content, fighter)),
         keeper_screens.player_screen(

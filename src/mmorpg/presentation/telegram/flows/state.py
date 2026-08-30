@@ -19,7 +19,7 @@ from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import Item
 from mmorpg.domain.entities.moderation import KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayRecord
-from mmorpg.domain.ports.repositories import AccessibilitySettings
+from mmorpg.domain.ports.repositories import AccessibilitySettings, PlayerFilter
 from mmorpg.domain.rules.guild import Guild
 from mmorpg.domain.rules.party import Party
 from mmorpg.presentation.telegram.routing import Command, Intent
@@ -260,6 +260,10 @@ class PlayState:
     keeper_target: int = 0
     keeper_typing: str = ""
     keeper_page: PageState = field(default_factory=PageState)
+    #: Чем сужен список игроков в панели (уровень, город, гильдия, блокировка,
+    #: активность). Переживает уход с экрана: смотритель настраивает фильтр и
+    #: возвращается к списку.
+    keeper_player_filter: PlayerFilter = field(default_factory=PlayerFilter)
     #: Причина блокировки, набранная до выбора срока. Живёт в состоянии, потому
     #: что набирают её одним сообщением, а срок нажимают следующим.
     keeper_reason: str = ""
@@ -352,6 +356,14 @@ class PlayState:
                     self.keeper_page.page,
                     self.keeper_reason,
                 ],
+                "keeper_pf": [
+                    self.keeper_player_filter.level_min,
+                    self.keeper_player_filter.level_max,
+                    self.keeper_player_filter.city_id,
+                    self.keeper_player_filter.guild,
+                    self.keeper_player_filter.banned,
+                    self.keeper_player_filter.active_since,
+                ],
             },
             ensure_ascii=False,
         )
@@ -389,6 +401,7 @@ class PlayState:
         # Хвост списка читается с запасом: состояние переживает выкатку, а
         # сохранённому состоянию не верят (``Claude.md``, правило 8).
         keeper = [*data.get("keeper", []), "", "", "", 0, "", 1, ""][:7]
+        pf = [*data.get("keeper_pf", []), 0, 0, "", "", False, 0][:6]
         # Хвост читается с запасом: запись старого образца не называла передачу.
         transfer_scope, transfer_to, transfer_item = [*data.get("transfer", []), "", "", ""][:3]
         return cls(
@@ -433,6 +446,14 @@ class PlayState:
             keeper_typing=str(keeper[4]),
             keeper_page=PageState(page=int(keeper[5])),
             keeper_reason=str(keeper[6]),
+            keeper_player_filter=PlayerFilter(
+                level_min=int(pf[0]),
+                level_max=int(pf[1]),
+                city_id=str(pf[2]),
+                guild=str(pf[3]),
+                banned=bool(pf[4]),
+                active_since=int(pf[5]),
+            ),
             transfer_scope=str(transfer_scope),
             transfer_to=str(transfer_to),
             transfer_item=str(transfer_item),

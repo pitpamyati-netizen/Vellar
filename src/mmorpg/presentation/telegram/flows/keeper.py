@@ -24,6 +24,7 @@ from mmorpg.domain.entities.craft import CraftKind
 from mmorpg.domain.entities.moderation import KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.stats import StatCode
+from mmorpg.domain.ports.repositories import PlayerFilter
 from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.rules import keeper as keeper_rules
 from mmorpg.domain.rules import overlay as overlay_rules
@@ -66,6 +67,7 @@ PANEL: frozenset[ScreenId] = frozenset(
         ScreenId.KEEPER_ENTITY,
         ScreenId.KEEPER_FIELD,
         ScreenId.KEEPER_PLAYERS,
+        ScreenId.KEEPER_PLAYER_FILTERS,
         ScreenId.KEEPER_PLAYER,
         ScreenId.KEEPER_STATS,
         ScreenId.KEEPER_SERVICE,
@@ -233,7 +235,16 @@ def _render_panel(
         case ScreenId.KEEPER_FIELD:
             return _render_field(content, state, view)
         case ScreenId.KEEPER_PLAYERS:
-            return keeper_screens.players_screen(content, view, state.keeper_page, state.notice)
+            return keeper_screens.players_screen(
+                content, view, state.keeper_page, state.notice, state.keeper_player_filter
+            )
+        case ScreenId.KEEPER_PLAYER_FILTERS:
+            return keeper_screens.player_filters_screen(
+                content,
+                state.keeper_player_filter,
+                typing=state.keeper_typing,
+                notice=state.notice,
+            )
         case ScreenId.KEEPER_PLAYER if view.target is not None:
             return keeper_screens.player_screen(
                 content, view.target, derived_stats(content, view.target), state.notice, view
@@ -371,6 +382,10 @@ def awaits_text(state: PlayState, command: Command) -> bool:
         return True
     if not state.keeper_typing:
         return False
+    if state.screen is ScreenId.KEEPER_PLAYER_FILTERS and state.keeper_typing in {
+        key for key, _, _ in keeper_screens.PF_TYPED
+    }:
+        return True
     return (
         (state.screen is ScreenId.KEEPER_FIELD and state.keeper_typing == TYPING_VALUE)
         or (state.screen is ScreenId.KEEPER_AMOUNT and state.keeper_typing == TYPING_VALUE)
@@ -397,6 +412,8 @@ def typed(
         return state.with_notice("Это команда, а не значение. Наберите значение без косой черты.")
     if state.screen is ScreenId.KEEPER_LIST and state.searching:
         return _searched_content(state, text)
+    if state.screen is ScreenId.KEEPER_PLAYER_FILTERS:
+        return _typed_player_filter(content, state, text)
     if state.screen is ScreenId.KEEPER_PLAYERS:
         return _found(state, view, text)
     if state.screen is ScreenId.KEEPER_AMOUNT:
@@ -510,6 +527,8 @@ def advance(
             return _step_field(content, state, command, view)
         case ScreenId.KEEPER_PLAYERS:
             return _step_players(content, state, command, view)
+        case ScreenId.KEEPER_PLAYER_FILTERS:
+            return _step_player_filters(content, state, command)
         case ScreenId.KEEPER_PLAYER:
             return _step_player(content, state, command, view)
         case ScreenId.KEEPER_LOG:
@@ -1526,6 +1545,90 @@ def _typed_quest_count(
     )
 
 
+def _step_player_filters(content: GameContent, state: PlayState, command: Command) -> PlayState:
+    """Фильтры списка игроков: числа и названия набирают, флаги нажимают."""
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите поле или наберите значение.")
+    criteria = state.keeper_player_filter
+
+    if labels.KEEPER_PF_APPLY.matches(command.argument):
+        return replace(go_back(state), keeper_typing="", keeper_page=PageState())
+    if labels.KEEPER_PF_CLEAR.matches(command.argument):
+        return replace(state, keeper_player_filter=PlayerFilter(), keeper_typing="").with_notice(
+            "Фильтры игроков сняты."
+        )
+
+    field_key = keeper_screens.pf_field_from_button(command.argument)
+    if field_key:
+        return replace(state, keeper_typing=field_key).with_notice("Наберите значение сообщением.")
+
+    toggled = keeper_screens.pf_toggle_from_button(criteria, command.argument)
+    if toggled == "banned":
+        changed = replace(criteria, banned=not criteria.banned)
+        return replace(state, keeper_player_filter=changed).with_notice(
+            f"Только заблокированные: {'да' if changed.banned else 'нет'}."
+        )
+    if toggled == "fresh":
+        changed = replace(criteria, active_since=0 if criteria.active_since else 1)
+        return replace(state, keeper_player_filter=changed).with_notice(
+            f"Заходил за сутки: {'да' if changed.active_since else 'нет'}."
+        )
+    return state.with_notice(PRESS_A_BUTTON)
+
+
+def _typed_player_filter(content: GameContent, state: PlayState, text: str) -> PlayState:
+    """Разобрать набранное значение поля фильтра игроков. Пустое сообщение снимает поле."""
+    criteria = state.keeper_player_filter
+    value = text.strip()
+    walked = replace(state, keeper_typing="")
+    key = state.keeper_typing
+
+    if key in {"pf_level_min", "pf_level_max"}:
+        number = 0
+        if value:
+            parsed = _to_int(value)
+            if parsed is None or parsed < 0:
+                return state.with_notice("Нужно целое число не меньше нуля.")
+            number = parsed
+        changed = (
+            replace(criteria, level_min=number)
+            if key == "pf_level_min"
+            else replace(criteria, level_max=number)
+        )
+        said = f"Уровень {'от' if key == 'pf_level_min' else 'до'}: {number or 'без ограничения'}."
+        return replace(walked, keeper_player_filter=changed).with_notice(said)
+
+    if key == "pf_guild":
+        return replace(walked, keeper_player_filter=replace(criteria, guild=value)).with_notice(
+            f"Гильдия: «{value}»." if value else "Гильдия снята."
+        )
+
+    if key == "pf_city":
+        if not value:
+            return replace(walked, keeper_player_filter=replace(criteria, city_id="")).with_notice(
+                "Город снят."
+            )
+        city_id = _resolve_city(content, value)
+        if not city_id:
+            return state.with_notice(f"Города «{value}» нет. Наберите название или ключ.")
+        return replace(walked, keeper_player_filter=replace(criteria, city_id=city_id)).with_notice(
+            f"Город: {content.city(city_id).name}."
+        )
+
+    return walked.with_notice("Такого поля нет.")
+
+
+def _resolve_city(content: GameContent, text: str) -> str:
+    folded = text.strip().casefold()
+    for city in content.cities:
+        if city.id == folded or city.name.casefold() == folded:
+            return city.id
+    for city in content.cities:
+        if folded in city.name.casefold():
+            return city.id
+    return ""
+
+
 def _step_players(
     content: GameContent, state: PlayState, command: Command, view: KeeperView
 ) -> PlayState:
@@ -1538,6 +1641,8 @@ def _step_players(
         return replace(state, keeper_typing=TYPING_NAME).with_notice(
             "Наберите имя персонажа сообщением."
         )
+    if labels.KEEPER_PLAYER_FILTERS_BTN.matches(command.argument):
+        return replace(state, keeper_typing="").at(ScreenId.KEEPER_PLAYER_FILTERS)
     found = keeper_screens.player_from_button(content, view, command.argument)
     if found is None:
         return state.with_notice("Не узнал персонажа. Нажмите строку из списка.")

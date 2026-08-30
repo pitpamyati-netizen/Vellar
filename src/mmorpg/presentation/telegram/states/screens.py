@@ -85,6 +85,7 @@ class Play(StatesGroup):
     keeper_entity = State()
     keeper_field = State()
     keeper_players = State()
+    keeper_player_filters = State()
     keeper_player = State()
     keeper_stats = State()
     keeper_service = State()
@@ -176,6 +177,7 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.KEEPER_ENTITY: Play.keeper_entity,
     ScreenId.KEEPER_FIELD: Play.keeper_field,
     ScreenId.KEEPER_PLAYERS: Play.keeper_players,
+    ScreenId.KEEPER_PLAYER_FILTERS: Play.keeper_player_filters,
     ScreenId.KEEPER_PLAYER: Play.keeper_player,
     ScreenId.KEEPER_STATS: Play.keeper_stats,
     ScreenId.KEEPER_SERVICE: Play.keeper_service,
@@ -269,6 +271,7 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.KEEPER_ENTITY: ScreenId.KEEPER_LIST,
     ScreenId.KEEPER_FIELD: ScreenId.KEEPER_ENTITY,
     ScreenId.KEEPER_PLAYERS: ScreenId.KEEPER,
+    ScreenId.KEEPER_PLAYER_FILTERS: ScreenId.KEEPER_PLAYERS,
     ScreenId.KEEPER_PLAYER: ScreenId.KEEPER_PLAYERS,
     ScreenId.KEEPER_STATS: ScreenId.KEEPER,
     ScreenId.KEEPER_SERVICE: ScreenId.KEEPER,

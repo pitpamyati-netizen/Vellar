@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import AsyncIterator
 from dataclasses import replace
 from types import MappingProxyType
@@ -23,7 +24,7 @@ from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatBlock
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeStatus
-from mmorpg.domain.ports.repositories import AccessibilitySettings, User
+from mmorpg.domain.ports.repositories import AccessibilitySettings, PlayerFilter, User
 from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
 from mmorpg.domain.rules.party import Party as PlayerParty
 from mmorpg.infrastructure.persistence.postgres import (
@@ -83,7 +84,9 @@ async def clean_blocks(pool) -> AsyncIterator[tuple[int, int]]:
         await purge()
 
 
-def a_character(user_id: int, name: str = "Тестовый") -> Character:
+def a_character(
+    user_id: int, name: str = "Тестовый", *, level: int = 7, city_id: str = "farhold"
+) -> Character:
     """Персонаж с заполненными необязательными полями, чтобы непроверенным не осталось ничего."""
     return Character(
         id=0,
@@ -91,7 +94,7 @@ def a_character(user_id: int, name: str = "Тестовый") -> Character:
         name=name,
         race_id="dwarf",
         class_id="warrior",
-        level=7,
+        level=level,
         experience=1234,
         gold=250,
         allocated=StatBlock(STR=3, AGI=2, END=4, INT=1, WIS=0, CHA=1, LCK=2),
@@ -103,7 +106,7 @@ def a_character(user_id: int, name: str = "Тестовый") -> Character:
             edges=MappingProxyType({"cleave": "wide"}),
         ),
         equipment=Equipment(MappingProxyType({"weapon": "iron_axe"})),
-        city_id="farhold",
+        city_id=city_id,
         unspent_stat_points=5,
         unspent_skill_points=2,
         health=33,
@@ -812,6 +815,47 @@ async def test_the_newest_characters_come_first(pool, clean_user) -> None:
     listed = await characters.newest(limit=2)
 
     assert [person.id for person in listed] == [newer.id, older.id]
+
+
+async def test_players_are_searched_by_level_city_and_activity(pool, clean_user) -> None:
+    characters = PostgresCharacterRepository(pool)
+    await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user))
+    await characters.create(a_character(clean_user, name="Мелкий", level=3, city_id="farhold"))
+    mid = await characters.create(
+        a_character(clean_user, name="Середняк", level=20, city_id="farhold")
+    )
+    far = await characters.create(
+        a_character(clean_user, name="Дальний", level=25, city_id="stonedale")
+    )
+
+    by_level = await characters.search(PlayerFilter(level_min=10))
+    mine = [one for one in by_level if one.user_id == clean_user]
+    assert [one.id for one in mine] == [far.id, mid.id]  # по убыванию уровня
+
+    in_farhold = await characters.search(PlayerFilter(level_min=10, city_id="farhold"))
+    assert [one.id for one in in_farhold if one.user_id == clean_user] == [mid.id]
+
+    # updated_at ставится на create настоящим временем, поэтому граница — тоже.
+    real_now = int(time.time())
+    fresh = await characters.search(
+        PlayerFilter(city_id="farhold", active_since=real_now - 24 * 3600)
+    )
+    assert mid.id in {one.id for one in fresh}
+    stale = await characters.search(
+        PlayerFilter(city_id="farhold", active_since=real_now + 24 * 3600)
+    )
+    assert mid.id not in {one.id for one in stale}
+
+
+async def test_banned_ids_are_only_the_currently_banned(pool, clean_user) -> None:
+    users = PostgresUserRepository(pool)
+    await users.upsert(User(telegram_id=clean_user))
+    before = await users.banned_ids(now=NOW)
+    assert clean_user not in before
+
+    await users.set_ban(clean_user, Ban(until=NOW + 3600))
+    assert clean_user in await users.banned_ids(now=NOW)
+    assert clean_user not in await users.banned_ids(now=NOW + 7200)
 
 
 async def test_a_character_is_deleted_once(pool, clean_user) -> None:

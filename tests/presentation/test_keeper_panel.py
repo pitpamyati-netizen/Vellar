@@ -644,6 +644,8 @@ def walk_to(panel: Panel, screen: ScreenId) -> Panel:
             return walked.press(walked.button_with("Город"))
         case ScreenId.KEEPER_PLAYERS:
             return panel.press(labels.KEEPER_PLAYERS.text)
+        case ScreenId.KEEPER_PLAYER_FILTERS:
+            return panel.press(labels.KEEPER_PLAYERS.text, labels.KEEPER_PLAYER_FILTERS_BTN.text)
         case ScreenId.KEEPER_PLAYER:
             panel.players = (
                 Character(id=7, user_id=900, name="Мерла", race_id="human", class_id="warrior"),

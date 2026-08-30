@@ -932,6 +932,58 @@ async def test_a_mute_is_stored_on_the_account_and_written_down(
     assert (await keeper_log.latest())[0].action == KeeperAction.UNMUTE
 
 
+async def test_players_are_filtered_by_level_and_city(
+    keeper: Keeper, characters: InMemoryCharacterRepository
+) -> None:
+    for name, level, city in (
+        ("Мелкий", 3, "farhold"),
+        ("Крупный", 40, "farhold"),
+        ("Дальний", 40, "stonedale"),
+    ):
+        await characters.create(
+            Character(
+                id=0,
+                user_id=hash(name) % 100_000,
+                name=name,
+                race_id="human",
+                class_id="warrior",
+                level=level,
+                city_id=city,
+            )
+        )
+
+    await keeper.press(
+        labels.KEEPER.text, labels.KEEPER_PLAYERS.text, labels.KEEPER_PLAYER_FILTERS_BTN.text
+    )
+    await keeper.press(labels.KEEPER_PF_LEVEL_MIN.text, "10")
+    await keeper.press(labels.KEEPER_PF_CITY.text, "farhold")
+    screen = await keeper.press(labels.KEEPER_PF_APPLY.text)
+
+    assert screen.id is ScreenId.KEEPER_PLAYERS
+    listed = [b for b in keeper.buttons() if ". " in b]
+    assert any("Крупный" in b for b in listed)
+    assert not any("Мелкий" in b or "Дальний" in b for b in listed)
+    assert "Фильтр:" in screen.text()
+
+
+async def test_clearing_the_player_filter_brings_back_the_newest_list(
+    keeper: Keeper, characters: InMemoryCharacterRepository
+) -> None:
+    await characters.create(
+        Character(id=0, user_id=1, name="Кто-то", race_id="human", class_id="warrior", level=50)
+    )
+    await keeper.press(
+        labels.KEEPER.text, labels.KEEPER_PLAYERS.text, labels.KEEPER_PLAYER_FILTERS_BTN.text
+    )
+    await keeper.press(labels.KEEPER_PF_LEVEL_MIN.text, "99")
+    filtered = await keeper.press(labels.KEEPER_PF_APPLY.text)
+    assert "никто не подошёл" in filtered.text().lower()
+
+    await keeper.press(labels.KEEPER_PLAYER_FILTERS_BTN.text, labels.KEEPER_PF_CLEAR.text)
+    back = await keeper.press(labels.KEEPER_PF_APPLY.text)
+    assert "Последние заведённые" in back.text()
+
+
 async def test_a_content_list_narrows_to_a_substring_and_opens_the_match(keeper: Keeper) -> None:
     await keeper.press(labels.KEEPER.text, labels.KEEPER_WORLD.text, "Задания")
 

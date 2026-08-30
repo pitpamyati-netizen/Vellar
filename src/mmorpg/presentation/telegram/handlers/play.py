@@ -551,7 +551,27 @@ async def _keeper_view(
             target=log_target,
         )
     if flow.screen is ScreenId.KEEPER_PLAYERS:
-        players = await characters.newest(limit=PLAYERS_SHOWN)
+        criteria = flow.keeper_player_filter
+        if criteria.any:
+            # «Заходил за сутки» приходит от автомата как 1: границу ставит здесь
+            # тот, у кого есть часы. Заблокированность и гильдию досовмещаем сами
+            # (``PlayerFilter``): у поиска по игрокам этих таблиц нет.
+            resolved = replace(criteria, active_since=(now - DAY) if criteria.active_since else 0)
+            picked = await characters.search(resolved, limit=PLAYERS_SHOWN)
+            if criteria.banned:
+                banned = await users.banned_ids(now=now)
+                picked = tuple(who for who in picked if who.user_id in banned)
+            if criteria.guild and guilds is not None:
+                needle = criteria.guild.casefold()
+                in_guild: list[Character] = []
+                for who in picked:
+                    guild = await guilds.of(who.id)
+                    if guild is not None and needle in guild.name.casefold():
+                        in_guild.append(who)
+                picked = tuple(in_guild)
+            players = picked
+        else:
+            players = await characters.newest(limit=PLAYERS_SHOWN)
         # Имя набирают сообщением, и ищет его тот, у кого есть хранилище: автомат
         # получает уже найденного персонажа или пустоту.
         if flow.keeper_typing == TYPING_NAME and text and not text.startswith("/"):
