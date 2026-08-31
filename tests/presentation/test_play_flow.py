@@ -41,7 +41,7 @@ def menu(hero: Character) -> PlayState:
 
 @pytest.fixture
 def in_city(content: GameContent, hero: Character, menu: PlayState) -> PlayState:
-    return step(content, hero, menu, "Мир", "Дубно")
+    return step(content, hero, menu, "Мир")
 
 
 @pytest.fixture
@@ -64,7 +64,7 @@ def test_main_menu_states_where_you_are(
 def test_world_lists_only_unlocked_cities(
     content: GameContent, hero: Character, menu: PlayState
 ) -> None:
-    world = step(content, hero, menu, "Мир")
+    world = step(content, hero, menu, "Мир", "Дорога")
     text = render(content, hero, world, world_seed=WORLD_SEED).text()
     assert "Дубно" in text
     assert "Закрыто городов: 14" in text
@@ -73,7 +73,7 @@ def test_world_lists_only_unlocked_cities(
 def test_a_locked_city_explains_itself(
     content: GameContent, hero: Character, menu: PlayState
 ) -> None:
-    world = step(content, hero, menu, "Мир")
+    world = step(content, hero, menu, "Мир", "Дорога")
     blocked = step(content, hero, world, "Мглин")
     assert blocked.screen is ScreenId.WORLD
     assert "откроется на уровне" in blocked.notice
@@ -83,6 +83,65 @@ def test_entering_a_city(content: GameContent, hero: Character, in_city: PlaySta
     assert in_city.screen is ScreenId.CITY
     assert in_city.city_id == "farhold"
     assert "Дубно" in render(content, hero, in_city, world_seed=WORLD_SEED).text()
+
+
+def test_world_button_opens_your_own_city_without_a_pick(
+    content: GameContent, hero: Character, menu: PlayState
+) -> None:
+    landed = step(content, hero, menu, "Мир")
+    assert landed.screen is ScreenId.CITY
+    assert landed.city_id == hero.city_id
+
+
+def test_the_city_offers_the_road(
+    content: GameContent, hero: Character, in_city: PlayState
+) -> None:
+    rows = render(content, hero, in_city, world_seed=WORLD_SEED).button_texts()
+    assert "Дорога" in [text for row in rows for text in row]
+    assert step(content, hero, in_city, "Дорога").screen is ScreenId.WORLD
+
+
+def test_travel_to_another_city_costs_gold_and_sticks(
+    content: GameContent, hero: Character
+) -> None:
+    traveller = replace(hero, level=30, gold=500)
+    arrived = step(content, traveller, begin(traveller), "Мир", "Дорога", "Сурож")
+
+    assert arrived.screen is ScreenId.CITY
+    assert arrived.city_id == "dusk_harbor"
+    moved = arrived.pending.character
+    assert moved is not None
+    assert moved.city_id == "dusk_harbor"
+    assert moved.gold == 500 - 160
+    assert "Дорога стоила 160" in arrived.notice
+
+
+def test_choosing_your_own_city_costs_nothing(
+    content: GameContent, hero: Character, menu: PlayState
+) -> None:
+    same = step(content, hero, menu, "Мир", "Дорога", "Дубно")
+    assert same.pending.empty
+    assert "и так в городе" in same.notice
+
+
+def test_travel_is_refused_without_the_fare(content: GameContent, hero: Character) -> None:
+    broke = replace(hero, level=30, gold=100)
+    stopped = step(content, broke, begin(broke), "Мир", "Дорога", "Сурож")
+
+    assert stopped.screen is ScreenId.WORLD
+    assert stopped.city_id == broke.city_id
+    assert stopped.pending.empty
+    assert "стоит 160" in stopped.notice
+
+
+def test_a_keeper_travels_for_free(content: GameContent, hero: Character) -> None:
+    keeper = replace(hero, level=30, gold=0, is_admin=True)
+    arrived = step(content, keeper, begin(keeper), "Мир", "Дорога", "Сурож")
+
+    assert arrived.screen is ScreenId.CITY
+    assert arrived.city_id == "dusk_harbor"
+    assert arrived.pending.character is not None
+    assert arrived.pending.character.gold == 0
 
 
 # --- лавка и сумка ----------------------------------------------------
@@ -347,7 +406,7 @@ def test_back_walks_the_stack(
 ) -> None:
     assert step(content, hero, in_location, "Назад").screen is ScreenId.LOCATION_LIST
     assert step(content, hero, in_location, "Назад", "Назад").screen is ScreenId.CITY
-    assert step(content, hero, in_location, "Назад", "Назад", "Назад").screen is ScreenId.WORLD
+    assert step(content, hero, in_location, "Назад", "Назад", "Назад").screen is ScreenId.MAIN_MENU
 
 
 def test_coming_back_to_a_screen_unwinds_instead_of_stacking(

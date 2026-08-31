@@ -305,7 +305,6 @@ def path_to(location: Any, kind: NodeKind) -> tuple[list[int], int] | None:
 async def walk_to(player: Player, content: GameContent, kind: NodeKind) -> int:
     """Войти в первую локацию первого города и встать на узел вида ``kind``."""
     await player.press("Мир")
-    await player.press("Дубно")
     await player.press("Локации")
     await player.press("1. Луга у Заставы")
 
@@ -538,7 +537,6 @@ async def test_the_inn_sells_health_and_the_bank_keeps_gold(
     await characters.save(hurt.with_health(5, derived_stats(content, hurt).max_health))
 
     await player.press("Мир")
-    await player.press("Дубно")
     await player.press("Таверна")
     screen = await player.press("Снять комнату")
     assert "здоровье полное" in screen.text()
@@ -560,7 +558,6 @@ async def test_a_contract_is_taken_counted_and_paid(
     player: Player, content: GameContent, characters: InMemoryCharacterRepository
 ) -> None:
     await player.press("Мир")
-    await player.press("Дубно")
     await player.press("Таверна")
     board = await player.press("Доска заданий")
     assert "Столбы на Тракте" in board.text()
@@ -685,7 +682,7 @@ async def test_what_one_player_took_is_gone_for_everybody(
             text=text,
         )
 
-    for text in ("Мир", "Дубно", "Локации", "1. Луга у Заставы"):
+    for text in ("Мир", "Локации", "1. Луга у Заставы"):
         await play_handler.play(
             their_message(text),
             second_state,
@@ -715,7 +712,6 @@ async def test_the_map_relays_when_the_district_is_worked_out(
 ) -> None:
     """Карта не стоит на месте: выработанная округа заселяется заново и иначе (ADR 0035)."""
     await player.press("Мир")
-    await player.press("Дубно")
     await player.press("Локации")
     await player.press("1. Луга у Заставы")
 
@@ -778,7 +774,6 @@ async def test_a_descent_pays_at_the_bottom_and_not_before(
     await characters.save(strong)
 
     await player.press("Мир")
-    await player.press("Дубно")
     screen = await player.press("Подземелья")
     assert screen.id is ScreenId.DUNGEON
     assert "дно" in screen.text().casefold()
@@ -832,7 +827,6 @@ async def test_leaving_a_descent_leaves_it_behind(
     await characters.save(strong)
 
     await player.press("Мир")
-    await player.press("Дубно")
     await player.press("Подземелья")
     await player.press("Первая штольня")
     screen = await player.press("Разведка")
@@ -998,7 +992,6 @@ async def test_a_round_of_the_circle_is_fought_and_paid_out(
     )
 
     await player.press("Мир")
-    await player.press("Дубно")
     screen = await player.press("Арена")
     assert screen.id is ScreenId.ARENA
     stake = arena_rules.stake_for(rich.level)
@@ -1039,7 +1032,6 @@ async def test_an_empty_circle_says_so_and_charges_nothing(
     await characters.save(rich)
 
     await player.press("Мир")
-    await player.press("Дубно")
     await player.press("Арена")
     screen = await player.press("Выйти на арену")
 
@@ -1082,7 +1074,6 @@ async def test_finishing_the_tutorial_hands_over_the_full_kit(
     await characters.save(replace(argus, gold=1_000, tutorial=0b101111))
 
     await player.press("Мир")
-    await player.press("Дубно")
     shop = await player.press("Лавка")
     buy = next(
         item.text

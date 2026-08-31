@@ -157,6 +157,18 @@ STRAW_HEAL_PERCENT = 30
 MENTOR_PRICE_BASE = 40
 MENTOR_PRICE_PER_LEVEL = 10
 BANK_DEPOSIT_STEP = 50
+# Дорога до другого города: платят за наёмную повозку и охрану в дорогу
+# (``Narrative.md``, Дом Порубежья). Цена растёт и с уровнем, как постель и учитель,
+# и с числом городов между тем, где стоишь, и тем, куда идёшь: дальний конец дороги
+# стоит дороже ближнего соседа. Таймеров нет - дорога проходится сразу (ADR 0051).
+TRAVEL_PRICE_BASE = 15
+TRAVEL_PRICE_PER_LEVEL = 5
+
+
+def travel_price(level: int, distance: int) -> int:
+    """Плата за переход в другой город: ``distance`` - сколько городов между ними по дороге."""
+    per_city = TRAVEL_PRICE_BASE + TRAVEL_PRICE_PER_LEVEL * max(0, level - 1)
+    return max(1, per_city * max(1, distance))
 
 
 def inn_price(level: int) -> int:

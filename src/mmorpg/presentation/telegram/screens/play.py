@@ -19,6 +19,7 @@ from mmorpg.domain.entities.location import (
     Presence,
     Roamer,
 )
+from mmorpg.domain.rules import economy as economy_rules
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules.combat import blow_range
 from mmorpg.domain.rules.nodes import Standing
@@ -173,18 +174,26 @@ def main_menu_screen(
 def world_screen(
     content: GameContent, character: Character, state: PageState, notice: str = ""
 ) -> Screen:
-    # Смотритель ходит по всей дороге: запрет по уровню - правило для игроков.
+    # Смотритель ходит по всей дороге даром: запрет по уровню и плата за дорогу -
+    # правила для игроков.
+    here = standing_in(content, character)
     open_cities = (
         content.cities if character.is_admin else content.cities_available_at(character.level)
     )
+
+    def leg(city: City) -> str:
+        if city.id == here.id:
+            return "вы здесь"
+        if character.is_admin:
+            return "дорога даром"
+        fare = economy_rules.travel_price(character.level, abs(city.order - here.order))
+        return f"дорога {gold(fare)}"
+
     entries = [
         ListEntry(
             key=city.id,
             text=city.name,
-            detail=(
-                f"уровни с {city.level_min} по {city.level_max}"
-                + (", вы здесь" if city.id == character.city_id else "")
-            ),
+            detail=f"уровни с {city.level_min} по {city.level_max}, {leg(city)}",
         )
         for city in open_cities
     ]
@@ -193,8 +202,9 @@ def world_screen(
     ahead = [city for city in content.cities if city.unlock_level > character.level]
     next_city = min(ahead, key=lambda city: city.unlock_level) if ahead else None
     lead = [
-        notice or f"Вы в городе {standing_in(content, character).name}.",
-        "Города стоят вдоль одной дороги по порядку: чем дальше, тем выше уровни.",
+        notice or f"Большая дорога. Вы в городе {here.name}. У вас {gold(character.gold)}.",
+        "Города стоят вдоль неё по порядку: чем дальше, тем выше уровни и дороже дорога.",
+        "Дорога до другого города стоит золота и проходится сразу.",
     ]
     if next_city is not None:
         lead.append(
@@ -240,6 +250,9 @@ def city_screen(content: GameContent, city: City, character: Character, notice: 
     rows: list[tuple[Label, ...]] = [
         tuple(offered[index : index + 2]) for index in range(0, len(offered), 2)
     ]
+    # Отсюда уходит большая дорога: своим рядом, потому что это выход из города, а не
+    # его служба (ADR 0051).
+    rows.append((labels.ROAD,))
     return Screen(
         id=ScreenId.CITY,
         lines=(
@@ -248,6 +261,7 @@ def city_screen(content: GameContent, city: City, character: Character, notice: 
             f"Уровни города: с {city.level_min} по {city.level_max}. "
             f"Ваш уровень: {character.level}.",
             "Доступно: " + ", ".join(item.text.lower() for item in offered) + ".",
+            "«Дорога» уводит в другой город.",
         ),
         rows=tuple(rows),
     )

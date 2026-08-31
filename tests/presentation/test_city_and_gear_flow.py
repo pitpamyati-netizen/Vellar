@@ -81,7 +81,7 @@ def step(
 
 @pytest.fixture
 def in_city(content: GameContent, hero: Character) -> PlayState:
-    return step(content, hero, begin(hero), "Мир", "Дубно")
+    return step(content, hero, begin(hero), "Мир")
 
 
 # --- gear -------------------------------------------------------------
@@ -599,7 +599,7 @@ def test_a_dungeon_you_outgrew_says_so_before_you_walk_in(
     content: GameContent, hero: Character
 ) -> None:
     grown = replace(hero, level=150)
-    picked = step(content, grown, begin(grown), "Мир", "Дубно", "Подземелья", "Барсучьи ходы")
+    picked = step(content, grown, begin(grown), "Мир", "Подземелья", "Барсучьи ходы")
     text = render(content, grown, picked, world_seed=WORLD_SEED).text()
     assert "переросли этот спуск" in text
 
@@ -637,14 +637,14 @@ def test_a_city_has_a_deep_dungeon_open_only_to_the_grown(
 
     # Третий уровень до последней локации Дубно (22) не дорос: глубокий ход
     # назван строкой, но кнопки не получает.
-    early = step(content, hero, begin(hero), "Мир", "Дубно", "Подземелья")
+    early = step(content, hero, begin(hero), "Мир", "Подземелья")
     early_text = render(content, hero, early, world_seed=WORLD_SEED).text()
     assert deep.name in early_text and "закрыт до уровня 22" in early_text
     assert step(content, hero, early, deep.name).screen is ScreenId.DUNGEON
 
     # Двадцать второй - дорос: кнопка есть, и она уводит в глубокий спуск.
     ready = replace(hero, level=22)
-    screen = step(content, ready, begin(ready), "Мир", "Дубно", "Подземелья")
+    screen = step(content, ready, begin(ready), "Мир", "Подземелья")
     picked = step(content, ready, screen, deep.name)
     assert picked.screen is ScreenId.DUNGEON_PICK
     assert deep.flavour in render(content, ready, picked, world_seed=WORLD_SEED).text()
@@ -728,7 +728,7 @@ def test_a_taken_contract_stays_on_the_board_with_its_count(
     holder = took.pending.character
     assert holder.quests.is_taken(quest.id)
 
-    again = step(content, holder, begin(holder), "Мир", "Дубно", "Таверна", "Доска заданий")
+    again = step(content, holder, begin(holder), "Мир", "Таверна", "Доска заданий")
     text = render(content, holder, again, world_seed=WORLD_SEED).text()
     assert "Столбы на Тракте — взято, 0 из 3" in text
     assert "Взято отсюда: 1" in text
@@ -739,7 +739,7 @@ def test_a_taken_contract_can_be_given_back(content: GameContent, hero: Characte
 
     quest = content.quest("farhold_tallies")
     holder = quest_rules.take(content, hero, quest)
-    board = step(content, holder, begin(holder), "Мир", "Дубно", "Таверна", "Доска заданий")
+    board = step(content, holder, begin(holder), "Мир", "Таверна", "Доска заданий")
     offer = step(content, holder, board, f"{quest.name} — взято, 0 из 3, в работе")
     assert offer.screen is ScreenId.QUEST_OFFER
     text = render(content, holder, offer, world_seed=WORLD_SEED).text()

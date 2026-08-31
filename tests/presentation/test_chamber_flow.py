@@ -39,7 +39,7 @@ def step(content: GameContent, hero: Character, state: PlayState, *messages: str
 
 @pytest.fixture
 def in_chamber(content: GameContent, elder: Character) -> PlayState:
-    return step(content, elder, begin(elder), "Мир", "Дубно", "Управа")
+    return step(content, elder, begin(elder), "Мир", "Управа")
 
 
 def test_the_chamber_stands_in_every_city(content: GameContent, elder: Character) -> None:
@@ -68,7 +68,7 @@ def test_a_new_name_resets_the_level_and_keeps_the_haul(
 
 def test_nobody_short_of_the_last_level_is_let_in(content: GameContent, elder: Character) -> None:
     young = replace(elder, level=100)
-    in_chamber = step(content, young, begin(young), "Мир", "Дубно", "Управа")
+    in_chamber = step(content, young, begin(young), "Мир", "Управа")
     shown = render(content, young, in_chamber, world_seed=WORLD_SEED)
     assert f"с {turning_rules.MIN_LEVEL} уровня" in shown.text()
     assert all("новое имя" not in item.text.lower() for row in shown.rows for item in row)
@@ -93,7 +93,7 @@ def test_the_question_is_answered_by_those_who_paid_for_a_voice(
     assert "Голос дают за уход" in silent.text()
 
     reborn = replace(elder, remorts=2)
-    voting = step(content, reborn, begin(reborn), "Мир", "Дубно", "Управа", "Голосование")
+    voting = step(content, reborn, begin(reborn), "Мир", "Управа", "Голосование")
     voted = step(content, reborn, voting, f"Ответить: {option.name}")
     stored = voted.pending.character
     assert stored is not None
@@ -107,7 +107,7 @@ def test_the_tally_is_shown_where_the_vote_is_cast(content: GameContent, elder: 
     reborn = replace(
         elder, remorts=1, turning_cycle=turning.id, turning_answer=turning.options[0].id
     )
-    asked = step(content, reborn, begin(reborn), "Мир", "Дубно", "Управа", "Голосование")
+    asked = step(content, reborn, begin(reborn), "Мир", "Управа", "Голосование")
 
     shown = render(
         content,

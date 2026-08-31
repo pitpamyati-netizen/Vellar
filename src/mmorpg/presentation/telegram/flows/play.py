@@ -1093,7 +1093,9 @@ def _handle_main_menu(
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите кнопку из меню.")
     if labels.WORLD.matches(command.argument):
-        return state.at(ScreenId.WORLD)
+        # «Мир» - это город, в котором игрок стоит: выбирать его заново каждый раз
+        # незачем. На большую дорогу уводит «Дорога» уже из города (ADR 0051).
+        return replace(state, city_id=character.city_id).at(ScreenId.CITY)
     if labels.CHARACTER.matches(command.argument):
         return state.at(ScreenId.CHARACTER)
     if labels.INVENTORY.matches(command.argument):
@@ -1215,9 +1217,34 @@ def _handle_world(
     )
 
     if command.intent is Intent.SELECT:
+        here = known_city(content, state.city_id, character.city_id)
         for city in available:
-            if city.name == command.argument:
-                return replace(state, city_id=city.id).at(ScreenId.CITY)
+            if city.name != command.argument:
+                continue
+            if city.id == here.id:
+                return state.with_notice(f"Вы и так в городе {city.name}.")
+            # Смотритель ходит по дороге даром; игрок платит за повозку и охрану.
+            fare = (
+                0
+                if character.is_admin
+                else economy.travel_price(character.level, abs(city.order - here.order))
+            )
+            if character.gold < fare:
+                return state.with_notice(
+                    f"Дорога до города {city.name} стоит {fare} золота, у вас {character.gold}."
+                )
+            moved = replace(character.with_gold(-fare), city_id=city.id)
+            arrived = replace(
+                state,
+                city_id=city.id,
+                pending=PendingWrite(character=moved, gold_flow=economy_log.SERVICE),
+            )
+            note = (
+                f"Вы пришли в город {city.name}."
+                if not fare
+                else f"Вы пришли в город {city.name}. Дорога стоила {fare} золота."
+            )
+            return arrived.at(ScreenId.CITY).with_notice(note)
 
     # Закрытый город всё-таки может сюда попасть - набранным или нажатым со старой
     # клавиатуры, - поэтому он получает настоящее объяснение, а не общий отказ.
@@ -1236,6 +1263,8 @@ def _handle_city(
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите кнопку города.")
     city = known_city(content, state.city_id, character.city_id)
+    if labels.ROAD.matches(command.argument):
+        return replace(state, world_page=PageState()).at(ScreenId.WORLD)
     if labels.NPCS.matches(command.argument):
         # Кнопки может уже не быть: жителя убрали правкой между двумя нажатиями.
         if not content.npcs_in(city.id):

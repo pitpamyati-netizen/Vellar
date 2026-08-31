@@ -9,7 +9,12 @@ from __future__ import annotations
 
 import pytest
 
-from mmorpg.domain.rules.economy import TRADE_TAX_PERCENT, payout, trade_tax
+from mmorpg.domain.rules.economy import (
+    TRADE_TAX_PERCENT,
+    payout,
+    trade_tax,
+    travel_price,
+)
 
 
 def test_the_duty_is_a_share_of_the_price() -> None:
@@ -39,3 +44,12 @@ def test_nothing_is_ever_created_by_rounding(price: int) -> None:
     """Всё, что платит покупатель, либо получено, либо сожжено, но не выдумано."""
     assert payout(price) + trade_tax(price) == price
     assert 0 <= payout(price) <= price
+
+
+def test_the_road_costs_more_the_farther_and_the_higher_the_level() -> None:
+    """Плата за дорогу растёт и с числом городов между, и с уровнем путника."""
+    assert travel_price(1, 1) < travel_price(1, 5)
+    assert travel_price(1, 3) < travel_price(50, 3)
+    # Соседний город и «остаться на месте» стоят одинаково: меньше одной ноги дороги нет.
+    assert travel_price(10, 0) == travel_price(10, 1)
+    assert travel_price(10, 1) >= 1

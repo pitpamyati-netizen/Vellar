@@ -325,7 +325,7 @@ def test_a_player_meets_that_person_in_the_city_and_takes_the_work(
     _add_quest(panel)
 
     walk = begin(player)
-    for pressed in ("Мир", "Дубно"):
+    for pressed in ("Мир",):
         walk = advance(panel.content, player, walk, pressed, clock=CLOCK, world_seed=WORLD_SEED)
     city = render(panel.content, player, walk, world_seed=WORLD_SEED)
     assert labels.NPCS.text in [text for row in city.button_texts() for text in row]
@@ -353,7 +353,7 @@ def test_a_player_meets_that_person_in_the_city_and_takes_the_work(
 
 def test_a_city_without_residents_shows_no_button(content: GameContent, player: Character) -> None:
     walk = begin(player)
-    for pressed in ("Мир", "Дубно"):
+    for pressed in ("Мир",):
         walk = advance(content, player, walk, pressed, clock=CLOCK, world_seed=WORLD_SEED)
 
     city = render(content, player, walk, world_seed=WORLD_SEED)

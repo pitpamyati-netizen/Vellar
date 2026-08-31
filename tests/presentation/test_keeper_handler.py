@@ -840,7 +840,7 @@ async def test_ordinary_play_costs_the_panel_nothing(
         return await original(**kwargs)
 
     characters.census = counting  # type: ignore[method-assign]
-    await keeper.press("Мир", "Дубно")
+    await keeper.press("Мир")
 
     assert counted == []
 

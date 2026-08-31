@@ -158,8 +158,10 @@ def test_a_keeper_walks_into_a_city_a_player_could_not(
 ) -> None:
     locked = next(city for city in content.cities if city.unlock_level > player.level)
 
-    assert step(content, player, begin(player), "Мир", locked.name).screen is ScreenId.WORLD
-    walked = step(content, keeper, begin(keeper), "Мир", locked.name)
+    assert (
+        step(content, player, begin(player), "Мир", "Дорога", locked.name).screen is ScreenId.WORLD
+    )
+    walked = step(content, keeper, begin(keeper), "Мир", "Дорога", locked.name)
     assert walked.screen is ScreenId.CITY
     assert walked.city_id == locked.id
 
