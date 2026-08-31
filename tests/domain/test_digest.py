@@ -1,13 +1,14 @@
-"""Сводка заставы: три дела — чистая функция от (город, переворот, уровень).
+"""Сводка заставы: направленные дела — чистая функция от (город, переворот, уровень).
 
 Тесты свойств здесь и есть спецификация: дела обязаны быть определёнными,
-указывать на существующие места и платить в объявленных границах (ADR 0053).
+указывать на существующие места и породы и платить в объявленных границах
+(ADR 0053, 0054).
 """
 
 from __future__ import annotations
 
 from mmorpg.domain.entities import GameContent
-from mmorpg.domain.procgen.enemies import GOLD_BASE, GOLD_PER_LEVEL
+from mmorpg.domain.procgen.enemies import GOLD_BASE, GOLD_PER_LEVEL, candidates
 from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules.digest import DeedKind
 
@@ -18,11 +19,22 @@ def _deeds(content: GameContent, city_id: str, rotation: int, level: int):
     return digest_rules.digest(content, WORLD_SEED, city_id, rotation, level)
 
 
-def test_always_three_deeds_in_fixed_order(content: GameContent) -> None:
+def test_four_deeds_in_fixed_order(content: GameContent) -> None:
     deeds = _deeds(content, "farhold", 10, 8)
-    assert len(deeds) == 3
-    assert deeds[0].kind is DeedKind.CULL
-    assert deeds[2].kind is DeedKind.DELVE
+    assert len(deeds) == 4
+    assert deeds[0].kind is DeedKind.HUNT
+    assert deeds[1].kind is DeedKind.CULL
+    assert deeds[3].kind is DeedKind.DELVE
+
+
+def test_hunt_names_an_archetype_that_fits_its_place(content: GameContent) -> None:
+    city = content.city("dusk_harbor")
+    for deed in _deeds(content, "dusk_harbor", 7, 40):
+        if deed.kind is not DeedKind.HUNT:
+            continue
+        biome = city.location(deed.slot).biome
+        fitting = {one.id for one in candidates(content.enemy_archetypes, biome, dungeon=False)}
+        assert deed.archetype_id in fitting
 
 
 def test_deterministic_for_same_arguments(content: GameContent) -> None:
@@ -45,7 +57,7 @@ def test_targets_are_real_places(content: GameContent) -> None:
     slots = {loc.slot for loc in city.locations}
     dungeons = {one.id for one in city.dungeons}
     for deed in _deeds(content, "dusk_harbor", 7, 40):
-        if deed.kind is DeedKind.CULL:
+        if deed.kind in (DeedKind.CULL, DeedKind.HUNT):
             assert deed.slot in slots
         elif deed.kind is DeedKind.HAUL:
             assert content.has_city(deed.city_id) and deed.city_id != city.id
@@ -86,6 +98,13 @@ def test_closers_match_only_their_own_deed(content: GameContent) -> None:
     deeds = _deeds(content, "dusk_harbor", 5, 40)
     cull = next(d for d in deeds if d.kind is DeedKind.CULL)
     delve = next(d for d in deeds if d.kind is DeedKind.DELVE)
+    hunt = next(d for d in deeds if d.kind is DeedKind.HUNT)
+
+    ids = (hunt.archetype_id,)
+    assert digest_rules.closes_hunt(hunt, slot=hunt.slot, archetype_ids=ids)
+    assert not digest_rules.closes_hunt(hunt, slot=hunt.slot, archetype_ids=("nope",))
+    assert not digest_rules.closes_hunt(hunt, slot=hunt.slot + 99, archetype_ids=ids)
+    assert not digest_rules.closes_hunt(cull, slot=cull.slot, archetype_ids=ids)
 
     assert digest_rules.closes_cull(cull, slot=cull.slot)
     assert not digest_rules.closes_cull(cull, slot=cull.slot + 99)

@@ -1078,6 +1078,13 @@ async def _pay_digest(
         )
     elif session.kind is BattleKind.NODE and not session.in_descent:
         deed = digest_claim.cull_deed(deeds, session.slot)
+        if deed is None:
+            fallen = tuple(
+                one.enemy.archetype_id
+                for one in session.state.combatants
+                if one.enemy is not None and not one.alive
+            )
+            deed = digest_claim.hunt_deed(deeds, slot=session.slot, archetype_ids=fallen)
     if deed is None:
         return
 

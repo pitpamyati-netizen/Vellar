@@ -41,6 +41,17 @@ async def already_claimed(
     return await cache.get(_key(character_id, rotation)) is not None
 
 
+def hunt_deed(deeds: tuple[Deed, ...], *, slot: int, archetype_ids: tuple[str, ...]) -> Deed | None:
+    return next(
+        (
+            one
+            for one in deeds
+            if digest_rules.closes_hunt(one, slot=slot, archetype_ids=archetype_ids)
+        ),
+        None,
+    )
+
+
 def cull_deed(deeds: tuple[Deed, ...], slot: int) -> Deed | None:
     return next((one for one in deeds if digest_rules.closes_cull(one, slot=slot)), None)
 

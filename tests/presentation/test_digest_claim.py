@@ -77,6 +77,11 @@ async def test_deed_finders_match_the_right_deed(content: GameContent, hero: Cha
     cull = next(d for d in deeds if d.kind is digest_rules.DeedKind.CULL)
     delve = next(d for d in deeds if d.kind is digest_rules.DeedKind.DELVE)
 
+    hunt = next(d for d in deeds if d.kind is digest_rules.DeedKind.HUNT)
+    ids = (hunt.archetype_id,)
+    assert digest_claim.hunt_deed(deeds, slot=hunt.slot, archetype_ids=ids) is hunt
+    assert digest_claim.hunt_deed(deeds, slot=hunt.slot, archetype_ids=("nope",)) is None
+
     assert digest_claim.cull_deed(deeds, cull.slot) is cull
     assert digest_claim.cull_deed(deeds, 999) is None
     assert digest_claim.delve_deed(deeds, dungeon_id=delve.dungeon_id) is delve

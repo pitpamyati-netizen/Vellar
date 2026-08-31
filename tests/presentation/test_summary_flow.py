@@ -1,4 +1,4 @@
-"""Экран «Сводка» в городе: три дела и переходы к ним (ADR 0053)."""
+"""Экран «Сводка» в городе: направленные дела и переходы к ним (ADR 0053, 0054)."""
 
 from __future__ import annotations
 
@@ -36,10 +36,11 @@ def test_the_city_offers_the_summary(content: GameContent, hero: Character) -> N
     assert state.screen is ScreenId.SUMMARY
 
 
-def test_the_summary_lists_three_deeds(content: GameContent, hero: Character) -> None:
+def test_the_summary_lists_the_deeds(content: GameContent, hero: Character) -> None:
     state = _step(content, hero, begin(hero), "Мир", "Сводка")
     text = render(content, hero, state, world_seed=WORLD_SEED, clock=CLOCK).text()
-    assert text.count("Надбавка:") == 3
+    assert text.count("Надбавка:") == 4
+    assert "Выбить стаю" in text
     assert "Надбавку за этот переворот ещё не брали." in text
 
 
