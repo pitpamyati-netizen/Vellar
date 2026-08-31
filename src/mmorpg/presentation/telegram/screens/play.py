@@ -235,6 +235,7 @@ CITY_SERVICES: tuple[tuple[str, Label], ...] = (
     ("chamber", labels.CHAMBER),
     ("house", labels.HOUSE),
     ("tavern", labels.TAVERN),
+    ("summary", labels.SUMMARY),
     ("mentor", labels.MENTOR),
     ("bank", labels.BANK),
 )

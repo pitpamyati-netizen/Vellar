@@ -40,6 +40,7 @@ from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeRecord, TradeStatus
 from mmorpg.domain.ports.repositories import Census, GoldFlowSlice, PlayerFilter
 from mmorpg.domain.procgen import generate_location, location_seed
+from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules.combat import hero_combatant, monster_combatant, open_battle
@@ -1023,6 +1024,21 @@ def all_screens(
         quest_screens.offer_screen(content, content.quest("farhold_whetstones"), hero),
         quest_screens.offer_screen(content, content.quest("farhold_meadow_teeth"), hero),
         city_screens.tavern_screen(content, fighter, content.city("farhold")),
+        city_screens.summary_screen(
+            content,
+            content.city("farhold"),
+            fighter,
+            digest_rules.digest(content, "vellar-test", "farhold", 7, fighter.level),
+            claimed=False,
+        ),
+        city_screens.summary_screen(
+            content,
+            content.city("dusk_harbor"),
+            replace(fighter, level=40),
+            digest_rules.digest(content, "vellar-test", "dusk_harbor", 5, 40),
+            claimed=True,
+            roamer_place="Мелководье",
+        ),
         city_screens.mentor_screen(content, fighter, content.city("farhold"), PageState()),
         city_screens.bank_screen(content, fighter, content.city("farhold")),
         city_screens.dungeon_list_screen(

@@ -32,6 +32,7 @@ from mmorpg.domain.procgen.seeds import derive, location_seed
 from mmorpg.domain.rules import adventure, economy
 from mmorpg.domain.rules import arena as arena_rules
 from mmorpg.domain.rules import crafts as craft_rules
+from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import dungeon as dungeon_rules
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import houses as house_rules
@@ -106,6 +107,7 @@ SERVICES: dict[str, tuple[str, ScreenId]] = {
     labels.CHAMBER.text: ("chamber", ScreenId.CHAMBER),
     labels.HOUSE.text: ("house", ScreenId.HOUSE),
     labels.TAVERN.text: ("tavern", ScreenId.TAVERN),
+    labels.SUMMARY.text: ("summary", ScreenId.SUMMARY),
     labels.MENTOR.text: ("mentor", ScreenId.MENTOR),
     labels.BANK.text: ("bank", ScreenId.BANK),
 }
@@ -272,6 +274,7 @@ def render(
     party: PartyView | None = None,
     guild: GuildView | None = None,
     location_state: LocationState | None = None,
+    digest_view: city_screens.DigestView | None = None,
 ) -> Screen:
     screen = _render(
         content,
@@ -288,6 +291,7 @@ def render(
         party=party,
         guild=guild,
         location_state=location_state,
+        digest_view=digest_view,
     )
     # Подсказка незакрытого шага обучения — строка в теле экрана, не весть
     # (правило доступности 4: заголовок отвечает «где я», а подсказка — это
@@ -318,6 +322,7 @@ def _render(
     party: PartyView | None = None,
     guild: GuildView | None = None,
     location_state: LocationState | None = None,
+    digest_view: city_screens.DigestView | None = None,
 ) -> Screen:
     shelf = goods or Goods(gold=character.gold)
     clock = clock or Clock()
@@ -529,6 +534,19 @@ def _render(
             )
         case ScreenId.TAVERN:
             return city_screens.tavern_screen(content, character, city, state.notice)
+        case ScreenId.SUMMARY:
+            view = digest_view or city_screens.DigestView()
+            return city_screens.summary_screen(
+                content,
+                city,
+                character,
+                digest_rules.digest(
+                    content, world_seed, city.id, clock.shop_rotation, character.level
+                ),
+                claimed=view.claimed,
+                roamer_place=view.roamer_place,
+                notice=state.notice,
+            )
         case ScreenId.MENTOR:
             return city_screens.mentor_screen(
                 content, character, city, state.mentor_page, state.notice
@@ -856,6 +874,8 @@ def advance(
             return _handle_edge(content, character, state, command)
         case ScreenId.TAVERN:
             return _handle_tavern(content, character, state, command)
+        case ScreenId.SUMMARY:
+            return _handle_summary(state, command)
         case ScreenId.CRAFTS:
             return _handle_crafts(content, character, state, command, clock=ticking)
         case ScreenId.CRAFT:
@@ -1071,6 +1091,19 @@ def _walk_to_tutorial_step(
         # Прочитать их *и есть* дело, а экран теперь открыт.
         return mark_task(opened, character, TutorialTask.STATS)
     return opened
+
+
+def _handle_summary(state: PlayState, command: Command) -> PlayState:
+    """Сводка сама ничего не делает: её кнопки уводят к делу (ADR 0053)."""
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите кнопку из сводки.")
+    if labels.LOCATIONS.matches(command.argument):
+        return replace(state, list_page=PageState()).at(ScreenId.LOCATION_LIST)
+    if labels.ROAD.matches(command.argument):
+        return replace(state, world_page=PageState()).at(ScreenId.WORLD)
+    if labels.DUNGEONS.matches(command.argument):
+        return replace(state, list_page=PageState()).at(ScreenId.DUNGEON)
+    return state.with_notice("Нажмите кнопку из сводки.")
 
 
 def _handle_tutorial(

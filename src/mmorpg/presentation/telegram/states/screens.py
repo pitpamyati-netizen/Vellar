@@ -57,6 +57,7 @@ class Play(StatesGroup):
     quest_board = State()
     quest_offer = State()
     tavern = State()
+    summary = State()
     mentor = State()
     bank = State()
     dungeon = State()
@@ -153,6 +154,7 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.QUEST_BOARD: Play.quest_board,
     ScreenId.QUEST_OFFER: Play.quest_offer,
     ScreenId.TAVERN: Play.tavern,
+    ScreenId.SUMMARY: Play.summary,
     ScreenId.MENTOR: Play.mentor,
     ScreenId.BANK: Play.bank,
     ScreenId.DUNGEON: Play.dungeon,
@@ -249,6 +251,7 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.QUEST_BOARD: ScreenId.TAVERN,
     ScreenId.QUEST_OFFER: ScreenId.QUEST_BOARD,
     ScreenId.TAVERN: ScreenId.CITY,
+    ScreenId.SUMMARY: ScreenId.CITY,
     ScreenId.MENTOR: ScreenId.CITY,
     ScreenId.BANK: ScreenId.CITY,
     ScreenId.DUNGEON: ScreenId.CITY,

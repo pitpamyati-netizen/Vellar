@@ -58,6 +58,7 @@ from mmorpg.domain.ports.repositories import (
 )
 from mmorpg.domain.procgen.seeds import rotation_index
 from mmorpg.domain.rules import adventure, progression
+from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import economy as economy_rules
 from mmorpg.domain.rules import guild as guild_rules
 from mmorpg.domain.rules import moderation as moderation_rules
@@ -70,13 +71,14 @@ from mmorpg.domain.rules.economy import buy_price, roll_assortment
 from mmorpg.domain.rules.modifiers import collect_modifiers
 from mmorpg.domain.rules.stats import derived_stats, primary_stats
 from mmorpg.logging import get_logger
-from mmorpg.presentation.telegram import broadcast
+from mmorpg.presentation.telegram import broadcast, digest_claim
 from mmorpg.presentation.telegram.broadcast import ChannelBroadcaster
 from mmorpg.presentation.telegram.flows import keeper as keeper_flow
 from mmorpg.presentation.telegram.flows.play import (
     advance,
     begin,
     build_location,
+    known_city,
     location_known,
     render,
     visit_seed,
@@ -94,6 +96,7 @@ from mmorpg.presentation.telegram.flows.state import (
 from mmorpg.presentation.telegram.handlers.combat import open_fight
 from mmorpg.presentation.telegram.handlers.creation import welcome_screen
 from mmorpg.presentation.telegram.messaging import send_screen, send_text
+from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import guild as guild_screens
 from mmorpg.presentation.telegram.screens import keeper as keeper_screens
 from mmorpg.presentation.telegram.screens import party as party_screens
@@ -279,6 +282,7 @@ async def play(
 
     before_level = character.level
     before_tutorial = character.tutorial
+    before_city = character.city_id
     character = await _apply(
         updated.pending, character, message.from_user.id, characters, inventory, users
     )
@@ -311,6 +315,11 @@ async def play(
     # опыта подхватит общий механизм второго сообщения ниже.
     character, updated = await _pay_tutorial(
         content, character, before_tutorial, updated, characters, inventory
+    )
+    # Обоз со сводки: приход в названный заставой город закрывает дело ``HAUL`` и
+    # платит надбавку — раз за переворот (ADR 0053).
+    character, updated = await _pay_digest_haul(
+        content, character, before_city, updated, characters, state_cache, now, settings
     )
     updated, here = await sync_location(content, updated, flow, character, locations, now, settings)
 
@@ -369,6 +378,9 @@ async def play(
     )
     gathered = await _party_view(updated, character, characters, parties)
     guild_view = await _guild_view(updated, character, characters, guilds)
+    briefing = await _digest_view(
+        updated, character, content, locations, state_cache, now, settings
+    )
     await state.set_state(STATE_FOR_SCREEN[updated.screen])
     await state.update_data({STATE_KEY: updated.serialise()})
     screen = await render_play(
@@ -386,6 +398,7 @@ async def play(
         party=gathered,
         guild=guild_view,
         location_state=here,
+        digest_view=briefing,
     )
     # Уровень объявляется вторым сообщением, и это единственное место в игре,
     # где одно действие отвечает дважды: заданием, узлом или ремеслом уровень
@@ -416,6 +429,7 @@ async def render_play(
     party: party_screens.PartyView | None = None,
     guild: guild_screens.GuildView | None = None,
     location_state: LocationState | None = None,
+    digest_view: city_screens.DigestView | None = None,
 ) -> Screen:
     """Нарисовать один игровой экран и вернуть его. Берётся здесь и боевым хендлером.
 
@@ -436,6 +450,7 @@ async def render_play(
         party=party,
         guild=guild,
         location_state=location_state,
+        digest_view=digest_view,
     )
     await send_screen(message, screen, emoji=emoji)
     return screen
@@ -508,6 +523,37 @@ async def _goods(
     charisma = primary_stats(content, character)[StatCode.CHA]
     prices = {item.id: buy_price(content, item, charisma=charisma) for item in stock}
     return Goods(gold=character.gold, owned=owned, stock=stock, prices=prices)
+
+
+async def _digest_view(
+    flow: PlayState,
+    character: Character,
+    content: GameContent,
+    locations: LocationStateCache,
+    state_cache: StateCache,
+    now: int,
+    settings: Settings,
+) -> city_screens.DigestView | None:
+    """Что о сводке знает не домен: бралась ли надбавка и осел ли где роамер.
+
+    Считается только для экрана «Сводка» — на всех прочих это лишние обращения
+    к кэшу (ADR 0053).
+    """
+    if flow.screen is not ScreenId.SUMMARY:
+        return None
+    city = known_city(content, flow.city_id, character.city_id)
+    claimed = await digest_claim.already_claimed(
+        state_cache,
+        character.id,
+        now=now,
+        rotation_seconds=settings.shop_rotation_seconds,
+    )
+    place = ""
+    for location in city.locations:
+        if await locations.roamer(city.id, location.slot, now=now) is not None:
+            place = location.name
+            break
+    return city_screens.DigestView(claimed=claimed, roamer_place=place)
 
 
 async def _named(characters: CharacterRepository, character_id: int) -> str:
@@ -1107,6 +1153,49 @@ async def _pay_tutorial(
         economy_log.record(economy_log.TUTORIAL, payout.gold, character_id=payout.character.id)
     said = " ".join(payout.lines)
     return payout.character, updated.with_notice(f"{updated.notice} {said}".strip())
+
+
+async def _pay_digest_haul(
+    content: GameContent,
+    character: Character,
+    before_city: str,
+    updated: PlayState,
+    characters: CharacterRepository,
+    state_cache: StateCache,
+    now: int,
+    settings: Settings,
+) -> tuple[Character, PlayState]:
+    """Закрыть дело ``HAUL`` со сводки города-отправления, если игрок пришёл куда просили.
+
+    Дорожный переход помечает кошелёк ``SERVICE`` и меняет ``city_id`` — по этой
+    паре его и узнают. Сводку считаем для города, из которого вышли: обоз шёл
+    оттуда (``domain/rules/digest.py``, ADR 0053).
+    """
+    if updated.pending.gold_flow != economy_log.SERVICE:
+        return character, updated
+    if not before_city or character.city_id == before_city or not content.has_city(before_city):
+        return character, updated
+
+    rotation = rotation_index(now, settings.shop_rotation_seconds)
+    deeds = digest_rules.digest(
+        content, settings.world_seed, before_city, rotation, character.level
+    )
+    deed = digest_claim.haul_deed(deeds, character.city_id)
+    if deed is None:
+        return character, updated
+
+    claimed = await digest_claim.claim(
+        state_cache,
+        content,
+        character,
+        deed,
+        now=now,
+        rotation_seconds=settings.shop_rotation_seconds,
+    )
+    if claimed is None:
+        return character, updated
+    await characters.save(claimed.character)
+    return claimed.character, updated.with_notice(f"{updated.notice} {claimed.line}".strip())
 
 
 async def _location_state(

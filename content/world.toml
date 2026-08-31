@@ -36,7 +36,7 @@ level_min = 1
 level_max = 30
 unlock_level = 1
 unlock_requires = []
-services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "house", "chamber"]
+services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "arena", "house", "chamber"]
 
 [[city.dungeon]]
 id = "farhold_badger_runs"
@@ -124,7 +124,7 @@ level_min = 24
 level_max = 54
 unlock_level = 24
 unlock_requires = ["city:farhold"]
-services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "house", "chamber"]
+services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "arena", "house", "chamber"]
 
 [[city.dungeon]]
 id = "dusk_harbor_bilge_ways"
@@ -212,7 +212,7 @@ level_min = 48
 level_max = 76
 unlock_level = 48
 unlock_requires = ["city:dusk_harbor"]
-services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "house", "chamber"]
+services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "arena", "house", "chamber"]
 
 [[city.dungeon]]
 id = "stonedale_upper_adits"
@@ -300,7 +300,7 @@ level_min = 70
 level_max = 98
 unlock_level = 70
 unlock_requires = ["city:stonedale"]
-services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "house", "chamber"]
+services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "arena", "house", "chamber"]
 
 [[city.dungeon]]
 id = "copper_cross_ore_drifts"
@@ -388,7 +388,7 @@ level_min = 92
 level_max = 118
 unlock_level = 92
 unlock_requires = ["city:copper_cross"]
-services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "house", "chamber"]
+services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "arena", "house", "chamber"]
 
 [[city.dungeon]]
 id = "quiet_fords_river_drains"
@@ -476,7 +476,7 @@ level_min = 113
 level_max = 138
 unlock_level = 113
 unlock_requires = ["city:quiet_fords"]
-services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "house", "chamber"]
+services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "arena", "house", "chamber"]
 
 [[city.dungeon]]
 id = "salt_ridge_chalk_adits"
@@ -564,7 +564,7 @@ level_min = 133
 level_max = 157
 unlock_level = 133
 unlock_requires = ["city:salt_ridge"]
-services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "house", "chamber"]
+services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "arena", "house", "chamber"]
 
 [[city.dungeon]]
 id = "crimson_wharf_hull_ways"
@@ -652,7 +652,7 @@ level_min = 152
 level_max = 176
 unlock_level = 152
 unlock_requires = ["city:crimson_wharf"]
-services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "house", "chamber"]
+services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "arena", "house", "chamber"]
 
 [[city.dungeon]]
 id = "glass_hollow_fused_caves"
@@ -740,7 +740,7 @@ level_min = 171
 level_max = 194
 unlock_level = 171
 unlock_requires = ["city:glass_hollow"]
-services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "house", "chamber"]
+services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "arena", "house", "chamber"]
 
 [[city.dungeon]]
 id = "winter_march_meltways"
@@ -828,7 +828,7 @@ level_min = 189
 level_max = 213
 unlock_level = 189
 unlock_requires = ["city:winter_march"]
-services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "house", "chamber"]
+services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "arena", "house", "chamber"]
 
 [[city.dungeon]]
 id = "ashen_gates_cinder_adits"
@@ -916,7 +916,7 @@ level_min = 208
 level_max = 230
 unlock_level = 208
 unlock_requires = ["city:ashen_gates"]
-services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "house", "chamber"]
+services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "arena", "house", "chamber"]
 
 [[city.dungeon]]
 id = "thunder_range_ledge_adits"
@@ -1004,7 +1004,7 @@ level_min = 226
 level_max = 248
 unlock_level = 226
 unlock_requires = ["city:thunder_range"]
-services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "house", "chamber"]
+services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "arena", "house", "chamber"]
 
 [[city.dungeon]]
 id = "azure_halls_clerks_undercroft"
@@ -1092,7 +1092,7 @@ level_min = 244
 level_max = 266
 unlock_level = 244
 unlock_requires = ["city:azure_halls"]
-services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "house", "chamber"]
+services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "arena", "house", "chamber"]
 
 [[city.dungeon]]
 id = "bone_marches_spoil_vaults"
@@ -1180,7 +1180,7 @@ level_min = 262
 level_max = 283
 unlock_level = 262
 unlock_requires = ["city:bone_marches"]
-services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "chamber"]
+services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "arena", "chamber"]
 
 [[city.dungeon]]
 id = "obsidian_throne_stair_adits"
@@ -1268,7 +1268,7 @@ level_min = 279
 level_max = 300
 unlock_level = 279
 unlock_requires = ["city:obsidian_throne"]
-services = ["shop", "locations", "dungeons", "tavern", "mentor", "bank", "arena", "house", "chamber"]
+services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "arena", "house", "chamber"]
 
 [[city.dungeon]]
 id = "last_beacon_cape_adits"

@@ -7,11 +7,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from dataclasses import dataclass
+
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, Dungeon, GameContent, Npc
+from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import dungeon as dungeon_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules.digest import Deed, DeedKind
 from mmorpg.domain.rules.economy import inn_price, mentor_price
 from mmorpg.domain.rules.quests import ready_to_hand_in
 from mmorpg.domain.rules.stats import derived_stats
@@ -54,6 +59,70 @@ def tavern_screen(
     if due:
         rows.append((labels.HAND_IN,))
     return Screen(id=ScreenId.TAVERN, lines=tuple(lines), rows=tuple(rows))
+
+
+@dataclass(frozen=True, slots=True)
+class DigestView:
+    """Что о сводке знает не домен, а хендлер: бралась ли надбавка и есть ли роамер."""
+
+    claimed: bool = False
+    roamer_place: str = ""
+
+
+#: Какая городская кнопка ведёт к делу этого вида.
+_DEED_ROUTE: dict[DeedKind, tuple[str, Label]] = {
+    DeedKind.CULL: ("locations", labels.LOCATIONS),
+    DeedKind.HAUL: ("", labels.ROAD),
+    DeedKind.DELVE: ("dungeons", labels.DUNGEONS),
+}
+
+
+def summary_screen(
+    content: GameContent,
+    city: City,
+    character: Character,
+    deeds: Sequence[Deed],
+    *,
+    claimed: bool,
+    roamer_place: str = "",
+    notice: str = "",
+) -> Screen:
+    """Сводка заставы: три направленных дела на этот переворот прилавка (ADR 0053).
+
+    Дела — чистая функция от города, переворота и уровня игрока
+    (``domain/rules/digest.py``). Экран их только показывает и уводит к делу:
+    саму надбавку начисляет то место, где дело закрывается (бой, дорога, спуск),
+    и ровно раз за переворот. Заодно называет блуждающее подземелье, если оно
+    осело в локации города, — иначе его находят только случайно (ADR 0037).
+    """
+    lines = [
+        *head(f"Сводка заставы, {city.name}.", notice),
+        "Что застава разослала на этот переворот. Одно дело за переворот платит надбавку "
+        "сверх обычного.",
+    ]
+    for deed in deeds:
+        bonus_gold, bonus_experience = digest_rules.reward(deed.level)
+        lines.append(f"— {deed.line} Надбавка: {gold(bonus_gold)} и опыта {bonus_experience}.")
+    if roamer_place:
+        lines.append(f"Ещё говорят: у места «{roamer_place}» осел подземный ход — войти можно там.")
+    lines.append(
+        "Надбавку за этот переворот уже брали."
+        if claimed
+        else "Надбавку за этот переворот ещё не брали."
+    )
+
+    seen: set[str] = set()
+    row: list[Label] = []
+    for deed in deeds:
+        declared, button = _DEED_ROUTE[deed.kind]
+        if button.text in seen:
+            continue
+        if declared and declared not in city.services:
+            continue
+        seen.add(button.text)
+        row.append(button)
+    rows = (tuple(row),) if row else ()
+    return Screen(id=ScreenId.SUMMARY, lines=tuple(lines), rows=rows)
 
 
 def forget_label(skill_name: str, refund: int) -> Label:

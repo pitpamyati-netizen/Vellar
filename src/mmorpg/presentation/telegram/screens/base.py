@@ -55,6 +55,7 @@ class ScreenId(StrEnum):
     QUEST_BOARD = "quest_board"
     QUEST_OFFER = "quest_offer"
     TAVERN = "tavern"
+    SUMMARY = "summary"
     MENTOR = "mentor"
     BANK = "bank"
     DUNGEON = "dungeon"

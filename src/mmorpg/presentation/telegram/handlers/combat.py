@@ -45,9 +45,10 @@ from mmorpg.domain.ports.repositories import (
     LocationStateCache,
     StateCache,
 )
-from mmorpg.domain.procgen.seeds import derive, rng
+from mmorpg.domain.procgen.seeds import derive, rng, rotation_index
 from mmorpg.domain.rules import adventure, progression
 from mmorpg.domain.rules import arena as arena_rules
+from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import dungeon as dungeon_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import party as party_rules
@@ -58,6 +59,7 @@ from mmorpg.domain.rules.combat import act
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.domain.rules.tutorial import TutorialTask
 from mmorpg.logging import get_logger
+from mmorpg.presentation.telegram import digest_claim
 from mmorpg.presentation.telegram.flows import combat as fight_flow
 from mmorpg.presentation.telegram.flows.play import (
     build_location,
@@ -808,6 +810,11 @@ async def _finish(
     if session.roamer:
         await _settle_roamer(session, next_flow, owner, payouts, locations)
 
+    if owner is not None and session.state.verdict_for(owner.id) is Verdict.VICTORY:
+        await _pay_digest(
+            content, settings, session, flow, next_flow, state_cache, payouts, updated
+        )
+
     for character_id, character in updated.items():
         fighter = session.combatant_of(character_id)
         if fighter is None or not fighter.live:
@@ -1032,6 +1039,60 @@ def _heal_room_winners(
             continue
         restored = min(stats.max_health - current, max(1, stats.max_health * percent // 100))
         updated[one.character_id] = character.with_health(current + restored, stats.max_health)
+
+
+async def _pay_digest(
+    content: GameContent,
+    settings: Settings,
+    session: BattleSession,
+    flow: PlayState,
+    next_flow: PlayState,
+    state_cache: StateCache,
+    payouts: dict[int, Payout],
+    updated: dict[int, Character],
+) -> None:
+    """Закрыть дело со сводки, если победа его закрыла, и выдать надбавку (ADR 0053).
+
+    Победа в названной локации закрывает ``CULL``, пройденное логово названного
+    спуска или блуждающий ход — ``DELVE``. Раз за переворот прилавка: разовость
+    держит ключ со сроком в кэше (``digest_claim``). Строка идёт в ``extra``, как
+    и счёт по заданиям.
+    """
+    hero = updated.get(session.owner)
+    if hero is None:  # pragma: no cover - у похода всегда есть владелец
+        return
+    if not content.has_city(session.city_id):
+        # Арена и поединок сюда не приводят (не NODE и не спуск), но бой без
+        # города — не повод падать: сводка привязана к городу.
+        return
+    now = int(time.time())
+    rotation = rotation_index(now, settings.shop_rotation_seconds)
+    deeds = digest_rules.digest(content, settings.world_seed, session.city_id, rotation, hero.level)
+
+    deed = None
+    if session.in_descent and not next_flow.descent.active:
+        deed = digest_claim.delve_deed(
+            deeds,
+            dungeon_id="" if session.roamer else flow.descent.dungeon_id,
+            roamer_cleared=session.roamer,
+        )
+    elif session.kind is BattleKind.NODE and not session.in_descent:
+        deed = digest_claim.cull_deed(deeds, session.slot)
+    if deed is None:
+        return
+
+    claimed = await digest_claim.claim(
+        state_cache,
+        content,
+        hero,
+        deed,
+        now=now,
+        rotation_seconds=settings.shop_rotation_seconds,
+    )
+    if claimed is None:
+        return
+    updated[session.owner] = claimed.character
+    payouts.setdefault(session.owner, Payout()).extra.append(claimed.line)
 
 
 async def _settle_roamer(
