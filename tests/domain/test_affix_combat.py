@@ -62,10 +62,21 @@ def _run(
 
 def test_venombite_poisons_on_a_basic_monster_hit(content: GameContent, warrior: Character) -> None:
     hero = replace(warrior, level=20)
-    state, roster = _fight(content, hero, _enemy(affixes=("venombite",)))
-    state = _run(content, state, roster, rounds=30)
-    assert state.by_id(1) is not None
-    assert state.by_id(1).effects.has(StatusKind.POISON)
+    roster = {1: hero}
+    foe = monster_combatant(_enemy(affixes=("venombite",), health=6_000), combatant_id=2, side=1)
+    hero_one = hero_combatant(content, hero, combatant_id=1, side=0, live=True)
+    state = open_battle(content, roster, [hero_one, foe], SEED)
+    poisoned = False
+    for turn in range(40):
+        if state.active is None or state.is_over:
+            break
+        state = act(
+            content, roster, state, BattleAction(kind=ActionKind.ATTACK), turn.to_bytes(16, "big")
+        )
+        one = state.by_id(1)
+        if one is not None and one.effects.has(StatusKind.POISON):
+            poisoned = True
+    assert poisoned, "«Гнилозубый» должен когда-нибудь отравить того, кого ударил"
 
 
 def test_a_plain_pack_never_poisons(content: GameContent, warrior: Character) -> None:

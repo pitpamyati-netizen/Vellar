@@ -48,7 +48,7 @@ def fighter(content: GameContent) -> Character:
         gold=500,
         loadout=SkillLoadout(
             actives=(
-                # Простой удар, провокация и удар щитом: натиск, оборона, точность.
+                # Простой удар, провокация и удар щитом: напор, заслон, финт.
                 "warrior_sekushchiy_roscherk",
                 "warrior_provokatsiya",
                 "warrior_udar_shchitom",
@@ -112,9 +112,9 @@ def test_the_panel_holds_the_filled_slots_by_their_own_numbers(
     screen = flow.render(content, fighter, session, HERO)
     texts = [row[0].text for row in screen.rows]
     # Обычный удар говорит и свой тег, и то, сколько он снимет.
-    assert texts[0].startswith("Атака — натиск, урон от ")
+    assert texts[0].startswith("Атака — напор, урон от ")
     # Следом - защита: закрыться умеет всякий, и умения на это не нужно.
-    assert texts[1].startswith("Защититься — оборона, броня плюс ")
+    assert texts[1].startswith("Защититься — заслон, броня плюс ")
     # У бойца заняты три слота из шести, и это ровно три кнопки, с 1 по 3.
     assert [text.split(".")[0] for text in texts[2:5]] == ["1", "2", "3"]
     assert "расовое" in texts[5]
@@ -161,7 +161,7 @@ def test_cooldown_is_written_into_the_button(
     used, _ = flow.advance(content, {HERO: fighter}, session, HERO, ready)
     third = flow.render(content, fighter, used, HERO).rows[4][0].text
     # Потраченное называет, сколько от него осталось, - а это другой вопрос.
-    assert third.startswith("3. Удар щитом — оборона,")
+    assert third.startswith("3. Удар щитом — заслон,")
     assert third.endswith("ещё 3 хода")
 
 
@@ -285,8 +285,7 @@ def test_the_enemy_announces_its_intent_and_the_way_in(
     """Правила 1.1.1 и 1.1.3: выбор делается против чего-то, и это сказано словами."""
     line = flow.render(content, fighter, session, HERO).text().split("\n")[2]
     assert "Намерение:" in line
-    assert "брешь — " in line
-    assert any(tag in line for tag in ("натиск", "оборона", "точность"))
+    assert any(tag in line for tag in ("напор", "заслон", "финт"))
 
 
 def test_the_trace_is_a_spoken_line(
@@ -296,14 +295,14 @@ def test_the_trace_is_a_spoken_line(
     opening = flow.render(content, fighter, session, HERO).text()
     assert "След пуст." in opening
 
-    pressed, _ = flow.advance(content, {HERO: fighter}, session, HERO, "Атака — натиск")
+    pressed, _ = flow.advance(content, {HERO: fighter}, session, HERO, "Атака — напор")
     once = flow.render(content, fighter, pressed, HERO).text()
-    assert "След: натиск." in once
+    assert "След: напор." in once
     assert "повтор даст разгон" in once
 
-    twice, _ = flow.advance(content, {HERO: fighter}, pressed, HERO, "Атака — натиск")
+    twice, _ = flow.advance(content, {HERO: fighter}, pressed, HERO, "Атака — напор")
     assert (
-        "След: натиск, 2 следа подряд, разгон 25 процентов."
+        "След: напор, 2 следа подряд, разгон 25 процентов."
         in flow.render(content, fighter, twice, HERO).text()
     )
 
@@ -312,11 +311,11 @@ def test_every_action_button_names_its_tag(
     content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
     texts = [row[0].text for row in flow.render(content, fighter, session, HERO).rows]
-    assert texts[0].startswith("Атака — натиск,")
-    assert texts[1].startswith("Защититься — оборона,")
-    assert "натиск" in texts[2], "Секущий росчерк is a plain blow"
-    assert "оборона" in texts[3], "Провокация pulls the blow onto you"
-    assert "оборона" in texts[5], "the racial slot names its tag too"
+    assert texts[0].startswith("Атака — напор,")
+    assert texts[1].startswith("Защититься — заслон,")
+    assert "напор" in texts[2], "Секущий росчерк is a plain blow"
+    assert "заслон" in texts[3], "Провокация pulls the blow onto you"
+    assert "заслон" in texts[5], "the racial slot names its tag too"
 
 
 # --- защита, цели и отряд ---------------------------------------------
@@ -404,7 +403,7 @@ def test_the_plain_attack_word_still_works(
     assert flow.action_for(content, fighter, session, HERO, "Атака") == BattleAction(
         kind=ActionKind.ATTACK
     )
-    assert flow.action_for(content, fighter, session, HERO, "Атака — натиск") == BattleAction(
+    assert flow.action_for(content, fighter, session, HERO, "Атака — напор") == BattleAction(
         kind=ActionKind.ATTACK
     )
 

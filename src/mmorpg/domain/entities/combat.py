@@ -95,31 +95,18 @@ class ActionKind(StrEnum):
 
 
 class ActionTag(StrEnum):
-    """След, который оставляет ход: натиск, оборона или точность.
+    """След, который оставляет ход: напор, заслон или финт.
 
-    Три тега в замкнутом круге, поэтому безопасного хода нет и бесполезного тоже.
-    Русские слова для них пишет слой представления.
+    Три РАЗНЫХ вещи без круга контр (ADR 0050): напор - натиск (бьёшь сильнее, но
+    открыт до своего следующего хода: удар по тебе мимо брони, твой ответ
+    вполсилы), заслон - «Защититься» (двойная броня, урон вполовину), финт -
+    объявленный породой не уклоняется. Русские слова для них пишет слой
+    представления; член ``PRECISION`` читается как «финт».
     """
 
     PRESS = "press"
     GUARD = "guard"
     PRECISION = "precision"
-
-
-_COUNTERS: dict[ActionTag, ActionTag] = {
-    ActionTag.PRESS: ActionTag.GUARD,
-    ActionTag.GUARD: ActionTag.PRECISION,
-    ActionTag.PRECISION: ActionTag.PRESS,
-}
-
-
-def counter_to(tag: ActionTag) -> ActionTag:
-    """Тег, который открывает брешь в ``tag``.
-
-    Оборона держит натиск, точность находит щель в обороне, а натиск входит
-    внутрь раньше, чем точность выберет место.
-    """
-    return _COUNTERS[tag]
 
 
 TRACE_LENGTH = 3
@@ -129,8 +116,8 @@ TRACE_LENGTH = 3
 class Trace:
     """Последние теги бойца, свежий - последним.
 
-    Хранятся ``TRACE_LENGTH``: больше правила и не спрашивают. Повтор даёт
-    разгон, три разных подряд ломают размен.
+    Хранятся ``TRACE_LENGTH``: больше правила и не спрашивают. Повтор тега даёт
+    разгон и усиливает удар.
     """
 
     tags: tuple[ActionTag, ...] = ()
@@ -153,7 +140,12 @@ class Trace:
         return Trace(tags=(*self.tags, tag)[-TRACE_LENGTH:])
 
     def breaks_with(self, tag: ActionTag) -> bool:
-        """Станут ли последние три тега все разными, если добавить ``tag``."""
+        """Станут ли последние три тега все разными, если добавить ``tag``.
+
+        Это не контра (круга «тег X бьёт тег Y» больше нет, ADR 0050): это
+        награда за непредсказуемость - три разных удара подряд, и противник не
+        поспевает с ответом.
+        """
         recent = (*self.tags[-(TRACE_LENGTH - 1) :], tag)
         return len(recent) == TRACE_LENGTH and len(set(recent)) == TRACE_LENGTH
 
@@ -185,11 +177,15 @@ class EventKind(StrEnum):
     NOT_ENOUGH_RESOURCE = "not_enough_resource"
     ON_COOLDOWN = "on_cooldown"
     WRONG_WEAPON = "wrong_weapon"
+    #: Умению нужна незаметность, а её нет (ADR 0050).
+    NEEDS_STEALTH = "needs_stealth"
     EMPTY_SLOT = "empty_slot"
     NO_TARGET = "no_target"
     TURN_SKIPPED = "turn_skipped"
     MOMENTUM = "momentum"
+    #: Брешь: враг объявил напор и открылся - удар по нему мимо брони.
     BREACH = "breach"
+    #: Разнобой: три разных тега подряд, противник не поспел с ответом.
     BREAKTHROUGH = "breakthrough"
     ROUND = "round"
 
@@ -267,8 +263,9 @@ class Combatant:
     focus: int = 0
     #: Ушёл из боя сам: сбежал или сдался. Не то же, что пал.
     left: bool = False
-    #: В нём пробили брешь: его ближайший удар доходит вполсилы. Снимается в
-    #: конце его же хода - брешь живёт ровно до ответа (ADR 0021).
+    #: Его застали на замахе напора: удар по нему проходит мимо брони, а его
+    #: собственный ближайший удар доходит вполсилы. Снимается в конце его же
+    #: хода - брешь живёт ровно до ответа (ADR 0050).
     breached: bool = False
 
     @property

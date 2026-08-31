@@ -11,16 +11,18 @@
 устал; она отдаёт бой, а не отменяет его.
 
 Три правила делают бой разменом, а не гонкой урона, и ни одно из них не
-добавляет кнопки:
+добавляет кнопки (круга контр - «тег X бьёт тег Y» - больше нет, ADR 0050):
 
-- **намерение** - тот, за кого ходит движок, объявляет тег следующего хода
-  заранее; живой игрок объявляет его собственным следом, который противник
-  видит на экране. Драться вслепую не приходится ни с той, ни с другой стороны;
-- **след** - повтор тега даёт разгон и усиливает удар, три разных тега подряд
-  ломают размен: перелом отдаёт бойцу лишний ход, а не отнимает его у всех
-  разом, - в бою четверых «противники пропускают ход» решало бы бой целиком;
-- **брешь** - тег, отвечающий на объявленный, снимает броню цели и вдвое
-  ослабляет её ближайший удар.
+- **намерение** - у того, за кого ходит движок, повадка постоянная, от породы
+  (``INTENT_CYCLE`` по имени породы и месту в строю): стая одного вида стоит
+  ровным строем весь бой, а не мельтешит всеми тремя намерениями каждый круг.
+  Перебивают повадку раны и почти павшая цель; эпик и босс в заслон не встают.
+  Живой игрок объявляет собственным следом. Стойка одинаково открывает своего и
+  чужого: заслон удваивает броню и бьёт вполсилы, а кто объявил напор - тот
+  **breached**: удар по нему мимо брони, его собственный ответ вполсилы;
+- **след** - повтор тега даёт разгон и усиливает удар (``MOMENTUM_*``), а три
+  разных тега подряд - разнобой: противник не поспевает с ответом и теряет
+  ближайший ход (не контра, а награда за непредсказуемость).
 
 Всякая величина - удар, умение, лечение - названа процентом от того, что растёт
 само: удар считается костями оружия, лечение и щит - долей максимума здоровья.
@@ -28,7 +30,7 @@
 
 Вся случайность идёт от семени, переданного снаружи, поэтому бой воспроизводим
 по семени и последовательности действий. У намерений случайности нет вовсе: они
-чистая функция бойца и круга, и экран с движком всегда называют одно и то же.
+чистая функция состояния боя, и экран с движком всегда называют одно и то же.
 """
 
 from __future__ import annotations
@@ -51,13 +53,12 @@ from mmorpg.domain.entities.combat import (
     CombatantKind,
     EventKind,
     Trace,
-    counter_to,
 )
 from mmorpg.domain.entities.content import GameContent, Skill
 from mmorpg.domain.entities.damage import UNARMED, DamageType
 from mmorpg.domain.entities.dice import Dice
 from mmorpg.domain.entities.effects import ActiveEffect, EffectStack, status_effect
-from mmorpg.domain.entities.location import Enemy
+from mmorpg.domain.entities.location import Enemy, EnemyRank
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.entities.statuses import DOT_STATUSES, StatusKind, status_spec
 from mmorpg.domain.procgen import items as item_procgen
@@ -168,29 +169,42 @@ ARMOR_SOFTENER_BASE = gear.ARMOR_SOFTENER_BASE
 ARMOR_SOFTENER_PER_LEVEL = gear.ARMOR_SOFTENER_PER_LEVEL
 armor_factor = gear.armor_factor
 
-# --- темп: намерение, след, брешь -------------------------------------
+# --- темп: намерение, след, разгон -----------------------------------
 
-#: Круг, по которому ходят намерения того, за кого ходит движок.
+#: Повадка бойца, за которого ходит движок: круга, крутящегося каждый круг,
+#: больше нет (ADR 0050). Повадку задаёт порода (по её инициативе), поэтому вся
+#: стая волков стоит на экране ровным строем одного намерения, а не рябью, в
+#: которой всё время видно все три. Держится весь бой, пока обстоятельства не
+#: перебьют.
 INTENT_CYCLE = (ActionTag.PRESS, ActionTag.PRECISION, ActionTag.GUARD)
+#: Эпик и босс в глухую оборону не встают и раненые не цепенеют: они хозяева
+#: логова, весь бой давят. Открытость напора - их цена за такую длину боя: у
+#: логова хватает здоровья, чтобы бой всё равно был долгим (``RANK_FACTORS``).
+INTENT_ELITE = (ActionTag.PRESS,)
 #: Четверть здоровья - и зверь перестаёт разменивать удары.
 WOUNDED_RATIO = 0.25
-#: Что объявленное намерение делает с бронёй, когда по ней бьют.
+#: Треть здоровья у цели - и боец бросает повадку и добивает.
+FINISH_RATIO = 1.0 / 3.0
+#: Что объявленная стойка делает с бронёй того, кто её объявил, когда по нему
+#: бьют. Заслон - меньше, чем прежде: повадка теперь держится весь бой, а не
+#: круг, и «двойная броня всегда» растягивала бой с породой-заслоном втрое
+#: (ADR 0050).
 INTENT_ARMOR: dict[ActionTag, float] = {
     ActionTag.PRESS: 0.75,
     ActionTag.PRECISION: 1.0,
-    ActionTag.GUARD: 2.0,
+    ActionTag.GUARD: 1.5,
 }
-#: И с уроном собственного удара.
+#: И с уроном его собственного удара.
 INTENT_DAMAGE: dict[ActionTag, float] = {
-    ActionTag.PRESS: 1.2,
+    ActionTag.PRESS: 1.0,
     ActionTag.PRECISION: 0.95,
     ActionTag.GUARD: 0.5,
 }
-#: Два одинаковых тега подряд - разгон, три разных - перелом.
+#: Два одинаковых тега подряд - разгон.
 MOMENTUM_STREAK = 2
 #: Прибавка за каждый повтор сверх первого: третий тег подряд стоит +50%.
 MOMENTUM_DAMAGE_PERCENT = 25.0
-#: Удар того, в ком пробили брешь, доходит вполсилы.
+#: Удар того, кого застали на замахе напора, доходит вполсилы.
 BREACH_ANSWER_SCALE = 0.5
 
 # --- защита ------------------------------------------------------------
@@ -317,37 +331,52 @@ def _order_for(combatants: Sequence[Combatant], seed: bytes, round_number: int) 
 def intent_of(state: BattleState, combatant: Combatant) -> ActionTag | None:
     """Что этот боец объявляет на свой следующий ход.
 
-    Чистая и однозначная функция: экран печатает объявление, движок держит
-    обещание. За кого ходит движок - тот идёт по кругу намерений и всегда
-    закрывается, когда ранен. За живого игрока объявляет его собственный след:
-    угадать чужой ход нельзя, но видно, чем он бил, и этого хватает, чтобы
-    выбрать ответ (ADR 0021).
+    Чистая и однозначная функция от состояния боя: экран печатает объявление,
+    движок держит обещание, и бой воспроизводится по семени - случайности здесь
+    нет вовсе. За живого игрока объявляет его собственный след. За кого ходит
+    движок - у того постоянная повадка от породы и места в строю (``INTENT_CYCLE``),
+    и весь бой одна и та же, пока обстоятельства её не перебьют: сам ранен - в
+    заслон, цель почти пала - в напор, добивать (ADR 0050).
     """
     if combatant.live:
         return combatant.trace.last
-    if combatant.health * 4 <= max(1, combatant.max_health):
+    # Эпик и босс - хозяева логова: в глухую оборону не встают и раненые не
+    # цепенеют, весь бой давят и метят. У обычного противника четверть здоровья -
+    # и он бросает размен.
+    elite = combatant.rank is not EnemyRank.NORMAL
+    if not elite and combatant.health * 4 <= max(1, combatant.max_health):
         return ActionTag.GUARD
-    # Место в своей стороне, а не номер в бою: двое рядом объявляют разное, и
-    # объявляют они одно и то же, сколько бы народу ни стояло напротив.
+    target = state.target_for(combatant.id)
+    if target is not None and target.health <= max(1, target.max_health) * FINISH_RATIO:
+        return ActionTag.PRESS
+    # Повадка постоянна весь бой (круга, крутящегося каждый круг, больше нет,
+    # ADR 0050) и у каждого бойца стаи своя: место в строю разводит троих по трём
+    # намерениям, а порода (сумма кодов имени) решает, с какого из них начать.
+    # Строй читается сразу и держится - на том и стоит выбор ответа.
+    key = sum(map(ord, combatant.enemy.archetype_id)) if combatant.enemy is not None else 0
     place = [one.id for one in state.combatants if one.side == combatant.side].index(combatant.id)
-    step = int(combatant.initiative) + place + state.round
-    return INTENT_CYCLE[step % len(INTENT_CYCLE)]
+    if elite:
+        return INTENT_ELITE[(key + place) % len(INTENT_ELITE)]
+    return INTENT_CYCLE[(key + place) % len(INTENT_CYCLE)]
 
 
 @dataclass(frozen=True, slots=True)
 class TurnTempo:
     """Всё, что правила тегов решают о ходе, посчитанное до самого хода.
 
-    Считать приходится заранее: разгон меняет урон того самого действия, которое
-    его и заработало, а перелом решает, останется ли ход за бойцом.
+    Считать заранее приходится: разгон меняет урон того самого действия, которое
+    его и заработало, а разнобой решает, останется ли ход за бойцом. Круга контр
+    больше нет (ADR 0050): брешь теперь у того, кто объявил напор, а не у того,
+    чей тег «бьёт» объявленный.
     """
 
     intents: Mapping[int, ActionTag | None]
     tag: ActionTag | None = None
     streak: int = 0
+    #: Три разных тега подряд: противник, на ком размен сломался, теряет ход.
     breakthrough: bool = False
-    #: Что объявил на этот ход тот, кто ходит. У живого игрока объявления нет:
-    #: он выбирает в момент нажатия, и его удар обычный.
+    #: Что объявил на этот ход тот, кто ходит. У живого игрока объявления нет -
+    #: за него стоит ``tag`` (тег выбранного действия).
     own_intent: ActionTag | None = None
 
     @property
@@ -355,11 +384,23 @@ class TurnTempo:
         return self.streak >= MOMENTUM_STREAK
 
     def breached(self, combatant_id: int) -> bool:
-        """Отвечает ли тег бойца на то, что объявила эта цель."""
-        intent = self.intents.get(combatant_id)
-        return intent is not None and self.tag is counter_to(intent)
+        """Застали ли эту цель на замахе напора.
+
+        Не контра (круга «тег X бьёт тег Y» больше нет, ADR 0050): напор - это
+        и «бью сильнее», и «открыт», и открыт одинаково с обеих сторон. Кто
+        объявил напор, тот и breached: удар по нему мимо брони, его ответ
+        вполсилы.
+        """
+        return self.intents.get(combatant_id) is ActionTag.PRESS
 
     def armor_scale(self, combatant_id: int) -> float:
+        """Что объявленная этой целью стойка делает с её же бронёй в этот ход.
+
+        Заслон удваивает броню; напор её выносит из счёта целиком (цель на
+        замахе); финт не трогает. Для живого игрока «объявление» - это его
+        последний тег (``intent_of``), поэтому напор оставляет героя открытым до
+        его следующего действия, а заслон - собранным.
+        """
         if self.breached(combatant_id):
             return 0.0
         intent = self.intents.get(combatant_id)
@@ -621,11 +662,10 @@ def _tempo(
         return TurnTempo(intents=intents, own_intent=own)
 
     trace = actor.trace
-    # Разгон и брешь - награда за выбор, а выбор делает тот, за кем стоит
-    # персонаж. Порода бьёт одним и тем же тегом всегда: разгон от однообразия
-    # был бы прибавкой, которую никто не заслужил, а брешь - наказанием за
-    # оборону, которого игрок не мог бы избежать ничем. Своё намерение порода
-    # объявляет и по нему получает брешь сама - это и есть её половина размена.
+    # Разгон - награда за выбор, а выбор делает тот, за кем стоит персонаж. Порода
+    # бьёт одним и тем же тегом всегда: разгон от однообразия был бы прибавкой,
+    # которую никто не заслужил. Своя стойка у неё есть - её объявляет
+    # ``intent_of``, и по ``own_intent`` считаются её броня и урон.
     if not actor.is_hero:
         return TurnTempo(intents=intents, streak=1, own_intent=own)
     return TurnTempo(
@@ -679,7 +719,11 @@ def _announce_tempo(state: BattleState, actor: Combatant, tempo: TurnTempo) -> B
 
 
 def _advanced_trace(trace: Trace, tempo: TurnTempo) -> Trace:
-    """Перелом тратит след, всё прочее его удлиняет."""
+    """Разнобой тратит след, всё прочее его удлиняет; ход без тега не трогает.
+
+    Без траты следа вечное «напор - заслон - финт» ломало бы каждый ход с
+    четвёртого, и противник не ходил бы больше никогда.
+    """
     if tempo.tag is None:
         return trace
     return Trace() if tempo.breakthrough else trace.push(tempo.tag)
@@ -928,6 +972,11 @@ def _attempt_skill(
     # нанести, игрок не должен.
     if refusal := gear.skill_refusal(content, character, skill):
         return BattleEvent(kind=EventKind.WRONG_WEAPON, skill_name=skill.name, effect_name=refusal)
+
+    # Удар со спины бьют только из незаметности. Отказ до хода, как не то оружие:
+    # ход не тратится, следа нет (ADR 0050, ADR 0016).
+    if skill.requires_stealth and not actor.effects.has(StatusKind.UNSEEN):
+        return BattleEvent(kind=EventKind.NEEDS_STEALTH, skill_name=skill.name)
 
     cooldown = actor.cooldown_of(skill.code)
     if cooldown > 0:
@@ -1802,8 +1851,11 @@ def _strike(
             - accuracy_penalty,
         ),
     )
-    # Удар, объявленный точностью, не уклоняется - его принимают или отвечают.
-    dodgeable = tempo.own_intent is not ActionTag.PRECISION
+    # Не уклоняются от объявленного породой финта и от удара из незаметности:
+    # первый нацелен заранее, второго цель не видит (ADR 0050).
+    dodgeable = tempo.own_intent is not ActionTag.PRECISION and not (
+        spec is not None and spec.always_hits
+    )
     if dodgeable and source.uniform(0, 100) > hit_chance:
         # По герою - «уклонился», по породе - «промах». Одно и то же число, но
         # игрок слышит в нём своё уклонение, а не чужую неловкость: за первым
@@ -1844,15 +1896,15 @@ def _strike(
     raw *= mods.percent(target_mods, "damage_taken_percent")
 
     pierce = spec.pierce if spec is not None else 0.0
-    # Брешь выносит броню из счёта целиком; объявленная оборона её удваивает, а
-    # тот, кто замахнулся для натиска, уже открылся.
+    # Заслон удваивает броню цели; напор выносит её из счёта целиком (цель на
+    # замахе); финт брони не трогает (``TurnTempo.armor_scale``).
     effective_armor = (
         _armor_of(content, roster, target) * (1.0 - pierce) * tempo.armor_scale(target.id)
     )
     raw *= armor_factor(effective_armor, target.level)
     raw *= incoming_damage_factor(target_mods, struck_with)
-    # Удар того, в ком пробили брешь, доходит вполсилы: его застали на замахе, и
-    # платит он этим ходом, а не следующим.
+    # Удар того, кого застали на замахе напора, доходит вполсилы: он открылся, и
+    # платит этим же ходом, а не следующим.
     if actor.breached:
         raw *= BREACH_ANSWER_SCALE
 
@@ -2217,7 +2269,7 @@ def _upkeep(
         return state
 
     modifiers = _modifiers_of(content, roster, one)
-    # Брешь стоила ему одного удара - того, который он только что нанёс.
+    # Брешь живёт до ответа: он только что походил - снимаем.
     updated = replace(one.tick_cooldowns(), breached=False)
 
     # Состояния платят по счёту до того, как срок укоротится: горение на три

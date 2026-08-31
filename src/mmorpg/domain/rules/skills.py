@@ -35,9 +35,9 @@ MASTERY_COOLDOWN = 1
 
 #: Как ветвь называется вслух. Игрок слышит слово, а не код.
 BRANCH_NAMES: dict[ActionTag, str] = {
-    ActionTag.PRESS: "Натиск",
-    ActionTag.GUARD: "Оборона",
-    ActionTag.PRECISION: "Точность",
+    ActionTag.PRESS: "Напор",
+    ActionTag.GUARD: "Заслон",
+    ActionTag.PRECISION: "Финт",
 }
 
 # Что делают две грани третьего ранга, здесь больше не решается: каждая грань

@@ -93,6 +93,9 @@ class EffectSpec:
     damage_scale: float = 1.0
     pierce: float = 0.0
     guaranteed_crit: bool = False
+    #: Удар нельзя обойти: цель его принимает или отвечает, но не уклоняется.
+    #: Так бьют из незаметности - цель не видит удара (ADR 0050).
+    always_hits: bool = False
     crit_bonus: float = 0.0
     lifesteal: float = 0.0
     #: Доля урона, достающаяся второй цели у одноцелевого удара. Ставится только
@@ -213,6 +216,9 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
     "damage": _damage(),
     "damage_crit": _damage(crit_bonus=12.0),
     "damage_guaranteed_crit": _damage(guaranteed_crit=True),
+    # Удары из незаметности: цель их не видит и не уклоняется (ADR 0050).
+    "damage_backstab": _damage(crit_bonus=12.0, always_hits=True),
+    "damage_backstab_crit": _damage(guaranteed_crit=True, always_hits=True),
     "damage_pierce": _damage(pierce=0.5),
     "damage_savage": _damage(damage_scale=1.5, tags=("inaccurate",)),
     "damage_reckless": _damage(damage_scale=1.35, self_damage_taken=25.0),

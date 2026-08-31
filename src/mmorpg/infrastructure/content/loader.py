@@ -393,6 +393,7 @@ def _parse_skills(
                 rank_step=float(entry.get("rank_step", default_step)),
                 tag=tag,
                 weapon_types=tuple(str(value) for value in entry.get("weapons", ())),
+                requires_stealth=bool(entry.get("requires_stealth", False)),
                 dice=_skill_dice(code, entry, problems),
             )
         )

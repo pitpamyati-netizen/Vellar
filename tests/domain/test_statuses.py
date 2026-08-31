@@ -381,15 +381,15 @@ def test_undying_promise_also_clears_what_would_take_the_turn(content: GameConte
 
 
 def _vanished(content: GameContent) -> tuple[Character, BattleState]:
-    rogue = caster("rogue", "rogue_ischeznovenie")
+    rogue = caster("rogue", "rogue_skrytnost")
     state = start(content, rogue)
     hidden = use(content, rogue, state, slot=0)
-    assert StatusKind.UNSEEN in held(hero(hidden)), "«Исчезновение» вешает незаметность"
+    assert StatusKind.UNSEEN in held(hero(hidden)), "«Скрытность» вешает незаметность"
     return rogue, hidden
 
 
 def test_vanish_takes_the_hero_off_the_target_list(content: GameContent) -> None:
-    rogue = caster("rogue", "rogue_ischeznovenie")
+    rogue = caster("rogue", "rogue_skrytnost")
     state = start(content, rogue)
     before = hero(state).health
     after = use(content, rogue, state, slot=0)

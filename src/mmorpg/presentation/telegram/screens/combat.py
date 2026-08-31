@@ -30,7 +30,6 @@ from mmorpg.domain.entities.combat import (
     Combatant,
     EventKind,
     Trace,
-    counter_to,
 )
 from mmorpg.domain.entities.content import GameContent, Skill
 from mmorpg.domain.entities.location import EnemyRank
@@ -59,12 +58,20 @@ from mmorpg.presentation.telegram.screens.format import amount, head, percent, p
 
 EMPTY_SLOT = "Пустой слот"
 READY = "готово"
+NEEDS_STEALTH = "нужна незаметность"
 
 #: Домен держит теги машинными; русские слова для них живут здесь.
 TAG_NAMES: dict[ActionTag, str] = {
-    ActionTag.PRESS: "натиск",
-    ActionTag.GUARD: "оборона",
-    ActionTag.PRECISION: "точность",
+    ActionTag.PRESS: "напор",
+    ActionTag.GUARD: "заслон",
+    ActionTag.PRECISION: "финт",
+}
+
+#: Одна произносимая подсказка к объявленной стойке - что она сулит в этот ход.
+INTENT_HINTS: dict[ActionTag, str] = {
+    ActionTag.PRESS: "бьёт сильнее, но открыт — бейте мимо брони",
+    ActionTag.GUARD: "двойная броня, бьёт вполсилы",
+    ActionTag.PRECISION: "бьёт наверняка, не увернуться",
 }
 
 #: Столько о ступени, сколько нужно, чтобы понять, сколько это займёт.
@@ -265,6 +272,13 @@ def _weapon_status(content: GameContent, character: Character, skill: Skill) -> 
     return f"нужно оружие: {wanted}"
 
 
+def _stealth_status(skill: Skill, viewer: Combatant) -> str:
+    """Чего умению не хватает из незаметности. Пусто, когда хватает."""
+    if not skill.requires_stealth or viewer.effects.has(StatusKind.UNSEEN):
+        return ""
+    return NEEDS_STEALTH
+
+
 def _slot_status(skill: Skill, character: Character, viewer: Combatant) -> str:
     """Готовность, цена и цена применения - всегда словами."""
     cooldown = viewer.cooldown_of(skill.code)
@@ -299,7 +313,11 @@ def skill_label(content: GameContent, character: Character, viewer: Combatant, s
     if skill is None:
         return label(f"{slot + 1}. {EMPTY_SLOT}")
 
-    status = _weapon_status(content, character, skill) or _slot_status(skill, character, viewer)
+    status = (
+        _weapon_status(content, character, skill)
+        or _stealth_status(skill, viewer)
+        or _slot_status(skill, character, viewer)
+    )
     return label(
         f"{slot + 1}. {skill.name} — {TAG_NAMES[tag_of_skill(skill)]}, "
         f"{skill_effect(content, character, viewer, skill)}, {status}"
@@ -328,11 +346,11 @@ def racial_label(content: GameContent, character: Character, viewer: Combatant) 
 
 
 def foe_line(state: BattleState, one: Combatant) -> str:
-    """Здоровье противника, объявленное намерение и тег, вскрывающий его.
+    """Здоровье противника и объявленная стойка с подсказкой, что она сулит.
 
-    У живого игрока намерения нет - есть след: чем он бил в прошлый ход. Угадать
-    чужой выбор нельзя, но выбрать ответ на привычку можно, и это ровно та же
-    игра, что и с намерением породы (ADR 0021).
+    Круга контр больше нет (ADR 0050): у врага постоянная повадка, читаемая с
+    одного взгляда. У живого игрока намерения нет - есть след: чем он бил в
+    прошлый ход.
     """
     rank = RANK_NAMES[one.rank]
     title = f"{one.id}. {one.name} ({rank})" if rank else f"{one.id}. {one.name}"
@@ -347,8 +365,9 @@ def foe_line(state: BattleState, one: Combatant) -> str:
     intent = intent_of(state, one)
     if intent is None:
         return f"{line}. Ещё не бил: намерения не видно."
-    word = "След" if one.live else "Намерение"
-    return f"{line}. {word}: {TAG_NAMES[intent]}, брешь — {TAG_NAMES[counter_to(intent)]}."
+    if one.live:
+        return f"{line}. След: {TAG_NAMES[intent]}."
+    return f"{line}. Намерение: {TAG_NAMES[intent]} ({INTENT_HINTS[intent]})."
 
 
 def ally_line(one: Combatant, *, viewer_id: int) -> str:
@@ -390,11 +409,11 @@ def status_line(one: Combatant) -> str:
 
 
 def trace_line(trace: Trace) -> str:
-    """Где стоит размен и что даст следующий ход."""
+    """Где стоит след и что даст следующий ход."""
     if trace.last is None:
         return (
             "След пуст. Повтор тега даёт разгон и усиливает удар, "
-            "три разных тега подряд — перелом, и ход остаётся за вами."
+            "три разных тега подряд — разнобой, и противник теряет ход."
         )
 
     lead = f"След: {TAG_NAMES[trace.last]}"
@@ -404,7 +423,7 @@ def trace_line(trace: Trace) -> str:
         lead = f"{lead}, {trace.streak} {marks} подряд, разгон {gain}"
     repeat = percent(MOMENTUM_DAMAGE_PERCENT * trace.streak)
     hints = [f"повтор даст разгон {repeat}"]
-    hints.extend(f"{TAG_NAMES[tag]} даст перелом" for tag in ActionTag if trace.breaks_with(tag))
+    hints.extend(f"{TAG_NAMES[tag]} даст разнобой" for tag in ActionTag if trace.breaks_with(tag))
     return f"{lead}. Дальше: {'; '.join(hints)}."
 
 
@@ -503,6 +522,8 @@ def describe_event(event: BattleEvent, viewer_id: int = 0) -> str:
         case EventKind.WRONG_WEAPON:
             # Отказ уже собран словами в домене.
             return event.effect_name
+        case EventKind.NEEDS_STEALTH:
+            return f"Умению {event.skill_name} нужна незаметность."
         case EventKind.EMPTY_SLOT:
             return "Слот пуст. Наберите умения в меню, вне боя."
         case EventKind.NO_TARGET if event.actor and not you_hit:
@@ -522,11 +543,11 @@ def describe_event(event: BattleEvent, viewer_id: int = 0) -> str:
         case EventKind.MOMENTUM:
             return f"{event.actor} набирает разгон: удар сильнее."
         case EventKind.BREACH:
-            return f"Брешь: {event.target} открылся, броня не в счёт, его удар вдвое слабее."
+            return f"Брешь: {event.target} на замахе, броня не в счёт, его удар вдвое слабее."
         case EventKind.BREAKTHROUGH if you_hit:
-            return "Перелом: размен сломан, и ход остаётся за вами."
+            return "Разнобой: три разных тега подряд, противник теряет ближайший ход."
         case EventKind.BREAKTHROUGH:
-            return f"Перелом: {event.actor} сбивает ритм и бьёт снова."
+            return f"Разнобой: {event.actor} сбивает ритм и бьёт снова."
         case _:
             return ""
 
@@ -661,7 +682,7 @@ def bag_screen(
     """Расходники во время боя. Живут здесь, никогда в слоте умения."""
     lines = [
         *head("Сумка. Расходники берут только отсюда.", notice),
-        f"Позиций в сумке: {len(entries)}. Всё, что выпито в бою, оставляет след обороны.",
+        f"Позиций в сумке: {len(entries)}. Всё, что выпито в бою, оставляет след заслона.",
     ]
     rows: list[tuple[Label, ...]] = []
     for _item_id, name, quantity in entries:

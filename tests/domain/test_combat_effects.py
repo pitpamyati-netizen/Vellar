@@ -527,11 +527,21 @@ def test_a_shield_burns_out_with_its_skill(content: GameContent) -> None:
 def test_a_riposte_answers_the_blow_it_took(content: GameContent) -> None:
     """«3 хода вы отвечаете на каждый удар по вам» - раньше не отвечали ничем."""
     warrior = caster("warrior", "human", "warrior_otvetnyy_vypad")
-    answered = use(content, warrior, start(content, warrior, (enemy(damage=40),)))
-    assert any(
-        event.kind in {EventKind.DAMAGE, EventKind.CRIT} and event.target == "Волк"
-        for event in answered.events
-    )
+    state = start(content, warrior, (enemy(damage=40),))
+    for seed in range(1, 60):
+        answered = use(content, warrior, state, seed=seed)
+        landed = any(
+            event.kind in {EventKind.DAMAGE, EventKind.CRIT} and event.target_id == 1
+            for event in answered.events
+        )
+        if not landed:
+            continue  # удар по воину не дошёл - отвечать нечем
+        assert any(
+            event.kind in {EventKind.DAMAGE, EventKind.CRIT} and event.target == "Волк"
+            for event in answered.events
+        )
+        return
+    pytest.fail("ни на одном семени удар по воину не дошёл")
 
 
 def test_undying_keeps_the_last_stand_standing(content: GameContent) -> None:
