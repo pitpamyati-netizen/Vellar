@@ -182,6 +182,8 @@ def test_only_the_two_top_rarities_carry_a_special_property(content: GameContent
 LIVE_KEYS = frozenset(
     {
         "damage_percent",
+        "physical_damage_percent",
+        "magic_damage_percent",
         "damage_taken_percent",
         "armor_percent",
         "health_percent",
@@ -193,8 +195,19 @@ LIVE_KEYS = frozenset(
         "resource_percent",
         "resource_regen_percent",
         "cost_reduction_percent",
+        "cooldown_reduction_percent",
         "regen_per_turn_percent",
         "healing_done_percent",
+        "lifesteal_percent",
+        "reflect_percent",
+        "dot_damage_percent",
+        "single_target_damage_percent",
+        "aoe_damage_percent",
+        "first_turn_damage_percent",
+        "resist_physical_percent",
+        "resist_magic_percent",
+        "flee_chance_percent",
+        "gold_percent",
     }
 )
 

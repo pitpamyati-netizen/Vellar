@@ -6,9 +6,9 @@
 # ЖЁСТКОЕ ПРАВИЛО: у вещи нет описания. Вещей собираются тысячи; что вещь такое,
 # отвечают её род, ступень и числа.
 #
-# СНАРЯЖЕНИЕ ЗДЕСЬ НЕ ПИШУТ, ПИШУТ ТОЛЬКО ЕГО ВИДЫ. Меч существует на двенадцати
-# ступенях в пяти редкостях, и так же - любой другой вид: выписать их значило бы
-# завести около двух тысяч записей, которые никто никогда не станет править.
+# СНАРЯЖЕНИЕ ЗДЕСЬ НЕ ПИШУТ, ПИШУТ ТОЛЬКО ЕГО ВИДЫ. Меч существует на каждой
+# ступени в пяти редкостях, и так же - любой другой вид: выписать их значило бы
+# завести тысячи записей, которые никто никогда не станет править.
 # Пишется *вид*, а вещь собирается из вида, ступени и редкости так же, как
 # противник собирается из породы и уровня (domain/procgen/items.py, ADR 0015).
 #
@@ -39,18 +39,29 @@ rarities = [
 # меч» это один и тот же меч у всех, а не одно имя на двадцать разных мечей.
 # Прилагательное нужно в четырёх родах: меч (m), кольчуга (f), копьё (n),
 # поножи (p).
+#
+# Ступени привязаны к городам: почти у каждого города есть своя ступень на
+# уровне входа (world.toml, level_min), плюс четыре ранние в стартовом городе,
+# где уровни берутся быстро. Пересёк границу города - в лавке и добыче новая
+# ступень: новое прилагательное и числа выше. Так игрок видит, что стал сильнее,
+# и меняет вещи (ADR 0052).
 tiers = [
     { level = 1, m = "Ветхий", f = "Ветхая", n = "Ветхое", p = "Ветхие" },
     { level = 6, m = "Простой", f = "Простая", n = "Простое", p = "Простые" },
     { level = 14, m = "Крепкий", f = "Крепкая", n = "Крепкое", p = "Крепкие" },
     { level = 26, m = "Добрый", f = "Добрая", n = "Доброе", p = "Добрые" },
-    { level = 45, m = "Отменный", f = "Отменная", n = "Отменное", p = "Отменные" },
+    { level = 45, m = "Кованый", f = "Кованая", n = "Кованое", p = "Кованые" },
     { level = 70, m = "Ладный", f = "Ладная", n = "Ладное", p = "Ладные" },
-    { level = 100, m = "Дивный", f = "Дивная", n = "Дивное", p = "Дивные" },
-    { level = 135, m = "Славный", f = "Славная", n = "Славное", p = "Славные" },
-    { level = 175, m = "Гордый", f = "Гордая", n = "Гордое", p = "Гордые" },
-    { level = 215, m = "Царский", f = "Царская", n = "Царское", p = "Царские" },
-    { level = 255, m = "Звёздный", f = "Звёздная", n = "Звёздное", p = "Звёздные" },
+    { level = 92, m = "Прочный", f = "Прочная", n = "Прочное", p = "Прочные" },
+    { level = 113, m = "Отменный", f = "Отменная", n = "Отменное", p = "Отменные" },
+    { level = 135, m = "Мастерской", f = "Мастерская", n = "Мастерское", p = "Мастерские" },
+    { level = 152, m = "Дивный", f = "Дивная", n = "Дивное", p = "Дивные" },
+    { level = 171, m = "Славный", f = "Славная", n = "Славное", p = "Славные" },
+    { level = 190, m = "Знатный", f = "Знатная", n = "Знатное", p = "Знатные" },
+    { level = 208, m = "Гордый", f = "Гордая", n = "Гордое", p = "Гордые" },
+    { level = 228, m = "Царский", f = "Царская", n = "Царское", p = "Царские" },
+    { level = 248, m = "Звёздный", f = "Звёздная", n = "Звёздное", p = "Звёздные" },
+    { level = 268, m = "Пресветлый", f = "Пресветлая", n = "Пресветлое", p = "Пресветлые" },
     { level = 290, m = "Немеркнущий", f = "Немеркнущая", n = "Немеркнущее", p = "Немеркнущие" },
 ]
 
@@ -99,6 +110,14 @@ weapon_types = [
     { id = "staff", name = "Посох", gender = "m", damage_type = "bludgeoning", dice = "2d5", spread = 1.2, modifiers = { damage_percent = 4, resource_percent = 5 } },
     { id = "wand", name = "Жезл", gender = "m", damage_type = "arcane", dice = "1d12", spread = 1.3, modifiers = { damage_percent = 6, resource_regen_percent = 8 } },
     { id = "symbol", name = "Символ веры", gender = "m", damage_type = "holy", dice = "2d5", spread = 1.25, modifiers = { healing_done_percent = 10, resource_percent = 8 } },
+    { id = "rapier", name = "Рапира", gender = "f", damage_type = "piercing", dice = "2d6", spread = 1.2, modifiers = { accuracy_percent = 6, crit_chance_percent = 3 } },
+    { id = "warhammer", name = "Боевой молот", gender = "m", damage_type = "bludgeoning", dice = "2d7", spread = 1.5, modifiers = { crit_damage_percent = 14, initiative_percent = -9 } },
+    { id = "crossbow", name = "Арбалет", gender = "m", damage_type = "piercing", dice = "2d6", spread = 1.3, modifiers = { accuracy_percent = 7, initiative_percent = -6 } },
+    { id = "claws", name = "Боевые когти", gender = "p", damage_type = "rending", dice = "2d6", spread = 1.4, modifiers = { crit_chance_percent = 6, initiative_percent = 4 } },
+    { id = "scythe", name = "Боевая коса", gender = "f", damage_type = "rending", dice = "2d6", spread = 1.45, modifiers = { crit_damage_percent = 12, accuracy_percent = -5 } },
+    { id = "tome", name = "Гримуар", gender = "m", damage_type = "fire", dice = "1d12", spread = 1.25, modifiers = { resource_percent = 6, cost_reduction_percent = 4 } },
+    { id = "orb", name = "Сфера", gender = "f", damage_type = "cold", dice = "2d5", spread = 1.2, modifiers = { resource_regen_percent = 8, crit_damage_percent = 6 } },
+    { id = "totem", name = "Тотем", gender = "m", damage_type = "nature", dice = "2d5", spread = 1.3, modifiers = { healing_done_percent = 10, resource_percent = 6 } },
 ]
 
 # Рода доспеха. armor - доля брони относительно лёгкого доспеха той же ступени.
@@ -113,9 +132,13 @@ armor_types = [
 
 # Особое свойство легендарной и реликтовой вещи. Одно на вещь, выбирается по её
 # же имени - и потому всегда одно и то же. Каждый ключ здесь движок читает:
-# прибавка, которой никто не считает, это не свойство, а обещание.
+# прибавка, которой никто не считает, это не свойство, а обещание. Список широк
+# нарочно: чем он длиннее, тем реже две легендарки одного вида несут одно и то
+# же, и тем больше поводов присмотреться к находке (ADR 0052).
 special_properties = [
     { key = "damage_percent", value = 8 },
+    { key = "physical_damage_percent", value = 12 },
+    { key = "magic_damage_percent", value = 12 },
     { key = "crit_chance_percent", value = 6 },
     { key = "crit_damage_percent", value = 20 },
     { key = "health_percent", value = 8 },
@@ -126,9 +149,20 @@ special_properties = [
     { key = "resource_percent", value = 15 },
     { key = "resource_regen_percent", value = 20 },
     { key = "cost_reduction_percent", value = 12 },
+    { key = "cooldown_reduction_percent", value = 10 },
     { key = "healing_done_percent", value = 12 },
     { key = "regen_per_turn_percent", value = 2 },
     { key = "damage_taken_percent", value = -6 },
+    { key = "lifesteal_percent", value = 8 },
+    { key = "reflect_percent", value = 14 },
+    { key = "dot_damage_percent", value = 18 },
+    { key = "single_target_damage_percent", value = 14 },
+    { key = "aoe_damage_percent", value = 14 },
+    { key = "first_turn_damage_percent", value = 18 },
+    { key = "resist_physical_percent", value = 10 },
+    { key = "resist_magic_percent", value = 10 },
+    { key = "flee_chance_percent", value = 25 },
+    { key = "gold_percent", value = 15 },
 ]
 
 # Виды снаряжения. Из каждого собирается вещь на каждой ступени в каждой
@@ -213,10 +247,85 @@ slot = "weapon"
 weapon_type = "symbol"
 
 [[gear]]
+id = "rapier"
+noun = "рапира"
+gender = "f"
+slot = "weapon"
+weapon_type = "rapier"
+
+[[gear]]
+id = "warhammer"
+noun = "боевой молот"
+gender = "m"
+slot = "weapon"
+weapon_type = "warhammer"
+
+[[gear]]
+id = "crossbow"
+noun = "арбалет"
+gender = "m"
+slot = "weapon"
+weapon_type = "crossbow"
+
+[[gear]]
+id = "claws"
+noun = "боевые когти"
+gender = "p"
+slot = "weapon"
+weapon_type = "claws"
+
+[[gear]]
+id = "scythe"
+noun = "боевая коса"
+gender = "f"
+slot = "weapon"
+weapon_type = "scythe"
+
+[[gear]]
+id = "tome"
+noun = "гримуар"
+gender = "m"
+slot = "weapon"
+weapon_type = "tome"
+
+[[gear]]
+id = "orb"
+noun = "сфера"
+gender = "f"
+slot = "weapon"
+weapon_type = "orb"
+
+[[gear]]
+id = "totem"
+noun = "тотем"
+gender = "m"
+slot = "weapon"
+weapon_type = "totem"
+
+# Доспех: на каждый (род × место) по два-три существительных. Числа у них
+# одинаковые - разнообразие в имени и в выборе. Стартовый набор (fill_gear в
+# equipment.py) берёт то существительное, что стоит последним, поэтому привычные
+# идут в конце.
+
+[[gear]]
+id = "cloth_head_wrap"
+noun = "повязка"
+gender = "f"
+slot = "head"
+armor_type = "cloth"
+
+[[gear]]
 id = "cloth_head"
 noun = "капюшон"
 gender = "m"
 slot = "head"
+armor_type = "cloth"
+
+[[gear]]
+id = "cloth_body_robe"
+noun = "балахон"
+gender = "m"
+slot = "body"
 armor_type = "cloth"
 
 [[gear]]
@@ -227,10 +336,24 @@ slot = "body"
 armor_type = "cloth"
 
 [[gear]]
+id = "cloth_hands_mitts"
+noun = "митенки"
+gender = "p"
+slot = "hands"
+armor_type = "cloth"
+
+[[gear]]
 id = "cloth_hands"
 noun = "обмотки"
 gender = "p"
 slot = "hands"
+armor_type = "cloth"
+
+[[gear]]
+id = "cloth_feet_slippers"
+noun = "чуни"
+gender = "p"
+slot = "feet"
 armor_type = "cloth"
 
 [[gear]]
@@ -241,10 +364,24 @@ slot = "feet"
 armor_type = "cloth"
 
 [[gear]]
+id = "light_head_beret"
+noun = "берет"
+gender = "m"
+slot = "head"
+armor_type = "light"
+
+[[gear]]
 id = "light_head"
 noun = "колпак"
 gender = "m"
 slot = "head"
+armor_type = "light"
+
+[[gear]]
+id = "light_body_vest"
+noun = "жилет"
+gender = "m"
+slot = "body"
 armor_type = "light"
 
 [[gear]]
@@ -255,10 +392,24 @@ slot = "body"
 armor_type = "light"
 
 [[gear]]
+id = "light_hands_gauntlets"
+noun = "краги"
+gender = "p"
+slot = "hands"
+armor_type = "light"
+
+[[gear]]
 id = "light_hands"
 noun = "перчатки"
 gender = "p"
 slot = "hands"
+armor_type = "light"
+
+[[gear]]
+id = "light_feet_moccasins"
+noun = "мокасины"
+gender = "p"
+slot = "feet"
 armor_type = "light"
 
 [[gear]]
@@ -269,10 +420,24 @@ slot = "feet"
 armor_type = "light"
 
 [[gear]]
+id = "medium_head_liner"
+noun = "подшлемник"
+gender = "m"
+slot = "head"
+armor_type = "medium"
+
+[[gear]]
 id = "medium_head"
 noun = "шишак"
 gender = "m"
 slot = "head"
+armor_type = "medium"
+
+[[gear]]
+id = "medium_body_panoply"
+noun = "панцирь"
+gender = "m"
+slot = "body"
 armor_type = "medium"
 
 [[gear]]
@@ -283,10 +448,24 @@ slot = "body"
 armor_type = "medium"
 
 [[gear]]
+id = "medium_hands_vambraces"
+noun = "поручи"
+gender = "p"
+slot = "hands"
+armor_type = "medium"
+
+[[gear]]
 id = "medium_hands"
 noun = "наручи"
 gender = "p"
 slot = "hands"
+armor_type = "medium"
+
+[[gear]]
+id = "medium_feet_boots"
+noun = "боты"
+gender = "p"
+slot = "feet"
 armor_type = "medium"
 
 [[gear]]
@@ -297,10 +476,24 @@ slot = "feet"
 armor_type = "medium"
 
 [[gear]]
+id = "heavy_head_visor"
+noun = "забрало"
+gender = "n"
+slot = "head"
+armor_type = "heavy"
+
+[[gear]]
 id = "heavy_head"
 noun = "шлем"
 gender = "m"
 slot = "head"
+armor_type = "heavy"
+
+[[gear]]
+id = "heavy_body_plate"
+noun = "латы"
+gender = "p"
+slot = "body"
 armor_type = "heavy"
 
 [[gear]]
@@ -311,10 +504,24 @@ slot = "body"
 armor_type = "heavy"
 
 [[gear]]
+id = "heavy_hands_cops"
+noun = "налокотники"
+gender = "p"
+slot = "hands"
+armor_type = "heavy"
+
+[[gear]]
 id = "heavy_hands"
 noun = "рукавицы"
 gender = "p"
 slot = "hands"
+armor_type = "heavy"
+
+[[gear]]
+id = "heavy_feet_sabatons"
+noun = "сабатоны"
+gender = "p"
+slot = "feet"
 armor_type = "heavy"
 
 [[gear]]
@@ -340,6 +547,30 @@ slot = "trinket"
 id = "pendant"
 noun = "подвеска"
 gender = "f"
+slot = "trinket"
+
+[[gear]]
+id = "signet"
+noun = "печатка"
+gender = "f"
+slot = "trinket"
+
+[[gear]]
+id = "amulet"
+noun = "амулет"
+gender = "m"
+slot = "trinket"
+
+[[gear]]
+id = "talisman"
+noun = "талисман"
+gender = "m"
+slot = "trinket"
+
+[[gear]]
+id = "bracelet"
+noun = "браслет"
+gender = "m"
 slot = "trinket"
 
 # --- Consumables ---

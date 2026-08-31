@@ -64,7 +64,13 @@ TRIALS = 20
 #: Что обещает замысел. Медиана - это договор; потолок лишь не даёт назвать откатом один
 #: неудачный бросок, а пол не даёт случиться откату обратному - бою, который кончился
 #: раньше, чем стал боем.
-ORDINARY_TURNS = 4
+#:
+#: Стало на ход больше: пока «лучшее оружие» бралось любой редкости, толковому
+#: игроку доставался реликтовый клинок, растущий по уровню героя, - и он ел
+#: обычный бой в три хода. С тех пор как редкость обычная (``armed``, ADR 0052),
+#: разбойник к середине пути открывает бой уходом в тень и лишь потом бьёт из-за
+#: спины: пять ходов - это его ступенчатый разгон на честном оружии, а не откат.
+ORDINARY_TURNS = 5
 ORDINARY_FLOOR = 2
 #: Потолок стал выше на два хода вместе с костями: урон теперь бросается, и один
 #: неудачный бой действительно бывает вдвое длиннее обычного. Медиана — вот
@@ -123,11 +129,17 @@ def armed(
     удара, и меряя без них, мы меряли бы того, кого в игре нет.
     """
     # Игрок носит своё: чужое не запрещено, но стоит точности и инициативы, и брать
-    # его нарочно незачем.
+    # его нарочно незачем. Редкость - обычная, ровно как у доспеха ниже: клинок
+    # именной славы это редкая находка с логова, а не то, с чем ходят по локации.
+    # Прежде редкость не отбиралась, и «лучшее оружие» плыло от того, какое
+    # свойство хэш навесил на легендарку, - а с ним и длина боя (ADR 0052).
     wieldable = [
         item
         for item in content.items
-        if item.is_weapon and klass.can_wield(item.weapon_type) and item.level <= level
+        if item.is_weapon
+        and klass.can_wield(item.weapon_type)
+        and item.level <= level
+        and item.rarity == "common"
     ]
     if not wieldable:
         return Equipment()
@@ -144,8 +156,7 @@ def armed(
 
     def worth(item: Item) -> tuple[int, float, int]:
         average = item.damage.average if item.damage is not None else 0.0
-        share = 1.0 + item.modifiers.get("damage_percent", 0.0) / 100.0
-        return sum(item.weapon_type in types for types in wanted), average * share, item.level
+        return sum(item.weapon_type in types for types in wanted), average, item.level
 
     equipment = Equipment().equip("weapon", max(wieldable, key=worth).id)
     for slot in ("head", "body", "hands", "feet"):

@@ -78,6 +78,7 @@ MODIFIER_NAMES: dict[str, str] = {
     "gather_yield_percent": "сбор сырья",
     "salvage_yield_percent": "уцелевшие материалы",
     "reflect_percent": "отражённый урон",
+    "lifesteal_percent": "вампиризм",
     "dot_damage_percent": "урон ядов и горения",
     "flee_chance_percent": "шанс сбежать",
     "first_turn_damage_percent": "урон в первый ход",

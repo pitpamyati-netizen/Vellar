@@ -28,9 +28,9 @@ from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.keeper import KeeperView
 
 WORLD_SEED = "vellar-test"
-#: Сколько страниц списка пролистывает поиск кнопки. Больше ни у одного экрана
-#: панели нет.
-_PAGES_SEARCHED = 8
+#: Сколько страниц списка пролистывает поиск кнопки. Самый длинный - выдача
+#: вещи: под сотню видов снаряжения плюс расходники и сырьё за ними (ADR 0052).
+_PAGES_SEARCHED = 14
 
 CLOCK = Clock(now=1_700_000_000, shop_rotation=100, gather_cooldown=900)
 KEEPER_ACCOUNT = 500_100

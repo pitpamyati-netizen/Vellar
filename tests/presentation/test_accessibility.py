@@ -175,3 +175,20 @@ def test_the_slot_list_matches_the_content_it_names(content: GameContent) -> Non
     assert [slot.id for slot in content.slots] == list(item_screens.SLOT_NAMES)
     for slot in content.slots:
         assert item_screens.SLOT_NAMES[slot.id] == slot.name
+
+
+def test_every_thing_a_card_can_show_has_a_russian_name(content: GameContent) -> None:
+    """Прибавка на вещи читается словом, а не английским ключом.
+
+    Карточка вещи (``screens/items.modifier_line``) берёт название из
+    ``MODIFIER_NAMES``; ключа, которого там нет, диктор прочтёт по буквам. Сюда
+    попадает всё, что вещь и её род могут навесить: особые свойства легендарок,
+    прибавки родов оружия и доспеха (ADR 0052).
+    """
+    shown: set[str] = {prop.key for prop in content.special_properties}
+    for weapon in content.weapon_types:
+        shown |= set(weapon.modifiers)
+    for armor in content.armor_types:
+        shown |= set(armor.modifiers)
+    missing = sorted(key for key in shown if key not in item_screens.MODIFIER_NAMES)
+    assert not missing, f"нет русского имени на карточке вещи: {missing}"
