@@ -13,6 +13,7 @@ from mmorpg.domain.entities.location import Enemy, EnemyKind
 from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.rules.economy import buy_price, roll_assortment, sell_price
 from mmorpg.presentation.telegram.flows import combat as flow
+from mmorpg.presentation.telegram.screens import combat as combat_screens
 from mmorpg.presentation.telegram.screens import shop as shop_screens
 from mmorpg.presentation.telegram.screens.base import ScreenId
 from mmorpg.presentation.telegram.screens.paginated import PageState
@@ -282,29 +283,40 @@ def test_unknown_input_is_refused_without_burning_a_turn(
 def test_the_enemy_announces_its_intent_and_the_way_in(
     content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
-    """Правила 1.1.1 и 1.1.3: выбор делается против чего-то, и это сказано словами."""
+    """Правила 1.1.1 и 1.1.3: выбор делается против чего-то, и это сказано словами.
+
+    На панели боя намерение названо одним словом; что оно сулит и как этим
+    воспользоваться — на экране «Разбор боя», не абзацем в каждой строке
+    (ADR 0050).
+    """
     line = flow.render(content, fighter, session, HERO).text().split("\n")[2]
     assert "Намерение:" in line
     assert any(tag in line for tag in ("напор", "заслон", "финт"))
+
+    breakdown = combat_screens.breakdown_screen(content, fighter, session.state, HERO).text()
+    assert "намерение" in breakdown
+    assert any(tag in breakdown for tag in ("напор", "заслон", "финт"))
 
 
 def test_the_trace_is_a_spoken_line(
     content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
-    """Правило 1.1.4: ни полосы, ни значка - состояние размена это фраза."""
+    """Правило 1.1.4: ни полосы, ни значка - состояние размена это фраза.
+
+    Панель несёт одну строку-совет, полный расклад — экран «Разбор боя»
+    (``breakdown_screen``); обе формы говорят словами (ADR 0050).
+    """
     opening = flow.render(content, fighter, session, HERO).text()
     assert "След пуст." in opening
 
     pressed, _ = flow.advance(content, {HERO: fighter}, session, HERO, "Атака — напор")
     once = flow.render(content, fighter, pressed, HERO).text()
     assert "След: напор." in once
-    assert "повтор даст разгон" in once
+    assert "разгон" in once
 
     twice, _ = flow.advance(content, {HERO: fighter}, pressed, HERO, "Атака — напор")
-    assert (
-        "След: напор, 2 следа подряд, разгон 25 процентов."
-        in flow.render(content, fighter, twice, HERO).text()
-    )
+    full = combat_screens.breakdown_screen(content, fighter, twice.state, HERO).text()
+    assert "След: напор, 2 следа подряд, разгон 25 процентов." in full
 
 
 def test_every_action_button_names_its_tag(
@@ -316,6 +328,36 @@ def test_every_action_button_names_its_tag(
     assert "напор" in texts[2], "Секущий росчерк is a plain blow"
     assert "заслон" in texts[3], "Провокация pulls the blow onto you"
     assert "заслон" in texts[5], "the racial slot names its tag too"
+
+
+def test_the_panel_carries_a_breakdown_button(
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
+) -> None:
+    """«Разбор боя» есть на панели и на экране ожидания, и это не ход (ADR 0050)."""
+    texts = [t.text for row in flow.render(content, fighter, session, HERO).rows for t in row]
+    assert "Разбор боя" in texts
+
+    for pressed in ("Разбор боя", "/разбор", "/бой разбор"):
+        assert flow.wants_breakdown(content, fighter, session, HERO, pressed), pressed
+        after, notice = flow.advance(content, {HERO: fighter}, session, HERO, pressed)
+        assert after.state.round == session.state.round, pressed
+        assert notice == "", pressed
+
+
+def test_the_breakdown_screen_gathers_the_tempo_rules(
+    content: GameContent, fighter: Character, session: battle_service.BattleSession
+) -> None:
+    """Полный расклад — намерение врага с подсказкой, след и что дают три стойки."""
+    screen = combat_screens.breakdown_screen(content, fighter, session.state, HERO)
+    body = screen.text()
+    assert "намерение" in body
+    assert "мимо брони" in body or "в полтора раза" in body or "не увернуться" in body
+    for stance in ("Напор:", "Заслон:", "Финт:"):
+        assert stance in body, stance
+    assert "разнобой" in body
+    # Возврат — «Что там в бою»; своей кнопки действия у разбора нет.
+    plain = [t.text for row in screen.rows for t in row]
+    assert plain == ["Что там в бою"]
 
 
 # --- защита, цели и отряд ---------------------------------------------

@@ -33,6 +33,7 @@ class Intent(StrEnum):
     FLEE = "flee"
     YIELD = "yield"
     REFRESH = "refresh"
+    BREAKDOWN = "breakdown"
     PARTY = "party"
     PARTY_CREATE = "party_create"
     PARTY_DISBAND = "party_disband"
@@ -90,6 +91,8 @@ SIMPLE_COMMANDS: dict[str, Intent] = {
     "/yield": Intent.YIELD,
     "/обновить": Intent.REFRESH,
     "/refresh": Intent.REFRESH,
+    "/разбор": Intent.BREAKDOWN,
+    "/breakdown": Intent.BREAKDOWN,
     # Отряд: одна команда на всё, что с ним делают.
     "/отряд": Intent.PARTY,
     "/party": Intent.PARTY,
@@ -126,6 +129,8 @@ _COMBAT_WORDS: dict[str, Intent] = {
     "yield": Intent.YIELD,
     "обновить": Intent.REFRESH,
     "refresh": Intent.REFRESH,
+    "разбор": Intent.BREAKDOWN,
+    "breakdown": Intent.BREAKDOWN,
 }
 
 #: Слова после ``/отряд``: завести, расформировать, позвать, принять зов, уйти.
@@ -225,6 +230,7 @@ _BUTTON_INTENTS: tuple[tuple[object, Intent], ...] = (
     (labels.FLEE, Intent.FLEE),
     (labels.BATTLE_YIELD, Intent.YIELD),
     (labels.BATTLE_REFRESH, Intent.REFRESH),
+    (labels.BATTLE_BREAKDOWN, Intent.BREAKDOWN),
     (labels.PARTY, Intent.PARTY),
     (labels.PARTY_CREATE, Intent.PARTY_CREATE),
     (labels.PARTY_DISBAND, Intent.PARTY_DISBAND),

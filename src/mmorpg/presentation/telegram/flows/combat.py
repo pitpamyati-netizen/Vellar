@@ -114,6 +114,22 @@ def render(
             return screens.waiting_screen(content, state, viewer_id, notice)
 
 
+def wants_breakdown(
+    content: GameContent,
+    character: Character,
+    session: BattleSession,
+    viewer_id: int,
+    text: str,
+) -> bool:
+    """Просит ли игрок полный разбор темпа.
+
+    Это не ход и не отказ: «Разбор боя» открывает другой экран, как «Сумка», и
+    счётчик от него не двигается (``Claude.md``, правило 3).
+    """
+    screen = render(content, character, session, viewer_id)
+    return resolve(text, screen).intent is Intent.BREAKDOWN
+
+
 def action_for(
     content: GameContent,
     character: Character,
@@ -215,9 +231,11 @@ def advance(
     if character is None:  # pragma: no cover - зритель всегда в списке
         return session, ""
 
-    # «Что там в бою» - не ход, а просьба сказать всё заново: ждущему больше
-    # нечего нажать, и нажатие обязано что-то делать (``Claude.md``, правило 9).
-    if resolve(text, render(content, character, session, viewer_id)).intent is Intent.REFRESH:
+    # «Что там в бою» и «Разбор боя» - не ход, а просьба сказать всё заново или
+    # полнее: счётчик от них не двигается (``Claude.md``, правило 9). Экран разбора
+    # рисует хендлер; здесь довольно того, что ход не потрачен.
+    looked = resolve(text, render(content, character, session, viewer_id)).intent
+    if looked is Intent.REFRESH or looked is Intent.BREAKDOWN:
         return session, ""
 
     action = action_for(content, character, session, viewer_id, text)

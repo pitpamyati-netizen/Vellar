@@ -68,10 +68,12 @@ TAG_NAMES: dict[ActionTag, str] = {
 }
 
 #: Одна произносимая подсказка к объявленной стойке - что она сулит в этот ход.
+#: Слова описывают ровно то, что делает движок (``domain/rules/combat``: брешь у
+#: объявившего напор, ``INTENT_ARMOR``, ``BREACH_ANSWER_SCALE``; ADR 0050).
 INTENT_HINTS: dict[ActionTag, str] = {
-    ActionTag.PRESS: "бьёт сильнее, но открыт — бейте мимо брони",
-    ActionTag.GUARD: "двойная броня, бьёт вполсилы",
-    ActionTag.PRECISION: "бьёт наверняка, не увернуться",
+    ActionTag.PRESS: "он открылся: бейте мимо брони, а его удар дойдёт вполсилы",
+    ActionTag.GUARD: "брони у него в полтора раза больше, но и сам он бьёт вполсилы",
+    ActionTag.PRECISION: "от его удара не увернуться",
 }
 
 #: Столько о ступени, сколько нужно, чтобы понять, сколько это займёт.
@@ -367,7 +369,8 @@ def foe_line(state: BattleState, one: Combatant) -> str:
         return f"{line}. Ещё не бил: намерения не видно."
     if one.live:
         return f"{line}. След: {TAG_NAMES[intent]}."
-    return f"{line}. Намерение: {TAG_NAMES[intent]} ({INTENT_HINTS[intent]})."
+    # Что стойка сулит - на экране «Разбор боя», не абзацем в каждой строке.
+    return f"{line}. Намерение: {TAG_NAMES[intent]}."
 
 
 def ally_line(one: Combatant, *, viewer_id: int) -> str:
@@ -406,6 +409,25 @@ def status_line(one: Combatant) -> str:
         for effect in held
         if effect.status is not None and effect.status is not StatusKind.BARRIER
     )
+
+
+def advice_line(trace: Trace) -> str:
+    """Одна строка-совет о следе для боевой панели.
+
+    Полный расклад темпа - намерения врагов, разнобой, что дают три стойки -
+    ушёл на экран «Разбор боя» (``breakdown_screen``): на слух абзац о следе и
+    разгоне в каждом ходу это стена (ADR 0050). Механику это не трогает: та же
+    строка, только короче, и кнопка на всё остальное.
+    """
+    tail = "«Разбор боя» — весь расклад темпа."
+    if trace.last is None:
+        return f"След пуст. Повтор тега — разгон, три разных подряд — разнобой. {tail}"
+    lead = f"След: {TAG_NAMES[trace.last]}"
+    if trace.streak > 1:
+        gain = percent(MOMENTUM_DAMAGE_PERCENT * (trace.streak - 1))
+        return f"{lead}, разгон {gain}; повтор поднимет его. {tail}"
+    repeat = percent(MOMENTUM_DAMAGE_PERCENT * trace.streak)
+    return f"{lead}. Повтор даст разгон {repeat}. {tail}"
 
 
 def trace_line(trace: Trace) -> str:
@@ -616,7 +638,7 @@ def battle_screen(
 
     lines = list(head(f"Бой. Круг {state.round}.", notice))
     lines.extend(_sides(content, state, viewer))
-    lines.append(trace_line(viewer.trace))
+    lines.append(advice_line(viewer.trace))
     lines.extend(turn_lines(state, viewer_id))
     target = state.target_for(viewer_id)
     if target is not None:
@@ -643,6 +665,7 @@ def battle_screen(
         # что игра начинает целиться туда, куда сказали. Ушедшего из виду в
         # списке нет - его не выбрать, пока он сам не проявится (ADR 0043).
         rows.extend((target_label(one),) for one in foes)
+    rows.append((labels.BATTLE_BREAKDOWN,))
     rows.append((labels.BAG, labels.FLEE))
     if _has_live_foes(state, viewer):
         rows.append((labels.BATTLE_YIELD,))
@@ -671,9 +694,55 @@ def waiting_screen(
     lines.append("«Что там в бою» — перечитать, «Сдаться» — отдать бой и выйти.")
     rows: tuple[tuple[Label, ...], ...] = (
         (labels.BATTLE_REFRESH,),
+        (labels.BATTLE_BREAKDOWN,),
         (labels.BATTLE_YIELD,),
     )
     return Screen(id=ScreenId.COMBAT, lines=tuple(lines), rows=rows)
+
+
+def breakdown_screen(
+    content: GameContent,
+    character: Character,
+    state: BattleState,
+    viewer_id: int,
+    notice: str = "",
+) -> Screen:
+    """Полный расклад темпа: намерения врагов, след, что дают три стойки.
+
+    Отдельный экран нарочно (ADR 0050): на боевой панели это был абзац в каждом
+    ходу, а на слух абзац между делом это стена. Механику не трогает ничто —
+    здесь только собран в одном месте текст, который раньше был размазан по
+    строкам врагов и по следу. Возврат — «Что там в бою».
+    """
+    viewer = state.by_id(viewer_id)
+    lines = list(head(f"Бой. Разбор темпа. Круг {state.round}.", notice))
+    if viewer is not None:
+        lines.append(trace_line(viewer.trace))
+        for one in state.combatants:
+            if one.side == viewer.side or not one.alive or one.live:
+                continue
+            if one.effects.has(StatusKind.UNSEEN):
+                continue
+            intent = intent_of(state, one)
+            if intent is not None:
+                lines.append(
+                    f"{one.id}. {one.name}: намерение {TAG_NAMES[intent]} — {INTENT_HINTS[intent]}."
+                )
+        lines.extend(affix_lines(content, state, viewer))
+    lines.append(
+        "Напор: бьёте сильнее на разгоне, но вы на замахе — по вам мимо брони, ваш ответ вполсилы."
+    )
+    lines.append("Заслон: держите удар, брони в полтора раза больше, но и сами бьёте вполсилы.")
+    lines.append("Финт: бьёте наверняка, увернуться от вас нельзя.")
+    lines.append(
+        "Повтор тега — разгон, плюс четверть урона за каждый повтор. Три разных тега "
+        "подряд — разнобой: противник, на ком размен сломался, теряет ближайший ход."
+    )
+    return Screen(
+        id=ScreenId.COMBAT,
+        lines=tuple(lines),
+        rows=((labels.BATTLE_REFRESH,),),
+    )
 
 
 def bag_screen(

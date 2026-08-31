@@ -1052,6 +1052,12 @@ def all_screens(
         combat_screens.battle_screen(content, fighter, duel_fight, 1),
         combat_screens.waiting_screen(content, duel_fight, 2),
         combat_screens.waiting_screen(content, crowded_fight, 1, "Сейчас не ваш ход."),
+        # «Разбор боя»: полный расклад темпа отдельным экраном (ADR 0050). Три
+        # противника с намерениями — самый длинный вид; поединок живых — где
+        # намерения нет, есть след.
+        combat_screens.breakdown_screen(content, fighter, sample_fight, 1),
+        combat_screens.breakdown_screen(content, fighter, crowded_fight, 1),
+        combat_screens.breakdown_screen(content, fighter, duel_fight, 1),
         combat_screens.bag_screen(content, (("small_healing_potion", "Малое зелье лечения", 3),)),
         combat_screens.bag_screen(content, ()),
         combat_screens.victory_screen(sample_fight, 1, experience=40, gold=14),

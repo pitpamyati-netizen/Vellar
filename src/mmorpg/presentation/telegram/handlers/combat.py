@@ -523,6 +523,14 @@ async def fight(
         await _open_bag(message, state, content, character, inventory)
         return
 
+    if fight_flow.wants_breakdown(content, character, session, viewer.id, message.text):
+        # «Разбор боя» - не ход: тот же бой, другой экран, счётчик стоит.
+        await send_screen(
+            message,
+            combat_screens.breakdown_screen(content, character, session.state, viewer.id),
+        )
+        return
+
     before = session
     session, notice = fight_flow.advance(content, roster, session, viewer.id, message.text)
     await _store_and_show(
