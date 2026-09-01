@@ -812,7 +812,7 @@ async def _finish(
 
     if owner is not None and session.state.verdict_for(owner.id) is Verdict.VICTORY:
         await _pay_digest(
-            content, settings, session, flow, next_flow, state_cache, payouts, updated
+            content, settings, session, flow, next_flow, locations, state_cache, payouts, updated
         )
 
     for character_id, character in updated.items():
@@ -1047,16 +1047,17 @@ async def _pay_digest(
     session: BattleSession,
     flow: PlayState,
     next_flow: PlayState,
+    locations: LocationStateCache,
     state_cache: StateCache,
     payouts: dict[int, Payout],
     updated: dict[int, Character],
 ) -> None:
     """Закрыть дело со сводки, если победа его закрыла, и выдать надбавку (ADR 0053).
 
-    Победа в названной локации закрывает ``CULL``, пройденное логово названного
-    спуска или блуждающий ход — ``DELVE``. Раз за переворот прилавка: разовость
-    держит ключ со сроком в кэше (``digest_claim``). Строка идёт в ``extra``, как
-    и счёт по заданиям.
+    Победа в названной локации закрывает ``HUNT``/``CULL``, пройденное логово
+    названного спуска или блуждающий ход — ``DELVE``. Раз за переворот прилавка:
+    разовость держит ключ со сроком в кэше (``digest_claim``). Строка идёт в
+    ``extra``, как и счёт по заданиям.
     """
     hero = updated.get(session.owner)
     if hero is None:  # pragma: no cover - у похода всегда есть владелец
@@ -1067,7 +1068,10 @@ async def _pay_digest(
         return
     now = int(time.time())
     rotation = rotation_index(now, settings.shop_rotation_seconds)
-    deeds = digest_rules.digest(content, settings.world_seed, session.city_id, rotation, hero.level)
+    moods = await digest_claim.city_moods(locations, content, session.city_id, now=now)
+    deeds = digest_rules.digest(
+        content, settings.world_seed, session.city_id, rotation, hero.level, moods=moods
+    )
 
     deed = None
     if session.in_descent and not next_flow.descent.active:

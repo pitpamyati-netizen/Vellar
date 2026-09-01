@@ -15,10 +15,12 @@ from dataclasses import dataclass
 from mmorpg import economy_log
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
-from mmorpg.domain.ports.repositories import StateCache
+from mmorpg.domain.ports.repositories import LocationStateCache, StateCache
 from mmorpg.domain.procgen.seeds import rotation_index, seconds_left_in_rotation
 from mmorpg.domain.rules import digest as digest_rules
+from mmorpg.domain.rules import mood as mood_rules
 from mmorpg.domain.rules.digest import Deed
+from mmorpg.domain.rules.mood import LocationMood
 from mmorpg.domain.rules.progression import earned, grant_experience
 
 
@@ -40,6 +42,25 @@ async def already_claimed(
 ) -> bool:
     rotation = rotation_index(now, rotation_seconds)
     return await cache.get(_key(character_id, rotation)) is not None
+
+
+async def city_moods(
+    locations: LocationStateCache, content: GameContent, city_id: str, *, now: int
+) -> dict[int, LocationMood]:
+    """Состояние каждой мирной локации города — для смещения целей сводки (ADR 0055).
+
+    Читают одинаково и экран сводки (`_digest_view`), и место зачёта дела
+    (`_pay_digest*`): пока округа не сменила настроение между тем и другим, дело
+    на экране и дело в зачёте — одно и то же.
+    """
+    if not content.has_city(city_id):
+        return {}
+    result: dict[int, LocationMood] = {}
+    for location in content.city(city_id).locations:
+        state = await locations.state(city_id, location.slot, now=now)
+        roamer = await locations.roamer(city_id, location.slot, now=now)
+        result[location.slot] = mood_rules.mood_of(state.with_roamer(roamer))
+    return result
 
 
 def hunt_deed(deeds: tuple[Deed, ...], *, slot: int, archetype_ids: tuple[str, ...]) -> Deed | None:

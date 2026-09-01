@@ -62,6 +62,7 @@ from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import economy as economy_rules
 from mmorpg.domain.rules import guild as guild_rules
 from mmorpg.domain.rules import moderation as moderation_rules
+from mmorpg.domain.rules import mood as mood_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import party as party_rules
 from mmorpg.domain.rules import roamer as roamer_rules
@@ -324,7 +325,7 @@ async def play(
     # Обыск со сводки: отработанный узел названного вида в названной локации
     # закрывает дело ``SEARCH`` и платит надбавку — раз за переворот (ADR 0054).
     character, updated = await _pay_digest_search(
-        content, character, flow, updated, characters, state_cache, now, settings
+        content, character, flow, updated, characters, locations, state_cache, now, settings
     )
     updated, here = await sync_location(content, updated, flow, character, locations, now, settings)
 
@@ -554,11 +555,14 @@ async def _digest_view(
         rotation_seconds=settings.shop_rotation_seconds,
     )
     place = ""
+    moods: dict[int, mood_rules.LocationMood] = {}
     for location in city.locations:
-        if await locations.roamer(city.id, location.slot, now=now) is not None:
+        state = await locations.state(city.id, location.slot, now=now)
+        roamer = await locations.roamer(city.id, location.slot, now=now)
+        moods[location.slot] = mood_rules.mood_of(state.with_roamer(roamer))
+        if roamer is not None and not place:
             place = location.name
-            break
-    return city_screens.DigestView(claimed=claimed, roamer_place=place)
+    return city_screens.DigestView(claimed=claimed, roamer_place=place, moods=moods)
 
 
 async def _named(characters: CharacterRepository, character_id: int) -> str:
@@ -1209,6 +1213,7 @@ async def _pay_digest_search(
     flow: PlayState,
     updated: PlayState,
     characters: CharacterRepository,
+    locations: LocationStateCache,
     state_cache: StateCache,
     now: int,
     settings: Settings,
@@ -1217,7 +1222,8 @@ async def _pay_digest_search(
 
     Узел, из которого шаг забрал единицу волны, помечен в ``pending`` парой
     ``node_take`` / ``node_kind``. Сводку считаем для локации, в которой игрок
-    стоит: дело зовёт именно туда.
+    стоит: дело зовёт именно туда. ``moods`` — то же живое состояние округи, что
+    видит экран сводки (ADR 0055).
     """
     index = updated.pending.node_take
     node_kind = updated.pending.node_kind
@@ -1225,8 +1231,14 @@ async def _pay_digest_search(
         return character, updated
 
     rotation = rotation_index(now, settings.shop_rotation_seconds)
+    moods = await digest_claim.city_moods(locations, content, flow.session.city_id, now=now)
     deeds = digest_rules.digest(
-        content, settings.world_seed, flow.session.city_id, rotation, character.level
+        content,
+        settings.world_seed,
+        flow.session.city_id,
+        rotation,
+        character.level,
+        moods=moods,
     )
     deed = digest_claim.search_deed(deeds, slot=flow.session.slot, node_kind=node_kind)
     if deed is None:

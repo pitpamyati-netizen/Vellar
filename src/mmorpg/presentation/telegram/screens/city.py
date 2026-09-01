@@ -7,8 +7,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, Dungeon, GameContent, Npc
@@ -18,6 +18,7 @@ from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.digest import Deed, DeedKind
 from mmorpg.domain.rules.economy import inn_price, mentor_price
+from mmorpg.domain.rules.mood import LocationMood
 from mmorpg.domain.rules.quests import ready_to_hand_in
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.keyboards import labels
@@ -63,10 +64,12 @@ def tavern_screen(
 
 @dataclass(frozen=True, slots=True)
 class DigestView:
-    """Что о сводке знает не домен, а хендлер: бралась ли надбавка и есть ли роамер."""
+    """Что о сводке знает не домен, а хендлер: бралась ли надбавка, есть ли роамер
+    и как звучит округа по локациям (для смещения целей, ADR 0055)."""
 
     claimed: bool = False
     roamer_place: str = ""
+    moods: Mapping[int, LocationMood] = field(default_factory=dict)
 
 
 #: Какая городская кнопка ведёт к делу этого вида.

@@ -11,6 +11,7 @@ from mmorpg.domain.entities import GameContent
 from mmorpg.domain.procgen.enemies import GOLD_BASE, GOLD_PER_LEVEL, candidates
 from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules.digest import DeedKind
+from mmorpg.domain.rules.mood import LocationMood
 
 WORLD_SEED = "vellar-test"
 
@@ -50,6 +51,38 @@ def test_hunt_names_an_archetype_that_fits_its_place(content: GameContent) -> No
 
 def test_deterministic_for_same_arguments(content: GameContent) -> None:
     assert _deeds(content, "farhold", 42, 12) == _deeds(content, "farhold", 42, 12)
+
+
+def _peaceful_slots(content: GameContent, city_id: str) -> list[int]:
+    return [loc.slot for loc in content.city(city_id).locations if not loc.pvp]
+
+
+def test_mood_pulls_location_deeds_toward_the_restless_place(content: GameContent) -> None:
+    slots = _peaceful_slots(content, "dusk_harbor")
+    target = slots[-1]
+    calm = dict.fromkeys(slots, LocationMood.UNTOUCHED)
+    stirred = {**calm, target: LocationMood.RESTLESS}
+
+    def hits(moods: dict[int, LocationMood]) -> int:
+        return sum(
+            1
+            for rot in range(120)
+            for deed in digest_rules.digest(
+                content, WORLD_SEED, "dusk_harbor", rot, 40, moods=moods
+            )
+            if deed.kind in (DeedKind.HUNT, DeedKind.CULL, DeedKind.SEARCH) and deed.slot == target
+        )
+
+    assert hits(stirred) > hits(calm)
+
+
+def test_haul_and_delve_ignore_mood(content: GameContent) -> None:
+    slots = _peaceful_slots(content, "dusk_harbor")
+    stirred = dict.fromkeys(slots, LocationMood.RESTLESS)
+    plain = _deeds(content, "dusk_harbor", 9, 40)
+    biased = digest_rules.digest(content, WORLD_SEED, "dusk_harbor", 9, 40, moods=stirred)
+    for kind in (DeedKind.HAUL, DeedKind.DELVE):
+        assert next(d for d in plain if d.kind is kind) == next(d for d in biased if d.kind is kind)
 
 
 def test_the_set_is_not_frozen_across_rotations(content: GameContent) -> None:

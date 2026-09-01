@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -25,7 +26,19 @@ from mmorpg.domain.entities.location import EnemyArchetype, NodeKind
 from mmorpg.domain.procgen.enemies import GOLD_BASE, GOLD_PER_LEVEL, candidates
 from mmorpg.domain.procgen.location import guaranteed_find_kinds
 from mmorpg.domain.procgen.seeds import derive, rng, shop_seed
+from mmorpg.domain.rules.mood import LocationMood
 from mmorpg.domain.rules.progression import experience_reward
+
+#: Насколько охотнее застава шлёт дело в локацию по её состоянию (ADR 0055).
+#: Веса пологие нарочно: состояние *подталкивает* выбор, а не диктует его, —
+#: иначе дело на экране и дело в зачёте расходились бы каждый раз, как в округе
+#: осел или ушёл блуждающий ход.
+_MOOD_WEIGHT: dict[LocationMood, int] = {
+    LocationMood.UNTOUCHED: 2,
+    LocationMood.WORKED: 3,
+    LocationMood.DEPLETED: 4,
+    LocationMood.RESTLESS: 5,
+}
 
 #: Во сколько раз дело со сводки платит больше обычного боя того же уровня.
 #: «Награда в полтора-два обычных» (Roadmap) — берём середину.
@@ -74,21 +87,30 @@ def digest(
     city_id: str,
     rotation: int,
     level: int,
+    *,
+    moods: Mapping[int, LocationMood] | None = None,
 ) -> tuple[Deed, ...]:
-    """Дела заставы на этот переворот. Детерминировано от четырёх аргументов.
+    """Дела заставы на этот переворот. Детерминировано от аргументов.
 
     Четыре-пять дел, порядок постоянный: выбить названную породу в одной локации,
     разредить стаю в другой, проводить обоз до соседнего города, обыскать узел
     названного вида (только там, где у места есть гарантированный узел находок) и
     спуститься в названное подземелье. Соседних открытых городов может ещё не быть
     (низкие уровни) — тогда вместо обоза застава просит разредить ещё одну стаю.
+
+    ``moods`` (слот локации → :class:`LocationMood`, ADR 0055) подталкивает выбор
+    места: застава охотнее шлёт туда, где неспокойно. Не передан — выбор чисто по
+    сиду, как раньше. Живое состояние читают одинаково и экран сводки, и место
+    зачёта дела, поэтому расхождение возможно только если округа сменила
+    настроение между тем и другим — и тогда дело просто не засчитается, платы
+    из ниоткуда не будет.
     """
     city = content.city(city_id)
     source = rng(derive(shop_seed(world_seed, city_id, rotation), "digest"))
 
     spots = _combat_locations(city, level)
 
-    hunt_here = source.choice(spots)
+    hunt_here = _pick_spot(source, spots, moods)
     prey = _prey_for(content, hunt_here, source)
     deeds: list[Deed] = []
     if prey is not None:
@@ -96,7 +118,9 @@ def digest(
     else:  # pragma: no cover - у дорожного пула всегда есть «*»-запас
         deeds.append(_cull(hunt_here, level))
 
-    cull_here = source.choice([loc for loc in spots if loc.slot != hunt_here.slot] or spots)
+    cull_here = _pick_spot(
+        source, [loc for loc in spots if loc.slot != hunt_here.slot] or spots, moods
+    )
     deeds.append(_cull(cull_here, level))
 
     neighbours = _haul_targets(content, city, level)
@@ -104,9 +128,9 @@ def digest(
         deeds.append(_haul(source.choice(neighbours), level))
     else:
         elsewhere = [loc for loc in spots if loc.slot != cull_here.slot] or spots
-        deeds.append(_cull(source.choice(elsewhere), level))
+        deeds.append(_cull(_pick_spot(source, elsewhere, moods), level))
 
-    find_here = source.choice(spots)
+    find_here = _pick_spot(source, spots, moods)
     prowl = _searchable_kinds(world_seed, city_id, find_here.slot)
     if prowl:
         deeds.append(_search(find_here, source.choice(prowl), level))
@@ -187,6 +211,24 @@ def _combat_locations(city: City, level: int) -> list[Location]:
         return covering
     by_gap = sorted(pool, key=lambda loc: (_band_gap(loc, level), loc.slot))
     return by_gap[: max(2, len(covering))] if len(by_gap) >= 2 else by_gap
+
+
+def _pick_spot(
+    source: random.Random,
+    spots: list[Location],
+    moods: Mapping[int, LocationMood] | None,
+) -> Location:
+    """Выбрать локацию под дело с поправкой на состояние округи.
+
+    ``random.choices`` тратит из сида ровно один вызов независимо от весов,
+    поэтому наличие или отсутствие ``moods`` не сдвигает последующие броски: дела
+    ``HAUL`` и ``DELVE`` от состояния округи не зависят вовсе, а ``HUNT``/``CULL``/
+    ``SEARCH`` меняют только *куда* зовут, не *что* идёт следом.
+    """
+    weights = [
+        _MOOD_WEIGHT.get((moods or {}).get(loc.slot, LocationMood.UNTOUCHED), 2) for loc in spots
+    ]
+    return source.choices(spots, weights=weights, k=1)[0]
 
 
 def _prey_for(

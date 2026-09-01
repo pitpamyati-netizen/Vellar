@@ -543,7 +543,12 @@ def _render(
                 city,
                 character,
                 digest_rules.digest(
-                    content, world_seed, city.id, clock.shop_rotation, character.level
+                    content,
+                    world_seed,
+                    city.id,
+                    clock.shop_rotation,
+                    character.level,
+                    moods=view.moods,
                 ),
                 claimed=view.claimed,
                 roamer_place=view.roamer_place,

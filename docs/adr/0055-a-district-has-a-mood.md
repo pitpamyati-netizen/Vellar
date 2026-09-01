@@ -35,9 +35,16 @@
 блуждающий ход и так описан). Дальше состояние правит механику — три захода,
 каждый свой коммит:
 
-1. **Цели сводки.** Хендлер сводки передаёт `digest` состояние по локациям
-   города; `digest` при выборе места предпочитает `WORKED` / `DEPLETED` /
-   `RESTLESS` — застава шлёт туда, где неспокойно.
+1. **Цели сводки** (сделано). `digest(moods=...)` — необязательный аргумент
+   `слот → LocationMood`. `_pick_spot` выбирает локацию под `HUNT`/`CULL`/
+   `SEARCH` через `random.choices` с весом по состоянию (`_MOOD_WEIGHT`, пологий:
+   2/3/4/5). `random.choices` тратит из сида ровно один вызов независимо от
+   весов, поэтому `HAUL` и `DELVE` от состояния не зависят вовсе, а расхождение
+   между экраном и зачётом возможно только у локационных дел и только если округа
+   сменила настроение между тем и другим — тогда дело не засчитается, платы из
+   ниоткуда нет. Живое состояние строит `digest_claim.city_moods`; читают его
+   одинаково `_digest_view` (→ `DigestView.moods` → рендер) и `_pay_digest` /
+   `_pay_digest_search`.
 2. **Шанс прозвищ врагов.** `WORKED` и выше поднимает `NODE_AFFIX_ODDS` в
    дорожных боях этой локации (`procgen/enemies`): выбитая округа злее.
 3. **Цены и ассортимент ближайшего города.** `DEPLETED` / `RESTLESS` вокруг
@@ -53,9 +60,13 @@
 - `presentation/telegram/screens/play.py` — `location_screen(mood=...)`,
   `MOOD_LINE`; `flows/play.py` — `mood_rules.mood_of(here_now)` в рендере
   `LOCATION`.
-- Тесты — `tests/domain/test_mood.py`, экран с непустым `mood` в
-  `conftest.all_screens`.
-- Заходы 1–3 (цели сводки, прозвища, цены) — свои коммиты против этого ADR.
+- `domain/rules/digest.py` — `digest(moods=...)`, `_pick_spot`, `_MOOD_WEIGHT`.
+- `presentation/telegram/digest_claim.py` — `city_moods`; `screens/city.py` —
+  `DigestView.moods`; `handlers/{play,combat}.py` — строят `city_moods` и
+  прокидывают в `digest()` рядом с зачётом дела.
+- Тесты — `tests/domain/test_mood.py`, `tests/domain/test_digest.py` (смещение и
+  неизменность `HAUL`/`DELVE`), экран с непустым `mood` в `conftest.all_screens`.
+- Заходы 2–3 (прозвища врагов, цены города) — свои коммиты против этого ADR.
 - Docs — этот ADR, `Claude.md`, `Roadmap.md`, `content/changelog.toml` (на
   каждом заходе, где игрок что-то заметит).
 
