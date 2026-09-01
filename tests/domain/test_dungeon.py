@@ -97,6 +97,20 @@ def test_affix_odds_only_touch_elites_and_bosses() -> None:
     assert dungeon.affix_odds(EnemyRank.BOSS).chance > dungeon.affix_odds(EnemyRank.ELITE).chance
 
 
+def test_a_worked_out_district_makes_elites_nastier() -> None:
+    from mmorpg.domain.rules.mood import LocationMood
+
+    calm = dungeon.affix_odds(EnemyRank.ELITE, LocationMood.UNTOUCHED)
+    worked = dungeon.affix_odds(EnemyRank.ELITE, LocationMood.WORKED)
+    restless = dungeon.affix_odds(EnemyRank.ELITE, LocationMood.RESTLESS)
+    assert restless.chance > worked.chance > calm.chance
+    assert restless.count == calm.count
+    # Обычной стаи выработка не касается (ADR 0042).
+    assert dungeon.affix_odds(EnemyRank.NORMAL, LocationMood.RESTLESS) == dungeon.AffixOdds(0.0, 0)
+    # Шанс не переваливает за единицу.
+    assert dungeon.affix_odds(EnemyRank.BOSS, LocationMood.RESTLESS).chance <= 1.0
+
+
 def test_bounty_multiplies_across_conditions() -> None:
     rich = next(one for one in dungeon.CONDITIONS if one.id == "rich_seam")
     assert dungeon.bounty_of(()) == 1.0

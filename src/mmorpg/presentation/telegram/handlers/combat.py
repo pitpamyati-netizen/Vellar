@@ -50,6 +50,7 @@ from mmorpg.domain.rules import adventure, progression
 from mmorpg.domain.rules import arena as arena_rules
 from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import dungeon as dungeon_rules
+from mmorpg.domain.rules import mood as mood_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import party as party_rules
 from mmorpg.domain.rules import pvp as pvp_rules
@@ -327,8 +328,9 @@ async def _spawn(
     # не первая заново (``domain/rules/nodes.py``).
     seed = derive(node_fight_seed(settings.world_seed, flow.session, left.wave), left.taken)
     # Прозвище-модификатор бывает только у сильного одиночки и хозяина логова, и
-    # никогда у обычной стаи (ADR 0042); эпиков в локации мало (ADR 0034).
-    odds = dungeon_rules.affix_odds(node.kind.rank)
+    # никогда у обычной стаи (ADR 0042); эпиков в локации мало (ADR 0034). В
+    # выбитой и встревоженной округе эпик и хозяин логова злее (ADR 0055).
+    odds = dungeon_rules.affix_odds(node.kind.rank, mood_rules.mood_of(location_state))
     enemies = fight_flow.spawn_for_node(
         content,
         seed=seed,

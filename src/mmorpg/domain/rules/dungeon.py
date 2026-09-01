@@ -25,6 +25,7 @@ from types import MappingProxyType
 from mmorpg.domain.entities.effects import ActiveEffect
 from mmorpg.domain.entities.location import EnemyRank
 from mmorpg.domain.procgen.seeds import derive, rng
+from mmorpg.domain.rules.mood import LocationMood
 
 
 class Difficulty(StrEnum):
@@ -119,10 +120,31 @@ NODE_AFFIX_ODDS: Mapping[EnemyRank, AffixOdds] = MappingProxyType(
     }
 )
 
+#: Насколько выбитая округа поднимает шанс прозвища у эпика и хозяина логова
+#: (ADR 0055). Обычной стаи это не касается - у неё прозвищ нет вовсе (ADR 0042).
+_MOOD_AFFIX_BUMP: Mapping[LocationMood, float] = MappingProxyType(
+    {
+        LocationMood.UNTOUCHED: 0.0,
+        LocationMood.WORKED: 0.10,
+        LocationMood.DEPLETED: 0.20,
+        LocationMood.RESTLESS: 0.25,
+    }
+)
 
-def affix_odds(rank: EnemyRank) -> AffixOdds:
-    """Шанс прозвища для противника этой ступени на узле локации."""
-    return NODE_AFFIX_ODDS.get(rank, AffixOdds(chance=0.0, count=0))
+
+def affix_odds(rank: EnemyRank, mood: LocationMood = LocationMood.UNTOUCHED) -> AffixOdds:
+    """Шанс прозвища для противника этой ступени на узле локации.
+
+    ``mood`` (ADR 0055) поднимает шанс у эпика и хозяина логова в выбитой и
+    встревоженной округе. Обычную стаю не трогает: у неё прозвищ нет по ADR 0042,
+    и выработка это не меняет.
+    """
+    base = NODE_AFFIX_ODDS.get(rank, AffixOdds(chance=0.0, count=0))
+    if base.count == 0:
+        return base
+    return AffixOdds(
+        chance=min(1.0, base.chance + _MOOD_AFFIX_BUMP.get(mood, 0.0)), count=base.count
+    )
 
 
 #: Насколько бой в комнате этого вида слабее обычного. Логово и зверь крепче

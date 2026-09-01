@@ -45,8 +45,11 @@
    ниоткуда нет. Живое состояние строит `digest_claim.city_moods`; читают его
    одинаково `_digest_view` (→ `DigestView.moods` → рендер) и `_pay_digest` /
    `_pay_digest_search`.
-2. **Шанс прозвищ врагов.** `WORKED` и выше поднимает `NODE_AFFIX_ODDS` в
-   дорожных боях этой локации (`procgen/enemies`): выбитая округа злее.
+2. **Шанс прозвищ врагов** (сделано). `dungeon.affix_odds(rank, mood)` прибавляет
+   к базовому шансу `_MOOD_AFFIX_BUMP` (0 / 0,10 / 0,20 / 0,25) — но только эпику
+   и хозяину логова. Обычная стая прозвищ не получает никогда (ADR 0042), и
+   выработка этого не меняет. `handlers/combat._spawn` передаёт
+   `mood_of(location_state)`.
 3. **Цены и ассортимент ближайшего города.** `DEPLETED` / `RESTLESS` вокруг
    города двигает цены лавки и набор товара: округа кормит город.
 
@@ -64,9 +67,12 @@
 - `presentation/telegram/digest_claim.py` — `city_moods`; `screens/city.py` —
   `DigestView.moods`; `handlers/{play,combat}.py` — строят `city_moods` и
   прокидывают в `digest()` рядом с зачётом дела.
+- `domain/rules/dungeon.py` — `affix_odds(rank, mood)`, `_MOOD_AFFIX_BUMP`;
+  `handlers/combat._spawn` передаёт `mood_of(location_state)`.
 - Тесты — `tests/domain/test_mood.py`, `tests/domain/test_digest.py` (смещение и
-  неизменность `HAUL`/`DELVE`), экран с непустым `mood` в `conftest.all_screens`.
-- Заходы 2–3 (прозвища врагов, цены города) — свои коммиты против этого ADR.
+  неизменность `HAUL`/`DELVE`), `tests/domain/test_dungeon.py` (прибавка к шансу
+  прозвища), экран с непустым `mood` в `conftest.all_screens`.
+- Заход 3 (цены города) — свой коммит против этого ADR.
 - Docs — этот ADR, `Claude.md`, `Roadmap.md`, `content/changelog.toml` (на
   каждом заходе, где игрок что-то заметит).
 

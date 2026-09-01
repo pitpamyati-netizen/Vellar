@@ -59,8 +59,9 @@
   `_MOOD_WEIGHT`); `HAUL`/`DELVE` не трогает (`random.choices` тратит сид
   одинаково). `city_moods` строит живое состояние, читают одинаково экран сводки
   и место зачёта. ADR 0055.
-- `-` mood → `NODE_AFFIX_ODDS` в дорожных боях локации (`procgen/enemies`,
-  `test_affix_combat`).
+- `+` mood → шанс прозвищ: `dungeon.affix_odds(rank, mood)` +
+  `_MOOD_AFFIX_BUMP` только эпику и хозяину логова (обычная стая — никогда,
+  ADR 0042). `handlers/combat._spawn` передаёт `mood_of(location_state)`. ADR 0055.
 - `-` mood → цены и ассортимент ближайшего города (генерация лавки, её тесты).
 
 Отложено (следующие ADR): цепочки дел с двойной надбавкой; дома как источник
