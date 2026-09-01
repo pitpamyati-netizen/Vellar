@@ -318,6 +318,24 @@ def _level_for(index: int, count: int, level_min: int, level_max: int) -> int:
     return level_min + int(step)
 
 
+def guaranteed_find_kinds(world_seed: str, city_id: str, slot: int) -> tuple[NodeKind, ...]:
+    """Виды узлов-находок, которые это место держит в любом своём поколении.
+
+    Сколько среди узлов находок и какого они вида — функция места, не поколения
+    (ADR 0035): на этом стоят ``search``-задания и дело ``SEARCH`` сводки
+    (ADR 0054). Поколение только тасует, в каком узле что. Здесь — тот же расчёт
+    ``base``, что в :func:`generate_location`, оборванный до состава находок:
+    ``era`` влияет лишь на порядок, поэтому его значение неважно.
+    """
+    seed = location_seed(world_seed, city_id, slot)
+    base = rng(seed)
+    era = rng(seed)
+    count = base.randint(MIN_NODES, MAX_NODES)
+    categories = _interior_categories(base, era, count)
+    composition = _kind_composition(base, categories)
+    return tuple(composition.get(_Category.FINDING, ()))
+
+
 def node_level_span(location: GeneratedLocation) -> tuple[int, int]:
     levels = [node.level for node in location.nodes]
     return min(levels), max(levels)

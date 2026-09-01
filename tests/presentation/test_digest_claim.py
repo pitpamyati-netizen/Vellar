@@ -89,3 +89,10 @@ async def test_deed_finders_match_the_right_deed(content: GameContent, hero: Cha
     haul = next((d for d in deeds if d.kind is digest_rules.DeedKind.HAUL), None)
     if haul is not None:
         assert digest_claim.haul_deed(deeds, haul.city_id) is haul
+
+    search = next((d for d in deeds if d.kind is digest_rules.DeedKind.SEARCH), None)
+    if search is not None:
+        assert (
+            digest_claim.search_deed(deeds, slot=search.slot, node_kind=search.node_kind) is search
+        )
+        assert digest_claim.search_deed(deeds, slot=search.slot, node_kind="shrine") is None

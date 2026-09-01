@@ -39,7 +39,7 @@ def test_the_city_offers_the_summary(content: GameContent, hero: Character) -> N
 def test_the_summary_lists_the_deeds(content: GameContent, hero: Character) -> None:
     state = _step(content, hero, begin(hero), "Мир", "Сводка")
     text = render(content, hero, state, world_seed=WORLD_SEED, clock=CLOCK).text()
-    assert text.count("Надбавка:") == 4
+    assert text.count("Надбавка:") in (4, 5)
     assert "Выбить стаю" in text
     assert "Надбавку за этот переворот ещё не брали." in text
 

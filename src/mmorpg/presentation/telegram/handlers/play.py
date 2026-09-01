@@ -321,6 +321,11 @@ async def play(
     character, updated = await _pay_digest_haul(
         content, character, before_city, updated, characters, state_cache, now, settings
     )
+    # Обыск со сводки: отработанный узел названного вида в названной локации
+    # закрывает дело ``SEARCH`` и платит надбавку — раз за переворот (ADR 0054).
+    character, updated = await _pay_digest_search(
+        content, character, flow, updated, characters, state_cache, now, settings
+    )
     updated, here = await sync_location(content, updated, flow, character, locations, now, settings)
 
     # Спуск в блуждающее подземелье: замок берут здесь, до боя, - подземелье
@@ -1181,6 +1186,49 @@ async def _pay_digest_haul(
         content, settings.world_seed, before_city, rotation, character.level
     )
     deed = digest_claim.haul_deed(deeds, character.city_id)
+    if deed is None:
+        return character, updated
+
+    claimed = await digest_claim.claim(
+        state_cache,
+        content,
+        character,
+        deed,
+        now=now,
+        rotation_seconds=settings.shop_rotation_seconds,
+    )
+    if claimed is None:
+        return character, updated
+    await characters.save(claimed.character)
+    return claimed.character, updated.with_notice(f"{updated.notice} {claimed.line}".strip())
+
+
+async def _pay_digest_search(
+    content: GameContent,
+    character: Character,
+    flow: PlayState,
+    updated: PlayState,
+    characters: CharacterRepository,
+    state_cache: StateCache,
+    now: int,
+    settings: Settings,
+) -> tuple[Character, PlayState]:
+    """Закрыть дело ``SEARCH`` со сводки, если шаг отработал названный узел (ADR 0054).
+
+    Узел, из которого шаг забрал единицу волны, помечен в ``pending`` парой
+    ``node_take`` / ``node_kind``. Сводку считаем для локации, в которой игрок
+    стоит: дело зовёт именно туда.
+    """
+    index = updated.pending.node_take
+    node_kind = updated.pending.node_kind
+    if index < 0 or not node_kind or not location_known(content, flow.session):
+        return character, updated
+
+    rotation = rotation_index(now, settings.shop_rotation_seconds)
+    deeds = digest_rules.digest(
+        content, settings.world_seed, flow.session.city_id, rotation, character.level
+    )
+    deed = digest_claim.search_deed(deeds, slot=flow.session.slot, node_kind=node_kind)
     if deed is None:
         return character, updated
 

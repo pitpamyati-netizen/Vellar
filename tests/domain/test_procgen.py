@@ -20,6 +20,7 @@ from mmorpg.domain.procgen import (
     generate_enemy,
     generate_group,
     generate_location,
+    guaranteed_find_kinds,
     location_seed,
     rotation_ends_at,
     rotation_index,
@@ -150,6 +151,29 @@ def test_what_survives_every_epoch() -> None:
         assert sorted(n.kind for n in later.nodes if n.kind in finding) == want_finding
         assert later.is_connected
         assert later.exit_node.index == base.exit_node.index == len(later.nodes) - 1
+
+
+def test_guaranteed_find_kinds_matches_every_epoch() -> None:
+    """То, что обещает ``guaranteed_find_kinds``, стоит в локации в любом поколении.
+
+    На этом держится дело ``SEARCH`` сводки (ADR 0054): застава называет вид узла
+    от места, а не от поколения.
+    """
+    for city_id, slot in (("farhold", 1), ("farhold", 3), ("dusk_harbor", 2)):
+        promised = sorted(guaranteed_find_kinds(WORLD_SEED, city_id, slot))
+        for epoch in range(12):
+            here = generate_location(
+                world_seed=WORLD_SEED,
+                city_id=city_id,
+                slot=slot,
+                name="x",
+                biome="forest",
+                level_min=1,
+                level_max=30,
+                epoch=epoch,
+            )
+            present = sorted(n.kind for n in here.nodes if n.kind in _FINDING_KINDS)
+            assert present == promised
 
 
 def test_the_boss_stays_pinned_every_epoch() -> None:

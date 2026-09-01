@@ -21,8 +21,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from mmorpg.domain.entities.content import City, Dungeon, GameContent, Location
-from mmorpg.domain.entities.location import EnemyArchetype
+from mmorpg.domain.entities.location import EnemyArchetype, NodeKind
 from mmorpg.domain.procgen.enemies import GOLD_BASE, GOLD_PER_LEVEL, candidates
+from mmorpg.domain.procgen.location import guaranteed_find_kinds
 from mmorpg.domain.procgen.seeds import derive, rng, shop_seed
 from mmorpg.domain.rules.progression import experience_reward
 
@@ -33,11 +34,14 @@ DIGEST_BONUS = 1.75
 
 class DeedKind(StrEnum):
     """Что за дело заставы. Порядок в наборе постоянный: сперва охота, потом
-    разредить стаю, потом обоз, потом спуск."""
+    разредить стаю, потом обоз, потом обыскать место, потом спуск. ``SEARCH``
+    бывает не в каждом городе — не у всякого места есть гарантированный узел
+    находок (ADR 0054)."""
 
     HUNT = "hunt"  # выбить названную породу в локации города
     CULL = "cull"  # разредить любую стаю в локации города
     HAUL = "haul"  # проводить обоз до соседнего открытого города
+    SEARCH = "search"  # обыскать узел названного вида в локации города
     DELVE = "delve"  # спуститься в названное подземелье города
 
 
@@ -60,6 +64,8 @@ class Deed:
     dungeon_id: str = ""
     #: Какую породу выбить (``HUNT``).
     archetype_id: str = ""
+    #: Какой узел обыскать — ``NodeKind`` строкой (``SEARCH``).
+    node_kind: str = ""
 
 
 def digest(
@@ -71,10 +77,11 @@ def digest(
 ) -> tuple[Deed, ...]:
     """Дела заставы на этот переворот. Детерминировано от четырёх аргументов.
 
-    Четыре дела: выбить названную породу в одной локации, разредить стаю в другой,
-    проводить обоз до соседнего города и спуститься в названное подземелье.
-    Соседних открытых городов может ещё не быть (низкие уровни) — тогда вместо
-    обоза застава просит разредить ещё одну стаю.
+    Четыре-пять дел, порядок постоянный: выбить названную породу в одной локации,
+    разредить стаю в другой, проводить обоз до соседнего города, обыскать узел
+    названного вида (только там, где у места есть гарантированный узел находок) и
+    спуститься в названное подземелье. Соседних открытых городов может ещё не быть
+    (низкие уровни) — тогда вместо обоза застава просит разредить ещё одну стаю.
     """
     city = content.city(city_id)
     source = rng(derive(shop_seed(world_seed, city_id, rotation), "digest"))
@@ -98,6 +105,11 @@ def digest(
     else:
         elsewhere = [loc for loc in spots if loc.slot != cull_here.slot] or spots
         deeds.append(_cull(source.choice(elsewhere), level))
+
+    find_here = source.choice(spots)
+    prowl = _searchable_kinds(world_seed, city_id, find_here.slot)
+    if prowl:
+        deeds.append(_search(find_here, source.choice(prowl), level))
 
     holes = _delve_targets(city, level)
     if holes:
@@ -136,6 +148,16 @@ def closes_cull(deed: Deed, *, slot: int) -> bool:
 def closes_haul(deed: Deed, *, city_id: str) -> bool:
     """Приход в этот город по дороге закрывает дело ``HAUL`` на него."""
     return deed.kind is DeedKind.HAUL and bool(city_id) and deed.city_id == city_id
+
+
+def closes_search(deed: Deed, *, slot: int, node_kind: str) -> bool:
+    """Отработанный узел этого вида в этой локации закрывает дело ``SEARCH``."""
+    return (
+        deed.kind is DeedKind.SEARCH
+        and deed.slot == slot
+        and bool(deed.node_kind)
+        and deed.node_kind == node_kind
+    )
 
 
 def closes_delve(deed: Deed, *, dungeon_id: str = "", roamer_cleared: bool = False) -> bool:
@@ -179,6 +201,23 @@ def _prey_for(
     return source.choice(list(pool)) if pool else None
 
 
+#: Виды узлов-находок, под которые у сводки есть человеческая фраза. «Событие»
+#: (``NodeKind.EVENT``) сюда не входит: «обыскать происшествие» звучит натужно.
+_SEARCH_KINDS: tuple[NodeKind, ...] = (NodeKind.CACHE, NodeKind.GATHER)
+
+_SEARCH_LINE: dict[str, str] = {
+    NodeKind.CACHE.value: "Обыскать тайник у места «{place}».",
+    NodeKind.GATHER.value: "Собрать сырьё у места «{place}».",
+}
+
+
+def _searchable_kinds(world_seed: str, city_id: str, slot: int) -> list[NodeKind]:
+    """Виды узлов-находок, которые это место держит в любом поколении, — и только
+    те, о которых сводка умеет сказать словами (``_SEARCH_KINDS``)."""
+    have = set(guaranteed_find_kinds(world_seed, city_id, slot))
+    return [kind for kind in _SEARCH_KINDS if kind in have]
+
+
 def _haul_targets(content: GameContent, city: City, level: int) -> list[City]:
     """Открытые города по соседству — до трёх ближайших по дороге."""
     others = sorted(
@@ -206,6 +245,17 @@ def _hunt(location: Location, prey: EnemyArchetype, level: int) -> Deed:
         level=_deed_level(location, level),
         slot=location.slot,
         archetype_id=prey.id,
+    )
+
+
+def _search(location: Location, kind: NodeKind, level: int) -> Deed:
+    return Deed(
+        kind=DeedKind.SEARCH,
+        line=_SEARCH_LINE[kind.value].format(place=location.name),
+        where=location.name,
+        level=_deed_level(location, level),
+        slot=location.slot,
+        node_kind=kind.value,
     )
 
 

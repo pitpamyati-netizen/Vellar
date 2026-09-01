@@ -74,6 +74,7 @@ _DEED_ROUTE: dict[DeedKind, tuple[str, Label]] = {
     DeedKind.HUNT: ("locations", labels.LOCATIONS),
     DeedKind.CULL: ("locations", labels.LOCATIONS),
     DeedKind.HAUL: ("", labels.ROAD),
+    DeedKind.SEARCH: ("locations", labels.LOCATIONS),
     DeedKind.DELVE: ("dungeons", labels.DUNGEONS),
 }
 
@@ -92,7 +93,8 @@ def summary_screen(
 
     Дела — чистая функция от города, переворота и уровня игрока
     (``domain/rules/digest.py``): выбить названную породу, разредить стаю,
-    проводить обоз, спуститься в подземелье. Экран их только показывает и уводит к делу:
+    проводить обоз, обыскать узел, спуститься в подземелье. Экран их только
+    показывает и уводит к делу:
     саму надбавку начисляет то место, где дело закрывается (бой, дорога, спуск),
     и ровно раз за переворот. Заодно называет блуждающее подземелье, если оно
     осело в локации города, — иначе его находят только случайно (ADR 0037).

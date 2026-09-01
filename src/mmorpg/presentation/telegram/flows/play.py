@@ -2230,7 +2230,7 @@ def _resolve_node_action(
     # Волна входит в сид, поэтому вторая горсть из той же жилы - не первая заново.
     seed = derive(visit_seed(world_seed, state.session), "search", index, left.wave, left.taken)
     result = adventure.resolve_search(content, character, node, seed)
-    write = PendingWrite(character=result.character, node_take=index)
+    write = PendingWrite(character=result.character, node_take=index, node_kind=node.kind.value)
     if result.item_id:
         write = write.with_items((result.item_id, 1))
 

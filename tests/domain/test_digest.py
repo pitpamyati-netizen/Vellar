@@ -19,12 +19,23 @@ def _deeds(content: GameContent, city_id: str, rotation: int, level: int):
     return digest_rules.digest(content, WORLD_SEED, city_id, rotation, level)
 
 
-def test_four_deeds_in_fixed_order(content: GameContent) -> None:
-    deeds = _deeds(content, "farhold", 10, 8)
-    assert len(deeds) == 4
-    assert deeds[0].kind is DeedKind.HUNT
-    assert deeds[1].kind is DeedKind.CULL
-    assert deeds[3].kind is DeedKind.DELVE
+def test_deed_set_shape(content: GameContent) -> None:
+    for city_id, rotation, level in (("farhold", 10, 8), ("dusk_harbor", 3, 40)):
+        deeds = _deeds(content, city_id, rotation, level)
+        assert 4 <= len(deeds) <= 5
+        assert deeds[0].kind is DeedKind.HUNT
+        assert deeds[1].kind is DeedKind.CULL
+        assert deeds[-1].kind is DeedKind.DELVE
+        if len(deeds) == 5:
+            assert deeds[3].kind is DeedKind.SEARCH
+            assert deeds[3].node_kind in {"cache", "gather"}
+
+
+def test_search_deed_appears_for_some_city(content: GameContent) -> None:
+    seen = {
+        deed.kind for city in content.cities for deed in _deeds(content, city.id, 5, city.level_max)
+    }
+    assert DeedKind.SEARCH in seen
 
 
 def test_hunt_names_an_archetype_that_fits_its_place(content: GameContent) -> None:
@@ -57,7 +68,7 @@ def test_targets_are_real_places(content: GameContent) -> None:
     slots = {loc.slot for loc in city.locations}
     dungeons = {one.id for one in city.dungeons}
     for deed in _deeds(content, "dusk_harbor", 7, 40):
-        if deed.kind in (DeedKind.CULL, DeedKind.HUNT):
+        if deed.kind in (DeedKind.CULL, DeedKind.HUNT, DeedKind.SEARCH):
             assert deed.slot in slots
         elif deed.kind is DeedKind.HAUL:
             assert content.has_city(deed.city_id) and deed.city_id != city.id
@@ -119,3 +130,12 @@ def test_closers_match_only_their_own_deed(content: GameContent) -> None:
     assert haul is not None
     assert digest_rules.closes_haul(haul, city_id=haul.city_id)
     assert not digest_rules.closes_haul(haul, city_id="")
+
+    search = next((d for d in deeds if d.kind is DeedKind.SEARCH), None)
+    if search is not None:
+        assert digest_rules.closes_search(search, slot=search.slot, node_kind=search.node_kind)
+        assert not digest_rules.closes_search(search, slot=search.slot, node_kind="shrine")
+        assert not digest_rules.closes_search(
+            search, slot=search.slot + 99, node_kind=search.node_kind
+        )
+        assert not digest_rules.closes_search(cull, slot=cull.slot, node_kind=search.node_kind)

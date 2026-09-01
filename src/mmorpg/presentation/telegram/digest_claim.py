@@ -1,10 +1,11 @@
-"""Начисление надбавки за дело со сводки — раз за переворот прилавка (ADR 0053).
+"""Начисление надбавки за дело со сводки — раз за переворот прилавка (ADR 0053, 0054).
 
 Дела сводки — чистая функция от ``(город, переворот, уровень)`` в
 ``domain/rules/digest.py``. Здесь то, чего домен не делает: разовость (ключ со
 сроком в кэше, как у волн узлов и роамера) и выдача надбавки прямо там, где дело
-закрылось, — победой в бою, приходом по дороге или пройденным логовом. Второе
-сообщение об этом даёт вызывающий, как и об уровне.
+закрылось, — победой в бою (``HUNT``/``CULL``/``DELVE``), приходом по дороге
+(``HAUL``) или отработанным узлом находок (``SEARCH``). Второе сообщение об этом
+даёт вызывающий, как и об уровне.
 """
 
 from __future__ import annotations
@@ -54,6 +55,13 @@ def hunt_deed(deeds: tuple[Deed, ...], *, slot: int, archetype_ids: tuple[str, .
 
 def cull_deed(deeds: tuple[Deed, ...], slot: int) -> Deed | None:
     return next((one for one in deeds if digest_rules.closes_cull(one, slot=slot)), None)
+
+
+def search_deed(deeds: tuple[Deed, ...], *, slot: int, node_kind: str) -> Deed | None:
+    return next(
+        (one for one in deeds if digest_rules.closes_search(one, slot=slot, node_kind=node_kind)),
+        None,
+    )
 
 
 def haul_deed(deeds: tuple[Deed, ...], city_id: str) -> Deed | None:

@@ -22,7 +22,7 @@
 **Сводка — генератор направленных дел, а не список из трёх констант.**
 `digest()` остаётся чистой функцией от `(город, переворот, уровень)` и по-прежнему
 собирает всё из `derive(shop_seed(...), "digest")`. Порядок в наборе постоянный,
-дел теперь **четыре**:
+дел теперь **четыре-пять**:
 
 - `HUNT` — «выбить стаю «{порода}» у места «{локация}»»: победа в бою в этой
   локации над стаей, где была названная порода;
@@ -30,6 +30,9 @@
   прежде);
 - `HAUL` — «проводить обоз до города {N}»: приход по дороге (как прежде); нет
   открытого соседа — вместо обоза вторая `CULL`;
+- `SEARCH` — «обыскать тайник / собрать сырьё у места «{локация}»»: отработанный
+  без боя узел этого вида в названной локации. Бывает не в каждом городе — не у
+  всякого места есть **гарантированный** узел находок нужного вида;
 - `DELVE` — «спуститься в подземелье «{название}»»: пройденное логово названного
   спуска **или** любой блуждающий ход в локации города (как прежде).
 
@@ -45,25 +48,45 @@ dungeon=False)` — того же пула, из которого локация
 `HUNT` острее `CULL` не числом, а адресом: не «любой бой здесь», а «вот этот
 зверь».
 
+**`SEARCH` всегда выполнимо — и потому не в каждом городе.** Вид узла берётся из
+`procgen/location.guaranteed_find_kinds(world_seed, city_id, slot)` — тот же
+расчёт `base`, что в `generate_location`, оборванный до состава находок. Число и
+вид узлов-находок — функция места, не поколения (ADR 0035): на этом же стоят
+`search`-задания. Поколение только тасует, в каком узле что. Если у выбранного
+места нет гарантированного тайника или сбора — дела `SEARCH` в этот переворот
+просто нет (у сводки остаётся четыре дела). Закрывается одним отработанным узлом,
+без счётчика, как `HUNT`.
+
 **Учёт — там же, где у `CULL`.** `handlers/combat.py::_pay_digest` после победы в
 узле пробует `cull_deed`, затем `hunt_deed` по `archetype_id` павших
 (`session.state.combatants`, `one.enemy`, `not one.alive` — тот же список, что
-берёт `adventure.resolve_victory`). Надбавка, разовость (ключ
+берёт `adventure.resolve_victory`). `SEARCH` закрывает
+`handlers/play.py::_pay_digest_search` — рядом с `_pay_digest_haul`, по паре
+`pending.node_take` / `pending.node_kind` (новое поле `PendingWrite`, ставит
+`flows/play._resolve_node_action`). Надбавка, разовость (ключ
 `digest:{id}:{rotation}` со сроком) и `economy_log.DIGEST` — без изменений.
 
-**Кнопки экрана.** `HUNT` ведёт на «Локации», как `CULL`; `_DEED_ROUTE`
+**Кнопки экрана.** `HUNT` и `SEARCH` ведут на «Локации», как `CULL`; `_DEED_ROUTE`
 дополняется, дедупликация по тексту кнопки уже есть.
 
 ## Последствия
 
-- `domain/rules/digest.py` — `DeedKind.HUNT`, `Deed.archetype_id`, `_prey_for`,
-  `_hunt`, `closes_hunt`; `digest()` возвращает четыре дела; импорт
-  `procgen.enemies.candidates` (rules → procgen уже был ради `GOLD_BASE`).
-- `presentation/telegram/digest_claim.py` — `hunt_deed`.
-- `presentation/telegram/handlers/combat.py` — ветка `HUNT` в `_pay_digest`.
-- `presentation/telegram/screens/city.py` — `_DEED_ROUTE[DeedKind.HUNT]`,
+- `domain/rules/digest.py` — `DeedKind.HUNT` / `DeedKind.SEARCH`,
+  `Deed.archetype_id` / `Deed.node_kind`, `_prey_for` / `_hunt`,
+  `_searchable_kinds` / `_search`, `closes_hunt` / `closes_search`; `digest()`
+  возвращает четыре-пять дел; импорт `procgen.enemies.candidates` и
+  `procgen.location.guaranteed_find_kinds` (rules → procgen уже был ради
+  `GOLD_BASE`).
+- `domain/procgen/location.py` — публичная `guaranteed_find_kinds`.
+- `presentation/telegram/digest_claim.py` — `hunt_deed`, `search_deed`.
+- `presentation/telegram/handlers/combat.py` — ветка `HUNT` в `_pay_digest`;
+  `handlers/play.py` — `_pay_digest_search` рядом с `_pay_digest_haul`.
+- `presentation/telegram/flows/state.py` — `PendingWrite.node_kind`;
+  `flows/play.py::_resolve_node_action` ставит его.
+- `presentation/telegram/screens/city.py` — `_DEED_ROUTE` для `HUNT` и `SEARCH`,
   текст docstring.
-- Тесты — `tests/domain/test_digest.py`, `tests/presentation/test_digest_claim.py`,
+- Тесты — `tests/domain/test_digest.py`, `tests/domain/test_procgen.py`,
+  `tests/presentation/test_digest_claim.py`,
   `tests/presentation/test_summary_flow.py`.
 - Docs — этот ADR, `docs/digest.md`, `Claude.md`, `Roadmap.md`,
   `content/changelog.toml`.
@@ -71,11 +94,11 @@ dungeon=False)` — того же пула, из которого локация
 
 ## Что рассматривали ещё
 
-- **`SEARCH` (обыскать N мест категории) сразу здесь.** Отложено на следующий
-  заход: нужна публичная чистая функция «какие виды находок это место
-  гарантирует» (`procgen/location._kind_composition` приватна), иначе дело
-  рискует быть невыполнимым в части поколений. `HUNT` такой зависимости не
-  имеет — пул пород чист от биома.
+- **Счётчик «N мест» для `SEARCH`.** Отвергнуто по той же причине, что и у
+  `HUNT`: хранение прогресса дел ADR 0053 отклонил. Одно место — одно дело.
+- **`SEARCH` по любой находке, включая событие.** Сузили до тайника и сбора:
+  «обыскать происшествие» звучит натужно, а у этих двух видов есть ясное
+  существительное и добыча.
 - **`ROAMER` / `AFFIX` как отдельные дела.** Отвергнуто: и блуждающий ход, и
   прозвище-модификатор появляются по броску от состояния кэша, а не гарантированы
   на переворот. `DELVE` уже закрывается пройденным роамером; отдельное дело часто
