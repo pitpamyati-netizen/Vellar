@@ -50,8 +50,13 @@
    и хозяину логова. Обычная стая прозвищ не получает никогда (ADR 0042), и
    выработка этого не меняет. `handlers/combat._spawn` передаёт
    `mood_of(location_state)`.
-3. **Цены и ассортимент ближайшего города.** `DEPLETED` / `RESTLESS` вокруг
-   города двигает цены лавки и набор товара: округа кормит город.
+3. **Цены и ассортимент ближайшего города** (сделано). `mood.city_strain`
+   усредняет `_STRAIN` (0 / 0,15 / 0,5 / 0,4) по локациям города → 0…1.
+   `economy.roll_assortment(strain=)` сужает прилавок (`STRAIN_STOCK_LOSS`, но не
+   ниже `STOCK_MIN`), `buy_price(strain=)` поднимает цену (`STRAIN_PRICE_MARKUP`,
+   до +50%). `handlers/play._goods` считает `strain` только на экране лавки. Лавка
+   и без того перебрасывается каждый переворот и проверяется в том же запросе,
+   поэтому расхождения нет.
 
 **Ничего не хранится.** `mood_of` — функция от `LocationState`, а он и так живёт
 в кэше со сроком (ADR 0037), как волны узлов. В БД ничего, миграции нет.
@@ -69,10 +74,13 @@
   прокидывают в `digest()` рядом с зачётом дела.
 - `domain/rules/dungeon.py` — `affix_odds(rank, mood)`, `_MOOD_AFFIX_BUMP`;
   `handlers/combat._spawn` передаёт `mood_of(location_state)`.
+- `domain/rules/mood.py` — `city_strain`, `_STRAIN`; `domain/rules/economy.py` —
+  `roll_assortment(strain=)`, `buy_price(strain=)`, `STRAIN_*`;
+  `handlers/play._goods` считает `strain` из `city_moods` на экране лавки.
 - Тесты — `tests/domain/test_mood.py`, `tests/domain/test_digest.py` (смещение и
   неизменность `HAUL`/`DELVE`), `tests/domain/test_dungeon.py` (прибавка к шансу
-  прозвища), экран с непустым `mood` в `conftest.all_screens`.
-- Заход 3 (цены города) — свой коммит против этого ADR.
+  прозвища), `tests/presentation/test_combat_shop_flow.py` (цена и ширина
+  прилавка), экран с непустым `mood` в `conftest.all_screens`.
 - Docs — этот ADR, `Claude.md`, `Roadmap.md`, `content/changelog.toml` (на
   каждом заходе, где игрок что-то заметит).
 

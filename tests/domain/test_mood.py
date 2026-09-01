@@ -5,7 +5,13 @@ from __future__ import annotations
 from types import MappingProxyType
 
 from mmorpg.domain.entities.location import LocationState, NodeState, Roamer
-from mmorpg.domain.rules.mood import WORKED_AT, LocationMood, mood_of, worked_units
+from mmorpg.domain.rules.mood import (
+    WORKED_AT,
+    LocationMood,
+    city_strain,
+    mood_of,
+    worked_units,
+)
 from mmorpg.domain.rules.nodes import REGROWTH_WAVES
 
 
@@ -39,3 +45,11 @@ def test_a_roamer_makes_the_district_restless() -> None:
     # Самый громкий след: перебивает и выработку.
     relaid = _state(waves={0: (REGROWTH_WAVES, 0)}, roamer=roamer)
     assert mood_of(relaid) is LocationMood.RESTLESS
+
+
+def test_city_strain_averages_the_districts_and_stays_in_range() -> None:
+    assert city_strain([]) == 0.0
+    assert city_strain([LocationMood.UNTOUCHED] * 5) == 0.0
+    all_out = city_strain([LocationMood.DEPLETED] * 5)
+    some_out = city_strain([LocationMood.DEPLETED, *[LocationMood.UNTOUCHED] * 4])
+    assert 0.0 < some_out < all_out <= 1.0

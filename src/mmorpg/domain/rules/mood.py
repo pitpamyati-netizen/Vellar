@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from enum import StrEnum
 
 from mmorpg.domain.entities.location import LocationState
@@ -52,3 +53,26 @@ def mood_of(state: LocationState) -> LocationMood:
     if worked_units(state) >= WORKED_AT:
         return LocationMood.WORKED
     return LocationMood.UNTOUCHED
+
+
+#: Вклад каждого состояния в «нужду» ближайшего города (ADR 0055). Выбитая округа
+#: кормит город хуже всего; встревоженная — почти так же плохо, но по другой
+#: причине (по дорогам ходит подземная дрянь).
+_STRAIN: dict[LocationMood, float] = {
+    LocationMood.UNTOUCHED: 0.0,
+    LocationMood.WORKED: 0.15,
+    LocationMood.DEPLETED: 0.5,
+    LocationMood.RESTLESS: 0.4,
+}
+
+
+def city_strain(moods: Iterable[LocationMood]) -> float:
+    """Насколько туго ближайшему городу по округе вокруг: 0 (всё тихо) … 1.
+
+    Средняя «нужда» по локациям города. Лавка от неё дорожает и сужается
+    (``domain/rules/economy.py``), а больше пока ничего.
+    """
+    values = list(moods)
+    if not values:
+        return 0.0
+    return min(1.0, sum(_STRAIN.get(one, 0.0) for one in values) / len(values))

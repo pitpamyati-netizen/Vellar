@@ -202,7 +202,9 @@ async def play(
         shop_rotation=rotation_index(now, settings.shop_rotation_seconds),
         gather_cooldown=settings.gather_cooldown_seconds,
     )
-    goods = await _goods(content, character, flow, inventory, settings, clock.shop_rotation)
+    goods = await _goods(
+        content, character, flow, inventory, locations, settings, clock.shop_rotation, now
+    )
     company = await _company(flow, character, locations, now)
     here = await _location_state(content, flow, locations, now)
     view = await _keeper_view(
@@ -362,7 +364,9 @@ async def play(
 
     # Экран, на котором кончился шаг, - не тот, с которого он начался, и сумка по дороге
     # могла измениться, поэтому то, что он показывает, читается заново.
-    shelf = await _goods(content, character, updated, inventory, settings, clock.shop_rotation)
+    shelf = await _goods(
+        content, character, updated, inventory, locations, settings, clock.shop_rotation, now
+    )
     company = await _company(updated, character, locations, now)
     counted = await _tally(content, updated, characters)
     shown = await _keeper_view(
@@ -500,8 +504,10 @@ async def _goods(
     character: Character,
     flow: PlayState,
     inventory: InventoryRepository,
+    locations: LocationStateCache,
     settings: Settings,
     rotation: int,
+    now: int,
 ) -> Goods:
     """Что лежит в сумке и что предлагает прилавок - для тех экранов, которым это нужно.
 
@@ -517,17 +523,24 @@ async def _goods(
     if flow.screen is not ScreenId.SHOP:
         return Goods(gold=character.gold, owned=owned)
 
+    city_id = flow.city_id or character.city_id
+    # «Нужда» города по состоянию округи вокруг: выбитая и встревоженная земля
+    # кормит город хуже, лавка дорожает и сужается (ADR 0055).
+    moods = await digest_claim.city_moods(locations, content, city_id, now=now)
+    strain = mood_rules.city_strain(moods.values())
+
     bundle = collect_modifiers(content, character)
     stock = roll_assortment(
         content,
         world_seed=settings.world_seed,
-        city_id=flow.city_id or character.city_id,
+        city_id=city_id,
         rotation=rotation,
         character_level=character.level,
         reputation=bundle.get(economy_rules.REPUTATION_KEY, 0.0),
+        strain=strain,
     )
     charisma = primary_stats(content, character)[StatCode.CHA]
-    prices = {item.id: buy_price(content, item, charisma=charisma) for item in stock}
+    prices = {item.id: buy_price(content, item, charisma=charisma, strain=strain) for item in stock}
     return Goods(gold=character.gold, owned=owned, stock=stock, prices=prices)
 
 

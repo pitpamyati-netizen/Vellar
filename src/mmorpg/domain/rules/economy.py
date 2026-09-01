@@ -30,6 +30,12 @@ CHARISMA_DISCOUNT_PER_POINT = 0.4
 MAX_CHARISMA_DISCOUNT = 15.0
 SELL_FRACTION = 0.35
 
+#: Что делает с лавкой «нужда» ближайшего города (``mood.city_strain``, 0…1,
+#: ADR 0055). При полной нужде цена растёт наполовину, а прилавок теряет половину
+#: позиций — но не опускается ниже ``STOCK_MIN``: голодный город всё же торгует.
+STRAIN_PRICE_MARKUP = 0.5
+STRAIN_STOCK_LOSS = 0.5
+
 # Престол берёт сбор с каждой сделки между игроками (``Narrative.md``, раздел 9).
 # Это число - вся причина, по которой золото не копится вечно: единственный отток,
 # который растёт вместе с тем, сколько игроки на самом деле торгуют.
@@ -44,12 +50,16 @@ def roll_assortment(
     rotation: int,
     character_level: int,
     reputation: float = 0.0,
+    strain: float = 0.0,
 ) -> tuple[Item, ...]:
     """Чем торгует этот город в этот переворот своего прилавка.
 
     Чем выше репутация, тем шире прилавок, и постоянный покупатель видит больше:
     ``reputation`` приходит процентами ``reputation_percent`` со всего, что на
     персонаже надето и выбрано (``REPUTATION_PER_STEP``).
+
+    ``strain`` (0…1, ``mood.city_strain``, ADR 0055) — «нужда» города по состоянию
+    округи вокруг: сужает прилавок, но не ниже ``STOCK_MIN``.
 
     Редкость решает, что вообще может лечь на прилавок. Снаряжение собирается во
     всех редкостях сразу (``domain/procgen/items.py``), и без веса лавка
@@ -73,6 +83,9 @@ def roll_assortment(
         )[:8]
 
     size = min(len(candidates), source.randint(STOCK_MIN, STOCK_MAX) + widened)
+    pinch = max(0.0, min(1.0, strain))
+    if pinch:
+        size = max(min(STOCK_MIN, len(candidates)), size - round(size * STRAIN_STOCK_LOSS * pinch))
     chosen: list[Item] = []
     pool = list(candidates)
     weights = [content.rarity(item.rarity).weight for item in pool]
@@ -89,10 +102,12 @@ def buy_price(
     *,
     modifiers: dict[str, float] | None = None,
     charisma: int = 0,
+    strain: float = 0.0,
 ) -> int:
-    """Цена в лавке после редкости, харизмы и скидок от черт."""
+    """Цена в лавке после редкости, нужды города, харизмы и скидок от черт."""
     rarity = content.rarity(item.rarity)
     price = item.price * rarity.price_factor
+    price *= 1.0 + STRAIN_PRICE_MARKUP * max(0.0, min(1.0, strain))
 
     discount = min(MAX_CHARISMA_DISCOUNT, charisma * CHARISMA_DISCOUNT_PER_POINT)
     if modifiers:

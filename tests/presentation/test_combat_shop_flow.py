@@ -549,6 +549,24 @@ def test_reputation_widens_the_shelf(content: GameContent) -> None:
     assert len(trusted) >= len(plain)
 
 
+def test_city_strain_raises_prices_and_thins_the_shelf(content: GameContent) -> None:
+    kwargs = {
+        "world_seed": WORLD_SEED,
+        "city_id": "farhold",
+        "rotation": 3,
+        "character_level": 10,
+        "reputation": 400.0,
+    }
+    calm = roll_assortment(content, **kwargs)
+    strained = roll_assortment(content, **kwargs, strain=1.0)
+    assert len(strained) < len(calm)
+    assert len(strained) >= 6  # STOCK_MIN: голодный город всё же торгует
+
+    item = content.item("light_body@6#common")
+    assert buy_price(content, item, strain=1.0) > buy_price(content, item)
+    assert buy_price(content, item, strain=0.0) == buy_price(content, item)
+
+
 def test_charisma_and_traits_lower_the_price(content: GameContent) -> None:
     item = content.item("light_body@6#common")
     plain = buy_price(content, item)
