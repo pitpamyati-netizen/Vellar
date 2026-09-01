@@ -36,6 +36,7 @@ from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import dungeon as dungeon_rules
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import houses as house_rules
+from mmorpg.domain.rules import mood as mood_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import quests as quest_rules
@@ -450,6 +451,7 @@ def _render(
                 others=neighbours,
                 pvp=_location_allows_pvp(content, state.session),
                 roamer=here_now.roamer,
+                mood=mood_rules.mood_of(here_now),
                 notice=state.notice,
             )
         # Экран говорит «локация», а вылазки за ним больше нет: состояние, сохранённое

@@ -22,6 +22,7 @@ from mmorpg.domain.entities.location import (
 from mmorpg.domain.rules import economy as economy_rules
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules.combat import blow_range
+from mmorpg.domain.rules.mood import LocationMood
 from mmorpg.domain.rules.nodes import Standing
 from mmorpg.domain.rules.progression import LevelUp, experience_into_level
 from mmorpg.domain.rules.stats import DerivedStats
@@ -369,6 +370,15 @@ def node_left_line(standing: Standing, kind: NodeKind) -> str:
 #: Как подземелье описывается на экране, смотря на кого оно рассчитано.
 ROAMER_AUDIENCE: dict[bool, str] = {False: "рассчитано на одного", True: "рассчитано на отряд"}
 
+#: Одна строка о том, как звучит округа (``domain/rules/mood.py``, ADR 0055).
+#: «Встревожена» здесь не названа: блуждающий ход и без того описан отдельными
+#: строками, а вторая о том же — лишняя.
+MOOD_LINE: dict[LocationMood, str] = {
+    LocationMood.UNTOUCHED: "Округа тихая: давно её как следует не тревожили.",
+    LocationMood.WORKED: "По округе ходят: часть узлов уже подчищена.",
+    LocationMood.DEPLETED: "Округу выработали, и она переложилась: тропы и места легли заново.",
+}
+
 
 def location_screen(
     location: GeneratedLocation,
@@ -379,6 +389,7 @@ def location_screen(
     others: Sequence[Presence] = (),
     pvp: bool = False,
     roamer: Roamer | None = None,
+    mood: LocationMood = LocationMood.UNTOUCHED,
     notice: str = "",
 ) -> Screen:
     neighbours = tuple(location.node(index) for index in node.links)
@@ -424,6 +435,10 @@ def location_screen(
         lines.append(
             "Прямо здесь блуждающее подземелье, но в него уже спустились. Дождитесь, пока выйдут."
         )
+
+    mood_line = MOOD_LINE.get(mood)
+    if mood_line:
+        lines.append(mood_line)
 
     lines.append(f"Узлов, где ещё что-то есть: {busy} из {len(worth_doing)}.")
     if busy == len(worth_doing):

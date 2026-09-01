@@ -323,6 +323,14 @@ async def walk_to(player: Player, content: GameContent, kind: NodeKind) -> int:
 # --- цикл -------------------------------------------------------------
 
 
+async def test_a_fresh_location_reads_as_untouched(player: Player, content: GameContent) -> None:
+    """Экран локации, в которую только что вошли, называет округу тихой (ADR 0055)."""
+    await player.press("Мир")
+    await player.press("Локации")
+    screen = await player.press("1. Луга у Заставы")
+    assert "Округа тихая" in screen.text()
+
+
 async def test_a_battle_node_actually_starts_a_fight(player: Player, content: GameContent) -> None:
     """То единственное, на чём стоит всё остальное: бой открывается."""
     await walk_to(player, content, NodeKind.BATTLE)

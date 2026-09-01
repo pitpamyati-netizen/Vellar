@@ -46,6 +46,7 @@ from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules.combat import hero_combatant, monster_combatant, open_battle
 from mmorpg.domain.rules.economy import buy_price, roll_assortment
 from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
+from mmorpg.domain.rules.mood import LocationMood
 from mmorpg.domain.rules.party import Party as PlayerParty
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.handlers import creation as handlers_creation
@@ -831,6 +832,7 @@ def all_screens(
             sample_location,
             sample_location.exit_node,
             standing=emptied_location(sample_location),
+            mood=LocationMood.DEPLETED,
             notice="Узел вычищен.",
         ),
         play.location_screen(
