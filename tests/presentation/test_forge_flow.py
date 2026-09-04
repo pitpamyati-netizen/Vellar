@@ -16,8 +16,8 @@ from mmorpg.presentation.telegram.screens.base import ScreenId
 WORLD_SEED = "vellar-test"
 CLOCK = Clock(now=1_700_000_000, shop_rotation=100)
 
-SWORD = "sword@6#common"
-PLATE = "heavy_body@6#common"
+SWORD = "sword@5#common"
+PLATE = "heavy_body@5#common"
 
 
 @pytest.fixture

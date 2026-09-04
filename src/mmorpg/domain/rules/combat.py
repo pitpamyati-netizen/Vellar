@@ -161,7 +161,7 @@ LOW_HEALTH_THRESHOLD = 0.35
 # Точность отвечает *разницей* уровней, а не самим уровнем: измеренная
 # абсолютно, она превращала любой бой на трёхсотом уровне в подбрасывание
 # монеты.
-ACCURACY_PER_LEVEL_GAP = 1.2
+ACCURACY_PER_LEVEL_GAP = 2.4
 
 # Броня смягчается уровнем защищающегося; смягчение и цена надетого - одна кривая,
 # прочитанная с двух концов, и живёт она в ``domain/rules/equipment.py``.
@@ -215,7 +215,7 @@ BREACH_ANSWER_SCALE = 0.5
 # число к трёхсотому уровню не значило бы ничего.
 
 #: Сколько брони прибавляет закрывшемуся каждый его уровень.
-DEFEND_ARMOR_PER_LEVEL = 3.0
+DEFEND_ARMOR_PER_LEVEL = 6.0
 #: Сколько ходов держится защита. Два, а не один: срок укорачивается в конце
 #: того же хода, в который защита поставлена (``_upkeep``), и «один ход» значило
 #: бы, что закрывшийся не закрыт ни от чего.
@@ -984,7 +984,7 @@ def _attempt_skill(
 
     modifiers = mods.collect_modifiers(content, character, actor.effects)
     cost = round(
-        _skill_cost(skill, modifiers, free=actor.free_cast)
+        _skill_cost(skill, modifiers, free=actor.free_cast, max_resource=actor.max_resource)
         * skill_rules.cost_factor(character, skill)
     )
     if cost > actor.resource:
@@ -1033,11 +1033,27 @@ def _use_skill(
     )
 
 
-def _skill_cost(skill: Skill, modifiers: Mapping[str, float], *, free: bool) -> int:
+def skill_cost(skill: Skill, max_resource: int) -> int:
+    """Во что умение обходится бойцу с таким запасом.
+
+    ``Skill.cost`` - проценты от максимума запаса, а не число (ADR 0058). Числом
+    цена держалась ровно один уровень: запас растёт с уровнем и характеристикой,
+    а «стоит 8» не росло ни с чем, и на сотом уровне Отвага, Чары и Прыть были
+    украшением экрана. Проценты значат одно и то же на всей полосе: умение стоит
+    той же доли хода, что и на первом уровне.
+    """
+    if skill.cost <= 0 or max_resource <= 0:
+        return 0
+    return max(1, round(max_resource * skill.cost / 100.0))
+
+
+def _skill_cost(
+    skill: Skill, modifiers: Mapping[str, float], *, free: bool, max_resource: int
+) -> int:
     if free:
         return 0
     reduction = 1.0 - modifiers.get("cost_reduction_percent", 0.0) / 100.0
-    return max(0, round(skill.cost * max(0.1, reduction)))
+    return max(0, round(skill_cost(skill, max_resource) * max(0.1, reduction)))
 
 
 def _apply_spec(

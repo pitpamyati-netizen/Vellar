@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from mmorpg.domain.entities import GameContent
-from mmorpg.domain.procgen.enemies import GOLD_BASE, GOLD_PER_LEVEL, candidates
+from mmorpg.domain.procgen.enemies import candidates, gold_at
 from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules.digest import DeedKind
 from mmorpg.domain.rules.mood import LocationMood
@@ -116,7 +116,7 @@ def test_haul_falls_back_when_no_neighbour_is_open(content: GameContent) -> None
 
 
 def test_haul_points_at_an_open_neighbour(content: GameContent) -> None:
-    hauls = [d for d in _deeds(content, "dusk_harbor", 5, 40) if d.kind is DeedKind.HAUL]
+    hauls = [d for d in _deeds(content, "dusk_harbor", 5, 20) if d.kind is DeedKind.HAUL]
     assert hauls and hauls[0].city_id == "farhold"
 
 
@@ -134,7 +134,7 @@ def test_reward_grows_with_level_and_stays_in_bounds(content: GameContent) -> No
     assert 0 < low_gold < high_gold
     assert 0 < low_xp < high_xp
     # «Полтора-два обычных»: золото — ровно множитель от обычного боя уровня дела.
-    plain = GOLD_BASE + GOLD_PER_LEVEL * 50
+    plain = gold_at(50)
     assert 1.5 * plain <= high_gold <= 2.0 * plain
 
 

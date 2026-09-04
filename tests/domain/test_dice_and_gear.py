@@ -121,8 +121,8 @@ def test_growing_never_turns_a_blow_into_a_coin_flip() -> None:
 
 
 def test_a_gear_id_reads_back_the_way_it_was_written() -> None:
-    item_id = gear_procgen.gear_id("sword", 45, "rare")
-    assert gear_procgen.parse_gear_id(item_id) == ("sword", 45, "rare")
+    item_id = gear_procgen.gear_id("sword", 24, "rare")
+    assert gear_procgen.parse_gear_id(item_id) == ("sword", 24, "rare")
 
 
 @pytest.mark.parametrize("item_id", ["wolf_pelt", "sword@45", "sword#rare", "", "sword@ноль#rare"])
@@ -145,14 +145,14 @@ def test_gear_is_named_apart_from_everything_else(content: GameContent) -> None:
 def test_a_later_grade_costs_more_and_a_rarer_thing_costs_more(content: GameContent) -> None:
     grades = [content.item(f"sword@{tier.level}#common").price for tier in content.gear_tiers]
     assert grades == sorted(grades)
-    rarities = [content.item(f"sword@45#{rarity.id}").price for rarity in content.rarities]
+    rarities = [content.item(f"sword@24#{rarity.id}").price for rarity in content.rarities]
     assert rarities == sorted(rarities)
 
 
 # --- что падает ------------------------------------------------------
 
 
-def rolls(content: GameContent, rank: EnemyRank, level: int = 45, tries: int = 400) -> list[str]:
+def rolls(content: GameContent, rank: EnemyRank, level: int = 24, tries: int = 400) -> list[str]:
     source = random.Random(20260820)
     dropped = [
         gear_procgen.roll_drop(content, source, level=level, rank=rank) for _ in range(tries)
@@ -188,7 +188,7 @@ def test_what_falls_is_a_thing_the_game_actually_has(content: GameContent) -> No
 
 
 def test_what_falls_is_of_the_grade_of_the_one_who_dropped_it(content: GameContent) -> None:
-    for level in (1, 45, 300):
+    for level in (1, 24, 150):
         tier = gear_procgen.tier_at(content, level)
         assert tier is not None
         for item_id in rolls(content, EnemyRank.BOSS, level=level, tries=60):

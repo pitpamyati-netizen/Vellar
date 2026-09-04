@@ -900,13 +900,13 @@ def test_gear_level_defaults_to_the_player_and_can_be_typed(with_players: Panel)
     with_players.players = (replace(with_players.players[0], level=40),)
     card = _give(with_players)
     card.press(card.button_with("топор"))
-    assert "26" in card.screen().text(), "ступень по уровню игрока"
+    assert "35" in card.screen().text(), "ступень по уровню игрока"
 
     card.press("6")
     card.press(card.button_with("Редкий"))
 
     assert card.state.pending.grant_item is not None
-    assert card.state.pending.grant_item[1] == "axe@6#rare"
+    assert card.state.pending.grant_item[1] == "axe@5#rare"
 
 
 def test_a_written_item_is_given_by_count(with_players: Panel) -> None:

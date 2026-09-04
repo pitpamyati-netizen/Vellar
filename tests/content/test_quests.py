@@ -17,7 +17,7 @@ def test_the_first_act_is_actually_written(content: GameContent) -> None:
     farhold = content.quests_in("farhold")
     assert len(farhold) >= 5
     assert farhold[0].level == 1
-    assert max(quest.level for quest in farhold) >= 20
+    assert max(quest.level for quest in farhold) >= 10
 
 
 def test_every_contract_belongs_to_a_city_that_exists(content: GameContent) -> None:

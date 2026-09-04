@@ -16,7 +16,7 @@ from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, House
 
 #: С какого уровня вступают в дом: после обучения, но задолго до эндгейма.
-JOIN_LEVEL = 20
+JOIN_LEVEL = 10
 
 #: Вступительный взнос. Уходит из игры (``economy_log.SERVICE``), как грамота
 #: гильдии. Уйти из дома бесплатно, а вступить в другой — снова взнос.

@@ -18,6 +18,7 @@ from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import BattleState
 from mmorpg.domain.entities.content import GameContent, Item, ItemKind
 from mmorpg.domain.entities.location import LocationNode, NodeKind
+from mmorpg.domain.procgen.enemies import gold_at
 from mmorpg.domain.procgen.seeds import rng
 from mmorpg.domain.rules import crafts as craft_rules
 from mmorpg.domain.rules import economy
@@ -49,12 +50,13 @@ DEFEAT_GOLD_PERCENT = 10
 DEFEAT_HEALTH_PERCENT = 25
 
 # Тихий узел платит долю от того, что платит бой того же уровня: поиск - безопасный
-# способ потратить стражу, а значит, и более медленный.
-CACHE_GOLD_BASE = 6.0
-CACHE_GOLD_PER_LEVEL = 3.2
-EVENT_GOLD_PER_LEVEL = 1.6
+# способ потратить стражу, а значит, и более медленный. Доля, а не своя кривая
+# (ADR 0058): всё, что игра платит золотом, меряется одним боем своего уровня
+# (``procgen/enemies.gold_at``), иначе тихий узел рано или поздно обгоняет бой.
+CACHE_GOLD_SHARE = 2.5
+EVENT_GOLD_SHARE = 1.2
 SEARCH_EXPERIENCE_BASE = 5
-SEARCH_EXPERIENCE_PER_LEVEL = 3
+SEARCH_EXPERIENCE_PER_LEVEL = 6
 SHRINE_HEAL_PERCENT = 35
 CACHE_ITEM_CHANCE = 45.0
 
@@ -226,7 +228,7 @@ def resolve_search(
 
     match node.kind:
         case NodeKind.CACHE:
-            gold = max(1, round(CACHE_GOLD_BASE + CACHE_GOLD_PER_LEVEL * node.level))
+            gold = max(1, round(gold_at(node.level) * CACHE_GOLD_SHARE))
             if source.uniform(0, 100) < CACHE_ITEM_CHANCE:
                 item_id = _pick_item(content, source, node.level)
                 count = 1 if item_id else 0
@@ -245,7 +247,7 @@ def resolve_search(
             healed = min(restored, stats.max_health - current)
             working = working.with_health(current + healed, stats.max_health)
         case _:
-            gold = max(1, round(EVENT_GOLD_PER_LEVEL * node.level))
+            gold = max(1, round(gold_at(node.level) * EVENT_GOLD_SHARE))
 
     share = max(0.0, mods.percent(mods.collect_modifiers(content, character), EVENT_REWARD_KEY))
     if node.kind is not NodeKind.SHRINE:
@@ -337,8 +339,8 @@ def _gather(
 # целиком», которой в коде не платило ничто. Это и есть та награда.  Она стоит примерно
 # ещё одного эпического боя — достаточно, чтобы спускаться раненым было настоящим
 # решением, а уйти на втором этаже чего-то стоило.
-DESCENT_GOLD_BASE = 25.0
-DESCENT_GOLD_PER_LEVEL = 9.0
+#: Дно платит золотом как пять обычных боёв своего уровня (``gold_at``, ADR 0058).
+DESCENT_GOLD_SHARE = 5.0
 #: Дно платит опытом как ещё один противник уровня самого спуска.
 DESCENT_EXPERIENCE_BASE = 30
 
@@ -360,7 +362,7 @@ class DescentPrize:
 
 def descent_gold(level: int) -> int:
     """Сколько платит дно, до всяких бросков."""
-    return max(1, round(DESCENT_GOLD_BASE + DESCENT_GOLD_PER_LEVEL * max(1, level)))
+    return max(1, round(gold_at(level) * DESCENT_GOLD_SHARE))
 
 
 def descent_prize(

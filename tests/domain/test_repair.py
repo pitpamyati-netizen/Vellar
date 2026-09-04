@@ -16,8 +16,8 @@ from mmorpg.domain.rules import repair as repair_rules
 from mmorpg.domain.rules import tools as tool_rules
 from mmorpg.domain.rules.stats import derived_stats
 
-SWORD = "sword@6#common"
-PLATE = "heavy_body@6#common"
+SWORD = "sword@5#common"
+PLATE = "heavy_body@5#common"
 PICK = "pick@1#common"
 
 
@@ -45,13 +45,13 @@ def worn(character: Character, item_id: str, spent: int) -> Character:
 
 def test_durability_grows_with_the_level_of_the_thing(content: GameContent) -> None:
     early = content.item("sword@1#common")
-    late = content.item("sword@45#common")
+    late = content.item("sword@24#common")
     assert repair_rules.limit(late) > repair_rules.limit(early)
 
 
 def test_durability_grows_with_the_rarity_of_the_thing(content: GameContent) -> None:
-    plain = content.item("sword@6#common")
-    named = content.item("sword@6#legendary")
+    plain = content.item("sword@5#common")
+    named = content.item("sword@5#legendary")
     assert repair_rules.limit(named) > repair_rules.limit(plain)
 
 
@@ -139,9 +139,9 @@ def test_the_price_follows_the_wear(content: GameContent, knight: Character) -> 
 
 
 def test_the_price_follows_level_and_rarity(content: GameContent, knight: Character) -> None:
-    plain = content.item("sword@6#common")
-    named = content.item("sword@6#rare")
-    late = content.item("sword@45#common")
+    plain = content.item("sword@5#common")
+    named = content.item("sword@5#rare")
+    late = content.item("sword@24#common")
     spent_plain = repair_rules.price_of(worn(knight, plain.id, repair_rules.limit(plain)), plain)
     spent_named = repair_rules.price_of(worn(knight, named.id, repair_rules.limit(named)), named)
     spent_late = repair_rules.price_of(worn(knight, late.id, repair_rules.limit(late)), late)
@@ -151,7 +151,7 @@ def test_the_price_follows_level_and_rarity(content: GameContent, knight: Charac
 
 def test_repair_is_always_cheaper_than_a_new_thing(content: GameContent, knight: Character) -> None:
     """Починка дороже вещи - это не починка, а лавка."""
-    for item_id in (SWORD, PLATE, "sword@45#legendary"):
+    for item_id in (SWORD, PLATE, "sword@24#legendary"):
         item = content.item(item_id)
         price = repair_rules.price_of(worn(knight, item_id, repair_rules.limit(item)), item)
         assert price < shop_rules.buy_price(content, item)

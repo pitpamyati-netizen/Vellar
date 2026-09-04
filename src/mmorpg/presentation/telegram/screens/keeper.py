@@ -46,6 +46,7 @@ from mmorpg.domain.rules.guild import Guild, GuildRank
 from mmorpg.domain.rules.keeper import GOLD_STEP, POINTS_STEP
 from mmorpg.domain.rules.overlay import FieldKind, FieldSpec
 from mmorpg.domain.rules.party import Party
+from mmorpg.domain.rules.progression import MAX_LEVEL
 from mmorpg.domain.rules.stats import DerivedStats
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
@@ -675,7 +676,7 @@ def describe_player_filter(content: GameContent, criteria: PlayerFilter) -> str:
     """Фильтр игроков словами. Пусто — ничего не задано."""
     parts: list[str] = []
     if criteria.level_min or criteria.level_max:
-        parts.append(f"уровни с {criteria.level_min or 1} по {criteria.level_max or 300}")
+        parts.append(f"уровни с {criteria.level_min or 1} по {criteria.level_max or MAX_LEVEL}")
     if criteria.city_id:
         parts.append(f"город {_city_name(content, criteria.city_id)}")
     if criteria.guild:

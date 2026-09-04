@@ -112,8 +112,8 @@ def test_travel_to_another_city_costs_gold_and_sticks(
     moved = arrived.pending.character
     assert moved is not None
     assert moved.city_id == "dusk_harbor"
-    assert moved.gold == 500 - 160
-    assert "Дорога стоила 160" in arrived.notice
+    assert moved.gold == 500 - 107
+    assert "Дорога стоила 107" in arrived.notice
 
 
 def test_choosing_your_own_city_costs_nothing(
@@ -131,7 +131,7 @@ def test_travel_is_refused_without_the_fare(content: GameContent, hero: Characte
     assert stopped.screen is ScreenId.WORLD
     assert stopped.city_id == broke.city_id
     assert stopped.pending.empty
-    assert "стоит 160" in stopped.notice
+    assert "стоит 107" in stopped.notice
 
 
 def test_a_keeper_travels_for_free(content: GameContent, hero: Character) -> None:
@@ -265,7 +265,7 @@ def test_location_list_shows_level_bands(
     listed = step(content, hero, in_city, "Локации")
     text = render(content, hero, listed, world_seed=WORLD_SEED).text()
     assert "Луга у Заставы" in text
-    assert "уровни с 1 по 4" in text
+    assert "уровни с 1 по 2" in text
 
 
 def test_entering_a_location_starts_at_the_entrance(

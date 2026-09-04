@@ -285,7 +285,7 @@ def sealbearer(fighter: Character) -> Character:
         turning_cycle="toll",
         turning_answer="toll_keep",
         equipment=Equipment(
-            MappingProxyType({"trinket": "ring@26#legendary", "body": "heavy_body@26#legendary"})
+            MappingProxyType({"trinket": "ring@12#legendary", "body": "heavy_body@12#legendary"})
         ),
         loadout=replace(
             fighter.loadout,
@@ -327,9 +327,9 @@ def battered(fighter: Character) -> Character:
     return replace(
         fighter,
         equipment=Equipment(
-            MappingProxyType({"weapon": "sword@6#common", "body": "heavy_body@6#common"})
+            MappingProxyType({"weapon": "sword@5#common", "body": "heavy_body@5#common"})
         ),
-        wear=ItemWear(MappingProxyType({"sword@6#common": 20, "heavy_body@6#common": 999})),
+        wear=ItemWear(MappingProxyType({"sword@5#common": 20, "heavy_body@5#common": 999})),
     )
 
 
@@ -1166,8 +1166,8 @@ def all_screens(
         ),
         item_screens.item_screen(
             content,
-            replace(hero, equipment=hero.equipment.equip("body", "light_body@6#common")),
-            content.item("medium_body@6#uncommon"),
+            replace(hero, equipment=hero.equipment.equip("body", "light_body@5#common")),
+            content.item("medium_body@5#uncommon"),
             quantity=1,
             sale=12,
         ),

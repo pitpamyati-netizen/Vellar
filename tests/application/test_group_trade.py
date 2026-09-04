@@ -322,15 +322,15 @@ async def test_an_ambiguous_name_asks_instead_of_guessing(
     argus: Character,
     merla: Character,
 ) -> None:
-    await inventory.add(argus.id, "medium_head@6#common", 1)
-    await inventory.add(argus.id, "sword@6#common", 1)
+    await inventory.add(argus.id, "medium_head@5#common", 1)
+    await inventory.add(argus.id, "sword@5#common", 1)
 
     # «Простой шишак» и «Простой меч» — одна ступень, два разных предмета.
     outcome = await run(trade, "передать простой", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
 
     assert outcome.refusal is Refusal.AMBIGUOUS_ITEM
     assert len(outcome.options) == 2
-    assert await inventory.count(argus.id, "medium_head@6#common") == 1
+    assert await inventory.count(argus.id, "medium_head@5#common") == 1
 
 
 async def test_giving_to_yourself_is_refused(

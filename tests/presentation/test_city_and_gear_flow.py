@@ -89,8 +89,8 @@ def in_city(content: GameContent, hero: Character) -> PlayState:
 
 def test_a_thing_in_the_bag_opens_its_card_first(content: GameContent, hero: Character) -> None:
     """Нажатие на вещь больше не действует ею: сперва карточка, потом кнопка."""
-    dressed = replace(hero, equipment=hero.equipment.equip("body", "light_body@6#common"))
-    goods = Goods(gold=dressed.gold, owned=(OwnedItem("medium_body@6#uncommon", 1),))
+    dressed = replace(hero, equipment=hero.equipment.equip("body", "light_body@5#common"))
+    goods = Goods(gold=dressed.gold, owned=(OwnedItem("medium_body@5#uncommon", 1),))
     inventory = step(content, dressed, begin(dressed), "Инвентарь", goods=goods)
     card = step(
         content, dressed, inventory, "Простая кольчуга доброй ковки, штук 1 — надеть", goods=goods
@@ -105,7 +105,7 @@ def test_a_thing_in_the_bag_opens_its_card_first(content: GameContent, hero: Cha
 
 
 def test_putting_on_a_thing_takes_it_out_of_the_bag(content: GameContent, hero: Character) -> None:
-    goods = Goods(gold=hero.gold, owned=(OwnedItem("medium_body@6#uncommon", 1),))
+    goods = Goods(gold=hero.gold, owned=(OwnedItem("medium_body@5#uncommon", 1),))
     inventory = step(content, hero, begin(hero), "Инвентарь", goods=goods)
     worn = step(
         content,
@@ -117,14 +117,14 @@ def test_putting_on_a_thing_takes_it_out_of_the_bag(content: GameContent, hero: 
     )
 
     assert worn.pending.character is not None
-    assert worn.pending.character.equipment.item_in("body") == "medium_body@6#uncommon"
-    assert worn.pending.items == (("medium_body@6#uncommon", -1),)
+    assert worn.pending.character.equipment.item_in("body") == "medium_body@5#uncommon"
+    assert worn.pending.items == (("medium_body@5#uncommon", -1),)
     assert "надет" in worn.notice
 
 
 def test_what_it_replaces_goes_back_into_the_bag(content: GameContent, hero: Character) -> None:
-    dressed = replace(hero, equipment=hero.equipment.equip("body", "light_body@6#common"))
-    goods = Goods(gold=dressed.gold, owned=(OwnedItem("medium_body@6#uncommon", 1),))
+    dressed = replace(hero, equipment=hero.equipment.equip("body", "light_body@5#common"))
+    goods = Goods(gold=dressed.gold, owned=(OwnedItem("medium_body@5#uncommon", 1),))
     inventory = step(content, dressed, begin(dressed), "Инвентарь", goods=goods)
     worn = step(
         content,
@@ -135,14 +135,14 @@ def test_what_it_replaces_goes_back_into_the_bag(content: GameContent, hero: Cha
         goods=goods,
     )
 
-    assert worn.pending.items == (("medium_body@6#uncommon", -1), ("light_body@6#common", 1))
+    assert worn.pending.items == (("medium_body@5#uncommon", -1), ("light_body@5#common", 1))
 
 
 def test_a_card_names_the_kind_and_the_armour_it_holds(
     content: GameContent, hero: Character
 ) -> None:
     """Броня называется числом: процент от выносливости и был тем, что ничего не менял."""
-    goods = Goods(gold=hero.gold, owned=(OwnedItem("medium_body@6#uncommon", 1),))
+    goods = Goods(gold=hero.gold, owned=(OwnedItem("medium_body@5#uncommon", 1),))
     inventory = step(content, hero, begin(hero), "Инвентарь", goods=goods)
     card = step(
         content, hero, inventory, "Простая кольчуга доброй ковки, штук 1 — надеть", goods=goods
@@ -158,7 +158,7 @@ def test_a_thing_your_class_never_wears_warns_but_never_refuses(
 ) -> None:
     """Чужое не запрещено, оно дорого: цена сказана до нажатия, кнопка на месте."""
     rogue = replace(hero, class_id="rogue", loadout=SkillLoadout())
-    goods = Goods(gold=rogue.gold, owned=(OwnedItem("medium_body@6#uncommon", 1),))
+    goods = Goods(gold=rogue.gold, owned=(OwnedItem("medium_body@5#uncommon", 1),))
     inventory = step(content, rogue, begin(rogue), "Инвентарь", goods=goods)
     card = step(
         content, rogue, inventory, "Простая кольчуга доброй ковки, штук 1 — надеть", goods=goods
@@ -176,7 +176,7 @@ def test_wearing_a_thing_your_class_never_wears_costs_accuracy_and_speed(
     rogue = replace(hero, class_id="rogue", loadout=SkillLoadout())
     bare = derived_stats(content, rogue)
     dressed = derived_stats(
-        content, replace(rogue, equipment=rogue.equipment.equip("body", "medium_body@6#uncommon"))
+        content, replace(rogue, equipment=rogue.equipment.equip("body", "medium_body@5#uncommon"))
     )
 
     assert dressed.accuracy < bare.accuracy
@@ -185,12 +185,12 @@ def test_wearing_a_thing_your_class_never_wears_costs_accuracy_and_speed(
 
 def test_a_weapon_card_states_the_blow_as_a_range(content: GameContent, hero: Character) -> None:
     """«от 6 до 114» — это то, что случится; одно число обещало бы точность."""
-    goods = Goods(gold=hero.gold, owned=(OwnedItem("sword@26#rare", 1),))
+    goods = Goods(gold=hero.gold, owned=(OwnedItem("sword@12#rare", 1),))
     inventory = step(content, hero, begin(hero), "Инвентарь", goods=goods)
     card = step(content, hero, inventory, "Добрый меч редкой работы, штук 1 — надеть", goods=goods)
     text = render(content, hero, card, world_seed=WORLD_SEED, goods=goods).text()
 
-    sword = content.item("sword@26#rare")
+    sword = content.item("sword@12#rare")
     assert sword.damage is not None
     assert f"Урон: {sword.damage.spoken()}." in text
     assert "Род оружия: меч." in text
@@ -201,7 +201,7 @@ def test_a_weapon_card_states_the_blow_as_a_range(content: GameContent, hero: Ch
 def test_a_common_thing_gives_no_stats_and_says_nothing_about_them(
     content: GameContent, hero: Character
 ) -> None:
-    goods = Goods(gold=hero.gold, owned=(OwnedItem("sword@26#common", 1),))
+    goods = Goods(gold=hero.gold, owned=(OwnedItem("sword@12#common", 1),))
     inventory = step(content, hero, begin(hero), "Инвентарь", goods=goods)
     card = step(content, hero, inventory, "Добрый меч, штук 1 — надеть", goods=goods)
     text = render(content, hero, card, world_seed=WORLD_SEED, goods=goods).text()
@@ -210,7 +210,7 @@ def test_a_common_thing_gives_no_stats_and_says_nothing_about_them(
 
 
 def test_a_relic_says_that_it_grows_with_you(content: GameContent, hero: Character) -> None:
-    goods = Goods(gold=hero.gold, owned=(OwnedItem("charm@14#relic", 1),))
+    goods = Goods(gold=hero.gold, owned=(OwnedItem("charm@9#relic", 1),))
     inventory = step(content, hero, begin(hero), "Инвентарь", goods=goods)
     card = step(
         content, hero, inventory, "Крепкий оберег давних времён, штук 1 — надеть", goods=goods
@@ -223,7 +223,7 @@ def test_a_relic_says_that_it_grows_with_you(content: GameContent, hero: Charact
 def test_the_character_sheet_names_the_blow_and_what_makes_it(
     content: GameContent, hero: Character
 ) -> None:
-    armed = replace(hero, equipment=hero.equipment.equip("weapon", "sword@14#common"))
+    armed = replace(hero, equipment=hero.equipment.equip("weapon", "sword@9#common"))
     low, high = blow_range(content, armed)
     text = play_screens.character_screen(content, armed, derived_stats(content, armed)).text()
 
@@ -583,7 +583,7 @@ def test_the_descent_lists_dungeons_then_asks_for_difficulty(
     assert down.descent.difficulty == "recon"
     assert down.descent.dungeon_id == "farhold_first_adit"
     assert down.descent.city_id == "farhold"
-    assert down.descent.level == 12
+    assert down.descent.level == 6
 
 
 def test_a_dungeon_is_a_place_and_not_a_mirror(content: GameContent) -> None:
@@ -635,15 +635,16 @@ def test_a_city_has_a_deep_dungeon_open_only_to_the_grown(
     deep = city.deep_dungeon
     assert deep.level == city.level_max
 
-    # Третий уровень до последней локации Дубно (22) не дорос: глубокий ход
+    # Пятый уровень до последней локации Дубно (11) не дорос: глубокий ход
     # назван строкой, но кнопки не получает.
-    early = step(content, hero, begin(hero), "Мир", "Подземелья")
-    early_text = render(content, hero, early, world_seed=WORLD_SEED).text()
-    assert deep.name in early_text and "закрыт до уровня 22" in early_text
-    assert step(content, hero, early, deep.name).screen is ScreenId.DUNGEON
+    young = replace(hero, level=5)
+    early = step(content, young, begin(young), "Мир", "Подземелья")
+    early_text = render(content, young, early, world_seed=WORLD_SEED).text()
+    assert deep.name in early_text and "закрыт до уровня 11" in early_text
+    assert step(content, young, early, deep.name).screen is ScreenId.DUNGEON
 
-    # Двадцать второй - дорос: кнопка есть, и она уводит в глубокий спуск.
-    ready = replace(hero, level=22)
+    # Одиннадцатый - дорос: кнопка есть, и она уводит в глубокий спуск.
+    ready = replace(hero, level=11)
     screen = step(content, ready, begin(ready), "Мир", "Подземелья")
     picked = step(content, ready, screen, deep.name)
     assert picked.screen is ScreenId.DUNGEON_PICK
@@ -766,7 +767,7 @@ def test_search_narrows_the_bag(content: GameContent, hero: Character) -> None:
         owned=(
             OwnedItem("wolf_pelt", 4),
             OwnedItem("small_healing_potion", 2),
-            OwnedItem("medium_body@6#uncommon", 1),
+            OwnedItem("medium_body@5#uncommon", 1),
         ),
     )
     inventory = step(content, hero, begin(hero), "Инвентарь", goods=goods)
@@ -784,7 +785,7 @@ def test_search_narrows_the_bag(content: GameContent, hero: Character) -> None:
 def test_sections_cut_the_bag_and_reset_puts_it_back(content: GameContent, hero: Character) -> None:
     goods = Goods(
         gold=hero.gold,
-        owned=(OwnedItem("wolf_pelt", 4), OwnedItem("medium_body@6#uncommon", 1)),
+        owned=(OwnedItem("wolf_pelt", 4), OwnedItem("medium_body@5#uncommon", 1)),
     )
     inventory = step(content, hero, begin(hero), "Инвентарь", goods=goods)
     sections = step(content, hero, inventory, "Фильтры", goods=goods)

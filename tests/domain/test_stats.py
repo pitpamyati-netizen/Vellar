@@ -167,4 +167,4 @@ def test_point_allowances(content: GameContent) -> None:
         == rules.free_points_at_creation + rules.stat_points_per_level * 9
     )
     assert skill_point_allowance(content, 1) == 0
-    assert skill_point_allowance(content, 10) == 9
+    assert skill_point_allowance(content, 10) == rules.skill_point_per_level * 9

@@ -17,8 +17,19 @@
 #
 # Каждый класс даёт 24 боевых и 20 пассивных умений на всё развитие (skills.toml,
 # owner = "class:<id>"), открываемых на уровнях из [meta].active_unlock_levels /
-# passive_unlock_levels. Боевое умение приходит каждые пятнадцать уровней, между
+# passive_unlock_levels. Боевое умение приходит каждые семь-восемь уровней, между
 # ними пассивное, и нигде нет уровня, за которым ничего не открывается.
+#
+# ЧТО РАСТЁТ САМО. base_stat_value - с чего начинается каждая характеристика,
+# stat_growth_per_level - на сколько каждая из семи растёт сама по себе за
+# уровень, stat_points_per_level - сколько игрок раздаёт руками (ADR 0058).
+# Прежде рос только розданный: очков хватало на две характеристики, и остальные
+# пять стояли на пятёрке и на потолке. Теперь удача, ловкость и мудрость воина
+# растут вместе с ним, а «кем ты стал» по-прежнему решают розданные очки.
+#
+# У ресурса класса regen_per_turn - ПРОЦЕНТЫ от максимума за ход, а не число
+# (ADR 0058): запас растёт с уровнем, и числом восстановление значило что-то
+# ровно на первом уровне.
 #
 # На четырёх уровнях из двадцати боевое умение приходит развилкой: два умения на
 # одно место, берётся одно, второе закрыто до наставника ([meta].fork_levels,
@@ -29,13 +40,14 @@
 
 [meta]
 base_stat_value = 5
-free_points_at_creation = 5
-stat_points_per_level = 2
-active_unlock_levels = [1, 6, 15, 25, 36, 48, 61, 75, 90, 105, 121, 137, 154, 172, 190, 208, 227, 247, 266, 286]
-fork_levels = [75, 137, 208, 286]
+free_points_at_creation = 10
+stat_points_per_level = 4
+stat_growth_per_level = 0.5
+active_unlock_levels = [1, 3, 8, 13, 18, 24, 31, 38, 45, 53, 61, 69, 77, 86, 95, 104, 114, 124, 133, 143]
+fork_levels = [38, 69, 104, 143]
 passive_unlock_levels = [
-    2, 9, 18, 28, 40, 52, 66, 80, 95, 110,
-    126, 143, 160, 178, 196, 215, 234, 253, 273, 293,
+    2, 5, 9, 14, 20, 26, 33, 40, 48, 55,
+    63, 72, 80, 89, 98, 108, 117, 127, 137, 146,
 ]
 active_slots = 6
 racial_slots = 1
@@ -50,8 +62,8 @@ key_stats = ["STR", "END"]
 weapons = ["sword", "axe", "mace", "spear", "greatsword", "warhammer", "crossbow"]
 armor = ["light", "medium", "heavy"]
 bonuses = { STR = 2, END = 1 }
-resource = { id = "valor", name = "Отвага", base = 40, per_level = 1.0, stat = "END", per_stat = 1.0, regen_per_turn = 6 }
-health = { base = 110, per_level = 9.0, per_endurance = 6.0 }
+resource = { id = "valor", name = "Отвага", base = 40, per_level = 2, stat = "END", per_stat = 1.0, regen_per_turn = 6 }
+health = { base = 110, per_level = 18, per_endurance = 6.0 }
 
 [[class]]
 id = "barbarian"
@@ -63,8 +75,8 @@ key_stats = ["STR"]
 weapons = ["axe", "mace", "greatsword", "spear", "warhammer", "scythe", "claws"]
 armor = ["cloth", "light", "medium"]
 bonuses = { STR = 2, END = 1 }
-resource = { id = "rage", name = "Ярость", base = 0, per_level = 0.5, stat = "STR", per_stat = 0.5, regen_per_turn = 4 }
-health = { base = 120, per_level = 10.0, per_endurance = 6.0 }
+resource = { id = "rage", name = "Ярость", base = 0, per_level = 1, stat = "STR", per_stat = 0.5, regen_per_turn = 4 }
+health = { base = 120, per_level = 20, per_endurance = 6.0 }
 
 [[class]]
 id = "paladin"
@@ -76,8 +88,8 @@ key_stats = ["STR", "CHA"]
 weapons = ["sword", "mace", "spear", "greatsword", "warhammer", "rapier"]
 armor = ["light", "medium", "heavy"]
 bonuses = { STR = 1, CHA = 1, END = 1 }
-resource = { id = "grace", name = "Благодать", base = 45, per_level = 1.2, stat = "CHA", per_stat = 1.5, regen_per_turn = 5 }
-health = { base = 105, per_level = 8.5, per_endurance = 6.0 }
+resource = { id = "grace", name = "Благодать", base = 45, per_level = 2.4, stat = "CHA", per_stat = 1.5, regen_per_turn = 5 }
+health = { base = 105, per_level = 17, per_endurance = 6.0 }
 
 [[class]]
 id = "ranger"
@@ -89,8 +101,8 @@ key_stats = ["AGI", "WIS"]
 weapons = ["bow", "dagger", "short_sword", "spear", "crossbow", "rapier"]
 armor = ["cloth", "light", "medium"]
 bonuses = { AGI = 2, WIS = 1 }
-resource = { id = "focus", name = "Фокус", base = 50, per_level = 1.2, stat = "WIS", per_stat = 1.5, regen_per_turn = 8 }
-health = { base = 95, per_level = 7.5, per_endurance = 6.0 }
+resource = { id = "focus", name = "Фокус", base = 50, per_level = 2.4, stat = "WIS", per_stat = 1.5, regen_per_turn = 8 }
+health = { base = 95, per_level = 15, per_endurance = 6.0 }
 
 [[class]]
 id = "rogue"
@@ -102,8 +114,8 @@ key_stats = ["AGI", "LCK"]
 weapons = ["dagger", "short_sword", "bow", "rapier", "claws", "crossbow"]
 armor = ["cloth", "light"]
 bonuses = { AGI = 2, LCK = 1 }
-resource = { id = "energy", name = "Прыть", base = 60, per_level = 1.0, stat = "AGI", per_stat = 1.0, regen_per_turn = 10 }
-health = { base = 90, per_level = 7.0, per_endurance = 6.0 }
+resource = { id = "energy", name = "Прыть", base = 60, per_level = 2, stat = "AGI", per_stat = 1.0, regen_per_turn = 10 }
+health = { base = 90, per_level = 14, per_endurance = 6.0 }
 
 [[class]]
 id = "mage"
@@ -115,8 +127,8 @@ key_stats = ["INT"]
 weapons = ["staff", "wand", "dagger", "tome", "orb"]
 armor = ["cloth"]
 bonuses = { INT = 3 }
-resource = { id = "mana", name = "Чары", base = 70, per_level = 2.0, stat = "INT", per_stat = 2.5, regen_per_turn = 7 }
-health = { base = 80, per_level = 6.0, per_endurance = 6.0 }
+resource = { id = "mana", name = "Чары", base = 70, per_level = 4, stat = "INT", per_stat = 2.5, regen_per_turn = 7 }
+health = { base = 80, per_level = 12, per_endurance = 6.0 }
 
 [[class]]
 id = "cleric"
@@ -128,8 +140,8 @@ key_stats = ["WIS"]
 weapons = ["mace", "staff", "symbol", "warhammer", "totem"]
 armor = ["cloth", "light", "medium"]
 bonuses = { WIS = 2, CHA = 1 }
-resource = { id = "faith", name = "Вера", base = 65, per_level = 1.8, stat = "WIS", per_stat = 2.2, regen_per_turn = 7 }
-health = { base = 90, per_level = 7.0, per_endurance = 6.0 }
+resource = { id = "faith", name = "Вера", base = 65, per_level = 3.6, stat = "WIS", per_stat = 2.2, regen_per_turn = 7 }
+health = { base = 90, per_level = 14, per_endurance = 6.0 }
 
 [[class]]
 id = "druid"
@@ -141,5 +153,5 @@ key_stats = ["WIS", "END"]
 weapons = ["staff", "spear", "dagger", "symbol", "claws", "scythe", "totem", "orb"]
 armor = ["cloth", "light"]
 bonuses = { WIS = 2, END = 1 }
-resource = { id = "communion", name = "Единение", base = 60, per_level = 1.6, stat = "WIS", per_stat = 2.0, regen_per_turn = 7 }
-health = { base = 95, per_level = 7.5, per_endurance = 6.0 }
+resource = { id = "communion", name = "Единение", base = 60, per_level = 3.2, stat = "WIS", per_stat = 2.0, regen_per_turn = 7 }
+health = { base = 95, per_level = 15, per_endurance = 6.0 }

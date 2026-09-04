@@ -57,7 +57,7 @@ from mmorpg.domain.rules.stats import derived_stats, stat_allowance
 
 #: Бой, взятый по всей полосе уровней, а не только на тех уровнях, на которых случается
 #: играть разработчику.
-LEVELS = (1, 10, 40, 150, 300)
+LEVELS = (1, 10, 40, 90, 150)
 CLASSES = ("warrior", "rogue", "mage", "cleric")
 TRIALS = 20
 
@@ -105,7 +105,13 @@ ORDINARY_WINS = 0.95
 #: Насколько прочитанное намерение вправе ускорить бой. Оно обязано платить
 #: (``test_reading_the_intent_shortens_the_fight``) и обязано остаться способом драться
 #: хорошо, а не единственным существующим боем.
-TEMPO_CEILING = 2.0
+#:
+#: Стало на четверть больше вместе со сжатием полосы (ADR 0058): умения приходят
+#: вдвое чаще по уровням, и на сороковом их в панели уже шесть против прежних
+#: четырёх. Замер ловит не один темп, а разницу между «жать Атаку» и играть
+#: умениями по намерению - и эта разница выросла ровно настолько, насколько
+#: раньше выучивалось за восемьдесят уровней.
+TEMPO_CEILING = 2.25
 #: Насколько далеко могут стоять самый быстрый и самый медленный класс на боссе. Классу
 #: позволен характер; превращать одного и того же босса в другую игру ему не позволено.
 CLASS_SPREAD = 1.75
@@ -501,7 +507,7 @@ def test_no_class_makes_a_boss_a_different_game(content: GameContent) -> None:
     другого. Берётся с обоих концов полосы: разрыв был шире всего наверху, где крит
     упирается в потолок.
     """
-    for level in (10, 40, 150, 300):
+    for level in (10, 40, 90, 150):
         medians = {
             class_id: statistics.median(sample(content, class_id, level, rank=EnemyRank.BOSS))
             for class_id in (klass.id for klass in content.classes)
@@ -531,7 +537,7 @@ def test_reading_the_intent_shortens_the_fight(content: GameContent, class_id: s
     )
 
 
-@pytest.mark.parametrize("level", (1, 40, 300))
+@pytest.mark.parametrize("level", (1, 40, 150))
 def test_a_skill_always_beats_a_plain_attack(content: GameContent, level: int) -> None:
     """Тот откат, с которого всё началось: сила умения была в содержимом плоским
     числом, пока обычная атака росла с уровнем, — и к тридцатому уровню всякое

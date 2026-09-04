@@ -238,10 +238,11 @@ def _build_rules(raw: Mapping[str, Mapping[str, Any]], problems: list[str]) -> P
     skill_meta = raw["skills.toml"].get("meta", {})
 
     rules = ProgressionRules(
-        max_character_level=int(world_meta.get("max_character_level", 300)),
+        max_character_level=int(world_meta.get("max_character_level", 150)),
         base_stat_value=int(class_meta.get("base_stat_value", 5)),
-        free_points_at_creation=int(class_meta.get("free_points_at_creation", 5)),
-        stat_points_per_level=int(class_meta.get("stat_points_per_level", 2)),
+        free_points_at_creation=int(class_meta.get("free_points_at_creation", 10)),
+        stat_points_per_level=int(class_meta.get("stat_points_per_level", 4)),
+        stat_growth_per_level=float(class_meta.get("stat_growth_per_level", 0.5)),
         active_unlock_levels=tuple(class_meta.get("active_unlock_levels", ())),
         passive_unlock_levels=tuple(class_meta.get("passive_unlock_levels", ())),
         fork_levels=tuple(class_meta.get("fork_levels", ())),
@@ -250,11 +251,11 @@ def _build_rules(raw: Mapping[str, Mapping[str, Any]], problems: list[str]) -> P
         traits_at_creation=int(trait_meta.get("picks_at_creation", 2)),
         max_rank=int(skill_meta.get("max_rank", 5)),
         edge_rank=int(skill_meta.get("edge_rank", 3)),
-        skill_point_per_level=int(skill_meta.get("skill_point_per_level", 1)),
+        skill_point_per_level=int(skill_meta.get("skill_point_per_level", 2)),
         rank_costs=tuple(int(value) for value in skill_meta.get("rank_costs", (1, 2, 2, 3, 4))),
         branch_gates=tuple(int(value) for value in skill_meta.get("branch_gates", (0, 20, 50, 90))),
         branch_tier_levels=tuple(
-            int(value) for value in skill_meta.get("branch_tier_levels", (1, 61, 154, 227))
+            int(value) for value in skill_meta.get("branch_tier_levels", (1, 31, 77, 114))
         ),
     )
     if len(rules.rank_costs) != rules.max_rank:

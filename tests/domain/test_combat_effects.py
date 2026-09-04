@@ -435,7 +435,7 @@ def test_bleeding_actually_takes_health_every_turn(content: GameContent) -> None
     character = replace(
         character,
         loadout=replace(character.loadout, ranks={skill.code: 1}),
-        equipment=character.equipment.equip("weapon", "dagger@6#uncommon"),
+        equipment=character.equipment.equip("weapon", "dagger@5#uncommon"),
     )
 
     after = use(content, character, start(content, character, (enemy(),)))
@@ -487,7 +487,7 @@ def test_a_missed_blow_draws_no_blood(content: GameContent) -> None:
     rogue = replace(
         rogue,
         loadout=replace(rogue.loadout, ranks={"rogue_otravlennyy_klinok": 1}),
-        equipment=Equipment().equip("weapon", "dagger@6#uncommon"),
+        equipment=Equipment().equip("weapon", "dagger@5#uncommon"),
     )
     state = start(content, rogue, (enemy(),))
 
@@ -702,7 +702,7 @@ def test_a_blow_aimed_at_a_body_already_down_does_not_raise(content: GameContent
     rogue = replace(
         rogue,
         loadout=replace(rogue.loadout, ranks={"rogue_otravlennyy_klinok": 1}),
-        equipment=Equipment().equip("weapon", "dagger@6#uncommon"),
+        equipment=Equipment().equip("weapon", "dagger@5#uncommon"),
     )
     state = start(content, rogue, (enemy(), enemy(name="Второй")))
     # Первый уже лежит, но бой не окончен: цель нажатия - именно он.

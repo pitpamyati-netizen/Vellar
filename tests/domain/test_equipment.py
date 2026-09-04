@@ -33,22 +33,22 @@ def hero(class_id: str, level: int = 20, **worn: str) -> Character:
 
 def test_armour_pieces_carry_a_number_of_their_own(content: GameContent) -> None:
     """Нагрудник даёт броню сам, а не процентом от выносливости."""
-    assert content.item("medium_body@14#common").armor > 0
-    assert content.item("sword@14#common").armor == 0
-    assert content.item("charm@14#common").armor == 0
+    assert content.item("medium_body@9#common").armor > 0
+    assert content.item("sword@9#common").armor == 0
+    assert content.item("charm@9#common").armor == 0
     assert content.item("wolf_pelt").armor == 0
 
 
 def test_heavier_armour_of_the_same_grade_holds_more(content: GameContent) -> None:
-    cloth = content.item("cloth_body@45#common").armor
-    light = content.item("light_body@45#common").armor
-    heavy = content.item("heavy_body@45#common").armor
+    cloth = content.item("cloth_body@24#common").armor
+    light = content.item("light_body@24#common").armor
+    heavy = content.item("heavy_body@24#common").armor
     assert heavy > light > cloth
 
 
 def test_a_breastplate_holds_more_than_boots_of_the_same_kind(content: GameContent) -> None:
     """Место решает не меньше рода: четыре мелочи не одевают лучше нагрудника."""
-    assert content.item("heavy_body@45#common").armor > content.item("heavy_feet@45#common").armor
+    assert content.item("heavy_body@24#common").armor > content.item("heavy_feet@24#common").armor
 
 
 def test_a_later_grade_holds_more_than_an_earlier_one(content: GameContent) -> None:
@@ -59,7 +59,7 @@ def test_a_later_grade_holds_more_than_an_earlier_one(content: GameContent) -> N
 
 def test_worn_armour_reaches_the_character_sheet(content: GameContent) -> None:
     bare = derived_stats(content, hero("warrior"))
-    dressed = derived_stats(content, hero("warrior", body="medium_body@14#common"))
+    dressed = derived_stats(content, hero("warrior", body="medium_body@9#common"))
     assert dressed.armor > bare.armor
 
 
@@ -75,13 +75,13 @@ def test_armour_that_left_the_game_neither_gives_nor_breaks(content: GameContent
 
 def test_a_weapon_beats_bare_hands(content: GameContent) -> None:
     bare = blow_range(content, hero("warrior"))
-    armed = blow_range(content, hero("warrior", weapon="sword@14#common"))
+    armed = blow_range(content, hero("warrior", weapon="sword@9#common"))
     assert armed[1] > bare[1]
 
 
 def test_damage_is_a_range_and_not_one_number(content: GameContent) -> None:
     """Урон бросается: «от 2 до 124» — это то, что случится."""
-    sword = content.item("sword@26#common")
+    sword = content.item("sword@12#common")
     assert sword.damage is not None
     assert sword.damage.low < sword.damage.high
     assert sword.damage.spoken() == f"от {sword.damage.low} до {sword.damage.high}"
@@ -114,7 +114,7 @@ def test_a_weapon_that_left_the_game_leaves_bare_hands(content: GameContent) -> 
 
 def test_a_kind_gives_what_the_kind_promises(content: GameContent) -> None:
     """Инициатива кинжала — свойство кинжалов вообще, а не этого клинка."""
-    bundle = mods.equipment_modifiers(content, ("dagger@14#common",))
+    bundle = mods.equipment_modifiers(content, ("dagger@9#common",))
     assert (
         bundle["initiative_percent"]
         == content.weapon_type("dagger").modifiers["initiative_percent"]
@@ -145,14 +145,14 @@ def test_fill_gear_dresses_the_class_in_first_tier_common(content: GameContent) 
 def test_fill_gear_leaves_worn_slots_alone(content: GameContent) -> None:
     from mmorpg.domain.entities.character import Equipment
 
-    base = Equipment().equip("body", "heavy_body@14#rare")
+    base = Equipment().equip("body", "heavy_body@9#rare")
     filled = gear.fill_gear(content, "warrior", base, ("weapon", "body", "head"))
-    assert filled.item_in("body") == "heavy_body@14#rare"
+    assert filled.item_in("body") == "heavy_body@9#rare"
     assert filled.item_in("head") is not None
 
 
 def test_a_full_plate_set_costs_initiative_four_times(content: GameContent) -> None:
-    worn = ("heavy_body@45#common", "heavy_hands@45#common", "heavy_feet@45#common")
+    worn = ("heavy_body@24#common", "heavy_hands@24#common", "heavy_feet@24#common")
     bundle = gear.type_modifiers(content, worn)
     single = content.armor_type("heavy").modifiers["initiative_percent"]
     assert bundle["initiative_percent"] == pytest.approx(single * len(worn))
@@ -164,14 +164,14 @@ def test_a_full_plate_set_costs_initiative_four_times(content: GameContent) -> N
 def test_rarity_is_what_gives_stats(content: GameContent) -> None:
     """Обычная вещь не даёт ни одной, необычная одну, остальные по две."""
     for rarity in content.rarities:
-        item = content.item(f"sword@45#{rarity.id}")
+        item = content.item(f"sword@24#{rarity.id}")
         assert len(item.stat_bonuses) == rarity.stats, rarity.id
         assert all(value > 0 for value in item.stat_bonuses.values())
 
 
 def test_only_the_two_top_rarities_carry_a_special_property(content: GameContent) -> None:
     for rarity in content.rarities:
-        item = content.item(f"heavy_body@45#{rarity.id}")
+        item = content.item(f"heavy_body@24#{rarity.id}")
         assert bool(item.modifiers) is rarity.special, rarity.id
 
 
@@ -235,19 +235,19 @@ def test_every_live_key_is_read_by_something(content: GameContent) -> None:
 
 def test_the_same_thing_is_the_same_thing_for_everyone(content: GameContent) -> None:
     """Собранная вещь выведена из своего же имени и не зависит ни от чего ещё."""
-    once = content.item("ring@70#legendary")
+    once = content.item("ring@35#legendary")
     twice = gear_procgen.build(
         content,
         content.gear_archetype("ring"),
-        70,
+        35,
         content.rarity("legendary"),
     )
     assert once == twice
 
 
 def test_a_relic_grows_with_the_hero_and_nothing_else_does(content: GameContent) -> None:
-    relic = content.item("sword@70#relic")
-    legendary = content.item("sword@70#legendary")
+    relic = content.item("sword@35#relic")
+    legendary = content.item("sword@35#legendary")
 
     assert gear_procgen.worn(content, legendary, 300) == legendary
     grown = gear_procgen.worn(content, relic, 300)
@@ -257,8 +257,8 @@ def test_a_relic_grows_with_the_hero_and_nothing_else_does(content: GameContent)
 
 
 def test_a_relic_on_the_character_sheet_counts_by_the_hero(content: GameContent) -> None:
-    young = derived_stats(content, hero("warrior", level=20, trinket="ring@70#relic"))
-    old = derived_stats(content, hero("warrior", level=300, trinket="ring@70#relic"))
+    young = derived_stats(content, hero("warrior", level=20, trinket="ring@35#relic"))
+    old = derived_stats(content, hero("warrior", level=150, trinket="ring@35#relic"))
     assert old.max_health > young.max_health
 
 
@@ -272,7 +272,7 @@ def test_a_relic_never_falls_off_a_shelf(content: GameContent) -> None:
 
 def test_a_class_may_wear_anything_at_a_price(content: GameContent) -> None:
     """Запрета нет. Есть цена, и она в точности и инициативе."""
-    rogue = hero("rogue", body="heavy_body@45#common")
+    rogue = hero("rogue", body="heavy_body@24#common")
     penalty = gear.proficiency_penalty(content, rogue)
     assert penalty["accuracy_percent"] < 0
     assert penalty["initiative_percent"] < 0
@@ -284,13 +284,13 @@ def test_a_class_may_wear_anything_at_a_price(content: GameContent) -> None:
 
 
 def test_its_own_costs_nothing(content: GameContent) -> None:
-    assert gear.proficiency_penalty(content, hero("rogue", body="light_body@45#common")) == {}
-    assert gear.equip_warning(content, hero("rogue"), content.item("dagger@45#common")) == ""
+    assert gear.proficiency_penalty(content, hero("rogue", body="light_body@24#common")) == {}
+    assert gear.equip_warning(content, hero("rogue"), content.item("dagger@24#common")) == ""
 
 
 def test_a_warning_says_what_and_how_much(content: GameContent) -> None:
-    said = gear.equip_warning(content, hero("mage"), content.item("heavy_body@45#common"))
-    assert content.item("heavy_body@45#common").name in said
+    said = gear.equip_warning(content, hero("mage"), content.item("heavy_body@24#common"))
+    assert content.item("heavy_body@24#common").name in said
     assert content.armor_type("heavy").name.lower() in said
     assert content.character_class("mage").name.lower() in said
     assert str(abs(int(gear.FOREIGN_ARMOR_ACCURACY))) in said
@@ -306,7 +306,7 @@ def test_a_warning_names_numbers_the_way_the_character_sheet_does(
     не должно попасть в текст про штраф — ни сейчас, ни когда классов станет
     больше.
     """
-    said = gear.equip_warning(content, hero("mage"), content.item("heavy_body@45#common")).lower()
+    said = gear.equip_warning(content, hero("mage"), content.item("heavy_body@24#common")).lower()
     assert "инициатива" in said
     for klass in content.classes:
         assert klass.resource.name.lower() not in said, klass.resource.name
@@ -314,14 +314,14 @@ def test_a_warning_names_numbers_the_way_the_character_sheet_does(
 
 def test_a_trinket_belongs_to_everyone(content: GameContent) -> None:
     for klass in content.classes:
-        assert gear.equip_warning(content, hero(klass.id), content.item("charm@45#rare")) == ""
+        assert gear.equip_warning(content, hero(klass.id), content.item("charm@24#rare")) == ""
 
 
 def test_a_full_foreign_set_costs_more_than_one_piece(content: GameContent) -> None:
-    one = gear.proficiency_penalty(content, hero("mage", body="heavy_body@45#common"))
+    one = gear.proficiency_penalty(content, hero("mage", body="heavy_body@24#common"))
     many = gear.proficiency_penalty(
         content,
-        hero("mage", body="heavy_body@45#common", head="heavy_head@45#common"),
+        hero("mage", body="heavy_body@24#common", head="heavy_head@24#common"),
     )
     assert many["accuracy_percent"] < one["accuracy_percent"]
 
@@ -332,9 +332,9 @@ def test_a_full_foreign_set_costs_more_than_one_piece(content: GameContent) -> N
 def test_a_skill_asks_for_its_weapon(content: GameContent) -> None:
     """Здесь отказ, а не штраф: выстрелить без лука нечем."""
     shot = content.skill("ranger_tochnyy_vystrel")
-    assert gear.skill_refusal(content, hero("ranger", weapon="bow@14#common"), shot) == ""
+    assert gear.skill_refusal(content, hero("ranger", weapon="bow@9#common"), shot) == ""
     assert "лук" in gear.skill_refusal(content, hero("ranger"), shot)
-    with_knife = hero("ranger", weapon="dagger@14#common")
+    with_knife = hero("ranger", weapon="dagger@9#common")
     assert content.weapon_type("dagger").name.lower() in gear.skill_refusal(
         content, with_knife, shot
     )

@@ -77,7 +77,7 @@ def cost_to_learn(content: GameContent, character: Character, skill: Skill) -> i
 
     Цена растёт с рангом (``ProgressionRules.rank_costs``): вширь дёшево, вглубь
     дорого. Раньше цена была одна на все ранги, и дерево стоило ровно столько,
-    сколько игра выдаёт за триста уровней, - то есть не стоило ничего (ADR 0024).
+    сколько игра выдаёт за всю полосу уровней, - то есть не стоило ничего (ADR 0024).
     """
     if not is_known(character, skill.code):
         return content.rules.rank_cost(1)

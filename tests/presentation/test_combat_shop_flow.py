@@ -178,7 +178,7 @@ def test_every_button_says_what_it_does(
     screen = flow.render(content, fighter, session, HERO)
     cleave, taunt = screen.rows[2][0].text, screen.rows[3][0].text
     assert "урон " in cleave, cleave
-    assert "стоит 8" in cleave, cleave
+    assert "стоит 5" in cleave, cleave
     assert "цель бьёт по вам" in taunt, taunt
     assert "броня плюс" in taunt, taunt
     assert "на 2 хода" in taunt, taunt
@@ -378,7 +378,7 @@ def test_the_defend_button_names_both_numbers_and_spends_the_turn(
 ) -> None:
     """Закрыться умеет всякий, и кнопка говорит, что за ход дают."""
     defend = flow.render(content, fighter, session, HERO).rows[1][0].text
-    assert "броня плюс 30" in defend, defend
+    assert "броня плюс 60" in defend, defend
     assert "уклонение плюс 30 процентов" in defend, defend
 
     after, notice = flow.advance(content, {HERO: fighter}, session, HERO, defend)
@@ -531,7 +531,9 @@ def test_assortment_matches_the_player_level(content: GameContent) -> None:
         content, world_seed=WORLD_SEED, city_id="farhold", rotation=3, character_level=20
     )
     assert stock
-    assert all(14 <= item.level <= 24 for item in stock)
+    # Полка инструментов стоит вне окна: её ступень берётся по уровню покупателя
+    # (ADR 0056), а окно считает уровни вещей.
+    assert all(17 <= item.level <= 22 or item.tool_type for item in stock)
 
 
 def test_reputation_widens_the_shelf(content: GameContent) -> None:
@@ -562,13 +564,13 @@ def test_city_strain_raises_prices_and_thins_the_shelf(content: GameContent) -> 
     assert len(strained) < len(calm)
     assert len(strained) >= 6  # STOCK_MIN: голодный город всё же торгует
 
-    item = content.item("light_body@6#common")
+    item = content.item("light_body@5#common")
     assert buy_price(content, item, strain=1.0) > buy_price(content, item)
     assert buy_price(content, item, strain=0.0) == buy_price(content, item)
 
 
 def test_charisma_and_traits_lower_the_price(content: GameContent) -> None:
-    item = content.item("light_body@6#common")
+    item = content.item("light_body@5#common")
     plain = buy_price(content, item)
     charming = buy_price(content, item, charisma=20)
     haggler = buy_price(content, item, modifiers={"shop_price_percent": -12.0})
@@ -577,13 +579,13 @@ def test_charisma_and_traits_lower_the_price(content: GameContent) -> None:
 
 
 def test_selling_pays_less_than_buying(content: GameContent) -> None:
-    item = content.item("light_body@6#common")
+    item = content.item("light_body@5#common")
     assert sell_price(content, item) < buy_price(content, item)
 
 
 def test_rarity_raises_the_price(content: GameContent) -> None:
     common = buy_price(content, content.item("sword@1#common"))
-    epic = buy_price(content, content.item("wand@26#legendary"))
+    epic = buy_price(content, content.item("wand@12#legendary"))
     assert epic > common
 
 

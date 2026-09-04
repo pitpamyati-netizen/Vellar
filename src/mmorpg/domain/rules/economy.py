@@ -12,6 +12,7 @@ from collections.abc import Sequence
 from mmorpg.domain.entities.content import GameContent, Item
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.procgen import items as gear_procgen
+from mmorpg.domain.procgen.enemies import gold_at
 from mmorpg.domain.procgen.seeds import rng, shop_seed
 
 STOCK_MIN = 6
@@ -25,11 +26,11 @@ STOCK_MAX = 12
 #: держит лавку открытой чуть шире.
 REPUTATION_KEY = "reputation_percent"
 REPUTATION_PER_STEP = 10.0
-LEVEL_WINDOW_BELOW = 6
-LEVEL_WINDOW_ABOVE = 4
+LEVEL_WINDOW_BELOW = 3
+LEVEL_WINDOW_ABOVE = 2
 CHARISMA_DISCOUNT_PER_POINT = 0.4
 MAX_CHARISMA_DISCOUNT = 15.0
-SELL_FRACTION = 0.35
+SELL_FRACTION = 0.2
 
 #: Что делает с лавкой «нужда» ближайшего города (``mood.city_strain``, 0…1,
 #: ADR 0055). При полной нужде цена растёт наполовину, а прилавок теряет половину
@@ -199,33 +200,37 @@ def refund(price: int, tax: int) -> int:
 
 # --- за что берёт город ---------------------------------------------
 # Постель, учитель и сундук - три способа, которыми золото уходит от игрока, не
-# доставаясь другому игроку. Все три растут с уровнем, потому что персонаж сорокового
-# уровня зарабатывает за стражу столько, сколько персонаж четвёртого за десять.
+# доставаясь другому игроку. Все три считаются от одного боя своего уровня
+# (``procgen/enemies.gold_at``, ADR 0058), а не каждый по своей кривой: тогда
+# ночь стоит одного и того же - трёх схваток - и на пятом уровне, и на сто
+# пятидесятом. Своей кривой они разъезжались с доходом: постель к концу полосы
+# стоила четверть всего, что игрок брал за уровень.
 
-INN_PRICE_BASE = 5
-INN_PRICE_PER_LEVEL = 3
+#: Ночь на постоялом дворе - три схватки своего уровня.
+INN_FIGHTS = 3.0
 STRAW_HEAL_PERCENT = 30
-MENTOR_PRICE_BASE = 40
-MENTOR_PRICE_PER_LEVEL = 10
+#: Учитель - пятнадцать: распустить вложенное должно быть решением.
+MENTOR_FIGHTS = 15.0
 BANK_DEPOSIT_STEP = 50
 # Дорога до другого города: платят за наёмную повозку и охрану в дорогу
 # (``Narrative.md``, Дом Порубежья). Цена растёт и с уровнем, как постель и учитель,
 # и с числом городов между тем, где стоишь, и тем, куда идёшь: дальний конец дороги
 # стоит дороже ближнего соседа. Таймеров нет - дорога проходится сразу (ADR 0051).
-TRAVEL_PRICE_BASE = 15
-TRAVEL_PRICE_PER_LEVEL = 5
+#: Дорога до соседнего города - четыре схватки; дальний конец дороги дороже
+#: ближнего соседа во столько раз, сколько городов между ними.
+TRAVEL_FIGHTS = 4.0
 # Починка в кузнице: доля от цены самой вещи за полностью сточенную прочность
 # (ADR 0057). Доля, а не своя кривая, - потому что цена вещи уже считает и ступень,
 # и редкость: чинить редкий доспех дороже ровно настолько, насколько он дороже
 # обычного. Меньше единицы нарочно и с запасом: починка, стоящая как новая вещь,
 # - это не починка, а лавка.
-REPAIR_SHARE = 0.25
+REPAIR_SHARE = 0.15
 
 
 def travel_price(level: int, distance: int) -> int:
     """Плата за переход в другой город: ``distance`` - сколько городов между ними по дороге."""
-    per_city = TRAVEL_PRICE_BASE + TRAVEL_PRICE_PER_LEVEL * max(0, level - 1)
-    return max(1, per_city * max(1, distance))
+    per_city = gold_at(level) * TRAVEL_FIGHTS
+    return max(1, round(per_city * max(1, distance)))
 
 
 def repair_price(item_price: int, spent: int, limit: int) -> int:
@@ -242,12 +247,12 @@ def repair_price(item_price: int, spent: int, limit: int) -> int:
 
 def inn_price(level: int) -> int:
     """Ночь на постоялом дворе: полное здоровье по цене, которую гость потянет."""
-    return max(1, INN_PRICE_BASE + INN_PRICE_PER_LEVEL * max(0, level - 1))
+    return max(1, round(gold_at(level) * INN_FIGHTS))
 
 
 def mentor_price(level: int) -> int:
     """Сколько берёт учитель за то, чтобы распустить ранг или грань и вернуть очко."""
-    return max(1, MENTOR_PRICE_BASE + MENTOR_PRICE_PER_LEVEL * max(0, level - 1))
+    return max(1, round(gold_at(level) * MENTOR_FIGHTS))
 
 
 def affordable(items: Sequence[Item], gold: int, prices: dict[str, int]) -> tuple[Item, ...]:

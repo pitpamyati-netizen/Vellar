@@ -1,4 +1,4 @@
-"""Основа мира: 15 городов, по 5 локаций, уровни 1-300 без пробелов."""
+"""Основа мира: 15 городов, по 5 локаций, уровни 1-150 без пробелов."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import itertools
 
 from mmorpg.domain.entities import GameContent
 
-MAX_LEVEL = 300
+MAX_LEVEL = 150
 
 
 def test_fifteen_cities(content: GameContent) -> None:

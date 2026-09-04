@@ -42,6 +42,7 @@ from mmorpg.domain.rules.combat import (
     defend_armor,
     defend_dodge,
     intent_of,
+    skill_cost,
 )
 from mmorpg.domain.rules.skill_effects import (
     EffectCategory,
@@ -290,12 +291,15 @@ def _slot_status(skill: Skill, character: Character, viewer: Combatant) -> str:
     rank = character.loadout.rank_of(skill.code)
     ready_in = recharged(skill.cooldown, spec_for(skill.effect), skill.power_at_rank(rank))
     parts = []
-    if skill.cost:
-        parts.append(f"стоит {skill.cost}")
+    # Цена объявлена долей запаса (ADR 0058), а игроку называется числом: доля -
+    # это правило, а на экране стоит то, что сейчас спишут.
+    price = skill_cost(skill, viewer.max_resource)
+    if price:
+        parts.append(f"стоит {price}")
     if ready_in:
         parts.append(f"откат {turns(ready_in)}")
-    if skill.cost > viewer.resource:
-        parts.append(f"не хватает {skill.cost - viewer.resource}")
+    if price > viewer.resource:
+        parts.append(f"не хватает {price - viewer.resource}")
     else:
         parts.append(READY)
     return ", ".join(parts)

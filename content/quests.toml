@@ -1,6 +1,6 @@
 # Задания: оплаченная работа, которую выдают города. Пять актов по Narrative.md,
-# раздел 5: «Задний двор» (1-30), «Межа» (24-98), «Выморочный дом» (92-157),
-# «Местничество» (133-230), «Порожний престол» (230-300).
+# раздел 5: «Задний двор» (1-15), «Межа» (12-49), «Выморочный дом» (46-79),
+# «Местничество» (67-115), «Порожний престол» (115-150).
 #
 # Задание - это сделка, а не призвание: тот, кто его даёт, называет цену в первых
 # двух фразах, отказаться можно всегда, и отказ никогда не закрывает работу
@@ -39,113 +39,113 @@ level = 1
 name = "Столбы на Тракте"
 giver = "Довен, писарь при досмотре"
 intro = "Водит пальцем по столбцам досмотра и оба раза сбивается."
-terms = "Числа не сходятся третью неделю. Сходите на Луга у Заставы, обойдите там три места без драки — заросли, тайник, святилище, что попадётся, — и скажите, что там на деле. Плачу 40."
+terms = "Числа не сходятся третью неделю. Сходите на Луга у Заставы, обойдите там три места без драки — заросли, тайник, святилище, что попадётся, — и скажите, что там на деле. Плачу 75."
 objective = "search"
 location = 1
 target_count = 3
-reward_gold = 40
-reward_experience = 60
+reward_gold = 75
+reward_experience = 96
 reward_item = "small_healing_potion"
 
 [[quest]]
 id = "farhold_meadow_teeth"
 city = "farhold"
-level = 3
+level = 2
 follows = "farhold_tallies"
 name = "Зубы на Лугах"
 giver = "Мерла с Отмелей, гуртовщица при доме"
 intro = "Считает овец дважды и оба раза сбивается."
-terms = "Скот убывает, а волки сытые. Шесть шкур зверья с Лугов, и я плачу 70 без торга."
+terms = "Скот убывает, а волки сытые. Шесть шкур зверья с Лугов, и я плачу 91 без торга."
 objective = "kill"
 location = 1
 target_kind = "beast"
 target_count = 6
-reward_gold = 70
-reward_experience = 140
+reward_gold = 91
+reward_experience = 176
 reward_item = "light_feet@1#common"
 
 [[quest]]
 id = "farhold_whetstones"
 city = "farhold"
-level = 4
+level = 2
 follows = "farhold_tallies"
 name = "Точила для досмотра"
 giver = "Ольда, весовщица при досмотре"
 intro = "Проводит пальцем по зазубренному лезвию и морщится."
-terms = "Косы и мечи у досмотрщиков тупые, кузня занята. Сделайте три точила своими руками — плачу 90."
+terms = "Косы и мечи у досмотрщиков тупые, кузня занята. Сделайте три точила своими руками — плачу 91."
 objective = "craft"
 target_kind = "whetstone"
 target_count = 3
-reward_gold = 90
-reward_experience = 150
+reward_gold = 91
+reward_experience = 176
 reward_item = "iron_scrap"
 
 [[quest]]
 id = "farhold_grove_toll"
 city = "farhold"
-level = 6
+level = 3
 follows = "farhold_meadow_teeth"
 name = "Проезд в Роще"
 giver = "Довен, писарь при досмотре"
 intro = "Кладёт на стол пропуск с чужой печатью."
-terms = "В Ольшанике кто-то берёт за проезд помимо дома. Разберитесь с восемью, плата 120 и молчание."
+terms = "В Ольшанике кто-то берёт за проезд помимо дома. Разберитесь с восемью, плата 104 и молчание."
 objective = "kill"
 location = 2
 target_count = 8
-reward_gold = 120
-reward_experience = 260
-reward_item = "light_body@6#common"
+reward_gold = 104
+reward_experience = 256
+reward_item = "light_body@5#common"
 
 [[quest]]
 id = "farhold_ravine_leader"
 city = "farhold"
-level = 10
+level = 5
 follows = "farhold_grove_toll"
 name = "Вожак Оврагов"
 giver = "Тарен, ловчий при доме"
 intro = "Показывает капкан, разогнутый изнутри."
-terms = "Стая слушается одного. Уберите вожака в Волчьих Оврагах, за него дают 200."
+terms = "Стая слушается одного. Уберите вожака в Волчьих Оврагах, за него дают 125."
 objective = "elite"
 location = 3
 target_count = 1
-reward_gold = 200
-reward_experience = 420
-reward_item = "charm@6#uncommon"
+reward_gold = 125
+reward_experience = 408
+reward_item = "charm@5#uncommon"
 
 [[quest]]
 id = "farhold_road_count"
 city = "farhold"
-level = 16
+level = 8
 follows = "farhold_ravine_leader"
 name = "Пересчёт на Меже"
 giver = "Довен, писарь при досмотре"
 intro = "Молодший в доме требует счёт по меже к утру."
-terms = "Пять мест на Тракте на Затон: тайники, привалы, что найдёте. Опишете все пять — 260."
+terms = "Пять мест на Тракте на Затон: тайники, привалы, что найдёте. Опишете все пять — 150."
 objective = "search"
 location = 4
 target_count = 5
-reward_gold = 260
-reward_experience = 700
-reward_item = "medium_body@6#uncommon"
+reward_gold = 150
+reward_experience = 624
+reward_item = "medium_body@5#uncommon"
 
 [[quest]]
 id = "farhold_mine_ledger"
 city = "farhold"
-level = 22
+level = 11
 follows = "farhold_road_count"
 name = "Недостача в Шахте"
 giver = "Ольда, весовщица при досмотре"
 intro = "Весы сходятся, а рудой в них не пахнет."
-terms = "Выработки закрыли не из-за обвала. Пройдите десять встреч внизу и вернитесь, плата 400."
+terms = "Выработки закрыли не из-за обвала. Пройдите десять встреч внизу и вернитесь, плата 171."
 objective = "kill"
 location = 5
 target_count = 10
-reward_gold = 400
-reward_experience = 1200
+reward_gold = 171
+reward_experience = 832
 # Конец цепочки из шести заданий — единственная реликтовая вещь, которую можно
 # получить не с хозяина логова. Реликтовое растёт вместе с героем и потому не
 # устаревает: за него платят либо логовом, либо всей цепочкой до конца.
-reward_item = "light_feet@14#relic"
+reward_item = "light_feet@9#relic"
 
 # --- Сурож: мимо досмотра ---
 #
@@ -155,52 +155,52 @@ reward_item = "light_feet@14#relic"
 [[quest]]
 id = "harbor_manifest"
 city = "dusk_harbor"
-level = 24
+level = 12
 name = "Опись без печати"
 giver = "Кевен, приёмщик мостков"
 intro = "Держит опись, в которой не хватает половины строк."
-terms = "Четыре схрона на Мостках стоят не там, где записаны. Найдите их, плачу 450."
+terms = "Четыре схрона на Мостках стоят не там, где записаны. Найдите их, плачу 177."
 objective = "search"
 location = 1
 target_kind = "cache"
 target_count = 4
-reward_gold = 450
-reward_experience = 1400
+reward_gold = 177
+reward_experience = 896
 
 [[quest]]
 id = "harbor_salves"
 city = "dusk_harbor"
-level = 26
+level = 13
 follows = "harbor_manifest"
 name = "Настой для мостков"
 giver = "Мерет, лекарка при складах"
 intro = "Считает пустые склянки и кладёт их обратно в ящик."
-terms = "Грузчики режутся о тросы, а лечить нечем. Сварите четыре малых зелья лечения, с меня 520."
+terms = "Грузчики режутся о тросы, а лечить нечем. Сварите четыре малых зелья лечения, с меня 183."
 objective = "craft"
 target_kind = "small_healing_potion"
 target_count = 4
-reward_gold = 520
-reward_experience = 1600
+reward_gold = 183
+reward_experience = 968
 reward_item = "grove_resin"
 
 [[quest]]
 id = "harbor_undertow"
 city = "dusk_harbor"
-level = 27
+level = 14
 follows = "harbor_manifest"
 name = "Двое с Топей"
 giver = "Кевен, приёмщик мостков"
 intro = "Говорит тише, чем нужно для разговора у воды."
-terms = "На Камышовых Топях засели двое, что возят мимо досмотра. Уберите обоих, с меня 600."
+terms = "На Камышовых Топях засели двое, что возят мимо досмотра. Уберите обоих, с меня 189."
 objective = "elite"
 location = 2
 target_count = 2
-reward_gold = 600
-reward_experience = 1900
-reward_item = "pendant@14#rare"
+reward_gold = 189
+reward_experience = 1032
+reward_item = "pendant@9#rare"
 
 # =========================================================================
-# АКТ II. «Межа» (24–98). Сурож, Кремно, Стрешин.
+# АКТ II. «Межа» (12–49). Сурож, Кремно, Стрешин.
 #
 # Дом Порубежья и Дом Камня спорят за досмотр на крестовье четырёх трактов.
 # Спор оседает в тихую войну на меже: перехваченные обозы, наёмные отряды,
@@ -213,114 +213,114 @@ reward_item = "pendant@14#rare"
 [[quest]]
 id = "harbor_stone_weighers"
 city = "dusk_harbor"
-level = 33
+level = 17
 name = "Чужие гири"
 giver = "Кевен, приёмщик мостков"
 intro = "Кладёт на стол две гири с незнакомым клеймом."
-terms = "Дом Камня выставил на Волноломе своих весовщиков со своими гирями. Обойдите там три места и посмотрите, где они встали, — плачу 620."
+terms = "Дом Камня выставил на Волноломе своих весовщиков со своими гирями. Обойдите там три места и посмотрите, где они встали, — плачу 206."
 objective = "search"
 location = 3
 target_count = 3
-reward_gold = 620
-reward_experience = 2000
+reward_gold = 206
+reward_experience = 1232
 reward_item = "healing_potion"
 
 [[quest]]
 id = "harbor_stone_carters"
 city = "dusk_harbor"
-level = 43
+level = 22
 follows = "harbor_stone_weighers"
 name = "Обозы через Верфи"
 giver = "Тового, старшина грузчиков"
 intro = "Разминает разбитый кулак."
-terms = "Каменные обозы идут через Гнилые Верфи мимо весов, охрана у них наёмная. Разберитесь с восемью, с меня 900."
+terms = "Каменные обозы идут через Гнилые Верфи мимо весов, охрана у них наёмная. Разберитесь с восемью, с меня 232."
 objective = "kill"
 location = 4
 target_kind = "humanoid"
 target_count = 8
-reward_gold = 900
-reward_experience = 2600
-reward_item = "medium_body@45#uncommon"
+reward_gold = 232
+reward_experience = 1552
+reward_item = "medium_body@24#uncommon"
 
 [[quest]]
 id = "harbor_burnt_scales"
 city = "dusk_harbor"
-level = 52
+level = 26
 follows = "harbor_stone_carters"
 name = "Кто жёг весы"
 giver = "Кевен, приёмщик мостков"
 intro = "Показывает обугленный угол весовой книги."
-terms = "Весы на Гротах под Обрывом сожгли с умыслом. Тот, кто это водит, прячется там же — уберите его, плата 1400."
+terms = "Весы на Гротах под Обрывом сожгли с умыслом. Тот, кто это водит, прячется там же — уберите его, плата 250."
 objective = "elite"
 location = 5
 target_count = 1
-reward_gold = 1400
-reward_experience = 3400
-reward_item = "heavy_head@45#rare"
+reward_gold = 250
+reward_experience = 1800
+reward_item = "heavy_head@24#rare"
 
 # --- Кремно: та же межа с другой стороны ---
 
 [[quest]]
 id = "stonedale_quarry_tally"
 city = "stonedale"
-level = 48
+level = 24
 name = "Столбы на Осыпях"
 giver = "Дарен, писарь каменного двора"
 intro = "Стучит костяшкой по расчётной доске."
-terms = "Выработку на Осыпях Дола считают по старым столбам, а половину уже не найти. Обойдите три места, скажите, какие стоят, — плачу 980."
+terms = "Выработку на Осыпях Дола считают по старым столбам, а половину уже не найти. Обойдите три места, скажите, какие стоят, — плачу 241."
 objective = "search"
 location = 1
 target_count = 3
-reward_gold = 980
-reward_experience = 2900
+reward_gold = 241
+reward_experience = 1680
 reward_item = "whetstone"
 
 [[quest]]
 id = "stonedale_road_levy"
 city = "stonedale"
-level = 58
+level = 29
 follows = "stonedale_quarry_tally"
 name = "Пошлина помимо дома"
 giver = "Гроза, старшой заставы на Каменоломне"
 intro = "Кладёт на доску сломанную печать досмотра."
-terms = "На Каменоломне берут проездную пошлину помимо дома, и люди там не наши. Разберитесь с девятью, с меня 1300."
+terms = "На Каменоломне берут проездную пошлину помимо дома, и люди там не наши. Разберитесь с девятью, с меня 263."
 objective = "kill"
 location = 3
 target_kind = "humanoid"
 target_count = 9
-reward_gold = 1300
-reward_experience = 3600
-reward_item = "medium_hands@45#uncommon"
+reward_gold = 263
+reward_experience = 1992
+reward_item = "medium_hands@24#uncommon"
 
 [[quest]]
 id = "stonedale_gorge_wardens"
 city = "stonedale"
-level = 74
+level = 37
 follows = "stonedale_road_levy"
 name = "Камень за выкуп"
 giver = "Дарен, писарь каменного двора"
 intro = "Разворачивает счёт за камень, которого двор не получил."
-terms = "В Штольнях засел отряд, что держит наш камень за выкуп. Уберите вожака, плата 1900."
+terms = "В Штольнях засел отряд, что держит наш камень за выкуп. Уберите вожака, плата 295."
 objective = "elite"
 location = 5
 target_count = 1
-reward_gold = 1900
-reward_experience = 4600
-reward_item = "light_feet@70#rare"
+reward_gold = 295
+reward_experience = 2472
+reward_item = "light_feet@35#rare"
 
 [[quest]]
 id = "stonedale_masons_whetstones"
 city = "stonedale"
-level = 52
+level = 26
 name = "Точила для выработки"
 giver = "Гроза, старшой заставы на Каменоломне"
 intro = "Проводит пальцем по щербатому зубилу."
-terms = "Инструмент на выработке тупой, а кузня льёт на войско. Сделайте пять точильных камней своими руками — плачу 900."
+terms = "Инструмент на выработке тупой, а кузня льёт на войско. Сделайте пять точильных камней своими руками — плачу 250."
 objective = "craft"
 target_kind = "whetstone"
 target_count = 5
-reward_gold = 900
-reward_experience = 3000
+reward_gold = 250
+reward_experience = 1800
 reward_item = "iron_scrap"
 
 # --- Стрешин: развязка четырёх трактов ---
@@ -328,52 +328,52 @@ reward_item = "iron_scrap"
 [[quest]]
 id = "copper_cross_crossroads_count"
 city = "copper_cross"
-level = 70
+level = 35
 name = "Застава на развязке"
 giver = "Ольма, смотрительница мытни"
 intro = "Водит пальцем по путевому листу, где не сходятся печати."
-terms = "На Тракте у Мытни кто-то поставил свою заставу и берёт с проезжих. Обойдите четыре места, посмотрите чьи, — плачу 1500."
+terms = "На Тракте у Мытни кто-то поставил свою заставу и берёт с проезжих. Обойдите четыре места, посмотрите чьи, — плачу 287."
 objective = "search"
 location = 1
 target_count = 4
-reward_gold = 1500
-reward_experience = 4200
+reward_gold = 287
+reward_experience = 2352
 
 [[quest]]
 id = "copper_cross_toll_jumpers"
 city = "copper_cross"
-level = 82
+level = 41
 follows = "copper_cross_crossroads_count"
 name = "Объезд через Хутор"
 giver = "Ветлин, десятник досмотра"
 intro = "Кладёт на стол путевой лист без единой печати."
-terms = "Обозы уходят через Хутор в объезд развязки, охрана у них не наша. Пройдите десять встреч, плата 1900."
+terms = "Обозы уходят через Хутор в объезд развязки, охрана у них не наша. Пройдите десять встреч, плата 310."
 objective = "kill"
 location = 3
 target_kind = "humanoid"
 target_count = 10
-reward_gold = 1900
-reward_experience = 5000
-reward_item = "medium_feet@70#uncommon"
+reward_gold = 310
+reward_experience = 2712
+reward_item = "medium_feet@35#uncommon"
 
 [[quest]]
 id = "copper_cross_burned_weighhouse"
 city = "copper_cross"
-level = 96
+level = 48
 follows = "copper_cross_toll_jumpers"
 name = "Весовая на Плавильнях"
 giver = "Ольма, смотрительница мытни"
 intro = "Кладёт перед вами оплавленный замок весовой."
-terms = "Весы на развязке жгут третий месяц, и оба дома валят друг на друга. Поджигатель — на Плавильнях. Кончайте это, плата 2600."
+terms = "Весы на развязке жгут третий месяц, и оба дома валят друг на друга. Поджигатель — на Плавильнях. Кончайте это, плата 334."
 objective = "elite"
 location = 5
 target_count = 1
-reward_gold = 2600
-reward_experience = 6200
-reward_item = "heavy_body@92#rare"
+reward_gold = 334
+reward_experience = 3128
+reward_item = "heavy_body@46#rare"
 
 # =========================================================================
-# АКТ III. «Выморочный дом» (92–157). Полота, Ирень, Вырь.
+# АКТ III. «Выморочный дом» (46–79). Полота, Ирень, Вырь.
 #
 # У Дома Переправ не осталось наследника по прямой. На удел — броды и подвоз
 # воды — заявляются дальняя ветвь, признанный бастард и Дом Вольной Гавани,
@@ -386,151 +386,151 @@ reward_item = "heavy_body@92#rare"
 [[quest]]
 id = "quiet_fords_ford_watch"
 city = "quiet_fords"
-level = 92
+level = 46
 name = "Броды на Отмелях"
 giver = "Радей, старшой перевоза"
 intro = "Разворачивает список бродов, где половина строк вычеркнута."
-terms = "Пока в доме решают, чей он теперь, броды на Отмелях никто не смотрит. Обойдите три, скажите, какие держат, — плачу 1900."
+terms = "Пока в доме решают, чей он теперь, броды на Отмелях никто не смотрит. Обойдите три, скажите, какие держат, — плачу 327."
 objective = "search"
 location = 1
 target_count = 3
-reward_gold = 1900
-reward_experience = 5500
+reward_gold = 327
+reward_experience = 3008
 
 [[quest]]
 id = "quiet_fords_debt_collectors"
 city = "quiet_fords"
-level = 104
+level = 52
 follows = "quiet_fords_ford_watch"
 name = "Долги дома"
 giver = "Радей, старшой перевоза"
 intro = "Кладёт на стол расписку с печатью Вольной Гавани."
-terms = "На Плёсы приехали люди Вольной Гавани — снимать с перевоза за старые долги дома. Восьмерых разверните обратно, с меня 2300."
+terms = "На Плёсы приехали люди Вольной Гавани — снимать с перевоза за старые долги дома. Восьмерых разверните обратно, с меня 348."
 objective = "kill"
 location = 4
 target_kind = "humanoid"
 target_count = 8
-reward_gold = 2300
-reward_experience = 6200
-reward_item = "light_body@92#uncommon"
+reward_gold = 348
+reward_experience = 3360
+reward_item = "light_body@46#uncommon"
 
 [[quest]]
 id = "quiet_fords_temple_claim"
 city = "quiet_fords"
-level = 116
+level = 58
 follows = "quiet_fords_debt_collectors"
 name = "Наследник в Храме"
 giver = "Веда, ключница дома"
 intro = "Держит грамоту с тремя разными печатями на одном притязании."
-terms = "В Утопленном Храме засел тот, кто называет себя наследником, и с ним отряд. Дом хочет знать, крепко ли он сидит, — плата 3000."
+terms = "В Утопленном Храме засел тот, кто называет себя наследником, и с ним отряд. Дом хочет знать, крепко ли он сидит, — плата 367."
 objective = "elite"
 location = 5
 target_count = 1
-reward_gold = 3000
-reward_experience = 7000
-reward_item = "medium_body@113#rare"
+reward_gold = 367
+reward_experience = 3712
+reward_item = "medium_body@57#rare"
 
 # --- Ирень: вода в бочках, и её мало ---
 
 [[quest]]
 id = "salt_ridge_water_tally"
 city = "salt_ridge"
-level = 113
+level = 57
 name = "Недолив на Террасах"
 giver = "Курт, весовщик водовозов"
 intro = "Показывает бочку, в которой воды на треть меньше меры."
-terms = "Бочки с водой на Меловых Террасах убывают в пути. Обойдите три места по дороге, гляньте, где их снимают, — плачу 2200."
+terms = "Бочки с водой на Меловых Террасах убывают в пути. Обойдите три места по дороге, гляньте, где их снимают, — плачу 363."
 objective = "search"
 location = 1
 target_count = 3
-reward_gold = 2200
-reward_experience = 6400
+reward_gold = 363
+reward_experience = 3656
 reward_item = "healing_potion"
 
 [[quest]]
 id = "salt_ridge_caravan_raiders"
 city = "salt_ridge"
-level = 124
+level = 62
 follows = "salt_ridge_water_tally"
 name = "Перехват на Пути Водовозов"
 giver = "Курт, весовщик водовозов"
 intro = "Кладёт на стол обломок тележной оси."
-terms = "На Пути Водовозов перехватывают обозы — кто-то хочет, чтобы хребет остался без воды. Разберитесь с девятью, плата 2700."
+terms = "На Пути Водовозов перехватывают обозы — кто-то хочет, чтобы хребет остался без воды. Разберитесь с девятью, плата 379."
 objective = "kill"
 location = 3
 target_kind = "humanoid"
 target_count = 9
-reward_gold = 2700
-reward_experience = 7200
-reward_item = "medium_hands@113#uncommon"
+reward_gold = 379
+reward_experience = 3936
+reward_item = "medium_hands@57#uncommon"
 
 [[quest]]
 id = "salt_ridge_dry_well"
 city = "salt_ridge"
-level = 136
+level = 68
 follows = "salt_ridge_caravan_raiders"
 name = "Отрава у источника"
 giver = "Мара, старшая заставы"
 intro = "Кладёт на стол пробку от вскрытой бочки."
-terms = "Воду травят у самого источника, в Известковых Гротах. Тот, кто это делает, там и сидит — плата 3400."
+terms = "Воду травят у самого источника, в Известковых Гротах. Тот, кто это делает, там и сидит — плата 396."
 objective = "elite"
 location = 5
 target_count = 1
-reward_gold = 3400
-reward_experience = 8000
-reward_item = "heavy_head@135#rare"
+reward_gold = 396
+reward_experience = 4280
+reward_item = "heavy_head@67#rare"
 
 # --- Вырь: Гавань держит долговые расписки ---
 
 [[quest]]
 id = "crimson_wharf_debt_ledger"
 city = "crimson_wharf"
-level = 133
+level = 67
 name = "Расписки в схронах"
 giver = "Сель, писарь при капитанах"
 intro = "Раскладывает пустой долговой лист."
-terms = "На что заложен Дом Переправ — в бумагах по схронам Смолокурен. Обойдите там четыре места без боя и гляньте, — плачу 2600."
+terms = "На что заложен Дом Переправ — в бумагах по схронам Смолокурен. Обойдите там четыре места без боя и гляньте, — плачу 394."
 objective = "search"
 location = 1
 target_count = 4
-reward_gold = 2600
-reward_experience = 7600
+reward_gold = 394
+reward_experience = 4224
 
 [[quest]]
 id = "crimson_wharf_press_gang"
 city = "crimson_wharf"
-level = 145
+level = 73
 follows = "crimson_wharf_debt_ledger"
 name = "Вербовка силой"
 giver = "капитан Дорж"
 intro = "Кивает на пустую скамью, где вчера сидела половина артели."
-terms = "На Остовах Флота вербуют в команду силой, берут и наших. Пройдите десять встреч, разгоните, с меня 3100."
+terms = "На Остовах Флота вербуют в команду силой, берут и наших. Пройдите десять встреч, разгоните, с меня 411."
 objective = "kill"
 location = 3
 target_kind = "humanoid"
 target_count = 10
-reward_gold = 3100
-reward_experience = 8400
-reward_item = "light_feet@135#uncommon"
+reward_gold = 411
+reward_experience = 4560
+reward_item = "light_feet@67#uncommon"
 
 [[quest]]
 id = "crimson_wharf_heir_price"
 city = "crimson_wharf"
-level = 155
+level = 78
 follows = "crimson_wharf_press_gang"
 name = "Цена наследства"
 giver = "Сель, писарь при капитанах"
 intro = "Раскладывает три письма, каждое зовёт другого человека наследником."
-terms = "На Рифах прячут того, кому Гавань хочет отдать удел Переправ. Дом Переправ хочет поговорить с ним первым — плата 3800."
+terms = "На Рифах прячут того, кому Гавань хочет отдать удел Переправ. Дом Переправ хочет поговорить с ним первым — плата 424."
 objective = "elite"
 location = 5
 target_count = 1
-reward_gold = 3800
-reward_experience = 9000
-reward_item = "pendant@152#rare"
+reward_gold = 424
+reward_experience = 4840
+reward_item = "pendant@76#rare"
 
 # =========================================================================
-# АКТ IV. «Местничество» (133–230). Оскол, Мезень, Горынь, Крев.
+# АКТ IV. «Местничество» (67–115). Оскол, Мезень, Горынь, Крев.
 #
 # Престол слабеет, и дома тягаются за должности при дворе. Дом Заставы
 # двигает войско к Гнездну — по его словам, для порядка (Narrative.md,
@@ -542,161 +542,161 @@ reward_item = "pendant@152#rare"
 [[quest]]
 id = "glass_hollow_glass_tithe"
 city = "glass_hollow"
-level = 152
+level = 76
 name = "Перепись на Полях"
 giver = "Тавр, приказчик стекольного двора"
 intro = "Кладёт на стол предписание с печатью Престола."
-terms = "С Престола прислали переписать, сколько стекла уходит на юг. Двор хочет знать раньше — обойдите три места на Стеклянных Полях, плачу 3000."
+terms = "С Престола прислали переписать, сколько стекла уходит на юг. Двор хочет знать раньше — обойдите три места на Стеклянных Полях, плачу 419."
 objective = "search"
 location = 1
 target_count = 3
-reward_gold = 3000
-reward_experience = 8800
+reward_gold = 419
+reward_experience = 4728
 
 [[quest]]
 id = "glass_hollow_court_couriers"
 city = "glass_hollow"
-level = 164
+level = 82
 follows = "glass_hollow_glass_tithe"
 name = "Гонцы к Гнездну"
 giver = "Тавр, приказчик стекольного двора"
 intro = "Кладёт на стол вскрытое чужое прошение."
-terms = "Через Оплавленные Руины ходят гонцы к столице с чужими прошениями. Перехватите восьмерых, с меня 3400."
+terms = "Через Оплавленные Руины ходят гонцы к столице с чужими прошениями. Перехватите восьмерых, с меня 435."
 objective = "kill"
 location = 3
 target_kind = "humanoid"
 target_count = 8
-reward_gold = 3400
-reward_experience = 9400
-reward_item = "medium_body@152#uncommon"
+reward_gold = 435
+reward_experience = 5064
+reward_item = "medium_body@76#uncommon"
 
 [[quest]]
 id = "glass_hollow_crater_deal"
 city = "glass_hollow"
-level = 174
+level = 87
 follows = "glass_hollow_court_couriers"
 name = "Сделка на Дне Кратера"
 giver = "Ирма, доверенная Гавани"
 intro = "Кладёт перстень с чужого двора, снятый с посыльного."
-terms = "На Дне Кратера Гавань торгуется с чьими-то людьми за место при дворе. Дом хочет знать, с кем, — плата 4200."
+terms = "На Дне Кратера Гавань торгуется с чьими-то людьми за место при дворе. Дом хочет знать, с кем, — плата 448."
 objective = "elite"
 location = 5
 target_count = 1
-reward_gold = 4200
-reward_experience = 10000
-reward_item = "heavy_body@171#rare"
+reward_gold = 448
+reward_experience = 5344
+reward_item = "heavy_body@86#rare"
 
 # --- Мезень: войско снимается с зимних стоянок ---
 
 [[quest]]
 id = "winter_march_muster_count"
 city = "winter_march"
-level = 171
+level = 86
 name = "Пересчёт на Падях"
 giver = "Ждан, каптенармус гарнизона"
 intro = "Водит пальцем по спискам, где числа не сходятся."
-terms = "Войско снимается с зимних стоянок, а списки врут. Обойдите три поста на Падях, пересчитайте, — плачу 3400."
+terms = "Войско снимается с зимних стоянок, а списки врут. Обойдите три поста на Падях, пересчитайте, — плачу 446."
 objective = "search"
 location = 1
 target_count = 3
-reward_gold = 3400
-reward_experience = 9800
+reward_gold = 446
+reward_experience = 5288
 
 [[quest]]
 id = "winter_march_deserters"
 city = "winter_march"
-level = 183
+level = 92
 follows = "winter_march_muster_count"
 name = "Беглые в Караулке"
 giver = "Ждан, каптенармус гарнизона"
 intro = "Кладёт на стол брошенный войсковой знак."
-terms = "С похода к столице бегут, и беглые сбиваются в Караулке. Верните порядок — десять встреч, с меня 3800."
+terms = "С похода к столице бегут, и беглые сбиваются в Караулке. Верните порядок — десять встреч, с меня 461."
 objective = "kill"
 location = 3
 target_kind = "humanoid"
 target_count = 10
-reward_gold = 3800
-reward_experience = 10400
-reward_item = "medium_feet@171#uncommon"
+reward_gold = 461
+reward_experience = 5616
+reward_item = "medium_feet@86#uncommon"
 
 [[quest]]
 id = "winter_march_march_orders"
 city = "winter_march"
-level = 192
+level = 96
 follows = "winter_march_deserters"
 name = "Приказ в обход Престола"
 giver = "сотник Барма"
 intro = "Разворачивает приказ, подписанный не рукой Престола."
-terms = "Приказ двигать войско к столице пришёл в обход Престола. Тот, кто его привёз, — в Подлёдных Ходах. Плата 4600."
+terms = "Приказ двигать войско к столице пришёл в обход Престола. Тот, кто его привёз, — в Подлёдных Ходах. Плата 471."
 objective = "elite"
 location = 5
 target_count = 1
-reward_gold = 4600
-reward_experience = 11000
-reward_item = "heavy_head@190#rare"
+reward_gold = 471
+reward_experience = 5840
+reward_item = "heavy_head@95#rare"
 
 # --- Горынь: кузни куют не только на войско ---
 
 [[quest]]
 id = "ashen_gates_forge_tally"
 city = "ashen_gates"
-level = 189
+level = 95
 name = "Сера для кузен"
 giver = "Ур, старшина кузнечного ряда"
 intro = "Кладёт на стол ком слежавшейся серы."
-terms = "На Пепелищах бросили выработки серы, а кузням она нужна. Обойдите три, скажите, где ещё берут, — плачу 3800."
+terms = "На Пепелищах бросили выработки серы, а кузням она нужна. Обойдите три, скажите, где ещё берут, — плачу 468."
 objective = "search"
 location = 1
 target_count = 3
-reward_gold = 3800
-reward_experience = 11000
+reward_gold = 468
+reward_experience = 5784
 
 [[quest]]
 id = "ashen_gates_arms_run"
 city = "ashen_gates"
-level = 200
+level = 100
 follows = "ashen_gates_forge_tally"
 name = "Оружие мимо счёта"
 giver = "Ур, старшина кузнечного ряда"
 intro = "Кладёт на стол клинок без клейма кузен Врат."
-terms = "Готовое оружие уводят из Дымной Цитадели прежде, чем его сочтут. Пройдите девять встреч, с меня 4200."
+terms = "Готовое оружие уводят из Дымной Цитадели прежде, чем его сочтут. Пройдите девять встреч, с меня 481."
 objective = "kill"
 location = 4
 target_kind = "humanoid"
 target_count = 9
-reward_gold = 4200
-reward_experience = 11600
-reward_item = "heavy_hands@190#uncommon"
+reward_gold = 481
+reward_experience = 6056
+reward_item = "heavy_hands@95#uncommon"
 
 [[quest]]
 id = "ashen_gates_black_smithy"
 city = "ashen_gates"
-level = 211
+level = 106
 follows = "ashen_gates_arms_run"
 name = "Тайная кузня в Гари"
 giver = "Ур, старшина кузнечного ряда"
 intro = "Кладёт рядом два клинка: один с клеймом, другой без."
-terms = "В Гари поставили тайную кузню — куют на чью-то дружину помимо войска. Уберите того, кто её держит, плата 5000."
+terms = "В Гари поставили тайную кузню — куют на чью-то дружину помимо войска. Уберите того, кто её держит, плата 495."
 objective = "elite"
 location = 5
 target_count = 1
-reward_gold = 5000
-reward_experience = 12000
-reward_item = "heavy_body@208#rare"
+reward_gold = 495
+reward_experience = 6384
+reward_item = "heavy_body@104#rare"
 
 [[quest]]
 id = "ashen_gates_field_salves"
 city = "ashen_gates"
-level = 195
+level = 98
 name = "Зелья для лазарета"
 giver = "Мста, лекарка при кузнях"
 intro = "Считает пустые склянки в лазаретном ящике."
-terms = "Кузнецы горят на работе, а лечить нечем — обоз с зельями ушёл к войску. Сварите четыре зелья лечения, с меня 4000."
+terms = "Кузнецы горят на работе, а лечить нечем — обоз с зельями ушёл к войску. Сварите четыре зелья лечения, с меня 476."
 objective = "craft"
 target_kind = "healing_potion"
 target_count = 4
-reward_gold = 4000
-reward_experience = 11200
+reward_gold = 476
+reward_experience = 5952
 reward_item = "grove_resin"
 
 # --- Крев: руда на чеканку монеты ---
@@ -704,52 +704,52 @@ reward_item = "grove_resin"
 [[quest]]
 id = "thunder_range_ore_tally"
 city = "thunder_range"
-level = 208
+level = 104
 name = "Недостача руды"
 giver = "Влас, весовщик рудного двора"
 intro = "Кладёт на весы два слитка вместо трёх по счёту."
-terms = "Руду на чеканку возят с Уступов, и по дороге её меньше, чем грузят. Обойдите три места, гляньте где, — плачу 4200."
+terms = "Руду на чеканку возят с Уступов, и по дороге её меньше, чем грузят. Обойдите три места, гляньте где, — плачу 490."
 objective = "search"
 location = 1
 target_count = 3
-reward_gold = 4200
-reward_experience = 12000
+reward_gold = 490
+reward_experience = 6272
 
 [[quest]]
 id = "thunder_range_coin_road"
 city = "thunder_range"
-level = 220
+level = 110
 follows = "thunder_range_ore_tally"
 name = "Обозы на Тропе Молний"
 giver = "Влас, весовщик рудного двора"
 intro = "Кладёт на стол монету незнакомой чеканки."
-terms = "На Тропе Молний перехватывают рудные обозы — кто-то хочет чеканить свою монету. Разгоните десятерых, с меня 4600."
+terms = "На Тропе Молний перехватывают рудные обозы — кто-то хочет чеканить свою монету. Разгоните десятерых, с меня 504."
 objective = "kill"
 location = 4
 target_kind = "humanoid"
 target_count = 10
-reward_gold = 4600
-reward_experience = 12600
-reward_item = "medium_hands@208#uncommon"
+reward_gold = 504
+reward_experience = 6600
+reward_item = "medium_hands@104#uncommon"
 
 [[quest]]
 id = "thunder_range_false_die"
 city = "thunder_range"
-level = 228
+level = 114
 follows = "thunder_range_coin_road"
 name = "Монета с изъяном"
 giver = "Влас, весовщик рудного двора"
 intro = "Кладёт рядом две монеты: верный чекан, неверный вес."
-terms = "В Оке Бури льют монету с изъяном и пускают её в казну домов. Тот, кто это правит, там же — плата 5400."
+terms = "В Оке Бури льют монету с изъяном и пускают её в казну домов. Тот, кто это правит, там же — плата 514."
 objective = "elite"
 location = 5
 target_count = 1
-reward_gold = 5400
-reward_experience = 13000
-reward_item = "charm@228#rare"
+reward_gold = 514
+reward_experience = 6816
+reward_item = "charm@113#rare"
 
 # =========================================================================
-# АКТ V. «Порожний престол» (230–300). Вельск, Мглин, Гнездно, Колва.
+# АКТ V. «Порожний престол» (115–150). Вельск, Мглин, Гнездно, Колва.
 #
 # Наследник не назван. Большой совет решает, кто сядет на Престол и сядет ли
 # кто; решение принимают игроки, и его видит весь сервер (Narrative.md,
@@ -761,63 +761,63 @@ reward_item = "charm@228#rare"
 [[quest]]
 id = "azure_halls_record_search"
 city = "azure_halls"
-level = 232
+level = 116
 name = "Вынос из Галерей"
 giver = "Пров, младший хранитель списков"
 intro = "Показывает полку, где вместо свитков лежит пыль."
-terms = "Из Галерей Списков вынесли записи о наследстве Престола. Обойдите четыре места без боя, посмотрите, что унесли, — плачу 4800."
+terms = "Из Галерей Списков вынесли записи о наследстве Престола. Обойдите четыре места без боя, посмотрите, что унесли, — плачу 518."
 objective = "search"
 location = 3
 target_count = 4
-reward_gold = 4800
-reward_experience = 13600
+reward_gold = 518
+reward_experience = 6920
 
 [[quest]]
 id = "azure_halls_patent_forgers"
 city = "azure_halls"
-level = 240
+level = 120
 follows = "azure_halls_record_search"
 name = "Поддельный патент"
 giver = "Пров, младший хранитель списков"
 intro = "Кладёт на стол патент на магию с чужой печатью."
-terms = "На Ветряных Мостах торгуют поддельным патентом на магию, и Дом Мер теряет счёт. Пройдите девять встреч, с меня 5200."
+terms = "На Ветряных Мостах торгуют поддельным патентом на магию, и Дом Мер теряет счёт. Пройдите девять встреч, с меня 527."
 objective = "kill"
 location = 4
 target_kind = "humanoid"
 target_count = 9
-reward_gold = 5200
-reward_experience = 14400
-reward_item = "light_feet@228#uncommon"
+reward_gold = 527
+reward_experience = 7136
+reward_item = "light_feet@113#uncommon"
 
 [[quest]]
 id = "azure_halls_sealed_vote"
 city = "azure_halls"
-level = 246
+level = 123
 follows = "azure_halls_patent_forgers"
 name = "Голоса на совет"
 giver = "Пров, младший хранитель списков"
 intro = "Кладёт бюллетень совета, заполненный чужой рукой."
-terms = "В Башне Мер кто-то собирает голоса на совет силой и подкупом. Уберите того, кто этим заправляет, плата 6000."
+terms = "В Башне Мер кто-то собирает голоса на совет силой и подкупом. Уберите того, кто этим заправляет, плата 534."
 objective = "elite"
 location = 5
 target_count = 1
-reward_gold = 6000
-reward_experience = 15000
-reward_item = "pendant@248#rare"
+reward_gold = 534
+reward_experience = 7296
+reward_item = "pendant@122#rare"
 
 [[quest]]
 id = "azure_halls_clerk_draughts"
 city = "azure_halls"
-level = 234
+level = 117
 name = "Настой для писцов"
 giver = "Пров, младший хранитель списков"
 intro = "Трёт покрасневшие глаза над спорной грамотой."
-terms = "Писцы Дома Мер валятся с ног над спорными грамотами. Сварите четыре настоя сосредоточения, плачу 4800."
+terms = "Писцы Дома Мер валятся с ног над спорными грамотами. Сварите четыре настоя сосредоточения, плачу 520."
 objective = "craft"
 target_kind = "resource_draught"
 target_count = 4
-reward_gold = 4800
-reward_experience = 13600
+reward_gold = 520
+reward_experience = 6976
 reward_item = "grove_resin"
 
 # --- Мглин: дом хранит грамоты о престолонаследии ---
@@ -825,162 +825,162 @@ reward_item = "grove_resin"
 [[quest]]
 id = "bone_marches_record_dig"
 city = "bone_marches"
-level = 244
+level = 122
 name = "Грамоты в отвалах"
 giver = "Тихон, приказчик раскопа"
 intro = "Отряхивает с ладони известковую пыль."
-terms = "Дом Курганов держит старые грамоты о престолонаследии, и часть увезли на Отвалы под видом породы. Обойдите три места, плачу 5000."
+terms = "Дом Курганов держит старые грамоты о престолонаследии, и часть увезли на Отвалы под видом породы. Обойдите три места, плачу 532."
 objective = "search"
 location = 1
 target_count = 3
-reward_gold = 5000
-reward_experience = 14400
+reward_gold = 532
+reward_experience = 7248
 
 [[quest]]
 id = "bone_marches_grave_robbers"
 city = "bone_marches"
-level = 256
+level = 128
 follows = "bone_marches_record_dig"
 name = "Чужие копатели"
 giver = "Тихон, приказчик раскопа"
 intro = "Кладёт на стол чужую лопату с обрубленным черенком."
-terms = "В Нижний Город лезут чужие копатели за грамотами дома. Разберитесь с десятью, с меня 5400."
+terms = "В Нижний Город лезут чужие копатели за грамотами дома. Разберитесь с десятью, с меня 545."
 objective = "kill"
 location = 4
 target_kind = "humanoid"
 target_count = 10
-reward_gold = 5400
-reward_experience = 15200
-reward_item = "medium_body@248#uncommon"
+reward_gold = 545
+reward_experience = 7568
+reward_item = "medium_body@122#uncommon"
 
 [[quest]]
 id = "bone_marches_buried_claim"
 city = "bone_marches"
-level = 264
+level = 132
 follows = "bone_marches_grave_robbers"
 name = "Грамота из свежего раскопа"
 giver = "Тихон, приказчик раскопа"
 intro = "Разворачивает грамоту, поднятую из свежего раскопа."
-terms = "В Моровых Ямах кто-то откопал грамоту, что называет наследника, и не отдаёт её. Заберите — плата 6200."
+terms = "В Моровых Ямах кто-то откопал грамоту, что называет наследника, и не отдаёт её. Заберите — плата 553."
 objective = "elite"
 location = 5
 target_count = 1
-reward_gold = 6200
-reward_experience = 15600
-reward_item = "heavy_head@268#rare"
+reward_gold = 553
+reward_experience = 7776
+reward_item = "heavy_head@131#rare"
 
 # --- Гнездно: войско у столицы, совет на пороге ---
 
 [[quest]]
 id = "obsidian_throne_court_census"
 city = "obsidian_throne"
-level = 264
+level = 132
 name = "Прошения в Анфиладах"
 giver = "Нелюб, дьяк Престола"
 intro = "Кивает на стол, где прошений больше, чем при полном дворе."
-terms = "Двор полупуст, а прошений больше прежнего. Обойдите три места в Анфиладах, посмотрите, кто их носит, — плачу 5400."
+terms = "Двор полупуст, а прошений больше прежнего. Обойдите три места в Анфиладах, посмотрите, кто их носит, — плачу 553."
 objective = "search"
 location = 2
 target_count = 3
-reward_gold = 5400
-reward_experience = 15800
+reward_gold = 553
+reward_experience = 7776
 
 [[quest]]
 id = "obsidian_throne_house_envoys"
 city = "obsidian_throne"
-level = 270
+level = 135
 follows = "obsidian_throne_court_census"
 name = "Посольства с дружиной"
 giver = "Нелюб, дьяк Престола"
 intro = "Кладёт на стол список посольств, вписанных сверх меры."
-terms = "Дома свозят в столицу дружины под видом посольств. На Литейном Дворе их девять — разверните, с меня 5800."
+terms = "Дома свозят в столицу дружины под видом посольств. На Литейном Дворе их девять — разверните, с меня 560."
 objective = "kill"
 location = 3
 target_kind = "humanoid"
 target_count = 9
-reward_gold = 5800
-reward_experience = 16400
-reward_item = "medium_feet@268#uncommon"
+reward_gold = 560
+reward_experience = 7936
+reward_item = "medium_feet@131#uncommon"
 
 [[quest]]
 id = "obsidian_throne_army_at_gates"
 city = "obsidian_throne"
-level = 276
+level = 138
 follows = "obsidian_throne_house_envoys"
 name = "Войско у Провала"
 giver = "воевода Ставр"
 intro = "Показывает на карте, как близко к столице встало войско."
-terms = "Дом Заставы подвёл войско к Провалу — для порядка, по их словам. Возьмите их дозорного начальника, Престол хочет знать намерение. Плата 6400."
+terms = "Дом Заставы подвёл войско к Провалу — для порядка, по их словам. Возьмите их дозорного начальника, Престол хочет знать намерение. Плата 566."
 objective = "elite"
 location = 4
 target_count = 1
-reward_gold = 6400
-reward_experience = 16800
-reward_item = "heavy_body@268#legendary"
+reward_gold = 566
+reward_experience = 8096
+reward_item = "heavy_body@131#legendary"
 
 [[quest]]
 id = "obsidian_throne_empty_seat"
 city = "obsidian_throne"
-level = 282
+level = 141
 follows = "obsidian_throne_army_at_gates"
 name = "Порожнее место"
 giver = "Нелюб, дьяк Престола"
 intro = "Кладёт печать Престола, которой давно никто не прикладывал."
-terms = "В Тронном Зале засел тот, кто рвётся на Престол прежде совета. Престол просит вывести его — плата 7000."
+terms = "В Тронном Зале засел тот, кто рвётся на Престол прежде совета. Престол просит вывести его — плата 572."
 objective = "elite"
 location = 5
 target_count = 1
-reward_gold = 7000
-reward_experience = 17400
+reward_gold = 572
+reward_experience = 8256
 # Конец цепочки из четырёх заданий столицы: реликтовая печатка, которую не берут
 # ни с логова, ни на прилавке (loader RELIC_CHAIN_LENGTH, ADR 0007).
-reward_item = "signet@268#relic"
+reward_item = "signet@131#relic"
 
 # --- Колва: конец дороги, последний маяк ---
 
 [[quest]]
 id = "last_beacon_signal_watch"
 city = "last_beacon"
-level = 279
+level = 140
 name = "Посты на Мысе"
 giver = "Веденей, смотритель маяка"
 intro = "Показывает сигнальный фонарь с прогоревшим дном."
-terms = "Маяк держит Дом Курганов на свой счёт, и сигнальные посты на Мысе бросили. Обойдите три, скажите, какие целы, — плачу 5800."
+terms = "Маяк держит Дом Курганов на свой счёт, и сигнальные посты на Мысе бросили. Обойдите три, скажите, какие целы, — плачу 570."
 objective = "search"
 location = 1
 target_count = 3
-reward_gold = 5800
-reward_experience = 16800
+reward_gold = 570
+reward_experience = 8200
 
 [[quest]]
 id = "last_beacon_last_couriers"
 city = "last_beacon"
-level = 290
+level = 145
 follows = "last_beacon_signal_watch"
 name = "Письма мимо Престола"
 giver = "Веденей, смотритель маяка"
 intro = "Кладёт на стол связку писем с сорванными печатями."
-terms = "Через Башню Маяка идут письма домов к южным капитанам мимо Престола. Перехватите десятерых, с меня 6200."
+terms = "Через Башню Маяка идут письма домов к южным капитанам мимо Престола. Перехватите десятерых, с меня 581."
 objective = "kill"
 location = 3
 target_kind = "humanoid"
 target_count = 10
-reward_gold = 6200
-reward_experience = 17600
-reward_item = "heavy_hands@290#uncommon"
+reward_gold = 581
+reward_experience = 8464
+reward_item = "heavy_hands@140#uncommon"
 
 [[quest]]
 id = "last_beacon_far_claim"
 city = "last_beacon"
-level = 298
+level = 149
 follows = "last_beacon_last_couriers"
 name = "Чужой сигнал с Вершины"
 giver = "Веденей, смотритель маяка"
 intro = "Кладёт на стол погашенный фонарь, снятый с Вершины."
-terms = "На Вершине жгли чужой сигнал — звали корабли к берегу в обход маяка. Тот, кто это делал, ещё там. Плата 7200."
+terms = "На Вершине жгли чужой сигнал — звали корабли к берегу в обход маяка. Тот, кто это делал, ещё там. Плата 589."
 objective = "elite"
 location = 5
 target_count = 1
-reward_gold = 7200
-reward_experience = 18000
-reward_item = "heavy_body@290#legendary"
+reward_gold = 589
+reward_experience = 8672
+reward_item = "heavy_body@140#legendary"

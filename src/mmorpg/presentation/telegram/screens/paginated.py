@@ -35,6 +35,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
+from mmorpg.domain.rules.progression import MAX_LEVEL
 from mmorpg.presentation.telegram.keyboards.labels import (
     FILTERS,
     NEXT_PAGE,
@@ -106,7 +107,7 @@ class ListFilters:
         if self.rarity:
             parts.append(f"редкость «{self.rarity}»")
         if self.level_min or self.level_max:
-            parts.append(f"уровни с {self.level_min or 1} по {self.level_max or 300}")
+            parts.append(f"уровни с {self.level_min or 1} по {self.level_max or MAX_LEVEL}")
         if self.available_only:
             parts.append("только доступное мне")
         parts.append(f"сортировка «{self.sort}»")

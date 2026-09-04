@@ -1,8 +1,8 @@
-# Карта мира: 15 городов, по 5 локаций, уровни 1-300.
+# Карта мира: 15 городов, по 5 локаций, уровни 1-150.
 #
 # Инварианты, которые проверяет tests/content/test_world.py:
 #   - ровно 15 городов, ровно 5 локаций на город
-#   - каждый уровень от 1 до 300 покрыт хотя бы одной локацией
+#   - каждый уровень от 1 до 150 покрыт хотя бы одной локацией
 #   - внутри города границы растут монотонно, между локациями нет пробелов
 #   - полосы городов перекрываются, поэтому всегда есть и где подкопить, и куда
 #     рваться
@@ -23,7 +23,7 @@
 # Перед правкой см. docs/content-guide.md.
 
 [meta]
-max_character_level = 300
+max_character_level = 150
 cities_expected = 15
 locations_per_city = 5
 
@@ -33,7 +33,7 @@ order = 1
 name = "Дубно"
 description = "Северная застава Дома Порубежья: здесь досматривают обозы, а за городом дорога переходит в тропу."
 level_min = 1
-level_max = 30
+level_max = 15
 unlock_level = 1
 unlock_requires = []
 services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "forge", "arena", "house", "chamber"]
@@ -43,35 +43,35 @@ id = "farhold_badger_runs"
 name = "Барсучьи ходы"
 flavour = "Звериные норы, которые расширили те, кто прятал в них припас."
 biome = "рудник"
-level = 5
+level = 3
 
 [[city.dungeon]]
 id = "farhold_first_adit"
 name = "Первая штольня"
 flavour = "Её били давно и бросили, когда порода пошла пустая."
 biome = "штольни"
-level = 12
+level = 6
 
 [[city.dungeon]]
 id = "farhold_roadside_vaults"
 name = "Придорожные склепы"
 flavour = "Хоронили обозников, не доехавших до заставы; за оградой давно не смотрят."
 biome = "катакомбы"
-level = 19
+level = 10
 
 [[city.dungeon]]
 id = "farhold_wet_galleries"
 name = "Мокрые галереи"
 flavour = "Вода точит известняк, и ходы уводят глубже, чем кто-либо мерил."
 biome = "глубокие пещеры"
-level = 26
+level = 13
 
 [[city.dungeon]]
 id = "farhold_flooded_drift"
 name = "Затопленный штрек"
 flavour = "Нижняя выработка ушла под воду; воздух в ней держат помпой, и то не везде."
 biome = "затопленные ходы"
-level = 30
+level = 15
 deep = true
 
 [[city.location]]
@@ -80,31 +80,31 @@ slot = 1
 name = "Луга у Заставы"
 biome = "луга"
 level_min = 1
-level_max = 4
+level_max = 2
 
 [[city.location]]
 id = "dusk_grove"
 slot = 2
 name = "Ольшаник"
 biome = "лес"
-level_min = 4
-level_max = 10
+level_min = 2
+level_max = 5
 
 [[city.location]]
 id = "wolf_ravines"
 slot = 3
 name = "Волчьи Овраги"
 biome = "овраги"
-level_min = 9
-level_max = 16
+level_min = 5
+level_max = 8
 
 [[city.location]]
 id = "old_road"
 slot = 4
 name = "Тракт на Затон"
 biome = "дорога"
-level_min = 15
-level_max = 23
+level_min = 8
+level_max = 12
 pvp = true
 
 [[city.location]]
@@ -112,17 +112,17 @@ id = "abandoned_mine"
 slot = 5
 name = "Выработки"
 biome = "подземелье"
-level_min = 22
-level_max = 30
+level_min = 11
+level_max = 15
 
 [[city]]
 id = "dusk_harbor"
 order = 2
 name = "Сурож"
 description = "Портовый город Дома Порубежья на Затоне: живёт рыбой и тем, что провозят мимо досмотра."
-level_min = 24
-level_max = 54
-unlock_level = 24
+level_min = 12
+level_max = 27
+unlock_level = 12
 unlock_requires = ["city:farhold"]
 services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "forge", "arena", "house", "chamber"]
 
@@ -131,35 +131,35 @@ id = "dusk_harbor_bilge_ways"
 name = "Трюмные ходы"
 flavour = "Прорыты между затопленных складов; вода стоит по колено и не уходит."
 biome = "затопленные ходы"
-level = 28
+level = 14
 
 [[city.dungeon]]
 id = "dusk_harbor_drowned_vaults"
 name = "Подмытые склепы"
 flavour = "Море подобралось к старому кладбищу, и часть плит ушла под воду."
 biome = "катакомбы"
-level = 35
+level = 18
 
 [[city.dungeon]]
 id = "dusk_harbor_smuggler_caves"
 name = "Пещеры мимо весов"
 flavour = "В них держали товар, пока на заставе считали другой."
 biome = "глубокие пещеры"
-level = 43
+level = 22
 
 [[city.dungeon]]
 id = "dusk_harbor_cliff_adits"
 name = "Штольни в Обрыве"
 flavour = "Били за солью и известью; крепь местами держит, местами нет."
 biome = "штольни"
-level = 50
+level = 25
 
 [[city.dungeon]]
 id = "dusk_harbor_grottos"
 name = "Гроты под Обрывом"
 flavour = "Ходы, в которых прятали товар мимо весов; часть завалило, часть нет."
 biome = "глубокие пещеры"
-level = 54
+level = 27
 deep = true
 
 [[city.location]]
@@ -167,32 +167,32 @@ id = "fisher_piers"
 slot = 1
 name = "Мостки"
 biome = "берег"
-level_min = 24
-level_max = 27
+level_min = 12
+level_max = 14
 
 [[city.location]]
 id = "reed_marshes"
 slot = 2
 name = "Камышовые Топи"
 biome = "болото"
-level_min = 27
-level_max = 33
+level_min = 14
+level_max = 17
 
 [[city.location]]
 id = "broken_pier"
 slot = 3
 name = "Волнолом"
 biome = "берег"
-level_min = 32
-level_max = 40
+level_min = 16
+level_max = 20
 
 [[city.location]]
 id = "rotten_docks"
 slot = 4
 name = "Гнилые Верфи"
 biome = "руины"
-level_min = 39
-level_max = 47
+level_min = 20
+level_max = 24
 pvp = true
 
 [[city.location]]
@@ -200,17 +200,17 @@ id = "washed_grottos"
 slot = 5
 name = "Гроты под Обрывом"
 biome = "пещеры"
-level_min = 46
-level_max = 54
+level_min = 23
+level_max = 27
 
 [[city]]
 id = "stonedale"
 order = 3
 name = "Кремно"
 description = "Гнездо Дома Камня в Каменном Долу: отсюда идёт строительный камень на всю дорогу."
-level_min = 48
-level_max = 76
-unlock_level = 48
+level_min = 24
+level_max = 38
+unlock_level = 24
 unlock_requires = ["city:dusk_harbor"]
 services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "forge", "arena", "house", "chamber"]
 
@@ -219,35 +219,35 @@ id = "stonedale_upper_adits"
 name = "Верхние штольни"
 flavour = "Ближние к дневному свету; порода тут выбрана до пустого."
 biome = "штольни"
-level = 52
+level = 26
 
 [[city.dungeon]]
 id = "stonedale_granite_pit"
 name = "Гранитный забой"
 flavour = "Камень отсюда шёл на ступени; теперь берут только те, кому больше негде."
 biome = "рудник"
-level = 58
+level = 29
 
 [[city.dungeon]]
 id = "stonedale_wind_hollows"
 name = "Полости Ущелья"
 flavour = "Ветер выл в них так, что артель ушла, не докопав."
 biome = "глубокие пещеры"
-level = 65
+level = 33
 
 [[city.dungeon]]
 id = "stonedale_miners_rest"
 name = "Покой Рудокопов"
 flavour = "Здесь клали тех, кого завалило; ниши идут в три яруса."
 biome = "катакомбы"
-level = 72
+level = 36
 
 [[city.dungeon]]
 id = "stonedale_abandoned_adits"
 name = "Брошенные штольни"
 flavour = "Крепь сгнила, породу отсюда больше не берут — а спускаются всё равно."
 biome = "штольни"
-level = 76
+level = 38
 deep = true
 
 [[city.location]]
@@ -255,32 +255,32 @@ id = "dale_screes"
 slot = 1
 name = "Осыпи Дола"
 biome = "холмы"
-level_min = 48
-level_max = 51
+level_min = 24
+level_max = 26
 
 [[city.location]]
 id = "granite_steps"
 slot = 2
 name = "Гранитные Ступени"
 biome = "горы"
-level_min = 51
-level_max = 56
+level_min = 26
+level_max = 28
 
 [[city.location]]
 id = "quarry"
 slot = 3
 name = "Каменоломня"
 biome = "карьер"
-level_min = 55
-level_max = 63
+level_min = 28
+level_max = 32
 
 [[city.location]]
 id = "wind_gorge"
 slot = 4
 name = "Ущелье Ветров"
 biome = "ущелье"
-level_min = 62
-level_max = 69
+level_min = 31
+level_max = 35
 pvp = true
 
 [[city.location]]
@@ -288,17 +288,17 @@ id = "collapsed_adits"
 slot = 5
 name = "Штольни"
 biome = "пещеры"
-level_min = 68
-level_max = 76
+level_min = 34
+level_max = 38
 
 [[city]]
 id = "copper_cross"
 order = 4
 name = "Стрешин"
 description = "Крестовье четырёх трактов, второй город Дома Камня: живёт с проезжих и с досмотра на развязке."
-level_min = 70
-level_max = 98
-unlock_level = 70
+level_min = 35
+level_max = 49
+unlock_level = 35
 unlock_requires = ["city:stonedale"]
 services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "forge", "arena", "house", "chamber"]
 
@@ -307,35 +307,35 @@ id = "copper_cross_ore_drifts"
 name = "Рудные штреки"
 flavour = "Медь тут ещё есть, но возить её дороже, чем она стоит."
 biome = "рудник"
-level = 73
+level = 37
 
 [[city.dungeon]]
 id = "copper_cross_old_workings"
 name = "Старые выработки"
 flavour = "Их бросили, когда рядом пробили новый ствол."
 biome = "штольни"
-level = 80
+level = 40
 
 [[city.dungeon]]
 id = "copper_cross_undertown"
 name = "Подмостье"
 flavour = "Литейщики жили под цехами, чтобы не ходить на мороз; жильё осталось, люди нет."
 biome = "подземный город"
-level = 87
+level = 44
 
 [[city.dungeon]]
 id = "copper_cross_slag_caves"
 name = "Шлаковые пещеры"
 flavour = "Горячий шлак сливали в карст, и порода в них до сих пор тёплая."
 biome = "глубокие пещеры"
-level = 94
+level = 47
 
 [[city.dungeon]]
 id = "copper_cross_lower_furnaces"
 name = "Нижние печи"
 flavour = "Литейные ямы под остывшими плавильнями; шлак местами ещё тёплый."
 biome = "штольни"
-level = 98
+level = 49
 deep = true
 
 [[city.location]]
@@ -343,32 +343,32 @@ id = "trade_road"
 slot = 1
 name = "Тракт у Мытни"
 biome = "дорога"
-level_min = 70
-level_max = 73
+level_min = 35
+level_max = 37
 
 [[city.location]]
 id = "copper_mines"
 slot = 2
 name = "Медные Копи"
 biome = "шахта"
-level_min = 73
-level_max = 78
+level_min = 37
+level_max = 39
 
 [[city.location]]
 id = "ruined_farm"
 slot = 3
 name = "Хутор"
 biome = "руины"
-level_min = 77
-level_max = 85
+level_min = 39
+level_max = 43
 
 [[city.location]]
 id = "bandit_hollow"
 slot = 4
 name = "Разбойничий Лог"
 biome = "лес"
-level_min = 84
-level_max = 91
+level_min = 42
+level_max = 46
 pvp = true
 
 [[city.location]]
@@ -376,17 +376,17 @@ id = "smelting_pits"
 slot = 5
 name = "Плавильни"
 biome = "шахта"
-level_min = 90
-level_max = 98
+level_min = 45
+level_max = 49
 
 [[city]]
 id = "quiet_fords"
 order = 5
 name = "Полота"
 description = "Гнездо Дома Переправ: речные броды и старые курганы, и без его лодок дальше на юг не пройти."
-level_min = 92
-level_max = 118
-unlock_level = 92
+level_min = 46
+level_max = 59
+unlock_level = 46
 unlock_requires = ["city:copper_cross"]
 services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "forge", "arena", "house", "chamber"]
 
@@ -395,35 +395,35 @@ id = "quiet_fords_river_drains"
 name = "Водоотводы"
 flavour = "Их били, чтобы отвести реку от полей; река нашла другой путь."
 biome = "затопленные ходы"
-level = 95
+level = 48
 
 [[city.dungeon]]
 id = "quiet_fords_bank_barrows"
 name = "Курганные ходы"
 flavour = "Насыпи связаны подземными переходами; кто и зачем — не записано."
 biome = "катакомбы"
-level = 102
+level = 51
 
 [[city.dungeon]]
 id = "quiet_fords_karst_sink"
 name = "Провальные пещеры"
 flavour = "Река ушла под землю, и за ней ушли те, кто её ловил."
 biome = "глубокие пещеры"
-level = 109
+level = 55
 
 [[city.dungeon]]
 id = "quiet_fords_sunken_ward"
 name = "Затопленный квартал"
 flavour = "Нижний посад ушёл под воду за одну весну; крыши ещё торчат."
 biome = "подземный город"
-level = 115
+level = 58
 
 [[city.dungeon]]
 id = "quiet_fords_temple_crypt"
 name = "Крипта под Храмом"
 flavour = "Вода стоит по грудь, свод держится на трёх колоннах из семи."
 biome = "катакомбы"
-level = 118
+level = 59
 deep = true
 
 [[city.location]]
@@ -431,32 +431,32 @@ id = "willow_shoals"
 slot = 1
 name = "Отмели"
 biome = "река"
-level_min = 92
-level_max = 95
+level_min = 46
+level_max = 48
 
 [[city.location]]
 id = "flooded_forest"
 slot = 2
 name = "Затопленный Лес"
 biome = "болото"
-level_min = 95
-level_max = 100
+level_min = 48
+level_max = 50
 
 [[city.location]]
 id = "river_barrows"
 slot = 3
 name = "Курганы у Реки"
 biome = "курганы"
-level_min = 99
-level_max = 106
+level_min = 50
+level_max = 53
 
 [[city.location]]
 id = "mill_reaches"
 slot = 4
 name = "Плёсы"
 biome = "река"
-level_min = 105
-level_max = 112
+level_min = 53
+level_max = 56
 pvp = true
 
 [[city.location]]
@@ -464,17 +464,17 @@ id = "drowned_temple"
 slot = 5
 name = "Утопленный Храм"
 biome = "руины"
-level_min = 111
-level_max = 118
+level_min = 56
+level_max = 59
 
 [[city]]
 id = "salt_ridge"
 order = 6
 name = "Ирень"
 description = "Караванная застава Дома Переправ на сухом меловом хребте: своей воды нет, её возят бочками из Полоты."
-level_min = 113
-level_max = 138
-unlock_level = 113
+level_min = 57
+level_max = 69
+unlock_level = 57
 unlock_requires = ["city:quiet_fords"]
 services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "forge", "arena", "house", "chamber"]
 
@@ -483,35 +483,35 @@ id = "salt_ridge_chalk_adits"
 name = "Меловые штольни"
 flavour = "Мел брали на побелку; ходы белые и крошатся под рукой."
 biome = "штольни"
-level = 116
+level = 58
 
 [[city.dungeon]]
 id = "salt_ridge_brine_pit"
 name = "Рассольный забой"
 flavour = "Соль тут добывают выпаркой, а раньше рубили киркой — забой остался."
 biome = "рудник"
-level = 122
+level = 61
 
 [[city.dungeon]]
 id = "salt_ridge_salt_caves"
 name = "Соляные пещеры"
 flavour = "Вода выела в извести залы, где стены на вкус горькие."
 biome = "глубокие пещеры"
-level = 128
+level = 64
 
 [[city.dungeon]]
 id = "salt_ridge_caravan_tombs"
 name = "Гробницы Водовозов"
 flavour = "Погибших на тракте солили и клали здесь до весны; иных не забрали."
 biome = "катакомбы"
-level = 134
+level = 67
 
 [[city.dungeon]]
 id = "salt_ridge_salt_ways"
 name = "Соляные ходы"
 flavour = "Выедены водой в извести; соль отсюда возят до сих пор, только глубже."
 biome = "штольни"
-level = 138
+level = 69
 deep = true
 
 [[city.location]]
@@ -519,32 +519,32 @@ id = "chalk_terraces"
 slot = 1
 name = "Меловые Террасы"
 biome = "пустошь"
-level_min = 113
-level_max = 115
+level_min = 57
+level_max = 58
 
 [[city.location]]
 id = "scorched_waste"
 slot = 2
 name = "Пустошь"
 biome = "пустошь"
-level_min = 115
-level_max = 121
+level_min = 58
+level_max = 61
 
 [[city.location]]
 id = "caravan_route"
 slot = 3
 name = "Путь Водовозов"
 biome = "дорога"
-level_min = 120
-level_max = 126
+level_min = 60
+level_max = 63
 
 [[city.location]]
 id = "scorpion_ridge"
 slot = 4
 name = "Хребет Скорпионов"
 biome = "горы"
-level_min = 125
-level_max = 132
+level_min = 63
+level_max = 66
 pvp = true
 
 [[city.location]]
@@ -552,17 +552,17 @@ id = "limestone_grottos"
 slot = 5
 name = "Известковые Гроты"
 biome = "пещеры"
-level_min = 131
-level_max = 138
+level_min = 66
+level_max = 69
 
 [[city]]
 id = "crimson_wharf"
 order = 7
 name = "Вырь"
 description = "Вольный порт, гнездо Дома Вольной Гавани: здесь распоряжаются капитаны, а Престол терпит их за долю в казну."
-level_min = 133
-level_max = 157
-unlock_level = 133
+level_min = 67
+level_max = 79
+unlock_level = 67
 unlock_requires = ["city:salt_ridge"]
 services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "forge", "arena", "house", "chamber"]
 
@@ -571,35 +571,35 @@ id = "crimson_wharf_hull_ways"
 name = "Ходы в остовах"
 flavour = "Корпуса легли друг на друга, и внутри держится воздух и вода."
 biome = "затопленные ходы"
-level = 136
+level = 68
 
 [[city.dungeon]]
 id = "crimson_wharf_drowned_yard"
 name = "Подтопленный погост"
 flavour = "Хоронили у самой воды; теперь до плит добираются вплавь."
 biome = "катакомбы"
-level = 142
+level = 71
 
 [[city.dungeon]]
 id = "crimson_wharf_tide_caves"
 name = "Приливные пещеры"
 flavour = "Их заливает дважды в день, и между приливами есть время дойти и вернуться."
 biome = "глубокие пещеры"
-level = 148
+level = 74
 
 [[city.dungeon]]
 id = "crimson_wharf_underwharf"
 name = "Подпирсье"
 flavour = "Грузчики жили под настилом; часть свай сгнила, часть держит."
 biome = "подземный город"
-level = 153
+level = 77
 
 [[city.dungeon]]
 id = "crimson_wharf_reef_hulks"
 name = "Остовы на Рифах"
 flavour = "Разбитые корпуса легли друг на друга, и внутри ещё держится воздух."
 biome = "затопленные ходы"
-level = 157
+level = 79
 deep = true
 
 [[city.location]]
@@ -607,32 +607,32 @@ id = "tar_docks"
 slot = 1
 name = "Смолокурни"
 biome = "порт"
-level_min = 133
-level_max = 135
+level_min = 67
+level_max = 68
 
 [[city.location]]
 id = "free_bay"
 slot = 2
 name = "Вольная Бухта"
 biome = "берег"
-level_min = 135
-level_max = 140
+level_min = 68
+level_max = 70
 
 [[city.location]]
 id = "sunken_fleet"
 slot = 3
 name = "Остовы Флота"
 biome = "корабли"
-level_min = 139
-level_max = 145
+level_min = 70
+level_max = 73
 
 [[city.location]]
 id = "beacon_cliff"
 slot = 4
 name = "Маячный Утёс"
 biome = "утёсы"
-level_min = 144
-level_max = 151
+level_min = 72
+level_max = 76
 pvp = true
 
 [[city.location]]
@@ -640,17 +640,17 @@ id = "grim_reefs"
 slot = 5
 name = "Рифы"
 biome = "море"
-level_min = 150
-level_max = 157
+level_min = 75
+level_max = 79
 
 [[city]]
 id = "glass_hollow"
 order = 8
 name = "Оскол"
 description = "Город Дома Вольной Гавани у кратера, где песок спёкся в стекло: стекло идёт на юг его кораблями."
-level_min = 152
-level_max = 176
-unlock_level = 152
+level_min = 76
+level_max = 88
+unlock_level = 76
 unlock_requires = ["city:crimson_wharf"]
 services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "forge", "arena", "house", "chamber"]
 
@@ -659,35 +659,35 @@ id = "glass_hollow_fused_caves"
 name = "Спёкшиеся пещеры"
 flavour = "Жар оплавил породу, и стены в них гладкие, как лёд."
 biome = "глубокие пещеры"
-level = 155
+level = 78
 
 [[city.dungeon]]
 id = "glass_hollow_prospect_adits"
 name = "Разведочные штольни"
 flavour = "Их били в поисках стекла, годного на продажу; годного мало."
 biome = "штольни"
-level = 161
+level = 81
 
 [[city.dungeon]]
 id = "glass_hollow_crater_tombs"
 name = "Склепы у Воронки"
 flavour = "Клали тех, кто искал в кратере и не вернулся."
 biome = "катакомбы"
-level = 167
+level = 84
 
 [[city.dungeon]]
 id = "glass_hollow_underhollow"
 name = "Осколье"
 flavour = "Артель зимовала под землёй целыми семьями; печи ещё стоят."
 biome = "подземный город"
-level = 172
+level = 86
 
 [[city.dungeon]]
 id = "glass_hollow_glass_cavities"
 name = "Стеклянные полости"
 flavour = "Полости в спёкшейся породе; края режут не хуже ножа."
 biome = "глубокие пещеры"
-level = 176
+level = 88
 deep = true
 
 [[city.location]]
@@ -695,32 +695,32 @@ id = "glass_fields"
 slot = 1
 name = "Стеклянные Поля"
 biome = "пустошь"
-level_min = 152
-level_max = 154
+level_min = 76
+level_max = 77
 
 [[city.location]]
 id = "impact_crater"
 slot = 2
 name = "Воронка"
 biome = "кратер"
-level_min = 154
-level_max = 159
+level_min = 77
+level_max = 80
 
 [[city.location]]
 id = "molten_ruins"
 slot = 3
 name = "Оплавленные Руины"
 biome = "руины"
-level_min = 158
-level_max = 164
+level_min = 79
+level_max = 82
 
 [[city.location]]
 id = "mirror_tunnels"
 slot = 4
 name = "Тоннели под Воронкой"
 biome = "тоннели"
-level_min = 163
-level_max = 170
+level_min = 82
+level_max = 85
 pvp = true
 
 [[city.location]]
@@ -728,17 +728,17 @@ id = "crater_floor"
 slot = 5
 name = "Дно Кратера"
 biome = "кратер"
-level_min = 169
-level_max = 176
+level_min = 85
+level_max = 88
 
 [[city]]
 id = "winter_march"
 order = 9
 name = "Мезень"
 description = "Гарнизон Дома Заставы у снеговой черты: здесь стоит войско державы, и дальше дорогу зимой не чистят."
-level_min = 171
-level_max = 194
-unlock_level = 171
+level_min = 86
+level_max = 97
+unlock_level = 86
 unlock_requires = ["city:glass_hollow"]
 services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "forge", "arena", "house", "chamber"]
 
@@ -747,35 +747,35 @@ id = "winter_march_meltways"
 name = "Талые ходы"
 flavour = "Летом их топит, зимой сковывает; проходят по льду."
 biome = "затопленные ходы"
-level = 174
+level = 87
 
 [[city.dungeon]]
 id = "winter_march_frost_adits"
 name = "Мёрзлые штольни"
 flavour = "Порода в них не оттаивает даже у входа."
 biome = "штольни"
-level = 179
+level = 90
 
 [[city.dungeon]]
 id = "winter_march_ice_caves"
 name = "Ледяные пещеры"
 flavour = "Их держит мороз; в оттепель свод трещит."
 biome = "глубокие пещеры"
-level = 185
+level = 93
 
 [[city.dungeon]]
 id = "winter_march_garrison_vaults"
 name = "Караульные склепы"
 flavour = "Гарнизон не хоронил мёртвых в мёрзлой земле — складывал под казармой."
 biome = "катакомбы"
-level = 190
+level = 95
 
 [[city.dungeon]]
 id = "winter_march_underice"
 name = "Подлёдные галереи"
 flavour = "Пробиты во льду и держатся, пока держит мороз."
 biome = "глубокие пещеры"
-level = 194
+level = 97
 deep = true
 
 [[city.location]]
@@ -783,32 +783,32 @@ id = "snow_dells"
 slot = 1
 name = "Пади"
 biome = "снега"
-level_min = 171
-level_max = 173
+level_min = 86
+level_max = 87
 
 [[city.location]]
 id = "ice_pass"
 slot = 2
 name = "Ледяной Перевал"
 biome = "горы"
-level_min = 173
-level_max = 178
+level_min = 87
+level_max = 89
 
 [[city.location]]
 id = "frozen_garrison"
 slot = 3
 name = "Караулка"
 biome = "руины"
-level_min = 177
-level_max = 183
+level_min = 89
+level_max = 92
 
 [[city.location]]
 id = "wolf_tundra"
 slot = 4
 name = "Тундра за Перевалом"
 biome = "тундра"
-level_min = 182
-level_max = 188
+level_min = 91
+level_max = 94
 pvp = true
 
 [[city.location]]
@@ -816,17 +816,17 @@ id = "underice_passages"
 slot = 5
 name = "Подлёдные Ходы"
 biome = "подземелье"
-level_min = 187
-level_max = 194
+level_min = 94
+level_max = 97
 
 [[city]]
 id = "ashen_gates"
 order = 10
 name = "Горынь"
 description = "Кузнечный город Дома Заставы у Пепельных Врат: здесь куют то, чем снаряжают войско державы."
-level_min = 189
-level_max = 213
-unlock_level = 189
+level_min = 95
+level_max = 107
+unlock_level = 95
 unlock_requires = ["city:winter_march"]
 services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "forge", "arena", "house", "chamber"]
 
@@ -835,35 +835,35 @@ id = "ashen_gates_cinder_adits"
 name = "Пепельные штольни"
 flavour = "Уголь и серу брали отсюда на кузни; воздух сухой и колючий."
 biome = "штольни"
-level = 192
+level = 96
 
 [[city.dungeon]]
 id = "ashen_gates_slag_pit"
 name = "Шлаковый забой"
 flavour = "Руду плавили на месте; забой затянут коркой остывшего металла."
 biome = "рудник"
-level = 198
+level = 99
 
 [[city.dungeon]]
 id = "ashen_gates_burn_hollows"
 name = "Прогарные полости"
 flavour = "Огонь ушёл под землю и выел ходы, кое-где ещё дышащие жаром."
 biome = "глубокие пещеры"
-level = 204
+level = 102
 
 [[city.dungeon]]
 id = "ashen_gates_forge_undercroft"
 name = "Подкузнечье"
 flavour = "Кузнецы жили при печах, чтобы не гасить их на ночь."
 biome = "подземный город"
-level = 209
+level = 105
 
 [[city.dungeon]]
 id = "ashen_gates_burnways"
 name = "Прогары"
 flavour = "Огонь ушёл под землю и выел в породе ходы; кое-где они ещё дышат жаром."
 biome = "глубокие пещеры"
-level = 213
+level = 107
 deep = true
 
 [[city.location]]
@@ -871,32 +871,32 @@ id = "ash_fields"
 slot = 1
 name = "Пепелища"
 biome = "пепел"
-level_min = 189
-level_max = 191
+level_min = 95
+level_max = 96
 
 [[city.location]]
 id = "lava_fissures"
 slot = 2
 name = "Лавовые Трещины"
 biome = "вулкан"
-level_min = 191
-level_max = 196
+level_min = 96
+level_max = 98
 
 [[city.location]]
 id = "gate_forges"
 slot = 3
 name = "Кузни Врат"
 biome = "кузни"
-level_min = 195
-level_max = 201
+level_min = 98
+level_max = 101
 
 [[city.location]]
 id = "smoke_citadel"
 slot = 4
 name = "Дымная Цитадель"
 biome = "крепость"
-level_min = 200
-level_max = 207
+level_min = 100
+level_max = 104
 pvp = true
 
 [[city.location]]
@@ -904,17 +904,17 @@ id = "burnt_forest"
 slot = 5
 name = "Гарь"
 biome = "лес"
-level_min = 206
-level_max = 213
+level_min = 103
+level_max = 107
 
 [[city]]
 id = "thunder_range"
 order = 11
 name = "Крев"
 description = "Поселение Дома Мер на грозовых скалах: молнии бьют в железную жилу, и руду отсюда возят на чеканку."
-level_min = 208
-level_max = 230
-unlock_level = 208
+level_min = 104
+level_max = 115
+unlock_level = 104
 unlock_requires = ["city:ashen_gates"]
 services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "forge", "arena", "house", "chamber"]
 
@@ -923,35 +923,35 @@ id = "thunder_range_ledge_adits"
 name = "Штольни в Уступах"
 flavour = "Били вдоль полок скалы; ветер выдувает из них лампы."
 biome = "штольни"
-level = 211
+level = 106
 
 [[city.dungeon]]
 id = "thunder_range_split_caves"
 name = "Пещеры в Расколе"
 flavour = "Гора треснула, и в трещину ушли ходы старой выработки."
 biome = "глубокие пещеры"
-level = 216
+level = 108
 
 [[city.dungeon]]
 id = "thunder_range_iron_pit"
 name = "Железный забой"
 flavour = "Молнии бьют в жилу так часто, что руда в ней спёкшаяся."
 biome = "рудник"
-level = 221
+level = 111
 
 [[city.dungeon]]
 id = "thunder_range_watch_tombs"
 name = "Склепы Дозорных"
 flavour = "Тех, кто следил за перевалом, клали в скалу рядом с постом."
 biome = "катакомбы"
-level = 226
+level = 113
 
 [[city.dungeon]]
 id = "thunder_range_peak_cavities"
 name = "Полости в Пике"
 flavour = "Пещеры внутри расколотой горы, куда бьёт с обеих сторон."
 biome = "глубокие пещеры"
-level = 230
+level = 115
 deep = true
 
 [[city.location]]
@@ -959,32 +959,32 @@ id = "storm_ledges"
 slot = 1
 name = "Уступы"
 biome = "горы"
-level_min = 208
-level_max = 210
+level_min = 104
+level_max = 105
 
 [[city.location]]
 id = "griffin_nests"
 slot = 2
 name = "Гнёзда Грифонов"
 biome = "скалы"
-level_min = 210
-level_max = 215
+level_min = 105
+level_max = 108
 
 [[city.location]]
 id = "split_peak"
 slot = 3
 name = "Расколотый Пик"
 biome = "горы"
-level_min = 214
-level_max = 219
+level_min = 107
+level_max = 110
 
 [[city.location]]
 id = "lightning_path"
 slot = 4
 name = "Тропа Молний"
 biome = "плато"
-level_min = 218
-level_max = 225
+level_min = 109
+level_max = 113
 pvp = true
 
 [[city.location]]
@@ -992,17 +992,17 @@ id = "storm_eye"
 slot = 5
 name = "Око Бури"
 biome = "скалы"
-level_min = 224
-level_max = 230
+level_min = 112
+level_max = 115
 
 [[city]]
 id = "azure_halls"
 order = 12
 name = "Вельск"
 description = "Гнездо Дома Мер: весы, чеканка монеты, списки и патент на магию."
-level_min = 226
-level_max = 248
-unlock_level = 226
+level_min = 113
+level_max = 124
+unlock_level = 113
 unlock_requires = ["city:thunder_range"]
 services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "forge", "arena", "house", "chamber"]
 
@@ -1011,35 +1011,35 @@ id = "azure_halls_clerks_undercroft"
 name = "Ходы под Чертогами"
 flavour = "Писцы жили под галереями, чтобы не носить списки по лестницам."
 biome = "подземный город"
-level = 229
+level = 115
 
 [[city.dungeon]]
 id = "azure_halls_ledger_vaults"
 name = "Склепы Учёта"
 flavour = "Здесь клали чиновников вместе с их печатями; печати ценят до сих пор."
 biome = "катакомбы"
-level = 234
+level = 117
 
 [[city.dungeon]]
 id = "azure_halls_foundation_adits"
 name = "Штольни Основания"
 flavour = "Их били, проверяя скалу под башнями; проверка затянулась на век."
 biome = "штольни"
-level = 239
+level = 120
 
 [[city.dungeon]]
 id = "azure_halls_cistern_caves"
 name = "Пещеры Водохранилища"
 flavour = "Город берёт воду отсюда; вниз по течению за ней уже не ходят."
 biome = "глубокие пещеры"
-level = 244
+level = 122
 
 [[city.dungeon]]
 id = "azure_halls_chamber_cellars"
 name = "Подвалы Дома Мер"
 flavour = "Списки, которые не сожгли и наверх не подняли."
 biome = "подземный город"
-level = 248
+level = 124
 deep = true
 
 [[city.location]]
@@ -1047,32 +1047,32 @@ id = "azure_terraces"
 slot = 1
 name = "Сады Дома Мер"
 biome = "сады"
-level_min = 226
-level_max = 228
+level_min = 113
+level_max = 114
 
 [[city.location]]
 id = "hanging_tiers"
 slot = 2
 name = "Ярусы"
 biome = "небо"
-level_min = 228
-level_max = 233
+level_min = 114
+level_max = 117
 
 [[city.location]]
 id = "record_galleries"
 slot = 3
 name = "Галереи Списков"
 biome = "чертоги"
-level_min = 232
-level_max = 237
+level_min = 116
+level_max = 119
 
 [[city.location]]
 id = "wind_bridges"
 slot = 4
 name = "Ветряные Мосты"
 biome = "небо"
-level_min = 236
-level_max = 243
+level_min = 118
+level_max = 122
 pvp = true
 
 [[city.location]]
@@ -1080,17 +1080,17 @@ id = "tower_of_measures"
 slot = 5
 name = "Башня Мер"
 biome = "башня"
-level_min = 242
-level_max = 248
+level_min = 121
+level_max = 124
 
 [[city]]
 id = "bone_marches"
 order = 13
 name = "Мглин"
 description = "Гнездо Дома Курганов: город стоит на старых погребениях и живёт тем, что из них выкапывают."
-level_min = 244
-level_max = 266
-unlock_level = 244
+level_min = 122
+level_max = 133
+unlock_level = 122
 unlock_requires = ["city:azure_halls"]
 services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "forge", "arena", "house", "chamber"]
 
@@ -1099,35 +1099,35 @@ id = "bone_marches_spoil_vaults"
 name = "Склепы Отвалов"
 flavour = "Кости из отвалов складывали обратно в землю, но глубже."
 biome = "катакомбы"
-level = 247
+level = 124
 
 [[city.dungeon]]
 id = "bone_marches_undermarch"
 name = "Подмостье Мглина"
 flavour = "Нижний город строили над ямами и под ними разом."
 biome = "подземный город"
-level = 252
+level = 126
 
 [[city.dungeon]]
 id = "bone_marches_pit_drains"
 name = "Водоотводы Ям"
 flavour = "Их били, чтобы моровая вода не поднималась к жилью."
 biome = "затопленные ходы"
-level = 257
+level = 129
 
 [[city.dungeon]]
 id = "bone_marches_lime_caves"
 name = "Известковые пещеры"
 flavour = "Известью пересыпали умерших; в пещерах её брали до сих пор."
 biome = "глубокие пещеры"
-level = 262
+level = 131
 
 [[city.dungeon]]
 id = "bone_marches_pit_ways"
 name = "Ходы под Ямами"
 flavour = "Копали под моровыми ямами, чтобы возить, не поднимая на воздух."
 biome = "подземный город"
-level = 266
+level = 133
 deep = true
 
 [[city.location]]
@@ -1135,32 +1135,32 @@ id = "bone_fields"
 slot = 1
 name = "Отвалы"
 biome = "пустошь"
-level_min = 244
-level_max = 246
+level_min = 122
+level_max = 123
 
 [[city.location]]
 id = "march_barrows"
 slot = 2
 name = "Большие Курганы"
 biome = "курганы"
-level_min = 246
-level_max = 251
+level_min = 123
+level_max = 126
 
 [[city.location]]
 id = "forgotten_crypts"
 slot = 3
 name = "Склепы Забытых"
 biome = "склепы"
-level_min = 250
-level_max = 255
+level_min = 125
+level_max = 128
 
 [[city.location]]
 id = "lower_city"
 slot = 4
 name = "Нижний Город"
 biome = "город мёртвых"
-level_min = 254
-level_max = 261
+level_min = 127
+level_max = 131
 pvp = true
 
 [[city.location]]
@@ -1168,17 +1168,17 @@ id = "plague_pits"
 slot = 5
 name = "Моровые Ямы"
 biome = "подземелье"
-level_min = 260
-level_max = 266
+level_min = 130
+level_max = 133
 
 [[city]]
 id = "obsidian_throne"
 order = 14
 name = "Гнездно"
 description = "Столица державы со смутных времён. Престол слаб, дворец полупуст, и семь домов держат при нём по двору."
-level_min = 262
-level_max = 283
-unlock_level = 262
+level_min = 131
+level_max = 142
+unlock_level = 131
 unlock_requires = ["city:bone_marches"]
 services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "forge", "arena", "chamber"]
 
@@ -1187,35 +1187,35 @@ id = "obsidian_throne_stair_adits"
 name = "Штольни под Ступенями"
 flavour = "Их били, укрепляя парадный вход; укрепили не везде."
 biome = "штольни"
-level = 265
+level = 133
 
 [[city.dungeon]]
 id = "obsidian_throne_hall_caves"
 name = "Пещеры под Анфиладами"
 flavour = "Полости в скале, на которые давят верхние залы."
 biome = "глубокие пещеры"
-level = 270
+level = 135
 
 [[city.dungeon]]
 id = "obsidian_throne_undercourt"
 name = "Подтронье"
 flavour = "Двор жил под двором: прислуга, кузни, склады — всё под полом."
 biome = "подземный город"
-level = 275
+level = 138
 
 [[city.dungeon]]
 id = "obsidian_throne_court_tombs"
 name = "Склепы Двора"
 flavour = "Знать клали ближе к залу, чем к небу."
 biome = "катакомбы"
-level = 279
+level = 140
 
 [[city.dungeon]]
 id = "obsidian_throne_hall_sink"
 name = "Провал под Залом"
 flavour = "Тронный зал просел, и под ним открылось то, на чём он стоял."
 biome = "глубокие пещеры"
-level = 283
+level = 142
 deep = true
 
 [[city.location]]
@@ -1223,32 +1223,32 @@ id = "grand_stairs"
 slot = 1
 name = "Парадные Ступени"
 biome = "крепость"
-level_min = 262
-level_max = 264
+level_min = 131
+level_max = 132
 
 [[city.location]]
 id = "empty_halls"
 slot = 2
 name = "Анфилады"
 biome = "чертоги"
-level_min = 264
-level_max = 268
+level_min = 132
+level_max = 134
 
 [[city.location]]
 id = "foundry_yard"
 slot = 3
 name = "Литейный Двор"
 biome = "кузни"
-level_min = 268
-level_max = 273
+level_min = 134
+level_max = 137
 
 [[city.location]]
 id = "old_chasm"
 slot = 4
 name = "Провал"
 biome = "ущелье"
-level_min = 272
-level_max = 278
+level_min = 136
+level_max = 139
 pvp = true
 
 [[city.location]]
@@ -1256,17 +1256,17 @@ id = "throne_hall"
 slot = 5
 name = "Тронный Зал"
 biome = "тронный зал"
-level_min = 277
-level_max = 283
+level_min = 139
+level_max = 142
 
 [[city]]
 id = "last_beacon"
 order = 15
 name = "Колва"
 description = "Мыс на дальнем конце дороги: последний маяк держит Дом Курганов на своём коште."
-level_min = 279
-level_max = 300
-unlock_level = 279
+level_min = 140
+level_max = 150
+unlock_level = 140
 unlock_requires = ["city:obsidian_throne"]
 services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "forge", "arena", "house", "chamber"]
 
@@ -1275,35 +1275,35 @@ id = "last_beacon_cape_adits"
 name = "Штольни Мыса"
 flavour = "Их били в скале под маяком, чтобы знать, на чём он стоит."
 biome = "штольни"
-level = 282
+level = 141
 
 [[city.dungeon]]
 id = "last_beacon_rift_caves"
 name = "Пещеры Разлома"
 flavour = "Старый разлом уходит вниз дальше, чем светит любая лампа."
 biome = "глубокие пещеры"
-level = 287
+level = 144
 
 [[city.dungeon]]
 id = "last_beacon_sea_ways"
 name = "Морские ходы"
 flavour = "Их заливает в шторм; между штормами по ним возят то, что не хотят показывать."
 biome = "затопленные ходы"
-level = 292
+level = 146
 
 [[city.dungeon]]
 id = "last_beacon_keepers_vaults"
 name = "Склепы Смотрителей"
 flavour = "Тех, кто держал маяк, клали у его основания."
 biome = "катакомбы"
-level = 296
+level = 148
 
 [[city.dungeon]]
 id = "last_beacon_base_ways"
 name = "Основание Маяка"
 flavour = "Ходы в скале, на которой держится последняя башня дороги."
 biome = "штольни"
-level = 300
+level = 150
 deep = true
 
 [[city.location]]
@@ -1311,32 +1311,32 @@ id = "last_cape"
 slot = 1
 name = "Мыс"
 biome = "край"
-level_min = 279
-level_max = 281
+level_min = 140
+level_max = 141
 
 [[city.location]]
 id = "old_rift"
 slot = 2
 name = "Старый Разлом"
 biome = "разлом"
-level_min = 281
-level_max = 285
+level_min = 141
+level_max = 143
 
 [[city.location]]
 id = "beacon_tower"
 slot = 3
 name = "Башня Маяка"
 biome = "башня"
-level_min = 285
-level_max = 290
+level_min = 143
+level_max = 145
 
 [[city.location]]
 id = "keepers_garden"
 slot = 4
 name = "Сад Смотрителей"
 biome = "сады"
-level_min = 289
-level_max = 295
+level_min = 145
+level_max = 148
 pvp = true
 
 [[city.location]]
@@ -1344,5 +1344,5 @@ id = "beacon_summit"
 slot = 5
 name = "Вершина"
 biome = "вершина"
-level_min = 294
-level_max = 300
+level_min = 147
+level_max = 150

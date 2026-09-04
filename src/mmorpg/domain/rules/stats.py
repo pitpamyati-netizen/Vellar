@@ -29,28 +29,67 @@ from mmorpg.domain.rules import repair
 # умело менять броню лишь процентами от полутора десятков, и латы ощущались как
 # стёганка.
 ARMOR_PER_ENDURANCE = 1.6
-ACCURACY_BASE = 75.0
+ACCURACY_BASE = 80.0
 ACCURACY_PER_AGILITY = 1.2
 DODGE_PER_AGILITY = 0.55
 CRIT_CHANCE_BASE = 3.0
 CRIT_CHANCE_PER_LUCK = 0.45
 CRIT_DAMAGE_BASE = 150.0
 CRIT_DAMAGE_PER_LUCK = 0.45
-# Обе половины крита ограничены. Без потолка удача умножала шанс на урон, и сборка на
-# удачу била втрое сильнее всех прочих - это не сборка, а дыра. С потолком она стоит
-# примерно в полтора раза больше.
-MAX_CRIT_CHANCE = 50.0
-MAX_CRIT_DAMAGE = 250.0
+
+# Убывающая отдача вместо стены. Раньше у крита, уклонения и точности стоял
+# прямой потолок, и характеристика упиралась в него на середине пути: пятьдесят
+# процентов крита набирались сотней удачи, а всё вложенное сверх - и весь второй
+# конец полосы - не значило ничего (ADR 0058). Теперь характеристика идёт к
+# своему пределу и не доходит: каждое очко прибавляет, но следующее прибавляет
+# чуть меньше предыдущего - так это считают и в других играх, где вторичные
+# числа не должны обгонять первичные.
+#
+# ``*_CEILING`` - предел, к которому идёт одна характеристика; ``*_SOFTENER`` -
+# насколько быстро она к нему идёт (при raw, равном смягчителю, набрана ровно
+# половина предела). Прибавки от вещей и умений складываются **после** и обещают
+# ровно свои проценты: «плюс пять к криту» обязано давать пять (правило 7).
+ACCURACY_SOFTENER = 120.0
+ACCURACY_CEILING = 25.0
+DODGE_SOFTENER = 110.0
+DODGE_CEILING = 45.0
+CRIT_CHANCE_SOFTENER = 90.0
+CRIT_CHANCE_CEILING = 45.0
+CRIT_DAMAGE_SOFTENER = 150.0
+CRIT_DAMAGE_CEILING = 150.0
+
+# Общие потолки. Они больше не про характеристику - они про то, чтобы ни одна
+# сборка вместе с вещами и умениями не ушла в неуязвимость.
+MAX_CRIT_CHANCE = 75.0
+MAX_CRIT_DAMAGE = 300.0
 MAX_DODGE = 75.0
 # Инициатива - это очередь удара, и мерить её приходится в той же шкале, в
 # какой она есть у противника (``procgen/enemies.INITIATIVE_BASE``): у породы
 # она растёт с уровнем, а у героя росла только с ловкостью, и маг трёхсотого
 # уровня оказывался вчетверо медленнее камня. База и уровень выравнивают шкалы,
 # ловкость по-прежнему решает, кто быстрее среди равных (ADR 0021).
-INITIATIVE_BASE = 20.0
-INITIATIVE_PER_LEVEL = 0.35
+INITIATIVE_BASE = 19.65
+INITIATIVE_PER_LEVEL = 0.7
 INITIATIVE_PER_AGILITY = 0.8
+#: Что мудрость даёт запасу. Проценты от максимума за ход, с убывающей отдачей и
+#: своим пределом: запас растёт с уровнем, и прибавка числом сделала бы Чары
+#: бездонными к середине пути (ADR 0058).
 RESOURCE_REGEN_PER_WISDOM = 0.4
+RESOURCE_REGEN_SOFTENER = 120.0
+RESOURCE_REGEN_CEILING = 12.0
+
+
+def softened(raw: float, softener: float, ceiling: float) -> float:
+    """Убывающая отдача: ``ceiling * raw / (raw + softener)``.
+
+    Гладкая кривая без ступеней и без стены: первые очки характеристики стоят
+    дорого, поздние - дёшево, и предел не достигается никогда. Значение
+    отрицательного ``raw`` - ноль: характеристика в минусе не даёт отрицательного
+    крита, она просто не даёт ничего.
+    """
+    if raw <= 0.0 or softener <= 0.0:
+        return 0.0
+    return ceiling * raw / (raw + softener)
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,7 +121,7 @@ def primary_stats(
     modifiers = mods.collect_modifiers(content, character, effects)
 
     return (
-        StatBlock.uniform(rules.base_stat_value)
+        StatBlock.uniform(rules.innate_stat_value(character.level))
         + race.bonuses
         + klass.bonuses
         + character.allocated
@@ -123,18 +162,29 @@ def derived_stats(
         modifiers, "armor_percent"
     ) + mods.flat(modifiers, "armor_flat")
 
-    accuracy = (ACCURACY_BASE + stats[StatCode.AGI] * ACCURACY_PER_AGILITY) * mods.percent(
-        modifiers, "accuracy_percent"
-    )
-    dodge = stats[StatCode.AGI] * DODGE_PER_AGILITY + mods.flat(modifiers, "dodge_percent")
+    accuracy = (
+        ACCURACY_BASE
+        + softened(stats[StatCode.AGI] * ACCURACY_PER_AGILITY, ACCURACY_SOFTENER, ACCURACY_CEILING)
+    ) * mods.percent(modifiers, "accuracy_percent")
+    dodge = softened(
+        stats[StatCode.AGI] * DODGE_PER_AGILITY, DODGE_SOFTENER, DODGE_CEILING
+    ) + mods.flat(modifiers, "dodge_percent")
     crit_chance = (
         CRIT_CHANCE_BASE
-        + stats[StatCode.LCK] * CRIT_CHANCE_PER_LUCK
+        + softened(
+            stats[StatCode.LCK] * CRIT_CHANCE_PER_LUCK,
+            CRIT_CHANCE_SOFTENER,
+            CRIT_CHANCE_CEILING,
+        )
         + mods.flat(modifiers, "crit_chance_percent")
     )
     crit_damage = (
         CRIT_DAMAGE_BASE
-        + stats[StatCode.LCK] * CRIT_DAMAGE_PER_LUCK
+        + softened(
+            stats[StatCode.LCK] * CRIT_DAMAGE_PER_LUCK,
+            CRIT_DAMAGE_SOFTENER,
+            CRIT_DAMAGE_CEILING,
+        )
         + mods.flat(modifiers, "crit_damage_percent")
     )
     initiative = (
@@ -142,9 +192,18 @@ def derived_stats(
         + INITIATIVE_PER_LEVEL * level
         + stats[StatCode.AGI] * INITIATIVE_PER_AGILITY
     ) * mods.percent(modifiers, "initiative_percent")
+    # Восстановление запаса объявлено долей самого запаса - и у класса
+    # (``regen_per_turn``), и у мудрости: числом оно значило что-то ровно на
+    # первом уровне (ADR 0058). Игроку по-прежнему называется число: доля - это
+    # правило, а на экране стоит то, что вернётся за ход.
+    regen_share = resource.regen_per_turn + softened(
+        stats[StatCode.WIS] * RESOURCE_REGEN_PER_WISDOM,
+        RESOURCE_REGEN_SOFTENER,
+        RESOURCE_REGEN_CEILING,
+    )
     resource_regen = (
-        resource.regen_per_turn + stats[StatCode.WIS] * RESOURCE_REGEN_PER_WISDOM
-    ) * mods.percent(modifiers, "resource_regen_percent")
+        max_resource * regen_share / 100.0 * mods.percent(modifiers, "resource_regen_percent")
+    )
 
     return DerivedStats(
         max_health=max(1, round(max_health)),
@@ -159,6 +218,16 @@ def derived_stats(
         resource_regen=round(resource_regen, 2),
         health_regen_percent=round(mods.flat(modifiers, "regen_per_turn_percent"), 2),
     )
+
+
+def innate_stats(content: GameContent, level: int) -> StatBlock:
+    """То, что персонаж этого уровня имеет в каждой характеристике сам по себе.
+
+    Рост общий и приходит без спроса (``ProgressionRules.stat_growth_per_level``,
+    ADR 0058): он и делает так, что удача, ловкость и мудрость воина растут
+    вместе с ним, а не остаются пятёркой создания навсегда.
+    """
+    return StatBlock.uniform(content.rules.innate_stat_value(level))
 
 
 def stat_allowance(content: GameContent, level: int) -> int:

@@ -23,7 +23,7 @@ from enum import StrEnum
 
 from mmorpg.domain.entities.content import City, Dungeon, GameContent, Location
 from mmorpg.domain.entities.location import EnemyArchetype, NodeKind
-from mmorpg.domain.procgen.enemies import GOLD_BASE, GOLD_PER_LEVEL, candidates
+from mmorpg.domain.procgen.enemies import candidates, gold_at
 from mmorpg.domain.procgen.location import guaranteed_find_kinds
 from mmorpg.domain.procgen.seeds import derive, rng, shop_seed
 from mmorpg.domain.rules.mood import LocationMood
@@ -147,7 +147,7 @@ def digest(
 def reward(level: int) -> tuple[int, int]:
     """Надбавка за дело: золото и опыт, ``DIGEST_BONUS`` от обычного боя уровня дела."""
     lvl = max(1, level)
-    gold = max(1, round((GOLD_BASE + GOLD_PER_LEVEL * lvl) * DIGEST_BONUS))
+    gold = max(1, round(gold_at(lvl) * DIGEST_BONUS))
     experience = max(
         1, round(experience_reward(enemy_level=lvl, character_level=lvl) * DIGEST_BONUS)
     )

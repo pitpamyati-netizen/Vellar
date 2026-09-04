@@ -310,10 +310,10 @@ def test_world_gap_is_reported(tmp_path: Path) -> None:
     directory = _copy_content(tmp_path)
     path = directory / "world.toml"
     text = path.read_text(encoding="utf-8")
-    # Сломать самую первую локацию, чтобы уровни 2-4 перестали быть покрытыми.
+    # Сдвинуть вторую локацию вверх, чтобы третий уровень перестал быть покрытым.
     text = text.replace(
-        'name = "Луга у Заставы"\nbiome = "луга"\nlevel_min = 1\nlevel_max = 4',
-        'name = "Луга у Заставы"\nbiome = "луга"\nlevel_min = 1\nlevel_max = 1',
+        'name = "Ольшаник"\nbiome = "лес"\nlevel_min = 2\nlevel_max = 5',
+        'name = "Ольшаник"\nbiome = "лес"\nlevel_min = 4\nlevel_max = 5',
     )
     path.write_text(text, encoding="utf-8")
     with pytest.raises(ContentError) as error:
