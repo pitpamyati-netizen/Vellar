@@ -1155,7 +1155,17 @@ def _apply_spec(
                     working, beneficiary, skill=skill, spec=spec, per_turn=float(amount)
                 )
             else:
-                working = _heal(working, beneficiary, amount, modifiers, skill_name=skill.name)
+                # «Насколько тебя лечат» - прибавка того, кого лечат, а не того,
+                # кто лечит: полковое лечение считало ``healing_taken_percent``
+                # знаменосца всему отряду, и «Спёртый воздух» на товарище не
+                # значил ничего.
+                working = _heal(
+                    working,
+                    beneficiary,
+                    amount,
+                    _modifiers_of(content, roster, one),
+                    skill_name=skill.name,
+                )
 
     if spec.category is EffectCategory.BARRIER:
         holder = working.by_id(actor_id)
@@ -1170,7 +1180,13 @@ def _apply_spec(
             holder = working.by_id(beneficiary)
             if holder is not None:
                 extra = round(holder.max_health * spec.bonus_heal / 100.0)
-                working = _heal(working, beneficiary, extra, modifiers, skill_name=skill.name)
+                working = _heal(
+                    working,
+                    beneficiary,
+                    extra,
+                    _modifiers_of(content, roster, holder),
+                    skill_name=skill.name,
+                )
 
     if spec.bonus_barrier:
         holder = working.by_id(actor_id)
@@ -1320,7 +1336,9 @@ def _heal(
     """Вернуть бойцу здоровье и сказать об этом.
 
     Через одну дверь проходит всё лечение, которое боец получает, - потому и
-    ``healing_taken_percent`` считается здесь.
+    ``healing_taken_percent`` считается здесь. ``modifiers`` поэтому всегда
+    свёрток **того, кого лечат**: «насколько меня лечат» - его прибавка, а не
+    того, кто взмахнул рукой.
     """
     one = state.by_id(combatant_id)
     if one is None:  # pragma: no cover

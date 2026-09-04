@@ -701,9 +701,13 @@ class GroupTrade:
     async def _resolve(self, query: str, owner: Party) -> ItemOption | GroupOutcome:
         """Превратить набранное игроком в одну вещь из сумки владельца."""
         entries = await self.inventory.list_items(owner.character_id)
+        # Вещь, которой в содержимом больше нет, пропускается, а не роняет команду:
+        # сумка переживает выпуски, а сохранённому состоянию не верят
+        # (``Claude.md``, правило 8).
         catalogue = [
             ItemOption(item_id=entry.item_id, name=self.content.item(entry.item_id).name)
             for entry in entries
+            if self.content.has_item(entry.item_id)
         ]
         found = match_items(query, catalogue)
         if not found:

@@ -24,6 +24,7 @@ from mmorpg.domain.entities.combat import (
     BattleState,
     Combatant,
 )
+from mmorpg.domain.entities.effects import ActiveEffect
 from mmorpg.domain.entities.location import Enemy, EnemyKind
 from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.rules import party as party_rules
@@ -201,6 +202,78 @@ def test_an_area_heal_reaches_the_whole_party(content: GameContent) -> None:
         if one(after, 2).health > before:
             break
     assert one(after, 2).health > before, "товарищ должен подлечиться"
+
+
+def _first_heal(
+    content: GameContent,
+    roster: dict[int, Character],
+    state: BattleState,
+    ally_id: int,
+) -> int:
+    """На сколько подлечило товарища первое сработавшее лечение."""
+    working = state
+    for _ in range(len(state.order) * 2):
+        before = one(working, ally_id).health
+        working = act(content, roster, working, BattleAction(kind=ActionKind.SKILL, slot=0), SEED)
+        after = one(working, ally_id).health
+        if after > before:
+            return after - before
+    return 0
+
+
+def _banner_party(content: GameContent) -> tuple[BattleState, dict[int, Character]]:
+    """Знаменосец с площадным лечением и раненый товарищ рядом."""
+    from dataclasses import replace
+
+    healer = replace(
+        a_hero("Аргус", 1, level=290),
+        loadout=SkillLoadout(
+            actives=("warrior_znamya_ne_padaet", None, None, None, None, None),
+            racial="race_human_second_wind",
+        ),
+    )
+    state, roster = build(
+        content,
+        [healer, a_hero("Мирна", 2, level=290)],
+        enemies=(make_enemy(health=90_000, damage=1),),
+    )
+    ally = one(state, 2)
+    return state.replace_combatant(replace(ally, health=max(1, ally.max_health // 3))), roster
+
+
+def _burdened(state: BattleState, combatant_id: int, percent: float) -> BattleState:
+    """Повесить на бойца «насколько меня лечат» - тем же ключом, что «Спёртый воздух»."""
+    from dataclasses import replace
+
+    one_of = one(state, combatant_id)
+    weight = ActiveEffect(
+        id="stale_air",
+        name="Спёртый воздух",
+        modifiers={"healing_taken_percent": percent},
+        turns_left=1,
+        beneficial=False,
+        permanent=True,
+    )
+    return state.replace_combatant(replace(one_of, effects=one_of.effects.apply(weight)))
+
+
+def test_being_healed_less_is_the_burden_of_the_healed_not_the_healer(
+    content: GameContent,
+) -> None:
+    """``healing_taken_percent`` - прибавка того, кого лечат, а не того, кто лечит.
+
+    Полковое лечение считало её со знаменосца и раздавало всему отряду: «Спёртый
+    воздух» на товарище не значил ничего, а на знаменосце резал лечение всем.
+    """
+    plain, roster = _banner_party(content)
+    full = _first_heal(content, roster, plain, 2)
+    assert full > 0, "площадное лечение обязано дойти до товарища"
+
+    on_healer, _ = _banner_party(content)
+    assert _first_heal(content, roster, _burdened(on_healer, 1, -50.0), 2) == full
+
+    on_ally, _ = _banner_party(content)
+    assert _first_heal(content, roster, _burdened(on_ally, 2, -50.0), 2) < full
 
 
 def test_the_pack_goes_for_the_one_who_has_least_left(content: GameContent) -> None:

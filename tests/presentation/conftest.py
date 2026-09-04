@@ -38,7 +38,12 @@ from mmorpg.domain.entities.location import (
 from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeRecord, TradeStatus
-from mmorpg.domain.ports.repositories import Census, GoldFlowSlice, PlayerFilter
+from mmorpg.domain.ports.repositories import (
+    AccessibilitySettings,
+    Census,
+    GoldFlowSlice,
+    PlayerFilter,
+)
 from mmorpg.domain.procgen import generate_location, location_seed
 from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import nodes as node_rules
@@ -63,6 +68,7 @@ from mmorpg.presentation.telegram.screens import items as item_screens
 from mmorpg.presentation.telegram.screens import keeper as keeper_screens
 from mmorpg.presentation.telegram.screens import party as party_screens
 from mmorpg.presentation.telegram.screens import quests as quest_screens
+from mmorpg.presentation.telegram.screens import settings as settings_screens
 from mmorpg.presentation.telegram.screens import skills as skill_screens
 from mmorpg.presentation.telegram.screens import transfer as transfer_screens
 from mmorpg.presentation.telegram.screens import tutorial as tutorial_screens
@@ -859,6 +865,11 @@ def all_screens(
             content,
             replace(fighter, unspent_stat_points=4),
             derived_stats(content, fighter),
+        ),
+        settings_screens.settings_screen(AccessibilitySettings()),
+        settings_screens.settings_screen(
+            AccessibilitySettings(emoji=True, verbose=True),
+            notice="Эмодзи теперь включены.",
         ),
         party_screens.party_screen(party_screens.PartyView()),
         party_screens.party_screen(

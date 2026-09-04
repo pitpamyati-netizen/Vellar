@@ -40,6 +40,9 @@ from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
 from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.ports.repositories import StateCache
 from mmorpg.domain.rules.combat import hero_combatant, monster_combatant, open_battle
+from mmorpg.logging import get_logger
+
+logger = get_logger(__name__)
 
 #: Сколько живёт брошенный бой. Час: дольше держать чужие раны в подвешенном
 #: состоянии незачем, а короче - и отлучившийся на обед теряет поединок.
@@ -253,8 +256,23 @@ class BattleStore:
         return f"battle-of:{character_id}"
 
     async def load(self, battle_id: str) -> BattleSession | None:
+        """Бой по номеру. ``None`` - его нет, истёк срок или запись не читается.
+
+        Не читается - тоже «нет». Запись переживает выпуск: бой, отложенный в
+        кэш прежним кодом, может не сойтись с нынешним разбором, и тогда падение
+        здесь заперло бы игрока в бою, которого не открыть и не бросить, - до
+        смотрителя (``Claude.md``, правило 8). Вызывающие и так умеют отвечать на
+        ``None``: «боя нет» уводит на живой экран.
+        """
         raw = await self._cache.get(self.key_of(battle_id))
-        return deserialise(raw) if raw else None
+        if not raw:
+            return None
+        try:
+            return deserialise(raw)
+        except KeyError, ValueError, TypeError, json.JSONDecodeError:
+            logger.warning("battle_unreadable", battle_id=battle_id)
+            await self._cache.delete(self.key_of(battle_id))
+            return None
 
     async def save(self, session: BattleSession) -> None:
         await self._cache.set(self.key_of(session.id), serialise(session), self._ttl)

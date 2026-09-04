@@ -40,6 +40,10 @@ ATTACKER = 700_001
 DEFENDER = 700_002
 BOT_ID = 1
 SETTINGS = Settings(_env_file=None, shop_rotation_seconds=10**9)  # type: ignore[call-arg]
+# Номер поединка собирается из момента (``handlers/combat._spawn``), а из номера
+# растёт сид боя. Без закреплённого момента поединок разыгрывается каждую секунду
+# по-новому, и «раны записаны обоим» проверяло бы не игру, а часы.
+NOW = 1_700_000_000
 
 
 class FakeBot:
@@ -182,6 +186,7 @@ async def open_duel(
         state_cache=cache,
         parties=parties or PartyStore(InMemoryPartyRepository(), cache),
         storage=storage,
+        now=NOW,
     )
 
 

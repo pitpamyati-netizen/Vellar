@@ -31,6 +31,7 @@ from mmorpg.domain.entities.location import NodeKind
 from mmorpg.domain.entities.stats import StatBlock
 from mmorpg.domain.procgen import location_seed
 from mmorpg.domain.rules import nodes as node_rules
+from mmorpg.domain.rules import roamer as roamer_rules
 from mmorpg.domain.rules.progression import experience_to_reach
 from mmorpg.domain.rules.stats import derived_stats, stat_allowance
 from mmorpg.infrastructure.persistence.memory import (
@@ -323,8 +324,18 @@ async def walk_to(player: Player, content: GameContent, kind: NodeKind) -> int:
 # --- цикл -------------------------------------------------------------
 
 
-async def test_a_fresh_location_reads_as_untouched(player: Player, content: GameContent) -> None:
-    """Экран локации, в которую только что вошли, называет округу тихой (ADR 0055)."""
+async def test_a_fresh_location_reads_as_untouched(
+    player: Player, content: GameContent, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Экран локации, в которую только что вошли, называет округу тихой (ADR 0055).
+
+    Блуждающий ход отключён нарочно. Он оседает по окну от стенных часов
+    (``domain/rules/roamer.py``), и локация, в которую первым зашёл игрок, в
+    трети окон встречает его встревоженной - а «встревожена» на экране отдельной
+    строкой не пишется (ADR 0055). Без этого тест проверял бы не тихую округу, а
+    время суток.
+    """
+    monkeypatch.setattr(roamer_rules, "SPAWN_CHANCE", 0.0)
     await player.press("Мир")
     await player.press("Локации")
     screen = await player.press("1. Луга у Заставы")

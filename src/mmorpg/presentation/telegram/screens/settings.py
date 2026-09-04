@@ -4,6 +4,12 @@
 галочка сама по себе ничего не говорит тому, кто читает экран не глядя.
 
 Эмодзи выключены по умолчанию (правило доступности 6).
+
+Размер страницы здесь называется правилом, а не числом из настроек: страницу
+режет не эта цифра, а то, что влезло в сообщение (``screens/paginated.py``,
+``entries_per_page``), и на списке умений записей бывает три. Экран, обещавший
+«позиций на странице: 8», обещал за игру то, чего она не делает
+(``Claude.md``, правило 7).
 """
 
 from __future__ import annotations
@@ -12,6 +18,7 @@ from mmorpg.domain.ports.repositories import AccessibilitySettings
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import head
+from mmorpg.presentation.telegram.screens.paginated import PAGE_SIZE
 
 TOGGLE_EMOJI = label("Переключить эмодзи")
 TOGGLE_VERBOSE = label("Переключить подробные описания")
@@ -30,7 +37,8 @@ def settings_screen(settings: AccessibilitySettings, notice: str = "") -> Screen
             "Смысл кнопки всегда написан словами, эмодзи её только украшают.",
             f"Подробные описания: {ON if settings.verbose else OFF}. "
             "Когда включены, характеристики говорят, что даёт вложенное в них очко.",
-            f"Позиций на странице списка: {settings.page_size}.",
+            f"Позиций на странице списка: не больше {PAGE_SIZE}, а там, где у записей "
+            "длинные описания, меньше - столько, сколько влезает в одно сообщение.",
             "Команда /осмотреться присылает текущий экран заново, если он потерялся в переписке.",
         ),
         rows=((TOGGLE_EMOJI,), (TOGGLE_VERBOSE,), (REPEAT_SCREEN,)),

@@ -203,6 +203,31 @@ async def test_a_battle_that_expired_frees_the_character(cache: InMemoryStateCac
     assert await store.busy(7) is None
 
 
+async def test_a_battle_the_code_can_no_longer_read_is_no_battle(
+    cache: InMemoryStateCache,
+) -> None:
+    """Запись боя, которая не разбирается, читается как «боя нет».
+
+    Кэш переживает выпуск: бой, отложенный прежним кодом, может не сойтись с
+    нынешним разбором. Падение здесь заперло бы игрока в бою, который не открыть
+    и не бросить, - вызывающие умеют отвечать на ``None``, а на исключение нет
+    (``Claude.md``, правило 8).
+    """
+    store = battle_service.BattleStore(cache)
+    await cache.set(store.key_of("stale"), '{"id": "stale"}', 60)
+    await cache.set(store.key_for_character(9), "stale", 60)
+
+    assert await store.load("stale") is None
+    assert await store.busy(9) is None
+
+
+async def test_a_battle_written_as_nonsense_is_no_battle(cache: InMemoryStateCache) -> None:
+    """И то, что вовсе не разбирается как запись, - тоже «боя нет»."""
+    store = battle_service.BattleStore(cache)
+    await cache.set(store.key_of("junk"), "не json вовсе", 60)
+    assert await store.load("junk") is None
+
+
 def test_roster_maps_fighters_to_the_characters_behind_them(content: GameContent) -> None:
     session = a_battle(content)
     roster = battle_service.roster_for(session, {1: a_hero("Аргус", 1), 2: a_hero("Мирна", 2)})

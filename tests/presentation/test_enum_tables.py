@@ -11,6 +11,7 @@ from __future__ import annotations
 from mmorpg.domain.entities.combat import ActionTag
 from mmorpg.domain.entities.location import EnemyRank, NodeKind
 from mmorpg.domain.entities.quest import ObjectiveKind
+from mmorpg.domain.rules import combat as combat_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules.tutorial import TutorialTask
 from mmorpg.presentation.telegram.screens import combat as combat_screens
@@ -45,6 +46,18 @@ def test_every_tag_and_rank_has_words_for_it() -> None:
         assert tag in combat_screens.TAG_NAMES, tag
     for rank in EnemyRank:
         assert rank in combat_screens.RANK_NAMES, rank
+
+
+def test_every_tag_has_numbers_for_it() -> None:
+    """У стойки должны быть и слова, и числа: движок берёт их без ``get``.
+
+    ``INTENT_ARMOR[intent]`` и ``INTENT_DAMAGE[intent]`` - прямое обращение
+    посреди боя, и строка, которой в таблице не хватает, была бы не «стойка без
+    эффекта», а KeyError на чужом ходу.
+    """
+    for tag in ActionTag:
+        assert tag in combat_rules.INTENT_ARMOR, tag
+        assert tag in combat_rules.INTENT_DAMAGE, tag
 
 
 def test_every_introduction_task_has_a_card() -> None:

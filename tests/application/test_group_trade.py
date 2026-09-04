@@ -294,6 +294,28 @@ async def test_an_item_nobody_holds_cannot_be_named(
     assert outcome.refusal is Refusal.UNKNOWN_ITEM
 
 
+async def test_a_bag_holding_a_vanished_item_still_answers(
+    trade: GroupTrade,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    """Вещь, которой в содержимом больше нет, не роняет команду в группе.
+
+    Сумка переживает выпуски: снаряжение однажды уже сменило имена (миграция
+    0015), и написанную вещь могут убрать. Строка, оставшаяся в сумке, должна
+    молча пропускаться, а не превращать «передать» в извинение
+    (``Claude.md``, правило 8).
+    """
+    await inventory.add(argus.id, "vanished@1#common", 1)
+    await inventory.add(argus.id, SWORD, 1)
+
+    outcome = await run(trade, f"передать {SWORD_NAME}", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+
+    assert outcome.result is GroupResult.ITEM_GIVEN
+    assert await inventory.count(merla.id, SWORD) == 1
+
+
 async def test_an_ambiguous_name_asks_instead_of_guessing(
     trade: GroupTrade,
     inventory: InMemoryInventoryRepository,
