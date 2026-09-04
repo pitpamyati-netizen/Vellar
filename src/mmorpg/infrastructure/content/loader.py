@@ -45,6 +45,7 @@ from mmorpg.domain.entities.content import (
     SkillEdge,
     SkillKind,
     SpecialProperty,
+    ToolType,
     Trait,
     Turning,
     TurningOption,
@@ -68,6 +69,7 @@ from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.rules.equipment import WEAPON_SLOT
 from mmorpg.domain.rules.modifiers import EFFECTIVE_KEYS
+from mmorpg.domain.rules.tools import TOOL_SLOT
 
 CONTENT_FILES = (
     "world.toml",
@@ -182,6 +184,7 @@ def load_content(content_dir: Path) -> GameContent:
     _validate_traits(traits, problems)
     _validate_world(cities, rules, problems)
     _validate_crafts(crafts, recipes, problems)
+    _validate_tools(crafts, gear, problems)
     _validate_quest_rewards(quests, gear, problems)
 
     parts: dict[str, Any] = {
@@ -194,6 +197,7 @@ def load_content(content_dir: Path) -> GameContent:
         "slots": gear.slots,
         "weapon_types": gear.weapon_types,
         "armor_types": gear.armor_types,
+        "tool_types": gear.tool_types,
         "gear_tiers": gear.gear_tiers,
         "gear_archetypes": gear.gear_archetypes,
         "special_properties": gear.special_properties,
@@ -982,6 +986,7 @@ class ItemContent(NamedTuple):
     slots: tuple[EquipSlot, ...]
     weapon_types: tuple[WeaponType, ...]
     armor_types: tuple[ArmorType, ...]
+    tool_types: tuple[ToolType, ...]
     gear_tiers: tuple[GearTier, ...]
     gear_archetypes: tuple[GearArchetype, ...]
     special_properties: tuple[SpecialProperty, ...]
@@ -1029,12 +1034,17 @@ def _parse_rarities(meta: Mapping[str, Any], problems: list[str]) -> tuple[Rarit
             special=bool(entry.get("special", False)),
             scaling=bool(entry.get("scaling", False)),
             mark=str(entry.get("mark", "")),
+            durability=int(entry.get("durability", 0)),
         )
         # Две вещи одного вида и разной редкости должны называться по-разному:
         # кнопка в списке - это её текст, и две одинаковые кнопки на экране
         # неразличимы на слух (правила доступности 6).
         if not rarity.mark and rarity.id != "common":
             problems.append(f"items.toml: rarity {rarity.id} has no mark to tell its things apart")
+        # Инструмент этой редкости должен что-то держать: прочность - всё, что
+        # редкость ему даёт, и ноль означал бы кирку, ломающуюся о первый камень.
+        if rarity.durability < 1:
+            problems.append(f"items.toml: rarity {rarity.id} says nothing about tool durability")
         parsed.append(rarity)
     return tuple(parsed)
 
@@ -1064,6 +1074,7 @@ def _parse_gear(
     armor_slots: set[str],
     weapon_type_ids: set[str],
     armor_type_ids: set[str],
+    tool_type_ids: set[str],
     problems: list[str],
 ) -> tuple[GearArchetype, ...]:
     parsed: list[GearArchetype] = []
@@ -1072,6 +1083,7 @@ def _parse_gear(
         slot = str(entry.get("slot", ""))
         weapon_type = str(entry.get("weapon_type", ""))
         armor_type = str(entry.get("armor_type", ""))
+        tool_type = str(entry.get("tool_type", ""))
         gender = str(entry.get("gender", ""))
 
         if slot not in slot_ids or slot == "none":
@@ -1086,6 +1098,12 @@ def _parse_gear(
             problems.append(f"items.toml: gear {gear_id} is not a weapon but names a weapon_type")
         if armor_type and slot not in armor_slots:
             problems.append(f"items.toml: gear {gear_id} is not armour but names an armor_type")
+        # Инструмент - это род и слот разом: вещь в слоте «Инструмент», у которой
+        # рода нет, не берёт ничего, а род вне этого слота ничего не значит.
+        if slot == TOOL_SLOT and tool_type not in tool_type_ids:
+            problems.append(f"items.toml: tool {gear_id} has unknown tool_type {tool_type!r}")
+        if tool_type and slot != TOOL_SLOT:
+            problems.append(f"items.toml: gear {gear_id} is not a tool but names a tool_type")
 
         parsed.append(
             GearArchetype(
@@ -1095,6 +1113,7 @@ def _parse_gear(
                 slot=slot,
                 weapon_type=weapon_type,
                 armor_type=armor_type,
+                tool_type=tool_type,
             )
         )
     _check_unique((gear.id for gear in parsed), "items.toml (gear)", problems)
@@ -1168,6 +1187,24 @@ def _parse_items(
     weapon_type_ids = {kind.id for kind in weapon_types}
     armor_type_ids = {kind.id for kind in armor_types}
 
+    tool_types = tuple(
+        ToolType(
+            id=str(entry["id"]),
+            name=str(entry["name"]),
+            craft=str(entry.get("craft", "")),
+            sources=tuple(str(one) for one in entry.get("sources", ())),
+        )
+        for entry in meta.get("tool_types", ())
+    )
+    for kind in tool_types:
+        # Инструмент, который ничего не берёт, - кнопка, которая ничего не
+        # делает: слот занят, а сырьё им не взять нигде (ADR 0056).
+        if not kind.sources:
+            problems.append(f"items.toml: tool type {kind.id} takes no source")
+        if not kind.craft:
+            problems.append(f"items.toml: tool type {kind.id} belongs to no craft")
+    tool_type_ids = {kind.id for kind in tool_types}
+
     special_properties: list[SpecialProperty] = []
     for entry in meta.get("special_properties", ()):
         key = str(entry.get("key", ""))
@@ -1176,7 +1213,7 @@ def _parse_items(
         special_properties.append(SpecialProperty(key=key, value=float(entry.get("value", 0))))
 
     gear_archetypes = _parse_gear(
-        raw, slot_ids, armor_slots, weapon_type_ids, armor_type_ids, problems
+        raw, slot_ids, armor_slots, weapon_type_ids, armor_type_ids, tool_type_ids, problems
     )
 
     parsed: list[Item] = []
@@ -1254,6 +1291,7 @@ def _parse_items(
         slots,
         tuple(weapon_types),
         armor_types,
+        tool_types,
         tiers,
         gear_archetypes,
         tuple(special_properties),
@@ -1889,6 +1927,32 @@ def _validate_crafts(
             recipe.craft_id == craft.id for recipe in recipes
         ):
             problems.append(f"crafts.toml: making craft {craft.id} has no recipes")
+
+
+def _validate_tools(crafts: Sequence[Craft], gear: ItemContent, problems: list[str]) -> None:
+    """У каждого собирающего ремесла есть свой инструмент, и он продаётся.
+
+    Сырьё берут только инструментом (ADR 0056), поэтому ремесло без инструмента -
+    это ремесло, в котором нельзя работать: ранг не растёт, рецепты не
+    открываются, а игрок читает на экране обещание, которого игра не держит.
+    """
+    tools_by_craft = {kind.craft for kind in gear.tool_types}
+    for craft in crafts:
+        if craft.kind is CraftKind.GATHERING and craft.id not in tools_by_craft:
+            problems.append(f"items.toml: gathering craft {craft.id} has no tool to work it with")
+
+    known_crafts = {craft.id for craft in crafts}
+    gathered_sources = {
+        item.source for item in gear.items if item.kind is ItemKind.MATERIAL and item.source
+    }
+    for kind in gear.tool_types:
+        if kind.craft and kind.craft not in known_crafts:
+            problems.append(f"items.toml: tool type {kind.id} names unknown craft {kind.craft!r}")
+        stray = sorted(set(kind.sources) - gathered_sources)
+        if stray:
+            problems.append(f"items.toml: tool type {kind.id} takes unknown sources {stray}")
+        if not any(one.tool_type == kind.id for one in gear.gear_archetypes):
+            problems.append(f"items.toml: tool type {kind.id} has no [[gear]] to hold it")
 
 
 # --- вспомогательное ------------------------------------------------

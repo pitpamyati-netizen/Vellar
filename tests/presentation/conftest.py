@@ -23,6 +23,7 @@ from mmorpg.domain.entities import (
     QuestLog,
     SkillLoadout,
     StatBlock,
+    ToolWear,
 )
 from mmorpg.domain.entities.combat import ActionTag, BattleState, Trace
 from mmorpg.domain.entities.content import Item
@@ -31,7 +32,9 @@ from mmorpg.domain.entities.location import (
     Enemy,
     EnemyKind,
     EnemyRank,
+    LocationNode,
     LocationState,
+    NodeKind,
     NodeState,
     Roamer,
 )
@@ -97,6 +100,27 @@ def sample_location() -> GeneratedLocation:
         biome="луга",
         level_min=1,
         level_max=4,
+    )
+
+
+def gather_node(location: GeneratedLocation) -> LocationNode:
+    """Первая жила этой локации: узел, у которого спрашивают об инструменте."""
+    return next(node for node in location.nodes if node.kind is NodeKind.GATHER)
+
+
+def worked_location(location: GeneratedLocation) -> dict[int, node_rules.Standing]:
+    """Локация, по которой уже прошлись: жила полна, а вход в неё - нет.
+
+    Ровно то, что видит игрок на втором узле вылазки: длинных пояснений о том,
+    как устроено место, экран второй раз не читает.
+    """
+    worked = next(node for node in location.nodes if node.kind is NodeKind.BATTLE)
+    started = LocationState(nodes={worked.index: NodeState(taken=99, emptied_at=1)})
+    return node_rules.standing(
+        location_seed("vellar-test", location.city_id, location.slot),
+        location,
+        started,
+        now=60,
     )
 
 
@@ -279,11 +303,21 @@ def craftsman(fighter: Character) -> Character:
         crafts=CraftLog(
             MappingProxyType(
                 {
-                    "mining": CraftProgress(experience=260, gathered_at=1_700_000_000),
+                    "mining": CraftProgress(experience=260),
                     "smithing": CraftProgress(experience=140),
                 }
             )
         ),
+    )
+
+
+@pytest.fixture(scope="session")
+def digger(craftsman: Character) -> Character:
+    """Тот, у кого в слоте инструмента кирка, уже наполовину сточенная."""
+    return replace(
+        craftsman,
+        equipment=craftsman.equipment.equip("tool", "pick@1#common"),
+        tools=ToolWear(MappingProxyType({"pick@1#common": 12})),
     )
 
 
@@ -519,6 +553,7 @@ def all_screens(
     duel_fight: BattleState,
     sample_stock: tuple[Item, ...],
     craftsman: Character,
+    digger: Character,
     sealbearer: Character,
     keeper: Character,
     edited: GameContent,
@@ -853,7 +888,17 @@ def all_screens(
             standing=emptied_location(sample_location),
             roamer=Roamer(node=1, group=False, difficulty="grim", level=3, stamp=1, holder=42),
         ),
+        *(
+            play.location_screen(
+                sample_location,
+                gather_node(sample_location),
+                standing=worked_location(sample_location),
+                tool_note=craft_screens.tool_line(content, who),
+            )
+            for who in (hero, digger)
+        ),
         play.character_screen(content, hero, derived_stats(content, hero)),
+        play.character_screen(content, digger, derived_stats(content, digger)),
         play.character_screen(content, fighter, derived_stats(content, fighter)),
         play.character_screen(
             content,
@@ -1005,29 +1050,23 @@ def all_screens(
         skill_screens.edge_screen(content, fighter, content.skill("warrior_rassechenie")),
         craft_screens.crafts_screen(content, hero),
         craft_screens.crafts_screen(content, craftsman),
-        craft_screens.craft_screen(
-            content, craftsman, content.craft("mining"), {}, now=1_700_000_000, cooldown=900
-        ),
+        craft_screens.craft_screen(content, craftsman, content.craft("mining"), {}),
         craft_screens.craft_screen(
             content,
             hero,
             content.craft("mining"),
             {},
-            now=1_700_000_000,
-            cooldown=900,
             notice="Собрано: Железный лом.",
         ),
+        craft_screens.craft_screen(content, digger, content.craft("mining"), {}),
+        craft_screens.craft_screen(content, digger, content.craft("herbalism"), {}),
         craft_screens.craft_screen(
             content,
             craftsman,
             content.craft("smithing"),
             {"iron_scrap": 4, "mountain_ore": 3},
-            now=1_700_000_000,
-            cooldown=900,
         ),
-        craft_screens.craft_screen(
-            content, hero, content.craft("alchemy"), {}, now=1_700_000_000, cooldown=900
-        ),
+        craft_screens.craft_screen(content, hero, content.craft("alchemy"), {}),
         quest_screens.journal_screen(content, fighter),
         quest_screens.journal_screen(content, hero),
         quest_screens.board_screen(content, hero, PageState()),

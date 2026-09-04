@@ -17,7 +17,7 @@ from types import MappingProxyType
 import pytest
 import pytest_asyncio
 
-from mmorpg.domain.entities.character import Character, Equipment, SkillLoadout
+from mmorpg.domain.entities.character import Character, Equipment, SkillLoadout, ToolWear
 from mmorpg.domain.entities.craft import CraftLog, CraftProgress
 from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
@@ -112,9 +112,8 @@ def a_character(
         health=33,
         bank_gold=900,
         quests=QuestLog(taken=MappingProxyType({"farhold_tallies": 2}), done=("prologue",)),
-        crafts=CraftLog(
-            MappingProxyType({"mining": CraftProgress(experience=260, gathered_at=1_700_000_000)})
-        ),
+        crafts=CraftLog(MappingProxyType({"mining": CraftProgress(experience=260)})),
+        tools=ToolWear(MappingProxyType({"pick@1#common": 12})),
         arena_wins=3,
         arena_losses=1,
         arena_credit=120,
@@ -291,9 +290,8 @@ async def test_a_character_survives_a_round_trip(pool, clean_user) -> None:
     assert read.bank_gold == 900
     assert dict(read.quests.taken) == {"farhold_tallies": 2}
     assert read.quests.done == ("prologue",)
-    assert read.crafts.progress("mining") == CraftProgress(
-        experience=260, gathered_at=1_700_000_000
-    )
+    assert read.crafts.progress("mining") == CraftProgress(experience=260)
+    assert read.tools.spent("pick@1#common") == 12
     assert read.unspent_stat_points == 5
     assert read.is_admin is True
     # Сундук - отдельная колонка: кошелёк не вправе его поглотить.
@@ -322,9 +320,7 @@ async def test_saving_a_character_updates_every_column(pool, clean_user) -> None
             health=11,
             bank_gold=1_500,
             quests=QuestLog(taken=MappingProxyType({"farhold_tallies": 3}), done=()),
-            crafts=CraftLog(
-                MappingProxyType({"smithing": CraftProgress(experience=40, gathered_at=0)})
-            ),
+            crafts=CraftLog(MappingProxyType({"smithing": CraftProgress(experience=40)})),
             arena_credit=60,
             remorts=3,
             turning_cycle="gates",

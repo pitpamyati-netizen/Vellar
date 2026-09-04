@@ -19,7 +19,7 @@ from mmorpg.presentation.telegram.flows.play import (
 from mmorpg.presentation.telegram.screens.base import ScreenId
 
 WORLD_SEED = "vellar-test"
-CLOCK = Clock(now=1_700_000_000, shop_rotation=100, gather_cooldown=900)
+CLOCK = Clock(now=1_700_000_000, shop_rotation=100)
 
 
 @pytest.fixture
@@ -323,9 +323,25 @@ def test_working_a_node_takes_one_thing_out_of_it(
         pytest.skip("this seed produced no gathering node")
 
     at_node = replace(in_location, session=replace(in_location.session, node=gather.index))
-    done = step(content, hero, at_node, "Собрать сырьё")
+    armed = replace(hero, equipment=hero.equipment.equip("tool", "pick@1#common"))
+    done = step(content, armed, at_node, "Собрать сырьё")
     assert done.pending.node_take == gather.index
     assert "сделано" in done.notice
+
+
+def test_a_vein_without_a_tool_is_refused_and_stays_untouched(
+    content: GameContent, hero: Character, in_location: PlayState
+) -> None:
+    """Отказ ходом не считается: жила остаётся полной, пока нечем её брать (ADR 0056)."""
+    location = build_location(content, WORLD_SEED, in_location.session)
+    gather = next((node for node in location.nodes if node.kind.value == "gather"), None)
+    if gather is None:
+        pytest.skip("this seed produced no gathering node")
+
+    at_node = replace(in_location, session=replace(in_location.session, node=gather.index))
+    refused = step(content, hero, at_node, "Собрать сырьё")
+    assert "Собирать нечем" in refused.notice
+    assert refused.pending.empty
 
 
 def test_an_emptied_node_says_when_it_fills_up_again(

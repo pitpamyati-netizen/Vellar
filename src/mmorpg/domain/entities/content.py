@@ -327,10 +327,21 @@ class Item:
     weapon_type: str = ""
     #: Род доспеха - только у того, что прикрывает тело, голову, руки или ноги.
     armor_type: str = ""
+    #: Род инструмента - только у того, что надевается в слот «Инструмент».
+    #: Инструментом берут сырьё в локации, и род решает, какое именно
+    #: (``domain/rules/tools.py``, ADR 0056).
+    tool_type: str = ""
+    #: Сколько сборов инструмент выдержит. Ноль у всего, что не инструмент:
+    #: прочность в Vellar есть только у того, что стачивается о работу.
+    durability: int = 0
 
     @property
     def is_equipment(self) -> bool:
         return self.kind is ItemKind.EQUIPMENT
+
+    @property
+    def is_tool(self) -> bool:
+        return bool(self.tool_type)
 
     @property
     def is_weapon(self) -> bool:
@@ -448,6 +459,27 @@ class GearArchetype:
     slot: str
     weapon_type: str = ""
     armor_type: str = ""
+    tool_type: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class ToolType:
+    """Род инструмента: кирка, серп, нож свежевателя.
+
+    Инструмент не дерётся и не прикрывает: он решает, что игрок вообще может
+    взять руками в локации. ``sources`` - то сырьё, которое им берут («руда»,
+    «травы», «шкуры», «обломки», ``Item.source``), а ``craft`` - ремесло, в
+    котором эта работа записывается (ADR 0056).
+    """
+
+    id: str
+    name: str
+    craft: str
+    sources: tuple[str, ...] = ()
+
+    def takes(self, source: str) -> bool:
+        """Берётся ли этим инструментом такое сырьё. Пустое сырьё берут любым."""
+        return not source or source in self.sources
 
 
 @dataclass(frozen=True, slots=True)
@@ -474,6 +506,10 @@ class Rarity:
     #: Без этого две вещи одного вида читались бы одной и той же строкой, а
     #: кнопки в списке различаются только текстом.
     mark: str = ""
+    #: Сколько сборов держит инструмент этой редкости. Больше редкость ничего
+    #: инструменту не даёт: он не бьёт, не прикрывает и не прибавляет
+    #: характеристик, и потому редкость на нём читается одним числом (ADR 0056).
+    durability: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -753,6 +789,7 @@ class GameContent:
     slots: tuple[EquipSlot, ...]
     weapon_types: tuple[WeaponType, ...]
     armor_types: tuple[ArmorType, ...]
+    tool_types: tuple[ToolType, ...]
     gear_tiers: tuple[GearTier, ...]
     gear_archetypes: tuple[GearArchetype, ...]
     special_properties: tuple[SpecialProperty, ...]
@@ -782,6 +819,7 @@ class GameContent:
     _gear_by_id: Mapping[str, GearArchetype]
     _weapon_types_by_id: Mapping[str, WeaponType]
     _armor_types_by_id: Mapping[str, ArmorType]
+    _tool_types_by_id: Mapping[str, ToolType]
     _quests_by_id: Mapping[str, Quest]
     _crafts_by_id: Mapping[str, Craft]
     _recipes_by_id: Mapping[str, Recipe]
@@ -811,6 +849,7 @@ class GameContent:
         slots: Sequence[EquipSlot] = (),
         weapon_types: Sequence[WeaponType] = (),
         armor_types: Sequence[ArmorType] = (),
+        tool_types: Sequence[ToolType] = (),
         gear_tiers: Sequence[GearTier] = (),
         gear_archetypes: Sequence[GearArchetype] = (),
         special_properties: Sequence[SpecialProperty] = (),
@@ -841,6 +880,7 @@ class GameContent:
             slots=tuple(slots),
             weapon_types=tuple(weapon_types),
             armor_types=tuple(armor_types),
+            tool_types=tuple(tool_types),
             gear_tiers=tuple(gear_tiers),
             gear_archetypes=tuple(gear_archetypes),
             special_properties=tuple(special_properties),
@@ -870,6 +910,7 @@ class GameContent:
             _gear_by_id=MappingProxyType({gear.id: gear for gear in gear_archetypes}),
             _weapon_types_by_id=MappingProxyType({kind.id: kind for kind in weapon_types}),
             _armor_types_by_id=MappingProxyType({kind.id: kind for kind in armor_types}),
+            _tool_types_by_id=MappingProxyType({kind.id: kind for kind in tool_types}),
             _quests_by_id=MappingProxyType({quest.id: quest for quest in quests}),
             _crafts_by_id=MappingProxyType({craft.id: craft for craft in crafts}),
             _recipes_by_id=MappingProxyType({recipe.id: recipe for recipe in recipes}),
@@ -948,6 +989,12 @@ class GameContent:
 
     def has_armor_type(self, type_id: str) -> bool:
         return type_id in self._armor_types_by_id
+
+    def tool_type(self, type_id: str) -> ToolType:
+        return self._tool_types_by_id[type_id]
+
+    def has_tool_type(self, type_id: str) -> bool:
+        return type_id in self._tool_types_by_id
 
     def quest(self, quest_id: str) -> Quest:
         return self._quests_by_id[quest_id]

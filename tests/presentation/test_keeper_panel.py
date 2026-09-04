@@ -32,7 +32,7 @@ WORLD_SEED = "vellar-test"
 #: вещи: под сотню видов снаряжения плюс расходники и сырьё за ними (ADR 0052).
 _PAGES_SEARCHED = 14
 
-CLOCK = Clock(now=1_700_000_000, shop_rotation=100, gather_cooldown=900)
+CLOCK = Clock(now=1_700_000_000, shop_rotation=100)
 KEEPER_ACCOUNT = 500_100
 
 

@@ -16,12 +16,14 @@ from dataclasses import dataclass, replace
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import BattleState
-from mmorpg.domain.entities.content import GameContent, ItemKind
+from mmorpg.domain.entities.content import GameContent, Item, ItemKind
 from mmorpg.domain.entities.location import LocationNode, NodeKind
 from mmorpg.domain.procgen.seeds import rng
+from mmorpg.domain.rules import crafts as craft_rules
 from mmorpg.domain.rules import economy
 from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules import quests as quest_rules
+from mmorpg.domain.rules import tools as tool_rules
 from mmorpg.domain.rules.equipment import fill_gear
 from mmorpg.domain.rules.progression import (
     LevelUp,
@@ -54,7 +56,6 @@ SEARCH_EXPERIENCE_BASE = 5
 SEARCH_EXPERIENCE_PER_LEVEL = 3
 SHRINE_HEAL_PERCENT = 35
 CACHE_ITEM_CHANCE = 45.0
-GATHER_ITEM_CHANCE = 80.0
 
 #: Прибавка к тому, что приносит тихий узел: тайник, находка, развилка. Ключ
 #: обещали «Рассказчик», «Разведчик» и «Звезда странника», и до сих пор его не
@@ -62,7 +63,8 @@ GATHER_ITEM_CHANCE = 80.0
 #: не платит, и «награда за событие» лечением не бывает.
 EVENT_REWARD_KEY = "event_reward_percent"
 
-#: Что лежит в узле для сбора, по его имени. Из зарослей не выкапывают руду, а с
+#: Что лежит в узле для сбора, по его имени - и каким инструментом это берут
+#: (ADR 0056). Из зарослей не выкапывают руду, а с
 #: останков не срезают травы: узел, который отдаёт железный лом вместо трав,
 #: читается как ошибка - ровно так же, как волчья шкура с кабана.
 #: Имена приходят из постоянного имени узла (``procgen/location._CATEGORY_NAMES``,
@@ -101,9 +103,19 @@ class SearchResult:
     gold: int = 0
     experience: int = 0
     item_id: str = ""
+    #: Сколько взято. Тайник отдаёт одну находку, жила - столько, сколько
+    #: вынесет ремесло того, кто её отработал (``crafts.gather_amount``).
+    count: int = 0
     healed: int = 0
     level_up: LevelUp | None = None
     quest_steps: tuple[QuestStep, ...] = ()
+    #: В каком ремесле записана эта работа и сколько её записано. Пусто у всего,
+    #: кроме сбора.
+    craft_id: str = ""
+    craft_experience: int = 0
+    #: Инструмент: сточился ли он этой работой и сколько сборов в нём осталось.
+    tool_broken: bool = False
+    tool_left: int = 0
 
     @property
     def levelled(self) -> bool:
@@ -177,8 +189,16 @@ def resolve_search(
     character: Character,
     node: LocationNode,
     seed: bytes,
+    *,
+    tool: Item | None = None,
+    biomes: frozenset[str] = frozenset(),
 ) -> SearchResult:
-    """Отработать узел, в котором нет боя. Определяется сидом."""
+    """Отработать узел, в котором нет боя. Определяется сидом.
+
+    ``tool`` - инструмент в слоте, ``biomes`` - земля вокруг этого места. Оба
+    нужны одному узлу - жиле: без инструмента она не отдаёт ничего, а что
+    именно в ней лежит, решает земля (``crafts.yields_here``, ADR 0056).
+    """
     source = rng(seed)
     stats = derived_stats(content, character)
     log, steps = quest_rules.record_search(content, character, node.kind)
@@ -186,23 +206,29 @@ def resolve_search(
 
     gold = 0
     item_id = ""
+    count = 0
     healed = 0
+    craft_id = ""
+    craft_experience = 0
+    tool_broken = False
+    tool_left = 0
     experience = SEARCH_EXPERIENCE_BASE + SEARCH_EXPERIENCE_PER_LEVEL * node.level
 
     match node.kind:
         case NodeKind.CACHE:
             gold = max(1, round(CACHE_GOLD_BASE + CACHE_GOLD_PER_LEVEL * node.level))
             if source.uniform(0, 100) < CACHE_ITEM_CHANCE:
-                item_id = _pick_item(content, source, node.level, materials_only=False)
+                item_id = _pick_item(content, source, node.level)
+                count = 1 if item_id else 0
         case NodeKind.GATHER:
-            if source.uniform(0, 100) < GATHER_ITEM_CHANCE:
-                item_id = _pick_item(
-                    content,
-                    source,
-                    node.level,
-                    materials_only=True,
-                    of_source=GATHER_SOURCES.get(node.name, ""),
-                )
+            gathered = _gather(content, working, node, source, tool=tool, biomes=biomes)
+            working = gathered.character
+            item_id = gathered.item_id
+            count = gathered.count
+            craft_id = gathered.craft_id
+            craft_experience = gathered.experience
+            tool_broken = gathered.tool_broken
+            tool_left = gathered.tool_left
         case NodeKind.SHRINE:
             current = working.health_or(stats.max_health)
             restored = round(stats.max_health * SHRINE_HEAL_PERCENT / 100)
@@ -223,9 +249,75 @@ def resolve_search(
         gold=gold,
         experience=earned(content, paid, experience),
         item_id=item_id,
+        count=count,
         healed=healed,
         level_up=level_up,
         quest_steps=steps,
+        craft_id=craft_id,
+        craft_experience=craft_experience,
+        tool_broken=tool_broken,
+        tool_left=tool_left,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class Gathered:
+    """Что вышло из одной отработанной жилы, вместе с ценой для инструмента."""
+
+    character: Character
+    item_id: str = ""
+    count: int = 0
+    craft_id: str = ""
+    experience: int = 0
+    tool_broken: bool = False
+    tool_left: int = 0
+
+
+def _gather(
+    content: GameContent,
+    character: Character,
+    node: LocationNode,
+    source: random.Random,
+    *,
+    tool: Item | None,
+    biomes: frozenset[str],
+) -> Gathered:
+    """Взять сырьё из жилы. Без инструмента - не взять ничего (ADR 0056).
+
+    Что лежит в жиле, решают трое: сама жила, если она называет своё сырьё
+    (``GATHER_SOURCES``), земля вокруг (``crafts.yields_here``) и инструмент в
+    руках - им берут не всё. Сколько вышло, решает ранг ремесла, а стоит это
+    одной единицы прочности - всегда, какой бы богатой ни была жила.
+    """
+    if tool is None:
+        return Gathered(character=character)
+
+    wanted = GATHER_SOURCES.get(node.name, "")
+    sources = (wanted,) if wanted else tool_rules.sources_of(content, tool)
+    here = craft_rules.yields_here(content, level=character.level, biomes=biomes, sources=sources)
+    if not here:
+        # Земля, в которой этому ремеслу нечего взять, не остаётся немой: жила
+        # отдаёт то, что вообще бывает такого рода, - иначе игрок стачивал бы
+        # инструмент о пустое место, ничего об этом не зная.
+        here = craft_rules.yields_here(content, level=character.level, sources=sources)
+    item_id = source.choice(here) if here else ""
+    if not item_id:
+        return Gathered(character=character)
+
+    craft_id = tool_rules.craft_of(content, tool) or craft_rules.craft_of_source(content, item_id)
+    experience = content.craft_rules.gather_experience if craft_id else 0
+    worked = character
+    if craft_id:
+        worked = character.with_crafts(character.crafts.with_experience(craft_id, experience))
+    worked, broken = tool_rules.wear(content, worked, tool)
+    return Gathered(
+        character=worked,
+        item_id=item_id,
+        count=craft_rules.gather_amount(content, worked, craft_id) if craft_id else 1,
+        craft_id=craft_id,
+        experience=experience,
+        tool_broken=broken,
+        tool_left=0 if broken else tool_rules.left(content, worked, tool),
     )
 
 
@@ -280,7 +372,7 @@ def descent_prize(
     """
     source = rng(seed)
     gold = max(1, round(descent_gold(level) * bounty))
-    item_id = _pick_item(content, source, level, materials_only=False)
+    item_id = _pick_item(content, source, level)
     experience = max(
         1,
         round(
@@ -437,39 +529,18 @@ def use_consumable(
     return character.with_health(current + restored, stats.max_health), restored
 
 
-def _pick_item(
-    content: GameContent,
-    source: random.Random,
-    level: int,
-    *,
-    materials_only: bool,
-    of_source: str = "",
-) -> str:
+def _pick_item(content: GameContent, source: random.Random, level: int) -> str:
     """Находка под уровень. Пусто, когда в содержимом нет ничего настолько простого.
 
-    ``of_source`` сужает сбор до того, что в узле действительно есть, и от этого
-    никогда не отступают: если в содержимом нет ничего такого рода достаточно
-    низкого, узел отдаёт самое дешёвое нужного рода, а не что-то не то. Рудная жила,
-    платящая травами, - та же ошибка, что кабан в волчьей шкуре, и весь смысл
-    ``source`` в том, чтобы её не было.
+    Сырьё сюда не попадает: его больше не находят - его собирают, и только
+    инструментом (``_gather``, ADR 0056). Тайник платит тем, что можно надеть,
+    выпить или продать.
     """
-    fits_kind = [
+    pool = [
         item
         for item in content.items
-        if (item.kind is ItemKind.MATERIAL)
-        is materials_only  # материалы для сбора, всё остальное - для тайников
+        if item.kind is not ItemKind.MATERIAL and item.level <= max(1, level)
     ]
-    pool = [item for item in fits_kind if item.level <= max(1, level)]
-    if of_source:
-        right = [item for item in fits_kind if item.source == of_source]
-        by_level = [item for item in right if item.level <= max(1, level)]
-        if by_level:
-            pool = by_level
-        elif right:
-            lowest = min(item.level for item in right)
-            pool = [item for item in right if item.level == lowest]
-        else:
-            pool = []
     if not pool:
         return ""
     return source.choice(pool).id

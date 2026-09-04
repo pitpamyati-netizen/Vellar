@@ -1,4 +1,4 @@
-"""Ремёсла из главного меню: отработать стражу сбора, сделать партию, не соврать про сумку."""
+"""Ремёсла из главного меню: сделать партию, не соврать про сумку и не собирать отсюда."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from mmorpg.presentation.telegram.screens.base import ScreenId
 from mmorpg.presentation.telegram.screens.shop import OwnedItem
 
 WORLD_SEED = "vellar-test"
-CLOCK = Clock(now=1_700_000_000, shop_rotation=100, gather_cooldown=900)
+CLOCK = Clock(now=1_700_000_000, shop_rotation=100)
 
 
 @pytest.fixture
@@ -115,7 +115,8 @@ def test_a_craft_opens_its_own_screen(content: GameContent, hero: Character) -> 
     assert state.screen is ScreenId.CRAFT
     assert state.craft_id == "mining"
     text = screen(content, hero, state).text()
-    assert "Собрать сырьё" in text
+    assert "Кирка" in text, "the screen names what this craft is worked with"
+    assert "Отсюда работать нельзя" in text
 
 
 def test_back_walks_out_the_way_it_came(content: GameContent, hero: Character) -> None:
@@ -125,37 +126,37 @@ def test_back_walks_out_the_way_it_came(content: GameContent, hero: Character) -
     assert step(content, hero, state, "Назад").screen is ScreenId.MAIN_MENU
 
 
-# --- сбор -------------------------------------------------------------
+# --- сбор отсюда не делается -----------------------------------------
 
 
-def test_gathering_puts_material_in_the_bag_and_records_the_work(
+def test_a_gathering_craft_has_no_button_to_press(content: GameContent, hero: Character) -> None:
+    """Кнопка, которая ничего не делает, - баг: сырьё берут у жилы (ADR 0056)."""
+    listed = step(content, hero, begin(hero), "Ремёсла")
+    state = step(content, hero, listed, button(content, hero, listed, "Горное дело"))
+    assert "Собрать сырьё" not in pressable(content, hero, state)
+
+
+def test_pressing_gather_from_an_old_keyboard_writes_nothing(
     content: GameContent, hero: Character
 ) -> None:
     listed = step(content, hero, begin(hero), "Ремёсла")
     state = step(
         content, hero, listed, button(content, hero, listed, "Горное дело"), "Собрать сырьё"
     )
-    assert "Собрано:" in state.notice
-    assert state.pending.character is not None
-    assert state.pending.character.crafts.progress("mining").experience > 0
-    assert len(state.pending.items) == 1
-    item_id, count = state.pending.items[0]
-    assert item_id in {"iron_scrap", "mountain_ore"}
-    assert count > 0
+    assert "в локации" in state.notice
+    assert state.pending.empty
 
 
-def test_a_second_gathering_inside_the_cooldown_is_refused(
+def test_a_craft_screen_says_what_is_in_the_tool_slot(
     content: GameContent, hero: Character
 ) -> None:
     listed = step(content, hero, begin(hero), "Ремёсла")
-    first = step(
-        content, hero, listed, button(content, hero, listed, "Горное дело"), "Собрать сырьё"
-    )
-    worked = first.pending.character
-    assert worked is not None
-    again = step(content, worked, first, "Собрать сырьё")
-    assert "Следующий сбор через" in again.notice
-    assert again.pending.empty, "a refused gathering writes nothing"
+    state = step(content, hero, listed, button(content, hero, listed, "Горное дело"))
+    assert "Собирать нечем" in screen(content, hero, state).text()
+
+    armed = replace(hero, equipment=hero.equipment.equip("tool", "pick@1#common"))
+    text = screen(content, armed, state).text()
+    assert "Сборов осталось" in text
 
 
 # --- making -----------------------------------------------------------
@@ -216,4 +217,3 @@ def test_the_walk_survives_a_round_trip_through_storage(
     restored = PlayState.deserialise(state.serialise())
     assert restored.screen is ScreenId.CRAFT
     assert restored.craft_id == "mining"
-    assert restored.craft_moment == CLOCK.now

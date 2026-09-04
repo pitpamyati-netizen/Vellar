@@ -122,13 +122,12 @@ class CraftRules:
 class CraftProgress:
     """Что один персонаж сделал в одном ремесле.
 
-    ``gathered_at`` - unix-время последнего сбора. Откат личный и короткий: дорога
-    пополняется для этого персонажа по его собственным часам, а не по общей страже,
-    которую всем приходилось пережидать вместе.
+    Одна сделанная работа, и больше ничего: отката у сбора нет, потому что сбор
+    держится не часов, а прочности инструмента (``domain/rules/tools.py``,
+    ADR 0056).
     """
 
     experience: int = 0
-    gathered_at: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,9 +142,4 @@ class CraftLog:
     def with_experience(self, craft_id: str, gained: int) -> CraftLog:
         current = self.progress(craft_id)
         updated = replace(current, experience=current.experience + max(0, gained))
-        return CraftLog(MappingProxyType({**self.entries, craft_id: updated}))
-
-    def with_gathered_at(self, craft_id: str, moment: int) -> CraftLog:
-        current = self.progress(craft_id)
-        updated = replace(current, gathered_at=moment)
         return CraftLog(MappingProxyType({**self.entries, craft_id: updated}))

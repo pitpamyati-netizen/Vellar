@@ -109,11 +109,10 @@ class Settings(BaseSettings):
 
     world_seed: str = "vellar-prime"
     # Мир больше не переворачивается по часам: локация держит свою карту, пока её не
-    # вычистят. Со сроком остались две вещи, и обе короткие, потому что обе существуют,
-    # чтобы дать повод вернуться, а не заставить ждать: прилавок в лавке и откат на
-    # сборе сырья.
+    # вычистят. Со сроком осталась одна вещь, и она короткая, потому что существует,
+    # чтобы дать повод вернуться, а не заставить ждать: прилавок в лавке. Сбор сырья
+    # держится не отката, а прочности инструмента (ADR 0056).
     shop_rotation_seconds: int = Field(default=1_800, gt=0)
-    gather_cooldown_seconds: int = Field(default=900, gt=0)
 
     postgres_dsn: str = "postgresql://vellar:vellar@localhost:5432/vellar"
     postgres_pool_min: int = Field(default=5, ge=1)

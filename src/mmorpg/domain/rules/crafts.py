@@ -7,7 +7,11 @@
 
 Два вида работы, и оба отвечают на один вопрос — что выйдет:
 
-- **сбор**: один сбор на ремесло за откат, и размер растёт с рангом;
+- **сбор**: сколько сырья приносит одна отработанная жила, и растёт это с
+  рангом. Где именно это происходит, решает не ремесло: сырьё берут в узлах
+  локации и только инструментом (``domain/rules/tools.py``, ADR 0056), а
+  ремесло отвечает лишь за то, сколько его вышло и что вообще лежит в этой
+  земле;
 - **изготовление**: сырьё внутрь, вещь наружу, а качество партии решает, придёт
   ли с ней что-то сверху.
 """
@@ -19,13 +23,7 @@ from dataclasses import dataclass
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
-from mmorpg.domain.entities.craft import (
-    Craft,
-    CraftRules,
-    CraftYield,
-    QualityTier,
-    Recipe,
-)
+from mmorpg.domain.entities.craft import CraftRules, QualityTier, Recipe
 from mmorpg.domain.procgen.seeds import rng
 from mmorpg.domain.rules.modifiers import collect_modifiers, percent
 
@@ -66,116 +64,55 @@ def character_rank(content: GameContent, character: Character, craft_id: str) ->
 # --- сбор ------------------------------------------------------------
 
 
-@dataclass(frozen=True, slots=True)
-class GatherResult:
-    """Что принесла одна стража сбора."""
+def gather_amount(content: GameContent, character: Character, craft_id: str) -> int:
+    """Сколько сырья выносит один отработанный узел этому персонажу.
 
-    item_id: str = ""
-    count: int = 0
-    experience: int = 0
-    refused: str = ""
-
-    @property
-    def ok(self) -> bool:
-        return not self.refused
-
-
-def gather_ready_at(character: Character, craft: Craft, cooldown: int) -> int:
-    """Момент, когда этот персонаж снова может собирать в этом ремесле."""
-    return character.crafts.progress(craft.id).gathered_at + max(0, cooldown)
-
-
-def can_gather(
-    content: GameContent,
-    character: Character,
-    craft: Craft,
-    *,
-    now: int,
-    cooldown: int,
-    biomes: frozenset[str] = frozenset(),
-) -> str:
-    """Пусто, когда собирать можно сейчас, иначе - причина, по которой нельзя.
-
-    ``biomes`` - это земля вокруг города, в котором стоит персонаж. Пусто значит «не
-    спрашивать, где он»: так зовёт тот, у кого карты нет, - например, тест одного
-    только отката.
+    Ранг ремесла - единственное, что здесь растёт: место решает, что лежит, а
+    ремесло - сколько его вынесли. Прибавки к сбору читаются тем же ключом, что
+    и всегда (``GATHER_YIELD_KEY``).
     """
-    if not craft.gathers:
-        return "Это ремесло ничего не собирает: из сырья делают вещи."
-    ready_at = gather_ready_at(character, craft, cooldown)
-    if now < ready_at:
-        left = ready_at - now
-        return f"Здесь уже собрано. Следующий сбор через {_minutes(left)}."
-    here = _reachable_yields(craft, character.level, biomes)
-    if not here:
-        if _reachable_yields(craft, content.rules.max_character_level, biomes):
-            return "Для вашего уровня тут пока нечего брать."
-        return "В этих краях этому ремеслу работать не с чем. Ищите другие места."
-    return ""
-
-
-def _minutes(seconds: int) -> str:
-    """A wait as a player hears it: whole minutes, and never "0 минут"."""
-    minutes = max(1, (seconds + 59) // 60)
-    if minutes % 10 == 1 and minutes % 100 != 11:
-        return f"{minutes} минуту"
-    if minutes % 10 in {2, 3, 4} and minutes % 100 not in {12, 13, 14}:
-        return f"{minutes} минуты"
-    return f"{minutes} минут"
-
-
-def gather(
-    content: GameContent,
-    character: Character,
-    craft: Craft,
-    *,
-    now: int,
-    cooldown: int,
-    seed: bytes,
-    biomes: frozenset[str] = frozenset(),
-) -> tuple[Character, GatherResult]:
-    """Отработать один сбор в ремесле. Персонаж возвращается изменённым.
-
-    Что вернётся, зависит от того, где работали: одна и та же кнопка в Дубно и в
-    Мезени тянется в разную землю.
-    """
-    refused = can_gather(content, character, craft, now=now, cooldown=cooldown, biomes=biomes)
-    if refused:
-        return character, GatherResult(refused=refused)
-
     rules = content.craft_rules
-    rank = character_rank(content, character, craft.id)
-    reachable = _reachable_yields(craft, character.level, biomes)
-    picked = rng(seed).choice(reachable)
-
-    modifiers = collect_modifiers(content, character)
+    rank = character_rank(content, character, craft_id)
     amount = rules.gather_base + rules.gather_per_rank * (rank - 1)
-    count = max(1, round(amount * percent(modifiers, GATHER_YIELD_KEY)))
-
-    log = character.crafts.with_experience(craft.id, rules.gather_experience)
-    log = log.with_gathered_at(craft.id, now)
-    return (
-        character.with_crafts(log),
-        GatherResult(
-            item_id=picked.item_id,
-            count=count,
-            experience=rules.gather_experience,
-        ),
-    )
+    modifiers = collect_modifiers(content, character)
+    return max(1, round(amount * percent(modifiers, GATHER_YIELD_KEY)))
 
 
-def _reachable_yields(craft: Craft, level: int, biomes: frozenset[str]) -> list[CraftYield]:
-    """Что это ремесло может принести здесь и на этом уровне.
+def yields_here(
+    content: GameContent,
+    *,
+    level: int,
+    biomes: frozenset[str] = frozenset(),
+    sources: tuple[str, ...] = (),
+) -> tuple[str, ...]:
+    """Какое сырьё лежит в этой земле на этом уровне.
 
-    Без карты (пустой ``biomes``) о месте не спрашивают вовсе, и решает один лишь
-    уровень - ровно так вело себя всё, что зовёт эту функцию, до того как земля
-    начала иметь значение.
+    Собирается по всем собирающим ремёслам разом: узел не знает, кто в него
+    пришёл, а ``crafts.toml`` - единственное место, где сказано, что где лежит.
+    ``sources`` сужает список тем, что берёт инструмент в руках; пустой - не
+    сужает. Пустые ``biomes`` значат «не спрашивать, где это».
     """
-    return [
-        entry
-        for entry in craft.yields
-        if entry.level <= level and (not biomes or entry.found_in(biomes))
-    ]
+    found: list[str] = []
+    for craft in content.crafts:
+        if not craft.gathers:
+            continue
+        for entry in craft.yields:
+            if entry.level > level or entry.item_id in found:
+                continue
+            if biomes and not entry.found_in(biomes):
+                continue
+            if sources and content.item(entry.item_id).source not in sources:
+                continue
+            found.append(entry.item_id)
+    return tuple(found)
+
+
+def craft_of_source(content: GameContent, item_id: str) -> str:
+    """Ремесло, в котором записывается эта находка. Пусто - ни в каком."""
+    for craft in content.crafts:
+        if craft.gathers and any(entry.item_id == item_id for entry in craft.yields):
+            return craft.id
+    return ""
 
 
 # --- making -----------------------------------------------------------

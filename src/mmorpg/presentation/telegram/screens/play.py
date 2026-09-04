@@ -390,8 +390,15 @@ def location_screen(
     pvp: bool = False,
     roamer: Roamer | None = None,
     mood: LocationMood = LocationMood.UNTOUCHED,
+    tool_note: str = "",
     notice: str = "",
 ) -> Screen:
+    """Узел локации: что здесь, кто здесь и куда отсюда.
+
+    ``tool_note`` - одна строка об инструменте, и только у жилы: чем её берут и
+    надолго ли этого хватит (``screens/crafts.tool_line``, ADR 0056). Услышать
+    отказ нужно до нажатия, а не после.
+    """
     neighbours = tuple(location.node(index) for index in node.links)
     # Подземелье этого узла, если оно тут и свободно, - только тогда рисуется кнопка.
     roamer_here = roamer if (roamer is not None and roamer.node == node.index) else None
@@ -424,6 +431,8 @@ def location_screen(
         if risk:
             lines.append(risk)
         lines.append(node_left_line(here, node.kind))
+        if node.kind is NodeKind.GATHER and tool_note:
+            lines.append(tool_note)
 
     if roamer_open is not None:
         lines.append(

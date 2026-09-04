@@ -124,11 +124,17 @@ def build(
             * share
         )
 
+    # Инструмент - вещь без чисел: он не бьёт, не прикрывает и не прибавляет
+    # характеристик. Всё, что редкость даёт инструменту, - прочность, и потому
+    # «редкая кирка» читается одним числом, а не списком прибавок (ADR 0056).
+    tool = bool(archetype.tool_type)
     amount = max(1, round(STAT_PER_LEVEL * counted))
-    stat_bonuses = {code.value: amount for code in _stat_codes(source, rarity.stats)}
+    stat_bonuses = (
+        {} if tool else {code.value: amount for code in _stat_codes(source, rarity.stats)}
+    )
 
     modifiers: dict[str, float] = {}
-    if rarity.special and content.special_properties:
+    if not tool and rarity.special and content.special_properties:
         chosen = content.special_properties[source.randrange(len(content.special_properties))]
         modifiers[chosen.key] = chosen.value
 
@@ -139,7 +145,14 @@ def build(
         slot=archetype.slot,
         rarity=rarity.id,
         level=level,
-        price=max(1, round((PRICE_BASE + PRICE_PER_LEVEL * level) * rarity.price_factor)),
+        # Инструмент редкостью не дорожает вдвойне: цену ему поднимает только
+        # лавка (``economy.buy_price`` и так множит на редкость), и потому один
+        # сбор стоит одинаково любой киркой - редкая покупает не силу, а то, что
+        # в лавку возвращаются реже (ADR 0056).
+        price=max(
+            1,
+            round((PRICE_BASE + PRICE_PER_LEVEL * level) * (1.0 if tool else rarity.price_factor)),
+        ),
         modifiers=modifiers,
         skill_modifiers={},
         damage=damage,
@@ -147,6 +160,8 @@ def build(
         stat_bonuses=stat_bonuses,
         weapon_type=archetype.weapon_type,
         armor_type=archetype.armor_type,
+        tool_type=archetype.tool_type,
+        durability=rarity.durability if tool else 0,
     )
 
 
@@ -276,7 +291,13 @@ def roll_drop(
     tier = tier_at(content, level)
     if tier is None:
         return None
-    archetype = content.gear_archetypes[source.randrange(len(content.gear_archetypes))]
+    # Инструмент с побеждённого не падает: его покупают, и покупают всегда
+    # (``rules/economy.tool_stock``, ADR 0056). Кирка вместо меча с хозяина
+    # логова была бы не находкой, а промахом таблицы добычи.
+    droppable = [one for one in content.gear_archetypes if not one.tool_type]
+    if not droppable:
+        return None
+    archetype = droppable[source.randrange(len(droppable))]
 
     relics = [rarity for rarity in content.rarities if rarity.scaling]
     if relics and source.random() < RELIC_CHANCE.get(rank, 0.0):

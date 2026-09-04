@@ -1,4 +1,4 @@
-"""Ремёсла: ранги, заработанные работой, один сбор за стражу и что даёт партия."""
+"""Ремёсла: ранги, заработанные работой, что лежит в земле и что даёт партия."""
 
 from __future__ import annotations
 
@@ -11,9 +11,6 @@ from mmorpg.domain.entities import Character, GameContent
 from mmorpg.domain.entities.craft import CraftKind, CraftLog, CraftProgress
 from mmorpg.domain.procgen.seeds import derive
 from mmorpg.domain.rules import crafts as craft_rules
-
-NOW = 1_700_000_000
-COOLDOWN = 900
 
 
 @pytest.fixture
@@ -66,78 +63,49 @@ def test_every_rank_has_a_name(content: GameContent) -> None:
 # --- сбор -------------------------------------------------------------
 
 
-def test_gathering_brings_back_a_material_and_records_the_work(
-    content: GameContent, miner: Character
-) -> None:
-    craft = content.craft("mining")
-    worked, result = craft_rules.gather(
-        content, miner, craft, now=NOW, cooldown=COOLDOWN, seed=seed("gather", 1)
-    )
-    assert result.ok
-    assert result.item_id in {entry.item_id for entry in craft.yields}
-    assert result.count >= content.craft_rules.gather_base
-    assert worked.crafts.progress("mining").experience > miner.crafts.progress("mining").experience
-    assert worked.crafts.progress("mining").gathered_at == NOW
-
-
-def test_a_second_gathering_inside_the_cooldown_is_refused(
-    content: GameContent, miner: Character
-) -> None:
-    craft = content.craft("mining")
-    worked, first = craft_rules.gather(
-        content, miner, craft, now=NOW, cooldown=COOLDOWN, seed=seed("gather", 1)
-    )
-    _, second = craft_rules.gather(
-        content, worked, craft, now=NOW, cooldown=COOLDOWN, seed=seed("gather", 2)
-    )
-    assert first.ok
-    assert not second.ok
-    assert "Следующий сбор через" in second.refused
-
-    _, later = craft_rules.gather(
-        content, worked, craft, now=NOW + COOLDOWN + 1, cooldown=COOLDOWN, seed=seed("gather", 3)
-    )
-    assert later.ok, "the road refills once the cooldown is out"
-
-
 def test_a_higher_rank_gathers_more(content: GameContent, miner: Character) -> None:
-    craft = content.craft("mining")
+    """Место решает, что лежит; ремесло - сколько его вынесли."""
     novice = replace(miner, crafts=CraftLog())
-    _, small = craft_rules.gather(
-        content, novice, craft, now=NOW, cooldown=COOLDOWN, seed=seed("g", 1)
-    )
     master = replace(
-        miner,
-        crafts=CraftLog(
-            MappingProxyType({"mining": CraftProgress(experience=10_000)}),
-        ),
+        miner, crafts=CraftLog(MappingProxyType({"mining": CraftProgress(experience=10_000)}))
     )
-    _, large = craft_rules.gather(
-        content, master, craft, now=NOW, cooldown=COOLDOWN, seed=seed("g", 1)
-    )
-    assert large.count > small.count
+    small = craft_rules.gather_amount(content, novice, "mining")
+    large = craft_rules.gather_amount(content, master, "mining")
+    assert small >= content.craft_rules.gather_base
+    assert large > small
 
 
-def test_a_making_craft_gathers_nothing(content: GameContent, miner: Character) -> None:
-    _, result = craft_rules.gather(
-        content, miner, content.craft("smithing"), now=NOW, cooldown=COOLDOWN, seed=seed("g", 1)
-    )
-    assert not result.ok
+def test_what_lies_in_the_ground_depends_on_where_it_is(content: GameContent) -> None:
+    """Одна и та же жила в горах и на болоте отдаёт разное."""
+    stony = craft_rules.yields_here(content, level=20, biomes=frozenset({"горы"}))
+    boggy = craft_rules.yields_here(content, level=20, biomes=frozenset({"болото"}))
+    assert stony and boggy
+    assert set(stony) != set(boggy)
+    assert "mountain_ore" in stony
+    assert "bog_iron" in boggy
 
 
-def test_a_level_below_every_yield_is_told_so(content: GameContent, miner: Character) -> None:
-    """Ремесло, у которого всё сырьё начинается выше, говорит об этом, а не платит."""
-    deep = replace(
-        content.craft("mining"),
-        yields=tuple(entry for entry in content.craft("mining").yields if entry.level > 1),
-    )
-    assert deep.yields, "mining is expected to have a material above level one"
-    novice = replace(miner, level=1, crafts=CraftLog())
-    _, result = craft_rules.gather(
-        content, novice, deep, now=NOW, cooldown=COOLDOWN, seed=seed("g", 1)
-    )
-    assert not result.ok
-    assert "уровня" in result.refused
+def test_a_tool_narrows_the_ground_to_what_it_takes(content: GameContent) -> None:
+    """Киркой не срезают траву: сырьё сужается тем, чем его берут."""
+    ore = craft_rules.yields_here(content, level=20, sources=("руда", "обломки"))
+    herbs = craft_rules.yields_here(content, level=20, sources=("травы",))
+    assert ore and herbs
+    assert not set(ore) & set(herbs)
+    assert all(content.item(item_id).source in {"руда", "обломки"} for item_id in ore)
+
+
+def test_the_ground_holds_only_what_the_level_allows(content: GameContent) -> None:
+    early = craft_rules.yields_here(content, level=1)
+    late = craft_rules.yields_here(content, level=300)
+    assert set(early) < set(late)
+    assert all(content.item(item_id).level <= 1 for item_id in early)
+
+
+def test_every_gathered_material_names_its_craft(content: GameContent) -> None:
+    """Работа записывается в то ремесло, которому находка принадлежит."""
+    for item_id in craft_rules.yields_here(content, level=300):
+        assert craft_rules.craft_of_source(content, item_id)
+    assert craft_rules.craft_of_source(content, "whetstone") == ""
 
 
 # --- making -----------------------------------------------------------
@@ -205,63 +173,3 @@ def test_crafts_split_into_gathering_and_making(content: GameContent) -> None:
     making = content.crafts_of_kind(CraftKind.MAKING)
     assert gathering and making
     assert len(gathering) + len(making) == len(content.crafts)
-
-
-# --- где делается работа ----------------------------------------------
-
-
-def test_what_a_craft_brings_back_depends_on_where_it_is_worked(
-    content: GameContent, miner: Character
-) -> None:
-    """Одна кнопка когда-то давала одно и то же в каждом городе."""
-    mining = content.craft("mining")
-    stony = frozenset({"горы"})
-    roadside = frozenset({"дорога"})
-
-    _, in_the_hills = craft_rules.gather(
-        content, miner, mining, now=NOW, cooldown=COOLDOWN, seed=seed("g", 1), biomes=stony
-    )
-    _, on_the_road = craft_rules.gather(
-        content, miner, mining, now=NOW, cooldown=COOLDOWN, seed=seed("g", 1), biomes=roadside
-    )
-
-    assert in_the_hills.ok and on_the_road.ok
-    assert in_the_hills.item_id != on_the_road.item_id, "the same seed, two different places"
-    assert content.item(in_the_hills.item_id).id in {
-        entry.item_id for entry in mining.yields if entry.found_in(stony)
-    }
-
-
-def test_ground_that_holds_nothing_for_this_craft_says_so(
-    content: GameContent, miner: Character
-) -> None:
-    nowhere = frozenset({"небо"})
-    refused = craft_rules.can_gather(
-        content, miner, content.craft("mining"), now=NOW, cooldown=COOLDOWN, biomes=nowhere
-    )
-    assert "В этих краях" in refused
-
-    _, result = craft_rules.gather(
-        content,
-        miner,
-        content.craft("mining"),
-        now=NOW,
-        cooldown=COOLDOWN,
-        seed=seed("g", 2),
-        biomes=nowhere,
-    )
-    assert not result.ok
-    # Отказанный сбор не стоит ничего: откат тоже не начался.
-    assert miner.crafts.progress("mining").gathered_at == 0
-
-
-def test_a_place_that_only_holds_deeper_materials_talks_about_the_level(
-    content: GameContent, miner: Character
-) -> None:
-    """Два разных молчания: «тебе ещё рано» и «здесь этого нет вовсе»."""
-    junior = replace(miner, level=1)
-    deep = frozenset({"пещеры"})
-    refused = craft_rules.can_gather(
-        content, junior, content.craft("mining"), now=NOW, cooldown=COOLDOWN, biomes=deep
-    )
-    assert "Для вашего уровня" in refused

@@ -26,12 +26,16 @@
 #   weight   как часто попадается; ноль - не попадается вовсе
 #   mark     чем имя отличается от обычного: две вещи одного вида должны
 #            называться по-разному, иначе в списке будут две одинаковые кнопки
+#   durability сколько сборов держит инструмент этой редкости. Инструменту
+#            редкость больше не даёт ничего: он не бьёт, не прикрывает и не
+#            прибавляет характеристик, и потому редкая кирка отличается от
+#            обычной одним числом - тем, на сколько её хватит (ADR 0056).
 rarities = [
-    { id = "common", name = "Обычный", weight = 100, price_factor = 1.0, stats = 0, mark = "" },
-    { id = "uncommon", name = "Необычный", weight = 42, price_factor = 2.4, stats = 1, mark = "доброй ковки" },
-    { id = "rare", name = "Редкий", weight = 14, price_factor = 6.0, stats = 2, mark = "редкой работы" },
-    { id = "legendary", name = "Легендарный", weight = 3, price_factor = 16.0, stats = 2, special = true, mark = "именной славы" },
-    { id = "relic", name = "Реликтовый", weight = 0, price_factor = 45.0, stats = 2, special = true, scaling = true, mark = "давних времён" },
+    { id = "common", name = "Обычный", weight = 100, price_factor = 1.0, stats = 0, mark = "", durability = 25 },
+    { id = "uncommon", name = "Необычный", weight = 42, price_factor = 2.4, stats = 1, mark = "доброй ковки", durability = 60 },
+    { id = "rare", name = "Редкий", weight = 14, price_factor = 6.0, stats = 2, mark = "редкой работы", durability = 150 },
+    { id = "legendary", name = "Легендарный", weight = 3, price_factor = 16.0, stats = 2, special = true, mark = "именной славы", durability = 400 },
+    { id = "relic", name = "Реликтовый", weight = 0, price_factor = 45.0, stats = 2, special = true, scaling = true, mark = "давних времён", durability = 1000 },
 ]
 
 # Ступени снаряжения: с какого уровня и каким словом её называют. Вещь бывает
@@ -75,6 +79,23 @@ slots = [
     { id = "hands", name = "Руки", armor_share = 0.3 },
     { id = "feet", name = "Ноги", armor_share = 0.3 },
     { id = "trinket", name = "Украшение", armor_share = 0.0 },
+    { id = "tool", name = "Инструмент", armor_share = 0.0 },
+]
+
+# Рода инструмента. Инструментом не дерутся: он решает, что игрок вообще может
+# взять руками в узле локации, - и без него сырьё не берут вовсе (ADR 0056).
+#
+# sources - какое сырьё берут этим инструментом (`source` у материала ниже),
+# craft - в каком ремесле записывается эта работа. Жила, назвавшая своё сырьё,
+# требует своего инструмента; жила, не назвавшая ничего, отдаёт то, что берёт
+# инструмент в руках.
+#
+# Сколько инструмент выдержит, решает его редкость (`durability` выше), и
+# больше редкость ему не даёт ничего.
+tool_types = [
+    { id = "pick", name = "Кирка", craft = "mining", sources = ["руда", "обломки"] },
+    { id = "sickle", name = "Серп", craft = "herbalism", sources = ["травы"] },
+    { id = "skinning_knife", name = "Нож свежевателя", craft = "skinning", sources = ["шкуры"] },
 ]
 
 # Рода оружия. Род решает, чем игрок бьёт, и говорит о себе двумя числами.
@@ -572,6 +593,33 @@ id = "bracelet"
 noun = "браслет"
 gender = "m"
 slot = "trinket"
+
+# --- Инструменты ---
+#
+# Их не выбивают и не куют: их покупают, и в лавке они есть всегда
+# (domain/rules/economy.tool_stock). Прочность решает редкость, а ступень -
+# только имя и цену.
+
+[[gear]]
+id = "pick"
+noun = "кирка"
+gender = "f"
+slot = "tool"
+tool_type = "pick"
+
+[[gear]]
+id = "sickle"
+noun = "серп"
+gender = "m"
+slot = "tool"
+tool_type = "sickle"
+
+[[gear]]
+id = "skinning_knife"
+noun = "нож свежевателя"
+gender = "m"
+slot = "tool"
+tool_type = "skinning_knife"
 
 # --- Consumables ---
 

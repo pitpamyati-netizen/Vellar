@@ -11,6 +11,7 @@ from collections.abc import Sequence
 
 from mmorpg.domain.entities.content import GameContent, Item
 from mmorpg.domain.entities.stats import StatCode
+from mmorpg.domain.procgen import items as gear_procgen
 from mmorpg.domain.procgen.seeds import rng, shop_seed
 
 STOCK_MIN = 6
@@ -35,6 +36,13 @@ SELL_FRACTION = 0.35
 #: позиций — но не опускается ниже ``STOCK_MIN``: голодный город всё же торгует.
 STRAIN_PRICE_MARKUP = 0.5
 STRAIN_STOCK_LOSS = 0.5
+
+#: Инструменты, которые лежат на прилавке всегда, - по редкости. Без инструмента
+#: сырьё не взять вовсе (ADR 0056), поэтому его наличие не бросают из сида: игрок,
+#: у которого сточилась кирка, обязан купить новую в любом городе и в любой
+#: переворот. Дороже этих двух инструмент бывает - но уже удачей общего прилавка,
+#: а не полкой.
+TOOL_RARITIES: tuple[str, ...] = ("common", "uncommon")
 
 # Престол берёт сбор с каждой сделки между игроками (``Narrative.md``, раздел 9).
 # Это число - вся причина, по которой золото не копится вечно: единственный отток,
@@ -71,10 +79,17 @@ def roll_assortment(
     widened = int(max(0.0, reputation) / REPUTATION_PER_STEP)
     high = character_level + LEVEL_WINDOW_ABOVE + widened
 
+    # Полка инструментов стоит до всякого броска и не зависит ни от сида, ни от
+    # нужды города: сточенную кирку меняют там, где стоят.
+    shelf = tool_stock(content, character_level=character_level)
+    on_shelf = {item.id for item in shelf}
+
     candidates = [
         item
         for item in content.items
-        if low <= item.level <= high and content.rarity(item.rarity).weight > 0
+        if low <= item.level <= high
+        and content.rarity(item.rarity).weight > 0
+        and item.id not in on_shelf
     ]
     if not candidates:
         candidates = sorted(
@@ -93,7 +108,28 @@ def roll_assortment(
         picked = source.choices(range(len(pool)), weights=weights, k=1)[0]
         chosen.append(pool.pop(picked))
         weights.pop(picked)
-    return tuple(sorted(chosen, key=lambda item: (item.level, item.name)))
+    return tuple(sorted((*shelf, *chosen), key=lambda item: (item.level, item.name)))
+
+
+def tool_stock(content: GameContent, *, character_level: int) -> tuple[Item, ...]:
+    """Инструменты, которые лежат в лавке всегда: по два на каждое ремесло.
+
+    Ступень берётся по уровню покупателя, как и всё на прилавке, а редкость
+    решает одно - на сколько сборов инструмента хватит. Вида, которого нет в
+    содержимом, здесь просто не будет: полка называет только то, что собрано.
+    """
+    tier = gear_procgen.tier_at(content, character_level)
+    if tier is None:
+        return ()
+    stock: list[Item] = []
+    for archetype in content.gear_archetypes:
+        if not archetype.tool_type:
+            continue
+        for rarity_id in TOOL_RARITIES:
+            item_id = gear_procgen.gear_id(archetype.id, tier.level, rarity_id)
+            if content.has_item(item_id):
+                stock.append(content.item(item_id))
+    return tuple(stock)
 
 
 def buy_price(

@@ -156,17 +156,16 @@ class PendingWrite:
 
 @dataclass(frozen=True, slots=True)
 class Clock:
-    """Две вещи со сроком, оставшиеся в игре, и момент, на который их читают.
+    """Единственное, что осталось в игре со сроком, и момент, на который его читают.
 
     Мир больше не переворачивается по общей страже: карта локации перекладывается
-    по выработке узлов, а не по часам (ADR 0035). Со сроком остались прилавок
-    лавки и личный откат сбора, и оба приходят сюда значениями, чтобы ветка
-    оставалась без часов.
+    по выработке узлов, а не по часам (ADR 0035), а сбор сырья держится не отката,
+    а прочности инструмента (ADR 0056). Со сроком остался прилавок лавки, и он
+    приходит сюда значением, чтобы ветка оставалась без часов.
     """
 
     now: int = 0
     shop_rotation: int = 0
-    gather_cooldown: int = 900
 
 
 @dataclass(frozen=True, slots=True)
@@ -257,9 +256,6 @@ class PlayState:
     craft_id: str = ""
     dungeon_pick: str = ""
     npc_id: str = ""
-    # Момент, на который открыли экран ремесла: строка отката не должна тикать, пока
-    # игрок ещё читает тот экран, на котором она напечатана.
-    craft_moment: int = 0
     # Что правит смотритель: разновидность, сущность, поле, чужой персонаж. Всё
     # остальное панель читает заново на каждом шаге, потому что мир между двумя
     # нажатиями мог измениться - в том числе её же прошлым нажатием.
@@ -354,7 +350,7 @@ class PlayState:
                     self.list_page.filters.category,
                     self.list_page.filters.query,
                 ],
-                "craft": [self.craft_id, self.craft_moment],
+                "craft": self.craft_id,
                 "pages": [self.list_page.page, self.skill_page.page, self.board_page.page],
                 "keeper": [
                     self.keeper_kind,
@@ -405,7 +401,10 @@ class PlayState:
         pick_raw = data.get("pick", 0)
         pick_slot = pick_raw[1] if isinstance(pick_raw, list) else pick_raw
         list_page, skill_page, board_page = data.get("pages", [1, 1, 1])
-        craft_id, craft_moment = data.get("craft", ["", 0])
+        # Раньше здесь лежала пара [ремесло, момент]: у сбора был личный откат.
+        # Сохранённая пара читается как её первый член - само ремесло.
+        craft_raw = data.get("craft", "")
+        craft_id = craft_raw[0] if isinstance(craft_raw, list) else craft_raw
         list_category, list_query = [*data.get("list_filters", []), "", ""][:2]
         # Хвост списка читается с запасом: состояние переживает выкатку, а
         # сохранённому состоянию не верят (``Claude.md``, правило 8).
@@ -446,8 +445,7 @@ class PlayState:
             npc_id=data.get("npc", ""),
             item_id=data.get("item", ""),
             searching=bool(data.get("searching", False)),
-            craft_id=craft_id,
-            craft_moment=int(craft_moment),
+            craft_id=str(craft_id),
             keeper_kind=str(keeper[0]),
             keeper_entity=str(keeper[1]),
             keeper_field=str(keeper[2]),

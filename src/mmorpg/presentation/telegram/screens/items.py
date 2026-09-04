@@ -27,6 +27,7 @@ from collections.abc import Mapping, Sequence
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, Item
 from mmorpg.domain.rules import equipment as gear
+from mmorpg.domain.rules import tools as tool_rules
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import gold as gold_words
@@ -116,6 +117,7 @@ SLOT_NAMES: dict[str, str] = {
     "hands": "Руки",
     "feet": "Ноги",
     "trinket": "Украшение",
+    "tool": "Инструмент",
 }
 
 EQUIP = label("Надеть", "🛡")
@@ -184,6 +186,14 @@ def kind_lines(content: GameContent, character: Character, item: Item) -> tuple[
         armor = content.armor_type(worn.armor_type)
         lines.append(f"Род доспеха: {armor.name.lower()}. Броня: {worn.armor}.")
         lines.extend(_type_gives("Всякий такой доспех", content, armor.modifiers))
+    if worn.is_tool:
+        takes = ", ".join(tool_rules.sources_of(content, worn))
+        lines.append(f"Род инструмента: {tool_rules.type_name(content, worn)}. Берёт: {takes}.")
+        limit = tool_rules.limit(worn)
+        left = tool_rules.left(content, character, worn)
+        held = character.equipment.item_in(tool_rules.TOOL_SLOT) == worn.id
+        wear = f"Сборов осталось {left} из {limit}." if held else f"Сборов хватит на {limit}."
+        lines.append(f"{wear} Сточенный инструмент исчезает: чинить его негде.")
     if worn.stat_bonuses:
         given = "; ".join(
             f"{STAT_NAMES.get(code, code)} плюс {value}"

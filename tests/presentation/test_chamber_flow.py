@@ -12,7 +12,7 @@ from mmorpg.presentation.telegram.flows.play import Clock, PlayState, advance, b
 from mmorpg.presentation.telegram.screens.base import ScreenId
 
 WORLD_SEED = "vellar-test"
-CLOCK = Clock(now=1_700_000_000, shop_rotation=100, gather_cooldown=900)
+CLOCK = Clock(now=1_700_000_000, shop_rotation=100)
 
 
 @pytest.fixture

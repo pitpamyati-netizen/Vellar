@@ -654,9 +654,11 @@ async def test_what_one_player_took_is_gone_for_everybody(
     sent: Recorder,
 ) -> None:
     """Локация - не личная копия: работа одного игрока в ней видна."""
+    # Жила сюда не годится: без инструмента она не трогается вовсе, и это
+    # проверяется своим тестом (``tests/domain/test_tools.py``, ADR 0056).
     quiet = next(
         kind
-        for kind in (NodeKind.GATHER, NodeKind.CACHE, NodeKind.EVENT, NodeKind.SHRINE)
+        for kind in (NodeKind.CACHE, NodeKind.EVENT, NodeKind.SHRINE)
         if path_to(
             build_location(
                 content,

@@ -32,7 +32,7 @@ from mmorpg.presentation.telegram.screens.base import ScreenId
 from mmorpg.presentation.telegram.screens.paginated import PageState
 
 WORLD_SEED = "vellar-test"
-CLOCK = Clock(now=1_700_000_000, shop_rotation=100, gather_cooldown=900)
+CLOCK = Clock(now=1_700_000_000, shop_rotation=100)
 PLAYER = 500_100
 
 

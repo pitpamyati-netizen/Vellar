@@ -200,7 +200,6 @@ async def play(
     clock = Clock(
         now=now,
         shop_rotation=rotation_index(now, settings.shop_rotation_seconds),
-        gather_cooldown=settings.gather_cooldown_seconds,
     )
     goods = await _goods(
         content, character, flow, inventory, locations, settings, clock.shop_rotation, now

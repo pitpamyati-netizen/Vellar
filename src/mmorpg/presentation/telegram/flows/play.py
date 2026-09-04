@@ -42,6 +42,7 @@ from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import roamer as roamer_rules
 from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules import tools as tool_rules
 from mmorpg.domain.rules import turning as turning_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
 from mmorpg.domain.rules.stats import derived_stats
@@ -443,15 +444,19 @@ def _render(
             location = build_location(
                 content, world_seed, state.session, epoch=node_rules.location_epoch(here_now)
             )
+            standing_here = location.node(state.session.node)
             return screens.location_screen(
                 location,
-                location.node(state.session.node),
+                standing_here,
                 standing=node_standing(content, world_seed, state.session, here_now, clock.now),
                 character_level=character.level,
                 others=neighbours,
                 pvp=_location_allows_pvp(content, state.session),
                 roamer=here_now.roamer,
                 mood=mood_rules.mood_of(here_now),
+                tool_note=craft_screens.tool_line(
+                    content, character, adventure.GATHER_SOURCES.get(standing_here.name, "")
+                ),
                 notice=state.notice,
             )
         # Экран говорит «локация», а вылазки за ним больше нет: состояние, сохранённое
@@ -510,8 +515,6 @@ def _render(
                 character,
                 content.craft(state.craft_id),
                 _bag(shelf),
-                now=state.craft_moment,
-                cooldown=clock.gather_cooldown,
                 biomes=here.biomes,
                 place=here.name,
                 notice=state.notice,
@@ -1145,7 +1148,7 @@ def _handle_main_menu(
     if labels.QUESTS.matches(command.argument):
         return state.at(ScreenId.QUESTS)
     if labels.CRAFTS.matches(command.argument):
-        return replace(state, craft_moment=clock.now).at(ScreenId.CRAFTS)
+        return state.at(ScreenId.CRAFTS)
     if labels.SETTINGS.matches(command.argument):
         return state.at(ScreenId.SETTINGS)
     if labels.TUTORIAL.matches(command.argument):
@@ -1179,8 +1182,7 @@ def _handle_crafts(
         return state.with_notice("Нажмите ремесло из списка.")
     for craft in content.crafts:
         if command.argument.startswith(craft.name):
-            chosen = replace(state, craft_id=craft.id, craft_moment=clock.now)
-            return chosen.at(ScreenId.CRAFT)
+            return replace(state, craft_id=craft.id).at(ScreenId.CRAFT)
     return state.with_notice("Не узнал ремесло. Нажмите ремесло из списка.")
 
 
@@ -1199,29 +1201,14 @@ def _handle_craft(
     # (``Claude.md``, правило 8: сохранённому состоянию не верят).
     if not content.has_craft(state.craft_id):
         return go_back(state).with_notice("Такого ремесла в игре больше нет.")
-    if command.intent is not Intent.SELECT:
-        return state.with_notice("Нажмите кнопку работы или «Назад».")
     craft = content.craft(state.craft_id)
-
-    if labels.GATHER.matches(command.argument):
-        # Место входит и в сид, и в правила: одна и та же стража работы в двух городах -
-        # это две разные работы.
-        here = known_city(content, state.city_id, character.city_id)
-        seed = derive(world_seed, "gather", character.id, craft.id, here.id, clock.now)
-        worked, gathered = craft_rules.gather(
-            content,
-            character,
-            craft,
-            now=clock.now,
-            cooldown=clock.gather_cooldown,
-            seed=seed,
-            biomes=here.biomes,
-        )
-        line = craft_screens.gathered_line(content, gathered)
-        if not gathered.ok:
-            return state.with_notice(line)
-        write = PendingWrite(character=worked).with_items((gathered.item_id, gathered.count))
-        return replace(state, craft_moment=clock.now).storing(write).with_notice(line)
+    if command.intent is not Intent.SELECT:
+        # У собирающего ремесла кнопок нет вовсе: сырьё берут у жилы и только
+        # инструментом (ADR 0056), поэтому и отвечать ему нужно об этом, а не о
+        # кнопках, которых на экране нет.
+        if craft.gathers:
+            return state.with_notice("Сырьё берут в локации, у жилы, а не отсюда.")
+        return state.with_notice("Нажмите кнопку работы или «Назад».")
 
     owned = _bag(goods)
     for recipe in content.recipes_of(craft.id):
@@ -2234,12 +2221,28 @@ def _resolve_node_action(
         # котором бой живёт.
         return replace(state, fight="node").at(ScreenId.COMBAT)
 
+    biomes = _location_biomes(content, state.session)
+    if node.kind is NodeKind.GATHER:
+        # Отказ ходом не считается: без годного инструмента жила не трогается
+        # вовсе, и волна в узле остаётся нетронутой (ADR 0056).
+        lying = adventure.GATHER_SOURCES.get(node.name, "")
+        refused = tool_rules.refusal(content, character, lying)
+        if refused:
+            return state.with_notice(refused)
+
     # Волна входит в сид, поэтому вторая горсть из той же жилы - не первая заново.
     seed = derive(visit_seed(world_seed, state.session), "search", index, left.wave, left.taken)
-    result = adventure.resolve_search(content, character, node, seed)
+    result = adventure.resolve_search(
+        content,
+        character,
+        node,
+        seed,
+        tool=tool_rules.tool_of(content, character),
+        biomes=biomes,
+    )
     write = PendingWrite(character=result.character, node_take=index, node_kind=node.kind.value)
     if result.item_id:
-        write = write.with_items((result.item_id, 1))
+        write = write.with_items((result.item_id, max(1, result.count)))
 
     said = search_line(content, node.name, result)
     # Сколько осталось, экран скажет строкой ниже своими словами - здесь это
@@ -2249,13 +2252,31 @@ def _resolve_node_action(
     return state.storing(write).with_notice(said)
 
 
+def _location_biomes(content: GameContent, session: LocationSession) -> frozenset[str]:
+    """Земля этого места: что в ней вообще лежит, решает сбор (``crafts.yields_here``)."""
+    if not content.has_city(session.city_id):
+        return frozenset()
+    city = content.city(session.city_id)
+    if not city.has_location(session.slot):
+        return frozenset()
+    return frozenset({city.location(session.slot).biome})
+
+
 def search_line(content: GameContent, node_name: str, result: adventure.SearchResult) -> str:
     """Одна фраза об отработанном узле, а следом - что он дал."""
     parts = [f"{node_name}: сделано."]
     if result.gold:
         parts.append(f"Найдено золота: {result.gold}.")
     if result.item_id and content.has_item(result.item_id):
-        parts.append(f"Взято: {content.item(result.item_id).name}.")
+        taken = content.item(result.item_id).name
+        many = f"Взято: {taken}, {result.count} штук."
+        parts.append(many if result.count > 1 else f"Взято: {taken}.")
+    if result.craft_experience:
+        parts.append(f"Работы записано: {result.craft_experience}.")
+    if result.tool_broken:
+        parts.append("Инструмент сточился и рассыпался. Новый берут в лавке.")
+    elif result.tool_left:
+        parts.append(f"Сборов у инструмента осталось: {result.tool_left}.")
     if result.healed:
         parts.append(f"Восстановлено здоровья: {result.healed}.")
     parts.append(f"Опыт: {result.experience}.")
