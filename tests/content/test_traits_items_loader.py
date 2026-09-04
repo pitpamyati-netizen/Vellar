@@ -120,10 +120,10 @@ def test_a_skill_never_asks_for_a_weapon_its_class_cannot_hold(content: GameCont
         assert set(skill.weapon_types) <= set(klass.weapon_types), skill.code
 
 
-def test_rarity_is_what_gives_stats_and_only_the_top_two_scale(content: GameContent) -> None:
-    """Договор редкостей, как он назван игроку: 0, 1, 2, 2 плюс свойство, и растущая."""
+def test_rarity_is_what_gives_affixes_and_only_the_top_two_scale(content: GameContent) -> None:
+    """Договор редкостей, как он назван игроку: 0, 1, 2, 3, 4 плюс свойство у двух старших."""
     by_id = {rarity.id: rarity for rarity in content.rarities}
-    assert [rarity.stats for rarity in content.rarities] == [0, 1, 2, 2, 2]
+    assert [rarity.affixes for rarity in content.rarities] == [0, 1, 2, 3, 4]
     assert not by_id["common"].special
     assert by_id["legendary"].special
     assert by_id["relic"].special

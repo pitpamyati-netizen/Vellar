@@ -20,10 +20,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from random import Random
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.craft import CraftRules, QualityTier, Recipe
+from mmorpg.domain.procgen import items as gear_procgen
 from mmorpg.domain.procgen.seeds import rng
 from mmorpg.domain.rules.modifiers import collect_modifiers, percent
 
@@ -163,7 +165,14 @@ def make(
     *,
     seed: bytes,
 ) -> tuple[Character, CraftResult]:
-    """Истратить сырьё и сделать партию. Возвращает изменённого персонажа."""
+    """Истратить сырьё и сделать партию. Возвращает изменённого персонажа.
+
+    Качество работы платит **самой вещью**: ладная партия выходит на ступень
+    редкости выше рецепта, отменная на две, и вместе со ступенью у изделия
+    появляется свой ведущий аффикс (ADR 0059, 0060). Тому, у чего редкости нет
+    вовсе - зельям, точильным камням, - качество платит по-старому, лишней
+    штукой: поднимать там нечего.
+    """
     refused = can_make(content, character, recipe, owned)
     if refused:
         return character, CraftResult(recipe_id=recipe.id, refused=refused)
@@ -171,17 +180,20 @@ def make(
     rules = content.craft_rules
     rank = character_rank(content, character, recipe.craft_id)
     modifiers = collect_modifiers(content, character)
-    quality = _roll_quality(rules, rank, percent(modifiers, CRAFT_QUALITY_KEY), seed)
+    source = rng(seed)
+    quality = _roll_quality(rules, rank, percent(modifiers, CRAFT_QUALITY_KEY), source)
 
     kept = quality.refund_percent * max(0.0, percent(modifiers, SALVAGE_YIELD_KEY))
     spent = tuple((need.item_id, -_spend(need.count, kept)) for need in recipe.inputs)
-    count = recipe.output_count + quality.extra
+    made_id = upgraded(content, recipe.output_id, quality, source=source)
+    gear = made_id != recipe.output_id or gear_procgen.parse_gear_id(recipe.output_id) is not None
+    count = recipe.output_count + (0 if gear else quality.extra)
     log = character.crafts.with_experience(recipe.craft_id, recipe.experience)
     return (
         character.with_crafts(log),
         CraftResult(
             recipe_id=recipe.id,
-            item_id=recipe.output_id,
+            item_id=made_id,
             count=count,
             quality=quality,
             experience=recipe.experience,
@@ -190,15 +202,39 @@ def make(
     )
 
 
+def upgraded(content: GameContent, item_id: str, quality: QualityTier, *, source: Random) -> str:
+    """Что вышло из-под рук: рецепт, поднятый качеством работы.
+
+    Снаряжение поднимается на ``quality.rarity_step`` ступеней редкости и получает
+    свой оттиск - ведущий аффикс, имя и числа (ADR 0059). Выше легендарного не
+    поднимается никто: реликтовое берут с хозяина логова или за пройденную цепочку
+    заданий, и выковать его нельзя. Всё, что снаряжением не является, возвращается
+    как есть.
+    """
+    parsed = gear_procgen.parse_gear_id(item_id)
+    if parsed is None:
+        return item_id
+    archetype_id, level, rarity_id, _ = parsed
+    # Реликтовое не куют, а невыкладываемое на прилавок и подавно: лестница -
+    # это то, чем город торгует.
+    ladder = [rarity for rarity in content.rarities if rarity.weight > 0 and not rarity.scaling]
+    known = [rarity.id for rarity in ladder]
+    if rarity_id not in known:
+        return item_id
+    picked = ladder[min(known.index(rarity_id) + max(0, quality.rarity_step), len(ladder) - 1)]
+    roll = source.randrange(max(1, gear_procgen.rolls_of(content))) if picked.affixes else 0
+    return gear_procgen.gear_id(archetype_id, level, picked.id, roll)
+
+
 def _spend(count: int, refund_percent: float) -> int:
     """Сырьё, которое действительно ушло. Возврат никогда не отдаёт работу даром."""
     kept = int(count * max(0.0, refund_percent) // 100)
     return max(1, count - kept)
 
 
-def _roll_quality(rules: CraftRules, rank: int, bonus: float, seed: bytes) -> QualityTier:
+def _roll_quality(rules: CraftRules, rank: int, bonus: float, source: Random) -> QualityTier:
     """Сначала лучшая ступень: отличная партия она же и хорошая, но не обе разом."""
-    roll = rng(seed).uniform(0, 100)
+    roll = source.uniform(0, 100)
     fine = (rules.fine_chance_base + rules.fine_chance_per_rank * (rank - 1)) * bonus
     good = (rules.good_chance_base + rules.good_chance_per_rank * (rank - 1)) * bonus
     if roll < fine:

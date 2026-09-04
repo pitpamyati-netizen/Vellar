@@ -28,7 +28,7 @@ from mmorpg.domain.entities.location import (
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.ports.repositories import AccessibilitySettings
 from mmorpg.domain.procgen.location import generate_location
-from mmorpg.domain.procgen.seeds import derive, location_seed
+from mmorpg.domain.procgen.seeds import derive, location_seed, rng
 from mmorpg.domain.rules import adventure, economy
 from mmorpg.domain.rules import arena as arena_rules
 from mmorpg.domain.rules import crafts as craft_rules
@@ -36,12 +36,14 @@ from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import dungeon as dungeon_rules
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import houses as house_rules
+from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules import mood as mood_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import repair as repair_rules
 from mmorpg.domain.rules import roamer as roamer_rules
+from mmorpg.domain.rules import salvage as salvage_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules import tools as tool_rules
 from mmorpg.domain.rules import turning as turning_rules
@@ -567,6 +569,24 @@ def _render(
             return city_screens.bank_screen(content, character, city, state.notice)
         case ScreenId.FORGE:
             return city_screens.forge_screen(content, character, city, state.notice)
+        case ScreenId.SALVAGE:
+            return city_screens.salvage_screen(
+                content,
+                character,
+                shelf.owned,
+                state.list_page,
+                city_name=city.name,
+                notice=state.notice,
+            )
+        case ScreenId.REFORGE:
+            return city_screens.reforge_screen(
+                content,
+                character,
+                shelf.owned,
+                state.list_page,
+                city_name=city.name,
+                notice=state.notice,
+            )
         case ScreenId.DUNGEON:
             return city_screens.dungeon_list_screen(
                 content,
@@ -906,6 +926,12 @@ def advance(
             return _handle_bank(content, character, state, command)
         case ScreenId.FORGE:
             return _handle_forge(content, character, state, command)
+        case ScreenId.SALVAGE:
+            return _handle_salvage(content, character, state, command, shelf)
+        case ScreenId.REFORGE:
+            return _handle_reforge(
+                content, character, state, command, shelf, clock=ticking, world_seed=world_seed
+            )
         case ScreenId.DUNGEON:
             return _handle_dungeon(content, character, state, command)
         case ScreenId.DUNGEON_PICK:
@@ -1702,6 +1728,12 @@ def _handle_forge(
     """
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите кнопку кузницы.")
+    # Кузница делает с вещью три работы, и две из них - о сумке, а не о надетом
+    # (ADR 0060). Обе идут своим списком, поэтому здесь только поворот.
+    if labels.SALVAGE.matches(command.argument):
+        return state.at(ScreenId.SALVAGE)
+    if labels.REFORGE.matches(command.argument):
+        return state.at(ScreenId.REFORGE)
     entries = repair_rules.bill(content, character)
     if not entries:
         return state.with_notice("Чинить нечего: всё надетое целое.")
@@ -1732,6 +1764,78 @@ def _handle_forge(
     fixed = repair_rules.repaired(character.with_gold(-price), items)
     write = PendingWrite(character=fixed).because(economy_log.SERVICE)
     return state.storing(write).with_notice(f"{said} Уплачено {price} золота.")
+
+
+def _handle_salvage(
+    content: GameContent,
+    character: Character,
+    state: PlayState,
+    command: Command,
+    goods: Goods,
+) -> PlayState:
+    """Разобрать вещь из сумки на сырьё (ADR 0060).
+
+    Надетое сюда не попадает: в списке только сумка, а сверх того разбор ещё раз
+    спрашивает, не на игроке ли вещь, - иначе кузнец снял бы с него сапоги.
+    """
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите вещь из списка.")
+    item = city_screens.gear_from_button(content, command.argument, goods.owned)
+    if item is None:
+        return state.with_notice("Нажмите вещь из списка.")
+    refused = salvage_rules.can_salvage(content, character, item)
+    if refused:
+        return state.with_notice(refused)
+
+    made = salvage_rules.yield_of(
+        content, item, modifiers=mods.collect_modifiers(content, character)
+    )
+    write = PendingWrite().with_items((item.id, -1), *made)
+    got = ", ".join(f"{content.item(item_id).name} {count}" for item_id, count in made)
+    return state.storing(write).with_notice(f"{item.name} разобран. Вышло: {got}.")
+
+
+def _handle_reforge(
+    content: GameContent,
+    character: Character,
+    state: PlayState,
+    command: Command,
+    goods: Goods,
+    *,
+    clock: Clock,
+    world_seed: str,
+) -> PlayState:
+    """Перековать вещь: тот же вид, та же редкость, другой ведущий аффикс (ADR 0059).
+
+    Плата вперёд, как и за починку. Оттиск всегда меняется: заплатить и получить
+    ровно то же, что принёс, - это пошлина, а не работа.
+    """
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите вещь из списка.")
+    item = city_screens.gear_from_button(content, command.argument, goods.owned)
+    if item is None:
+        return state.with_notice("Нажмите вещь из списка.")
+    if not salvage_rules.can_reforge(content, item):
+        return state.with_notice("Перековывать нечего: у этой вещи нет прибавок.")
+    if character.equipment.item_in(item.slot) == item.id:
+        return state.with_notice("Эта вещь на вас надета. Снимите её, потом перековывайте.")
+
+    price = salvage_rules.reforge_price(content, item)
+    if character.gold < price:
+        return state.with_notice(
+            f"Работа стоит {price} золота, у вас {character.gold}. Кузнец берёт вперёд."
+        )
+    seed = derive(world_seed, "reforge", character.id, item.id, clock.now)
+    made_id = salvage_rules.reforged(content, item.id, source=rng(seed))
+    write = (
+        PendingWrite(character=character.with_gold(-price))
+        .with_items((item.id, -1), (made_id, 1))
+        .because(economy_log.SERVICE)
+    )
+    made = content.item(made_id)
+    return state.storing(write).with_notice(
+        f"{item.name} перекован. Теперь это {made.name}. Уплачено {price} золота."
+    )
 
 
 def _hand_in(content: GameContent, character: Character, state: PlayState) -> PlayState:

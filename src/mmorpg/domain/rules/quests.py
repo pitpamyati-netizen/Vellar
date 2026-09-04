@@ -16,6 +16,7 @@ from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.location import Enemy, NodeKind
 from mmorpg.domain.entities.quest import ObjectiveKind, Quest, QuestLog
+from mmorpg.domain.procgen import items as gear_procgen
 from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules.progression import LevelUp, earned, grant_experience
 
@@ -124,9 +125,19 @@ def record_kills(
 
 
 def _counts_craft(quest: Quest, item_id: str) -> bool:
+    """Та ли это работа, которую заказывали.
+
+    Снаряжение сверяется видом и ступенью, а не именем целиком: ладная работа
+    выходит редкостью выше рецепта и со своим оттиском (ADR 0059, 0060), и
+    заказчик, попросивший кольчугу, не должен отказываться от кольчуги получше.
+    """
     if quest.objective is not ObjectiveKind.CRAFT:
         return False
-    return not quest.target_kind or quest.target_kind == item_id
+    if not quest.target_kind or quest.target_kind == item_id:
+        return True
+    wanted = gear_procgen.parse_gear_id(quest.target_kind)
+    made = gear_procgen.parse_gear_id(item_id)
+    return bool(wanted and made and wanted[:2] == made[:2])
 
 
 def record_craft(

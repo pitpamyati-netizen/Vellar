@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from random import Random
 
 from mmorpg.domain.entities.content import GameContent, Item
 from mmorpg.domain.entities.stats import StatCode
@@ -107,9 +108,24 @@ def roll_assortment(
     weights = [content.rarity(item.rarity).weight for item in pool]
     for _ in range(size):
         picked = source.choices(range(len(pool)), weights=weights, k=1)[0]
-        chosen.append(pool.pop(picked))
+        chosen.append(_stamped(content, source, pool.pop(picked)))
         weights.pop(picked)
     return tuple(sorted((*shelf, *chosen), key=lambda item: (item.level, item.name)))
+
+
+def _stamped(content: GameContent, source: Random, item: Item) -> Item:
+    """Вещь с прилавка - с оттиском этого переворота, а не эталон реестра.
+
+    Прилавок выкладывает то, что кому-то принесли: у вещи с прибавками свой
+    ведущий аффикс, а вместе с ним имя и числа (ADR 0059). Обычная вещь и
+    инструмент оттиска не несут - им нечего им сказать.
+    """
+    parsed = gear_procgen.parse_gear_id(item.id)
+    if parsed is None or item.is_tool or not content.rarity(item.rarity).affixes:
+        return item
+    archetype_id, level, rarity_id, _ = parsed
+    roll = source.randrange(max(1, gear_procgen.rolls_of(content)))
+    return content.item(gear_procgen.gear_id(archetype_id, level, rarity_id, roll))
 
 
 def tool_stock(content: GameContent, *, character_level: int) -> tuple[Item, ...]:

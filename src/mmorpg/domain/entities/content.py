@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
@@ -318,8 +318,12 @@ class Item:
     #: которая росла из выносливости, и не значил ничего.
     armor: int = 0
     #: Прибавки к характеристикам — числом. Их даёт редкость, а не вид вещи:
-    #: обычная не даёт ни одной, необычная одну, остальные две.
+    #: обычная не даёт ни одной, необычная одну, остальные больше.
     stat_bonuses: Mapping[str, int] = field(default_factory=dict)
+    #: Ключи аффиксов, выпавших этой вещи великими: та же прибавка, взятая выше
+    #: своего потолка (``procgen/items.GREAT_FACTOR``, ADR 0059). Редкая удача, и
+    #: потому её называют вслух - на карточке вещи отдельной строкой.
+    great: tuple[str, ...] = ()
     #: Что это за сырьё - "травы", "руда", "шкуры", "обломки". Пусто у всего,
     #: что сырьём не является, и у сырья, которое годится отовсюду.
     source: str = ""
@@ -436,10 +440,17 @@ class GearTier:
 
 @dataclass(frozen=True, slots=True)
 class SpecialProperty:
-    """Особое свойство легендарной и реликтовой вещи: один ключ и его величина."""
+    """Аффикс вещи: ключ, его опорная величина и слово, которым он зовётся.
+
+    ``word`` входит в имя вещи, которая этот аффикс несёт: «Крепкий меч ярости
+    редкой работы». Без него две вещи одного вида и одной редкости читались бы
+    одной и той же строкой, а различались бы только числами внутри карточки -
+    то есть на слух не различались бы вовсе.
+    """
 
     key: str
     value: float
+    word: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -487,8 +498,11 @@ class ToolType:
 class Rarity:
     """Насколько вещь редка — и что редкость за собой несёт.
 
-    Редкость это не цвет строчки: обычная вещь не даёт характеристик вовсе,
-    необычная даёт одну, редкая две, легендарная две и особое свойство сверх них.
+    Редкость это не цвет строчки: она решает, сколько у вещи аффиксов - прибавок,
+    выпавших ей при сборке. Обычная не несёт ни одной, необычная одну, редкая две,
+    легендарная три, реликтовая четыре, и у двух последних один из аффиксов -
+    особое свойство, которое бьёт в полную силу (ADR 0059).
+
     Реликтовая даёт то же, что легендарная, но её числа считаются не от уровня
     вещи, а от уровня героя, — она растёт вместе с ним и потому не устаревает.
     """
@@ -497,9 +511,9 @@ class Rarity:
     name: str
     weight: int
     price_factor: float
-    #: Сколько характеристик прибавляет вещь этой редкости.
-    stats: int = 0
-    #: Есть ли у вещи особое свойство сверх характеристик.
+    #: Сколько аффиксов несёт вещь этой редкости.
+    affixes: int = 0
+    #: Есть ли среди них особое свойство - аффикс полной силы.
     special: bool = False
     #: Считать ли числа вещи от уровня героя, а не от уровня самой вещи.
     scaling: bool = False
@@ -843,6 +857,21 @@ class GameContent:
     _houses_by_id: Mapping[str, House]
     _house_by_city: Mapping[str, House]
 
+    #: Каким словом вещь называет прибавку к характеристике: «меч силача».
+    #: Объявлено в ``items.toml [meta].stat_words`` рядом с прочими аффиксами.
+    stat_words: Mapping[str, str] = MappingProxyType({})
+
+    #: Чем собрать вещь, которой нет в реестре. Снаряжение собирается из вида,
+    #: ступени, редкости и оттиска (``procgen/items.py``), и оттисков у одной
+    #: вещи дюжина: выкладывать их все в реестр значило бы держать в памяти
+    #: десятки тысяч предметов, которых никто никогда не возьмёт в руки. Поэтому
+    #: реестр держит эталоны, а всё остальное собирается по имени, когда о нём
+    #: спросили. Домен сборщика не импортирует - его подаёт загрузчик.
+    _assemble: Callable[[GameContent, str], Item | None] | None = None
+    #: Собранное по дороге. Кэш, а не хранилище: та же вещь собралась бы заново
+    #: с тем же результатом - сборка определена её именем (ADR 0059).
+    _forged: dict[str, Item] = field(default_factory=dict)
+
     @classmethod
     def build(
         cls,
@@ -875,6 +904,8 @@ class GameContent:
         turnings: Sequence[Turning] = (),
         houses: Sequence[House] = (),
         open_turning_id: str = "",
+        stat_words: Mapping[str, str] | None = None,
+        assemble: Callable[[GameContent, str], Item | None] | None = None,
     ) -> GameContent:
         """Собрать реестр и его указатели."""
         by_owner: dict[str, list[Skill]] = {}
@@ -935,6 +966,8 @@ class GameContent:
             _house_by_city=MappingProxyType(
                 {city_id: house for house in houses for city_id in house.seats}
             ),
+            stat_words=MappingProxyType(dict(stat_words or {})),
+            _assemble=assemble,
         )
 
     # --- указатели ---------------------------------------------------
@@ -955,10 +988,29 @@ class GameContent:
         return trait_id in self._traits_by_id
 
     def item(self, item_id: str) -> Item:
-        return self._items_by_id[item_id]
+        """Вещь по имени - написанная, собранная эталоном или собранная сейчас.
+
+        Реестр держит эталоны снаряжения (оттиск ноль), а вещь с другим оттиском
+        собирается по требованию и запоминается: одна и та же строка всегда даёт
+        одну и ту же вещь, поэтому кэш здесь - только про скорость (ADR 0059).
+        """
+        found = self._items_by_id.get(item_id) or self._forged.get(item_id)
+        if found is not None:
+            return found
+        forged = self._assemble(self, item_id) if self._assemble is not None else None
+        if forged is None:
+            raise KeyError(item_id)
+        self._forged[item_id] = forged
+        return forged
 
     def has_item(self, item_id: str) -> bool:
-        return item_id in self._items_by_id
+        if item_id in self._items_by_id or item_id in self._forged:
+            return True
+        try:
+            self.item(item_id)
+        except KeyError:
+            return False
+        return True
 
     def skill(self, code: str) -> Skill:
         return self._skills_by_code[code]

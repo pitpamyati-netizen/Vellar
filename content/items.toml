@@ -20,8 +20,11 @@
 [meta]
 
 # Редкость решает, что вещь даёт сверх урона и брони.
-#   stats    сколько характеристик прибавляет
-#   special  есть ли особое свойство сверх них
+#   affixes  сколько прибавок вещь несёт. Прибавкой бывает и характеристика, и
+#            процент: пул один (ADR 0059), а ведущую из них называет оттиск вещи -
+#            он же стоит в её имени, чтобы два меча одной ступени и одной
+#            редкости не читались одной строкой
+#   special  есть ли сверх них особое свойство - аффикс полной силы
 #   scaling  считать числа от уровня героя, а не от уровня вещи
 #   weight   как часто попадается; ноль - не попадается вовсе
 #   mark     чем имя отличается от обычного: две вещи одного вида должны
@@ -35,11 +38,11 @@
 #            редкость её только множит: чинить редкий доспех приходится реже,
 #            но и дороже - цена починки идёт от цены вещи (ADR 0057).
 rarities = [
-    { id = "common", name = "Обычный", weight = 100, price_factor = 1.0, stats = 0, mark = "", durability = 25, toughness = 1.0 },
-    { id = "uncommon", name = "Необычный", weight = 42, price_factor = 2.4, stats = 1, mark = "доброй ковки", durability = 60, toughness = 1.2 },
-    { id = "rare", name = "Редкий", weight = 14, price_factor = 6.0, stats = 2, mark = "редкой работы", durability = 150, toughness = 1.5 },
-    { id = "legendary", name = "Легендарный", weight = 3, price_factor = 16.0, stats = 2, special = true, mark = "именной славы", durability = 400, toughness = 1.9 },
-    { id = "relic", name = "Реликтовый", weight = 0, price_factor = 45.0, stats = 2, special = true, scaling = true, mark = "давних времён", durability = 1000, toughness = 2.4 },
+    { id = "common", name = "Обычный", weight = 100, price_factor = 1.0, affixes = 0, mark = "", durability = 25, toughness = 1.0 },
+    { id = "uncommon", name = "Необычный", weight = 42, price_factor = 2.4, affixes = 1, mark = "доброй ковки", durability = 60, toughness = 1.2 },
+    { id = "rare", name = "Редкий", weight = 14, price_factor = 6.0, affixes = 2, mark = "редкой работы", durability = 150, toughness = 1.5 },
+    { id = "legendary", name = "Легендарный", weight = 3, price_factor = 16.0, affixes = 3, special = true, mark = "именной славы", durability = 400, toughness = 1.9 },
+    { id = "relic", name = "Реликтовый", weight = 0, price_factor = 45.0, affixes = 4, special = true, scaling = true, mark = "давних времён", durability = 1000, toughness = 2.4 },
 ]
 
 # Ступени снаряжения: с какого уровня и каким словом её называют. Вещь бывает
@@ -155,39 +158,51 @@ armor_types = [
     { id = "heavy", name = "Тяжёлый доспех", armor = 2.6, modifiers = { initiative_percent = -3, dodge_percent = -1 } },
 ]
 
-# Особое свойство легендарной и реликтовой вещи. Одно на вещь, выбирается по её
-# же имени - и потому всегда одно и то же. Каждый ключ здесь движок читает:
+# Слово, которым вещь называет прибавку к характеристике: «меч силача», «латы
+# выносливости». Слово входит в имя вещи, у которой этот аффикс ведущий, и потому
+# должно быть у каждого аффикса своё: два одинаковых слова - две одинаковые
+# кнопки в списке (ADR 0059, правила доступности 5-7).
+stat_words = { STR = "силача", AGI = "ловкача", END = "выносливости", INT = "премудрости", WIS = "прозорливости", CHA = "доброго слова", LCK = "удачи" }
+
+# Процентные аффиксы. Из них же берётся особое свойство легендарной и реликтовой
+# вещи - то, что бьёт в полную силу; выпавшие обычными идут долей от неё
+# (procgen/items.ORDINARY_AFFIX_SCALE). Каждый ключ здесь движок читает:
 # прибавка, которой никто не считает, это не свойство, а обещание. Список широк
-# нарочно: чем он длиннее, тем реже две легендарки одного вида несут одно и то
-# же, и тем больше поводов присмотреться к находке (ADR 0052).
+# нарочно: чем он длиннее, тем реже две находки одного вида несут одно и то же,
+# и тем больше поводов присмотреться к находке (ADR 0052, 0059).
+#
+# value - опорная величина: столько аффикс даёт на последнем уровне при среднем
+# броске. На первом уровне вещи от неё остаётся половина (AFFIX_TIER_FLOOR), сам
+# бросок гуляет на четверть в обе стороны, а изредка выпадает великим - в
+# полтора раза выше потолка.
 special_properties = [
-    { key = "damage_percent", value = 8 },
-    { key = "physical_damage_percent", value = 12 },
-    { key = "magic_damage_percent", value = 12 },
-    { key = "crit_chance_percent", value = 6 },
-    { key = "crit_damage_percent", value = 20 },
-    { key = "health_percent", value = 8 },
-    { key = "armor_percent", value = 12 },
-    { key = "dodge_percent", value = 5 },
-    { key = "accuracy_percent", value = 8 },
-    { key = "initiative_percent", value = 12 },
-    { key = "resource_percent", value = 15 },
-    { key = "resource_regen_percent", value = 20 },
-    { key = "cost_reduction_percent", value = 12 },
-    { key = "cooldown_reduction_percent", value = 10 },
-    { key = "healing_done_percent", value = 12 },
-    { key = "regen_per_turn_percent", value = 2 },
-    { key = "damage_taken_percent", value = -6 },
-    { key = "lifesteal_percent", value = 8 },
-    { key = "reflect_percent", value = 14 },
-    { key = "dot_damage_percent", value = 18 },
-    { key = "single_target_damage_percent", value = 14 },
-    { key = "aoe_damage_percent", value = 14 },
-    { key = "first_turn_damage_percent", value = 18 },
-    { key = "resist_physical_percent", value = 10 },
-    { key = "resist_magic_percent", value = 10 },
-    { key = "flee_chance_percent", value = 25 },
-    { key = "gold_percent", value = 15 },
+    { key = "damage_percent", value = 8, word = "ярости" },
+    { key = "physical_damage_percent", value = 12, word = "тяжёлой руки" },
+    { key = "magic_damage_percent", value = 12, word = "чародейства" },
+    { key = "crit_chance_percent", value = 6, word = "острого глаза" },
+    { key = "crit_damage_percent", value = 20, word = "увечья" },
+    { key = "health_percent", value = 8, word = "живучести" },
+    { key = "armor_percent", value = 12, word = "крепи" },
+    { key = "dodge_percent", value = 5, word = "увёртки" },
+    { key = "accuracy_percent", value = 8, word = "верного удара" },
+    { key = "initiative_percent", value = 12, word = "быстроты" },
+    { key = "resource_percent", value = 15, word = "запаса" },
+    { key = "resource_regen_percent", value = 20, word = "второго дыхания" },
+    { key = "cost_reduction_percent", value = 12, word = "бережливости" },
+    { key = "cooldown_reduction_percent", value = 10, word = "скорой руки" },
+    { key = "healing_done_percent", value = 12, word = "целителя" },
+    { key = "regen_per_turn_percent", value = 2, word = "заживления" },
+    { key = "damage_taken_percent", value = -6, word = "стойкости" },
+    { key = "lifesteal_percent", value = 8, word = "жажды" },
+    { key = "reflect_percent", value = 14, word = "шипов" },
+    { key = "dot_damage_percent", value = 18, word = "тления" },
+    { key = "single_target_damage_percent", value = 14, word = "поединщика" },
+    { key = "aoe_damage_percent", value = 14, word = "размаха" },
+    { key = "first_turn_damage_percent", value = 18, word = "первого шага" },
+    { key = "resist_physical_percent", value = 10, word = "железного бока" },
+    { key = "resist_magic_percent", value = 10, word = "оберега" },
+    { key = "flee_chance_percent", value = 25, word = "лёгких ног" },
+    { key = "gold_percent", value = 15, word = "прибытка" },
 ]
 
 # Виды снаряжения. Из каждого собирается вещь на каждой ступени в каждой

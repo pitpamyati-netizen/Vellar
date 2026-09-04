@@ -17,6 +17,7 @@ from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import dungeon as dungeon_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import repair as repair_rules
+from mmorpg.domain.rules import salvage as salvage_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.digest import Deed, DeedKind
 from mmorpg.domain.rules.economy import inn_price, mentor_price
@@ -33,6 +34,7 @@ from mmorpg.presentation.telegram.screens.paginated import (
     PageState,
     paginated_screen,
 )
+from mmorpg.presentation.telegram.screens.shop import OwnedItem
 
 DEPOSIT_STEPS: tuple[int, ...] = (50, 250, 1000)
 
@@ -244,7 +246,115 @@ def forge_screen(
     rows: list[tuple[Label, ...]] = [(repair_label(item),) for item, _ in entries]
     if len(entries) > 1:
         rows.append((labels.REPAIR_ALL,))
+    rows.append((labels.SALVAGE, labels.REFORGE))
     return Screen(id=ScreenId.FORGE, lines=tuple(lines), rows=tuple(rows))
+
+
+def salvage_label(item: Item) -> Label:
+    return label(f"Разобрать: {item.name}")
+
+
+def reforge_label(item: Item) -> Label:
+    return label(f"Перековать: {item.name}")
+
+
+def _bag_gear(content: GameContent, owned: Sequence[OwnedItem]) -> tuple[Item, ...]:
+    """Снаряжение из сумки: то, с чем кузнец вообще станет работать."""
+    return tuple(
+        content.item(held.item_id)
+        for held in owned
+        if content.has_item(held.item_id)
+        and content.item(held.item_id).is_equipment
+        and not content.item(held.item_id).is_tool
+    )
+
+
+def salvage_screen(
+    content: GameContent,
+    character: Character,
+    owned: Sequence[OwnedItem],
+    state: PageState,
+    *,
+    city_name: str,
+    notice: str = "",
+) -> Screen:
+    """Разбор: вещь обратно в сырьё (ADR 0060).
+
+    Разбирают ради материала, которого нет в лавке, а не ради золота: скупка
+    платит больше. Надетого здесь нет - оно не в сумке.
+    """
+    entries = [
+        ListEntry(
+            key=item.id,
+            text=salvage_label(item).text,
+            detail=_salvage_detail(content, item),
+        )
+        for item in _bag_gear(content, owned)
+    ]
+    return paginated_screen(
+        screen_id=ScreenId.SALVAGE,
+        title=f"Разбор, {city_name}",
+        entries=entries,
+        state=state,
+        lead_lines=(
+            notice or "Кузнец разбирает вещь на то, из чего она сделана.",
+            "Скупка платит больше: разбирают ради сырья, а не ради золота.",
+        ),
+        empty_text="Разбирать нечего: в сумке нет снаряжения.",
+        show_filters=False,
+    )
+
+
+def _salvage_detail(content: GameContent, item: Item) -> str:
+    made = salvage_rules.yield_of(content, item)
+    if not made:
+        return "ничего не выйдет"
+    return ", ".join(f"{content.item(item_id).name} {count}" for item_id, count in made)
+
+
+def reforge_screen(
+    content: GameContent,
+    character: Character,
+    owned: Sequence[OwnedItem],
+    state: PageState,
+    *,
+    city_name: str,
+    notice: str = "",
+) -> Screen:
+    """Перековка: та же вещь с другим ведущим аффиксом (ADR 0059, 0060).
+
+    Ступень и редкость остаются: перековка не делает вещь лучше, она делает её
+    другой - и потому это ответ на «выпало не то», а не лестница наверх.
+    """
+    entries = [
+        ListEntry(
+            key=item.id,
+            text=reforge_label(item).text,
+            detail=f"{salvage_rules.reforge_price(content, item)} золота",
+        )
+        for item in _bag_gear(content, owned)
+        if salvage_rules.can_reforge(content, item)
+    ]
+    return paginated_screen(
+        screen_id=ScreenId.REFORGE,
+        title=f"Перековка, {city_name}",
+        entries=entries,
+        state=state,
+        lead_lines=(
+            notice or f"Кузнец перебьёт прибавки заново. У вас {gold(character.gold)}.",
+            "Ступень и редкость останутся теми же, прибавки будут другими.",
+        ),
+        empty_text="Перековывать нечего: у обычной вещи прибавок нет.",
+        show_filters=False,
+    )
+
+
+def gear_from_button(content: GameContent, text: str, owned: Sequence[OwnedItem]) -> Item | None:
+    """Свести нажатую кнопку кузницы обратно к её вещи."""
+    for item in _bag_gear(content, owned):
+        if salvage_label(item).matches(text) or reforge_label(item).matches(text):
+            return item
+    return None
 
 
 def npc_label(npc: Npc) -> Label:

@@ -61,6 +61,8 @@ class Play(StatesGroup):
     mentor = State()
     bank = State()
     forge = State()
+    salvage = State()
+    reforge = State()
     dungeon = State()
     dungeon_pick = State()
     arena = State()
@@ -159,6 +161,8 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.MENTOR: Play.mentor,
     ScreenId.BANK: Play.bank,
     ScreenId.FORGE: Play.forge,
+    ScreenId.SALVAGE: Play.salvage,
+    ScreenId.REFORGE: Play.reforge,
     ScreenId.DUNGEON: Play.dungeon,
     ScreenId.DUNGEON_PICK: Play.dungeon_pick,
     ScreenId.ARENA: Play.arena,
@@ -257,6 +261,8 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.MENTOR: ScreenId.CITY,
     ScreenId.BANK: ScreenId.CITY,
     ScreenId.FORGE: ScreenId.CITY,
+    ScreenId.SALVAGE: ScreenId.FORGE,
+    ScreenId.REFORGE: ScreenId.FORGE,
     ScreenId.DUNGEON: ScreenId.CITY,
     ScreenId.DUNGEON_PICK: ScreenId.DUNGEON,
     ScreenId.ARENA: ScreenId.CITY,

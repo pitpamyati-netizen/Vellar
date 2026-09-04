@@ -161,18 +161,44 @@ def test_a_full_plate_set_costs_initiative_four_times(content: GameContent) -> N
 # --- редкость --------------------------------------------------------
 
 
-def test_rarity_is_what_gives_stats(content: GameContent) -> None:
-    """Обычная вещь не даёт ни одной, необычная одну, остальные по две."""
+def test_rarity_is_what_gives_affixes(content: GameContent) -> None:
+    """Сколько прибавок несёт вещь, решает редкость; чем прибавка окажется - оттиск.
+
+    Аффиксом бывает и характеристика, и процент (ADR 0059), поэтому считается их
+    сумма: разбирать, сколько чего, - дело карточки вещи, а не договора редкостей.
+    """
     for rarity in content.rarities:
         item = content.item(f"sword@24#{rarity.id}")
-        assert len(item.stat_bonuses) == rarity.stats, rarity.id
+        carried = len(item.stat_bonuses) + len(item.modifiers)
+        assert carried == rarity.affixes + int(rarity.special), rarity.id
         assert all(value > 0 for value in item.stat_bonuses.values())
 
 
-def test_only_the_two_top_rarities_carry_a_special_property(content: GameContent) -> None:
+def test_a_stamp_changes_what_the_thing_carries_and_what_it_is_called(
+    content: GameContent,
+) -> None:
+    """Две находки одного вида и одной редкости - разные вещи, и слышно это по имени."""
+    names = {content.item(f"sword@24#rare~{roll}").name for roll in range(6)}
+    assert len(names) == 6
+
+    plain = content.item("sword@24#rare")
+    other = content.item("sword@24#rare~3")
+    assert (plain.stat_bonuses, plain.modifiers) != (other.stat_bonuses, other.modifiers)
+
+
+def test_only_the_two_top_rarities_carry_a_great_roll(content: GameContent) -> None:
+    """Великая прибавка бывает только у легендарной и реликтовой (ADR 0059)."""
     for rarity in content.rarities:
-        item = content.item(f"heavy_body@24#{rarity.id}")
-        assert bool(item.modifiers) is rarity.special, rarity.id
+        if rarity.special:
+            continue
+        for roll in range(8):
+            item = content.item(f"heavy_body@24#{rarity.id}~{roll}")
+            assert not item.great, rarity.id
+    great = [
+        content.item(f"heavy_body@24#legendary~{roll}").great
+        for roll in range(content.rules.max_character_level // 5)
+    ]
+    assert any(great), "великая прибавка не выпала ни разу за тридцать находок"
 
 
 #: Ключи, которые движок действительно читает. Список не выведен из содержимого

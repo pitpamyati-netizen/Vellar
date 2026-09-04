@@ -201,6 +201,7 @@ def load_content(content_dir: Path) -> GameContent:
         "gear_tiers": gear.gear_tiers,
         "gear_archetypes": gear.gear_archetypes,
         "special_properties": gear.special_properties,
+        "stat_words": gear.stat_words,
         "enemy_archetypes": enemies,
         "elite_titles": elite_titles,
         "affixes": affixes,
@@ -219,8 +220,14 @@ def load_content(content_dir: Path) -> GameContent:
     if problems:
         raise ContentError(problems)
 
+    # Реестр держит написанные вещи и эталоны снаряжения; вещь с оттиском
+    # собирается по требованию тем же сборщиком (``GameContent.item``, ADR 0059).
     bare = GameContent.build(items=written, **parts)
-    return GameContent.build(items=(*written, *item_procgen.catalogue(bare)), **parts)
+    return GameContent.build(
+        items=(*written, *item_procgen.catalogue(bare)),
+        assemble=item_procgen.assemble,
+        **parts,
+    )
 
 
 def _read_toml(path: Path) -> dict[str, Any]:
@@ -991,6 +998,8 @@ class ItemContent(NamedTuple):
     gear_tiers: tuple[GearTier, ...]
     gear_archetypes: tuple[GearArchetype, ...]
     special_properties: tuple[SpecialProperty, ...]
+    #: Каким словом вещь называет прибавку к характеристике (ADR 0059).
+    stat_words: Mapping[str, str]
 
 
 #: Рода существительных, в которых объявляются прилагательные ступеней.
@@ -1031,7 +1040,7 @@ def _parse_rarities(meta: Mapping[str, Any], problems: list[str]) -> tuple[Rarit
             name=str(entry["name"]),
             weight=int(entry["weight"]),
             price_factor=float(entry["price_factor"]),
-            stats=int(entry.get("stats", 0)),
+            affixes=int(entry.get("affixes", 0)),
             special=bool(entry.get("special", False)),
             scaling=bool(entry.get("scaling", False)),
             mark=str(entry.get("mark", "")),
@@ -1217,7 +1226,23 @@ def _parse_items(
         key = str(entry.get("key", ""))
         if key not in modifier_keys:
             problems.append(f"items.toml: special property {key!r} is not a known modifier")
-        special_properties.append(SpecialProperty(key=key, value=float(entry.get("value", 0))))
+        word = str(entry.get("word", "")).strip()
+        if not word:
+            problems.append(f"items.toml: special property {key!r} has no word for the item name")
+        special_properties.append(
+            SpecialProperty(key=key, value=float(entry.get("value", 0)), word=word)
+        )
+
+    # Слово аффикса стоит в имени вещи, поэтому одно слово на двух аффиксах - это
+    # две одинаковые кнопки в списке (ADR 0059, правила доступности 5-7).
+    stat_words = {str(code): str(word).strip() for code, word in meta.get("stat_words", {}).items()}
+    missing = sorted({code.value for code in StatCode} - set(stat_words))
+    if missing:
+        problems.append(f"items.toml: [meta].stat_words says nothing about {missing}")
+    words = [*stat_words.values(), *(one.word for one in special_properties)]
+    doubled = sorted({word for word in words if word and words.count(word) > 1})
+    if doubled:
+        problems.append(f"items.toml: two affixes share the word {doubled}")
 
     gear_archetypes = _parse_gear(
         raw, slot_ids, armor_slots, weapon_type_ids, armor_type_ids, tool_type_ids, problems
@@ -1302,6 +1327,7 @@ def _parse_items(
         tiers,
         gear_archetypes,
         tuple(special_properties),
+        stat_words,
     )
 
 
@@ -1786,6 +1812,7 @@ def _build_craft_rules(raw: Mapping[str, Any], problems: list[str]) -> CraftRule
             name=str(entry["name"]),
             extra=int(entry.get("extra", 0)),
             refund_percent=int(entry.get("refund_percent", 0)),
+            rarity_step=int(entry.get("rarity_step", 0)),
         )
         for entry in meta.get("qualities", ())
     )

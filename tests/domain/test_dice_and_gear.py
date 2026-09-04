@@ -122,10 +122,25 @@ def test_growing_never_turns_a_blow_into_a_coin_flip() -> None:
 
 def test_a_gear_id_reads_back_the_way_it_was_written() -> None:
     item_id = gear_procgen.gear_id("sword", 24, "rare")
-    assert gear_procgen.parse_gear_id(item_id) == ("sword", 24, "rare")
+    assert gear_procgen.parse_gear_id(item_id) == ("sword", 24, "rare", 0)
+    stamped = gear_procgen.gear_id("sword", 24, "rare", 5)
+    assert stamped == "sword@24#rare~5"
+    assert gear_procgen.parse_gear_id(stamped) == ("sword", 24, "rare", 5)
 
 
-@pytest.mark.parametrize("item_id", ["wolf_pelt", "sword@45", "sword#rare", "", "sword@ноль#rare"])
+def test_a_thing_with_a_stamp_is_assembled_when_it_is_asked_for(content: GameContent) -> None:
+    """Реестр держит эталоны, оттиски собираются по требованию и живут в мире."""
+    stamped = gear_procgen.gear_id("sword", 24, "rare", 4)
+    assert stamped not in {item.id for item in content.items}
+    assert content.has_item(stamped)
+    assert content.item(stamped) is content.item(stamped), "собранное запоминается"
+    assert not content.has_item(gear_procgen.gear_id("sword", 24, "rare", 9_000))
+
+
+@pytest.mark.parametrize(
+    "item_id",
+    ["wolf_pelt", "sword@45", "sword#rare", "", "sword@ноль#rare", "sword@24#rare~ноль"],
+)
 def test_what_is_not_assembled_gear_says_so(item_id: str) -> None:
     assert gear_procgen.parse_gear_id(item_id) is None
 

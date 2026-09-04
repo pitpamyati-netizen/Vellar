@@ -1,26 +1,42 @@
-"""Сборка локации: перекладывается целиком, босс держит конец.
+"""Сборка локации: слои в глубину, тупики под находки, логово в самом низу.
 
-Локация - это от 16 до 28 узлов, сшитых в связный граф, где вход стоит под
-номером 0, а выход - последним. Связность и достижимость выхода обеспечены самой
-постройкой: каждый узел привязывается к более раннему до того, как добавляются
-короткие тропы, поэтому граф - это остовное дерево плюс рёбра.
+Локация - это от 16 до 28 узлов, разложенных **по слоям**: вход стоит наверху,
+за ним слой ближних мест, за ним следующий, и так до последнего, где ждут логово
+и выход. Узел цепляется к узлу слоя над собой, поэтому граф - это дерево плюс
+несколько коротких троп, связность и достижимость выхода обеспечены самой
+постройкой, а **глубина узла - это то, сколько шагов до него от входа**, а не
+его номер в списке.
+
+Раскладка слоями - то, к чему пришли все, кто раскладывает уровни сам: сперва
+ставят вход и выход, потом решают, где будут награды, и только потом заполняют
+остальное (Dead Cells); тупик держит награду, а самый дальний тупик держит
+хозяина (The Binding of Isaac). Здесь ровно это:
+
+* **Уровень узла считается от слоя, а не от номера.** Раньше «чем глубже, тем
+  тяжелее» было обещанием: номер узла в списке ничего не говорил о том, сколько
+  до него идти, и двадцатый узел мог висеть в одном шаге от входа.
+* **Награда лежит в тупике.** Узел, из которого дальше хода нет, получает
+  находку или святилище раньше, чем стычку: за то, что игрок свернул с дороги,
+  он получает дело, а не ещё один бой.
+* **Короткие тропы тупиков не касаются.** Тропа, подшитая к тупику, перестаёт
+  быть тупиком, и награда за поворот превращается в проходной узел.
 
 **Расположение узлов перекладывается поколениями.** Округа стоит, пока в ней
-есть что брать, и заселяется заново, когда её выработали: другое остовное дерево,
-места встают в другом порядке, короткие тропы ложатся иначе, у мест другие
-имена. Номер поколения считает выработка, а не время
+есть что брать, и заселяется заново, когда её выработали: другое дерево, места
+встают в другом порядке, короткие тропы ложатся иначе, у мест другие имена.
+Номер поколения считает выработка, а не время
 (``domain/rules/nodes.location_epoch``, ADR 0035).
 
 **Постоянного в локации - только то, чего игрок не слышит как карту.** От
-``location_seed`` зависят число узлов, набор категорий среди них (сколько боёв,
-сколько находок, сколько святилищ) и кривая уровней по глубине. Набор видов
-находок («сбор, сбор, тайник») тоже постоянен - на нём держатся ``search``-задания
-(ADR 0035). Всё это - функция места, не поколения.
+``location_seed`` зависят число узлов, **форма слоёв** (сколько их и сколько
+узлов в каждом), набор категорий среди узлов и кривая уровней по глубине. Набор
+видов находок («сбор, сбор, тайник») тоже постоянен - на нём держатся
+``search``-задания (ADR 0035). Всё это - функция места, не поколения.
 
-**Босс держит конец локации.** Хозяин логова всегда стоит на самом глубоком
-внутреннем узле (``count - 2``), за один шаг до выхода, и у каждой локации он
-ровно один. По дороге к выходу он не стоит: выход привязан к обычному узлу в
-обход логова, поэтому драться с боссом - решение, а не пошлина.
+**Босс держит конец локации.** Хозяин логова висит на узле последнего слоя
+(``count - 2``), и у каждой локации он ровно один. По дороге к выходу он не
+стоит: выход привязан к обычному узлу в обход логова, поэтому драться с боссом -
+решение, а не пошлина.
 
 Сборщик не знает ни о времени, ни о хранении: это чистая функция от места и
 номера поколения, а результат выбрасывается сразу после отрисовки. Наполнение же
@@ -37,7 +53,17 @@ from mmorpg.domain.procgen.seeds import epoch_seed, location_seed, rng
 
 MIN_NODES = 16
 MAX_NODES = 28
-EXTRA_LINK_RATIO = 0.5
+
+#: Сколько слоёв бывает между входом и последним. Меньше пяти - и локация звучит
+#: плоской: всё стоит в двух шагах от входа. Больше восьми - и она вытягивается в
+#: кишку, где сворачивать некуда.
+MIN_DEPTH = 5
+MAX_DEPTH = 8
+
+#: Сколько коротких троп кладётся поверх дерева, долей от числа узлов. Меньше,
+#: чем было: тропа, кладущаяся куда попало, съедала тупики, а вместе с ними и
+#: причину сворачивать с дороги.
+EXTRA_LINK_RATIO = 0.25
 
 
 class _Category(StrEnum):
@@ -70,6 +96,10 @@ _CATEGORY_KINDS: dict[_Category, tuple[tuple[NodeKind, int], ...]] = {
     _Category.SHRINE: ((NodeKind.SHRINE, 1),),
     _Category.BOSS: ((NodeKind.BOSS_BATTLE, 1),),
 }
+
+#: Категории, которые кладутся в тупик первыми: за поворот платят находкой, а не
+#: стычкой.
+_QUIET_CATEGORIES: frozenset[_Category] = frozenset({_Category.FINDING, _Category.SHRINE})
 
 # Имя узла - из пула его категории, поэтому оно честно при любом виде, который
 # узел примет в этом поколении: «развилка» одинаково подходит и сбору, и тайнику,
@@ -128,34 +158,41 @@ def generate_location(
 ) -> GeneratedLocation:
     """Собрать локацию в одном месте города, в её нынешнем поколении.
 
-    ``epoch`` решает всю раскладку: остовное дерево, где какая категория и вид
-    узла стоит, боевой состав, короткие тропы и имена узлов. От места (не от
-    поколения) зависят только число узлов, набор категорий и видов находок среди
-    них и кривая уровней. При ``epoch == 0`` и без выработки округа стоит в
+    ``epoch`` решает всю раскладку: кто чей сосед, где какая категория и вид узла
+    стоит, боевой состав, короткие тропы и имена узлов. От места (не от поколения)
+    зависят число узлов, форма слоёв, набор категорий и видов находок среди них и
+    кривая уровней по глубине. При ``epoch == 0`` и без выработки округа стоит в
     исходном виде.
     """
     seed = location_seed(world_seed, city_id, slot)
     base = rng(seed)
     era = rng(epoch_seed(seed, epoch))
 
+    # Порядок обращений к сиду места менять нельзя: на составе находок стоят
+    # ``search``-задания, и лишний бросок между ними пересобрал бы каждую локацию
+    # мира. Форма слоёв бросается последней - её здесь раньше не было.
     count = base.randint(MIN_NODES, MAX_NODES)
-    categories = _interior_categories(base, era, count)
-    composition = _kind_composition(base, categories)
+    pool = _interior_pool(base, count)
+    composition = _kind_composition(base, (*pool, _Category.BOSS))
+    sizes = _layers(base, count - 3)
 
+    tree, depths, dead_ends = _grow(era, count, sizes)
+    categories = _place_categories(era, pool, dead_ends, count - 3)
     composition = _relay_combat(era, categories, composition)
     kinds = _lay_kinds(era, categories, composition)
     names = tuple(_pick_name(era, category) for category in categories)
-    links = _lay_paths(era, count, _spanning_tree(era, count))
+    links = _lay_paths(era, count, tree, depths, dead_ends)
 
     ordered_kinds = (NodeKind.ENTRANCE, *kinds, NodeKind.EXIT)
     ordered_names = (_DOOR_NAMES[NodeKind.ENTRANCE], *names, _DOOR_NAMES[NodeKind.EXIT])
+    deepest = max(depths)
 
     nodes = tuple(
         LocationNode(
             index=index,
             kind=ordered_kinds[index],
             name=ordered_names[index],
-            level=_level_for(index, count, level_min, level_max),
+            level=_level_for(depths[index], deepest, level_min, level_max),
             links=tuple(sorted(links[index])),
         )
         for index in range(count)
@@ -173,26 +210,111 @@ def generate_location(
     )
 
 
-def _interior_categories(
-    base: random.Random, era: random.Random, count: int
-) -> tuple[_Category, ...]:
-    """Категория каждого среднего узла, боссом в конце.
+def _layers(base: random.Random, interior: int) -> tuple[int, ...]:
+    """Сколько у локации слоёв и сколько узлов в каждом - функция места.
 
-    Сколько среди внутренних узлов боёв, находок и святилищ - функция места
-    (``base``): набор не должен вырождаться от поколения к поколению, иначе
-    ``search``-задание на вид узла встало бы намертво. А вот в каком узле что
-    стоит - решает поколение (``era`` тасует). Босс дописан последним и в тасовку
-    не идёт: он всегда на самом глубоком внутреннем узле (``count - 2``). Раз этот
-    хвост закреплён, боевой узел в локации есть всегда.
+    Форма постоянна нарочно: на ней стоит кривая уровней, а её поколение не
+    трогает (ADR 0035). Слои неровные - широкий слой звучит как развилка, узкий
+    как горловина, - и это то, чем одна округа отличается от другой.
+    """
+    depth = max(1, min(base.randint(MIN_DEPTH, MAX_DEPTH), interior))
+    sizes = [1] * depth
+    for _ in range(interior - depth):
+        sizes[base.randrange(depth)] += 1
+    return tuple(sizes)
+
+
+def _interior_pool(base: random.Random, count: int) -> tuple[_Category, ...]:
+    """Из чего состоит середина локации: сколько в ней боёв, находок и святилищ.
+
+    Это мультимножество, а не раскладка: где именно что встанет, решает поколение
+    (``_place_categories``). Набор не должен вырождаться от поколения к поколению,
+    иначе ``search``-задание на вид узла встало бы намертво. Хотя бы один бой в
+    середине есть всегда.
     """
     population = [category for category, _ in _INTERIOR_CATEGORIES]
     weights = [weight for _, weight in _INTERIOR_CATEGORIES]
-    # count - 2 внутренних узлов всего, минус один под босса.
     interior = base.choices(population, weights=weights, k=count - 3)
     if _Category.COMBAT not in interior:
         interior[base.randrange(len(interior))] = _Category.COMBAT
-    era.shuffle(interior)
-    return (*interior, _Category.BOSS)
+    return tuple(interior)
+
+
+def _grow(
+    era: random.Random, count: int, sizes: tuple[int, ...]
+) -> tuple[list[set[int]], list[int], tuple[int, ...]]:
+    """Дерево по слоям: кто чей сосед - решает поколение.
+
+    Узел слоя цепляется к узлу слоя над собой, поэтому от входа к нему ровно
+    столько шагов, каков его слой, - на этом и стоит кривая уровней. Логово и
+    выход висят на узлах последнего слоя: логово - в стороне, выход - в обход
+    логова, чтобы уйти из локации можно было, не трогая хозяина (ADR 0035).
+
+    Возвращает дерево, глубину каждого узла и тупики - узлы, из которых дальше
+    хода нет.
+    """
+    links: list[set[int]] = [set() for _ in range(count)]
+    depths = [0] * count
+
+    def join(child: int, parent: int) -> None:
+        links[child].add(parent)
+        links[parent].add(child)
+
+    parents: set[int] = set()
+    above = [0]
+    cursor = 1
+    for depth, size in enumerate(sizes, start=1):
+        layer = list(range(cursor, cursor + size))
+        cursor += size
+        for index in layer:
+            parent = above[era.randrange(len(above))]
+            join(index, parent)
+            parents.add(parent)
+            depths[index] = depth
+        above = layer
+
+    for door in (count - 2, count - 1):
+        parent = above[era.randrange(len(above))]
+        join(door, parent)
+        parents.add(parent)
+        depths[door] = len(sizes) + 1
+
+    dead_ends = tuple(index for index in range(1, count - 2) if index not in parents)
+    return links, depths, dead_ends
+
+
+def _place_categories(
+    era: random.Random,
+    pool: tuple[_Category, ...],
+    dead_ends: tuple[int, ...],
+    interior: int,
+) -> tuple[_Category, ...]:
+    """Разложить середину по узлам этого поколения, наградой в тупик.
+
+    Тупик получает находку или святилище раньше, чем стычку: свернувший с дороги
+    должен получить дело, а не ещё один бой. Тихих категорий может не хватить на
+    все тупики - тогда в остальные встанет бой, и это честно: состав локации
+    постоянен, а тупиков в разных поколениях разное число.
+    """
+    quiet = [category for category in pool if category in _QUIET_CATEGORIES]
+    rest = [category for category in pool if category not in _QUIET_CATEGORIES]
+    era.shuffle(quiet)
+    era.shuffle(rest)
+
+    ends = list(dead_ends)
+    era.shuffle(ends)
+    placed: dict[int, _Category] = {}
+    for index in ends:
+        if not quiet:
+            break
+        placed[index] = quiet.pop()
+
+    left = [*quiet, *rest]
+    era.shuffle(left)
+    for index in range(1, interior + 1):
+        if index not in placed:
+            placed[index] = left.pop()
+    return (*(placed[index] for index in range(1, interior + 1)), _Category.BOSS)
 
 
 def _kind_composition(
@@ -262,43 +384,30 @@ def _lay_kinds(
     return tuple(result)
 
 
-def _spanning_tree(era: random.Random, count: int) -> list[set[int]]:
-    """Остовное дерево, растущее от входа. Перекладывается каждым поколением.
-
-    * Обычные внутренние узлы (``1 .. count - 3``) цепляются к любому более
-      раннему, поэтому каждый из них достижим от входа.
-    * Босс (``count - 2``) висит на одном обычном узле в глубине - не на входе.
-    * Выход (``count - 1``) привязан к обычному узлу, а не к боссу, - значит, к
-      выходу можно пройти, не трогая хозяина логова (ADR 0035).
-    """
-    links: list[set[int]] = [set() for _ in range(count)]
-
-    def join(left: int, right: int) -> None:
-        links[left].add(right)
-        links[right].add(left)
-
-    for index in range(1, count - 2):
-        join(index, era.randrange(index))
-
-    join(count - 2, era.randrange(1, count - 2))  # босс - в глубине, не на входе
-    join(count - 1, era.randrange(count - 2))  # выход - в обход логова
-    return links
-
-
-def _lay_paths(era: random.Random, count: int, tree: list[set[int]]) -> list[set[int]]:
+def _lay_paths(
+    era: random.Random,
+    count: int,
+    tree: list[set[int]],
+    depths: list[int],
+    dead_ends: tuple[int, ...],
+) -> list[set[int]]:
     """Дерево плюс несколько коротких троп этого поколения.
 
-    Ненаправленные тропы, добавленные поверх остовного дерева, связность сломать
-    не могут: выход достижим от входа по самому дереву. Босса они не касаются -
+    Тропа ложится только между соседними слоями и только между проходными узлами:
+    тупик, к которому подшили тропу, перестаёт быть тупиком, а вместе с ним
+    пропадает и причина туда сворачивать. Логова и выхода тропы не касаются -
     иначе короткая тропа подшила бы логово ко входу, и хозяин логова перестал бы
     держать конец локации (ADR 0035).
     """
-    boss = count - 2
     links: list[set[int]] = [set(node) for node in tree]
+    closed = {count - 2, count - 1, *dead_ends}
+    open_nodes = [index for index in range(count) if index not in closed]
+    if len(open_nodes) < 2:
+        return links
     for _ in range(int(count * EXTRA_LINK_RATIO)):
-        left = era.randrange(count)
-        right = era.randrange(count)
-        if left == right or boss in (left, right):
+        left = open_nodes[era.randrange(len(open_nodes))]
+        right = open_nodes[era.randrange(len(open_nodes))]
+        if left == right or abs(depths[left] - depths[right]) > 1:
             continue
         links[left].add(right)
         links[right].add(left)
@@ -310,12 +419,11 @@ def _pick_name(era: random.Random, category: _Category) -> str:
     return options[era.randrange(len(options))]
 
 
-def _level_for(index: int, count: int, level_min: int, level_max: int) -> int:
-    """Чем глубже узел, тем он тяжелее; выход стоит на верху полосы."""
-    if count <= 1 or level_max <= level_min:
+def _level_for(depth: int, deepest: int, level_min: int, level_max: int) -> int:
+    """Чем дальше от входа узел, тем он тяжелее. Считается по слою, не по номеру."""
+    if deepest <= 0 or level_max <= level_min:
         return level_min
-    step = (level_max - level_min) * index / (count - 1)
-    return level_min + int(step)
+    return level_min + int((level_max - level_min) * depth / deepest)
 
 
 def guaranteed_find_kinds(world_seed: str, city_id: str, slot: int) -> tuple[NodeKind, ...]:
@@ -323,16 +431,14 @@ def guaranteed_find_kinds(world_seed: str, city_id: str, slot: int) -> tuple[Nod
 
     Сколько среди узлов находок и какого они вида — функция места, не поколения
     (ADR 0035): на этом стоят ``search``-задания и дело ``SEARCH`` сводки
-    (ADR 0054). Поколение только тасует, в каком узле что. Здесь — тот же расчёт
-    ``base``, что в :func:`generate_location`, оборванный до состава находок:
-    ``era`` влияет лишь на порядок, поэтому его значение неважно.
+    (ADR 0054). Поколение только решает, в каком узле что встанет. Здесь — тот же
+    расчёт ``base``, что в :func:`generate_location`, оборванный до состава
+    находок.
     """
-    seed = location_seed(world_seed, city_id, slot)
-    base = rng(seed)
-    era = rng(seed)
+    base = rng(location_seed(world_seed, city_id, slot))
     count = base.randint(MIN_NODES, MAX_NODES)
-    categories = _interior_categories(base, era, count)
-    composition = _kind_composition(base, categories)
+    pool = _interior_pool(base, count)
+    composition = _kind_composition(base, (*pool, _Category.BOSS))
     return tuple(composition.get(_Category.FINDING, ()))
 
 

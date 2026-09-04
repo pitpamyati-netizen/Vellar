@@ -1108,6 +1108,22 @@ def all_screens(
         city_screens.bank_screen(content, fighter, content.city("farhold")),
         city_screens.forge_screen(content, fighter, content.city("farhold")),
         city_screens.forge_screen(content, battered, content.city("farhold")),
+        city_screens.salvage_screen(
+            content,
+            fighter,
+            (shop.OwnedItem("medium_body@5#uncommon", 1),),
+            PageState(),
+            city_name="Застава",
+        ),
+        city_screens.salvage_screen(content, fighter, (), PageState(), city_name="Застава"),
+        city_screens.reforge_screen(
+            content,
+            fighter,
+            (shop.OwnedItem("medium_body@5#uncommon", 1),),
+            PageState(),
+            city_name="Застава",
+        ),
+        city_screens.reforge_screen(content, fighter, (), PageState(), city_name="Застава"),
         city_screens.dungeon_list_screen(
             content,
             fighter,

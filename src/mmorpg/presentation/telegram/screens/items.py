@@ -217,6 +217,15 @@ def kind_lines(content: GameContent, character: Character, item: Item) -> tuple[
             for code, value in sorted(worn.stat_bonuses.items())
         )
         lines.append(f"Прибавка от редкости: {given}.")
+    if worn.great:
+        # Великая прибавка - редкая удача сборки (ADR 0059), и услышать о ней
+        # игрок должен словами: цифра сама по себе не скажет, что она выше
+        # потолка своей редкости.
+        named = "; ".join(
+            MODIFIER_NAMES.get(key, STAT_NAMES.get(key.removeprefix(FLAT_PREFIX), key))
+            for key in worn.great
+        )
+        lines.append(f"Великая работа: {named} — выше того, что даёт эта редкость обычно.")
     if content.has_rarity(worn.rarity) and content.rarity(worn.rarity).scaling:
         lines.append("Реликтовая вещь: её числа растут вместе с вашим уровнем.")
     return tuple(lines)

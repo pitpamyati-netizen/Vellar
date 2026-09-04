@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from random import Random
 from types import MappingProxyType
 
 import pytest
 
 from mmorpg.domain.entities import Character, GameContent
 from mmorpg.domain.entities.craft import CraftKind, CraftLog, CraftProgress
+from mmorpg.domain.procgen import items as gear_procgen
 from mmorpg.domain.procgen.seeds import derive
 from mmorpg.domain.rules import crafts as craft_rules
 
@@ -158,6 +160,48 @@ def test_quality_decides_what_comes_out(content: GameContent, miner: Character) 
         if result.quality.refund_percent:
             spent = dict(result.spent)
             assert any(abs(spent[need.item_id]) < need.count for need in recipe.inputs)
+
+
+def test_good_work_on_gear_comes_out_a_grade_rarer(content: GameContent, miner: Character) -> None:
+    """Качество платит самой вещью: ладная кольчуга выходит редкостью выше рецепта.
+
+    Лишней штукой качество платит только тому, у чего редкости нет вовсе - зельям
+    и точильным камням (ADR 0060).
+    """
+    recipe = next(
+        one
+        for one in content.recipes_of("smithing")
+        if gear_procgen.parse_gear_id(one.output_id) is not None
+    )
+    written = gear_procgen.parse_gear_id(recipe.output_id)
+    assert written is not None
+    ladder = [rarity.id for rarity in content.rarities]
+    owned = {need.item_id: need.count * 3 for need in recipe.inputs}
+
+    seen: dict[str, str] = {}
+    for index in range(400):
+        _, result = craft_rules.make(content, miner, recipe, owned, seed=seed("craft", index))
+        assert result.quality is not None
+        made = gear_procgen.parse_gear_id(result.item_id)
+        assert made is not None
+        assert made[:2] == written[:2], "вид и ступень берутся из рецепта"
+        assert result.count == recipe.output_count, "снаряжению лишней штуки не дают"
+        step = ladder.index(made[2]) - ladder.index(written[2])
+        assert step == result.quality.rarity_step
+        seen[result.quality.id] = result.item_id
+    assert set(seen) == {"plain", "good", "fine"}
+
+
+def test_a_relic_is_never_forged(content: GameContent, miner: Character) -> None:
+    """Реликтовое берут с хозяина логова, а не куют: лестница качества туда не ведёт."""
+    relics = {rarity.id for rarity in content.rarities if rarity.scaling}
+    top = content.craft_rules.quality("fine")
+    for rarity in content.rarities:
+        made = craft_rules.upgraded(content, f"sword@24#{rarity.id}", top, source=Random(1))
+        parsed = gear_procgen.parse_gear_id(made)
+        assert parsed is not None
+        if rarity.id not in relics:
+            assert parsed[2] not in relics
 
 
 def test_the_same_seed_makes_the_same_batch(content: GameContent, miner: Character) -> None:

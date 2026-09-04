@@ -184,6 +184,84 @@ def test_the_boss_stays_pinned_every_epoch() -> None:
         assert bosses[0].index == len(location.nodes) - 2, "самый глубокий внутренний узел"
 
 
+def _depths(location) -> dict[int, int]:
+    """Сколько шагов от входа до каждого узла - по самому графу, а не по номеру."""
+    seen = {0: 0}
+    frontier = [0]
+    while frontier:
+        current = frontier.pop(0)
+        for link in location.node(current).links:
+            if link not in seen:
+                seen[link] = seen[current] + 1
+                frontier.append(link)
+    return seen
+
+
+def test_a_node_is_as_hard_as_it_is_deep() -> None:
+    """Уровень узла считается от слоя, а не от номера в списке (ADR 0061).
+
+    До этого «чем глубже, тем тяжелее» было обещанием: номер ничего не говорил о
+    том, сколько до узла идти, и двадцатый узел мог висеть в шаге от входа.
+    """
+    for slot in range(1, 6):
+        for epoch in range(6):
+            location = build(
+                slot=slot,
+                epoch=epoch,
+            )
+            depths = _depths(location)
+            assert len(depths) == len(location.nodes), "связность"
+            for node in location.nodes:
+                for other in location.nodes:
+                    if depths[node.index] < depths[other.index]:
+                        assert node.level <= other.level
+
+
+def test_the_layers_run_deep_enough_to_be_a_road() -> None:
+    """Локация - это дорога в глубину, а не двор: слоёв не меньше пяти."""
+    for slot in range(1, 6):
+        location = build(slot=slot)
+        assert max(_depths(location).values()) >= 5
+
+
+def test_a_dead_end_pays_for_the_turn() -> None:
+    """Свернувший с дороги получает дело, а не ещё одну стычку (ADR 0061).
+
+    Тупиков в разных поколениях разное число, и тихих узлов может не хватить на
+    все, - но львиная доля тупиков обязана держать находку или святилище, иначе
+    сворачивать незачем.
+    """
+    quiet = _FINDING_KINDS | {NodeKind.SHRINE}
+    ends = paid = 0
+    for slot in range(1, 6):
+        for epoch in range(6):
+            location = build(slot=slot, epoch=epoch)
+            for node in location.nodes:
+                if node.index in (0, len(location.nodes) - 1) or len(node.links) != 1:
+                    continue
+                if node.kind is NodeKind.BOSS_BATTLE:
+                    continue
+                ends += 1
+                paid += node.kind in quiet
+    assert ends, "тупиков нет вовсе: сворачивать некуда"
+    assert paid / ends > 0.6, f"наград в тупиках {paid} из {ends}"
+
+
+def test_a_shortcut_never_swallows_a_dead_end() -> None:
+    """Тропа, подшитая к тупику, отменяет саму причину туда идти.
+
+    Проверяется по-другому: у каждого узла-находки в тупике ровно одна тропа, и
+    короткие тропы соединяют только соседние слои.
+    """
+    for slot in range(1, 6):
+        for epoch in range(6):
+            location = build(slot=slot, epoch=epoch)
+            depths = _depths(location)
+            for node in location.nodes:
+                for link in node.links:
+                    assert abs(depths[node.index] - depths[link]) <= 1, "тропа через слой"
+
+
 def test_the_exit_is_reachable_without_the_boss() -> None:
     """Босс держит конец, но не дорогу к выходу: драться с ним - решение (ADR 0035)."""
 

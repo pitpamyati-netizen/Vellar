@@ -93,13 +93,17 @@ def test_a_thing_in_the_bag_opens_its_card_first(content: GameContent, hero: Cha
     goods = Goods(gold=dressed.gold, owned=(OwnedItem("medium_body@5#uncommon", 1),))
     inventory = step(content, dressed, begin(dressed), "Инвентарь", goods=goods)
     card = step(
-        content, dressed, inventory, "Простая кольчуга доброй ковки, штук 1 — надеть", goods=goods
+        content,
+        dressed,
+        inventory,
+        f"{content.item('medium_body@5#uncommon').name}, штук 1 — надеть",
+        goods=goods,
     )
 
     assert card.screen is ScreenId.ITEM
     assert card.pending.empty
     text = render(content, dressed, card, world_seed=WORLD_SEED, goods=goods).text()
-    assert "Простая кольчуга доброй ковки" in text
+    assert content.item("medium_body@5#uncommon").name in text
     # И вот ради чего экран заведён: сравнение с тем, что уже надето.
     assert "Сейчас надето: Простая куртка" in text
 
@@ -111,7 +115,7 @@ def test_putting_on_a_thing_takes_it_out_of_the_bag(content: GameContent, hero: 
         content,
         hero,
         inventory,
-        "Простая кольчуга доброй ковки, штук 1 — надеть",
+        f"{content.item('medium_body@5#uncommon').name}, штук 1 — надеть",
         "Надеть",
         goods=goods,
     )
@@ -130,7 +134,7 @@ def test_what_it_replaces_goes_back_into_the_bag(content: GameContent, hero: Cha
         content,
         dressed,
         inventory,
-        "Простая кольчуга доброй ковки, штук 1 — надеть",
+        f"{content.item('medium_body@5#uncommon').name}, штук 1 — надеть",
         "Надеть",
         goods=goods,
     )
@@ -145,7 +149,11 @@ def test_a_card_names_the_kind_and_the_armour_it_holds(
     goods = Goods(gold=hero.gold, owned=(OwnedItem("medium_body@5#uncommon", 1),))
     inventory = step(content, hero, begin(hero), "Инвентарь", goods=goods)
     card = step(
-        content, hero, inventory, "Простая кольчуга доброй ковки, штук 1 — надеть", goods=goods
+        content,
+        hero,
+        inventory,
+        f"{content.item('medium_body@5#uncommon').name}, штук 1 — надеть",
+        goods=goods,
     )
     text = render(content, hero, card, world_seed=WORLD_SEED, goods=goods).text()
 
@@ -161,7 +169,11 @@ def test_a_thing_your_class_never_wears_warns_but_never_refuses(
     goods = Goods(gold=rogue.gold, owned=(OwnedItem("medium_body@5#uncommon", 1),))
     inventory = step(content, rogue, begin(rogue), "Инвентарь", goods=goods)
     card = step(
-        content, rogue, inventory, "Простая кольчуга доброй ковки, штук 1 — надеть", goods=goods
+        content,
+        rogue,
+        inventory,
+        f"{content.item('medium_body@5#uncommon').name}, штук 1 — надеть",
+        goods=goods,
     )
     screen = render(content, rogue, card, world_seed=WORLD_SEED, goods=goods)
 
@@ -187,7 +199,13 @@ def test_a_weapon_card_states_the_blow_as_a_range(content: GameContent, hero: Ch
     """«от 6 до 114» — это то, что случится; одно число обещало бы точность."""
     goods = Goods(gold=hero.gold, owned=(OwnedItem("sword@12#rare", 1),))
     inventory = step(content, hero, begin(hero), "Инвентарь", goods=goods)
-    card = step(content, hero, inventory, "Добрый меч редкой работы, штук 1 — надеть", goods=goods)
+    card = step(
+        content,
+        hero,
+        inventory,
+        f"{content.item('sword@12#rare').name}, штук 1 — надеть",
+        goods=goods,
+    )
     text = render(content, hero, card, world_seed=WORLD_SEED, goods=goods).text()
 
     sword = content.item("sword@12#rare")
@@ -213,7 +231,11 @@ def test_a_relic_says_that_it_grows_with_you(content: GameContent, hero: Charact
     goods = Goods(gold=hero.gold, owned=(OwnedItem("charm@9#relic", 1),))
     inventory = step(content, hero, begin(hero), "Инвентарь", goods=goods)
     card = step(
-        content, hero, inventory, "Крепкий оберег давних времён, штук 1 — надеть", goods=goods
+        content,
+        hero,
+        inventory,
+        f"{content.item('charm@9#relic').name}, штук 1 — надеть",
+        goods=goods,
     )
     text = render(content, hero, card, world_seed=WORLD_SEED, goods=goods).text()
 
