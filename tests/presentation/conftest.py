@@ -20,10 +20,10 @@ from mmorpg.domain.entities import (
     GameContent,
     GeneratedLocation,
     InventoryEntry,
+    ItemWear,
     QuestLog,
     SkillLoadout,
     StatBlock,
-    ToolWear,
 )
 from mmorpg.domain.entities.combat import ActionTag, BattleState, Trace
 from mmorpg.domain.entities.content import Item
@@ -317,7 +317,19 @@ def digger(craftsman: Character) -> Character:
     return replace(
         craftsman,
         equipment=craftsman.equipment.equip("tool", "pick@1#common"),
-        tools=ToolWear(MappingProxyType({"pick@1#common": 12})),
+        wear=ItemWear(MappingProxyType({"pick@1#common": 12})),
+    )
+
+
+@pytest.fixture(scope="session")
+def battered(fighter: Character) -> Character:
+    """Тот, кому пора в кузницу: меч наполовину сточен, доспех сломан (ADR 0057)."""
+    return replace(
+        fighter,
+        equipment=Equipment(
+            MappingProxyType({"weapon": "sword@6#common", "body": "heavy_body@6#common"})
+        ),
+        wear=ItemWear(MappingProxyType({"sword@6#common": 20, "heavy_body@6#common": 999})),
     )
 
 
@@ -554,6 +566,7 @@ def all_screens(
     sample_stock: tuple[Item, ...],
     craftsman: Character,
     digger: Character,
+    battered: Character,
     sealbearer: Character,
     keeper: Character,
     edited: GameContent,
@@ -1093,6 +1106,8 @@ def all_screens(
         ),
         city_screens.mentor_screen(content, fighter, content.city("farhold"), PageState()),
         city_screens.bank_screen(content, fighter, content.city("farhold")),
+        city_screens.forge_screen(content, fighter, content.city("farhold")),
+        city_screens.forge_screen(content, battered, content.city("farhold")),
         city_screens.dungeon_list_screen(
             content,
             fighter,

@@ -4,8 +4,8 @@ from mmorpg.domain.entities.character import (
     Character,
     Equipment,
     InventoryEntry,
+    ItemWear,
     SkillLoadout,
-    ToolWear,
 )
 from mmorpg.domain.entities.content import (
     ArmorType,
@@ -121,6 +121,7 @@ __all__ = [
     "Item",
     "ItemEffect",
     "ItemKind",
+    "ItemWear",
     "Location",
     "LocationNode",
     "LocationState",
@@ -153,7 +154,6 @@ __all__ = [
     "StatusKind",
     "StatusSpec",
     "ToolType",
-    "ToolWear",
     "TradeRecord",
     "TradeStatus",
     "Trait",

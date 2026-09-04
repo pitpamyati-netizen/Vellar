@@ -40,6 +40,7 @@ from mmorpg.domain.rules import mood as mood_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import quests as quest_rules
+from mmorpg.domain.rules import repair as repair_rules
 from mmorpg.domain.rules import roamer as roamer_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules import tools as tool_rules
@@ -112,6 +113,7 @@ SERVICES: dict[str, tuple[str, ScreenId]] = {
     labels.SUMMARY.text: ("summary", ScreenId.SUMMARY),
     labels.MENTOR.text: ("mentor", ScreenId.MENTOR),
     labels.BANK.text: ("bank", ScreenId.BANK),
+    labels.FORGE.text: ("forge", ScreenId.FORGE),
 }
 
 # Говорится, когда экран называет локацию, которую игра больше не может собрать.
@@ -563,6 +565,8 @@ def _render(
             )
         case ScreenId.BANK:
             return city_screens.bank_screen(content, character, city, state.notice)
+        case ScreenId.FORGE:
+            return city_screens.forge_screen(content, character, city, state.notice)
         case ScreenId.DUNGEON:
             return city_screens.dungeon_list_screen(
                 content,
@@ -900,6 +904,8 @@ def advance(
             return _handle_mentor(content, character, state, command)
         case ScreenId.BANK:
             return _handle_bank(content, character, state, command)
+        case ScreenId.FORGE:
+            return _handle_forge(content, character, state, command)
         case ScreenId.DUNGEON:
             return _handle_dungeon(content, character, state, command)
         case ScreenId.DUNGEON_PICK:
@@ -1684,6 +1690,48 @@ def _handle_tavern(
         said = f"Ночь на соломе: восстановлено {result.healed} здоровья, спина не в счёт."
     rested = PendingWrite(character=result.character).because(economy_log.SERVICE)
     return state.storing(rested).with_notice(said)
+
+
+def _handle_forge(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    """Кузница: вернуть прочность одной вещи или всему надетому разом (ADR 0057).
+
+    Платят за сточенное, а не за визит, поэтому «починить всё» - это сумма, а не
+    скидка. Не хватило золота - отказ до записи: кузнец не берёт половину работы.
+    """
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите кнопку кузницы.")
+    entries = repair_rules.bill(content, character)
+    if not entries:
+        return state.with_notice("Чинить нечего: всё надетое целое.")
+
+    if labels.REPAIR_ALL.matches(command.argument):
+        items = tuple(item for item, _ in entries)
+        price = repair_rules.total(entries)
+        said = f"Починено вещей: {len(items)}."
+    else:
+        chosen = next(
+            (
+                (item, price)
+                for item, price in entries
+                if city_screens.repair_label(item).matches(command.argument)
+            ),
+            None,
+        )
+        if chosen is None:
+            return state.with_notice("Нажмите кнопку кузницы.")
+        items, price = (chosen[0],), chosen[1]
+        said = f"Починено: {chosen[0].name}."
+
+    if character.gold < price:
+        return state.with_notice(
+            f"Работа стоит {price} золота, у вас {character.gold}. "
+            "Кузнец берёт вперёд и половину работы не делает."
+        )
+    fixed = repair_rules.repaired(character.with_gold(-price), items)
+    write = PendingWrite(character=fixed).because(economy_log.SERVICE)
+    return state.storing(write).with_notice(f"{said} Уплачено {price} золота.")
 
 
 def _hand_in(content: GameContent, character: Character, state: PlayState) -> PlayState:

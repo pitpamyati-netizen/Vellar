@@ -1,8 +1,9 @@
-"""Городские службы: постоялый двор, наставник, сундук и спуск.
+"""Городские службы: постоялый двор, кузница, наставник, сундук и спуск.
 
 Каждая из них существует потому, что что-то в игре стоит денег. Постоялый двор
-продаёт здоровье, наставник - второе мнение об очке умений, сундук держит золото
-подальше от проигранного боя, а спуск - это то, откуда деньги берутся.
+продаёт здоровье, кузница - прочность надетого, наставник - второе мнение об
+очке умений, сундук держит золото подальше от проигранного боя, а спуск - это
+то, откуда деньги берутся.
 """
 
 from __future__ import annotations
@@ -11,10 +12,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import City, Dungeon, GameContent, Npc
+from mmorpg.domain.entities.content import City, Dungeon, GameContent, Item, Npc
 from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import dungeon as dungeon_rules
 from mmorpg.domain.rules import quests as quest_rules
+from mmorpg.domain.rules import repair as repair_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.digest import Deed, DeedKind
 from mmorpg.domain.rules.economy import inn_price, mentor_price
@@ -197,6 +199,52 @@ def bank_screen(content: GameContent, character: Character, city: City, notice: 
         tuple(withdraw_label(step) for step in DEPOSIT_STEPS),
     ]
     return Screen(id=ScreenId.BANK, lines=tuple(lines), rows=tuple(rows))
+
+
+def repair_label(item: Item) -> Label:
+    return label(f"Починить: {item.name}")
+
+
+def forge_screen(
+    content: GameContent, character: Character, city: City, notice: str = ""
+) -> Screen:
+    """Кузница: где надетому возвращают прочность (ADR 0057).
+
+    Бой точит всё, что на бойце, и сточенная до конца вещь перестаёт давать хоть
+    что-нибудь - брони, костей, прибавок. Здесь их чинят: по одной или все разом,
+    и цена идёт от цены самой вещи, то есть от её ступени и редкости.
+
+    Инструмент кузница не берёт, и говорит об этом сама: сточенная кирка
+    исчезает, а новая лежит в лавке (ADR 0056).
+    """
+    entries = repair_rules.bill(content, character)
+    lines = [
+        *head(f"Кузница города {city.name}.", notice),
+        "Наковальня, мехи и запах палёного рога. Здесь чинят то, что на вас надето.",
+    ]
+    if not entries:
+        lines.append("Чинить нечего: всё надетое целое. Точат его бои, а не время.")
+        lines.append("Инструмент здесь не чинят: сточенный меняют в лавке.")
+        return Screen(id=ScreenId.FORGE, lines=tuple(lines), rows=())
+
+    whole = repair_rules.total(entries)
+    lines.append(f"Изношено вещей: {len(entries)}. У вас {gold(character.gold)}.")
+    for item, price in entries:
+        left = repair_rules.left(character, item)
+        limit = repair_rules.limit(item)
+        state = (
+            "сломана и не даёт ничего"
+            if repair_rules.is_broken(character, item)
+            else f"прочность {amount(left, limit)}"
+        )
+        lines.append(f"— {item.name}: {state}. Починка: {gold(price)}.")
+    lines.append(f"Починить всё разом: {gold(whole)}.")
+    lines.append("Инструмент здесь не чинят: сточенный меняют в лавке.")
+
+    rows: list[tuple[Label, ...]] = [(repair_label(item),) for item, _ in entries]
+    if len(entries) > 1:
+        rows.append((labels.REPAIR_ALL,))
+    return Screen(id=ScreenId.FORGE, lines=tuple(lines), rows=tuple(rows))
 
 
 def npc_label(npc: Npc) -> Label:

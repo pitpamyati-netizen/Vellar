@@ -1035,6 +1035,7 @@ def _parse_rarities(meta: Mapping[str, Any], problems: list[str]) -> tuple[Rarit
             scaling=bool(entry.get("scaling", False)),
             mark=str(entry.get("mark", "")),
             durability=int(entry.get("durability", 0)),
+            toughness=float(entry.get("toughness", 1.0)),
         )
         # Две вещи одного вида и разной редкости должны называться по-разному:
         # кнопка в списке - это её текст, и две одинаковые кнопки на экране
@@ -1045,6 +1046,11 @@ def _parse_rarities(meta: Mapping[str, Any], problems: list[str]) -> tuple[Rarit
         # редкость ему даёт, и ноль означал бы кирку, ломающуюся о первый камень.
         if rarity.durability < 1:
             problems.append(f"items.toml: rarity {rarity.id} says nothing about tool durability")
+        # То же и со снаряжением: множитель прочности в ноль означал бы меч,
+        # ломающийся в первом же бою, а отрицательный - вещь, которую нельзя
+        # надеть вовсе (ADR 0057).
+        if rarity.toughness <= 0:
+            problems.append(f"items.toml: rarity {rarity.id} has no gear toughness")
         parsed.append(rarity)
     return tuple(parsed)
 

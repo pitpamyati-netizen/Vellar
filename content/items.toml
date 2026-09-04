@@ -30,12 +30,16 @@
 #            редкость больше не даёт ничего: он не бьёт, не прикрывает и не
 #            прибавляет характеристик, и потому редкая кирка отличается от
 #            обычной одним числом - тем, на сколько её хватит (ADR 0056).
+#   toughness во сколько раз прочнее обычного снаряжение этой редкости. Сама
+#            прочность считается от уровня вещи (domain/procgen/items.py), а
+#            редкость её только множит: чинить редкий доспех приходится реже,
+#            но и дороже - цена починки идёт от цены вещи (ADR 0057).
 rarities = [
-    { id = "common", name = "Обычный", weight = 100, price_factor = 1.0, stats = 0, mark = "", durability = 25 },
-    { id = "uncommon", name = "Необычный", weight = 42, price_factor = 2.4, stats = 1, mark = "доброй ковки", durability = 60 },
-    { id = "rare", name = "Редкий", weight = 14, price_factor = 6.0, stats = 2, mark = "редкой работы", durability = 150 },
-    { id = "legendary", name = "Легендарный", weight = 3, price_factor = 16.0, stats = 2, special = true, mark = "именной славы", durability = 400 },
-    { id = "relic", name = "Реликтовый", weight = 0, price_factor = 45.0, stats = 2, special = true, scaling = true, mark = "давних времён", durability = 1000 },
+    { id = "common", name = "Обычный", weight = 100, price_factor = 1.0, stats = 0, mark = "", durability = 25, toughness = 1.0 },
+    { id = "uncommon", name = "Необычный", weight = 42, price_factor = 2.4, stats = 1, mark = "доброй ковки", durability = 60, toughness = 1.2 },
+    { id = "rare", name = "Редкий", weight = 14, price_factor = 6.0, stats = 2, mark = "редкой работы", durability = 150, toughness = 1.5 },
+    { id = "legendary", name = "Легендарный", weight = 3, price_factor = 16.0, stats = 2, special = true, mark = "именной славы", durability = 400, toughness = 1.9 },
+    { id = "relic", name = "Реликтовый", weight = 0, price_factor = 45.0, stats = 2, special = true, scaling = true, mark = "давних времён", durability = 1000, toughness = 2.4 },
 ]
 
 # Ступени снаряжения: с какого уровня и каким словом её называют. Вещь бывает

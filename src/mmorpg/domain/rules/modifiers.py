@@ -19,6 +19,7 @@ from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.rules import edges as edge_rules
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import houses as house_rules
+from mmorpg.domain.rules import repair
 from mmorpg.domain.rules import skills as skill_rules
 
 STAT_MODIFIER_PREFIX = "stat_"
@@ -190,15 +191,19 @@ def collect_modifiers(
     effects: EffectStack | None = None,
 ) -> dict[str, float]:
     """Все прибавки, действующие на персонажа прямо сейчас."""
+    working = repair.working_ids(content, character)
     return merge(
         trait_modifiers(content, character.trait_ids),
         race_modifiers(content, character),
         house_modifiers(content, character),
         passive_modifiers(content, character),
-        equipment_modifiers(content, character.equipment.item_ids(), character.level),
+        # Сломанное надетое не даёт ничего: ни прибавок, ни рода, ни цены за
+        # чужой род - сточенная до конца вещь считается снятой, пока её не
+        # починят (``domain/rules/repair.py``, ADR 0057).
+        equipment_modifiers(content, working, character.level),
         # Чужая вещь не запрещена — она дорога, и цена берётся здесь же, вместе
         # со всем остальным, что на персонаже сейчас висит.
-        gear.proficiency_penalty(content, character),
+        gear.proficiency_penalty(content, character, working),
         effects.modifiers() if effects is not None else {},
     )
 

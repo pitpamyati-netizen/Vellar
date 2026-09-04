@@ -27,11 +27,12 @@ from collections.abc import Mapping, Sequence
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, Item
 from mmorpg.domain.rules import equipment as gear
+from mmorpg.domain.rules import repair as repair_rules
 from mmorpg.domain.rules import tools as tool_rules
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
+from mmorpg.presentation.telegram.screens.format import amount, percent
 from mmorpg.presentation.telegram.screens.format import gold as gold_words
-from mmorpg.presentation.telegram.screens.format import percent
 
 #: Как называется каждый ключ модификатора по-русски. Ключи объявлены в
 #: ``traits.toml [meta].modifier_keys``; вещь, умение и особенность говорят на
@@ -194,6 +195,22 @@ def kind_lines(content: GameContent, character: Character, item: Item) -> tuple[
         held = character.equipment.item_in(tool_rules.TOOL_SLOT) == worn.id
         wear = f"Сборов осталось {left} из {limit}." if held else f"Сборов хватит на {limit}."
         lines.append(f"{wear} Сточенный инструмент исчезает: чинить его негде.")
+    if worn.is_equipment and not worn.is_tool and worn.durability:
+        # Прочность снаряжения: сколько боёв оно держит и сколько их осталось,
+        # если вещь надета. Точит её бой, возвращает кузница (ADR 0057).
+        limit = repair_rules.limit(worn)
+        if character.equipment.item_in(worn.slot) == worn.id:
+            left = repair_rules.left(character, worn)
+            state = (
+                "сломана и не даёт ничего"
+                if repair_rules.is_broken(character, worn)
+                else f"прочность {amount(left, limit)}"
+            )
+            price = repair_rules.price_of(character, worn)
+            tail = f" Починка в кузнице: {price}." if price else ""
+            lines.append(f"Надета, {state}.{tail}")
+        else:
+            lines.append(f"Прочность: {limit} боёв. Сточенное чинят в кузнице города.")
     if worn.stat_bonuses:
         given = "; ".join(
             f"{STAT_NAMES.get(code, code)} плюс {value}"

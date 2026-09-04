@@ -17,8 +17,8 @@ from mmorpg.domain.entities.character import (
     Character,
     Equipment,
     InventoryEntry,
+    ItemWear,
     SkillLoadout,
-    ToolWear,
 )
 from mmorpg.domain.entities.craft import CraftLog, CraftProgress
 from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
@@ -45,7 +45,7 @@ CHARACTER_COLUMNS = """
     id, user_id, name, race_id, class_id, level, experience, gold,
     stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
     trait_ids, loadout, equipment, city_id, unspent_stat_points, unspent_skill_points,
-    health, bank_gold, quests, crafts, tools, tutorial, arena_wins, arena_losses,
+    health, bank_gold, quests, crafts, wear, tutorial, arena_wins, arena_losses,
     arena_credit, remorts, turning_cycle, turning_answer, house_id, is_admin
 """
 
@@ -93,7 +93,7 @@ def _character_from_row(row: Any) -> Character:
         bank_gold=row["bank_gold"],
         quests=_quests_from_json(row["quests"]),
         crafts=_crafts_from_json(row["crafts"]),
-        tools=_tools_from_json(row["tools"]),
+        wear=_wear_from_json(row["wear"]),
         tutorial=row["tutorial"],
         arena_wins=row["arena_wins"],
         arena_losses=row["arena_losses"],
@@ -137,15 +137,15 @@ def _crafts_to_json(log: CraftLog) -> str:
     )
 
 
-def _tools_from_json(raw: str | None) -> ToolWear:
-    """Износ инструментов, прочитанный целиком. Пустая колонка - всё как новое."""
+def _wear_from_json(raw: str | None) -> ItemWear:
+    """Износ надетого, прочитанный целиком. Пустая колонка - всё как новое."""
     data = json.loads(raw) if raw else {}
-    return ToolWear(
+    return ItemWear(
         MappingProxyType({str(item_id): int(spent) for item_id, spent in dict(data).items()})
     )
 
 
-def _tools_to_json(wear: ToolWear) -> str:
+def _wear_to_json(wear: ItemWear) -> str:
     return json.dumps(dict(wear.used), ensure_ascii=False)
 
 
@@ -513,7 +513,7 @@ class PostgresCharacterRepository:
                 stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
                 trait_ids, loadout, equipment, city_id,
                 unspent_stat_points, unspent_skill_points,
-                health, bank_gold, quests, crafts, tools, tutorial, arena_wins,
+                health, bank_gold, quests, crafts, wear, tutorial, arena_wins,
                 arena_losses, arena_credit, remorts, turning_cycle, turning_answer,
                 house_id, is_admin
             )
@@ -546,7 +546,7 @@ class PostgresCharacterRepository:
             character.bank_gold,
             _quests_to_json(character.quests),
             _crafts_to_json(character.crafts),
-            _tools_to_json(character.tools),
+            _wear_to_json(character.wear),
             character.tutorial,
             character.arena_wins,
             character.arena_losses,
@@ -569,7 +569,7 @@ class PostgresCharacterRepository:
                 trait_ids = $12, loadout = $13::jsonb, equipment = $14::jsonb,
                 city_id = $15, unspent_stat_points = $16, unspent_skill_points = $17,
                 health = $18, bank_gold = $19, quests = $20::jsonb,
-                crafts = $21::jsonb, tools = $22::jsonb, tutorial = $23,
+                crafts = $21::jsonb, wear = $22::jsonb, tutorial = $23,
                 arena_wins = $24, arena_losses = $25, arena_credit = $26,
                 remorts = $27, turning_cycle = $28, turning_answer = $29,
                 is_admin = $30, house_id = $31, updated_at = now()
@@ -596,7 +596,7 @@ class PostgresCharacterRepository:
             character.bank_gold,
             _quests_to_json(character.quests),
             _crafts_to_json(character.crafts),
-            _tools_to_json(character.tools),
+            _wear_to_json(character.wear),
             character.tutorial,
             character.arena_wins,
             character.arena_losses,

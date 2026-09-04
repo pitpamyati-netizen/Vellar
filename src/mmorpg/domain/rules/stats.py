@@ -20,6 +20,7 @@ from mmorpg.domain.entities.effects import EffectStack
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import modifiers as mods
+from mmorpg.domain.rules import repair
 
 # Коэффициенты производных значений. Держатся здесь, а не в содержимом: это постоянные
 # формул, а не ручки баланса, которые автор содержимого правит на каждую расу.
@@ -113,7 +114,9 @@ def derived_stats(
     )
     max_resource = raw_resource * mods.percent(modifiers, "resource_percent")
 
-    worn = gear.worn_armor(content, character.equipment.item_ids(), character.level)
+    # Сломанное снаряжение брони не держит: сточенная до конца вещь не даёт
+    # ничего, пока её не починят в кузнице (``domain/rules/repair.py``, ADR 0057).
+    worn = gear.worn_armor(content, repair.working_ids(content, character), character.level)
     # Плоская броня прибавляется после процентов нарочно: закрывшемуся обещано
     # ровно «уровень, взятый трижды», и доспех этого числа не двигает.
     armor = (stats[StatCode.END] * ARMOR_PER_ENDURANCE + worn) * mods.percent(

@@ -65,6 +65,13 @@ STAT_PER_LEVEL = 0.06
 PRICE_BASE = 30.0
 PRICE_PER_LEVEL = 7.0
 
+# Прочность снаряжения. Растёт со ступенью вещи и множится редкостью
+# (``Rarity.toughness``): ветхий меч обычной работы держит сорок боёв, кованый
+# именной славы - под две сотни. Инструменту это число даёт редкость и только
+# она (ADR 0056), снаряжению - уровень и редкость вместе (ADR 0057).
+DURABILITY_BASE = 40.0
+DURABILITY_PER_LEVEL = 0.5
+
 #: Из чего собран идентификатор вещи: вид, ступень, редкость.
 #: ``sword@26#rare`` — «Добрый меч редкой работы».
 LEVEL_MARK = "@"
@@ -161,7 +168,17 @@ def build(
         weapon_type=archetype.weapon_type,
         armor_type=archetype.armor_type,
         tool_type=archetype.tool_type,
-        durability=rarity.durability if tool else 0,
+        # Инструмент стачивается о сборы и считается по редкости; всё остальное
+        # надетое стачивается о бои и считается по ступени с поправкой на
+        # редкость. Реликтовая вещь и здесь идёт по уровню героя: она растёт
+        # вместе с ним целиком, а не одними числами удара (ADR 0057).
+        durability=(
+            rarity.durability
+            if tool
+            else max(
+                1, round((DURABILITY_BASE + DURABILITY_PER_LEVEL * counted) * rarity.toughness)
+            )
+        ),
     )
 
 

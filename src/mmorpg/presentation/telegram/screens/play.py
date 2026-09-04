@@ -21,6 +21,7 @@ from mmorpg.domain.entities.location import (
 )
 from mmorpg.domain.rules import economy as economy_rules
 from mmorpg.domain.rules import equipment as gear
+from mmorpg.domain.rules import repair as repair_rules
 from mmorpg.domain.rules.combat import blow_range
 from mmorpg.domain.rules.mood import LocationMood
 from mmorpg.domain.rules.nodes import Standing
@@ -239,6 +240,7 @@ CITY_SERVICES: tuple[tuple[str, Label], ...] = (
     ("summary", labels.SUMMARY),
     ("mentor", labels.MENTOR),
     ("bank", labels.BANK),
+    ("forge", labels.FORGE),
 )
 
 
@@ -513,6 +515,25 @@ def location_screen(
     )
 
 
+def _wear_note(content: GameContent, character: Character, item_id: str) -> str:
+    """Прочность надетой вещи, если о ней есть что сказать (ADR 0057).
+
+    Целая вещь молчит: строка «прочность 40 из 40» на каждом слоте - это шесть
+    строк ни о чём. Сточенная говорит числом, сломанная - словом, потому что
+    сломанная не даёт ничего.
+    """
+    item = repair_rules.worn_of(content, character, item_id)
+    if item is None:
+        return ""
+    if repair_rules.is_broken(character, item):
+        return ", сломана и не даёт ничего"
+    left = repair_rules.left(character, item)
+    limit = repair_rules.limit(item)
+    if left >= limit:
+        return ""
+    return f", прочность {amount(left, limit)}"
+
+
 def character_screen(
     content: GameContent, character: Character, stats: DerivedStats, notice: str = ""
 ) -> Screen:
@@ -539,7 +560,8 @@ def character_screen(
         item_id = character.equipment.item_in(slot)
         if item_id is None or not content.has_item(item_id):
             continue
-        lines.append(f"{slot_name}: {content.item(item_id).name}.")
+        note = _wear_note(content, character, item_id)
+        lines.append(f"{slot_name}: {content.item(item_id).name}{note}.")
         worn.append((unequip_label(slot_name),))
     if not worn:
         lines.append("Ничего не надето. Снаряжение надевается из инвентаря.")

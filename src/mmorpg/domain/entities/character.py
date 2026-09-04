@@ -102,14 +102,17 @@ class Equipment:
 
 
 @dataclass(frozen=True, slots=True)
-class ToolWear:
-    """Сколько работы каждый инструмент уже отработал.
+class ItemWear:
+    """Сколько работы каждая надетая вещь уже отработала.
 
-    Прочность считается по имени вещи, а не по образцу: сумка Vellar держит
-    идентификаторы и число, а не сами предметы, поэтому две одинаковые кирки -
-    это одна и та же кирка дважды (``entities/craft.QualityTier`` держится того
-    же правила). Сточенный инструмент исчезает, и запись о нём уходит вместе с
-    ним (ADR 0056).
+    Одна запись на всё, что стачивается: инструмент точат сборы (ADR 0056),
+    снаряжение - бои (ADR 0057). Считается это по имени вещи, а не по образцу:
+    сумка Vellar держит идентификаторы и число, а не сами предметы, поэтому две
+    одинаковые кирки - это одна и та же кирка дважды
+    (``entities/craft.QualityTier`` держится того же правила).
+
+    Запись живёт ровно столько, сколько живёт износ: сточенный инструмент
+    исчезает вместе со своей, починенное снаряжение теряет свою в кузнице.
     """
 
     used: Mapping[str, int] = field(default_factory=dict)
@@ -117,13 +120,13 @@ class ToolWear:
     def spent(self, item_id: str) -> int:
         return self.used.get(item_id, 0)
 
-    def worn(self, item_id: str, amount: int = 1) -> ToolWear:
-        return ToolWear(
+    def worn(self, item_id: str, amount: int = 1) -> ItemWear:
+        return ItemWear(
             MappingProxyType({**self.used, item_id: self.spent(item_id) + max(0, amount)})
         )
 
-    def cleared(self, item_id: str) -> ToolWear:
-        return ToolWear(
+    def cleared(self, item_id: str) -> ItemWear:
+        return ItemWear(
             MappingProxyType({key: value for key, value in self.used.items() if key != item_id})
         )
 
@@ -162,9 +165,10 @@ class Character:
     # Работа, уже сделанная в ремесле. Ранг не хранится никогда - его отсчитывает
     # обратно от этого опыта ``mmorpg.domain.rules.crafts``.
     crafts: CraftLog = field(default_factory=CraftLog)
-    # Сколько сточено у каждого инструмента. Хранится, потому что износ - это не
-    # производное: его нельзя пересчитать ни из чего (``domain/rules/tools.py``).
-    tools: ToolWear = field(default_factory=ToolWear)
+    # Сколько сточено у каждой надетой вещи - и у инструмента, и у снаряжения.
+    # Хранится, потому что износ - это не производное: его нельзя пересчитать ни
+    # из чего (``domain/rules/tools.py``, ``domain/rules/repair.py``).
+    wear: ItemWear = field(default_factory=ItemWear)
     # Что помнит арена: два счётчика для таблицы сезона и золото, которое она с тебя
     # держит. Победа платится из этого залога и никогда из ниоткуда - это и не даёт
     # арене печатать золото (``domain/rules/arena.py``).

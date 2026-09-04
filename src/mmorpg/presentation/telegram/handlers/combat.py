@@ -913,6 +913,12 @@ async def _settle_world(
                 f"Задание «{step.quest.name}»: {step.progress} из {step.quest.target_count}."
                 for step in won.quest_steps
             )
+            # Сломанное остаётся надетым, но не даёт ничего, и узнать об этом
+            # игрок обязан сразу, а не на экране характеристик (ADR 0057).
+            payout.extra.extend(
+                f"Сточено до конца: {name}. Вещь не даёт ничего, пока её не починят в кузнице."
+                for name in won.broken
+            )
             # Выигранный бой - один из шагов обучения, и засчитывает его сама
             # победа, где бы она ни случилась. За шаг платят тут же (ADR 0038);
             # уровень от опыта подхватит ``progression.growth`` в ``_finish``.
@@ -936,6 +942,10 @@ async def _settle_world(
         lost = adventure.resolve_defeat(content, character)
         updated[one.character_id] = lost.character
         payouts[one.character_id].gold_lost = lost.gold_lost
+        payouts[one.character_id].extra.extend(
+            f"Сточено до конца: {name}. Вещь не даёт ничего, пока её не починят в кузнице."
+            for name in lost.broken
+        )
         economy_log.record(economy_log.DEFEAT, -lost.gold_lost, character_id=character.id)
 
     for one in session.participants():

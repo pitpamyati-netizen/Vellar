@@ -23,6 +23,7 @@ from mmorpg.domain.rules import crafts as craft_rules
 from mmorpg.domain.rules import economy
 from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules import quests as quest_rules
+from mmorpg.domain.rules import repair as repair_rules
 from mmorpg.domain.rules import tools as tool_rules
 from mmorpg.domain.rules.equipment import fill_gear
 from mmorpg.domain.rules.progression import (
@@ -88,6 +89,9 @@ class Aftermath:
     level_up: LevelUp | None = None
     quest_steps: tuple[QuestStep, ...] = ()
     gold_lost: int = 0
+    #: Что сточилось до конца этим боем - именами вещей. Сломанное остаётся
+    #: надетым, но не даёт ничего до кузницы (ADR 0057).
+    broken: tuple[str, ...] = ()
 
     @property
     def levelled(self) -> bool:
@@ -164,13 +168,17 @@ def resolve_victory(
         carry_wounds(content, character, state, combatant_id).with_gold(share_gold), quests=log
     )
     grown, level_up = grant_experience(content, paid, share_experience)
+    # Бой точит надетое, и выигранный тоже: доспех держит удары независимо от
+    # того, кто в итоге упал (``domain/rules/repair.py``, ADR 0057).
+    worn, broke = repair_rules.wear(content, grown, repair_rules.WEAR_PER_FIGHT)
     return Aftermath(
-        character=grown,
+        character=worn,
         experience=earned(content, paid, share_experience),
         gold=share_gold,
         loot=share_loot,
         level_up=level_up,
         quest_steps=steps,
+        broken=tuple(item.name for item in broke),
     )
 
 
@@ -181,7 +189,9 @@ def resolve_defeat(content: GameContent, character: Character) -> Aftermath:
     revived = character.with_gold(-lost).with_health(
         max(1, stats.max_health * DEFEAT_HEALTH_PERCENT // 100), stats.max_health
     )
-    return Aftermath(character=revived, gold_lost=lost)
+    # Поражение точит надетое втрое: с поля боя выносят не только раны.
+    worn, broke = repair_rules.wear(content, revived, repair_rules.WEAR_ON_DEFEAT)
+    return Aftermath(character=worn, gold_lost=lost, broken=tuple(item.name for item in broke))
 
 
 def resolve_search(

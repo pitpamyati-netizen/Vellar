@@ -33,6 +33,7 @@ from mmorpg.domain.entities.content import GameContent, Item, Skill
 from mmorpg.domain.entities.damage import UNARMED, DamageType
 from mmorpg.domain.entities.dice import Dice
 from mmorpg.domain.procgen import items as gear_procgen
+from mmorpg.domain.rules import repair
 
 # Броня смягчается против уровня того, кого бьют. Обе величины растут с уровнем
 # линейно, поэтому несмягчённая броня выиграла бы гонку: на трёхсотом уровне
@@ -107,12 +108,19 @@ def worn_armor(content: GameContent, item_ids: Iterable[str], hero_level: int = 
 
 
 def weapon_of(content: GameContent, character: Character) -> Item | None:
-    """Что у персонажа в руке, или ``None``, если ничего."""
+    """Что у персонажа в руке, или ``None``, если ничего.
+
+    Сточенное до конца оружие - это «ничего»: сломанный меч бьёт как кулак и
+    умения своего рода не даёт вовсе, пока его не починят в кузнице
+    (``domain/rules/repair.py``, ADR 0057).
+    """
     item_id = character.equipment.item_in(WEAPON_SLOT)
     if item_id is None:
         return None
     item = worn_item(content, item_id, character.level)
-    return item if item is not None and item.is_weapon else None
+    if item is None or not item.is_weapon:
+        return None
+    return None if repair.is_broken(character, item) else item
 
 
 def weapon_type_of(content: GameContent, character: Character) -> str:
@@ -180,15 +188,20 @@ def is_foreign(content: GameContent, character: Character, item: Item) -> bool:
     return False
 
 
-def proficiency_penalty(content: GameContent, character: Character) -> dict[str, float]:
+def proficiency_penalty(
+    content: GameContent, character: Character, item_ids: Iterable[str] | None = None
+) -> dict[str, float]:
     """Чего стоит всё чужое, что сейчас надето, — точностью и инициативой.
 
     Запрета нет: латы на маге застёгиваются. Просто он в них медленнее и чаще
     мажет, и обе цифры он видит на своём же экране характеристик.
+
+    ``item_ids`` — что из надетого вообще считается: сломанная вещь не даёт
+    ничего и потому ничего не стоит (``domain/rules/repair.py``).
     """
     accuracy = 0.0
     initiative = 0.0
-    for item_id in character.equipment.item_ids():
+    for item_id in character.equipment.item_ids() if item_ids is None else item_ids:
         if not content.has_item(item_id):
             continue
         item = content.item(item_id)

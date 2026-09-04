@@ -16,7 +16,8 @@
    отдаёт то, что берёт инструмент в руках.
 3. **Инструмент стачивается.** Каждый сбор стоит одной единицы прочности, а
    сколько её всего, решает редкость (``Rarity.durability``). Сточенный
-   инструмент исчезает - чинить его негде, а новый лежит в лавке всегда.
+   инструмент исчезает - в кузнице чинят снаряжение, а не его (ADR 0057), - и
+   новый лежит в лавке всегда.
 
 Модуль чистый: ни времени, ни случая, ни ввода-вывода.
 """
@@ -61,14 +62,16 @@ def limit(item: Item) -> int:
     """Сколько сборов этот инструмент держит всего. Ноль - это не инструмент.
 
     Число печётся в вещь при сборке из редкости (``procgen/items.build``):
-    больше редкость инструменту не даёт ничего.
+    больше редкость инструменту не даёт ничего. Прочность есть теперь и у
+    снаряжения, но её точат бои и возвращает кузница (``domain/rules/repair.py``),
+    и сборов она не держит ни одного.
     """
-    return item.durability
+    return item.durability if item.is_tool else 0
 
 
 def left(content: GameContent, character: Character, item: Item) -> int:
     """Сколько сборов у этого инструмента осталось у этого персонажа."""
-    return max(0, limit(item) - character.tools.spent(item.id))
+    return max(0, limit(item) - character.wear.spent(item.id))
 
 
 def sources_of(content: GameContent, item: Item) -> tuple[str, ...]:
@@ -132,17 +135,17 @@ def wear(
     """Стереть инструмент на одну работу. Возвращает персонажа и то, сточился ли он.
 
     Сточенный инструмент снимается и исчезает вместе со своей записью об износе:
-    починки в игре нет, а запись, пережившая вещь, сделала бы новую кирку
-    сточенной с первого удара.
+    инструмент не чинят даже в кузнице (ADR 0057), а запись, пережившая вещь,
+    сделала бы новую кирку сточенной с первого удара.
     """
-    spent = character.tools.spent(item.id) + max(0, amount)
+    spent = character.wear.spent(item.id) + max(0, amount)
     if spent < limit(item):
-        return replace(character, tools=character.tools.worn(item.id, amount)), False
+        return replace(character, wear=character.wear.worn(item.id, amount)), False
     return (
         replace(
             character,
             equipment=character.equipment.unequip(TOOL_SLOT),
-            tools=character.tools.cleared(item.id),
+            wear=character.wear.cleared(item.id),
         ),
         True,
     )

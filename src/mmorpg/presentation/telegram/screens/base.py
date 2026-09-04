@@ -58,6 +58,7 @@ class ScreenId(StrEnum):
     SUMMARY = "summary"
     MENTOR = "mentor"
     BANK = "bank"
+    FORGE = "forge"
     DUNGEON = "dungeon"
     DUNGEON_PICK = "dungeon_pick"
     ARENA = "arena"

@@ -8,7 +8,7 @@ from types import MappingProxyType
 import pytest
 
 from mmorpg.domain.entities import Character, GameContent
-from mmorpg.domain.entities.character import ToolWear
+from mmorpg.domain.entities.character import ItemWear
 from mmorpg.domain.entities.craft import CraftLog, CraftProgress
 from mmorpg.domain.entities.location import LocationNode, NodeKind
 from mmorpg.domain.procgen.seeds import derive
@@ -107,18 +107,18 @@ def test_work_wears_the_tool_down_and_the_last_stroke_breaks_it(
     assert not broken
     assert tool_rules.left(content, worn, item) == limit - 1
 
-    tired = replace(miner, tools=ToolWear(MappingProxyType({PICK: limit - 1})))
+    tired = replace(miner, wear=ItemWear(MappingProxyType({PICK: limit - 1})))
     spent, broken = tool_rules.wear(content, tired, item)
     assert broken
     assert spent.equipment.item_in(tool_rules.TOOL_SLOT) is None
-    assert spent.tools.spent(PICK) == 0, "a broken tool takes its record with it"
+    assert spent.wear.spent(PICK) == 0, "a broken tool takes its record with it"
 
 
 def test_a_spent_tool_refuses_before_it_is_taken_off(
     content: GameContent, miner: Character
 ) -> None:
     limit = tool_rules.limit(content.item(PICK))
-    spent = replace(miner, tools=ToolWear(MappingProxyType({PICK: limit})))
+    spent = replace(miner, wear=ItemWear(MappingProxyType({PICK: limit})))
     assert "сточен" in tool_rules.refusal(content, spent)
 
 
@@ -177,7 +177,7 @@ def test_without_a_tool_a_vein_gives_nothing(content: GameContent, miner: Charac
 
 def test_the_last_stroke_is_told_in_the_result(content: GameContent, miner: Character) -> None:
     limit = tool_rules.limit(content.item(PICK))
-    tired = replace(miner, tools=ToolWear(MappingProxyType({PICK: limit - 1})))
+    tired = replace(miner, wear=ItemWear(MappingProxyType({PICK: limit - 1})))
     result = adventure.resolve_search(
         content, tired, vein(), seed("gather", 5), tool=content.item(PICK)
     )

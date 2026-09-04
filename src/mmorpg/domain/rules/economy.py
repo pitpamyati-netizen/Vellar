@@ -214,12 +214,30 @@ BANK_DEPOSIT_STEP = 50
 # стоит дороже ближнего соседа. Таймеров нет - дорога проходится сразу (ADR 0051).
 TRAVEL_PRICE_BASE = 15
 TRAVEL_PRICE_PER_LEVEL = 5
+# Починка в кузнице: доля от цены самой вещи за полностью сточенную прочность
+# (ADR 0057). Доля, а не своя кривая, - потому что цена вещи уже считает и ступень,
+# и редкость: чинить редкий доспех дороже ровно настолько, насколько он дороже
+# обычного. Меньше единицы нарочно и с запасом: починка, стоящая как новая вещь,
+# - это не починка, а лавка.
+REPAIR_SHARE = 0.25
 
 
 def travel_price(level: int, distance: int) -> int:
     """Плата за переход в другой город: ``distance`` - сколько городов между ними по дороге."""
     per_city = TRAVEL_PRICE_BASE + TRAVEL_PRICE_PER_LEVEL * max(0, level - 1)
     return max(1, per_city * max(1, distance))
+
+
+def repair_price(item_price: int, spent: int, limit: int) -> int:
+    """Во сколько станет вернуть вещи ``spent`` прочности из ``limit``.
+
+    Платят за сточенное, а не за вещь: наполовину сношенный меч чинят за половину
+    полной цены починки. Целая вещь не стоит ничего - за неё в кузнице и не берут.
+    """
+    if spent <= 0 or limit <= 0 or item_price <= 0:
+        return 0
+    share = min(spent, limit) / limit
+    return max(1, round(item_price * REPAIR_SHARE * share))
 
 
 def inn_price(level: int) -> int:

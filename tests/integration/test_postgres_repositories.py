@@ -17,7 +17,7 @@ from types import MappingProxyType
 import pytest
 import pytest_asyncio
 
-from mmorpg.domain.entities.character import Character, Equipment, SkillLoadout, ToolWear
+from mmorpg.domain.entities.character import Character, Equipment, ItemWear, SkillLoadout
 from mmorpg.domain.entities.craft import CraftLog, CraftProgress
 from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
@@ -113,7 +113,7 @@ def a_character(
         bank_gold=900,
         quests=QuestLog(taken=MappingProxyType({"farhold_tallies": 2}), done=("prologue",)),
         crafts=CraftLog(MappingProxyType({"mining": CraftProgress(experience=260)})),
-        tools=ToolWear(MappingProxyType({"pick@1#common": 12})),
+        wear=ItemWear(MappingProxyType({"pick@1#common": 12})),
         arena_wins=3,
         arena_losses=1,
         arena_credit=120,
@@ -291,7 +291,7 @@ async def test_a_character_survives_a_round_trip(pool, clean_user) -> None:
     assert dict(read.quests.taken) == {"farhold_tallies": 2}
     assert read.quests.done == ("prologue",)
     assert read.crafts.progress("mining") == CraftProgress(experience=260)
-    assert read.tools.spent("pick@1#common") == 12
+    assert read.wear.spent("pick@1#common") == 12
     assert read.unspent_stat_points == 5
     assert read.is_admin is True
     # Сундук - отдельная колонка: кошелёк не вправе его поглотить.
