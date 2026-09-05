@@ -157,7 +157,7 @@ def test_a_card_names_the_kind_and_the_armour_it_holds(
     )
     text = render(content, hero, card, world_seed=WORLD_SEED, goods=goods).text()
 
-    assert "Род доспеха: средний доспех" in text
+    assert "Род доспеха: кольчужный доспех" in text
     assert "Броня: " in text
 
 

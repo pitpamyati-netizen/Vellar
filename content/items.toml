@@ -150,13 +150,15 @@ weapon_types = [
     { id = "totem", name = "Тотем", gender = "m", damage_type = "nature", dice = "2d5", spread = 1.3, modifiers = { healing_done_percent = 10, resource_percent = 6 } },
 ]
 
-# Рода доспеха. armor - доля брони относительно лёгкого доспеха той же ступени.
+# Рода доспеха. armor - доля брони относительно кожаного доспеха той же ступени.
+# Имя рода называет то, из чего он сделан, а не то, сколько весит: тканое шьёт
+# портной, кожаное кожевник, кольчужное и латное кует кузнец (ADR 0062).
 # modifiers берутся с каждой надетой вещи этого рода, поэтому полный тяжёлый
 # доспех отнимает инициативу вчетверо: это и есть его цена.
 armor_types = [
     { id = "cloth", name = "Тканый доспех", armor = 0.5, modifiers = { resource_percent = 3 } },
-    { id = "light", name = "Лёгкий доспех", armor = 1.0, modifiers = { dodge_percent = 1 } },
-    { id = "medium", name = "Средний доспех", armor = 1.7, modifiers = {} },
+    { id = "light", name = "Кожаный доспех", armor = 1.0, modifiers = { dodge_percent = 1 } },
+    { id = "medium", name = "Кольчужный доспех", armor = 1.7, modifiers = {} },
     { id = "heavy", name = "Тяжёлый доспех", armor = 2.6, modifiers = { initiative_percent = -3, dodge_percent = -1 } },
 ]
 
