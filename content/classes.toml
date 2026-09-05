@@ -43,6 +43,64 @@
 #
 # Игрок ставит в панель 6 из 20 боевых - этот выбор и есть сборка. Пассивные умения
 # слотов не занимают: изученное работает. См. docs/skills.md.
+#
+# ============================================================================
+# СЕТКА: ЧТО КЛАССУ ДАЁТ ОЧКО ХАРАКТЕРИСТИКИ (ADR 0068)
+# ============================================================================
+#
+# [class.scaling] - главное, что здесь есть. У каждой из семи характеристик
+# написано, что она даёт ИМЕННО ЭТОМУ КЛАССУ. Прежде характеристика висела в
+# воздухе: ``key_stats`` называл две из семи, движок читал первую, и класс
+# отличался от класса только словом. Сила мага и сила воина были одним и тем же
+# числом, а выносливость держала ровно 1,6 брони у обоих.
+#
+# Пять выходов, и каждый кто-то складывает (``loader.SCALING_CHANNELS``):
+#   blow      прибавка к обычному удару, В ОТНОШЕНИЯХ, а не в уроне. Сила воина
+#             2,2, сила мага 0,2 - воин вытягивает из очка силы в одиннадцать раз
+#             больше. Во что отношение обращается, решает ОДНО число на всю игру
+#             (``combat.BLOW_PER_SCALING``): правя баланс удара, правят его и не
+#             трогают восемь классов; правя характер класса, трогают одну строку.
+#   health    здоровье за очко (``rules/stats.derived_stats``).
+#   resource  запас класса за очко - Отвага, Ярость, Чары, Вера.
+#   armor     броня за очко.
+#   healing   насколько очко усиливает лечение, в процентах
+#             (``modifiers.scaling_modifiers`` → ``healing_done_percent``).
+#
+# Называть обязаны все семь, даже нулём. Молчание неотличимо от нуля, а ноль
+# сказан вслух: класс, промолчавший про удачу, обещает игроку, что удача ему
+# что-то даёт, - экран характеристик всё равно её напечатает.
+#
+# ВЫХОД, КОТОРОГО НИКТО НЕ СКЛАДЫВАЕТ, ЗАГРУЗЧИК НЕ ПРИНИМАЕТ. Тот же договор,
+# что у прибавок (``modifiers.EFFECTIVE_KEYS``, ADR 0018): написать классу
+# ``carry = 3`` и не считать переносимый вес - это обещание, а не механика.
+#
+# ============================================================================
+# ВЕХИ: ПОРОГ, ЗА КОТОРЫМ ОЧКО ПЕРЕСТАЁТ БЫТЬ ЧИСЛОМ (ADR 0068)
+# ============================================================================
+#
+# [[class.milestone]] - пороги характеристики и черты за них. Ровный рост ничего
+# не решает: сто очков силы отличаются от девяноста девяти только тем, что их
+# сто, и раздача сводилась к арифметике - лей в ключевую, пока не кончатся.
+#
+# Веха делает раздачу РЕШЕНИЕМ. За порогом приходит именованная черта, и взять её
+# можно, только СОБРАВ характеристику, а не размазав очки по семи. Отсюда и
+# сборка: два воина одного уровня расходятся не только деревом умений, но и тем,
+# какие пороги каждый решил взять.
+#
+# Пороги общие: 30, 60, 100, 160, 240. Тридцать берут к двадцатому уровню, двести
+# сорок - только сосредоточившись и, как правило, уже с прибавкой ухода
+# (turnings.toml): последняя веха - это то, ради чего берут новое имя.
+#
+# Платит веха ОБЫЧНОЙ ЧЕРТОЙ из traits.toml, и это нарочно: черта в Vellar не
+# даёт ни кнопки, ни боевого умения, ни экрана - только прибавки (Claude.md,
+# правило 2). Значит вехи заведены, ничего не прибавив к тому, что игрок слушает:
+# панель осталась шесть плюс один, экранов не прибавилось, а сборка стала глубже.
+# Черты вех лежат в разделе "milestone", помеченном granted: при создании
+# персонажа их нет, потому что выбрать нельзя то, что зарабатывают.
+#
+# Считается веха от ВЛОЖЕННОГО - основа, уровень, раса, класс, розданное, - а не
+# от итогового. Порог, который берут и теряют, снимая перчатки, - это не веха, а
+# мерцание (``domain/rules/milestones.py``).
 
 [meta]
 base_stat_value = 5
@@ -58,106 +116,468 @@ passive_unlock_levels = [
 active_slots = 6
 racial_slots = 1
 
+# ============================================================================
+
 [[class]]
 id = "warrior"
 name = "Воин"
 role = "Стойкий боец ближнего боя"
 description = "Держит строй и принимает удар на себя."
+lore = "Воина делает не удар, а место, на котором он стоит. Строй держится, пока держится крайний, и крайним всегда оказывается тот, кто согласился им быть. Отвага у него не порыв, а счёт: сколько ещё выдержу, столько и простою."
 power = "Сила ведёт удар, выносливость держит Отвагу и место в строю."
 key_stats = ["STR", "END"]
 weapons = ["sword", "axe", "mace", "spear", "greatsword", "warhammer", "crossbow"]
 armor = ["heavy"]
 bonuses = { STR = 2, END = 1 }
-resource = { id = "valor", name = "Отвага", base = 40, per_level = 2, stat = "END", per_stat = 1.0, regen_per_turn = 6 }
-health = { base = 110, per_level = 18, per_endurance = 6.0 }
+resource = { id = "valor", name = "Отвага", base = 40, per_level = 2, regen_per_turn = 6 }
+health = { base = 110, per_level = 18 }
+
+[class.scaling]
+STR = { blow = 2.2, health = 0.4 }
+END = { blow = 0.3, health = 6.0, resource = 1.0, armor = 1.35 }
+AGI = { blow = 0.15 }
+INT = { blow = 0.0 }
+WIS = { blow = 0.0, resource = 0.1 }
+CHA = { blow = 0.0 }
+LCK = { blow = 0.1 }
+
+[[class.milestone]]
+stat = "STR"
+threshold = 30
+trait = "ms_warrior_grip"
+name = "Хватка"
+text = "Рукоять перестала быть предметом: она стала продолжением руки."
+
+[[class.milestone]]
+stat = "END"
+threshold = 60
+trait = "ms_warrior_footing"
+name = "Упор"
+text = "Ноги нашли землю. Сдвинуть вас теперь стоит отдельного труда."
+
+[[class.milestone]]
+stat = "STR"
+threshold = 100
+trait = "ms_warrior_breach"
+name = "Пролом"
+text = "Вы бьёте не по доспеху, а сквозь него: железо больше не считается доводом."
+
+[[class.milestone]]
+stat = "END"
+threshold = 160
+trait = "ms_warrior_bulwark"
+name = "Незыблемый оплот"
+text = "Строй, в котором стоите вы, держится и без строя."
+
+[[class.milestone]]
+stat = "STR"
+threshold = 240
+trait = "ms_warrior_sundering"
+name = "Раскол"
+text = "Удар, после которого чинить нечего. Так бьют раз в поколение, и вы бьёте так всегда."
 
 [[class]]
 id = "barbarian"
 name = "Варвар"
 role = "Урон в обмен на защиту"
 description = "Дерётся почти без брони и берёт напором в первые ходы."
+lore = "Варвар не защищается, потому что защита — это признание, что бой будет долгим. Ярость приходит не в начале схватки, а в середине, когда становится ясно, кто первым устанет; и с этой минуты усталости у варвара больше нет."
 power = "Сила ведёт удар, а Ярость набирается по ходу боя."
 key_stats = ["STR"]
 weapons = ["axe", "mace", "greatsword", "spear", "warhammer", "scythe", "claws"]
 armor = ["medium"]
 bonuses = { STR = 2, END = 1 }
-resource = { id = "rage", name = "Ярость", base = 0, per_level = 1, stat = "STR", per_stat = 0.5, regen_per_turn = 4 }
-health = { base = 120, per_level = 20, per_endurance = 6.0 }
+resource = { id = "rage", name = "Ярость", base = 0, per_level = 1, regen_per_turn = 4 }
+health = { base = 120, per_level = 20 }
+
+[class.scaling]
+STR = { blow = 2.3, health = 0.6, resource = 0.5 }
+END = { blow = 0.2, health = 6.2, armor = 1.5 }
+AGI = { blow = 0.2 }
+INT = { blow = 0.0 }
+WIS = { blow = 0.0 }
+CHA = { blow = 0.0 }
+LCK = { blow = 0.15 }
+
+[[class.milestone]]
+stat = "STR"
+threshold = 30
+trait = "ms_barbarian_heat"
+name = "Разогрев"
+text = "Первый удар больше не пробный. Вы входите в бой уже горячим."
+
+[[class.milestone]]
+stat = "STR"
+threshold = 60
+trait = "ms_barbarian_thickskin"
+name = "Толстая кожа"
+text = "Броня, которой на вас нет, оказалась не так уж нужна."
+
+[[class.milestone]]
+stat = "STR"
+threshold = 100
+trait = "ms_barbarian_bloodscent"
+name = "Запах крови"
+text = "Раненого вы находите быстрее, чем он успевает отойти."
+
+[[class.milestone]]
+stat = "STR"
+threshold = 160
+trait = "ms_barbarian_unspent"
+name = "Неистраченный"
+text = "Ярость перестала кончаться раньше противника."
+
+[[class.milestone]]
+stat = "STR"
+threshold = 240
+trait = "ms_barbarian_avalanche"
+name = "Обвал"
+text = "Вас больше не останавливают. Вас пережидают — и не все доживают."
 
 [[class]]
 id = "paladin"
 name = "Паладин"
 role = "Защита и поддержка"
 description = "Стоит за чужую спину: прикрывает и держится дольше остальных."
+lore = "Паладина слушают не потому, что он громче, а потому, что он остаётся, когда уходят. Благодать — это не дар сверху: это доверие тех, кто стоит рядом, посчитанное вслух. Пока за ним идут, ему есть чем лечить."
 power = "Сила ведёт удар, а Благодать приходит по харизме: за паладином идут."
 key_stats = ["STR", "CHA"]
 weapons = ["sword", "mace", "spear", "greatsword", "warhammer", "rapier"]
 armor = ["heavy"]
 bonuses = { STR = 1, CHA = 1, END = 1 }
-resource = { id = "grace", name = "Благодать", base = 45, per_level = 2.4, stat = "CHA", per_stat = 1.5, regen_per_turn = 5 }
-health = { base = 105, per_level = 17, per_endurance = 6.0 }
+resource = { id = "grace", name = "Благодать", base = 45, per_level = 2.4, regen_per_turn = 5 }
+health = { base = 105, per_level = 17 }
+
+[class.scaling]
+STR = { blow = 2.3, health = 0.7 }
+CHA = { blow = 0.6, resource = 1.5, healing = 0.03 }
+END = { blow = 0.2, health = 6.0, armor = 1.4 }
+WIS = { blow = 0.1, resource = 0.2, healing = 0.02 }
+AGI = { blow = 0.1 }
+INT = { blow = 0.0 }
+LCK = { blow = 0.1 }
+
+[[class.milestone]]
+stat = "STR"
+threshold = 30
+trait = "ms_paladin_vow"
+name = "Обет"
+text = "Слово, сказанное перед боем, теперь весит столько же, сколько удар."
+
+[[class.milestone]]
+stat = "CHA"
+threshold = 60
+trait = "ms_paladin_standard"
+name = "Знамя"
+text = "Рядом с вами держатся дольше, чем держались бы сами."
+
+[[class.milestone]]
+stat = "STR"
+threshold = 100
+trait = "ms_paladin_shieldwall"
+name = "Стена щитов"
+text = "Чужой удар приходит в вас раньше, чем в того, за кем вы стоите."
+
+[[class.milestone]]
+stat = "CHA"
+threshold = 160
+trait = "ms_paladin_intercession"
+name = "Заступничество"
+text = "Ваши руки лечат не потому, что умеют, а потому, что им верят."
+
+[[class.milestone]]
+stat = "STR"
+threshold = 240
+trait = "ms_paladin_unbroken"
+name = "Несломленный"
+text = "Вас складывали дважды. Оба раза вы поднимались и доводили бой до конца."
 
 [[class]]
 id = "ranger"
 name = "Следопыт"
 role = "Дальний бой и выслеживание"
 description = "Бьёт издали и читает следы там, где их никто не видит."
+lore = "Следопыт живёт на расстоянии вытянутого выстрела и знает цену каждому шагу, который не пришлось делать. Выдержка у него не терпение, а счёт: сколько ещё продержится рука, столько и будет верным глаз."
 power = "Ловкость ведёт выстрел, а Выдержку держит мудрость."
 key_stats = ["AGI", "WIS"]
 weapons = ["bow", "dagger", "short_sword", "spear", "crossbow", "rapier"]
 armor = ["medium"]
 bonuses = { AGI = 2, WIS = 1 }
-resource = { id = "focus", name = "Фокус", base = 50, per_level = 2.4, stat = "WIS", per_stat = 1.5, regen_per_turn = 8 }
-health = { base = 95, per_level = 15, per_endurance = 6.0 }
+resource = { id = "focus", name = "Фокус", base = 50, per_level = 2.4, regen_per_turn = 8 }
+health = { base = 95, per_level = 15 }
+
+[class.scaling]
+AGI = { blow = 2.1, health = 0.4 }
+WIS = { blow = 0.5, resource = 1.5, healing = 0.02 }
+END = { blow = 0.2, health = 5.6, armor = 1.6 }
+STR = { blow = 0.3 }
+INT = { blow = 0.0 }
+CHA = { blow = 0.0 }
+LCK = { blow = 0.2 }
+
+[[class.milestone]]
+stat = "AGI"
+threshold = 30
+trait = "ms_ranger_sighting"
+name = "Прицел"
+text = "Рука перестала спорить с глазом."
+
+[[class.milestone]]
+stat = "WIS"
+threshold = 60
+trait = "ms_ranger_reading"
+name = "Чтение следа"
+text = "Вы знаете, куда он шагнёт, раньше него самого."
+
+[[class.milestone]]
+stat = "AGI"
+threshold = 100
+trait = "ms_ranger_looseness"
+name = "Лёгкая рука"
+text = "Второй выстрел уходит прежде, чем первый долетел."
+
+[[class.milestone]]
+stat = "WIS"
+threshold = 160
+trait = "ms_ranger_longwatch"
+name = "Долгий дозор"
+text = "Выдержка возвращается быстрее, чем вы успеваете её потратить."
+
+[[class.milestone]]
+stat = "AGI"
+threshold = 240
+trait = "ms_ranger_windless"
+name = "Безветрие"
+text = "Ветра для вас больше нет. Есть только расстояние, и оно ничего не решает."
 
 [[class]]
 id = "rogue"
 name = "Разбойник"
 role = "Максимальный урон и скрытность"
 description = "Ждёт удобного момента и вкладывает всё в один удар."
+lore = "Разбойник платит за один удар всем боем: он ждёт, отходит, ждёт снова — и бьёт один раз так, что второго не требуется. Прыть у него не скорость, а право на этот момент: пока есть чем распорядиться, момент найдётся."
 power = "Ловкость ведёт удар, она же копит Прыть."
 key_stats = ["AGI", "LCK"]
 weapons = ["dagger", "short_sword", "bow", "rapier", "claws", "crossbow"]
 armor = ["light"]
 bonuses = { AGI = 2, LCK = 1 }
-resource = { id = "energy", name = "Прыть", base = 60, per_level = 2, stat = "AGI", per_stat = 1.0, regen_per_turn = 10 }
-health = { base = 90, per_level = 14, per_endurance = 6.0 }
+resource = { id = "energy", name = "Прыть", base = 60, per_level = 2, regen_per_turn = 10 }
+health = { base = 90, per_level = 14 }
+
+[class.scaling]
+AGI = { blow = 2.2, health = 0.4, resource = 1.0 }
+LCK = { blow = 0.5 }
+END = { blow = 0.1, health = 5.4, armor = 1.4 }
+STR = { blow = 0.3 }
+INT = { blow = 0.0 }
+WIS = { blow = 0.0, resource = 0.1 }
+CHA = { blow = 0.0 }
+
+[[class.milestone]]
+stat = "AGI"
+threshold = 30
+trait = "ms_rogue_quiet"
+name = "Тихий шаг"
+text = "Вас перестали слышать раньше, чем видеть."
+
+[[class.milestone]]
+stat = "LCK"
+threshold = 60
+trait = "ms_rogue_opening"
+name = "Прореха"
+text = "В чужой защите всегда находится место, куда никто не смотрит."
+
+[[class.milestone]]
+stat = "AGI"
+threshold = 100
+trait = "ms_rogue_backhand"
+name = "Со спины"
+text = "Удар из-за плеча стоит теперь двух ударов в грудь."
+
+[[class.milestone]]
+stat = "LCK"
+threshold = 160
+trait = "ms_rogue_longodds"
+name = "Долгий расчёт"
+text = "То, что другим выпадает раз в двадцать боёв, вам выпадает вовремя."
+
+[[class.milestone]]
+stat = "AGI"
+threshold = 240
+trait = "ms_rogue_onebreath"
+name = "На одном вдохе"
+text = "Вы входите и выходите между двумя ударами сердца. Своими — не чужими."
 
 [[class]]
 id = "mage"
 name = "Маг"
 role = "Стихийный урон по площади"
 description = "Бьёт стихией по площади, пока хватает чар."
+lore = "Маг не бросает огонь — он его считает. Чары в Vellar это не сила, а мера: сколько удержишь в голове, столько и ляжет на землю. Ошибка в счёте видна сразу, и видна она обычно тому, кто стоял слишком близко."
 power = "Интеллект ведёт чары: их считают, как на заставе считают вес, и от счёта зависит удар."
 key_stats = ["INT"]
 weapons = ["staff", "wand", "dagger", "tome", "orb"]
 armor = ["cloth"]
 bonuses = { INT = 3 }
-resource = { id = "mana", name = "Чары", base = 70, per_level = 4, stat = "INT", per_stat = 2.5, regen_per_turn = 7 }
-health = { base = 80, per_level = 12, per_endurance = 6.0 }
+resource = { id = "mana", name = "Чары", base = 70, per_level = 4, regen_per_turn = 7 }
+health = { base = 80, per_level = 12 }
+
+[class.scaling]
+INT = { blow = 2.4, resource = 2.5 }
+WIS = { blow = 0.2, resource = 0.4, healing = 0.02 }
+END = { blow = 0.0, health = 5.0, armor = 1.3 }
+STR = { blow = 0.2 }
+AGI = { blow = 0.1 }
+CHA = { blow = 0.0 }
+LCK = { blow = 0.1 }
+
+[[class.milestone]]
+stat = "INT"
+threshold = 30
+trait = "ms_mage_reckoning"
+name = "Счёт"
+text = "Чары перестали сбиваться на середине."
+
+[[class.milestone]]
+stat = "INT"
+threshold = 60
+trait = "ms_mage_widening"
+name = "Разлёт"
+text = "То, что вы бросаете, накрывает шире, чем вы целили."
+
+[[class.milestone]]
+stat = "INT"
+threshold = 100
+trait = "ms_mage_deepwell"
+name = "Глубокий колодец"
+text = "Чары кончаются позже, чем кончается бой."
+
+[[class.milestone]]
+stat = "INT"
+threshold = 160
+trait = "ms_mage_thrift"
+name = "Бережливость"
+text = "Вы научились платить за чару меньше, чем она стоит."
+
+[[class.milestone]]
+stat = "INT"
+threshold = 240
+trait = "ms_mage_arithmetic"
+name = "Чистая арифметика"
+text = "Стихия перестала быть стихией. Осталось только число, и оно всегда сходится."
 
 [[class]]
 id = "cleric"
 name = "Жрец"
 role = "Лечение и снятие эффектов"
 description = "Лечит и снимает с человека дурные последствия."
+lore = "Жреца зовут не тогда, когда страшно, а когда уже поздно, — и он приходит. Вера у него не убеждение, а работа: перевязать, поднять, сказать имя вслух. Из всего, что умеет жрец, самое трудное — остаться, когда лечить уже нечего."
 power = "Мудрость ведёт и слово, и удар, и Вера растёт из неё же."
 key_stats = ["WIS"]
 weapons = ["mace", "staff", "symbol", "warhammer", "totem"]
 armor = ["cloth"]
 bonuses = { WIS = 2, CHA = 1 }
-resource = { id = "faith", name = "Вера", base = 65, per_level = 3.6, stat = "WIS", per_stat = 2.2, regen_per_turn = 7 }
-health = { base = 90, per_level = 14, per_endurance = 6.0 }
+resource = { id = "faith", name = "Вера", base = 65, per_level = 3.6, regen_per_turn = 7 }
+health = { base = 90, per_level = 14 }
+
+[class.scaling]
+WIS = { blow = 2.2, resource = 2.2, healing = 0.06 }
+CHA = { blow = 0.3, resource = 0.3, healing = 0.02 }
+END = { blow = 0.1, health = 5.6, armor = 1.3 }
+STR = { blow = 0.2 }
+AGI = { blow = 0.0 }
+INT = { blow = 0.1 }
+LCK = { blow = 0.1 }
+
+[[class.milestone]]
+stat = "WIS"
+threshold = 30
+trait = "ms_cleric_hands"
+name = "Твёрдые руки"
+text = "Перевязка держится до конца боя, а не до первого движения."
+
+[[class.milestone]]
+stat = "WIS"
+threshold = 60
+trait = "ms_cleric_naming"
+name = "Названное имя"
+text = "Названная вслух порча уходит легче: у неё больше нет тайны."
+
+[[class.milestone]]
+stat = "WIS"
+threshold = 100
+trait = "ms_cleric_vigil"
+name = "Бдение"
+text = "Вы держитесь дольше тех, кого лечите, — иначе лечить будет некому."
+
+[[class.milestone]]
+stat = "WIS"
+threshold = 160
+trait = "ms_cleric_wellspring"
+name = "Родник"
+text = "Вера возвращается сама, как вода в вычерпанный колодец."
+
+[[class.milestone]]
+stat = "WIS"
+threshold = 240
+trait = "ms_cleric_lastword"
+name = "Последнее слово"
+text = "Вы поднимали тех, за кем уже пришли. Дважды это сочли ошибкой счёта."
 
 [[class]]
 id = "druid"
 name = "Друид"
 role = "Контроль, превращения, регенерация"
 description = "Меняет облик, держит врага на месте и лечит понемногу, но долго."
+lore = "Друид не повелевает лесом — он с ним договаривается, и договор этот каждый раз новый. Единение считают не в силе, а в том, насколько далеко вы отошли от себя: медведем быть проще, чем вернуться человеком."
 power = "Мудрость ведёт удар и держит Единение с тем, что вокруг."
 key_stats = ["WIS", "END"]
 weapons = ["staff", "spear", "dagger", "symbol", "claws", "scythe", "totem", "orb"]
 armor = ["light"]
 bonuses = { WIS = 2, END = 1 }
-resource = { id = "communion", name = "Единение", base = 60, per_level = 3.2, stat = "WIS", per_stat = 2.0, regen_per_turn = 7 }
-health = { base = 95, per_level = 15, per_endurance = 6.0 }
+resource = { id = "communion", name = "Единение", base = 60, per_level = 3.2, regen_per_turn = 7 }
+health = { base = 95, per_level = 15 }
+
+[class.scaling]
+WIS = { blow = 2.0, resource = 2.0, healing = 0.04 }
+END = { blow = 0.4, health = 6.0, resource = 0.3, armor = 1.35 }
+AGI = { blow = 0.2 }
+STR = { blow = 0.2 }
+INT = { blow = 0.1 }
+CHA = { blow = 0.0 }
+LCK = { blow = 0.1 }
+
+[[class.milestone]]
+stat = "WIS"
+threshold = 30
+trait = "ms_druid_rooting"
+name = "Укоренение"
+text = "Земля под вами стала отвечать."
+
+[[class.milestone]]
+stat = "END"
+threshold = 60
+trait = "ms_druid_pelt"
+name = "Шкура"
+text = "Облик держится дольше, и держит он лучше."
+
+[[class.milestone]]
+stat = "WIS"
+threshold = 100
+trait = "ms_druid_slowgrowth"
+name = "Медленный рост"
+text = "Раны затягиваются сами, пока вы заняты другим."
+
+[[class.milestone]]
+stat = "END"
+threshold = 160
+trait = "ms_druid_thicket"
+name = "Чаща"
+text = "Пройти через вас стало так же трудно, как через бурелом."
+
+[[class.milestone]]
+stat = "WIS"
+threshold = 240
+trait = "ms_druid_oldcompact"
+name = "Старый договор"
+text = "Лес перестал спрашивать, зачем. Он просто делает, о чём вы попросили."

@@ -253,9 +253,13 @@ def test_every_live_key_is_read_by_something(content: GameContent) -> None:
     """
     plain = hero("warrior", level=50)
     base = derived_stats(content, plain)
+    # Персонаж пятидесятого уровня уже взял вехи характеристик (ADR 0068), и
+    # часть этих ключей у него не пуста. Проверяется прибавка, а не итог: вещь
+    # обязана добавить свои двадцать пять к тому, что у героя уже есть.
+    standing = mods.collect_modifiers(content, plain)
     for key in sorted(LIVE_KEYS):
-        bundle = mods.merge(mods.collect_modifiers(content, plain), {key: 25.0})
-        assert bundle[key] == 25.0, key
+        bundle = mods.merge(standing, {key: 25.0})
+        assert bundle[key] == standing.get(key, 0.0) + 25.0, key
     assert base.armor >= 0
 
 

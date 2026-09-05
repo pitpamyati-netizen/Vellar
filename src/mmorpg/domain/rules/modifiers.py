@@ -18,10 +18,20 @@ from mmorpg.domain.entities.effects import EffectStack
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import houses as house_rules
+from mmorpg.domain.rules import milestones as milestone_rules
 from mmorpg.domain.rules import repair
 from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules.curves import softened
 
 STAT_MODIFIER_PREFIX = "stat_"
+
+#: Насколько характеристики класса усиливают его лечение и как быстро эта прибавка
+#: перестаёт расти (ADR 0058, 0068). Убывающая отдача здесь не украшение:
+#: мудрость жреца доходит до семисот, и прямая линия обещала бы ему сорок с лишним
+#: процентов сверх всего прочего - ровно та же ошибка, что число вместо доли.
+#: Предел не достигается никогда, и вложенное считается всегда.
+HEALING_SOFTENER = 30.0
+HEALING_CEILING = 30.0
 
 #: Ключи, которые движок действительно читает.
 #:
@@ -108,6 +118,35 @@ def trait_modifiers(content: GameContent, trait_ids: Iterable[str]) -> dict[str,
     return merge(*(content.trait(trait_id).modifiers for trait_id in trait_ids))
 
 
+def milestone_modifiers(content: GameContent, character: Character) -> dict[str, float]:
+    """Что дают взятые вехи характеристик (ADR 0068).
+
+    Веха платит обычной чертой, поэтому здесь нечего складывать особым образом:
+    те же ключи, тот же ``merge``, тот же словарь. Считается веха от вложенного,
+    а не от итогового - иначе этот свёрток спрашивал бы сам себя
+    (``domain/rules/milestones.py``).
+    """
+    return trait_modifiers(content, milestone_rules.trait_ids(content, character))
+
+
+def scaling_modifiers(content: GameContent, character: Character) -> dict[str, float]:
+    """Выходы классовой сетки, которые живут прибавкой, а не своим числом.
+
+    Пока такой один - ``healing``: насколько характеристики этого класса
+    усиливают его лечение. Он не может считаться там же, где здоровье и запас:
+    лечение - это процент, а проценты в Vellar складываются в один свёрток и
+    применяются один раз (ADR 0007). Значит и этот выход обязан войти в свёрток,
+    а не умножить что-то у себя в углу.
+
+    Считается от **вложенного**, как и веха, и по той же причине: свёрток не
+    может спрашивать сам себя (``domain/rules/milestones.py``).
+    """
+    klass = content.character_class(character.class_id)
+    raw = klass.summed(milestone_rules.invested_stats(content, character), "healing")
+    healing = softened(raw, HEALING_SOFTENER, HEALING_CEILING)
+    return {"healing_done_percent": round(healing, 2)} if healing else {}
+
+
 def house_modifiers(content: GameContent, character: Character) -> Mapping[str, float]:
     """Что даёт техника дома, в котором игрок состоит. Пусто — он ни в каком.
 
@@ -186,6 +225,10 @@ def collect_modifiers(
     working = repair.working_ids(content, character)
     return merge(
         trait_modifiers(content, character.trait_ids),
+        # Вехи характеристик - такие же черты, только выданные порогом, а не
+        # выбором при создании (ADR 0068).
+        milestone_modifiers(content, character),
+        scaling_modifiers(content, character),
         race_modifiers(content, character),
         house_modifiers(content, character),
         passive_modifiers(content, character),

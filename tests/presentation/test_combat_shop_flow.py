@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 
 import pytest
@@ -178,7 +179,10 @@ def test_every_button_says_what_it_does(
     screen = flow.render(content, fighter, session, HERO)
     cleave, taunt = screen.rows[2][0].text, screen.rows[3][0].text
     assert "урон " in cleave, cleave
-    assert "стоит 5" in cleave, cleave
+    # Цена названа числом, но самим числом её не пишут: цена умения - доля
+    # запаса (ADR 0058), а запас двигает и уровень, и классовая сетка (ADR 0068).
+    # Проверяется, что цена СКАЗАНА, а не что она равна пятёрке.
+    assert re.search(r"стоит \d+", cleave), cleave
     assert "цель бьёт по вам" in taunt, taunt
     assert "броня плюс" in taunt, taunt
     assert "на 2 хода" in taunt, taunt

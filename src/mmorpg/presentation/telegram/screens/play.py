@@ -784,64 +784,90 @@ def spend_label(stat_name: str) -> Label:
 
 
 def stat_effect_lines(content: GameContent, character: Character) -> tuple[str, ...]:
-    """Что даёт одно очко в каждой характеристике, в числах этого персонажа.
+    """Что даёт одно очко в каждой характеристике — ЭТОМУ классу, в его числах.
 
-    Каждое число читается из постоянных правил, а не выписано руками, поэтому
-    правка баланса не может оставить объяснение лгать. Чего не стоит за
-    постоянной, того не пишут вовсе (``Claude.md``, правило 7).
+    Читается из классовой сетки (``classes.toml``, ``[class.scaling]``, ADR 0068),
+    а не выписано руками, поэтому правка баланса не может оставить объяснение
+    лгать. Чего не стоит за числом, того не пишут вовсе (``Claude.md``,
+    правило 7).
 
-    Две строки несут весь ответ на «куда вкладывать»: от чего этот класс бьёт и
-    чем наполняется его запас. Обе читаются с класса, поэтому воин и маг получают
-    разные фразы.
+    Отсюда и весь ответ на «куда вкладывать»: воин читает, что сила даёт ему
+    удар и здоровье, а маг — что сила не даёт ему почти ничего. Прежде обе
+    строки были одинаковы у всех восьми классов, и выбор очка был выбором вслепую.
     """
     from mmorpg.domain.entities.stats import StatCode
     from mmorpg.domain.rules import economy
     from mmorpg.domain.rules import stats as stat_rules
-    from mmorpg.presentation.telegram.screens.creation import STAT_GENITIVE, STAT_NAMES
+    from mmorpg.presentation.telegram.screens.creation import STAT_NAMES
 
     klass = content.character_class(character.class_id)
-    key_codes = tuple(klass.key_stats)
-    key_names = ", ".join(STAT_NAMES[StatCode(code)].lower() for code in key_codes)
-    blow = StatCode(key_codes[0]) if key_codes else None
-    pool = StatCode(klass.resource.stat)
 
-    effects: dict[StatCode, str] = {
-        StatCode.STR: "Сила: тяжесть удара в ближнем бою.",
+    # Что каждая характеристика делает помимо сетки: это правила, общие для всех
+    # классов, и живут они постоянными, а не содержимым.
+    common: dict[StatCode, str] = {
         StatCode.AGI: (
-            f"Ловкость: за очко плюс {number(stat_rules.ACCURACY_PER_AGILITY)} к точности, "
-            f"{percent(stat_rules.DODGE_PER_AGILITY)} уклонения и "
-            f"{number(stat_rules.INITIATIVE_PER_AGILITY)} инициативы — это ещё и очередь удара."
+            f"точность {number(stat_rules.ACCURACY_PER_AGILITY)}, "
+            f"уклонение {percent(stat_rules.DODGE_PER_AGILITY)}, "
+            f"инициатива {number(stat_rules.INITIATIVE_PER_AGILITY)}"
         ),
-        StatCode.END: (
-            f"Выносливость: за очко плюс {number(stat_rules.ARMOR_PER_ENDURANCE)} брони и "
-            f"{number(klass.health.per_endurance)} здоровья."
-        ),
-        StatCode.INT: "Интеллект: сила чар.",
-        StatCode.WIS: (
-            f"Мудрость: за очко плюс {number(stat_rules.RESOURCE_REGEN_PER_WISDOM)} ресурса в ход."
-        ),
+        StatCode.WIS: (f"запас в ход {number(stat_rules.RESOURCE_REGEN_PER_WISDOM)} процента"),
         StatCode.CHA: (
-            f"Харизма: за очко в лавке уступают "
-            f"{percent(economy.CHARISMA_DISCOUNT_PER_POINT)}, "
-            f"и так до {percent(economy.MAX_CHARISMA_DISCOUNT)}."
+            f"в лавке уступают {percent(economy.CHARISMA_DISCOUNT_PER_POINT)}, "
+            f"до {percent(economy.MAX_CHARISMA_DISCOUNT)}"
         ),
-        StatCode.LCK: (
-            f"Удача: за очко плюс {number(stat_rules.CRIT_CHANCE_PER_LUCK)} процента к шансу "
-            f"крита и столько же к его силе; выше {percent(stat_rules.MAX_CRIT_CHANCE)} "
-            "шанс не поднимется."
-        ),
+        StatCode.LCK: (f"крит {number(stat_rules.CRIT_CHANCE_PER_LUCK)} и столько же к его силе"),
     }
-    lead = [klass.power] if klass.power else []
-    if blow is not None:
-        lead.append(
-            f"Ваш удар растёт от {STAT_GENITIVE[blow]}, "
-            f"а {klass.resource.name.lower()} — от {STAT_GENITIVE[pool]}."
-            if pool is not blow
-            else f"От {STAT_GENITIVE[blow]} у вас и удар, и {klass.resource.name.lower()}."
+
+    lines: list[str] = []
+    if klass.power:
+        lines.append(klass.power)
+    for code in STAT_NAMES:
+        scaling = klass.scaling_of(code)
+        parts: list[str] = []
+        if scaling.blow:
+            parts.append(f"удар {number(scaling.blow)}")
+        if scaling.health:
+            parts.append(f"здоровье {number(scaling.health)}")
+        if scaling.resource:
+            parts.append(f"{klass.resource.name.lower()} {number(scaling.resource)}")
+        if scaling.armor:
+            parts.append(f"броня {number(scaling.armor)}")
+        if scaling.healing:
+            parts.append("лечение")
+        extra = common.get(code, "")
+        if extra:
+            parts.append(extra)
+        name = STAT_NAMES[code]
+        if parts:
+            lines.append(f"{name}: за очко {', '.join(parts)}.")
+        else:
+            # Ноль сказан вслух. Промолчать значило бы дать игроку думать, что
+            # характеристика что-то даёт, — экран всё равно печатает её число.
+            lines.append(f"{name}: этому классу не даёт ничего.")
+    return tuple(lines)
+
+
+def milestone_lines(content: GameContent, character: Character) -> tuple[str, ...]:
+    """Взятые вехи и ближайшая невзятая по каждой характеристике (ADR 0068).
+
+    Это и есть цель, ради которой характеристику СОБИРАЮТ, а не размазывают:
+    «до Пролома семь очков силы» — тот довод, которого у раздачи очков не было.
+    """
+    from mmorpg.domain.rules import milestones as milestone_rules
+    from mmorpg.presentation.telegram.screens.creation import STAT_NAMES
+
+    taken = milestone_rules.reached(content, character)
+    lines: list[str] = []
+    if taken:
+        lines.append("Взятые вехи: " + ", ".join(item.name for item in taken) + ".")
+    else:
+        lines.append("Вех пока нет: первая приходит на тридцати очках.")
+    for item, short in milestone_rules.pending(content, character):
+        word = plural(short, "очко", "очка", "очков")
+        lines.append(
+            f"До вехи «{item.name}» — {short} {word} в {STAT_NAMES[item.stat].lower()}. {item.text}"
         )
-    if key_names:
-        lead.append(f"Ключевые: {key_names}.")
-    return (*lead, *(effects[code] for code in STAT_NAMES))
+    return tuple(lines)
 
 
 def stats_screen(

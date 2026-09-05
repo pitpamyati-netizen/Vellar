@@ -243,6 +243,8 @@ def trait_categories(content: GameContent) -> tuple[str, ...]:
     """Разделы, по которым режется список особенностей, в порядке содержимого."""
     seen: list[str] = []
     for trait in content.traits:
+        if content.is_granted_category(trait.category):
+            continue
         name = content.trait_categories.get(trait.category, "")
         if name and name not in seen:
             seen.append(name)
@@ -260,7 +262,11 @@ def matching_traits(content: GameContent, state: PageState) -> tuple[Trait, ...]
     return tuple(
         trait
         for trait in content.traits
-        if (not category or content.trait_categories.get(trait.category) == category)
+        # Черта, которую игра выдаёт за веху или за уход, здесь не показывается
+        # вовсе: список создания предлагает выбор, а не перечисляет всё, что в
+        # игре бывает (ADR 0068).
+        if not content.is_granted_category(trait.category)
+        and (not category or content.trait_categories.get(trait.category) == category)
         and (not needle or needle in trait.name.casefold() or needle in trait.text.casefold())
     )
 

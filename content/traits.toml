@@ -20,6 +20,11 @@ categories = [
     { id = "survival", name = "Выживание" },
     { id = "fate", name = "Удача и случай" },
     { id = "dark", name = "Тёмные" },
+    # Разделы, которые игра ВЫДАЁТ, а не предлагает выбрать (granted, ADR 0068).
+    # Черта отсюда - та же черта и тот же свёрток прибавок, но на экране создания
+    # её нет: выбрать нельзя то, что зарабатывают. Раздел при этом настоящий -
+    # у него есть имя, и экран характеристик умеет его назвать.
+    { id = "milestone", name = "Вехи", granted = true },
 ]
 modifier_keys = [
     "stat_STR", "stat_AGI", "stat_END", "stat_INT", "stat_WIS", "stat_CHA", "stat_LCK",
@@ -583,3 +588,355 @@ category = "dark"
 tags = ["крит", "риск"]
 modifiers = { crit_damage_percent = 30, armor_percent = -15 }
 text = "Критический урон выше на 30 процентов, броня ниже на 15."
+
+# ============================================================================
+# ЧЕРТЫ ВЕХ ХАРАКТЕРИСТИК (ADR 0068)
+# ============================================================================
+#
+# Их не выбирают. Их берут, собрав характеристику до порога, объявленного у
+# класса (classes.toml, [[class.milestone]]). Раздел помечен granted: на экране
+# создания персонажа этих черт нет вовсе.
+#
+# Почему вехи платят именно чертой: черта в Vellar не даёт ни кнопки, ни боевого
+# умения, ни экрана — только прибавки (Claude.md, правило 2). Значит целую
+# систему порогов удалось завести, ничего не прибавив к тому, что игрок слушает.
+#
+# Одна веха — это немного: три-восемь процентов. Их пять на класс, и вместе они
+# складываются в тот самый разрыв между сосредоточенной сборкой и размазанной,
+# ради которого пороги и заведены.
+
+# --- Воин ---
+
+[[trait]]
+id = "ms_warrior_grip"
+name = "Хватка"
+category = "milestone"
+tags = ["веха", "сила"]
+modifiers = { accuracy_percent = 4, physical_damage_percent = 3 }
+text = "Рукоять стала продолжением руки: точность выше на 4 процента, физический удар — на 3."
+
+[[trait]]
+id = "ms_warrior_footing"
+name = "Упор"
+category = "milestone"
+tags = ["веха", "выносливость"]
+modifiers = { armor_percent = 6, dodge_percent = 2 }
+text = "Ноги нашли землю: брони на 6 процентов больше, уклонения — на 2 больше."
+
+[[trait]]
+id = "ms_warrior_breach"
+name = "Пролом"
+category = "milestone"
+tags = ["веха", "сила"]
+modifiers = { physical_damage_percent = 6 }
+text = "Вы бьёте сквозь доспех: физический удар сильнее на 6 процентов."
+
+[[trait]]
+id = "ms_warrior_bulwark"
+name = "Незыблемый оплот"
+category = "milestone"
+tags = ["веха", "выносливость"]
+modifiers = { damage_taken_percent = -6, armor_percent = 6 }
+text = "Вы держите удар на 6 процентов лучше, и брони у вас на 6 процентов больше."
+
+[[trait]]
+id = "ms_warrior_sundering"
+name = "Раскол"
+category = "milestone"
+tags = ["веха", "сила"]
+modifiers = { physical_damage_percent = 8, crit_damage_percent = 15 }
+text = "Физический удар сильнее на 8 процентов, а решающий — на 15 процентов злее."
+
+# --- Варвар ---
+
+[[trait]]
+id = "ms_barbarian_heat"
+name = "Разогрев"
+category = "milestone"
+tags = ["веха", "сила"]
+modifiers = { first_turn_damage_percent = 10 }
+text = "В первый ход боя вы бьёте на 10 процентов сильнее."
+
+[[trait]]
+id = "ms_barbarian_thickskin"
+name = "Толстая кожа"
+category = "milestone"
+tags = ["веха", "сила"]
+modifiers = { armor_percent = 6, health_percent = 3 }
+text = "Брони на 6 процентов больше, здоровья — на 3 процента больше."
+
+[[trait]]
+id = "ms_barbarian_bloodscent"
+name = "Запах крови"
+category = "milestone"
+tags = ["веха", "сила"]
+modifiers = { wounded_target_damage_percent = 8 }
+text = "По раненому противнику вы бьёте на 8 процентов сильнее."
+
+[[trait]]
+id = "ms_barbarian_unspent"
+name = "Неистраченный"
+category = "milestone"
+tags = ["веха", "сила"]
+modifiers = { resource_regen_percent = 12, cost_reduction_percent = 5 }
+text = "Ярость возвращается на 12 процентов быстрее, а умения стоят на 5 процентов дешевле."
+
+[[trait]]
+id = "ms_barbarian_avalanche"
+name = "Обвал"
+category = "milestone"
+tags = ["веха", "сила", "риск"]
+modifiers = { damage_percent = 8, damage_taken_percent = 4 }
+text = "Вы бьёте на 8 процентов сильнее и держите удар на 4 процента хуже."
+
+# --- Паладин ---
+
+[[trait]]
+id = "ms_paladin_vow"
+name = "Обет"
+category = "milestone"
+tags = ["веха", "сила"]
+modifiers = { damage_percent = 5, healing_done_percent = 4 }
+text = "Ваш удар сильнее на 5 процентов, а лечение — на 4 процента."
+
+[[trait]]
+id = "ms_paladin_standard"
+name = "Знамя"
+category = "milestone"
+tags = ["веха", "харизма"]
+modifiers = { healing_done_percent = 8 }
+text = "Вы лечите на 8 процентов сильнее."
+
+[[trait]]
+id = "ms_paladin_shieldwall"
+name = "Стена щитов"
+category = "milestone"
+tags = ["веха", "сила"]
+modifiers = { armor_percent = 7, damage_taken_percent = -4 }
+text = "Брони на 7 процентов больше, а удар по вам слабее на 4 процента."
+
+[[trait]]
+id = "ms_paladin_intercession"
+name = "Заступничество"
+category = "milestone"
+tags = ["веха", "харизма"]
+modifiers = { healing_done_percent = 10, healing_taken_percent = 5 }
+text = "Вы лечите на 10 процентов сильнее, а вас лечат на 5 процентов лучше."
+
+[[trait]]
+id = "ms_paladin_unbroken"
+name = "Несломленный"
+category = "milestone"
+tags = ["веха", "сила"]
+modifiers = { damage_percent = 6, damage_taken_percent = -5 }
+text = "Вы бьёте на 6 процентов сильнее, а удар по вам слабее на 5 процентов."
+
+# --- Следопыт ---
+
+[[trait]]
+id = "ms_ranger_sighting"
+name = "Прицел"
+category = "milestone"
+tags = ["веха", "ловкость"]
+modifiers = { accuracy_percent = 5 }
+text = "Ваша точность выше на 5 процентов."
+
+[[trait]]
+id = "ms_ranger_reading"
+name = "Чтение следа"
+category = "milestone"
+tags = ["веха", "мудрость"]
+modifiers = { single_target_damage_percent = 4, initiative_percent = 2 }
+text = "По одиночной цели вы бьёте на 4 процента сильнее и ходите на 2 процента раньше."
+
+[[trait]]
+id = "ms_ranger_looseness"
+name = "Лёгкая рука"
+category = "milestone"
+tags = ["веха", "ловкость"]
+modifiers = { crit_chance_percent = 4, accuracy_percent = 3 }
+text = "Решающий удар случается на 4 процента чаще, точность выше на 3 процента."
+
+[[trait]]
+id = "ms_ranger_longwatch"
+name = "Долгий дозор"
+category = "milestone"
+tags = ["веха", "мудрость"]
+modifiers = { resource_regen_percent = 12 }
+text = "Фокус возвращается на 12 процентов быстрее."
+
+[[trait]]
+id = "ms_ranger_windless"
+name = "Безветрие"
+category = "milestone"
+tags = ["веха", "ловкость"]
+modifiers = { single_target_damage_percent = 6, crit_damage_percent = 10 }
+text = "По одиночной цели вы бьёте на 6 процентов сильнее, решающий удар злее на 10."
+
+# --- Разбойник ---
+
+[[trait]]
+id = "ms_rogue_quiet"
+name = "Тихий шаг"
+category = "milestone"
+tags = ["веха", "ловкость"]
+modifiers = { dodge_percent = 3, initiative_percent = 2 }
+text = "Уклонения на 3 больше, ходите на 2 процента раньше."
+
+[[trait]]
+id = "ms_rogue_opening"
+name = "Прореха"
+category = "milestone"
+tags = ["веха", "удача"]
+modifiers = { crit_chance_percent = 4 }
+text = "Решающий удар случается на 4 процента чаще."
+
+[[trait]]
+id = "ms_rogue_backhand"
+name = "Со спины"
+category = "milestone"
+tags = ["веха", "ловкость"]
+modifiers = { single_target_damage_percent = 5 }
+text = "По одиночной цели вы бьёте на 5 процентов сильнее."
+
+[[trait]]
+id = "ms_rogue_longodds"
+name = "Долгий расчёт"
+category = "milestone"
+tags = ["веха", "удача"]
+modifiers = { crit_damage_percent = 15, rarity_percent = 5 }
+text = "Решающий удар злее на 15 процентов, добыча выпадает на 5 процентов ценнее."
+
+[[trait]]
+id = "ms_rogue_onebreath"
+name = "На одном вдохе"
+category = "milestone"
+tags = ["веха", "ловкость"]
+modifiers = { crit_chance_percent = 4, initiative_percent = 5 }
+text = "Решающий удар на 4 процента чаще, ходите на 5 процентов раньше."
+
+# --- Маг ---
+
+[[trait]]
+id = "ms_mage_reckoning"
+name = "Счёт"
+category = "milestone"
+tags = ["веха", "интеллект"]
+modifiers = { magic_damage_percent = 3 }
+text = "Магический удар сильнее на 3 процента."
+
+[[trait]]
+id = "ms_mage_widening"
+name = "Разлёт"
+category = "milestone"
+tags = ["веха", "интеллект"]
+modifiers = { aoe_damage_percent = 5 }
+text = "Удар по всем сильнее на 5 процентов."
+
+[[trait]]
+id = "ms_mage_deepwell"
+name = "Глубокий колодец"
+category = "milestone"
+tags = ["веха", "интеллект"]
+modifiers = { resource_percent = 10 }
+text = "Чар у вас на 10 процентов больше."
+
+[[trait]]
+id = "ms_mage_thrift"
+name = "Бережливость"
+category = "milestone"
+tags = ["веха", "интеллект"]
+modifiers = { cost_reduction_percent = 8 }
+text = "Умения стоят на 8 процентов дешевле."
+
+[[trait]]
+id = "ms_mage_arithmetic"
+name = "Чистая арифметика"
+category = "milestone"
+tags = ["веха", "интеллект"]
+modifiers = { magic_damage_percent = 6, aoe_damage_percent = 5 }
+text = "Магический удар сильнее на 6 процентов, удар по всем — на 5."
+
+# --- Жрец ---
+
+[[trait]]
+id = "ms_cleric_hands"
+name = "Твёрдые руки"
+category = "milestone"
+tags = ["веха", "мудрость"]
+modifiers = { healing_done_percent = 6 }
+text = "Вы лечите на 6 процентов сильнее."
+
+[[trait]]
+id = "ms_cleric_naming"
+name = "Названное имя"
+category = "milestone"
+tags = ["веха", "мудрость"]
+modifiers = { resist_mental_percent = 8, resist_negative_percent = 8 }
+text = "Рассудочный и негативный урон вредят вам на 8 процентов меньше."
+
+[[trait]]
+id = "ms_cleric_vigil"
+name = "Бдение"
+category = "milestone"
+tags = ["веха", "мудрость"]
+modifiers = { health_percent = 6, healing_taken_percent = 5 }
+text = "Здоровья на 6 процентов больше, вас лечат на 5 процентов лучше."
+
+[[trait]]
+id = "ms_cleric_wellspring"
+name = "Родник"
+category = "milestone"
+tags = ["веха", "мудрость"]
+modifiers = { resource_regen_percent = 14 }
+text = "Вера возвращается на 14 процентов быстрее."
+
+[[trait]]
+id = "ms_cleric_lastword"
+name = "Последнее слово"
+category = "milestone"
+tags = ["веха", "мудрость"]
+modifiers = { healing_done_percent = 14 }
+text = "Вы лечите на 14 процентов сильнее."
+
+# --- Друид ---
+
+[[trait]]
+id = "ms_druid_rooting"
+name = "Укоренение"
+category = "milestone"
+tags = ["веха", "мудрость"]
+modifiers = { resist_nature_percent = 8, armor_percent = 3 }
+text = "Природный урон вредит вам на 8 процентов меньше, брони на 3 процента больше."
+
+[[trait]]
+id = "ms_druid_pelt"
+name = "Шкура"
+category = "milestone"
+tags = ["веха", "выносливость"]
+modifiers = { health_percent = 5, armor_percent = 4 }
+text = "Здоровья на 5 процентов больше, брони — на 4 процента."
+
+[[trait]]
+id = "ms_druid_slowgrowth"
+name = "Медленный рост"
+category = "milestone"
+tags = ["веха", "мудрость"]
+modifiers = { regen_per_turn_percent = 3 }
+text = "Каждый ход вам возвращается 3 процента здоровья."
+
+[[trait]]
+id = "ms_druid_thicket"
+name = "Чаща"
+category = "milestone"
+tags = ["веха", "выносливость"]
+modifiers = { damage_taken_percent = -6 }
+text = "Удар по вам слабее на 6 процентов."
+
+[[trait]]
+id = "ms_druid_oldcompact"
+name = "Старый договор"
+category = "milestone"
+tags = ["веха", "мудрость"]
+modifiers = { dot_damage_percent = 12, healing_done_percent = 8 }
+text = "Яд, горение и кровотечение от вас точат на 12 процентов сильнее, лечение выше на 8."

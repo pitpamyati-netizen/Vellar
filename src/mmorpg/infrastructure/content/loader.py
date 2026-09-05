@@ -43,6 +43,8 @@ from mmorpg.domain.entities.content import (
     Skill,
     SkillKind,
     SpecialProperty,
+    StatMilestone,
+    StatScaling,
     ToolType,
     Trait,
     Turning,
@@ -137,6 +139,13 @@ def load_content(content_dir: Path) -> GameContent:
     modifier_keys = frozenset(trait_meta.get("modifier_keys", ()))
     inverted_modifiers = frozenset(trait_meta.get("lower_is_better", ()))
     categories = {entry["id"]: entry["name"] for entry in trait_meta.get("categories", ())}
+    # Разделы, черты которых игра выдаёт сама: вехи характеристик и наследие ухода
+    # (ADR 0068). Раздел остаётся настоящим - у него есть имя, и экран умеет его
+    # назвать, - но на выбор при создании персонажа он не идёт: выбрать нельзя то,
+    # что зарабатывают.
+    granted_categories = frozenset(
+        str(entry["id"]) for entry in trait_meta.get("categories", ()) if entry.get("granted")
+    )
     unknown_inverted = sorted(inverted_modifiers - modifier_keys)
     if unknown_inverted:
         problems.append(
@@ -208,6 +217,7 @@ def load_content(content_dir: Path) -> GameContent:
         "recipes": recipes,
         "craft_rules": craft_rules,
         "trait_categories": categories,
+        "granted_trait_categories": granted_categories,
         "inverted_modifiers": inverted_modifiers,
         "rules": rules,
         "turnings": turnings,
@@ -566,16 +576,15 @@ def _parse_classes(
                 name=str(resource_raw["name"]),
                 base=float(resource_raw["base"]),
                 per_level=float(resource_raw["per_level"]),
-                stat=StatCode(resource_raw["stat"]),
-                per_stat=float(resource_raw["per_stat"]),
                 regen_per_turn=float(resource_raw["regen_per_turn"]),
             )
             health_raw = entry["health"]
             health = HealthCurve(
                 base=float(health_raw["base"]),
                 per_level=float(health_raw["per_level"]),
-                per_endurance=float(health_raw["per_endurance"]),
             )
+            scaling = _parse_scaling(class_id, entry.get("scaling", {}), problems)
+            milestones = _parse_milestones(class_id, entry.get("milestone", ()), problems)
         except (KeyError, ValueError) as error:
             problems.append(f"classes.toml: {class_id}: {error}")
             continue
@@ -587,12 +596,84 @@ def _parse_classes(
                 role=str(entry.get("role", "")),
                 description=str(entry.get("description", "")),
                 power=str(entry.get("power", "")),
+                lore=str(entry.get("lore", "")),
                 key_stats=key_stats,
                 bonuses=bonuses,
                 resource=resource,
                 health=health,
                 weapon_types=weapon_types,
                 armor_types=armor_types,
+                scaling=scaling,
+                milestones=milestones,
+            )
+        )
+    return tuple(parsed)
+
+
+#: Выходы классовой сетки, которые движок действительно считает (ADR 0068). Тот же
+#: договор, что у ``modifiers.EFFECTIVE_KEYS``: выход, которого никто не складывает,
+#: - обещание, а не механика (``Claude.md``, правило 7). Список короткий нарочно -
+#: каждый выход стоит строки в правилах.
+SCALING_CHANNELS: frozenset[str] = frozenset({"blow", "health", "resource", "armor", "healing"})
+
+
+def _parse_scaling(
+    class_id: str, raw: Mapping[str, Any], problems: list[str]
+) -> Mapping[StatCode, StatScaling]:
+    """Что даёт классу очко каждой характеристики.
+
+    Сетка обязана называть все семь: класс, промолчавший про удачу, обещает
+    игроку, что удача ему что-то даёт, - экран характеристик всё равно её
+    напечатает. Молчание здесь неотличимо от нуля, а ноль сказан вслух.
+    """
+    parsed: dict[StatCode, StatScaling] = {}
+    for code_name, values in raw.items():
+        try:
+            code = StatCode(code_name)
+        except ValueError:
+            problems.append(f"classes.toml: {class_id} scales unknown stat {code_name!r}")
+            continue
+        unknown = sorted(set(values) - SCALING_CHANNELS)
+        if unknown:
+            problems.append(
+                f"classes.toml: {class_id}.{code_name} names outputs {unknown} that nothing sums"
+            )
+            continue
+        parsed[code] = StatScaling(**{key: float(value) for key, value in values.items()})
+    missing = sorted(code.value for code in StatCode if code not in parsed)
+    if missing:
+        problems.append(f"classes.toml: {class_id} says nothing about {missing}")
+    return parsed
+
+
+def _parse_milestones(
+    class_id: str, raw: Sequence[Mapping[str, Any]], problems: list[str]
+) -> tuple[StatMilestone, ...]:
+    """Вехи характеристик класса (ADR 0068)."""
+    parsed: list[StatMilestone] = []
+    seen: set[tuple[str, int]] = set()
+    for entry in raw:
+        try:
+            code = StatCode(str(entry["stat"]))
+            threshold = int(entry["threshold"])
+        except (KeyError, ValueError) as error:
+            problems.append(f"classes.toml: {class_id} has a broken milestone: {error}")
+            continue
+        if threshold <= 0:
+            problems.append(f"classes.toml: {class_id} has a milestone at {threshold} points")
+            continue
+        key = (code.value, threshold)
+        if key in seen:
+            problems.append(f"classes.toml: {class_id} names {code.value} {threshold} twice")
+            continue
+        seen.add(key)
+        parsed.append(
+            StatMilestone(
+                stat=code,
+                threshold=threshold,
+                trait_id=str(entry.get("trait", "")),
+                name=str(entry.get("name", "")),
+                text=str(entry.get("text", "")),
             )
         )
     return tuple(parsed)

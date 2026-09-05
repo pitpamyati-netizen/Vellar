@@ -137,22 +137,82 @@ class House:
 
 @dataclass(frozen=True, slots=True)
 class ClassResource:
-    """Ресурс класса - доблесть, ярость, мана и так далее."""
+    """Ресурс класса - доблесть, ярость, мана и так далее.
+
+    Чем запас растёт, здесь больше не сказано: это решает классовая сетка
+    (``CharacterClass.scaling``), где у каждой из семи характеристик написано,
+    сколько запаса даёт её очко. Прежде запас рос от одной названной
+    характеристики, и «мудрость жреца» была тем же числом, что «интеллект мага»,
+    - у класса не было своего почерка (ADR 0068).
+    """
 
     id: str
     name: str
     base: float
     per_level: float
-    stat: StatCode
-    per_stat: float
     regen_per_turn: float
 
 
 @dataclass(frozen=True, slots=True)
 class HealthCurve:
+    """Здоровье, которое класс имеет сам по себе. Остальное приносит сетка."""
+
     base: float
     per_level: float
-    per_endurance: float
+
+
+@dataclass(frozen=True, slots=True)
+class StatScaling:
+    """Что одно очко характеристики даёт этому классу.
+
+    Сетка и есть строгая классовость (ADR 0068): характеристика не висит в
+    воздухе, у неё написан выход, и выход у каждого класса свой. Сила воина
+    ведёт удар и держит здоровье, сила мага не делает почти ничего, а интеллект
+    ровно наоборот - и это написано числами, а не подразумевается тем, какая
+    характеристика названа ключевой.
+
+    ``blow``     сколько очко прибавляет к обычному удару. Не урон и не проценты:
+                 доля, которую боевой движок переводит в удар одним общим
+                 множителем (``combat.BLOW_PER_SCALING``). Здесь пишут ОТНОШЕНИЯ
+                 - во сколько раз сила воина полезнее силы мага, - а во что они
+                 обращаются, решает одно место на всю игру.
+    ``health``   сколько очко прибавляет к здоровью.
+    ``resource`` сколько очко прибавляет к запасу класса.
+    ``armor``    сколько очко прибавляет к броне.
+    ``healing``  насколько очко усиливает лечение, в процентах.
+    """
+
+    blow: float = 0.0
+    health: float = 0.0
+    resource: float = 0.0
+    armor: float = 0.0
+    healing: float = 0.0
+
+
+#: Характеристика, которой класс не назвал выхода. Отдельный объект, а не ``None``:
+#: складывающему сетку не приходится каждый раз спрашивать, названа ли она.
+_NO_SCALING = StatScaling()
+
+
+@dataclass(frozen=True, slots=True)
+class StatMilestone:
+    """Веха характеристики: порог, за которым класс получает черту.
+
+    Ровный рост числа ничего не решает: сто очков силы отличаются от девяноста
+    девяти только тем, что их сто. Веха делает вложение **решением** - за
+    порогом приходит именованная черта, и добрать её можно, только собрав
+    характеристику, а не размазав очки по семи (ADR 0068).
+
+    Награда - обычная черта из ``traits.toml``, и это нарочно: черта в Vellar не
+    даёт ни кнопки, ни экрана, только прибавки (``Claude.md``, правило 2). Значит
+    вехи встраиваются, ничего не прибавив к тому, что игрок слушает.
+    """
+
+    stat: StatCode
+    threshold: int
+    trait_id: str
+    name: str
+    text: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,6 +225,10 @@ class CharacterClass:
     #: пишут в ``classes.toml``: экран умеет назвать ключевую характеристику, но
     #: не умеет объяснить, почему она ключевая.
     power: str
+    #: Несколько строк о том, что этот класс такое, - для карточки при создании
+    #: персонажа. Не роль и не описание: те отвечают «что он делает», а это -
+    #: «кем надо быть, чтобы этим заниматься» (``Narrative.md``, раздел 2).
+    lore: str
     key_stats: tuple[StatCode, ...]
     bonuses: StatBlock
     resource: ClassResource
@@ -174,12 +238,33 @@ class CharacterClass:
     #: оказаться голым.
     weapon_types: tuple[str, ...] = ()
     armor_types: tuple[str, ...] = ()
+    #: Что даёт классу очко каждой из семи характеристик (ADR 0068). Пусто -
+    #: не даёт ничего: содержимое переживает код, и класс, заведённый до сетки,
+    #: не должен ронять игру. Загрузчик пустой сетки не пропускает.
+    scaling: Mapping[StatCode, StatScaling] = field(default_factory=dict)
+    #: Вехи характеристик: сколько очков и что за них даётся (ADR 0068).
+    milestones: tuple[StatMilestone, ...] = ()
 
     def can_wield(self, weapon_type: str) -> bool:
         return not self.weapon_types or weapon_type in self.weapon_types
 
     def can_wear(self, armor_type: str) -> bool:
         return not self.armor_types or armor_type in self.armor_types
+
+    def scaling_of(self, code: StatCode) -> StatScaling:
+        """Что этому классу даёт очко ``code``. Не названа - не даёт ничего."""
+        return self.scaling.get(code, _NO_SCALING)
+
+    def summed(self, stats: StatBlock, channel: str) -> float:
+        """Сложить один выход сетки по всем семи характеристикам.
+
+        Одно место на всю игру, где характеристики превращаются в число: и
+        здоровье, и запас, и броня, и удар считаются этой же строкой, поэтому
+        новый выход сетки нигде не забудут сложить.
+        """
+        return sum(
+            float(value) * float(getattr(self.scaling_of(code), channel)) for code, value in stats
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -707,6 +792,11 @@ class GameContent:
     recipes: tuple[Recipe, ...]
     craft_rules: CraftRules
     trait_categories: Mapping[str, str]
+    #: Разделы черт, которые игра ВЫДАЁТ, а не предлагает выбрать: вехи
+    #: характеристик и наследие ухода (ADR 0068). Черта из такого раздела - та же
+    #: черта и тот же свёрток прибавок, но на экране создания её нет: выбрать
+    #: нельзя то, что зарабатывают.
+    granted_trait_categories: frozenset[str]
     inverted_modifiers: frozenset[str]
     rules: ProgressionRules
     npcs: tuple[Npc, ...]
@@ -765,6 +855,7 @@ class GameContent:
         elite_titles: Sequence[str],
         trait_categories: Mapping[str, str],
         affixes: Sequence[EnemyAffix] = (),
+        granted_trait_categories: frozenset[str] = frozenset(),
         inverted_modifiers: frozenset[str],
         rules: ProgressionRules,
         craft_rules: CraftRules,
@@ -813,6 +904,7 @@ class GameContent:
             recipes=tuple(recipes),
             craft_rules=craft_rules,
             trait_categories=MappingProxyType(dict(trait_categories)),
+            granted_trait_categories=granted_trait_categories,
             inverted_modifiers=inverted_modifiers,
             rules=rules,
             npcs=tuple(npcs),
@@ -861,6 +953,10 @@ class GameContent:
 
     def trait(self, trait_id: str) -> Trait:
         return self._traits_by_id[trait_id]
+
+    def is_granted_category(self, category: str) -> bool:
+        """Раздел, черты которого выдаются, а не выбираются при создании."""
+        return category in self.granted_trait_categories
 
     def has_trait(self, trait_id: str) -> bool:
         return trait_id in self._traits_by_id

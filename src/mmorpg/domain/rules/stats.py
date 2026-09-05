@@ -21,12 +21,21 @@ from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules import repair
+from mmorpg.domain.rules.curves import softened
+
+#: Убывающая отдача живёт в ``rules/curves``: её считают и здесь, и в сборе
+#: прибавок (``modifiers.scaling_modifiers``). Имя оставлено здесь же, потому
+#: что все, кто её звал, звали её отсюда.
+__all__ = ["softened"]
 
 # Коэффициенты производных значений. Держатся здесь, а не в содержимом: это
-# постоянные формул, а не ручки баланса. Выносливость держит броню, которая есть
-# у всякого, - но только её: всё остальное приносит доспех, и приносит числом
-# (``domain/rules/equipment.py``).
-ARMOR_PER_ENDURANCE = 1.6
+# постоянные формул, а не ручки баланса.
+#
+# Брони, здоровья и запаса среди них больше нет: сколько их даёт очко
+# характеристики, решает КЛАССОВАЯ СЕТКА (``classes.toml``, ``[class.scaling]``,
+# ADR 0068). Прежде выносливость держала ровно 1,6 брони и у мага, и у воина, а
+# запас рос от одной названной характеристики - характеристика висела в воздухе,
+# и класс отличался от класса только тем, какое слово стояло в ``key_stats``.
 ACCURACY_BASE = 80.0
 ACCURACY_PER_AGILITY = 1.2
 DODGE_PER_AGILITY = 0.55
@@ -71,19 +80,6 @@ INITIATIVE_PER_AGILITY = 0.8
 RESOURCE_REGEN_PER_WISDOM = 0.4
 RESOURCE_REGEN_SOFTENER = 120.0
 RESOURCE_REGEN_CEILING = 12.0
-
-
-def softened(raw: float, softener: float, ceiling: float) -> float:
-    """Убывающая отдача: ``ceiling * raw / (raw + softener)``.
-
-    Гладкая кривая без ступеней и без стены: первые очки характеристики стоят
-    дорого, поздние - дёшево, и предел не достигается никогда. Значение
-    отрицательного ``raw`` - ноль: характеристика в минусе не даёт отрицательного
-    крита, она просто не даёт ничего.
-    """
-    if raw <= 0.0 or softener <= 0.0:
-        return 0.0
-    return ceiling * raw / (raw + softener)
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,16 +130,18 @@ def derived_stats(
     stats = primary_stats(content, character, effects)
     level = character.level
 
+    # Здоровье и запас: своя основа класса плюс то, что насчитала классовая
+    # сетка по всем семи характеристикам разом (ADR 0068). Складывает их одна
+    # строка на обе величины - ``CharacterClass.summed``, - поэтому выход сетки,
+    # заведённый однажды, нигде не забудут сложить.
     raw_health = (
-        klass.health.base
-        + klass.health.per_level * (level - 1)
-        + klass.health.per_endurance * stats[StatCode.END]
+        klass.health.base + klass.health.per_level * (level - 1) + klass.summed(stats, "health")
     )
     max_health = raw_health * mods.percent(modifiers, "health_percent")
 
     resource = klass.resource
     raw_resource = (
-        resource.base + resource.per_level * (level - 1) + resource.per_stat * stats[resource.stat]
+        resource.base + resource.per_level * (level - 1) + klass.summed(stats, "resource")
     )
     max_resource = raw_resource * mods.percent(modifiers, "resource_percent")
 
@@ -152,7 +150,7 @@ def derived_stats(
     worn = gear.worn_armor(content, repair.working_ids(content, character), character.level)
     # Плоская броня прибавляется после процентов нарочно: закрывшемуся обещано
     # ровно «уровень, взятый трижды», и доспех этого числа не двигает.
-    armor = (stats[StatCode.END] * ARMOR_PER_ENDURANCE + worn) * mods.percent(
+    armor = (klass.summed(stats, "armor") + worn) * mods.percent(
         modifiers, "armor_percent"
     ) + mods.flat(modifiers, "armor_flat")
 

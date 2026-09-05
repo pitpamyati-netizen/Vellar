@@ -140,7 +140,12 @@ REASONING_KINDS = frozenset({"humanoid"})
 # Кривую уровня несут кости оружия (ADR 0015), а ведущая характеристика - разброс
 # между теми, кто на одном уровне: без неё два героя одного уровня с одним мечом
 # били бы одинаково.
-BLOW_PER_STAT = 0.6
+#: Во что обращается единица классовой сетки (``classes.toml``,
+#: ``[class.scaling].blow``, ADR 0068). В сетке пишут ОТНОШЕНИЯ - во сколько раз
+#: сила воина полезнее силы мага, - а во что они обращаются, решает это одно
+#: число на всю игру. Разведены они нарочно: правя баланс удара, правят здесь и
+#: не трогают восемь классов, а правя характер класса, трогают только его строку.
+BLOW_PER_SCALING = 0.122
 BASIC_ATTACK_PERCENT = 100.0
 
 MIN_HIT_CHANCE = 40.0
@@ -776,13 +781,28 @@ def _blow_parts(
     effects: EffectStack | None,
     scaling: StatCode | None,
 ) -> tuple[Dice, float]:
-    """Кости оружия и прибавка от ведущей характеристики, порознь."""
+    """Кости оружия и прибавка от характеристик, порознь.
+
+    Прибавку считает КЛАССОВАЯ СЕТКА, и считает её по всем семи характеристикам
+    сразу (ADR 0068). Прежде удар вела ровно одна названная характеристика, а
+    остальные шесть не значили для удара ничего: воин с шестьюдесятью очками в
+    выносливости бил ровно как воин, не вложивший в неё ни одного.
+
+    ЧТО ТЕПЕРЬ ЗНАЧИТ ``scaling`` У УМЕНИЯ. Не «считать только от неё», а «это
+    умение опирается на неё»: названная характеристика идёт в счёт **дважды**,
+    своим же классовым коэффициентом. Поэтому огненная чара мага, опирающаяся на
+    интеллект, у мага бьёт вдвое от его интеллекта, а у воина - вдвое от его
+    крошечного коэффициента, то есть почти ни от чего. Это и есть классовый
+    бонус к умению: он не написан отдельной цифрой, он следует из сетки.
+    """
+    klass = content.character_class(character.class_id)
     if scaling is None:
-        klass = content.character_class(character.class_id)
         scaling = klass.key_stats[0] if klass.key_stats else None
     primary = primary_stats(content, character, effects)
-    stat_value = primary[scaling] if scaling is not None else 0
-    return gear.weapon_dice(content, character), BLOW_PER_STAT * stat_value
+    total = klass.summed(primary, "blow")
+    if scaling is not None:
+        total += primary[scaling] * klass.scaling_of(scaling).blow
+    return gear.weapon_dice(content, character), BLOW_PER_SCALING * total
 
 
 def blow_range(
