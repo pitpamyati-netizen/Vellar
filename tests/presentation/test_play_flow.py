@@ -363,7 +363,7 @@ def test_an_emptied_node_says_when_it_fills_up_again(
         pytest.skip("this seed produced no gathering node")
 
     at_node = replace(in_location, session=replace(in_location.session, node=gather.index))
-    emptied = LocationState(nodes={gather.index: NodeState(taken=99, emptied_at=100)})
+    emptied = LocationState(nodes={gather.index: NodeState(taken_slots=0xFF, emptied_at=100)})
     refused = advance(
         content,
         hero,

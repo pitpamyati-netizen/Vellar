@@ -20,6 +20,8 @@ from mmorpg import economy_log
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, Dungeon, GameContent, Item
 from mmorpg.domain.entities.location import (
+    Enemy,
+    Engagement,
     GeneratedLocation,
     LocationNode,
     LocationState,
@@ -202,13 +204,60 @@ def node_standing(
     return node_rules.standing(visit_seed(world_seed, session), location, state, now)
 
 
-def node_fight_seed(world_seed: str, session: LocationSession, wave: int) -> bytes:
-    """Сид боя, стоящего в нынешнем узле в его нынешней волне.
+def node_fight_seed(
+    world_seed: str, session: LocationSession, wave: int, index: int | None = None
+) -> bytes:
+    """Сид боёв, стоящих в узле в его нынешней волне.
 
     Волна входит в него нарочно: стая, пришедшая после того, как пала прошлая, -
     это другая стая (``domain/rules/nodes.py``).
     """
-    return derive(visit_seed(world_seed, session), "fight", session.node, wave)
+    return derive(
+        visit_seed(world_seed, session),
+        "fight",
+        session.node if index is None else index,
+        wave,
+    )
+
+
+def node_pack_seed(
+    world_seed: str, session: LocationSession, *, index: int, wave: int, place: int
+) -> bytes:
+    """Сид одной стаи - той, что стоит на этом месте волны (ADR 0065).
+
+    Место, а не счёт взятого: стая с третьего места собирается одной и той же,
+    сколько бы соседних до неё ни пало.
+    """
+    return derive(node_fight_seed(world_seed, session, wave, index), place)
+
+
+def node_pack(
+    content: GameContent,
+    *,
+    world_seed: str,
+    session: LocationSession,
+    location: GeneratedLocation,
+    index: int,
+    wave: int,
+    place: int,
+    state: LocationState,
+) -> tuple[Enemy, ...]:
+    """Стая, стоящая на этом месте волны. Та же, какую соберёт бой.
+
+    Одна функция на экран и на бой: экран, назвавший другую стаю, обещал бы то,
+    чего в узле нет (``Claude.md``, правило 7).
+    """
+    node = location.node(index)
+    odds = dungeon_rules.affix_odds(node.kind.rank, mood_rules.mood_of(state))
+    return fight_flow.spawn_for_node(
+        content,
+        seed=node_pack_seed(world_seed, session, index=index, wave=wave, place=place),
+        biome=location.biome,
+        level=max(1, node.level),
+        rank=node.kind.rank,
+        affix_chance=odds.chance,
+        affix_count=odds.count,
+    )
 
 
 def node_watch(
@@ -235,20 +284,18 @@ def node_watch(
     if left is None or left.empty or node.kind in {NodeKind.ENTRANCE, NodeKind.EXIT}:
         return ""
     if node.kind.is_combat:
-        seed = derive(
-            derive(visit_seed(world_seed, session), "fight", index, left.wave), left.taken
+        return screens.pack_line(
+            node_pack(
+                content,
+                world_seed=world_seed,
+                session=session,
+                location=location,
+                index=index,
+                wave=left.wave,
+                place=left.free[0],
+                state=state,
+            )
         )
-        odds = dungeon_rules.affix_odds(node.kind.rank, mood_rules.mood_of(state))
-        pack = fight_flow.spawn_for_node(
-            content,
-            seed=seed,
-            biome=location.biome,
-            level=max(1, node.level),
-            rank=node.kind.rank,
-            affix_chance=odds.chance,
-            affix_count=odds.count,
-        )
-        return screens.pack_line(pack)
     if node.kind is NodeKind.GATHER:
         return _vein_line(content, location, node, tool)
     return ""
@@ -286,6 +333,50 @@ def _watched(
             )
         )
     }
+
+
+def node_foes(
+    content: GameContent,
+    *,
+    world_seed: str,
+    session: LocationSession,
+    location: GeneratedLocation,
+    index: int,
+    standing: Mapping[int, node_rules.Standing],
+    state: LocationState,
+    fights: Sequence[Engagement] = (),
+) -> tuple[screens.NodeFoe, ...]:
+    """Стаи, стоящие в этом узле, каждая на своём месте волны (ADR 0065).
+
+    Занятая - это та, за которую уже дерутся: её называют именем того, чей это
+    бой, и зовут не напасть, а вмешаться. Всё остальное считается из сида, как и
+    прежде: узел не хранит ни одной из этих стай.
+    """
+    node = location.node(index)
+    left = standing.get(index)
+    if left is None or left.empty or not node.kind.is_combat:
+        return ()
+    busy = {one.slot: one.name for one in fights if one.node == index and one.wave == left.wave}
+    return tuple(
+        screens.NodeFoe(
+            place=place,
+            line=screens.pack_line(
+                node_pack(
+                    content,
+                    world_seed=world_seed,
+                    session=session,
+                    location=location,
+                    index=index,
+                    wave=left.wave,
+                    place=place,
+                    state=state,
+                )
+            ),
+            level=max(1, node.level),
+            fighter=busy.get(place, ""),
+        )
+        for place in left.free
+    )
 
 
 #: Сколько находок жила называет на экране. Безымянная жила отдаёт то, что берёт
@@ -380,6 +471,7 @@ def render(
     settings: AccessibilitySettings | None = None,
     clock: Clock | None = None,
     neighbours: Sequence[Presence] = (),
+    fights: Sequence[Engagement] = (),
     arena_table: Sequence[Character] = (),
     tally: Mapping[str, int] | None = None,
     keeper: KeeperView | None = None,
@@ -397,6 +489,7 @@ def render(
         settings=settings,
         clock=clock,
         neighbours=neighbours,
+        fights=fights,
         arena_table=arena_table,
         tally=tally,
         keeper=keeper,
@@ -426,6 +519,7 @@ def _render(
     settings: AccessibilitySettings | None = None,
     clock: Clock | None = None,
     neighbours: Sequence[Presence] = (),
+    fights: Sequence[Engagement] = (),
     arena_table: Sequence[Character] = (),
     tally: Mapping[str, int] | None = None,
     keeper: KeeperView | None = None,
@@ -566,6 +660,16 @@ def _render(
                     standing=counted,
                     state=here_now,
                     tool=tool_rules.tool_of(content, character),
+                ),
+                foes=node_foes(
+                    content,
+                    world_seed=world_seed,
+                    session=state.session,
+                    location=location,
+                    index=state.session.node,
+                    standing=counted,
+                    state=here_now,
+                    fights=fights,
                 ),
                 character_level=character.level,
                 others=neighbours,
@@ -847,6 +951,7 @@ def advance(
     goods: Goods | None = None,
     settings: AccessibilitySettings | None = None,
     neighbours: Sequence[Presence] = (),
+    fights: Sequence[Engagement] = (),
     keeper: KeeperView | None = None,
     party: PartyView | None = None,
     guild: GuildView | None = None,
@@ -903,6 +1008,7 @@ def advance(
         settings=settings,
         clock=clock,
         neighbours=neighbours,
+        fights=fights,
         keeper=view,
         party=party,
         guild=guild,
@@ -1081,6 +1187,7 @@ def advance(
                 command,
                 world_seed=world_seed,
                 neighbours=neighbours,
+                fights=fights,
                 location_state=location_state or LocationState(),
                 now=ticking.now,
             )
@@ -2359,6 +2466,7 @@ def _handle_location(
     *,
     world_seed: str,
     neighbours: Sequence[Presence] = (),
+    fights: Sequence[Engagement] = (),
     location_state: LocationState,
     now: int,
 ) -> PlayState:
@@ -2414,14 +2522,79 @@ def _handle_location(
         if screens.node_button(neighbour).matches(command.argument):
             return replace(state, session=replace(state.session, node=neighbour.index))
 
-    # Кнопка узла называет то, к чему ведёт («Вступить в бой: Серый волк, 3 штуки»),
-    # и потому узнаётся по слову действия, а не по строке целиком (ADR 0063).
+    # У каждой стаи узла своя кнопка, и узнаётся она по слову действия и номеру
+    # места в волне (ADR 0065): «Вступить в бой 2: Серый волк, 3 штуки».
+    picked = _picked_foe(
+        content,
+        state,
+        command,
+        location=location,
+        node=node,
+        world_seed=world_seed,
+        location_state=location_state,
+        fights=fights,
+        now=now,
+    )
+    if picked is not None:
+        return picked
+
+    # Кнопка узла называет то, к чему ведёт («Обыскать тайник»), и потому
+    # узнаётся по слову действия, а не по строке целиком (ADR 0063).
     if command.argument.startswith(screens.NODE_ACTIONS[node.kind]):
         return _resolve_node_action(
             content, character, state, location, world_seed, location_state, now
         )
 
     return state.with_notice("Не узнал это действие. Нажмите кнопку узла.")
+
+
+def _picked_foe(
+    content: GameContent,
+    state: PlayState,
+    command: Command,
+    *,
+    location: GeneratedLocation,
+    node: LocationNode,
+    world_seed: str,
+    location_state: LocationState,
+    fights: Sequence[Engagement],
+    now: int,
+) -> PlayState | None:
+    """Нажатие на одну названную стаю узла. ``None`` - нажали не по стае (ADR 0065).
+
+    Кнопка стаи говорит, что с ней делать: свободную бьют, за занятую уже
+    дерутся, и в тот бой вмешиваются. Клавиатура на руках у игрока может отстать
+    от узла на минуту, поэтому нажатие «не по той» кнопке объясняет, а не молчит
+    (правило доступности 12).
+    """
+    if not node.kind.is_combat:
+        return None
+    left = node_rules.standing_at(
+        visit_seed(world_seed, state.session), location, location_state, node.index, now
+    )
+    foes = node_foes(
+        content,
+        world_seed=world_seed,
+        session=state.session,
+        location=location,
+        index=node.index,
+        standing={node.index: left},
+        state=location_state,
+        fights=fights,
+    )
+    alone = left.size <= 1
+    for foe in foes:
+        if screens.foe_label(node.kind, foe, alone).matches(command.argument):
+            if foe.busy:
+                return state.with_notice(
+                    f"За эту стаю уже дерётся {foe.fighter}. В этот бой можно вмешаться."
+                )
+            return replace(state, fight=f"node:{foe.place}").at(ScreenId.COMBAT)
+        if screens.join_label(foe, alone).matches(command.argument):
+            if not foe.busy:
+                return state.with_notice("Тот бой уже кончился. Эта стая стоит свободно.")
+            return replace(state, fight=f"join:{foe.place}").at(ScreenId.COMBAT)
+    return None
 
 
 def _enter_roamer(
@@ -2488,8 +2661,9 @@ def _resolve_node_action(
 
     if node.kind.is_combat:
         # Бой собирает сам хендлер: ему принадлежат и сборка противника, и кэш, в
-        # котором бой живёт.
-        return replace(state, fight="node").at(ScreenId.COMBAT)
+        # котором бой живёт. Место в волне называется здесь же: без него хендлер
+        # не знает, за какую из стай узла дерутся (ADR 0065).
+        return replace(state, fight=f"node:{left.free[0]}").at(ScreenId.COMBAT)
 
     biomes = _location_biomes(content, state.session)
     if node.kind is NodeKind.GATHER:

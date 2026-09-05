@@ -77,6 +77,9 @@ class BattleSession:
     #: Волна узла, из которой вышел противник. Победа забирает единицу именно из
     #: неё: если узел успел смениться, забирать уже нечего.
     wave: int = 0
+    #: Место этой стаи в волне (ADR 0065). Победа забирает именно его, а пока бой
+    #: идёт, стая на этом месте занята для всех остальных.
+    place: int = 0
     depth: int = 0
     #: Это заход в блуждающее подземелье (ADR 0037). Тогда ``city_id`` и ``slot``
     #: называют локацию, где оно осело, - по ним снимают замок и убирают
@@ -126,6 +129,7 @@ def begin(
     slot: int = 0,
     node: int = 0,
     wave: int = 0,
+    place: int = 0,
     depth: int = 0,
     roamer: bool = False,
     opening_effects: Mapping[int, Sequence[ActiveEffect]] | None = None,
@@ -213,6 +217,7 @@ def begin(
         slot=slot,
         node=node,
         wave=wave,
+        place=place,
         depth=depth,
         roamer=roamer,
     )
@@ -503,6 +508,7 @@ def serialise(session: BattleSession) -> str:
             "slot": session.slot,
             "node": session.node,
             "wave": session.wave,
+            "place": session.place,
             "depth": session.depth,
             "roamer": session.roamer,
             "settled": session.settled,
@@ -545,6 +551,7 @@ def deserialise(raw: str) -> BattleSession:
         slot=int(data.get("slot", 0)),
         node=int(data.get("node", 0)),
         wave=int(data.get("wave", 0)),
+        place=int(data.get("place", 0)),
         depth=int(data.get("depth", 0)),
         roamer=bool(data.get("roamer", False)),
         settled=bool(data.get("settled", False)),

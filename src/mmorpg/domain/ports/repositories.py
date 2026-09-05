@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
 from mmorpg.domain.entities.character import Character, InventoryEntry
-from mmorpg.domain.entities.location import LocationState, Presence, Roamer
+from mmorpg.domain.entities.location import Engagement, LocationState, Presence, Roamer
 from mmorpg.domain.entities.moderation import Ban, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, TradeRecord, TradeStatus
@@ -495,13 +495,25 @@ class LocationStateCache(Protocol):
         """
 
     async def take(
-        self, city_id: str, slot: int, node: int, *, wave: int, size: int, now: int, ttl: int
+        self,
+        city_id: str,
+        slot: int,
+        node: int,
+        *,
+        wave: int,
+        size: int,
+        now: int,
+        ttl: int,
+        place: int = -1,
     ) -> LocationState:
         """Вынуть из узла одно: убитую стаю, горсть собранного.
 
         ``wave`` - волна, которую видел вызывающий. Нажатие, пришедшее после того,
         как узел перевернулся, принадлежит ушедшей волне и не меняет ничего: это и
         не даёт двоим вычистить последнюю стаю дважды.
+
+        ``place`` - какое место волны освободилось (ADR 0065); ``-1`` значит
+        «первое занятое», и так берут там, где выбирать не из чего.
         """
 
     async def arrive(
@@ -514,6 +526,40 @@ class LocationStateCache(Protocol):
         self, city_id: str, slot: int, node: int, *, exclude: int, now: int, ttl: int
     ) -> tuple[Presence, ...]:
         """Кто ещё стоит на этом узле прямо сейчас, свежие сверху."""
+
+    # --- чужой бой в узле (ADR 0065) ---
+    #
+    # Стая, за которую уже дерутся, занята: второй раз её не бьют, в бой за неё
+    # вмешиваются. Запись со сроком, как и всё в кэше: брошенный бой отпустит
+    # стаю сам, когда срок выйдет.
+
+    async def engage(
+        self,
+        city_id: str,
+        slot: int,
+        node: int,
+        *,
+        wave: int,
+        place: int,
+        battle_id: str,
+        name: str,
+        character_id: int,
+        now: int,
+        ttl: int,
+    ) -> Engagement | None:
+        """Занять стаю под свой бой. ``None`` - заняли; иначе тот, кто уже дерётся.
+
+        Первый записавший выигрывает: двое, нажавших «Вступить в бой» на одну и ту
+        же стаю разом, не заведут двух боёв с ней.
+        """
+
+    async def engaged_at(
+        self, city_id: str, slot: int, node: int, *, wave: int, now: int, ttl: int
+    ) -> tuple[Engagement, ...]:
+        """За какие стаи этого узла уже дерутся. Чужая волна не считается."""
+
+    async def disengage(self, city_id: str, slot: int, node: int, *, wave: int, place: int) -> None:
+        """Отпустить стаю: бой кончился - её либо забрали, либо она стоит дальше."""
 
     # --- блуждающее подземелье (ADR 0037) ---
     #

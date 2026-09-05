@@ -34,7 +34,7 @@ from mmorpg.application.services.party import PartyStore
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character, InventoryEntry
 from mmorpg.domain.entities.content import GameContent
-from mmorpg.domain.entities.location import LocationState, Presence, Roamer
+from mmorpg.domain.entities.location import Engagement, LocationState, Presence, Roamer
 from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind
 from mmorpg.domain.entities.stats import StatCode
@@ -91,7 +91,7 @@ from mmorpg.presentation.telegram.flows.state import (
     PlayState,
     go_back,
 )
-from mmorpg.presentation.telegram.handlers.combat import open_fight
+from mmorpg.presentation.telegram.handlers.combat import ENGAGED_TTL, open_fight
 from mmorpg.presentation.telegram.handlers.creation import welcome_screen
 from mmorpg.presentation.telegram.messaging import send_screen, send_text
 from mmorpg.presentation.telegram.screens import city as city_screens
@@ -202,6 +202,7 @@ async def play(
     )
     company = await _company(flow, character, locations, now)
     here = await _location_state(content, flow, locations, now)
+    held = await _fights(flow, locations, content, settings, here, now)
     view = await _keeper_view(
         flow,
         character,
@@ -233,6 +234,7 @@ async def play(
         goods=goods,
         settings=accessibility,
         neighbours=company,
+        fights=held,
         keeper=view,
         party=party,
         guild=guild_view,
@@ -353,6 +355,7 @@ async def play(
             parties=parties,
             storage=state.storage,
             location_state=here,
+            locations=locations,
             now=now,
         )
         return
@@ -363,6 +366,7 @@ async def play(
         content, character, updated, inventory, locations, settings, clock.shop_rotation, now
     )
     company = await _company(updated, character, locations, now)
+    engaged = await _fights(updated, locations, content, settings, here, now)
     counted = await _tally(content, updated, characters)
     shown = await _keeper_view(
         updated,
@@ -398,6 +402,7 @@ async def play(
         goods=shelf,
         clock=clock,
         neighbours=company,
+        fights=engaged,
         tally=counted,
         keeper=shown,
         party=gathered,
@@ -428,6 +433,7 @@ async def render_play(
     goods: Goods | None = None,
     clock: Clock | None = None,
     neighbours: Sequence[Presence] = (),
+    fights: Sequence[Engagement] = (),
     tally: Mapping[str, int] | None = None,
     keeper: KeeperView | None = None,
     party: party_screens.PartyView | None = None,
@@ -449,6 +455,7 @@ async def render_play(
         goods=shelf,
         clock=clock,
         neighbours=neighbours,
+        fights=fights,
         tally=tally,
         keeper=keeper,
         party=party,
@@ -490,6 +497,35 @@ async def _company(
         exclude=character.id,
         now=now,
         ttl=PRESENCE_TTL,
+    )
+
+
+async def _fights(
+    flow: PlayState,
+    locations: LocationStateCache,
+    content: GameContent,
+    settings: Settings,
+    here: LocationState,
+    now: int,
+) -> tuple[Engagement, ...]:
+    """За какие стаи этого узла уже дерутся (ADR 0065). Вне локации - ни за какие."""
+    if flow.screen is not ScreenId.LOCATION or not flow.session.active:
+        return ()
+    if not location_known(content, flow.session):
+        return ()
+    location = build_location(
+        content, settings.world_seed, flow.session, epoch=node_rules.location_epoch(here)
+    )
+    left = node_rules.standing_at(
+        visit_seed(settings.world_seed, flow.session), location, here, flow.session.node, now
+    )
+    return await locations.engaged_at(
+        flow.session.city_id,
+        flow.session.slot,
+        flow.session.node,
+        wave=left.wave,
+        now=now,
+        ttl=ENGAGED_TTL,
     )
 
 
@@ -1387,11 +1423,15 @@ async def take_from_node(
     *,
     state: LocationState | None = None,
     wave: int | None = None,
+    place: int = -1,
 ) -> LocationState:
     """Забрать из узла одну единицу: убитую стаю, горсть руды, свёрток из тайника.
 
     Волна, которую видел игрок, передаётся вниз: нажатие, опоздавшее к смене
     волны, ничего не забирает (``domain/rules/nodes.py``).
+
+    ``place`` - какое место волны освободилось (ADR 0065); ``-1`` значит «первое
+    занятое», и так берут там, где мест не выбирают: жила, тайник, святилище.
     """
     seed = visit_seed(settings.world_seed, session)
     known = state
@@ -1411,6 +1451,7 @@ async def take_from_node(
         size=left.size,
         now=now,
         ttl=LOCATION_TTL,
+        place=place,
     )
 
 

@@ -18,7 +18,10 @@ from mmorpg.domain.rules.nodes import REGROWTH_WAVES
 def _state(
     *, waves: dict[int, tuple[int, int]] | None = None, roamer: Roamer | None = None
 ) -> LocationState:
-    nodes = {index: NodeState(wave=w, taken=t) for index, (w, t) in (waves or {}).items()}
+    nodes = {
+        index: NodeState(wave=w, taken_slots=(1 << t) - 1)
+        for index, (w, t) in (waves or {}).items()
+    }
     return LocationState(nodes=MappingProxyType(nodes), roamer=roamer)
 
 

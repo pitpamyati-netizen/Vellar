@@ -39,6 +39,7 @@ from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import (
     ATTACKERS,
     DEFENDERS,
+    MAX_SIDE,
     ActionKind,
     ActionTag,
     BattleAction,
@@ -94,6 +95,8 @@ __all__ = [
     "incoming_damage_factor",
     "intent_of",
     "is_low_health",
+    "join_battle",
+    "joinable",
     "monster_combatant",
     "open_battle",
     "situational_damage",
@@ -285,6 +288,45 @@ def open_battle(
     state = BattleState(combatants=fighters, order=_order_for(fighters, seed, 1))
     state = _drive(content, roster, state, seed)
     return state
+
+
+def joinable(state: BattleState, side: int = ATTACKERS) -> bool:
+    """Есть ли на этой стороне место для ещё одного живого (ADR 0065).
+
+    Мерка та же, что у отряда: пятеро в строю - потолок, который слышно с одного
+    прочтения (``entities/combat.MAX_SIDE``).
+    """
+    if state.is_over:
+        return False
+    return len(state.living(side)) < MAX_SIDE
+
+
+def join_battle(
+    content: GameContent,
+    state: BattleState,
+    character: Character,
+    *,
+    side: int = ATTACKERS,
+) -> tuple[BattleState, Combatant]:
+    """Вступить в уже идущий бой (ADR 0065).
+
+    Очередь пересобирается каждый круг, поэтому вмешавшийся встаёт в неё сам, со
+    следующего круга, и по своей инициативе: ни чужого хода он не отнимает, ни
+    своего вне очереди не получает. Тем же ходом ничего не происходит - бой
+    ждёт, чей ход стоял, того же и ждёт.
+    """
+    combatant = hero_combatant(
+        content,
+        character,
+        combatant_id=max((one.id for one in state.combatants), default=0) + 1,
+        side=side,
+        live=True,
+    )
+    joined = replace(state, combatants=(*state.combatants, combatant))
+    joined = joined.with_events(
+        BattleEvent(kind=EventKind.JOINED, actor_id=combatant.id, actor=combatant.name)
+    )
+    return joined, combatant
 
 
 def _order_for(combatants: Sequence[Combatant], seed: bytes, round_number: int) -> tuple[int, ...]:

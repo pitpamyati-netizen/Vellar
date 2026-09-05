@@ -13,7 +13,13 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
-from mmorpg.domain.entities.location import LocationState, NodeState, Presence, Roamer
+from mmorpg.domain.entities.location import (
+    Engagement,
+    LocationState,
+    NodeState,
+    Presence,
+    Roamer,
+)
 from mmorpg.domain.rules.nodes import refreshed, taken_one
 
 if TYPE_CHECKING:  # pragma: no cover - только для типов
@@ -26,18 +32,43 @@ def _text(value: object) -> str:
 
 
 def _encode(node: NodeState) -> str:
-    return f"{node.wave}:{node.taken}:{node.emptied_at}"
+    return f"{node.wave}:{node.taken}:{node.emptied_at}:{node.taken_slots}"
 
 
 def _decode(raw: Mapping[Any, Any], now: int) -> dict[int, NodeState]:
-    """Сохранённые узлы, каждый уже переведённый на ``now``."""
+    """Сохранённые узлы, каждый уже переведённый на ``now``.
+
+    Запись прежнего образца называла только счёт взятого, без мест
+    (ADR 0065): её читают как «взяли первые столько-то», и узел от этого не
+    теряет ничего, кроме того, какая именно стая в нём пала.
+    """
     nodes: dict[int, NodeState] = {}
     for field, value in raw.items():
-        wave, taken, emptied_at = (int(part) for part in _text(value).split(":"))
+        wave, taken, emptied_at, *rest = (int(part) for part in _text(value).split(":"))
+        marks = rest[0] if rest else (1 << taken) - 1
         nodes[int(_text(field))] = refreshed(
-            NodeState(wave=wave, taken=taken, emptied_at=emptied_at), now
+            NodeState(wave=wave, taken_slots=marks, emptied_at=emptied_at), now
         )
     return nodes
+
+
+def _engagement(field: str, value: str, now: int, ttl: int) -> Engagement | None:
+    """Занятая стая из записи кэша. ``None`` - запись протухла или не читается."""
+    try:
+        node, wave, place = (int(part) for part in field.split(":"))
+        entry = json.loads(value)
+    except ValueError, json.JSONDecodeError:
+        return None
+    if int(entry.get("seen", 0)) + ttl <= now:
+        return None
+    return Engagement(
+        node=node,
+        wave=wave,
+        slot=place,
+        battle_id=str(entry.get("battle", "")),
+        name=str(entry.get("name", "")),
+        character_id=int(entry.get("who", 0)),
+    )
 
 
 class RedisStateCache:
@@ -85,19 +116,36 @@ class RedisLocationStateCache:
     def _hold_key(city_id: str, slot: int) -> str:
         return f"loc:{city_id}:{slot}:roamer:held"
 
+    @staticmethod
+    def _fights_key(city_id: str, slot: int) -> str:
+        return f"loc:{city_id}:{slot}:fights"
+
+    @staticmethod
+    def _fight_field(node: int, wave: int, place: int) -> str:
+        return f"{node}:{wave}:{place}"
+
     async def state(self, city_id: str, slot: int, *, now: int) -> LocationState:
         raw = await self._client.hgetall(self._state_key(city_id, slot))
         return LocationState(nodes=MappingProxyType(_decode(raw, now)))
 
     async def take(
-        self, city_id: str, slot: int, node: int, *, wave: int, size: int, now: int, ttl: int
+        self,
+        city_id: str,
+        slot: int,
+        node: int,
+        *,
+        wave: int,
+        size: int,
+        now: int,
+        ttl: int,
+        place: int = -1,
     ) -> LocationState:
         key = self._state_key(city_id, slot)
         nodes = _decode(await self._client.hgetall(key), now)
         current = nodes.get(node, NodeState())
         # Нажатие, называющее прежнюю волну, принадлежит узлу, который уже перевернулся:
         # это не ошибка, оно просто ничего не меняет.
-        nodes[node] = taken_one(current, size, now) if current.wave == wave else current
+        nodes[node] = taken_one(current, size, now, place) if current.wave == wave else current
         await self._client.hset(key, str(node), _encode(nodes[node]))
         await self._client.expire(key, max(1, ttl))
         return LocationState(nodes=MappingProxyType(nodes))
@@ -151,6 +199,64 @@ class RedisLocationStateCache:
             await self._client.hdel(key, *stale)
         seen.sort(key=lambda item: item[1], reverse=True)
         return tuple(presence for presence, _ in seen)
+
+    # --- чужой бой в узле (ADR 0065) ---
+
+    async def engage(
+        self,
+        city_id: str,
+        slot: int,
+        node: int,
+        *,
+        wave: int,
+        place: int,
+        battle_id: str,
+        name: str,
+        character_id: int,
+        now: int,
+        ttl: int,
+    ) -> Engagement | None:
+        key = self._fights_key(city_id, slot)
+        field = self._fight_field(node, wave, place)
+        value = json.dumps(
+            {"battle": battle_id, "name": name, "who": character_id, "seen": now},
+            ensure_ascii=False,
+        )
+        taken = not await self._client.hsetnx(key, field, value)
+        await self._client.expire(key, max(1, ttl))
+        if not taken:
+            return None
+        raw = await self._client.hget(key, field)
+        held = _engagement(field, _text(raw), now, ttl) if raw else None
+        if held is not None:
+            return held
+        # Запись стухла между двумя обращениями: стая свободна, занимаем её.
+        await self._client.hset(key, field, value)
+        return None
+
+    async def engaged_at(
+        self, city_id: str, slot: int, node: int, *, wave: int, now: int, ttl: int
+    ) -> tuple[Engagement, ...]:
+        key = self._fights_key(city_id, slot)
+        raw = await self._client.hgetall(key)
+        held: list[Engagement] = []
+        stale: list[str] = []
+        for field, value in raw.items():
+            name = _text(field)
+            one = _engagement(name, _text(value), now, ttl)
+            if one is None:
+                stale.append(name)
+                continue
+            if one.node == node and one.wave == wave:
+                held.append(one)
+        if stale:
+            await self._client.hdel(key, *stale)
+        return tuple(sorted(held, key=lambda one: one.slot))
+
+    async def disengage(self, city_id: str, slot: int, node: int, *, wave: int, place: int) -> None:
+        await self._client.hdel(
+            self._fights_key(city_id, slot), self._fight_field(node, wave, place)
+        )
 
     # --- блуждающее подземелье (ADR 0037) ---
 

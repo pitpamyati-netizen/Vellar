@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from types import MappingProxyType
 
 from mmorpg.domain.entities.character import Character
@@ -321,11 +322,11 @@ def _location_fit(location: Location, level: int) -> str:
     return f"{band}, по вашему уровню"
 
 
-def risk_line(node: LocationNode, character_level: int) -> str:
-    """Как, скорее всего, пойдёт этот бой, - сказанное до того, как его выбрали.
+def risk_note(node: LocationNode, character_level: int) -> str:
+    """Чем этот бой обернётся - словами, без номера уровня.
 
-    Один номер уровня не говорит игроку ничего: важна разница, её экран и
-    называет.
+    Номер называет сама стая, когда стаи перечислены поимённо (ADR 0065):
+    повторять его строкой ниже значит читать одно и то же дважды.
     """
     if not node.kind.is_combat:
         return ""
@@ -342,11 +343,68 @@ def risk_line(node: LocationNode, character_level: int) -> str:
         NodeKind.ELITE_BATTLE: " Эпический противник держится вдвое дольше обычного.",
         NodeKind.BOSS_BATTLE: " Хозяин логова держится вчетверо дольше обычного.",
     }.get(node.kind, "")
-    return f"Уровень узла {node.level}, ваш {character_level}: {risk}.{tier}"
+    return f"{risk}.{tier}"
+
+
+def risk_line(node: LocationNode, character_level: int) -> str:
+    """То же самое, но с обоими уровнями: так его слышат в соседних узлах.
+
+    Один номер уровня не говорит игроку ничего: важна разница, её экран и
+    называет.
+    """
+    note = risk_note(node, character_level)
+    return f"Уровень узла {node.level}, ваш {character_level}: {note}" if note else ""
 
 
 def attack_label(name: str) -> Label:
     return label(f"Напасть: {name}")
+
+
+#: Слово, которым зовут в чужой бой (ADR 0065). Первое и неизменное: по нему
+#: ветка узнаёт нажатие, а игрок - кнопку, которую нажимал вчера.
+JOIN_FIGHT = "Вмешаться"
+
+
+@dataclass(frozen=True, slots=True)
+class NodeFoe:
+    """Одна стая, стоящая в узле, - так её слышит игрок (ADR 0065).
+
+    ``place`` - её место в волне узла, и оно не меняется от того, что соседнюю
+    убили: третья стая остаётся третьей. ``fighter`` - имя того, чей бой её уже
+    держит; пусто - стая свободна.
+    """
+
+    place: int
+    line: str
+    level: int
+    fighter: str = ""
+
+    @property
+    def busy(self) -> bool:
+        return bool(self.fighter)
+
+
+def foe_number(foe: NodeFoe, single: bool) -> str:
+    """Номер стаи в узле или пустая строка, если стая в нём одна."""
+    return "" if single else f" {foe.place + 1}"
+
+
+def foe_label(kind: NodeKind, foe: NodeFoe, single: bool = False) -> Label:
+    """Кнопка боя с одной названной стаей: слово действия, номер, кто это."""
+    return label(f"{NODE_ACTIONS[kind]}{foe_number(foe, single)}: {foe.line}")
+
+
+def join_label(foe: NodeFoe, single: bool = False) -> Label:
+    """Кнопка «вмешаться» - в тот бой, что уже идёт за эту стаю (ADR 0065)."""
+    return label(f"{JOIN_FIGHT}{foe_number(foe, single)}: {foe.line}")
+
+
+def foe_line(foe: NodeFoe, single: bool = False) -> str:
+    """Строка стаи в узле: кто, какого уровня и свободна ли она."""
+    number = "" if single else f"{foe.place + 1}. "
+    if foe.busy:
+        return f"{number}{foe.line}, уровень {foe.level}: сражается {foe.fighter}."
+    return f"{number}{foe.line}, уровень {foe.level}."
 
 
 def invite_label(name: str) -> Label:
@@ -428,6 +486,7 @@ def location_screen(
     mood: LocationMood = LocationMood.UNTOUCHED,
     tool_note: str = "",
     watch: Mapping[int, str] = MappingProxyType({}),
+    foes: Sequence[NodeFoe] = (),
     notice: str = "",
 ) -> Screen:
     """Узел локации: что здесь, кто здесь и куда отсюда.
@@ -440,6 +499,10 @@ def location_screen(
     сырью (``flows/play.node_watch``, ADR 0063). Экран не гадает и не хранит:
     и то и другое - чистые функции от сида, и названы они теми же числами, с
     какими их соберёт бой.
+
+    ``foes`` - стаи этого узла поимённо, каждая со своим местом в волне и своей
+    кнопкой (ADR 0065). Стая, за которую уже дерутся, названа тем, чей это бой, и
+    зовёт не напасть, а вмешаться.
     """
     neighbours = tuple(location.node(index) for index in node.links)
     # Подземелье этого узла, если оно тут и свободно, - только тогда рисуется кнопка.
@@ -469,11 +532,20 @@ def location_screen(
         lines.append(node_left_line(here, node.kind))
     else:
         lines.append(f"{NODE_DESCRIPTIONS[node.kind].capitalize()}.")
-        seen = watch.get(node.index, "")
-        if seen:
+        alone = here.size <= 1
+        if foes:
+            # Стаи в узле стоят порознь, и каждая называет себя сама: одна строка
+            # на стаю, номер держит её место в волне (ADR 0065).
+            lines.append(f"{WATCH_WORDS.get(node.kind, 'Здесь')}:")
+            lines.extend(foe_line(foe, alone) for foe in foes)
+        elif seen := watch.get(node.index, ""):
             lines.append(f"{WATCH_WORDS.get(node.kind, 'Здесь')}: {seen}.")
-        risk = risk_line(node, character_level)
-        if risk:
+        risk = (
+            f"Ваш уровень {character_level}: {risk_note(node, character_level)}"
+            if foes
+            else risk_line(node, character_level)
+        )
+        if risk_note(node, character_level):
             lines.append(risk)
         lines.append(node_left_line(here, node.kind))
         if node.kind is NodeKind.GATHER and tool_note:
@@ -543,8 +615,17 @@ def location_screen(
     elif pvp:
         lines.append("Здесь вольная земля: на этом узле могут напасть. Сейчас никого нет.")
 
-    action = node_action(node.kind, "" if here.empty else watch.get(node.index, ""))
-    rows: list[tuple[Label, ...]] = [(action,)]
+    if foes:
+        # У каждой стаи своя кнопка: занятая зовёт вмешаться в тот бой, что за
+        # неё уже идёт, свободная - начать свой (ADR 0065).
+        alone = here.size <= 1
+        rows: list[tuple[Label, ...]] = [
+            (join_label(foe, alone),) if foe.busy else (foe_label(node.kind, foe, alone),)
+            for foe in foes
+        ]
+    else:
+        action = node_action(node.kind, "" if here.empty else watch.get(node.index, ""))
+        rows = [(action,)]
     if roamer_open is not None:
         rows.insert(0, (labels.ENTER_ROAMER,))
     for person in others:

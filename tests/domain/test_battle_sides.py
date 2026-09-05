@@ -23,7 +23,14 @@ from mmorpg.domain.entities.combat import (
 )
 from mmorpg.domain.entities.location import Enemy, EnemyKind
 from mmorpg.domain.rules import party as party_rules
-from mmorpg.domain.rules.combat import act, hero_combatant, monster_combatant, open_battle
+from mmorpg.domain.rules.combat import (
+    act,
+    hero_combatant,
+    join_battle,
+    joinable,
+    monster_combatant,
+    open_battle,
+)
 
 SEED = b"sides-seed-00001"
 
@@ -237,3 +244,41 @@ def test_every_hero_keeps_their_own_trace(content: GameContent) -> None:
     first, second = after.by_id(1), after.by_id(2)
     assert first is not None and second is not None
     assert first.trace != second.trace, "сходил один - след появился у него"
+
+
+# --- вмешательство в чужой бой (ADR 0065) ------------------------------
+
+
+def test_a_third_player_joins_the_fight_already_going(content: GameContent) -> None:
+    """Вмешавшийся встаёт на сторону нападающих и в общую очередь."""
+    state, _ = build(content, [(a_hero("Аргус", 1), True)], enemies=(make_enemy(health=9_000),))
+    assert len(state.living(ATTACKERS)) == 1
+
+    joined, newcomer = join_battle(content, state, a_hero("Мирна", 2))
+    assert newcomer.side == ATTACKERS
+    assert newcomer.live, "за живым игроком движок не ходит"
+    assert newcomer.id not in {one.id for one in state.combatants}, "номер свой, не чужой"
+    assert len(joined.living(ATTACKERS)) == 2
+    assert any(event.kind is EventKind.JOINED for event in joined.events)
+
+
+def test_joining_takes_nobody_else_turn(content: GameContent) -> None:
+    """Бой ждал того же, кого ждал: вмешательство ходом не считается."""
+    state, _ = build(content, [(a_hero("Аргус", 1), True)], enemies=(make_enemy(health=9_000),))
+    before = state.active
+    joined, newcomer = join_battle(content, state, a_hero("Мирна", 2))
+    assert before is not None
+    after = joined.active
+    assert after is not None and after.id == before.id
+    assert (joined.round, joined.cursor) == (state.round, state.cursor)
+    assert newcomer.id not in joined.order, "в очередь он встанет со следующего круга"
+
+
+def test_the_side_holds_five_and_no_more(content: GameContent) -> None:
+    """Мерка та же, что у отряда: шестого в строй не поставить."""
+    party = [(a_hero(f"Боец {index}", index), True) for index in range(1, 6)]
+    state, _ = build(content, party, enemies=(make_enemy(health=9_000),))
+    assert not joinable(state)
+
+    lonely, _ = build(content, [(a_hero("Аргус", 1), True)], enemies=(make_enemy(health=9_000),))
+    assert joinable(lonely)

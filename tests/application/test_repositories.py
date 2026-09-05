@@ -379,7 +379,7 @@ async def test_a_press_that_names_an_older_wave_takes_nothing() -> None:
     cache = InMemoryLocationStateCache()
     await cache.take("farhold", 1, 3, wave=0, size=1, now=1_000, ttl=600)
     late = await cache.take("farhold", 1, 3, wave=0, size=1, now=1_000 + RESPAWN_SECONDS, ttl=600)
-    assert late.node(3) == NodeState(wave=1, taken=0, emptied_at=0)
+    assert late.node(3) == NodeState(wave=1, taken_slots=0, emptied_at=0)
 
 
 async def test_an_untouched_location_fills_back_up_eventually() -> None:
@@ -388,6 +388,82 @@ async def test_an_untouched_location_fills_back_up_eventually() -> None:
     await cache.take("farhold", 1, 1, wave=0, size=3, now=1_000, ttl=600)
     clock.advance(601)
     assert await cache.state("farhold", 1, now=1_000) == LocationState()
+
+
+async def test_a_pack_someone_fights_is_taken_for_everyone_else() -> None:
+    """За стаю дерутся один раз: второй нажавший получает чужой бой (ADR 0065)."""
+    cache = InMemoryLocationStateCache()
+    assert (
+        await cache.engage(
+            "farhold",
+            1,
+            3,
+            wave=0,
+            place=1,
+            battle_id="7-1000",
+            name="Алина",
+            character_id=7,
+            now=1_000,
+            ttl=600,
+        )
+        is None
+    )
+
+    held = await cache.engage(
+        "farhold",
+        1,
+        3,
+        wave=0,
+        place=1,
+        battle_id="9-1001",
+        name="Мирна",
+        character_id=9,
+        now=1_001,
+        ttl=600,
+    )
+    assert held is not None
+    assert (held.battle_id, held.name) == ("7-1000", "Алина")
+
+    seen = await cache.engaged_at("farhold", 1, 3, wave=0, now=1_001, ttl=600)
+    assert [one.slot for one in seen] == [1]
+    assert await cache.engaged_at("farhold", 1, 3, wave=1, now=1_001, ttl=600) == ()
+    assert await cache.engaged_at("farhold", 1, 4, wave=0, now=1_001, ttl=600) == ()
+
+
+async def test_a_finished_fight_lets_the_pack_go() -> None:
+    cache = InMemoryLocationStateCache()
+    await cache.engage(
+        "farhold",
+        1,
+        3,
+        wave=0,
+        place=0,
+        battle_id="7-1000",
+        name="Алина",
+        character_id=7,
+        now=1_000,
+        ttl=600,
+    )
+    await cache.disengage("farhold", 1, 3, wave=0, place=0)
+    assert await cache.engaged_at("farhold", 1, 3, wave=0, now=1_000, ttl=600) == ()
+
+
+async def test_an_abandoned_fight_stops_holding_the_pack_eventually() -> None:
+    """Отметка живёт со сроком: брошенный бой не запирает стаю навсегда."""
+    cache = InMemoryLocationStateCache()
+    await cache.engage(
+        "farhold",
+        1,
+        3,
+        wave=0,
+        place=2,
+        battle_id="7-1000",
+        name="Алина",
+        character_id=7,
+        now=1_000,
+        ttl=600,
+    )
+    assert await cache.engaged_at("farhold", 1, 3, wave=0, now=1_700, ttl=600) == ()
 
 
 async def test_people_are_seen_on_their_own_node_only() -> None:

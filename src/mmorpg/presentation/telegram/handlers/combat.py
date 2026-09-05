@@ -13,7 +13,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
 from aiogram import Bot, F, Router
@@ -26,6 +26,7 @@ from aiogram.types import Message
 
 from mmorpg import economy_log
 from mmorpg.application.services.battle import (
+    BATTLE_TTL,
     BattleKind,
     BattleSession,
     BattleStore,
@@ -56,7 +57,7 @@ from mmorpg.domain.rules import party as party_rules
 from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import roamer as roamer_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
-from mmorpg.domain.rules.combat import act
+from mmorpg.domain.rules.combat import act, join_battle, joinable
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.domain.rules.tutorial import TutorialTask
 from mmorpg.logging import get_logger
@@ -67,7 +68,7 @@ from mmorpg.presentation.telegram.flows.play import (
     descent_fight_seed,
     dungeon_run_seed,
     location_known,
-    node_fight_seed,
+    node_pack_seed,
     visit_seed,
 )
 from mmorpg.presentation.telegram.flows.state import Descent, LocationSession, PlayState
@@ -123,6 +124,12 @@ class Payout:
     level_up: str = ""
 
 
+#: Сколько держится отметка «за эту стаю дерутся» (ADR 0065). Ровно столько же
+#: живёт и брошенный бой, который её держит (``services/battle.BATTLE_TTL``):
+#: стая не освобождается раньше, чем истлеет бой за неё.
+ENGAGED_TTL = BATTLE_TTL
+
+
 # --- начало боя -------------------------------------------------------
 
 
@@ -140,6 +147,7 @@ async def open_fight(
     parties: PartyStore,
     storage: BaseStorage | None = None,
     location_state: LocationState | None = None,
+    locations: LocationStateCache | None = None,
     now: int = 0,
 ) -> None:
     """Собрать бой, которого попросил игровой поток, и показать его всем."""
@@ -153,6 +161,26 @@ async def open_fight(
             await _show(message, state, content, character, session, storage=storage, emoji=emoji)
             return
 
+    if flow.fight.startswith("join:"):
+        # Вмешаться - это не завести бой, а войти в чужой (ADR 0065): ни сборки
+        # противника, ни занятости стаи здесь нет, стая уже занята тем боем.
+        await _join_fight(
+            message,
+            state,
+            content=content,
+            settings=settings,
+            character=character,
+            flow=flow,
+            characters=characters,
+            store=store,
+            locations=locations,
+            location_state=location_state or LocationState(),
+            storage=storage,
+            emoji=emoji,
+            now=now,
+        )
+        return
+
     allies = await _party_of(character, parties, characters, store)
     session, roster = await _spawn(
         message,
@@ -165,6 +193,7 @@ async def open_fight(
         store=store,
         parties=parties,
         location_state=location_state or LocationState(),
+        locations=locations,
         now=now,
     )
     if session is None:
@@ -212,6 +241,111 @@ async def _party_of(
     return tuple(companions)
 
 
+def _picked_place(fight: str, free: Sequence[int]) -> int:
+    """Место стаи, которое назвала ветка (ADR 0065).
+
+    Нажатие со старой клавиатуры может назвать место, с которого стаю уже увели:
+    тогда берётся первое стоящее - иначе кнопка вела бы в пустоту.
+    """
+    standing = tuple(free)
+    named = fight.removeprefix("node:")
+    place = int(named) if named.isdigit() else -1
+    if place in standing:
+        return place
+    # Вычищенный узел ветка не пускает в бой вовсе (``flows/play``), поэтому
+    # здесь остаётся только первое стоящее место - или самое первое, если узел
+    # уже пуст.
+    return standing[0] if standing else 0
+
+
+async def _join_fight(
+    message: Message,
+    state: FSMContext,
+    *,
+    content: GameContent,
+    settings: Settings,
+    character: Character,
+    flow: PlayState,
+    characters: CharacterRepository,
+    store: BattleStore,
+    locations: LocationStateCache | None,
+    location_state: LocationState,
+    storage: BaseStorage | None,
+    emoji: bool,
+    now: int,
+) -> None:
+    """Вмешаться в бой, который уже идёт за стаю этого узла (ADR 0065).
+
+    Ни стаи, ни платы это не удваивает: бой один, противник тот же, а плата
+    делится на всех, кто в нём стоял (``domain/rules/party.py``). Очередь
+    вмешавшийся получает со следующего круга - по своей инициативе, как все.
+    """
+    if locations is None or not location_known(content, flow.session):
+        await message.answer("Того боя здесь уже нет.")
+        return
+    location = build_location(
+        content,
+        settings.world_seed,
+        flow.session,
+        epoch=node_rules.location_epoch(location_state),
+    )
+    left = node_rules.standing_at(
+        visit_seed(settings.world_seed, flow.session),
+        location,
+        location_state,
+        flow.session.node,
+        now,
+    )
+    named = flow.fight.removeprefix("join:")
+    place = int(named) if named.isdigit() else -1
+    held = next(
+        (
+            one
+            for one in await locations.engaged_at(
+                flow.session.city_id,
+                flow.session.slot,
+                flow.session.node,
+                wave=left.wave,
+                now=now,
+                ttl=ENGAGED_TTL,
+            )
+            if one.slot == place
+        ),
+        None,
+    )
+    session = await store.load(held.battle_id) if held is not None else None
+    if held is None or session is None or session.state.is_over:
+        if held is not None:
+            await locations.disengage(
+                flow.session.city_id,
+                flow.session.slot,
+                flow.session.node,
+                wave=left.wave,
+                place=place,
+            )
+        await message.answer("Тот бой уже кончился. Эта стая стоит свободно, нападайте сами.")
+        return
+    if not joinable(session.state):
+        await message.answer("В том бою уже впятером: больше в строй никого не поставить.")
+        return
+
+    joined, _ = join_battle(content, session.state, character)
+    session = replace(session, state=joined)
+    await store.save(session)
+    landing = replace(flow, screen=ScreenId.COMBAT, fight="")
+    await state.set_state(Play.combat)
+    await state.update_data({PLAY_KEY: landing.serialise(), STATE_KEY: session.id})
+    await _broadcast(
+        message,
+        content=content,
+        session=session,
+        roster=await _roster(session, characters),
+        actor_id=character.id,
+        storage=storage,
+        emoji=emoji,
+    )
+
+
 async def _spawn(
     message: Message,
     *,
@@ -224,6 +358,7 @@ async def _spawn(
     store: BattleStore,
     parties: PartyStore,
     location_state: LocationState,
+    locations: LocationStateCache | None,
     now: int,
 ) -> tuple[BattleSession | None, dict[int, Character]]:
     """Кто с кем дерётся. Один сборщик на все виды боя."""
@@ -324,9 +459,53 @@ async def _spawn(
     left = node_rules.standing_at(
         visit_seed(settings.world_seed, flow.session), location, location_state, node.index, now
     )
-    # Волна и то, сколько из неё уже выбито, обе в семени: вторая стая в узле -
-    # не первая заново (``domain/rules/nodes.py``).
-    seed = derive(node_fight_seed(settings.world_seed, flow.session, left.wave), left.taken)
+    # Место стаи в волне называет ветка: игрок выбрал именно её из тех, что
+    # стоят в узле (ADR 0065). Нажатие со старой клавиатуры может назвать место,
+    # которого уже нет, - тогда берётся первое стоящее.
+    place = _picked_place(flow.fight, left.free)
+    # Волна и место в ней - обе в семени: вторая стая в узле не первая заново
+    # (``domain/rules/nodes.py``).
+    seed = node_pack_seed(
+        settings.world_seed, flow.session, index=node.index, wave=left.wave, place=place
+    )
+    if locations is not None:
+        # Стая занимается до боя и одним движением: двое, нажавших на одного и
+        # того же волка, не заведут двух боёв с ним (ADR 0065).
+        held = await locations.engage(
+            flow.session.city_id,
+            flow.session.slot,
+            node.index,
+            wave=left.wave,
+            place=place,
+            battle_id=battle_id,
+            name=character.name,
+            character_id=character.id,
+            now=now or int(time.time()),
+            ttl=ENGAGED_TTL,
+        )
+        if held is not None:
+            if await store.load(held.battle_id) is not None:
+                await message.answer(
+                    f"За эту стаю уже дерётся {held.name}. "
+                    "Вернитесь в узел: в этот бой можно вмешаться."
+                )
+                return None, {}
+            # Бой, державший стаю, истлел: отметка отпускается, и стая наша.
+            await locations.disengage(
+                flow.session.city_id, flow.session.slot, node.index, wave=left.wave, place=place
+            )
+            await locations.engage(
+                flow.session.city_id,
+                flow.session.slot,
+                node.index,
+                wave=left.wave,
+                place=place,
+                battle_id=battle_id,
+                name=character.name,
+                character_id=character.id,
+                now=now or int(time.time()),
+                ttl=ENGAGED_TTL,
+            )
     # Прозвище-модификатор бывает только у сильного одиночки и хозяина логова, и
     # никогда у обычной стаи (ADR 0042); эпиков в локации мало (ADR 0034). В
     # выбитой и встревоженной округе эпик и хозяин логова злее (ADR 0055).
@@ -352,6 +531,7 @@ async def _spawn(
         slot=flow.session.slot,
         node=node.index,
         wave=left.wave,
+        place=place,
     )
 
 
@@ -831,6 +1011,13 @@ async def _finish(
                     content, character, derived_stats(content, character), grown
                 )
 
+    if session.kind is BattleKind.NODE:
+        # Бой кончился - стая отпущена: победа её забрала, поражение оставило
+        # стоять, и в обоих случаях держать её незачем (ADR 0065).
+        await locations.disengage(
+            session.city_id, session.slot, session.node, wave=session.wave, place=session.place
+        )
+
     finished = replace(session, settled=True)
     await store.release(finished)
     await _land_everyone(message, state, content, finished, updated, flow, next_flow)
@@ -1251,7 +1438,14 @@ async def _take_node(
         return ""
     now = int(time.time())
     node_state = await take_from_node(
-        content, visit, session.node, locations, now, settings, wave=session.wave
+        content,
+        visit,
+        session.node,
+        locations,
+        now,
+        settings,
+        wave=session.wave,
+        place=session.place,
     )
     location = build_location(
         content, settings.world_seed, visit, epoch=node_rules.location_epoch(node_state)
@@ -1384,6 +1578,7 @@ async def _after_the_fight(
                 state_cache=state_cache,
                 parties=parties,
                 storage=_storage_of(state),
+                locations=locations,
             )
             return
     await _leave_to_play(message, state, content, settings, flow, character, locations)

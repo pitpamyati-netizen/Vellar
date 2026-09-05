@@ -574,6 +574,10 @@ def describe_event(event: BattleEvent, viewer_id: int = 0) -> str:
             return "Разнобой: три разных тега подряд, противник теряет ближайший ход."
         case EventKind.BREAKTHROUGH:
             return f"Разнобой: {event.actor} сбивает ритм и бьёт снова."
+        case EventKind.JOINED if you_hit:
+            return "Вы вмешались в бой. Ваш ход придёт со следующего круга."
+        case EventKind.JOINED:
+            return f"{event.actor} вмешивается в бой и встаёт в очередь со следующего круга."
         case _:
             return ""
 

@@ -12,7 +12,13 @@ from collections.abc import Callable
 from dataclasses import replace
 from types import MappingProxyType
 
-from mmorpg.domain.entities.location import LocationState, NodeState, Presence, Roamer
+from mmorpg.domain.entities.location import (
+    Engagement,
+    LocationState,
+    NodeState,
+    Presence,
+    Roamer,
+)
 from mmorpg.domain.rules.nodes import refreshed, taken_one
 
 
@@ -49,6 +55,9 @@ class InMemoryLocationStateCache:
         #: внутри) со своим сроком.
         self._roamers: dict[str, tuple[Roamer, float]] = {}
         self._holds: dict[str, tuple[int, float]] = {}
+        #: Стаи, за которые уже дерутся: место в волне узла - и чей это бой
+        #: (ADR 0065).
+        self._fights: dict[str, dict[tuple[int, int, int], tuple[Engagement, int]]] = {}
 
     @staticmethod
     def _key(city_id: str, slot: int) -> str:
@@ -70,13 +79,22 @@ class InMemoryLocationStateCache:
         return LocationState(nodes=MappingProxyType(nodes))
 
     async def take(
-        self, city_id: str, slot: int, node: int, *, wave: int, size: int, now: int, ttl: int
+        self,
+        city_id: str,
+        slot: int,
+        node: int,
+        *,
+        wave: int,
+        size: int,
+        now: int,
+        ttl: int,
+        place: int = -1,
     ) -> LocationState:
         nodes = dict(self._live_nodes(city_id, slot))
         current = refreshed(nodes.get(node, NodeState()), now)
         # Нажатие, называющее прежнюю волну, принадлежит узлу, который уже перевернулся:
         # это не ошибка, оно просто ничего не меняет.
-        nodes[node] = taken_one(current, size, now) if current.wave == wave else current
+        nodes[node] = taken_one(current, size, now, place) if current.wave == wave else current
         self._states[self._key(city_id, slot)] = (nodes, self._clock() + ttl)
         return LocationState(nodes=MappingProxyType(dict(nodes)))
 
@@ -102,6 +120,58 @@ class InMemoryLocationStateCache:
         ]
         fresh.sort(key=lambda item: item[1], reverse=True)
         return tuple(presence for presence, _ in fresh)
+
+    # --- чужой бой в узле (ADR 0065) ---
+
+    async def engage(
+        self,
+        city_id: str,
+        slot: int,
+        node: int,
+        *,
+        wave: int,
+        place: int,
+        battle_id: str,
+        name: str,
+        character_id: int,
+        now: int,
+        ttl: int,
+    ) -> Engagement | None:
+        held = self._fights.setdefault(self._key(city_id, slot), {})
+        standing = held.get((node, wave, place))
+        if standing is not None and standing[1] + ttl > now:
+            return standing[0]
+        held[(node, wave, place)] = (
+            Engagement(
+                node=node,
+                wave=wave,
+                slot=place,
+                battle_id=battle_id,
+                name=name,
+                character_id=character_id,
+            ),
+            now,
+        )
+        return None
+
+    async def engaged_at(
+        self, city_id: str, slot: int, node: int, *, wave: int, now: int, ttl: int
+    ) -> tuple[Engagement, ...]:
+        held = self._fights.get(self._key(city_id, slot), {})
+        for key, (_, seen) in list(held.items()):
+            if seen + ttl <= now:
+                del held[key]
+        return tuple(
+            sorted(
+                (one for one, _ in held.values() if one.node == node and one.wave == wave),
+                key=lambda one: one.slot,
+            )
+        )
+
+    async def disengage(self, city_id: str, slot: int, node: int, *, wave: int, place: int) -> None:
+        held = self._fights.get(self._key(city_id, slot))
+        if held is not None:
+            held.pop((node, wave, place), None)
 
     # --- блуждающее подземелье (ADR 0037) ---
 

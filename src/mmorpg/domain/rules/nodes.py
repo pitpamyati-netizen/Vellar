@@ -6,9 +6,11 @@
 
 Узел держит **волну**: несколько стычек в засаде, несколько горстей руды в жиле,
 пару свёртков в тайнике. Каждое действие забирает одну единицу, а не весь узел
-разом, — поэтому флага «кто-то здесь прошёл» больше нет: есть счёт того, сколько
-осталось. Когда волна кончилась, узел пуст, и через :data:`RESPAWN_SECONDS`
-на его месте встаёт следующая волна — другие противники, другие находки.
+разом, — поэтому флага «кто-то здесь прошёл» больше нет: есть места волны и то,
+какие из них опустели. Место, а не очередь: стая с третьего места остаётся
+третьей и после того, как пала первая (ADR 0065). Когда волна кончилась, узел
+пуст, и через :data:`RESPAWN_SECONDS` на его месте встаёт следующая волна —
+другие противники, другие находки.
 
 Всё здесь — чистая арифметика: момент приходит аргументом, случайность —
 явным сидом (``Claude.md``, правило 1).
@@ -82,25 +84,46 @@ def refreshed(state: NodeState, now: int) -> NodeState:
     возвращается как есть — функция ничего не решает за игрока.
     """
     if state.emptied_at and now - state.emptied_at >= RESPAWN_SECONDS:
-        return NodeState(wave=state.wave + 1, taken=0, emptied_at=0)
+        return NodeState(wave=state.wave + 1, taken_slots=0, emptied_at=0)
     return state
+
+
+def free_slots(state: NodeState, size: int) -> tuple[int, ...]:
+    """Места волны, на которых ещё кто-то стоит, по порядку (ADR 0065).
+
+    Место — это и есть стая: её собирают из сида места, а не из счётчика, и
+    убитая вторая не превращает третью во вторую.
+    """
+    if state.emptied_at or size <= 0:
+        return ()
+    return tuple(slot for slot in range(size) if state.holds(slot))
 
 
 def remaining(state: NodeState, size: int) -> int:
     """Сколько единиц в узле ещё не забрали."""
-    if state.emptied_at:
-        return 0
-    return max(0, size - state.taken)
+    return len(free_slots(state, size))
 
 
-def taken_one(state: NodeState, size: int, now: int) -> NodeState:
-    """Забрать одну единицу. Последняя ставит отметку времени: узел опустел."""
+def taken_one(state: NodeState, size: int, now: int, slot: int = -1) -> NodeState:
+    """Забрать одну единицу. Последняя ставит отметку времени: узел опустел.
+
+    ``slot`` — какое именно место волны освободилось; ``-1`` значит «первое
+    занятое», и так берут те узлы, где выбирать не из чего: жила, тайник,
+    святилище. Место, с которого уже взяли, второй раз не считается: два боя за
+    одну стаю не вычистят узел вдвое быстрее.
+    """
     if state.emptied_at or size <= 0:
         return state
-    count = state.taken + 1
-    if count >= size:
-        return NodeState(wave=state.wave, taken=size, emptied_at=max(1, now))
-    return NodeState(wave=state.wave, taken=count, emptied_at=0)
+    standing = free_slots(state, size)
+    if not standing:
+        return state
+    picked = standing[0] if slot < 0 else slot
+    if picked not in standing:
+        return state
+    marks = state.taken_slots | 1 << picked
+    if len(standing) <= 1:
+        return NodeState(wave=state.wave, taken_slots=marks, emptied_at=max(1, now))
+    return NodeState(wave=state.wave, taken_slots=marks, emptied_at=0)
 
 
 def seconds_until_refill(state: NodeState, now: int) -> int:
@@ -120,6 +143,8 @@ class Standing:
     taken: int
     wave: int
     refill_in: int
+    #: Места волны, на которых ещё кто-то стоит (ADR 0065). Пусто у пустого узла.
+    free: tuple[int, ...] = ()
 
     @property
     def empty(self) -> bool:
@@ -136,13 +161,15 @@ def standing_at(
     """Состояние одного узла: волна, счёт и срок до следующей волны."""
     node = refreshed(state.node(index), now)
     size = wave_size(location_seed_value, index, location.node(index).kind, node.wave)
+    standing = free_slots(node, size)
     return Standing(
         index=index,
         size=size,
-        left=remaining(node, size),
+        left=len(standing),
         taken=node.taken,
         wave=node.wave,
         refill_in=seconds_until_refill(node, now),
+        free=standing,
     )
 
 

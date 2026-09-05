@@ -184,6 +184,9 @@ class EventKind(StrEnum):
     BREACH = "breach"
     #: Разнобой: три разных тега подряд, противник не поспел с ответом.
     BREAKTHROUGH = "breakthrough"
+    #: В идущий бой вмешался ещё один живой: он встанет в очередь со следующего
+    #: круга (ADR 0065).
+    JOINED = "joined"
     ROUND = "round"
 
 

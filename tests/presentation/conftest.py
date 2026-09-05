@@ -115,7 +115,7 @@ def worked_location(location: GeneratedLocation) -> dict[int, node_rules.Standin
     как устроено место, экран второй раз не читает.
     """
     worked = next(node for node in location.nodes if node.kind is NodeKind.BATTLE)
-    started = LocationState(nodes={worked.index: NodeState(taken=99, emptied_at=1)})
+    started = LocationState(nodes={worked.index: NodeState(taken_slots=0xFF, emptied_at=1)})
     return node_rules.standing(
         location_seed("vellar-test", location.city_id, location.slot),
         location,
@@ -137,13 +137,33 @@ def full_location(location: GeneratedLocation) -> dict[int, node_rules.Standing]
 def emptied_location(location: GeneratedLocation) -> dict[int, node_rules.Standing]:
     """Локация, из которой всё вынесли минуту назад: узлы ждут новой волны."""
     emptied = LocationState(
-        nodes={node.index: NodeState(taken=99, emptied_at=1) for node in location.nodes}
+        nodes={node.index: NodeState(taken_slots=0xFF, emptied_at=1) for node in location.nodes}
     )
     return node_rules.standing(
         location_seed("vellar-test", location.city_id, location.slot),
         location,
         emptied,
         now=60,
+    )
+
+
+def battle_node(location: GeneratedLocation) -> LocationNode:
+    """Первая засада этой локации: узел, где стаи стоят поимённо (ADR 0065)."""
+    return next(node for node in location.nodes if node.kind is NodeKind.BATTLE)
+
+
+def standing_foes(location: GeneratedLocation) -> tuple[play.NodeFoe, ...]:
+    """Стаи засады, какими их видит игрок: за вторую уже дерутся."""
+    node = battle_node(location)
+    here = full_location(location)[node.index]
+    return tuple(
+        play.NodeFoe(
+            place=place,
+            line="Серый волк, 3 штуки" if place else "Матёрый кабан",
+            level=node.level,
+            fighter="Алина" if place == 1 else "",
+        )
+        for place in here.free
     )
 
 
@@ -894,6 +914,13 @@ def all_screens(
             sample_location.node(1),
             standing=emptied_location(sample_location),
             roamer=Roamer(node=1, group=True, difficulty="delve", level=3, stamp=1),
+        ),
+        play.location_screen(
+            sample_location,
+            battle_node(sample_location),
+            standing=full_location(sample_location),
+            character_level=3,
+            foes=standing_foes(sample_location),
         ),
         play.location_screen(
             sample_location,

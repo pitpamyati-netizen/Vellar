@@ -24,6 +24,7 @@ from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import Chat, Message, User
 
+from mmorpg.application.services.battle import BattleStore
 from mmorpg.application.services.content import ContentRegistry
 from mmorpg.config import Settings
 from mmorpg.domain.entities import Character, GameContent, QuestLog, SkillLoadout
@@ -192,12 +193,12 @@ def state() -> FSMContext:
     )
 
 
-def a_message(text: str) -> Message:
+def a_message(text: str, account: int = ACCOUNT, name: str = "Аргус") -> Message:
     return Message(
         message_id=1,
         date=datetime.now(UTC),
-        chat=Chat(id=ACCOUNT, type="private"),
-        from_user=User(id=ACCOUNT, is_bot=False, first_name="Аргус"),
+        chat=Chat(id=account, type="private"),
+        from_user=User(id=account, is_bot=False, first_name=name),
         text=text,
     )
 
@@ -205,14 +206,23 @@ def a_message(text: str) -> Message:
 class Player:
     """Один подопытный игрок: жмёт кнопки, и отвечает правильный хендлер."""
 
-    def __init__(self, state: FSMContext, sent: Recorder, **deps: Any) -> None:
+    def __init__(
+        self,
+        state: FSMContext,
+        sent: Recorder,
+        account: int = ACCOUNT,
+        name: str = "Аргус",
+        **deps: Any,
+    ) -> None:
         self.state = state
         self.sent = sent
+        self.account = account
+        self.name = name
         self.deps = deps
 
     async def press(self, text: str) -> Screen:
         current = await self.state.get_state()
-        message = a_message(text)
+        message = a_message(text, self.account, self.name)
         if current in {Play.combat.state, Play.combat_bag.state}:
             await combat_handler.fight(
                 message,
@@ -373,6 +383,135 @@ async def test_a_vein_names_what_lies_in_it(player: Player, content: GameContent
     )
     assert ": " in action, action
     assert "Здесь берут:" in screen.text()
+
+
+# --- стаи узла стоят порознь (ADR 0065) -------------------------------
+
+
+def attack_buttons(screen: Screen) -> list[str]:
+    """Кнопки боя этого экрана - по одной на стаю, стоящую в узле."""
+    wanted = play_screens.NODE_ACTIONS[NodeKind.BATTLE]
+    return [text for row in screen.button_texts() for text in row if text.startswith(wanted)]
+
+
+async def a_second_player(
+    name: str,
+    deps: dict[str, Any],
+    sent: Recorder,
+    characters: InMemoryCharacterRepository,
+) -> Player:
+    """Ещё один живой игрок на тех же хранилищах: он придёт в тот же узел."""
+    account = ACCOUNT + 1
+    await characters.create(
+        Character(
+            id=0,
+            user_id=account,
+            name=name,
+            race_id="human",
+            class_id="warrior",
+            level=4,
+        )
+    )
+    state = FSMContext(
+        storage=MemoryStorage(),
+        key=StorageKey(bot_id=1, chat_id=account, user_id=account),
+    )
+    await state.set_state(Play.main_menu)
+    return Player(state, sent, account, name, **deps)
+
+
+async def test_every_pack_in_the_node_has_its_own_button(
+    player: Player, content: GameContent
+) -> None:
+    """«Вступить в бой» звало в узел целиком; теперь зовут по стаям (ADR 0065)."""
+    await walk_to(player, content, NodeKind.BATTLE)
+    screen = player.sent.last
+    buttons = attack_buttons(screen)
+    assert len(buttons) >= 2, "в засаде стоит не одна стая"
+
+    for number, button in enumerate(buttons, start=1):
+        head, named = button.split(": ", 1)
+        assert head.endswith(str(number)), "номер держит место стаи в волне"
+        assert f"{number}. {named}" in screen.text(), "кнопка и строка называют одно и то же"
+        assert "уровень" in screen.text()
+
+
+async def test_the_pack_you_pressed_is_the_pack_you_fight(
+    player: Player, content: GameContent
+) -> None:
+    """Выбрали вторую стаю - дерётесь со второй, а не с той, что стояла первой."""
+    await walk_to(player, content, NodeKind.BATTLE)
+    second = attack_buttons(player.sent.last)[1]
+    named = second.split(": ", 1)[1].split(",")[0]
+
+    fight = await player.press(second)
+    assert fight.id is ScreenId.COMBAT
+    assert named in fight.text()
+
+
+async def test_a_pack_someone_fights_invites_you_in_instead(
+    player: Player,
+    content: GameContent,
+    characters: InMemoryCharacterRepository,
+    inventory: InMemoryInventoryRepository,
+    users: InMemoryUserRepository,
+    deltas: Any,
+    cache: Any,
+    parties: Any,
+    guilds: Any,
+    overlays: InMemoryContentOverlayRepository,
+    registry: ContentRegistry,
+    sent: Recorder,
+) -> None:
+    """Пришедший на занятую стаю не бьёт её второй раз, а вмешивается (ADR 0065)."""
+    node = await walk_to(player, content, NodeKind.BATTLE)
+    first = attack_buttons(player.sent.last)[0]
+    named = first.split(": ", 1)[1]
+    await player.press(first)
+    battle_id = (await player.state.get_data())["battle"]
+    assert battle_id
+
+    other = await a_second_player(
+        "Мерла",
+        {
+            "content": content,
+            "characters": characters,
+            "inventory": inventory,
+            "users": users,
+            "keeper_log": InMemoryKeeperLogRepository(),
+            "deltas": deltas,
+            "overlays": overlays,
+            "registry": registry,
+            "trades": InMemoryTradeRepository(),
+            "cache": cache,
+            "parties": parties,
+            "guilds": guilds,
+        },
+        sent,
+        characters,
+    )
+    walked = await walk_to(other, content, NodeKind.BATTLE)
+    assert walked == node, "оба стоят на одном узле"
+
+    screen = other.sent.last
+    assert f"сражается {player.name}" in screen.text()
+    joining = [
+        text
+        for row in screen.button_texts()
+        for text in row
+        if text.startswith(play_screens.JOIN_FIGHT)
+    ]
+    assert joining, "кнопка «Вмешаться» стоит там же, где стояло бы «Вступить в бой»"
+    assert named in joining[0]
+    assert named not in " ".join(attack_buttons(screen)), "по занятой стае второй раз не бьют"
+
+    joined = await other.press(joining[0])
+    assert joined.id is ScreenId.COMBAT
+    assert (await other.state.get_data())["battle"] == battle_id, "бой один на двоих"
+
+    session = await BattleStore(cache).load(battle_id)
+    assert session is not None
+    assert {one.name for one in session.participants()} == {player.name, other.name}
 
 
 # --- цикл -------------------------------------------------------------

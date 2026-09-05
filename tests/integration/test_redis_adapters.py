@@ -111,7 +111,63 @@ async def test_a_press_from_an_older_wave_takes_nothing(redis) -> None:
     late = await locations.take(
         TEST_CITY, 1, 1, wave=0, size=1, now=1_000 + RESPAWN_SECONDS, ttl=60
     )
-    assert late.node(1) == NodeState(wave=1, taken=0, emptied_at=0)
+    assert late.node(1) == NodeState(wave=1, taken_slots=0, emptied_at=0)
+
+
+async def test_a_pack_is_held_by_the_first_fight_only(redis) -> None:
+    """``SETNX`` в хеше: двое, нажавших на одного волка разом, дерутся за одного (ADR 0065)."""
+    locations = RedisLocationStateCache(redis)
+    taken = await locations.engage(
+        TEST_CITY,
+        1,
+        5,
+        wave=0,
+        place=1,
+        battle_id="1-1000",
+        name="Алина",
+        character_id=TEST_CHARACTER,
+        now=1_000,
+        ttl=60,
+    )
+    assert taken is None
+
+    held = await locations.engage(
+        TEST_CITY,
+        1,
+        5,
+        wave=0,
+        place=1,
+        battle_id="2-1001",
+        name="Мирна",
+        character_id=TEST_CHARACTER + 1,
+        now=1_001,
+        ttl=60,
+    )
+    assert held is not None and held.battle_id == "1-1000"
+
+    seen = await locations.engaged_at(TEST_CITY, 1, 5, wave=0, now=1_001, ttl=60)
+    assert [(one.slot, one.name) for one in seen] == [(1, "Алина")]
+    assert await locations.engaged_at(TEST_CITY, 1, 5, wave=1, now=1_001, ttl=60) == ()
+
+    await locations.disengage(TEST_CITY, 1, 5, wave=0, place=1)
+    assert await locations.engaged_at(TEST_CITY, 1, 5, wave=0, now=1_001, ttl=60) == ()
+
+
+async def test_a_stale_hold_is_forgotten(redis) -> None:
+    locations = RedisLocationStateCache(redis)
+    await locations.engage(
+        TEST_CITY,
+        1,
+        6,
+        wave=0,
+        place=0,
+        battle_id="1-1000",
+        name="Алина",
+        character_id=TEST_CHARACTER,
+        now=1_000,
+        ttl=60,
+    )
+    assert await locations.engaged_at(TEST_CITY, 1, 6, wave=0, now=1_100, ttl=60) == ()
 
 
 async def test_people_in_a_location_are_seen_by_node(redis) -> None:

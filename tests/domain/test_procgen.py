@@ -441,6 +441,38 @@ def test_taking_the_last_thing_empties_the_node_and_it_refills() -> None:
     assert not filled.empty
 
 
+def test_each_pack_keeps_its_place_in_the_wave() -> None:
+    """Убитая вторая стая не делает третью второй (ADR 0065)."""
+    state = NodeState()
+    assert node_rules.free_slots(state, 4) == (0, 1, 2, 3)
+
+    middle = node_rules.taken_one(state, 4, now=1_000, slot=1)
+    assert node_rules.free_slots(middle, 4) == (0, 2, 3)
+    assert node_rules.remaining(middle, 4) == 3
+    assert not middle.empty, "три стаи ещё стоят"
+
+    again = node_rules.taken_one(middle, 4, now=1_100, slot=1)
+    assert again == middle, "с пустого места второй раз не берут"
+
+
+def test_the_node_empties_only_when_every_place_is_cleared() -> None:
+    state = NodeState()
+    for slot in (2, 0, 3):
+        state = node_rules.taken_one(state, 4, now=1_000, slot=slot)
+    assert node_rules.free_slots(state, 4) == (1,)
+    assert not state.empty
+
+    state = node_rules.taken_one(state, 4, now=1_000, slot=1)
+    assert state.empty
+    assert node_rules.remaining(state, 4) == 0
+
+
+def test_a_node_without_a_choice_takes_the_first_place() -> None:
+    """Жила, тайник и святилище мест не выбирают: берут первое стоящее."""
+    state = node_rules.taken_one(NodeState(), 3, now=1_000)
+    assert node_rules.free_slots(state, 3) == (1, 2)
+
+
 def test_the_refill_waits_three_minutes() -> None:
     assert node_rules.RESPAWN_SECONDS == 180
 
