@@ -319,29 +319,31 @@ def test_cooldowns_tick_down_and_expire(content: GameContent, fighter: Character
     assert hero.cooldown_of("warrior_udar_shchitom") == 0
 
 
-def test_mastery_returns_the_skill_a_turn_earlier(content: GameContent, fighter: Character) -> None:
-    """Предельный ранг стоит вчетверо дороже первого и отбивает это откатом.
+def test_a_rank_returns_the_skill_earlier_and_cheaper(
+    content: GameContent, fighter: Character
+) -> None:
+    """Ранг обязан менять умение, а не только его силу (ADR 0067).
 
-    Одной прибавкой к силе четыре очка не отбиваются: пятнадцать процентов урона
-    за четыре очка проигрывают целому новому умению за одно. Поэтому у мастерства
-    есть второе следствие - умение возвращается на ход раньше (ADR 0024).
+    Прежде очко, вложенное в ранг, прибавляло пятнадцатую долю урона и больше
+    ничего. Теперь предельный ранг возвращает умение на два хода раньше и стоит
+    вполовину дешевле - и то, и другое слышно в первом же бою.
     """
     plain, _ = start(content, fighter, make_enemy(health=5_000))
     plain = act(content, {1: fighter}, plain, BattleAction(kind=ActionKind.SKILL, slot=2), SEED)
     novice = plain.by_id(1)
     assert novice is not None
 
-    master = replace(
-        fighter,
-        loadout=fighter.loadout.with_rank("warrior_udar_shchitom", content.rules.max_rank),
-    )
+    top = content.rules.max_rank
+    master = replace(fighter, loadout=fighter.loadout.with_rank("warrior_udar_shchitom", top))
     state, roster = start(content, master, make_enemy(health=5_000))
     state = act(content, roster, state, BattleAction(kind=ActionKind.SKILL, slot=2), SEED)
     hero = state.by_id(1)
     assert hero is not None
     assert hero.cooldown_of("warrior_udar_shchitom") == (
-        novice.cooldown_of("warrior_udar_shchitom") - skill_rules.MASTERY_COOLDOWN
+        novice.cooldown_of("warrior_udar_shchitom") - skill_rules.rank_gain(top).cooldown_cut
     )
+    # И запас списан меньший: скидка ранга - такая же объявленная механика.
+    assert hero.resource > novice.resource
 
 
 def test_not_enough_resource_is_refused_politely(content: GameContent, fighter: Character) -> None:

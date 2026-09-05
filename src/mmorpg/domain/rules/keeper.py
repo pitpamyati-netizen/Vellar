@@ -198,8 +198,7 @@ def set_skill_rank(
 ) -> Character | None:
     """Выставить ранг изученного умения. Ноль — забыть умение целиком.
 
-    Очки не двигаются: смотритель ставит ранг, а не платит за него. Грань,
-    оказавшаяся выше нового ранга, снимается вместе с ним.
+    Очки не двигаются: смотритель ставит ранг, а не платит за него.
     """
     loadout = character.loadout
     if not content.has_skill(code) or not skill_rules.is_known(character, code):
@@ -213,31 +212,10 @@ def set_skill_rank(
             loadout=replace(
                 loadout,
                 ranks={key: value for key, value in loadout.ranks.items() if key != code},
-                edges={key: value for key, value in loadout.edges.items() if key != code},
                 actives=tuple(None if item == code else item for item in loadout.actives),
             ),
         )
-    updated = loadout.with_rank(code, wanted)
-    if wanted < skill_rules.edge_rank_for(content) and loadout.edge_of(code) is not None:
-        updated = replace(
-            updated, edges={key: value for key, value in updated.edges.items() if key != code}
-        )
-    return replace(character, loadout=updated)
-
-
-def set_skill_edge(
-    content: GameContent, character: Character, code: str, edge_code: str
-) -> Character | None:
-    """Выбрать грань изученного умения или снять её пустым значением."""
-    if not content.has_skill(code) or not skill_rules.is_known(character, code):
-        return None
-    skill = content.skill(code)
-    if edge_code and all(edge.code != edge_code for edge in skill.edges):
-        return None
-    edges = {key: value for key, value in character.loadout.edges.items() if key != code}
-    if edge_code:
-        edges[code] = edge_code
-    return replace(character, loadout=replace(character.loadout, edges=edges))
+    return replace(character, loadout=loadout.with_rank(code, wanted))
 
 
 def put_skill_in_slot(
@@ -277,7 +255,6 @@ def respec_skills(content: GameContent, character: Character) -> Character:
         loadout=replace(
             loadout,
             ranks=kept,
-            edges={key: value for key, value in loadout.edges.items() if key == loadout.racial},
             actives=(None,) * len(loadout.actives),
         ),
         unspent_skill_points=character.unspent_skill_points + refund,

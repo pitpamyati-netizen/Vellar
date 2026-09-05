@@ -41,8 +41,6 @@ def spoken(content: GameContent) -> Iterator[tuple[str, str]]:
         )
     for skill in content.skills:
         yield skill.code, f"{skill.name} {skill.text}"
-        for edge in skill.edges:
-            yield edge.code, f"{edge.name} {edge.text}"
     for trait in content.traits:
         yield trait.id, f"{trait.name} {trait.text} {' '.join(trait.tags)}"
     for item in content.items:

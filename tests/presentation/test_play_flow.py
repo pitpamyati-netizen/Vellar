@@ -569,7 +569,7 @@ STALE_LOCATION = (
     '{"screen": "location", "stack": "main_menu,world,city,location_list,location",'
     ' "world_page": 1, "location_page": 1, "city": "farhold",'
     ' "session": ["", 0, 0, 0, 0], "descent": ["", 0, 0, 0], "stub": "",'
-    ' "pick": ["", 0], "edge": "", "quest": "", "pages": [1, 1, 1]}'
+    ' "pick": ["", 0], "quest": "", "pages": [1, 1, 1]}'
 )
 
 
@@ -600,13 +600,6 @@ def test_a_city_content_no_longer_has_falls_back_to_the_players_own(
     screen = render(content, hero, lost, world_seed=WORLD_SEED)
 
     assert content.city(hero.city_id).name in screen.text()
-
-
-def test_a_skill_edge_screen_for_an_unknown_skill_falls_back_to_the_list(
-    content: GameContent, hero: Character, menu: PlayState
-) -> None:
-    lost = replace(menu, edge_skill="skill_that_was_renamed", screen=ScreenId.SKILL_EDGE)
-    assert render(content, hero, lost, world_seed=WORLD_SEED).id is ScreenId.SKILLS
 
 
 def test_a_quest_offer_for_an_unknown_contract_falls_back_to_the_board(

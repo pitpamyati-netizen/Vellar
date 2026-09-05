@@ -5,11 +5,11 @@ from __future__ import annotations
 import pytest
 
 from mmorpg.domain.entities import GameContent, SkillKind
+from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.modifiers import EFFECTIVE_KEYS
+from mmorpg.domain.rules.progression import MAX_LEVEL
 from mmorpg.domain.rules.skill_effects import (
-    EffectCategory,
     cleansed_count,
-    recharged,
     spec_for,
 )
 from mmorpg.infrastructure.content.loader import (
@@ -101,7 +101,6 @@ def test_each_class_has_its_actives_and_passives(content: GameContent) -> None:
             pair = [skill for skill in actives if skill.fork == fork]
             assert len(pair) == 2, fork
             assert pair[0].level == pair[1].level, fork
-            assert pair[0].branch is pair[1].branch, fork
 
 
 def test_class_unlock_levels_match_the_rules(content: GameContent) -> None:
@@ -125,15 +124,6 @@ def test_panel_size_is_fixed(content: GameContent) -> None:
     assert (rules.active_slots, rules.racial_slots) == (6, 1)
     # Выбор есть всегда: шесть слотов из двадцати боевых умений.
     assert rules.active_slots < ACTIVES_PER_CLASS
-
-
-def test_every_skill_has_exactly_two_edges(content: GameContent) -> None:
-    for skill in content.skills:
-        assert len(skill.edges) == 2, skill.code
-        names = {edge.name for edge in skill.edges}
-        assert len(names) == 2, skill.code
-        codes = {edge.code for edge in skill.edges}
-        assert codes == {f"{skill.code}_a", f"{skill.code}_b"}
 
 
 def test_skill_codes_and_names_are_unique(content: GameContent) -> None:
@@ -198,19 +188,6 @@ def test_every_passive_points_at_a_modifier_the_engine_reads(content: GameConten
     assert not promised, promised
 
 
-def test_every_edge_points_at_a_modifier_the_engine_reads(content: GameContent) -> None:
-    """И грань тоже: её текст читает игрок, а получает он числа."""
-    promised = [
-        (skill.code, edge.name, key)
-        for skill in content.skills
-        for edge in skill.edges
-        for bundle in (edge.effect.self_modifiers, edge.effect.target_modifiers)
-        for key in bundle
-        if key not in EFFECTIVE_KEYS
-    ]
-    assert not promised, promised
-
-
 def test_every_racial_passive_does_something(content: GameContent) -> None:
     """Шестнадцать рас, шестнадцать способностей — и все они считаются.
 
@@ -247,27 +224,45 @@ def test_no_trait_promises_a_modifier_nobody_counts(content: GameContent) -> Non
 
 
 def test_a_rank_always_changes_something(content: GameContent) -> None:
-    """Очко, вложенное в ранг, обязано что-то менять.
+    """Очко, вложенное в ранг, обязано что-то менять - и не одним числом.
 
-    У четырёх умений оно не меняло ничего: «Исчезновение», «Юркость»,
-    «Отсрочка» и «По памяти» устроены как «да или нет», и силе ранга там было
-    некуда лечь (``Roadmap.md``, «Что осталось»). Теперь ранг у таких умений
-    возвращает умение быстрее, а у «Очищения» снимает больше.
+    Прежде ранг прибавлял пятнадцатую долю силы и больше ничего, а у умений «да
+    или нет» - «Исчезновение», «Юркость», «Отсрочка», «По памяти» - силе было
+    некуда лечь вовсе. Теперь предельный ранг у каждого боевого умения короче
+    откатом, длиннее сроками и дешевле разом (ADR 0067).
     """
-    idle: list[str] = []
-    for skill in content.skills:
-        if not skill.is_active:
-            continue
-        spec = spec_for(skill.effect)
-        first, top = skill.power_at_rank(1), skill.power_at_rank(content.rules.max_rank)
-        if spec.recharges:
-            if recharged(skill.cooldown, spec, first) == recharged(skill.cooldown, spec, top):
-                idle.append(skill.code)
-            continue
-        if spec.category is EffectCategory.CLEANSE:
-            if cleansed_count(spec, first) == cleansed_count(spec, top):
-                idle.append(skill.code)
-            continue
-        if first == top:
-            idle.append(skill.code)
+    top_rank = content.rules.max_rank
+    gain = skill_rules.rank_gain(top_rank)
+    assert gain.changes_anything
+    assert gain.cooldown_cut >= 1
+    assert gain.duration_bonus >= 1
+    assert gain.cost_factor < 1.0
+
+    # И сила: у боевого умения доля роста объявлена в содержимом, и она не ноль.
+    # У «Очищения» сила ложится в число снятых бед, и его считают отдельно.
+    idle = [
+        skill.code
+        for skill in content.skills
+        if skill.is_active
+        and skill.power_at_rank(1) == skill.power_at_rank(top_rank)
+        and cleansed_count(spec_for(skill.effect), skill.power_at_rank(1))
+        == cleansed_count(spec_for(skill.effect), skill.power_at_rank(top_rank))
+    ]
     assert not idle, idle
+
+
+def test_a_rank_costs_one_point_and_the_tree_costs_more_than_the_road(
+    content: GameContent,
+) -> None:
+    """Дерево дороже дохода: выучить всё нельзя, и «что взять» - вопрос.
+
+    Ранг стоит одно очко, очко приходит через уровень (ADR 0067), и этих двух
+    чисел довольно, чтобы за всю полосу не набралось даже на половину дерева.
+    """
+    rules = content.rules
+    assert rules.rank_cost == 1
+    assert rules.levels_per_skill_point == 2
+    income = rules.skill_points_at(MAX_LEVEL)
+    # Сорок изучаемых мест: двадцать боевых и двадцать пассивных.
+    places = (ACTIVES_PER_CLASS - FORKS_PER_CLASS) + PASSIVES_PER_CLASS
+    assert income < places * rules.full_rank_cost() / 2

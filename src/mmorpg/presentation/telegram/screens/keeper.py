@@ -1092,16 +1092,12 @@ _SKILL_KIND_WORD: dict[SkillKind, str] = {
 
 
 def skill_line(content: GameContent, player: Character, code: str) -> str:
-    """Одна строка об умении игрока: ранг, грань, слот."""
+    """Одна строка об умении игрока: ранг и слот."""
     if not content.has_skill(code):
         return f"{code} — умения такого в игре больше нет"
     skill = content.skill(code)
     rank = player.loadout.rank_of(code)
     parts = [f"{skill.name} — ранг {rank} из {content.rules.max_rank}"]
-    edge = player.loadout.edge_of(code)
-    if edge:
-        named = next((one.name for one in skill.edges if one.code == edge), edge)
-        parts.append(f"грань {named}")
     slot = next((index + 1 for index, held in enumerate(player.loadout.actives) if held == code), 0)
     if slot:
         parts.append(f"слот {slot}")
@@ -1179,46 +1175,21 @@ def skill_learn_from_button(content: GameContent, player: Character, pressed: st
 def keeper_skill_screen(
     content: GameContent, player: Character, code: str, notice: str = ""
 ) -> Screen:
-    """Одно умение игрока: ранг, грань, слот, забыть."""
+    """Одно умение игрока: ранг, слот, забыть."""
     skill = content.skill(code)
     rows: list[tuple[Label, ...]] = [(labels.KEEPER_RANK_UP, labels.KEEPER_RANK_DOWN)]
-    if skill.edges:
-        rows.append((labels.KEEPER_SKILL_EDGE_BTN, labels.KEEPER_SKILL_EDGE_CLEAR))
     if skill.kind is SkillKind.ACTIVE and skill.owner_kind is OwnerKind.CLASS:
         rows.append((labels.KEEPER_SKILL_SLOT_BTN, labels.KEEPER_SKILL_SLOT_CLEAR))
     if code != player.loadout.racial:
         rows.append((labels.KEEPER_SKILL_FORGET,))
-    branch = skill_rules.branch_of(skill)
-    where = (
-        f"Ветвь: {skill_rules.BRANCH_NAMES[branch]}."
-        if branch is not None
-        else "Вне классового дерева."
-    )
+    gain = skill_rules.rank_gain(player.loadout.rank_of(code))
     lines = (
         notice or f"Умение: {skill.name}. Кому: {player.name}.",
         skill_line(content, player, code) + ".",
-        where,
+        f"Ранг даёт: откат короче на {gain.cooldown_cut}, сроки длиннее на "
+        f"{gain.duration_bonus}, цена ниже на {round((1.0 - gain.cost_factor) * 100)} процентов.",
     )
     return Screen(id=ScreenId.KEEPER_SKILL, lines=lines, rows=tuple(rows))
-
-
-def skill_edge_screen(
-    content: GameContent, player: Character, code: str, notice: str = ""
-) -> Screen:
-    skill = content.skill(code)
-    lines = (
-        notice or f"Грань умения {skill.name}. Кому: {player.name}.",
-        *(f"{one.name}: {one.text}" for one in skill.edges),
-    )
-    rows = tuple((label(one.name),) for one in skill.edges)
-    return Screen(id=ScreenId.KEEPER_SKILL_EDGE, lines=lines, rows=rows)
-
-
-def skill_edge_from_button(content: GameContent, code: str, pressed: str) -> str:
-    for one in content.skill(code).edges:
-        if label(one.name).matches(pressed):
-            return one.code
-    return ""
 
 
 def skill_slot_screen(

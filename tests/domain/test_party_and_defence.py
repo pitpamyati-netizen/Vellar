@@ -19,7 +19,6 @@ from mmorpg.domain.entities.combat import (
     ATTACKERS,
     DEFENDERS,
     ActionKind,
-    ActionTag,
     BattleAction,
     BattleState,
     Combatant,
@@ -342,7 +341,8 @@ def test_defending_holds_until_the_next_turn_of_its_own(content: GameContent) ->
 
 
 def test_defending_is_a_turn_that_happened(content: GameContent) -> None:
-    """Закрыться - состоявшийся ход: противник отвечает, а след помнит оборону."""
+    """Закрыться - состоявшийся ход: очередь идёт дальше, а не стоит на месте."""
     state, roster = build(content, [a_hero("Аргус", 1)], enemies=(make_enemy(),))
     after = act(content, roster, state, BattleAction(kind=ActionKind.DEFEND), SEED)
-    assert one(after, 1).trace.last is ActionTag.GUARD
+    assert one(after, 1).effects.turns_of(StatusKind.GUARD) >= 1
+    assert after.round > state.round or after.cursor > state.cursor

@@ -112,10 +112,10 @@ def test_the_panel_holds_the_filled_slots_by_their_own_numbers(
     """Умение помнит свой номер, а пустое место кнопки не получает."""
     screen = flow.render(content, fighter, session, HERO)
     texts = [row[0].text for row in screen.rows]
-    # Обычный удар говорит и свой тег, и то, сколько он снимет.
-    assert texts[0].startswith("Атака — напор, урон от ")
+    # Обычный удар говорит, сколько он снимет.
+    assert texts[0].startswith("Атака — урон от ")
     # Следом - защита: закрыться умеет всякий, и умения на это не нужно.
-    assert texts[1].startswith("Защититься — заслон, броня плюс ")
+    assert texts[1].startswith("Защититься — броня плюс ")
     # У бойца заняты три слота из шести, и это ровно три кнопки, с 1 по 3.
     assert [text.split(".")[0] for text in texts[2:5]] == ["1", "2", "3"]
     assert "расовое" in texts[5]
@@ -162,7 +162,7 @@ def test_cooldown_is_written_into_the_button(
     used, _ = flow.advance(content, {HERO: fighter}, session, HERO, ready)
     third = flow.render(content, fighter, used, HERO).rows[4][0].text
     # Потраченное называет, сколько от него осталось, - а это другой вопрос.
-    assert third.startswith("3. Удар щитом — заслон,")
+    assert third.startswith("3. Удар щитом —")
     assert third.endswith("ещё 3 хода")
 
 
@@ -280,54 +280,20 @@ def test_unknown_input_is_refused_without_burning_a_turn(
 # --- правила тегов, сказанные вслух ----------------------------------
 
 
-def test_the_enemy_announces_its_intent_and_the_way_in(
+def test_the_enemy_names_how_it_fights(
     content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
     """Правила 1.1.1 и 1.1.3: выбор делается против чего-то, и это сказано словами.
 
-    На панели боя намерение названо одним словом; что оно сулит и как этим
-    воспользоваться — на экране «Разбор боя», не абзацем в каждой строке
-    (ADR 0050).
+    На панели боя повадка названа одним словом; что она делает - на экране
+    «Разбор боя», не абзацем в каждой строке (ADR 0066).
     """
     line = flow.render(content, fighter, session, HERO).text().split("\n")[2]
-    assert "Намерение:" in line
-    assert any(tag in line for tag in ("напор", "заслон", "финт"))
+    assert "Дерётся как" in line
+    assert any(role in line for role in combat_screens.ROLE_NAMES.values())
 
     breakdown = combat_screens.breakdown_screen(content, fighter, session.state, HERO).text()
-    assert "намерение" in breakdown
-    assert any(tag in breakdown for tag in ("напор", "заслон", "финт"))
-
-
-def test_the_trace_is_a_spoken_line(
-    content: GameContent, fighter: Character, session: battle_service.BattleSession
-) -> None:
-    """Правило 1.1.4: ни полосы, ни значка - состояние размена это фраза.
-
-    Панель несёт одну строку-совет, полный расклад — экран «Разбор боя»
-    (``breakdown_screen``); обе формы говорят словами (ADR 0050).
-    """
-    opening = flow.render(content, fighter, session, HERO).text()
-    assert "След пуст." in opening
-
-    pressed, _ = flow.advance(content, {HERO: fighter}, session, HERO, "Атака — напор")
-    once = flow.render(content, fighter, pressed, HERO).text()
-    assert "След: напор." in once
-    assert "разгон" in once
-
-    twice, _ = flow.advance(content, {HERO: fighter}, pressed, HERO, "Атака — напор")
-    full = combat_screens.breakdown_screen(content, fighter, twice.state, HERO).text()
-    assert "След: напор, 2 следа подряд, разгон 25 процентов." in full
-
-
-def test_every_action_button_names_its_tag(
-    content: GameContent, fighter: Character, session: battle_service.BattleSession
-) -> None:
-    texts = [row[0].text for row in flow.render(content, fighter, session, HERO).rows]
-    assert texts[0].startswith("Атака — напор,")
-    assert texts[1].startswith("Защититься — заслон,")
-    assert "напор" in texts[2], "Секущий росчерк is a plain blow"
-    assert "заслон" in texts[3], "Провокация pulls the blow onto you"
-    assert "заслон" in texts[5], "the racial slot names its tag too"
+    assert any(role in breakdown for role in combat_screens.ROLE_NAMES.values())
 
 
 def test_the_panel_carries_a_breakdown_button(
@@ -344,17 +310,16 @@ def test_the_panel_carries_a_breakdown_button(
         assert notice == "", pressed
 
 
-def test_the_breakdown_screen_gathers_the_tempo_rules(
+def test_the_breakdown_screen_says_what_each_foe_does(
     content: GameContent, fighter: Character, session: battle_service.BattleSession
 ) -> None:
-    """Полный расклад — намерение врага с подсказкой, след и что дают три стойки."""
+    """Полный расклад — повадка каждого врага и то, что она делает (ADR 0066)."""
     screen = combat_screens.breakdown_screen(content, fighter, session.state, HERO)
     body = screen.text()
-    assert "намерение" in body
-    assert "мимо брони" in body or "в полтора раза" in body or "не увернуться" in body
-    for stance in ("Напор:", "Заслон:", "Финт:"):
-        assert stance in body, stance
-    assert "разнобой" in body
+    named = [role for role, word in combat_screens.ROLE_NAMES.items() if f"{word} —" in body]
+    assert named, body
+    for role in named:
+        assert combat_screens.ROLE_HINTS[role] in body, role
     # Возврат — «Что там в бою»; своей кнопки действия у разбора нет.
     plain = [t.text for row in screen.rows for t in row]
     assert plain == ["Что там в бою"]

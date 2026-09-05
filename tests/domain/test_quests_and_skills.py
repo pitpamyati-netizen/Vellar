@@ -12,7 +12,6 @@ import pytest
 
 from mmorpg.domain.entities import Character, GameContent, QuestLog, SkillLoadout
 from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank, NodeKind
-from mmorpg.domain.rules import edges as edge_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.skill_effects import spec_for
@@ -230,68 +229,16 @@ def test_a_rank_stops_at_the_maximum(content: GameContent, veteran: Character) -
     assert skill_rules.learn(content, maxed, skill) is None
 
 
-def test_the_edge_is_asked_for_at_rank_three_and_only_once(
+def test_a_rank_shortens_the_cooldown_and_cuts_the_price(
     content: GameContent, veteran: Character
 ) -> None:
-    skill = skill_rules.teachable(content, veteran)[0]
-    at_edge = replace(veteran, loadout=SkillLoadout(ranks={skill.code: content.rules.edge_rank}))
-    assert skill_rules.needs_edge(content, at_edge, skill)
-
-    chosen = skill_rules.choose_edge(at_edge, skill, skill.edges[0].code)
-    assert chosen is not None
-    assert not skill_rules.needs_edge(content, chosen, skill)
-    assert skill_rules.choose_edge(chosen, skill, skill.edges[1].code) is None
-
-
-def test_every_edge_in_the_game_declares_what_it_does(content: GameContent) -> None:
-    """Ни одной грани-надписи.
-
-    Это и была поломка: у всех 128 умений обе грани описаны своим действием, а
-    движок делал для любой первой одно и то же, для любой второй - другое одно и
-    то же. Грань без объявленной механики - обещание, которое некому выполнить.
-    """
-    silent = [
-        f"{skill.code}:{edge.name}"
-        for skill in content.skills
-        for edge in skill.edges
-        if edge.effect.empty
-    ]
-    assert silent == []
-
-
-def test_an_edge_changes_the_numbers_it_promises(content: GameContent, veteran: Character) -> None:
-    """Выбранная грань доходит до умения, а невыбранная ничего не трогает."""
-    # Умение, которое само крови не пускает: кровь на цели - работа грани.
+    """Ранг обязан менять умение, а не только его силу (ADR 0067)."""
     skill = content.skill("warrior_sekushchiy_roscherk")
-    heavier, bleeding = skill.edges
-
-    plain = replace(veteran, loadout=SkillLoadout(ranks={skill.code: 3}))
-    assert skill_rules.chosen_edge(plain, skill) is None
-    assert edge_rules.applied(spec_for(skill.effect), None).dot_turns == 0
-
-    cutting = replace(plain, loadout=replace(plain.loadout, edges={skill.code: bleeding.code}))
-    chosen = skill_rules.chosen_edge(cutting, skill)
-    assert chosen is not None
-    # «Цель истекает кровью 3 хода» - именно это и происходит.
-    assert edge_rules.applied(spec_for(skill.effect), chosen).dot_turns == 3
-
-    # А вторая грань трогает силу и откат, но не само действие.
-    strong = replace(plain, loadout=replace(plain.loadout, edges={skill.code: heavier.code}))
-    harder = skill_rules.chosen_edge(strong, skill)
-    assert harder is not None
-    assert harder.power == pytest.approx(25.0)
-    assert edge_rules.applied(spec_for(skill.effect), harder).dot_turns == 0
-
-
-def test_an_edge_of_a_skill_that_changed_is_read_as_unchosen(
-    content: GameContent, veteran: Character
-) -> None:
-    """Содержимое переживает сохранённого персонажа (``Claude.md``, правило 8)."""
-    skill = content.skill("warrior_rassechenie")
-    stale = replace(veteran, loadout=SkillLoadout(edges={skill.code: "warrior_rassechenie_z"}))
-
-    assert skill_rules.chosen_edge(stale, skill) is None
-    assert skill_rules.power_factor(stale, skill) == 1.0
+    top = content.rules.max_rank
+    assert skill_rules.cost_factor(top) < skill_rules.cost_factor(1)
+    assert skill_rules.cooldown_at_rank(skill, top) <= skill_rules.cooldown_at_rank(skill, 1)
+    stretched = skill_rules.at_rank(spec_for("damage_burn"), top)
+    assert stretched.dot_turns > spec_for("damage_burn").dot_turns
 
 
 def test_a_skill_sits_in_exactly_one_slot(content: GameContent, veteran: Character) -> None:
@@ -326,7 +273,6 @@ def test_forgetting_hands_every_point_back_and_empties_the_slot(
         loadout=SkillLoadout(
             actives=(skill.code, None, None, None, None, None),
             ranks={skill.code: 3},
-            edges={skill.code: skill.edges[0].code},
         ),
     )
     spent = skill_rules.spent_on(content, student, skill.code)
@@ -335,7 +281,6 @@ def test_forgetting_hands_every_point_back_and_empties_the_slot(
     assert forgotten.unspent_skill_points == veteran.unspent_skill_points + spent
     assert not skill_rules.is_known(forgotten, skill.code)
     assert forgotten.loadout.actives[0] is None
-    assert forgotten.loadout.edge_of(skill.code) is None
 
 
 def test_a_contract_belongs_to_the_city_the_player_is_standing_in(
@@ -383,8 +328,8 @@ def test_a_skill_removed_from_the_game_hands_its_points_back(content: GameConten
     assert repaired is not None
     assert repaired.loadout.actives[0] is None
     assert "умения-такого-нет" not in repaired.loadout.ranks
-    # Ранг стоит тем дороже, чем он выше: второй ранг это 1 + 2, первый - 1.
-    assert repaired.unspent_skill_points == 4, "вернулось ровно столько, сколько было вложено"
+    # Ранг стоит одно очко: второй ранг это два очка, первый - одно.
+    assert repaired.unspent_skill_points == 3, "вернулось ровно столько, сколько было вложено"
     # Расовое умение не выбирают: вместо пропавшего встаёт то, что есть у расы.
     assert repaired.loadout.racial == content.race("human").active_code
 

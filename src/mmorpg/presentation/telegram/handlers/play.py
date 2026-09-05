@@ -710,7 +710,6 @@ async def _keeper_view(
             ScreenId.KEEPER_SKILLS,
             ScreenId.KEEPER_SKILL,
             ScreenId.KEEPER_SKILL_LEARN,
-            ScreenId.KEEPER_SKILL_EDGE,
             ScreenId.KEEPER_SKILL_SLOT,
             ScreenId.KEEPER_STATS_EDIT,
             ScreenId.KEEPER_QUESTS,

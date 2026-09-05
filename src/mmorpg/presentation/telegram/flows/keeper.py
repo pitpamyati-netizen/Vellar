@@ -87,7 +87,6 @@ PANEL: frozenset[ScreenId] = frozenset(
         ScreenId.KEEPER_SKILLS,
         ScreenId.KEEPER_SKILL,
         ScreenId.KEEPER_SKILL_LEARN,
-        ScreenId.KEEPER_SKILL_EDGE,
         ScreenId.KEEPER_SKILL_SLOT,
         ScreenId.KEEPER_STATS_EDIT,
         ScreenId.KEEPER_QUESTS,
@@ -187,8 +186,6 @@ def _render_skill(content: GameContent, state: PlayState, view: KeeperView) -> S
     assert view.target is not None  # проверено `_skill_ok`
     code = state.keeper_field
     match state.screen:
-        case ScreenId.KEEPER_SKILL_EDGE:
-            return keeper_screens.skill_edge_screen(content, view.target, code, state.notice)
         case ScreenId.KEEPER_SKILL_SLOT:
             return keeper_screens.skill_slot_screen(content, view.target, code, state.notice)
         case _:
@@ -329,9 +326,7 @@ def _render_panel(
             return keeper_screens.skill_learn_screen(
                 content, view.target, state.keeper_page, state.notice
             )
-        case ScreenId.KEEPER_SKILL | ScreenId.KEEPER_SKILL_EDGE | ScreenId.KEEPER_SKILL_SLOT if (
-            _skill_ok(content, state, view)
-        ):
+        case ScreenId.KEEPER_SKILL | ScreenId.KEEPER_SKILL_SLOT if _skill_ok(content, state, view):
             return _render_skill(content, state, view)
         case ScreenId.KEEPER_STATS_EDIT if view.target is not None:
             return keeper_screens.stats_edit_screen(
@@ -612,8 +607,6 @@ def advance(
             return _step_skill_learn(content, state, command, view)
         case ScreenId.KEEPER_SKILL:
             return _step_skill(content, state, command, view)
-        case ScreenId.KEEPER_SKILL_EDGE:
-            return _step_skill_edge(content, state, command, view)
         case ScreenId.KEEPER_SKILL_SLOT:
             return _step_skill_slot(content, state, command, view)
         case ScreenId.KEEPER_STATS_EDIT:
@@ -1324,10 +1317,6 @@ def _step_skill(
         return _set_rank(content, state, view, code, rank - 1)
     if labels.KEEPER_SKILL_FORGET.matches(command.argument):
         return _set_rank(content, state, view, code, 0)
-    if labels.KEEPER_SKILL_EDGE_BTN.matches(command.argument):
-        return state.at(ScreenId.KEEPER_SKILL_EDGE)
-    if labels.KEEPER_SKILL_EDGE_CLEAR.matches(command.argument):
-        return _set_edge(content, state, view, code, "")
     if labels.KEEPER_SKILL_SLOT_BTN.matches(command.argument):
         return state.at(ScreenId.KEEPER_SKILL_SLOT)
     if labels.KEEPER_SKILL_SLOT_CLEAR.matches(command.argument):
@@ -1356,36 +1345,6 @@ def _set_rank(
         return _skill_write(state, changed, f"забыто {name}", f"{name}: забыто.", back=True)
     now = changed.loadout.rank_of(code)
     return _skill_write(state, changed, f"{name} ранг {now}", f"{name}: ранг {now}.", back=False)
-
-
-def _set_edge(
-    content: GameContent, state: PlayState, view: KeeperView, code: str, edge_code: str
-) -> PlayState:
-    assert view.target is not None
-    changed = keeper_rules.set_skill_edge(content, view.target, code, edge_code)
-    if changed is None:
-        return state.with_notice("Такой грани у умения нет.")
-    picked = changed.loadout.edge_of(code)
-    named = "снята"
-    if picked:
-        named = next((one.name for one in content.skill(code).edges if one.code == picked), picked)
-    back = state.screen is ScreenId.KEEPER_SKILL_EDGE
-    return _skill_write(
-        state, changed, f"{content.skill(code).name}: грань {named}", f"Грань: {named}.", back=back
-    )
-
-
-def _step_skill_edge(
-    content: GameContent, state: PlayState, command: Command, view: KeeperView
-) -> PlayState:
-    if not _skill_ok(content, state, view):
-        return go_back(state).with_notice("Того умения больше нет.")
-    if command.intent is not Intent.SELECT:
-        return state.with_notice("Нажмите грань из списка.")
-    edge_code = keeper_screens.skill_edge_from_button(content, state.keeper_field, command.argument)
-    if not edge_code:
-        return state.with_notice("Не узнал грань. Нажмите строку из списка.")
-    return _set_edge(content, state, view, state.keeper_field, edge_code)
 
 
 def _step_skill_slot(

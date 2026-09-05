@@ -22,7 +22,6 @@ from mmorpg.domain.entities.combat import (
 )
 from mmorpg.domain.entities.effects import ActiveEffect
 from mmorpg.domain.entities.location import Enemy, EnemyKind
-from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.rules.combat import (
     act,
     hero_combatant,
@@ -346,85 +345,60 @@ def test_every_category_is_used_by_content(content: GameContent, category: Effec
     assert category in used
 
 
-# --- грани: то, что они обещают, и происходит --------------------------
+# --- ранги: то, что ранг обещает, и происходит -------------------------
 
 
-def with_edge(character: Character, code: str, edge_code: str) -> Character:
-    """Тот же персонаж, но с выбранной гранью и третьим рангом умения."""
-    loadout = replace(
-        character.loadout,
-        ranks={**character.loadout.ranks, code: 3},
-        edges={**character.loadout.edges, code: edge_code},
-    )
+def at_rank(character: Character, code: str, rank: int) -> Character:
+    """Тот же персонаж, но с этим рангом умения."""
+    loadout = replace(character.loadout, ranks={**character.loadout.ranks, code: rank})
     return replace(character, loadout=loadout)
 
 
-def test_an_edge_that_promises_a_second_target_hits_a_second_target(
-    content: GameContent,
-) -> None:
-    """«Размах» у рассечения: удар по одной цели задевает соседа."""
+def test_a_rank_stretches_what_the_skill_leaves_on_the_target(content: GameContent) -> None:
+    """Ранг держит горение и кровь дольше - это его объявленное дело (ADR 0067)."""
     skill = content.skill("warrior_rassechenie")
-    splashing = skill.edges[1]
-    assert splashing.name == "Размах"
     character = caster("warrior", "human", skill.code)
-    character = replace(character, loadout=replace(character.loadout, ranks={skill.code: 3}))
-    pair = (enemy("Волк"), enemy("Волчица"))
-    edged = with_edge(character, skill.code, splashing.code)
+    pack = (enemy(health=9_000),)
 
-    plain = use(content, character, start(content, character, pair))
-    wide = use(content, edged, start(content, edged, pair))
-
-    # Второй противник цел без грани и ранен с гранью.
-    assert foe(plain, 1).health == foe(plain, 1).max_health
-    assert foe(wide, 1).health < foe(wide, 1).max_health
-
-
-def test_an_edge_that_promises_bleeding_leaves_the_target_bleeding(
-    content: GameContent,
-) -> None:
-    # Умение, которое само по себе крови не пускает: кровь на цели - работа грани.
-    skill = content.skill("warrior_sekushchiy_roscherk")
-    bleeding = skill.edges[1]
-    assert bleeding.name == "Кровопускание"
-    character = caster("warrior", "human", skill.code)
-    character = replace(character, loadout=replace(character.loadout, ranks={skill.code: 3}))
-    pack = (enemy(),)
-    edged = with_edge(character, skill.code, bleeding.code)
-
-    plain = use(content, character, start(content, character, pack))
-    cutting = use(content, edged, start(content, edged, pack))
-
-    assert not foe(plain).effects.has(StatusKind.BLEEDING)
-    assert foe(cutting).effects.has(StatusKind.BLEEDING)
+    novice = at_rank(character, skill.code, 1)
+    master = at_rank(character, skill.code, content.rules.max_rank)
+    spec = spec_for(skill.effect)
+    if not spec.dot_turns:
+        # Умение без своего срока: проверять нечего, ранг ему стелет по-другому.
+        pytest.skip("у этого умения нет своего срока")
+    plain = use(content, novice, start(content, novice, pack))
+    deep = use(content, master, start(content, master, pack))
+    assert foe(deep).effects.turns_of(spec.dot_status) > foe(plain).effects.turns_of(
+        spec.dot_status
+    )
 
 
-def test_an_edge_that_promises_a_discount_is_a_discount(content: GameContent) -> None:
-    """«Экономный шар»: тот же шар за меньшие чары."""
+def test_a_rank_makes_the_skill_cheaper(content: GameContent) -> None:
+    """Скидка ранга - такая же объявленная механика, как урон."""
     skill = content.skill("mage_meteor")
-    cheaper = skill.edges[1]
     character = caster("mage", "human", skill.code)
-    character = replace(character, loadout=replace(character.loadout, ranks={skill.code: 3}))
-    pack = (enemy(),)
-    edged = with_edge(character, skill.code, cheaper.code)
+    pack = (enemy(health=9_000),)
 
-    plain = use(content, character, start(content, character, pack))
-    thrifty = use(content, edged, start(content, edged, pack))
+    novice = at_rank(character, skill.code, 1)
+    master = at_rank(character, skill.code, content.rules.max_rank)
+
+    plain = use(content, novice, start(content, novice, pack))
+    thrifty = use(content, master, start(content, master, pack))
 
     assert hero(thrifty).resource > hero(plain).resource
 
 
-def test_a_passive_edge_is_not_just_a_label(content: GameContent) -> None:
-    """Половина выбранных граней в игре - у пассивных умений."""
+def test_a_rank_of_a_passive_is_not_just_a_label(content: GameContent) -> None:
+    """Пассивное умение ранг тоже слышит: прибавка растёт вместе с ним."""
     from mmorpg.domain.rules import modifiers as mods
 
     skill = content.skill("warrior_stoykost")
     character = caster("warrior", "human")
-    character = replace(character, loadout=replace(character.loadout, ranks={skill.code: 3}))
 
-    plain = mods.passive_modifiers(content, character)
-    edged = mods.passive_modifiers(content, with_edge(character, skill.code, skill.edges[0].code))
+    plain = mods.passive_modifiers(content, at_rank(character, skill.code, 1))
+    deep = mods.passive_modifiers(content, at_rank(character, skill.code, content.rules.max_rank))
 
-    assert edged != plain
+    assert deep != plain
 
 
 def test_bleeding_actually_takes_health_every_turn(content: GameContent) -> None:

@@ -231,5 +231,9 @@ def stat_allowance(content: GameContent, level: int) -> int:
 
 
 def skill_point_allowance(content: GameContent, level: int) -> int:
-    """Сколько всего очков умений выдано персонажу этого уровня."""
-    return content.rules.skill_point_per_level * (level - 1)
+    """Сколько всего очков умений выдано персонажу этого уровня.
+
+    Очко приходит через уровень (ADR 0067), поэтому счёт ведёт само правило:
+    «каждые два» - это деление, а не умножение.
+    """
+    return content.rules.skill_points_at(level)

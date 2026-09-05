@@ -1,10 +1,9 @@
 """Экраны умений: что изучено, что покупает очко и что лежит в панели.
 
-Три экрана, и не больше, потому что форма самой панели не меняется никогда:
+Два экрана, и не больше, потому что форма самой панели не меняется никогда:
 
 - **Умения** — все умения класса, ранг каждого и то, что сделало бы одно очко;
-- **Слоты умений** — шесть боевых мест и расовое;
-- **Грань** — единственный выбор третьего ранга.
+- **Слоты умений** — шесть боевых мест и расовое.
 
 Слот всегда держит свой номер и своё место, пустой он или нет, поэтому панель
 можно один раз выучить по положению и не переучивать (правило доступности 7).
@@ -56,6 +55,19 @@ def matching_skills(
     )
 
 
+def turns_word(count: int) -> str:
+    """«один ход», «два хода», «пять ходов» - слово согласовано с числом."""
+    tail = count % 100
+    if 11 <= tail <= 14:
+        return f"{count} ходов"
+    last = count % 10
+    if last == 1:
+        return f"{count} ход"
+    if 2 <= last <= 4:
+        return f"{count} хода"
+    return f"{count} ходов"
+
+
 def points_word(count: int) -> str:
     """«одно очко», «два очка», «пять очков» - слово согласовано с числом."""
     tail = count % 100
@@ -69,35 +81,44 @@ def points_word(count: int) -> str:
     return f"{count} очков"
 
 
-def branch_name(skill: Skill) -> str:
-    """Ветвь умения словом. Пусто - умение вне классового дерева, как расовое."""
-    branch = skill_rules.branch_of(skill)
-    return skill_rules.BRANCH_NAMES[branch] if branch is not None else ""
+def rank_gain_words(rank: int) -> str:
+    """Что ранг уже прибавил этому умению. Пусто - первый ранг ничего не прибавил.
+
+    Называется ровно то, что считает движок (``skill_rules.rank_gain``): очко,
+    вложенное в ранг, обязано быть слышно, а не подразумеваться (ADR 0067).
+    """
+    gain = skill_rules.rank_gain(rank)
+    parts = []
+    if gain.cooldown_cut:
+        parts.append(f"откат короче на {turns_word(gain.cooldown_cut)}")
+    if gain.duration_bonus:
+        parts.append(f"сроки длиннее на {turns_word(gain.duration_bonus)}")
+    if gain.cost_factor < 1.0:
+        parts.append(f"цена ниже на {round((1.0 - gain.cost_factor) * 100)} процентов")
+    return ", ".join(parts)
 
 
 def skill_state(content: GameContent, character: Character, skill: Skill) -> str:
     """Одна фраза, говорящая всё, что игроку нужно знать о положении умения.
 
-    В том числе и то, что сделает нажатие: умение, ждущее свою грань, ведёт на
-    вопрос о грани, а не поднимает ранг. Цена ранга растёт (ADR 0024), поэтому она
-    называется вслух, а не подразумевается.
+    Ранг стоит одно очко (ADR 0067), и цена называется вслух, а не
+    подразумевается. Что ранг уже дал - тоже: очко, о котором молчат, потрачено
+    впустую.
     """
     rules = content.rules
     if not skill_rules.is_known(character, skill.code):
         taken = skill_rules.fork_taken(content, character, skill)
         if taken is not None:
             return f"закрыто развилкой: взято {taken.name}"
-        if not skill_rules.gate_met(content, character, skill):
-            gate = skill_rules.gate_of(content, skill)
-            return f"закрыто: нужно {points_word(gate)} в ветви «{branch_name(skill)}»"
         return f"не изучено, {points_word(skill_rules.cost_to_learn(content, character, skill))}"
     rank = character.loadout.rank_of(skill.code)
-    if skill_rules.needs_edge(content, character, skill):
-        return f"ранг {rank} из {rules.max_rank}, сначала выберите грань"
+    said = f"ранг {rank} из {rules.max_rank}"
+    if gained := rank_gain_words(rank):
+        said = f"{said}: {gained}"
     if rank >= rules.max_rank:
-        return f"ранг {rank} из {rules.max_rank}, выше некуда"
+        return f"{said}, выше некуда"
     cost = skill_rules.cost_to_learn(content, character, skill)
-    return f"ранг {rank} из {rules.max_rank}, следующий за {points_word(cost)}"
+    return f"{said}, следующий за {points_word(cost)}"
 
 
 def refusal(content: GameContent, character: Character, skill: Skill) -> str:
@@ -112,17 +133,10 @@ def refusal(content: GameContent, character: Character, skill: Skill) -> str:
                 f"{skill.name} и {taken.name} стоят на одной развилке, и {taken.name} "
                 "уже взято. Разобрать его может наставник."
             )
-        if not skill_rules.gate_met(content, character, skill):
-            branch = skill_rules.branch_of(skill)
-            have = skill_rules.branch_points(content, character)[branch] if branch else 0
-            return (
-                f"{skill.name} стоит выше по ветви «{branch_name(skill)}»: нужно "
-                f"{points_word(skill_rules.gate_of(content, skill))} в ней, вложено {have}."
-            )
     cost = skill_rules.cost_to_learn(content, character, skill)
     return (
         f"На {skill.name} нужно {points_word(cost)}, а есть {character.unspent_skill_points}. "
-        "Очки дают за уровень, и их возвращает наставник."
+        "Очко умений приходит через уровень, и вложенное возвращает наставник."
     )
 
 
@@ -159,18 +173,17 @@ def skill_detail(content: GameContent, skill: Skill) -> str:
 
 def skill_entry_text(content: GameContent, character: Character, skill: Skill) -> str:
     kind = "боевое" if skill.is_active else "пассивное"
-    branch = branch_name(skill)
-    where = f"{kind}, ветвь «{branch}»" if branch else kind
-    return f"{skill.name} — {where}, {skill_state(content, character, skill)}"
+    return f"{skill.name} — {kind}, {skill_state(content, character, skill)}"
 
 
-def branch_line(content: GameContent, character: Character) -> str:
-    """Три числа, по которым читается вся сборка: во что вложены очки."""
-    tally = skill_rules.branch_points(content, character)
-    said = ", ".join(
-        f"{skill_rules.BRANCH_NAMES[branch]} {tally[branch]}" for branch in skill_rules.BRANCHES
+def spent_line(content: GameContent, character: Character) -> str:
+    """Сколько очков уже лежит в дереве. Одно число: ветвей больше нет (ADR 0067)."""
+    spent = sum(
+        skill_rules.spent_on(content, character, code)
+        for code in skill_rules.known_codes(character)
+        if content.has_skill(code)
     )
-    return f"Вложено по ветвям: {said}."
+    return f"Вложено в умения: {points_word(spent)}."
 
 
 def skills_screen(
@@ -189,19 +202,18 @@ def skills_screen(
         )
         for skill in pool
     ]
-    edge_due = [skill.name for skill in pool if skill_rules.needs_edge(content, character, skill)]
     # Вступление короткое нарочно: оно повторяется на каждой странице списка, а
     # места в сообщении столько же, сколько у самих умений. Устройство панели
     # рассказывает экран слотов - тот, на котором это и делают.
     lead = [
         notice or f"Умения. Очков умений: {character.unspent_skill_points}.",
         f"Ваш уровень: {character.level}. Пассивные умения слотов не занимают.",
-        branch_line(content, character),
+        spent_line(content, character),
     ]
     if not character.unspent_skill_points:
-        lead.append("Очко умений даёт каждый новый уровень.")
-    if edge_due:
-        lead.append(f"Ждут выбора грани: {', '.join(edge_due)}.")
+        lead.append(
+            f"Очко умений приходит через уровень: одно на {content.rules.levels_per_skill_point}."
+        )
     return paginated_screen(
         screen_id=ScreenId.SKILLS,
         title="Умения",
@@ -281,30 +293,4 @@ def pick_screen(
         empty_text="Изученных боевых умений нет. Сначала изучите их в разделе «Умения».",
         show_filters=False,
         extra_rows=((CLEAR_SLOT,),),
-    )
-
-
-def edge_label(edge_name: str) -> Label:
-    return label(f"Грань: {edge_name}")
-
-
-def edge_screen(content: GameContent, character: Character, skill: Skill) -> Screen:
-    """Развилка третьего ранга. Два способа применять одно умение, а не два умения.
-
-    Каждая грань говорит только то, что написано у неё в содержимом: усиление и
-    скидка - такая же объявленная механика, как всё остальное, и попадают в
-    описание грани, а не после него (``domain/rules/edges.py``).
-    """
-    first, second = skill.edges
-    return Screen(
-        id=ScreenId.SKILL_EDGE,
-        lines=(
-            f"Грань умения {skill.name}. Выбирается один раз, на ранге "
-            f"{skill_rules.edge_rank_for(content)}.",
-            f"{first.name}: {first.text}",
-            f"{second.name}: {second.text}",
-            "Выбор грани ранга не повышает: ранг растёт за очко умений, как и раньше.",
-            "Сменить грань потом сможет только наставник, и он берёт за это деньги.",
-        ),
-        rows=((edge_label(first.name),), (edge_label(second.name),)),
     )

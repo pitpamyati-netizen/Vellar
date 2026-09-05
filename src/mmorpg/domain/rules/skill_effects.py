@@ -18,8 +18,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from mmorpg.domain.entities.combat import ActionTag
-from mmorpg.domain.entities.content import Skill
 from mmorpg.domain.entities.damage import DamageType
 from mmorpg.domain.entities.statuses import StatusKind
 
@@ -96,11 +94,11 @@ class EffectSpec:
     always_hits: bool = False
     crit_bonus: float = 0.0
     lifesteal: float = 0.0
-    #: Доля урона, достающаяся второй цели у одноцелевого удара. Ставится только
-    #: гранью: умение, бьющее двоих, описывается как ``aoe`` или ``damage_chain``.
+    #: Доля урона, достающаяся второй цели у одноцелевого удара. Умение, бьющее
+    #: двоих само, описывается как ``aoe`` или ``damage_chain``.
     splash: float = 0.0
     #: Лечение и барьер сверх основного действия, в процентах от максимума
-    #: здоровья. Тоже вотчина граней: «дополнительно лечит 10 процентов» у удара.
+    #: здоровья: «дополнительно лечит 10 процентов» у удара.
     bonus_heal: float = 0.0
     bonus_barrier: float = 0.0
     self_damage_taken: float = 0.0
@@ -121,15 +119,7 @@ class EffectSpec:
     duration: int = 0
     cleanse_count: int = 0
     special: str = ""
-    #: Сила ранга ложится в откат, а не в число. Так устроены умения «да или нет»:
-    #: «Исчезновение» либо уводит от удара, либо нет, и поднимать в нём нечего.
-    #: Ранг возвращает такое умение быстрее - процент от того, как часто им
-    #: пользуются.
-    recharges: bool = False
     tags: tuple[str, ...] = field(default_factory=tuple)
-    # След, который оставляет эффект. Не назван - читается по категории в
-    # `tag_of`; называется там, где категория сказала бы не то.
-    tag: ActionTag | None = None
 
     @property
     def damage_type(self) -> DamageType | None:
@@ -167,19 +157,6 @@ def cleansed_count(spec: EffectSpec, power: float) -> int:
     if spec.category is not EffectCategory.CLEANSE:
         return spec.cleanse_count
     return max(1, round(power))
-
-
-def recharged(cooldown: int, spec: EffectSpec, power: float) -> int:
-    """Откат умения «да или нет» на этой силе.
-
-    Сила ранга ложится сюда, потому что больше ей лечь некуда: «Исчезновение»
-    либо уводит от удара, либо нет. Сто процентов - откат, написанный в
-    содержимом; сто шестьдесят на пятом ранге - тот же откат, поделённый на
-    полтора. Ниже одного хода не опускается.
-    """
-    if not spec.recharges or not cooldown or power <= 0:
-        return cooldown
-    return max(1, round(cooldown * 100.0 / power))
 
 
 def _damage(**kwargs: object) -> EffectSpec:
@@ -332,26 +309,17 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
     "buff_avatar": _buff(duration=4, self_modifiers=(M("damage_percent"), M(UNSTUNNABLE, 1.0))),
     "buff_form_bear": _buff(self_modifiers=(M("health_percent"), M("armor_percent"))),
     "buff_form_wolf": _buff(self_modifiers=(M("damage_percent"), M("initiative_percent"))),
-    "buff_evade_full": EffectSpec(
-        category=EffectCategory.SPECIAL, special="evade_next", recharges=True
-    ),
-    "buff_free_cast": EffectSpec(
-        category=EffectCategory.SPECIAL, special="free_cast", recharges=True
-    ),
-    "buff_cooldown_reset": EffectSpec(
-        category=EffectCategory.SPECIAL, special="cooldown_reset", recharges=True
-    ),
+    "buff_evade_full": EffectSpec(category=EffectCategory.SPECIAL, special="evade_next"),
+    "buff_free_cast": EffectSpec(category=EffectCategory.SPECIAL, special="free_cast"),
+    "buff_cooldown_reset": EffectSpec(category=EffectCategory.SPECIAL, special="cooldown_reset"),
     # --- состояния себе ---
     "buff_empower": _buff(holds=(S(StatusKind.EMPOWER, 3),)),
     "buff_berserk": _buff(holds=(S(StatusKind.BERSERK, 3),)),
     "buff_haste": _buff(holds=(S(StatusKind.HASTE, 3),)),
-    "buff_invulnerable": _buff(
-        duration=1, holds=(S(StatusKind.INVULNERABILITY, 1),), recharges=True
-    ),
+    "buff_invulnerable": _buff(duration=1, holds=(S(StatusKind.INVULNERABILITY, 1),)),
     # Уход из виду: держится, пока боец не сделает что-то, кроме защиты, и спадает
-    # от первого же долетевшего удара (``combat``, ADR 0043). Умение «да или нет»,
-    # поэтому ``recharges``: сила ранга ложится в откат.
-    "buff_vanish": _buff(duration=3, holds=(S(StatusKind.UNSEEN, 3),), recharges=True),
+    # от первого же долетевшего удара (``combat``, ADR 0043).
+    "buff_vanish": _buff(duration=3, holds=(S(StatusKind.UNSEEN, 3),)),
     "buff_health_regen": _buff(holds=(S(StatusKind.HEALTH_REGEN, 4),)),
     "buff_resource_regen": _buff(holds=(S(StatusKind.RESOURCE_REGEN, 4),)),
     "buff_second_wind": _buff(
@@ -369,21 +337,21 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
         ),
     ),
     # --- состояния цели ---
-    "debuff_silence": _debuff(inflicts=(S(StatusKind.SILENCE, 2),), recharges=True),
-    "debuff_fear": _debuff(inflicts=(S(StatusKind.FEAR, 1),), recharges=True),
-    "debuff_charm": _debuff(inflicts=(S(StatusKind.CHARM, 1),), recharges=True),
-    "debuff_confusion": _debuff(inflicts=(S(StatusKind.CONFUSION, 2),), recharges=True),
-    "debuff_freeze": _debuff(inflicts=(S(StatusKind.FREEZE, 1),), recharges=True),
-    "debuff_stun": _debuff(inflicts=(S(StatusKind.STUN, 1),), recharges=True),
+    "debuff_silence": _debuff(inflicts=(S(StatusKind.SILENCE, 2),)),
+    "debuff_fear": _debuff(inflicts=(S(StatusKind.FEAR, 1),)),
+    "debuff_charm": _debuff(inflicts=(S(StatusKind.CHARM, 1),)),
+    "debuff_confusion": _debuff(inflicts=(S(StatusKind.CONFUSION, 2),)),
+    "debuff_freeze": _debuff(inflicts=(S(StatusKind.FREEZE, 1),)),
+    "debuff_stun": _debuff(inflicts=(S(StatusKind.STUN, 1),)),
     "debuff_weakness": _debuff(inflicts=(S(StatusKind.WEAKNESS, 3),)),
     "debuff_slow": _debuff(inflicts=(S(StatusKind.SLOW, 3),)),
-    "debuff_heal_block": _debuff(inflicts=(S(StatusKind.HEAL_BLOCK, 3),), recharges=True),
+    "debuff_heal_block": _debuff(inflicts=(S(StatusKind.HEAL_BLOCK, 3),)),
     "debuff_burning": _debuff(aoe=True, dot_turns=3, dot_status=StatusKind.BURNING, tags=("fire",)),
     "debuff_poison": _debuff(dot_turns=4, dot_status=StatusKind.POISON, tags=("poison",)),
     "debuff_bleeding": _debuff(dot_turns=4, dot_status=StatusKind.BLEEDING, tags=("rending",)),
     "debuff_aoe_slow": _debuff(aoe=True, inflicts=(S(StatusKind.SLOW, 2),)),
     "debuff_aoe_weakness": _debuff(aoe=True, inflicts=(S(StatusKind.WEAKNESS, 2),)),
-    "debuff_aoe_fear": _debuff(aoe=True, inflicts=(S(StatusKind.FEAR, 1),), recharges=True),
+    "debuff_aoe_fear": _debuff(aoe=True, inflicts=(S(StatusKind.FEAR, 1),)),
     # Провокация уводит удар цели на провокатора (``combat._forced_target``,
     # ADR 0027). В одиночку переключать некого, поэтому она несёт с собой и то, что
     # видно и там: провокатор прикрывается бронёй на те же ходы, и сила ранга
@@ -391,7 +359,6 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
     "taunt": _debuff(
         inflicts=(S(StatusKind.TAUNT, 2),),
         self_modifiers=(M("armor_percent"),),
-        tag=ActionTag.GUARD,
     ),
     # То же, но на весь двор: паладин вызывает всех сразу и вдобавок сбивает им
     # удар - это его дело в отряде, встать между стаей и товарищами.
@@ -399,7 +366,6 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
         aoe=True,
         inflicts=(S(StatusKind.TAUNT, 2),),
         target_modifiers=(M("damage_percent", scale=-1.0),),
-        tag=ActionTag.GUARD,
     ),
     # --- особое ---
     "avoid_combat": EffectSpec(category=EffectCategory.SPECIAL, special="avoid_combat"),
@@ -410,33 +376,6 @@ EFFECT_SPECS: dict[str, EffectSpec] = {
 # отличающийся только объявленным родом.
 EFFECT_SPECS.update(_by_damage_type(*DAMAGE_TAGS))
 EFFECT_SPECS.update(_by_damage_type(*DAMAGE_TAGS, aoe=True))
-
-
-def tag_of(spec: EffectSpec) -> ActionTag:
-    """Какой след оставляет эффект.
-
-    Удар - натиск; удар прицельный (в броню, в слабое место, в метку) или
-    оставляющий цель в помехах - точность; всё, что лечит, укрывает или готовит, -
-    оборона. Умение может назвать свой тег прямо, и тогда ничего не выводится.
-    """
-    if spec.tag is not None:
-        return spec.tag
-    if spec.category is EffectCategory.DAMAGE:
-        aimed = spec.pierce or spec.guaranteed_crit or spec.crit_bonus or spec.execute_scaling
-        hinders = spec.target_modifiers or spec.dot_turns or spec.inflicts or spec.stun_turns
-        return ActionTag.PRECISION if aimed or hinders else ActionTag.PRESS
-    if spec.category is EffectCategory.DEBUFF:
-        return ActionTag.PRECISION
-    return ActionTag.GUARD
-
-
-def tag_of_skill(skill: Skill) -> ActionTag:
-    """След целого умения - слово содержимого первым, эффекта вторым.
-
-    Каждому классу нужны все три тега в пределах досягаемости, иначе разнобой для
-    него арифметически невозможен; это и покупают пометки в содержимом.
-    """
-    return skill.tag if skill.tag is not None else tag_of(spec_for(skill.effect))
 
 
 def spec_for(effect: str) -> EffectSpec:

@@ -14,8 +14,8 @@
 ничего не делает, - это баг (``Claude.md``, правило 9). Умение на откате
 остаётся на месте и говорит об этом само.
 
-Правила тегов не добавляют кнопок: тег - это слово внутри метки, которая у
-игрока и так есть, а состояние следа - одна произносимая строка.
+Повадка противника не добавляет кнопок: она названа одним словом в строке о
+нём, а что она делает, рассказывает «Разбор боя» (ADR 0066).
 """
 
 from __future__ import annotations
@@ -24,57 +24,63 @@ from collections.abc import Sequence
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import (
-    ActionTag,
     BattleEvent,
     BattleState,
     Combatant,
     EventKind,
-    Trace,
 )
 from mmorpg.domain.entities.content import GameContent, Skill
-from mmorpg.domain.entities.location import EnemyRank
+from mmorpg.domain.entities.location import EnemyRank, EnemyRole
 from mmorpg.domain.entities.statuses import StatusKind, status_name
 from mmorpg.domain.rules import equipment as gear
+from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.combat import (
     BASIC_ATTACK_PERCENT,
-    MOMENTUM_DAMAGE_PERCENT,
+    CASTER_SWEEP_SCALE,
+    HEALER_SHARE,
+    ROLE_MOVE_EVERY,
     blow_range,
     defend_armor,
     defend_dodge,
-    intent_of,
+    role_of,
     skill_cost,
 )
 from mmorpg.domain.rules.skill_effects import (
     EffectCategory,
     EffectSpec,
     cleansed_count,
-    recharged,
     spec_for,
-    tag_of_skill,
 )
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
-from mmorpg.presentation.telegram.screens.format import amount, head, percent, plural, turns
+from mmorpg.presentation.telegram.screens.format import amount, head, percent, turns
 
 EMPTY_SLOT = "Пустой слот"
 READY = "готово"
 NEEDS_STEALTH = "нужна незаметность"
 
-#: Домен держит теги машинными; русские слова для них живут здесь.
-TAG_NAMES: dict[ActionTag, str] = {
-    ActionTag.PRESS: "напор",
-    ActionTag.GUARD: "заслон",
-    ActionTag.PRECISION: "финт",
+#: Домен держит повадки машинными; русские слова для них живут здесь.
+ROLE_NAMES: dict[EnemyRole, str] = {
+    EnemyRole.BRUTE: "громила",
+    EnemyRole.WARRIOR: "воин",
+    EnemyRole.ROGUE: "разбойник",
+    EnemyRole.CASTER: "заклинатель",
+    EnemyRole.HEALER: "знахарь",
 }
 
-#: Одна произносимая подсказка к объявленной стойке - что она сулит в этот ход.
-#: Слова описывают ровно то, что делает движок (``domain/rules/combat``: брешь у
-#: объявившего напор, ``INTENT_ARMOR``, ``BREACH_ANSWER_SCALE``; ADR 0050).
-INTENT_HINTS: dict[ActionTag, str] = {
-    ActionTag.PRESS: "он открылся: бейте мимо брони, а его удар дойдёт вполсилы",
-    ActionTag.GUARD: "брони у него в полтора раза больше, но и сам он бьёт вполсилы",
-    ActionTag.PRECISION: "от его удара не увернуться",
+#: Что повадка обещает - словами, описывающими ровно то, что делает движок
+#: (``domain/rules/combat``: ``role_action``, ``_role_move``; ADR 0066).
+ROLE_HINTS: dict[EnemyRole, str] = {
+    EnemyRole.BRUTE: "бьёт всегда, а на исходе сил бьёт в полтора раза сильнее",
+    EnemyRole.WARRIOR: "раненым закрывается: его придётся добивать",
+    EnemyRole.ROGUE: "по тому, кому осталась треть, бьёт наверняка",
+    EnemyRole.CASTER: (
+        f"раз в {ROLE_MOVE_EVERY} круга бьёт всех сразу, вполсилы и своим родом урона"
+    ),
+    EnemyRole.HEALER: (
+        f"раз в {ROLE_MOVE_EVERY} круга поднимает самого раненого в стае на четверть его здоровья"
+    ),
 }
 
 #: Столько о ступени, сколько нужно, чтобы понять, сколько это займёт.
@@ -118,18 +124,18 @@ SPECIAL_NAMES: dict[str, str] = {
 
 
 def attack_label(content: GameContent, character: Character, viewer: Combatant) -> Label:
-    """Обычный удар: тег и то, сколько он снимет.
+    """Обычный удар и то, сколько он снимет.
 
     Урон назван границами броска, как и у умений: он бросается костями оружия, и
-    одно число обещало бы точность, которой нет. Броня цели, крит и разгон
-    считаются после, поэтому это обещание об ударе, а не предсказание хода.
+    одно число обещало бы точность, которой нет. Броня цели и крит считаются
+    после, поэтому это обещание об ударе, а не предсказание хода.
     """
     low, high = blow_range(content, character, viewer.effects)
     share = BASIC_ATTACK_PERCENT / 100.0
     least = max(1, round(low * share))
     most = max(least, round(high * share))
     return label(
-        f"{labels.ATTACK.text} — {TAG_NAMES[ActionTag.PRESS]}, урон от {least} до {most}",
+        f"{labels.ATTACK.text} — урон от {least} до {most}",
         labels.ATTACK.emoji,
     )
 
@@ -137,8 +143,7 @@ def attack_label(content: GameContent, character: Character, viewer: Combatant) 
 def defend_label(viewer: Combatant) -> Label:
     """Закрыться: ход уходит целиком, и метка называет, что за него дают."""
     return label(
-        f"{labels.DEFEND.text} — {TAG_NAMES[ActionTag.GUARD]}, "
-        f"броня плюс {defend_armor(viewer.level)}, "
+        f"{labels.DEFEND.text} — броня плюс {defend_armor(viewer.level)}, "
         f"уклонение плюс {percent(defend_dodge())} до вашего следующего хода",
         labels.DEFEND.emoji,
     )
@@ -163,13 +168,16 @@ def skill_effect(
     считаются потом. Урон называется границами, а не одним числом, - он
     бросается костями оружия, и «урон 65» обещало бы точность, которой нет.
     """
-    spec = spec_for(skill.effect)
-    power = skill.power_at_rank(character.loadout.rank_of(skill.code))
+    rank = character.loadout.rank_of(skill.code)
+    # Сроки называются те, что даст ранг: карточка обязана обещать ровно то, что
+    # сделает движок (``skill_rules.at_rank``, ADR 0067).
+    spec = skill_rules.at_rank(spec_for(skill.effect), rank)
+    power = skill.power_at_rank(rank)
 
     if spec.category is EffectCategory.DAMAGE:
         low, high = blow_range(content, character, viewer.effects, skill.scaling)
         share = power / 100.0 * spec.damage_scale
-        rank_scale = 1.0 + skill.rank_step * (character.loadout.rank_of(skill.code) - 1)
+        rank_scale = 1.0 + skill.rank_step * (rank - 1)
         extra = skill.dice
         least = max(1, round(low * share + (extra.low * rank_scale if extra else 0)))
         most = max(least, round(high * share + (extra.high * rank_scale if extra else 0)))
@@ -289,11 +297,13 @@ def _slot_status(skill: Skill, character: Character, viewer: Combatant) -> str:
         return f"ещё {turns(cooldown)}"
 
     rank = character.loadout.rank_of(skill.code)
-    ready_in = recharged(skill.cooldown, spec_for(skill.effect), skill.power_at_rank(rank))
+    # Откат и цена считаются по рангу: ранг укорачивает первое и удешевляет
+    # второе (``skill_rules.rank_gain``, ADR 0067).
+    ready_in = skill_rules.cooldown_at_rank(skill, rank)
     parts = []
     # Цена объявлена долей запаса (ADR 0058), а игроку называется числом: доля -
     # это правило, а на экране стоит то, что сейчас спишут.
-    price = skill_cost(skill, viewer.max_resource)
+    price = round(skill_cost(skill, viewer.max_resource) * skill_rules.cost_factor(rank))
     if price:
         parts.append(f"стоит {price}")
     if ready_in:
@@ -325,8 +335,7 @@ def skill_label(content: GameContent, character: Character, viewer: Combatant, s
         or _slot_status(skill, character, viewer)
     )
     return label(
-        f"{slot + 1}. {skill.name} — {TAG_NAMES[tag_of_skill(skill)]}, "
-        f"{skill_effect(content, character, viewer, skill)}, {status}"
+        f"{slot + 1}. {skill.name} — {skill_effect(content, character, viewer, skill)}, {status}"
     )
 
 
@@ -342,8 +351,7 @@ def racial_label(content: GameContent, character: Character, viewer: Combatant) 
     if skill is None:
         return label(f"Расовое умение — {EMPTY_SLOT.lower()}")
     return label(
-        f"{skill.name} — расовое, {TAG_NAMES[tag_of_skill(skill)]}, "
-        f"{skill_effect(content, character, viewer, skill)}, "
+        f"{skill.name} — расовое, {skill_effect(content, character, viewer, skill)}, "
         f"{_slot_status(skill, character, viewer)}"
     )
 
@@ -352,11 +360,10 @@ def racial_label(content: GameContent, character: Character, viewer: Combatant) 
 
 
 def foe_line(state: BattleState, one: Combatant) -> str:
-    """Здоровье противника и объявленная стойка с подсказкой, что она сулит.
+    """Здоровье противника и то, как он дерётся.
 
-    Круга контр больше нет (ADR 0050): у врага постоянная повадка, читаемая с
-    одного взгляда. У живого игрока намерения нет - есть след: чем он бил в
-    прошлый ход.
+    Повадка названа одним словом (ADR 0066): что она значит, рассказывает
+    «Разбор боя». У чужого персонажа повадки нет - за ним стоит игрок.
     """
     rank = RANK_NAMES[one.rank]
     title = f"{one.id}. {one.name} ({rank})" if rank else f"{one.id}. {one.name}"
@@ -368,13 +375,11 @@ def foe_line(state: BattleState, one: Combatant) -> str:
     if one.effects.has(StatusKind.UNSEEN):
         # Ушёл из виду: в бою он есть, а выбрать целью нельзя, пока не проявится.
         return f"{line}. Ушёл из виду: не выбрать, пока сам не проявится."
-    intent = intent_of(state, one)
-    if intent is None:
-        return f"{line}. Ещё не бил: намерения не видно."
-    if one.live:
-        return f"{line}. След: {TAG_NAMES[intent]}."
-    # Что стойка сулит - на экране «Разбор боя», не абзацем в каждой строке.
-    return f"{line}. Намерение: {TAG_NAMES[intent]}."
+    role = role_of(one)
+    if role is None:
+        return f"{line}."
+    # Что повадка сулит - на экране «Разбор боя», не абзацем в каждой строке.
+    return f"{line}. Дерётся как {ROLE_NAMES[role]}."
 
 
 def ally_line(one: Combatant, *, viewer_id: int) -> str:
@@ -413,44 +418,6 @@ def status_line(one: Combatant) -> str:
         for effect in held
         if effect.status is not None and effect.status is not StatusKind.BARRIER
     )
-
-
-def advice_line(trace: Trace) -> str:
-    """Одна строка-совет о следе для боевой панели.
-
-    Полный расклад темпа - намерения врагов, разнобой, что дают три стойки -
-    ушёл на экран «Разбор боя» (``breakdown_screen``): на слух абзац о следе и
-    разгоне в каждом ходу это стена (ADR 0050). Механику это не трогает: та же
-    строка, только короче, и кнопка на всё остальное.
-    """
-    tail = "«Разбор боя» — весь расклад темпа."
-    if trace.last is None:
-        return f"След пуст. Повтор тега — разгон, три разных подряд — разнобой. {tail}"
-    lead = f"След: {TAG_NAMES[trace.last]}"
-    if trace.streak > 1:
-        gain = percent(MOMENTUM_DAMAGE_PERCENT * (trace.streak - 1))
-        return f"{lead}, разгон {gain}; повтор поднимет его. {tail}"
-    repeat = percent(MOMENTUM_DAMAGE_PERCENT * trace.streak)
-    return f"{lead}. Повтор даст разгон {repeat}. {tail}"
-
-
-def trace_line(trace: Trace) -> str:
-    """Где стоит след и что даст следующий ход."""
-    if trace.last is None:
-        return (
-            "След пуст. Повтор тега даёт разгон и усиливает удар, "
-            "три разных тега подряд — разнобой, и противник теряет ход."
-        )
-
-    lead = f"След: {TAG_NAMES[trace.last]}"
-    if trace.streak > 1:
-        marks = plural(trace.streak, "след", "следа", "следов")
-        gain = percent(MOMENTUM_DAMAGE_PERCENT * (trace.streak - 1))
-        lead = f"{lead}, {trace.streak} {marks} подряд, разгон {gain}"
-    repeat = percent(MOMENTUM_DAMAGE_PERCENT * trace.streak)
-    hints = [f"повтор даст разгон {repeat}"]
-    hints.extend(f"{TAG_NAMES[tag]} даст разнобой" for tag in ActionTag if trace.breaks_with(tag))
-    return f"{lead}. Дальше: {'; '.join(hints)}."
 
 
 def describe_event(event: BattleEvent, viewer_id: int = 0) -> str:
@@ -562,18 +529,8 @@ def describe_event(event: BattleEvent, viewer_id: int = 0) -> str:
         case EventKind.TURN_SKIPPED:
             reason = f": {event.effect_name.lower()}" if event.effect_name else ""
             return f"{event.actor} пропускает ход{reason}."
-        case EventKind.MOMENTUM if you_hit:
-            marks = plural(event.amount, "след", "следа", "следов")
-            gain = percent(MOMENTUM_DAMAGE_PERCENT * (event.amount - 1))
-            return f"Разгон: {event.amount} {marks} подряд, удар сильнее на {gain}."
-        case EventKind.MOMENTUM:
-            return f"{event.actor} набирает разгон: удар сильнее."
-        case EventKind.BREACH:
-            return f"Брешь: {event.target} на замахе, броня не в счёт, его удар вдвое слабее."
-        case EventKind.BREAKTHROUGH if you_hit:
-            return "Разнобой: три разных тега подряд, противник теряет ближайший ход."
-        case EventKind.BREAKTHROUGH:
-            return f"Разнобой: {event.actor} сбивает ритм и бьёт снова."
+        case EventKind.ROLE_MOVE:
+            return f"{event.actor} берётся за своё."
         case EventKind.JOINED if you_hit:
             return "Вы вмешались в бой. Ваш ход придёт со следующего круга."
         case EventKind.JOINED:
@@ -646,11 +603,11 @@ def battle_screen(
 
     lines = list(head(f"Бой. Круг {state.round}.", notice))
     lines.extend(_sides(content, state, viewer))
-    lines.append(advice_line(viewer.trace))
     lines.extend(turn_lines(state, viewer_id))
     target = state.target_for(viewer_id)
     if target is not None:
         lines.append(f"Ваша цель: {target.id}. {target.name}.")
+    lines.append("«Разбор боя» — кто перед вами и как он дерётся.")
     lines.append("Ваш ход.")
 
     rows: list[tuple[Label, ...]] = [
@@ -715,35 +672,34 @@ def breakdown_screen(
     viewer_id: int,
     notice: str = "",
 ) -> Screen:
-    """Полный расклад темпа: намерения врагов, след, что дают три стойки.
+    """Кто перед вами: повадка каждого врага, что она делает, и его прозвища.
 
-    Отдельный экран нарочно (ADR 0050): на боевой панели это был абзац в каждом
-    ходу, а на слух абзац между делом - стена. Механику не трогает ничто. Возврат -
+    Отдельный экран нарочно: на боевой панели это был бы абзац в каждом ходу, а
+    на слух абзац между делом - стена. Механику не трогает ничто. Возврат -
     «Что там в бою».
     """
     viewer = state.by_id(viewer_id)
-    lines = list(head(f"Бой. Разбор темпа. Круг {state.round}.", notice))
+    lines = list(head(f"Бой. Разбор боя. Круг {state.round}.", notice))
+    seen: list[EnemyRole] = []
     if viewer is not None:
-        lines.append(trace_line(viewer.trace))
         for one in state.combatants:
             if one.side == viewer.side or not one.alive or one.live:
                 continue
             if one.effects.has(StatusKind.UNSEEN):
                 continue
-            intent = intent_of(state, one)
-            if intent is not None:
-                lines.append(
-                    f"{one.id}. {one.name}: намерение {TAG_NAMES[intent]} — {INTENT_HINTS[intent]}."
-                )
+            role = role_of(one)
+            if role is None:
+                continue
+            lines.append(f"{one.id}. {one.name}: {ROLE_NAMES[role]} — {ROLE_HINTS[role]}.")
+            if role not in seen:
+                seen.append(role)
         lines.extend(affix_lines(content, state, viewer))
+    if not seen:
+        lines.append("Повадок здесь нет: перед вами не порода, а такой же приключенец.")
     lines.append(
-        "Напор: бьёте сильнее на разгоне, но вы на замахе — по вам мимо брони, ваш ответ вполсилы."
-    )
-    lines.append("Заслон: держите удар, брони в полтора раза больше, но и сами бьёте вполсилы.")
-    lines.append("Финт: бьёте наверняка, увернуться от вас нельзя.")
-    lines.append(
-        "Повтор тега — разгон, плюс четверть урона за каждый повтор. Три разных тега "
-        "подряд — разнобой: противник, на ком размен сломался, теряет ближайший ход."
+        f"Приём заклинателя бьёт всех на {percent(CASTER_SWEEP_SCALE * 100)} его удара, "
+        f"рука знахаря возвращает {percent(HEALER_SHARE * 100)} здоровья, и оба приходят "
+        f"раз в {ROLE_MOVE_EVERY} круга."
     )
     return Screen(
         id=ScreenId.COMBAT,

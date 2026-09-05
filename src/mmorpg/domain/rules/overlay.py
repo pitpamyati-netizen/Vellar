@@ -17,7 +17,6 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
-from itertools import pairwise
 from types import MappingProxyType
 
 from mmorpg.domain.entities.content import (
@@ -32,7 +31,7 @@ from mmorpg.domain.entities.content import (
 )
 from mmorpg.domain.entities.craft import Craft, CraftKind, CraftYield, Recipe, RecipeInput
 from mmorpg.domain.entities.damage import DamageType
-from mmorpg.domain.entities.location import EnemyArchetype, EnemyKind
+from mmorpg.domain.entities.location import EnemyArchetype, EnemyKind, EnemyRole
 from mmorpg.domain.entities.overlay import KEEPER_PREFIX, OverlayKind, OverlayRecord
 from mmorpg.domain.entities.quest import ObjectiveKind, Quest
 from mmorpg.domain.entities.stats import StatCode
@@ -237,6 +236,15 @@ FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
             choices=tuple(one.value for one in DamageType),
             hint="не выбрано — по породе",
         ),
+        # Как дерётся. Повадка - настоящий ход, а не множитель (ADR 0066);
+        # не выбрано — решает порода (``location.DEFAULT_ROLES``).
+        FieldSpec(
+            "role",
+            "Как дерётся",
+            FieldKind.CHOICE,
+            choices=tuple(one.value for one in EnemyRole),
+            hint="не выбрано — по породе",
+        ),
         FieldSpec("loot", "Что падает", FieldKind.LIST, source=Source.ITEM),
         # Только под землёй: порода уходит в dungeon-пул захода и пропадает из
         # встреч на дороге (ADR 0042).
@@ -342,21 +350,16 @@ FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
             FieldKind.NUMBER,
         ),
         FieldSpec(
-            "skill_point_per_level",
-            "Очков умений за уровень",
+            "levels_per_skill_point",
+            "Уровней на очко умений",
             FieldKind.NUMBER,
+            hint="2 — очко приходит через уровень",
         ),
         FieldSpec(
-            "rank_costs",
-            "Цена рангов умений",
-            FieldKind.NUMBERS,
-            hint="1, 2, 2, 3, 4 — по одному числу на ранг",
-        ),
-        FieldSpec(
-            "branch_gates",
-            "Очки на ступени ветви",
-            FieldKind.NUMBERS,
-            hint="0, 6, 14, 24 — первая ступень открыта сразу",
+            "rank_cost",
+            "Цена ранга умения",
+            FieldKind.NUMBER,
+            hint="1 — одно очко за любой ранг",
         ),
     ),
 }
@@ -718,6 +721,7 @@ def _enemy_fields(enemy: EnemyArchetype) -> dict[str, str]:
         "armor": _rate(enemy.armor),
         "initiative": _rate(enemy.initiative),
         "element": enemy.element.value if enemy.element is not None else "",
+        "role": enemy.role.value if enemy.role is not None else "",
         "loot": ", ".join(enemy.loot),
         "dungeon": "да" if enemy.dungeon else "нет",
     }
@@ -784,9 +788,8 @@ def _meta_fields(rules: ProgressionRules) -> dict[str, str]:
         "base_stat_value": str(rules.base_stat_value),
         "free_points_at_creation": str(rules.free_points_at_creation),
         "stat_points_per_level": str(rules.stat_points_per_level),
-        "skill_point_per_level": str(rules.skill_point_per_level),
-        "rank_costs": ", ".join(str(cost) for cost in rules.rank_costs),
-        "branch_gates": ", ".join(str(gate) for gate in rules.branch_gates),
+        "levels_per_skill_point": str(rules.levels_per_skill_point),
+        "rank_cost": str(rules.rank_cost),
     }
 
 
@@ -1016,16 +1019,6 @@ def _meta_problems(content: GameContent, record: OverlayRecord) -> list[str]:
         listed = record.numbers(spec.key)
         if any(one < 0 for one in listed):
             found.append(f"{spec.name}: отрицательных чисел здесь нет.")
-        if spec.key == "rank_costs" and 0 < len(listed) < content.rules.max_rank:
-            found.append(
-                f"Цена рангов умений: нужно хотя бы {content.rules.max_rank} чисел — "
-                "по одному на ранг."
-            )
-        if spec.key == "branch_gates":
-            if listed and listed[0] != 0:
-                found.append("Очки на ступени ветви: первое число всегда 0 — она открыта сразу.")
-            if any(earlier > later for earlier, later in pairwise(listed)):
-                found.append("Очки на ступени ветви: числа идут по возрастанию.")
     return found
 
 
@@ -1375,6 +1368,7 @@ def _apply_enemies(
             armor=record.rate("armor"),
             initiative=record.rate("initiative"),
             element=(DamageType(chosen) if (chosen := record.value("element")) else None),
+            role=(EnemyRole(picked) if (picked := record.value("role")) else None),
             loot=record.listed("loot"),
             dungeon=record.flag("dungeon"),
         )
@@ -1401,17 +1395,13 @@ def _rules_from(rules: ProgressionRules, record: OverlayRecord) -> ProgressionRu
     def num(key: str, current: int) -> int:
         return record.number(key, current) if record.value(key).strip() else current
 
-    def nums(key: str, current: tuple[int, ...]) -> tuple[int, ...]:
-        return record.numbers(key) if record.value(key).strip() else current
-
     return replace(
         rules,
         base_stat_value=num("base_stat_value", rules.base_stat_value),
         free_points_at_creation=num("free_points_at_creation", rules.free_points_at_creation),
         stat_points_per_level=num("stat_points_per_level", rules.stat_points_per_level),
-        skill_point_per_level=num("skill_point_per_level", rules.skill_point_per_level),
-        rank_costs=nums("rank_costs", rules.rank_costs),
-        branch_gates=nums("branch_gates", rules.branch_gates),
+        levels_per_skill_point=max(1, num("levels_per_skill_point", rules.levels_per_skill_point)),
+        rank_cost=max(1, num("rank_cost", rules.rank_cost)),
     )
 
 
@@ -1790,10 +1780,9 @@ def _meta_toml(content: GameContent, record: OverlayRecord) -> str:
     return "\n".join(
         [
             "# опорные числа лежат по разным файлам [meta] — перенесите нужные строки:",
-            f"# content/skills.toml   rank_costs = {list(rules.rank_costs)}",
-            f"# content/skills.toml   branch_gates = {list(rules.branch_gates)}",
+            f"# content/skills.toml   rank_cost = {rules.rank_cost}",
+            f"# content/skills.toml   levels_per_skill_point = {rules.levels_per_skill_point}",
             f"# content/classes.toml  stat_points_per_level = {rules.stat_points_per_level}",
-            f"# content/classes.toml  skill_point_per_level = {rules.skill_point_per_level}",
             f"# base_stat_value = {rules.base_stat_value}  "
             f"free_points_at_creation = {rules.free_points_at_creation}",
         ]

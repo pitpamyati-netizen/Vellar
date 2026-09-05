@@ -197,9 +197,7 @@ async def test_save_round_trips_every_field() -> None:
         gold=250,
         allocated=StatBlock(STR=4, LCK=2),
         trait_ids=("berserker", "born_lucky"),
-        loadout=created.loadout.with_rank("warrior_rassechenie", 3).with_edge(
-            "warrior_rassechenie", "warrior_rassechenie_a"
-        ),
+        loadout=created.loadout.with_rank("warrior_rassechenie", 3),
         equipment=created.equipment.equip("weapon", "sword@1#common"),
     )
     await characters.save(updated)
@@ -208,7 +206,6 @@ async def test_save_round_trips_every_field() -> None:
     assert reloaded == updated
     assert reloaded is not None
     assert reloaded.loadout.rank_of("warrior_rassechenie") == 3
-    assert reloaded.loadout.edge_of("warrior_rassechenie") == "warrior_rassechenie_a"
     assert reloaded.equipment.item_in("weapon") == "sword@1#common"
 
 

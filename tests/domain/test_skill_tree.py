@@ -1,9 +1,9 @@
-"""Дерево умений: цена ранга, ветви, развилки и то, что дерево дороже дохода.
+"""Дерево умений: цена ранга, что ранг даёт, развилки и доход против дерева.
 
-Здесь проверяется единственное обещание ADR 0024: к трёхсотому уровню выучить
-всё нельзя, и то, что выучено, - это выбор, а не расписание. Раньше шестьдесят
-умений по пять рангов сходились ровно с тремя сотнями очков, и два воина одного
-уровня были неразличимы.
+Здесь проверяется обещание ADR 0067: ранг стоит одно очко, очко приходит через
+уровень, и потому к сто пятидесятому выучить всё нельзя - выученное это выбор, а
+не расписание. Ветвей и граней в дереве больше нет: ветви вернутся талантами,
+а грани были 256 подписями, за которыми движок ничего не делал.
 """
 
 from __future__ import annotations
@@ -11,14 +11,14 @@ from __future__ import annotations
 from dataclasses import replace
 
 from mmorpg.domain.entities import Character, GameContent, SkillKind, SkillLoadout
-from mmorpg.domain.entities.combat import ActionTag
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.stats import skill_point_allowance
 
 # --- цена ------------------------------------------------------------
 
 
-def test_a_rank_costs_more_the_higher_it_stands(content: GameContent, warrior: Character) -> None:
+def test_every_rank_costs_the_same_single_point(content: GameContent, warrior: Character) -> None:
+    """Ранг стоит одно очко, любой: за очко он платит не ценой, а делом."""
     skill = content.class_skills_up_to("warrior", 1, SkillKind.ACTIVE)[0]
     rich = replace(warrior, unspent_skill_points=99)
     costs = []
@@ -26,13 +26,24 @@ def test_a_rank_costs_more_the_higher_it_stands(content: GameContent, warrior: C
         costs.append(skill_rules.cost_to_learn(content, rich, skill))
         rich = skill_rules.learn(content, rich, skill)
         assert rich is not None
-    assert costs == sorted(costs), costs
-    assert costs[-1] > costs[0], "предельный ранг обязан стоить дороже первого"
+    assert costs == [content.rules.rank_cost] * content.rules.max_rank
     assert skill_rules.cost_to_learn(content, rich, skill) == 0
     assert skill_rules.spent_on(content, rich, skill.code) == content.rules.full_rank_cost()
 
 
-def test_the_tree_costs_more_than_three_hundred_levels_pay(content: GameContent) -> None:
+def test_a_point_comes_every_other_level(content: GameContent) -> None:
+    """«Каждые два уровня» - это деление, и на нечётных оно не врёт."""
+    step = content.rules.levels_per_skill_point
+    assert step == 2
+    assert skill_point_allowance(content, 1) == 0
+    assert skill_point_allowance(content, 2) == 1
+    assert skill_point_allowance(content, 3) == 1
+    assert skill_point_allowance(content, 4) == 2
+    top = content.rules.max_character_level
+    assert skill_point_allowance(content, top) == top // step
+
+
+def test_the_tree_costs_more_than_the_whole_road_pays(content: GameContent) -> None:
     """Главное число замысла: дерево дороже дохода, поэтому «выучить всё» нельзя."""
     earned = skill_point_allowance(content, content.rules.max_character_level)
     for klass in content.classes:
@@ -43,123 +54,74 @@ def test_the_tree_costs_more_than_three_hundred_levels_pay(content: GameContent)
         places = len({skill.fork or skill.code for skill in actives}) + len(passives)
         full = places * content.rules.full_rank_cost()
         assert full > earned, klass.id
-        # И не настолько дороже, чтобы выбор стал незаметным: около половины дерева.
-        assert earned / full > 0.4, klass.id
 
 
-# --- ветви -----------------------------------------------------------
-
-
-def first_of(content: GameContent, branch: ActionTag, level: int = 300):
-    return next(
-        skill
-        for skill in content.class_skills_up_to("warrior", level, SkillKind.PASSIVE)
-        if skill.branch is branch and skill_rules.tier_of(content, skill) == 1
-    )
-
-
-def deep_in(content: GameContent, branch: ActionTag, tier: int = 4):
-    return next(
-        skill
-        for skill in content.class_skills_up_to("warrior", 300, SkillKind.PASSIVE)
-        if skill.branch is branch and skill_rules.tier_of(content, skill) == tier
-    )
-
-
-def below_tier(content: GameContent, branch: ActionTag, tier: int):
-    """Всё, во что можно вложить очко в этой ветви ниже названной ступени.
-
-    И боевые, и пассивные: гейт считает вложенное в ветвь целиком, поэтому одними
-    пассивными его на четвёртой ступени не набрать.
-    """
-    return [
-        skill
-        for kind in (SkillKind.ACTIVE, SkillKind.PASSIVE)
-        for skill in content.class_skills_up_to("warrior", 300, kind)
-        if skill.branch is branch and skill_rules.tier_of(content, skill) < tier
-    ]
-
-
-def spend_to_gate(
-    content: GameContent, character: Character, branch: ActionTag, gate: int
-) -> Character:
-    """Вложить в ветвь ровно столько, чтобы ступень открылась, и ни очком больше.
-
-    Ни очком больше - это важно: вложив вдвое, разобрать одно умение можно было бы
-    безнаказанно, и проверка гейта на разборе ничего бы не доказала.
-    """
-    for skill in below_tier(content, branch, 4):
-        while skill_rules.branch_points(content, character)[branch] < gate:
-            raised = skill_rules.learn(content, character, skill)
-            if raised is None:
-                break
-            character = raised
-        if skill_rules.branch_points(content, character)[branch] >= gate:
-            break
-    return character
-
-
-def test_every_class_skill_names_its_branch(content: GameContent) -> None:
-    nameless = [
-        skill.code
-        for skill in content.skills
-        if skill.owner_kind.value == "class" and skill.branch is None
-    ]
-    assert not nameless
-
-
-def test_a_locked_tier_refuses_the_point(content: GameContent, warrior: Character) -> None:
-    veteran = replace(warrior, level=300, unspent_skill_points=99)
-    late = deep_in(content, ActionTag.PRESS)
-    assert skill_rules.gate_of(content, late) > 0
-    assert not skill_rules.gate_met(content, veteran, late)
-    assert skill_rules.learn(content, veteran, late) is None
-
-
-def test_points_spent_in_a_branch_open_it(content: GameContent, warrior: Character) -> None:
-    veteran = replace(warrior, level=300, unspent_skill_points=999)
-    late = deep_in(content, ActionTag.PRESS)
-    gate = skill_rules.gate_of(content, late)
-
-    veteran = spend_to_gate(content, veteran, ActionTag.PRESS, gate)
-
-    assert skill_rules.branch_points(content, veteran)[ActionTag.PRESS] >= gate
-    assert skill_rules.gate_met(content, veteran, late)
-    opened = skill_rules.learn(content, veteran, late)
-    assert opened is not None and skill_rules.is_known(opened, late.code)
-
-
-def test_a_branch_is_counted_only_by_its_own_skills(
+def test_the_mentor_returns_exactly_what_was_spent(
     content: GameContent, warrior: Character
 ) -> None:
-    guard = first_of(content, ActionTag.GUARD)
-    student = replace(warrior, level=300, unspent_skill_points=9)
-    learned = skill_rules.learn(content, student, guard)
-    assert learned is not None
-    tally = skill_rules.branch_points(content, learned)
-    assert tally[ActionTag.GUARD] == content.rules.rank_cost(1)
-    assert tally[ActionTag.PRESS] == 0
-    assert tally[ActionTag.PRECISION] == 0
+    skill = content.class_skills_up_to("warrior", 1, SkillKind.ACTIVE)[0]
+    rich = replace(warrior, unspent_skill_points=10)
+    for _ in range(3):
+        raised = skill_rules.learn(content, rich, skill)
+        assert raised is not None
+        rich = raised
+    left = rich.unspent_skill_points
+    forgotten = skill_rules.forget(content, rich, skill)
+    assert forgotten is not None
+    assert forgotten.unspent_skill_points == left + 3 * content.rules.rank_cost
+    assert not skill_rules.is_known(forgotten, skill.code)
 
 
-def test_taking_a_branch_apart_below_its_gate_is_refused(
-    content: GameContent, warrior: Character
-) -> None:
-    """Иначе гейт - это пошлина: набрал дешёвых, открыл верх, разобрал дешёвые."""
-    veteran = replace(warrior, level=300, unspent_skill_points=999)
-    late = deep_in(content, ActionTag.PRESS)
-    veteran = spend_to_gate(content, veteran, ActionTag.PRESS, skill_rules.gate_of(content, late))
-    veteran = skill_rules.learn(content, veteran, late) or veteran
-    assert skill_rules.is_known(veteran, late.code)
+# --- что даёт ранг ---------------------------------------------------
 
-    # То, на чём ступень и стоит: без этого умения вложенного в ветвь станет меньше гейта.
-    propped = max(
-        below_tier(content, ActionTag.PRESS, 4),
-        key=lambda skill: skill_rules.spent_on(content, veteran, skill.code),
+
+def test_the_first_rank_gains_nothing_and_the_last_gains_all_three() -> None:
+    """Ранг меняет откат, сроки и цену - иначе очко в него потрачено впустую."""
+    first = skill_rules.rank_gain(1)
+    assert not first.changes_anything
+    assert (first.cooldown_cut, first.duration_bonus, first.cost_factor) == (0, 0, 1.0)
+
+    top = skill_rules.rank_gain(5)
+    assert top.cooldown_cut == 2
+    assert top.duration_bonus == 2
+    assert top.cost_factor < first.cost_factor
+
+
+def test_rank_gains_never_fall_as_the_rank_rises() -> None:
+    steps = [skill_rules.rank_gain(rank) for rank in range(1, 6)]
+    assert [one.cooldown_cut for one in steps] == sorted(one.cooldown_cut for one in steps)
+    assert [one.duration_bonus for one in steps] == sorted(one.duration_bonus for one in steps)
+    assert [one.cost_factor for one in steps] == sorted(
+        (one.cost_factor for one in steps), reverse=True
     )
-    assert skill_rules.undercuts_branch(content, veteran, propped)
-    assert skill_rules.forget(content, veteran, propped) is None
-    assert propped not in skill_rules.forgettable(content, veteran)
+
+
+def test_a_cooldown_never_falls_below_nothing(content: GameContent) -> None:
+    instant = next(skill for skill in content.skills if skill.cooldown == 0)
+    assert skill_rules.cooldown_at_rank(instant, content.rules.max_rank) == 0
+
+
+def test_rank_stretches_what_the_skill_leaves_but_not_what_takes_a_turn() -> None:
+    """Лишний ход оглушения бой не разменивает, а кончает - его ранг не трогает."""
+    from mmorpg.domain.entities.statuses import StatusKind
+    from mmorpg.domain.rules.skill_effects import spec_for
+
+    burning = spec_for("damage_burn")
+    stretched = skill_rules.at_rank(burning, 5)
+    assert stretched.dot_turns == burning.dot_turns + 2
+
+    freezing = spec_for("damage_freeze")
+    held = skill_rules.at_rank(freezing, 5)
+    frozen = next(one for one in held.inflicts if one.kind is StatusKind.FREEZE)
+    was = next(one for one in freezing.inflicts if one.kind is StatusKind.FREEZE)
+    assert frozen.turns == was.turns
+
+
+def test_the_first_rank_leaves_the_effect_exactly_as_written() -> None:
+    from mmorpg.domain.rules.skill_effects import spec_for
+
+    spec = spec_for("damage_burn")
+    assert skill_rules.at_rank(spec, 1) is spec
 
 
 # --- развилки --------------------------------------------------------
@@ -168,7 +130,7 @@ def test_taking_a_branch_apart_below_its_gate_is_refused(
 def forked(content: GameContent):
     return next(
         skill
-        for skill in content.class_skills_up_to("warrior", 300, SkillKind.ACTIVE)
+        for skill in content.class_skills_up_to("warrior", 150, SkillKind.ACTIVE)
         if skill.fork
     )
 
@@ -178,7 +140,6 @@ def test_a_fork_holds_exactly_one_rival(content: GameContent) -> None:
     rivals = skill_rules.fork_rivals(content, skill)
     assert len(rivals) == 1
     assert rivals[0].level == skill.level
-    assert rivals[0].branch is skill.branch
 
 
 def test_taking_one_side_of_a_fork_closes_the_other(
@@ -188,7 +149,7 @@ def test_taking_one_side_of_a_fork_closes_the_other(
     rival = skill_rules.fork_rivals(content, skill)[0]
     veteran = replace(
         warrior,
-        level=300,
+        level=150,
         unspent_skill_points=999,
         loadout=SkillLoadout(ranks={skill.code: 1}),
     )
@@ -202,12 +163,11 @@ def test_taking_one_side_of_a_fork_closes_the_other(
 def test_a_skill_outside_a_fork_argues_with_nobody(content: GameContent) -> None:
     plain = next(
         skill
-        for skill in content.class_skills_up_to("warrior", 300, SkillKind.ACTIVE)
+        for skill in content.class_skills_up_to("warrior", 150, SkillKind.ACTIVE)
         if not skill.fork
     )
     assert skill_rules.fork_rivals(content, plain) == ()
 
 
-# Что делает предельный ранг в бою, проверяет
-# ``test_combat.test_mastery_returns_the_skill_a_turn_earlier``: там есть настоящий
-# бой, а здесь только дерево.
+# Что ранг делает в настоящем бою, проверяет ``test_combat``: там есть очередь,
+# откаты и запас, а здесь только дерево.

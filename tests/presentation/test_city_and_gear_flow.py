@@ -422,60 +422,40 @@ def test_a_point_you_do_not_have_is_refused_in_words(content: GameContent, hero:
     )
     refused = step(content, broke, skills, skill_screens.skill_entry_text(content, broke, fresh))
     assert refused.pending.empty
-    # Отказ называет цену и остаток, а не отсылает к общему правилу: цена ранга
-    # теперь у каждого своя (ADR 0024).
+    # Отказ называет цену и остаток, а не отсылает к общему правилу.
     assert "а есть 0" in refused.notice
-    assert "Очки дают за уровень" in refused.notice
+    assert "через уровень" in refused.notice
 
 
-def test_the_third_rank_asks_for_an_edge_before_anything_else(
-    content: GameContent, hero: Character
-) -> None:
-    skill = content.skill("warrior_rassechenie")
-    ready = replace(
-        hero, loadout=replace(hero.loadout, ranks={skill.code: content.rules.edge_rank})
-    )
-    skills = step(content, ready, begin(ready), "Умения")
-    asked = step(content, ready, skills, skill_screens.skill_entry_text(content, ready, skill))
-    assert asked.screen is ScreenId.SKILL_EDGE
+def test_a_raised_rank_says_what_it_gave(content: GameContent, hero: Character) -> None:
+    """Очко, о котором молчат, потрачено впустую (ADR 0067).
 
-    chosen = step(content, ready, asked, skill_screens.edge_label(skill.edges[0].name).text)
-    assert chosen.pending.character is not None
-    assert chosen.pending.character.loadout.edge_of(skill.code) == skill.edges[0].code
-    assert chosen.screen is ScreenId.SKILLS
-
-
-def test_a_skill_waiting_for_its_edge_says_so_on_its_own_button(
-    content: GameContent, hero: Character
-) -> None:
-    """Кнопка обязана обещать то, что нажатие сделает.
-
-    На ранге грани нажатие уходит на выбор грани, а не на ранг. Пока кнопка
-    говорила «следующий за одно очко», игрок нажимал, выбирал грань, возвращался и
-    видел тот же ранг и ту же надпись - то есть заевший экран.
+    Кнопка обязана обещать то, что нажатие сделает, а отчёт - называть, что ранг
+    прибавил: откат, сроки и цену, а не только невидимую долю силы.
     """
     skill = content.skill("warrior_rassechenie")
     ready = replace(
-        hero, loadout=replace(hero.loadout, ranks={skill.code: content.rules.edge_rank})
+        hero,
+        unspent_skill_points=5,
+        loadout=replace(hero.loadout, ranks={skill.code: 3}),
     )
+    assert "откат короче" in skill_screens.skill_entry_text(content, ready, skill)
 
-    assert "сначала выберите грань" in skill_screens.skill_entry_text(content, ready, skill)
-
-    chosen = replace(ready, loadout=replace(ready.loadout, edges={skill.code: skill.edges[0].code}))
-    assert "следующий за" in skill_screens.skill_entry_text(content, chosen, skill)
-
-
-def test_choosing_an_edge_says_the_rank_grows_again(content: GameContent, hero: Character) -> None:
-    skill = content.skill("warrior_rassechenie")
-    ready = replace(
-        hero, loadout=replace(hero.loadout, ranks={skill.code: content.rules.edge_rank})
-    )
     skills = step(content, ready, begin(ready), "Умения")
-    asked = step(content, ready, skills, skill_screens.skill_entry_text(content, ready, skill))
+    raised = step(content, ready, skills, skill_screens.skill_entry_text(content, ready, skill))
+    assert raised.pending.character is not None
+    assert raised.pending.character.loadout.rank_of(skill.code) == 4
+    assert "ранг 4" in raised.notice
+    assert "Теперь" in raised.notice
 
-    chosen = step(content, ready, asked, skill_screens.edge_label(skill.edges[0].name).text)
 
-    assert "Ранг снова растёт" in chosen.notice
+def test_the_first_rank_promises_nothing_extra(content: GameContent, hero: Character) -> None:
+    """На первом ранге прибавлять нечему, и экран об этом молчит."""
+    skill = content.skill("warrior_rassechenie")
+    fresh = replace(hero, loadout=replace(hero.loadout, ranks={skill.code: 1}))
+    said = skill_screens.skill_entry_text(content, fresh, skill)
+    assert "откат короче" not in said
+    assert "следующий за" in said
 
 
 def test_a_slot_is_filled_and_emptied_from_the_panel(content: GameContent, hero: Character) -> None:

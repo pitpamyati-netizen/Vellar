@@ -59,17 +59,19 @@ def test_max_level_has_no_progress_bar() -> None:
 
 
 def test_apply_experience_grants_points_per_level() -> None:
+    """Очки характеристик - за каждый уровень, очко умений - через уровень."""
     result = apply_experience(
         current_level=1,
         current_experience=0,
         gained=experience_to_reach(4),
         stat_points_per_level=2,
-        skill_points_per_level=1,
+        levels_per_skill_point=2,
     )
     assert result.new_level == 4
     assert result.levels_gained == 3
     assert result.stat_points == 6
-    assert result.skill_points == 3
+    # С первого на четвёртый: очко на втором и очко на четвёртом.
+    assert result.skill_points == 2
 
 
 def test_apply_experience_without_a_level_up() -> None:
@@ -78,7 +80,7 @@ def test_apply_experience_without_a_level_up() -> None:
         current_experience=experience_to_reach(5),
         gained=1,
         stat_points_per_level=2,
-        skill_points_per_level=1,
+        levels_per_skill_point=2,
     )
     assert result.new_level == 5
     assert result.stat_points == 0
@@ -91,7 +93,7 @@ def test_negative_experience_is_rejected() -> None:
             current_experience=0,
             gained=-1,
             stat_points_per_level=2,
-            skill_points_per_level=1,
+            levels_per_skill_point=2,
         )
 
 

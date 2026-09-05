@@ -24,14 +24,12 @@ from typing import Any
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import (
-    ActionTag,
     BattleEvent,
     BattleOutcome,
     BattleState,
     Combatant,
     CombatantKind,
     EventKind,
-    Trace,
 )
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.damage import DamageType
@@ -429,10 +427,8 @@ def _combatant_to_json(one: Combatant) -> dict[str, object]:
         "damage_type": one.damage_type.value if one.damage_type is not None else "",
         "free_cast": one.free_cast,
         "evade": one.evade_charges,
-        "trace": [tag.value for tag in one.trace.tags],
         "focus": one.focus,
         "left": one.left,
-        "breached": one.breached,
     }
 
 
@@ -461,10 +457,8 @@ def _combatant_from_json(raw: Mapping[str, Any]) -> Combatant:
         damage_type=DamageType(kind) if (kind := raw.get("damage_type")) else None,
         free_cast=bool(raw["free_cast"]),
         evade_charges=int(raw["evade"]),
-        trace=Trace(tuple(ActionTag(tag) for tag in raw.get("trace", ()))),
         focus=int(raw.get("focus", 0)),
         left=bool(raw.get("left", False)),
-        breached=bool(raw.get("breached", False)),
     )
 
 

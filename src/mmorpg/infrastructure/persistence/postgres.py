@@ -83,7 +83,6 @@ def _character_from_row(row: Any) -> Character:
             actives=tuple(loadout_raw.get("actives", [None] * 6)),
             racial=loadout_raw.get("racial"),
             ranks=MappingProxyType(dict(loadout_raw.get("ranks", {}))),
-            edges=MappingProxyType(dict(loadout_raw.get("edges", {}))),
         ),
         equipment=Equipment(MappingProxyType(dict(equipment_raw))),
         city_id=row["city_id"],
@@ -155,7 +154,6 @@ def _loadout_to_json(loadout: SkillLoadout) -> str:
             "actives": list(loadout.actives),
             "racial": loadout.racial,
             "ranks": dict(loadout.ranks),
-            "edges": dict(loadout.edges),
         },
         ensure_ascii=False,
     )

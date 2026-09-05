@@ -17,14 +17,12 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, NamedTuple
 
-from mmorpg.domain.entities.combat import ActionTag
 from mmorpg.domain.entities.content import (
     ArmorType,
     CharacterClass,
     City,
     ClassResource,
     Dungeon,
-    EdgeEffect,
     EnemyAffix,
     EquipSlot,
     GameContent,
@@ -43,7 +41,6 @@ from mmorpg.domain.entities.content import (
     RacePassive,
     Rarity,
     Skill,
-    SkillEdge,
     SkillKind,
     SpecialProperty,
     ToolType,
@@ -63,7 +60,7 @@ from mmorpg.domain.entities.craft import (
 )
 from mmorpg.domain.entities.damage import DamageType
 from mmorpg.domain.entities.dice import MAX_SPREAD, MIN_SPREAD, Dice
-from mmorpg.domain.entities.location import EnemyArchetype, EnemyKind
+from mmorpg.domain.entities.location import EnemyArchetype, EnemyKind, EnemyRole
 from mmorpg.domain.entities.quest import ObjectiveKind, Quest
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.entities.statuses import StatusKind
@@ -258,28 +255,13 @@ def _build_rules(raw: Mapping[str, Mapping[str, Any]], problems: list[str]) -> P
         racial_slots=int(class_meta.get("racial_slots", 1)),
         traits_at_creation=int(trait_meta.get("picks_at_creation", 2)),
         max_rank=int(skill_meta.get("max_rank", 5)),
-        edge_rank=int(skill_meta.get("edge_rank", 3)),
-        skill_point_per_level=int(skill_meta.get("skill_point_per_level", 2)),
-        rank_costs=tuple(int(value) for value in skill_meta.get("rank_costs", (1, 2, 2, 3, 4))),
-        branch_gates=tuple(int(value) for value in skill_meta.get("branch_gates", (0, 20, 50, 90))),
-        branch_tier_levels=tuple(
-            int(value) for value in skill_meta.get("branch_tier_levels", (1, 31, 77, 114))
-        ),
+        levels_per_skill_point=int(skill_meta.get("levels_per_skill_point", 2)),
+        rank_cost=int(skill_meta.get("rank_cost", 1)),
     )
-    if len(rules.rank_costs) != rules.max_rank:
-        problems.append(
-            f"skills.toml: [meta].rank_costs must price all {rules.max_rank} ranks, "
-            f"got {len(rules.rank_costs)}"
-        )
-    if len(rules.branch_gates) != len(rules.branch_tier_levels):
-        problems.append(
-            "skills.toml: [meta].branch_gates and [meta].branch_tier_levels "
-            "must have the same length - one number per tier"
-        )
-    if rules.branch_gates and rules.branch_gates[0] != 0:
-        problems.append("skills.toml: [meta].branch_gates must open the first tier at 0")
-    if list(rules.branch_gates) != sorted(rules.branch_gates):
-        problems.append("skills.toml: [meta].branch_gates must not fall as tiers rise")
+    if rules.levels_per_skill_point < 1:
+        problems.append("skills.toml: [meta].levels_per_skill_point must be at least 1")
+    if rules.rank_cost < 1:
+        problems.append("skills.toml: [meta].rank_cost must be at least 1")
     unlock_count = ACTIVES_PER_CLASS - FORKS_PER_CLASS
     if len(rules.active_unlock_levels) != unlock_count:
         problems.append(
@@ -364,28 +346,6 @@ def _parse_skills(
             else:
                 problems.append(f"skills.toml: {code} scales with unknown stat {scaling_raw!r}")
 
-        tag_raw = entry.get("tag")
-        tag: ActionTag | None = None
-        if tag_raw is not None:
-            if tag_raw in {value.value for value in ActionTag}:
-                tag = ActionTag(tag_raw)
-            else:
-                problems.append(f"skills.toml: {code} declares unknown tag {tag_raw!r}")
-
-        raw_edges = entry.get("edges", ())
-        if len(raw_edges) != 2:
-            problems.append(f"skills.toml: {code} must declare exactly 2 edges")
-            continue
-        edges = tuple(
-            SkillEdge(
-                code=f"{code}_{letter}",
-                name=str(raw["name"]),
-                text=str(raw["text"]),
-                effect=_edge_effect(code, letter, raw, modifier_keys, problems),
-            )
-            for letter, raw in zip("ab", raw_edges, strict=True)
-        )
-
         parsed.append(
             Skill(
                 code=code,
@@ -398,13 +358,11 @@ def _parse_skills(
                 text=str(entry.get("text", "")),
                 effect=effect,
                 power=float(entry.get("power", 0)),
-                edges=(edges[0], edges[1]),
                 cost=int(entry.get("cost", 0)),
                 cooldown=int(entry.get("cooldown", 0)),
                 target=target,
                 scaling=scaling,
                 rank_step=float(entry.get("rank_step", default_step)),
-                tag=tag,
                 weapon_types=tuple(str(value) for value in entry.get("weapons", ())),
                 requires_stealth=bool(entry.get("requires_stealth", False)),
                 dice=_skill_dice(code, entry, problems),
@@ -426,96 +384,6 @@ def _skill_dice(code: str, entry: Mapping[str, Any], problems: list[str]) -> Dic
 
 
 # --- races -----------------------------------------------------------
-
-
-#: Как грань называет свою механику в ``skills.toml``. Ключи - поля
-#: ``EdgeEffect``; незнакомый ключ это отказ, а не молчание, потому что опечатка
-#: в ключе означала бы грань, которая опять ничего не делает.
-_EDGE_KEYS = frozenset(
-    {
-        "name",
-        "text",
-        "power",
-        "cost",
-        "cooldown",
-        "duration",
-        "dot_turns",
-        "stun_turns",
-        "hits",
-        "hit_power",
-        "splash",
-        "aoe",
-        "pierce",
-        "crit",
-        "lifesteal",
-        "cleanse",
-        "heal",
-        "barrier",
-        "self_modifiers",
-        "target_modifiers",
-    }
-)
-
-
-def _edge_effect(
-    code: str,
-    letter: str,
-    raw: Mapping[str, Any],
-    modifier_keys: frozenset[str],
-    problems: list[str],
-) -> EdgeEffect:
-    """Механика грани из содержимого.
-
-    Грань обязана что-то делать: пустое объявление - это обещание словами без
-    единого числа за ним.
-    """
-    where = f"skills.toml: {code} edge {letter}"
-    unknown = sorted(set(raw) - _EDGE_KEYS)
-    if unknown:
-        problems.append(f"{where} declares unknown keys {unknown}")
-
-    effect = EdgeEffect(
-        power=float(raw.get("power", 0)),
-        cost=float(raw.get("cost", 0)),
-        cooldown=int(raw.get("cooldown", 0)),
-        duration=int(raw.get("duration", 0)),
-        dot_turns=int(raw.get("dot_turns", 0)),
-        stun_turns=int(raw.get("stun_turns", 0)),
-        hits=int(raw.get("hits", 0)),
-        hit_power=float(raw.get("hit_power", 100)),
-        splash=float(raw.get("splash", 0)),
-        aoe=bool(raw.get("aoe", False)),
-        pierce=float(raw.get("pierce", 0)),
-        crit=float(raw.get("crit", 0)),
-        lifesteal=float(raw.get("lifesteal", 0)),
-        cleanse=int(raw.get("cleanse", 0)),
-        heal=float(raw.get("heal", 0)),
-        barrier=float(raw.get("barrier", 0)),
-        self_modifiers=_edge_modifiers(where, raw.get("self_modifiers"), modifier_keys, problems),
-        target_modifiers=_edge_modifiers(
-            where, raw.get("target_modifiers"), modifier_keys, problems
-        ),
-    )
-    if effect.empty:
-        problems.append(f"{where} changes nothing: a named edge with no mechanics is the promise")
-    return effect
-
-
-def _edge_modifiers(
-    where: str,
-    declared: Mapping[str, Any] | None,
-    modifier_keys: frozenset[str],
-    problems: list[str],
-) -> Mapping[str, float]:
-    """Модификаторы грани. Словарь тот же, что у особенностей и снаряжения."""
-    if not declared:
-        return MappingProxyType({})
-    strange = sorted(set(declared) - modifier_keys)
-    if strange:
-        problems.append(f"{where} names unknown modifiers {strange}")
-    return MappingProxyType(
-        {name: float(value) for name, value in declared.items() if name in modifier_keys}
-    )
 
 
 def _parse_races(
@@ -844,55 +712,7 @@ def _validate_classes(
                 f"skills.toml: class {klass.id} unlocks passives at {passive_levels}, "
                 f"expected {rules.passive_unlock_levels}"
             )
-        _check_branches(klass.id, (*actives, *passives), rules, problems)
         _check_forks(klass.id, actives, rules, problems)
-
-
-def _check_branches(
-    class_id: str,
-    owned: Sequence[Skill],
-    rules: ProgressionRules,
-    problems: list[str],
-) -> None:
-    """Ветвь названа у каждого умения, и каждая ступень достижима.
-
-    Ступень, гейт которой дороже всего, что лежит в ветви ниже неё, - это кнопка,
-    которая не нажмётся никогда (``Claude.md``, правило 9).
-    """
-    nameless = [skill.code for skill in owned if skill.branch is None]
-    if nameless:
-        problems.append(
-            f"skills.toml: class {class_id} leaves {len(nameless)} skills without a branch, "
-            f"first {nameless[0]}"
-        )
-        return
-
-    full = rules.full_rank_cost()
-    for branch in ActionTag:
-        in_branch = [skill for skill in owned if skill.branch is branch]
-        if not in_branch:
-            problems.append(f"skills.toml: class {class_id} has no skills in branch {branch.value}")
-            continue
-        if not any(rules.tier_of_level(skill.level) == 1 for skill in in_branch):
-            problems.append(
-                f"skills.toml: class {class_id} branch {branch.value} opens above tier 1 "
-                "and can never be entered"
-            )
-        for tier in range(2, len(rules.branch_gates) + 1):
-            if not any(rules.tier_of_level(skill.level) == tier for skill in in_branch):
-                continue
-            # Развилка даёт очкам одно место, а не два: считаем её один раз.
-            below = {
-                skill.fork or skill.code
-                for skill in in_branch
-                if rules.tier_of_level(skill.level) < tier
-            }
-            if len(below) * full < rules.gate_for_tier(tier):
-                problems.append(
-                    f"skills.toml: class {class_id} branch {branch.value} gates tier {tier} "
-                    f"behind {rules.gate_for_tier(tier)} points, but only "
-                    f"{len(below) * full} can be spent below it"
-                )
 
 
 def _check_forks(
@@ -901,7 +721,7 @@ def _check_forks(
     rules: ProgressionRules,
     problems: list[str],
 ) -> None:
-    """Развилка - ровно два умения, один уровень, одна ветвь.
+    """Развилка - ровно два умения на одном уровне.
 
     Развилка из одного умения - обычное умение с лишним словом на экране;
     развилка из трёх - панель, которая не влезает в сообщение.
@@ -932,8 +752,6 @@ def _check_forks(
                 f"skills.toml: fork {fork} stands on level {first.level}, "
                 f"which is not one of {rules.fork_levels}"
             )
-        if first.branch is not second.branch:
-            problems.append(f"skills.toml: fork {fork} spans two branches")
 
 
 # --- traits ----------------------------------------------------------
@@ -1339,6 +1157,7 @@ def _parse_enemies(
     elite_titles = tuple(str(title) for title in meta.get("elite_titles", ()))
     known_kinds = {kind.value for kind in EnemyKind}
     known_elements = {one.value for one in DamageType}
+    known_roles = {one.value for one in EnemyRole}
 
     parsed: list[EnemyArchetype] = []
     for entry in raw.get("enemy", ()):
@@ -1359,6 +1178,11 @@ def _parse_enemies(
             )
             element_raw = ""
 
+        role_raw = str(entry.get("role", ""))
+        if role_raw and role_raw not in known_roles:
+            problems.append(f"enemies.toml: {enemy_id} declares unknown role {role_raw!r}")
+            role_raw = ""
+
         parsed.append(
             EnemyArchetype(
                 id=enemy_id,
@@ -1371,6 +1195,7 @@ def _parse_enemies(
                 initiative=float(entry.get("initiative", 1.0)),
                 loot=loot,
                 element=DamageType(element_raw) if element_raw else None,
+                role=EnemyRole(role_raw) if role_raw else None,
                 dungeon=bool(entry.get("dungeon", False)),
             )
         )

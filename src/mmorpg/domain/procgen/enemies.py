@@ -15,9 +15,11 @@ from mmorpg.domain.entities.content import EnemyAffix
 from mmorpg.domain.entities.damage import DamageType
 from mmorpg.domain.entities.location import (
     DEFAULT_DAMAGE_TYPES,
+    DEFAULT_ROLES,
     Enemy,
     EnemyArchetype,
     EnemyRank,
+    EnemyRole,
 )
 from mmorpg.domain.procgen.seeds import derive, rng
 
@@ -36,8 +38,12 @@ HEALTH_PER_LEVEL = 24.60
 # чтобы проход по локации был чередой решений (идти дальше, выпить, вернуться и
 # заплатить за постель). Долгие ступени отдают часть этого обратно через
 # ``RANK_FACTORS``: эпический противник и босс и без того опасны.
-DAMAGE_BASE = 9.20
-DAMAGE_PER_LEVEL = 4.55
+#
+# Пятая часть сброшена вместе с намерениями (ADR 0066): прежде объявленная
+# стойка множила чужой удар на 1, 0,95 или 0,5, и по кругу это выходило 0,82.
+# Стоек больше нет, а мерка та же - значит, её берёт на себя основание.
+DAMAGE_BASE = 7.55
+DAMAGE_PER_LEVEL = 3.75
 ARMOR_PER_LEVEL = 2.30
 INITIATIVE_BASE = 7.65
 INITIATIVE_PER_LEVEL = 0.70
@@ -225,9 +231,17 @@ def generate_enemy(
         gold=max(1, round(gold)),
         rank=rank,
         element=element_of(archetype),
+        role=role_of(archetype),
         stakes=stakes,
         affixes=tuple(affix.id for affix in affixes_applied),
     )
+
+
+def role_of(archetype: EnemyArchetype) -> EnemyRole:
+    """Как дерётся эта порода. Не объявлено - решает порода (ADR 0066)."""
+    if archetype.role is not None:
+        return archetype.role
+    return DEFAULT_ROLES[archetype.kind]
 
 
 def element_of(archetype: EnemyArchetype) -> DamageType:

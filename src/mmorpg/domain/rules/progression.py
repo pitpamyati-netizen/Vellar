@@ -95,7 +95,7 @@ def apply_experience(
     current_experience: int,
     gained: int,
     stat_points_per_level: int,
-    skill_points_per_level: int,
+    levels_per_skill_point: int,
 ) -> LevelUp:
     """Посчитать смену уровня, вызванную ``gained`` опыта."""
     if gained < 0:
@@ -103,12 +103,23 @@ def apply_experience(
         raise ValueError(msg)
     new_level = level_for_experience(current_experience + gained)
     levels = max(0, new_level - current_level)
+    reached = max(current_level, new_level)
     return LevelUp(
         previous_level=current_level,
-        new_level=max(current_level, new_level),
+        new_level=reached,
         stat_points=levels * stat_points_per_level,
-        skill_points=levels * skill_points_per_level,
+        skill_points=skill_points_between(current_level, reached, levels_per_skill_point),
     )
+
+
+def skill_points_between(previous_level: int, new_level: int, levels_per_point: int) -> int:
+    """Сколько очков умений принесли уровни, взятые между двумя числами.
+
+    Очко приходит через уровень, поэтому считается разностью долей, а не
+    умножением: иначе «каждые два уровня» врало бы на нечётных (ADR 0067).
+    """
+    step = max(1, levels_per_point)
+    return max(0, max(0, new_level) // step - max(0, previous_level) // step)
 
 
 #: Прибавка к опыту. Ключ лежал в словаре особенностей с самого начала - его
@@ -147,7 +158,7 @@ def grant_experience(
         current_experience=character.experience,
         gained=gained,
         stat_points_per_level=rules.stat_points_per_level,
-        skill_points_per_level=rules.skill_point_per_level,
+        levels_per_skill_point=rules.levels_per_skill_point,
     )
     grown = character.with_experience(gained)
     if level_up.levels_gained:
@@ -175,7 +186,7 @@ def growth(content: GameContent, previous_level: int, new_level: int) -> LevelUp
         previous_level=previous_level,
         new_level=new_level,
         stat_points=levels * rules.stat_points_per_level,
-        skill_points=levels * rules.skill_point_per_level,
+        skill_points=skill_points_between(previous_level, new_level, rules.levels_per_skill_point),
     )
 
 

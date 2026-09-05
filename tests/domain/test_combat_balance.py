@@ -30,7 +30,6 @@ from mmorpg.domain.entities import (
 )
 from mmorpg.domain.entities.combat import (
     ActionKind,
-    ActionTag,
     BattleAction,
     BattleState,
     Combatant,
@@ -43,16 +42,14 @@ from mmorpg.domain.procgen.enemies import generate_enemy, generate_group
 from mmorpg.domain.procgen.seeds import derive
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules.combat import (
-    INTENT_ARMOR,
     _check_outcome,
     act,
     blow_of,
     hero_combatant,
-    intent_of,
     monster_combatant,
     open_battle,
 )
-from mmorpg.domain.rules.skill_effects import EffectCategory, spec_for, tag_of_skill
+from mmorpg.domain.rules.skill_effects import EffectCategory, spec_for
 from mmorpg.domain.rules.stats import derived_stats, stat_allowance
 
 #: Бой, взятый по всей полосе уровней, а не только на тех уровнях, на которых случается
@@ -102,16 +99,10 @@ RUN_SURVIVAL = 0.7
 #: который мир кладёт перед тобой, выигрывается», а не «выигрывается, что бы ни
 #: выпало»: второе значило бы, что бросок ничего не решает.
 ORDINARY_WINS = 0.95
-#: Насколько прочитанное намерение вправе ускорить бой. Оно обязано платить
-#: (``test_reading_the_intent_shortens_the_fight``) и обязано остаться способом драться
-#: хорошо, а не единственным существующим боем.
-#:
-#: Стало на четверть больше вместе со сжатием полосы (ADR 0058): умения приходят
-#: вдвое чаще по уровням, и на сороковом их в панели уже шесть против прежних
-#: четырёх. Замер ловит не один темп, а разницу между «жать Атаку» и играть
-#: умениями по намерению - и эта разница выросла ровно настолько, насколько
-#: раньше выучивалось за восемьдесят уровней.
-TEMPO_CEILING = 2.25
+#: Насколько толковый выбор умения вправе ускорить бой. Он обязан платить
+#: (``test_playing_the_panel_well_shortens_the_fight``) и обязан остаться способом
+#: драться хорошо, а не единственным существующим боем.
+PANEL_CEILING = 2.25
 #: Насколько далеко могут стоять самый быстрый и самый медленный класс на боссе. Классу
 #: позволен характер; превращать одного и того же босса в другую игру ему не позволено.
 CLASS_SPREAD = 1.75
@@ -275,15 +266,13 @@ def _value(
     if not enemies:
         return 0.0
     blow = blow_of(content, character, hero(state).effects)
-    announced = intent_of(state, enemies[0])
     unseen = hero(state).effects.has(StatusKind.UNSEEN)
 
     if action.kind is ActionKind.ATTACK:
-        tag, worth, hits_enemy = ActionTag.PRESS, blow, True
+        worth, hits_enemy = blow, True
     else:
         skill = content.skill(character.loadout.actives[action.slot])
         spec = spec_for(skill.effect)
-        tag = tag_of_skill(skill)
         hits_enemy = spec.category is EffectCategory.DAMAGE
         if hits_enemy:
             worth = blow * skill.power_at_rank(1) / 100.0 * spec.hits * spec.damage_scale
@@ -314,18 +303,6 @@ def _value(
             # не видит.
             worth = blow * 0.25
 
-    # Враг, объявивший напор, на замахе: удар по нему мимо брони, его ответ
-    # вполсилы (брешь). Враг в заслоне - глухая оборона, бить его невыгодно.
-    if hits_enemy and announced is ActionTag.PRESS:
-        worth *= 2.4
-    elif hits_enemy and announced is ActionTag.GUARD:
-        worth *= 1.0 / INTENT_ARMOR[ActionTag.GUARD]
-    if hero(state).trace.last is tag:
-        worth *= 1.4  # разгон
-    if hero(state).trace.breaks_with(tag) and announced is not ActionTag.PRESS:
-        # Разнобой отнимает у врага ход, но обрывает брешь: тратить его на
-        # открытого врага - потеря. Только против глухой обороны.
-        worth *= 1.4
     return worth
 
 
@@ -518,22 +495,21 @@ def test_no_class_makes_a_boss_a_different_game(content: GameContent) -> None:
 
 
 @pytest.mark.parametrize("class_id", CLASSES)
-def test_reading_the_intent_shortens_the_fight(content: GameContent, class_id: str) -> None:
-    """Весь смысл намерения, следа и бреши: выбирать хорошо обязано платить.
+def test_playing_the_panel_well_shortens_the_fight(content: GameContent, class_id: str) -> None:
+    """Панель обязана платить: жать «Атаку» - это хуже, чем выбирать умение.
 
     Обычные бои, где выигрывают оба игрока, чтобы сравнивались ходы, а не выживание:
     игрок, погибший на четвёртом ходу, тоже «закончил» за четыре хода.
 
-    Потолок — вторая половина обещания: темп это то, как бой ведут хорошо, а не
-    единственный существующий бой. Если брешь когда-нибудь станет стоить больше всего
-    остального вместе взятого, двигать надо пороги в ``domain/rules/combat.py``, а не
-    саму механику.
+    Потолок — вторая половина обещания: панель это то, как бой ведут хорошо, а не
+    единственный существующий бой. Если умения когда-нибудь станут стоить больше
+    всего остального вместе взятого, двигать надо содержимое, а не механику.
     """
     clever = sum(sample(content, class_id, 40, rank=EnemyRank.NORMAL))
     plain = sum(sample(content, class_id, 40, rank=EnemyRank.NORMAL, clever=False))
     assert clever < plain, f"{class_id}: {clever} turns played well vs {plain} turns of attacking"
-    assert clever * TEMPO_CEILING >= plain, (
-        f"{class_id}: tempo alone is worth {plain / clever:.1f} fights"
+    assert clever * PANEL_CEILING >= plain, (
+        f"{class_id}: the panel alone is worth {plain / clever:.1f} fights"
     )
 
 

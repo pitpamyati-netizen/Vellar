@@ -50,7 +50,6 @@ class Play(StatesGroup):
     skills = State()
     skill_slots = State()
     skill_pick = State()
-    skill_edge = State()
     crafts = State()
     craft = State()
     quests = State()
@@ -110,7 +109,6 @@ class Play(StatesGroup):
     keeper_skills = State()
     keeper_skill = State()
     keeper_skill_learn = State()
-    keeper_skill_edge = State()
     keeper_skill_slot = State()
     keeper_stats_edit = State()
     keeper_quests = State()
@@ -150,7 +148,6 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.SKILLS: Play.skills,
     ScreenId.SKILL_SLOTS: Play.skill_slots,
     ScreenId.SKILL_PICK: Play.skill_pick,
-    ScreenId.SKILL_EDGE: Play.skill_edge,
     ScreenId.CRAFTS: Play.crafts,
     ScreenId.CRAFT: Play.craft,
     ScreenId.QUESTS: Play.quests,
@@ -210,7 +207,6 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.KEEPER_SKILLS: Play.keeper_skills,
     ScreenId.KEEPER_SKILL: Play.keeper_skill,
     ScreenId.KEEPER_SKILL_LEARN: Play.keeper_skill_learn,
-    ScreenId.KEEPER_SKILL_EDGE: Play.keeper_skill_edge,
     ScreenId.KEEPER_SKILL_SLOT: Play.keeper_skill_slot,
     ScreenId.KEEPER_STATS_EDIT: Play.keeper_stats_edit,
     ScreenId.KEEPER_QUESTS: Play.keeper_quests,
@@ -250,7 +246,6 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.SKILLS: ScreenId.MAIN_MENU,
     ScreenId.SKILL_SLOTS: ScreenId.SKILLS,
     ScreenId.SKILL_PICK: ScreenId.SKILL_SLOTS,
-    ScreenId.SKILL_EDGE: ScreenId.SKILLS,
     ScreenId.CRAFTS: ScreenId.MAIN_MENU,
     ScreenId.CRAFT: ScreenId.CRAFTS,
     ScreenId.QUESTS: ScreenId.MAIN_MENU,
@@ -312,7 +307,6 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.KEEPER_SKILLS: ScreenId.KEEPER_PLAYER,
     ScreenId.KEEPER_SKILL: ScreenId.KEEPER_SKILLS,
     ScreenId.KEEPER_SKILL_LEARN: ScreenId.KEEPER_SKILLS,
-    ScreenId.KEEPER_SKILL_EDGE: ScreenId.KEEPER_SKILL,
     ScreenId.KEEPER_SKILL_SLOT: ScreenId.KEEPER_SKILL,
     ScreenId.KEEPER_STATS_EDIT: ScreenId.KEEPER_PLAYER,
     ScreenId.KEEPER_QUESTS: ScreenId.KEEPER_PLAYER,

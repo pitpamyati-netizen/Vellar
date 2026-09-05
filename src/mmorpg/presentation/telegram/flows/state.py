@@ -251,7 +251,6 @@ class PlayState:
     board_page: PageState = field(default_factory=PageState)
     # Что игрок сейчас выбирает: слот, грань, задание, подземелье.
     pick_slot: int = 0
-    edge_skill: str = ""
     quest_id: str = ""
     craft_id: str = ""
     dungeon_pick: str = ""
@@ -340,7 +339,6 @@ class PlayState:
                 ],
                 "pick": self.pick_slot,
                 "dungeon_pick": self.dungeon_pick,
-                "edge": self.edge_skill,
                 "quest": self.quest_id,
                 "npc": self.npc_id,
                 "item": self.item_id,
@@ -440,7 +438,6 @@ class PlayState:
             board_page=PageState(page=int(board_page)),
             pick_slot=int(pick_slot),
             dungeon_pick=str(data.get("dungeon_pick", "")),
-            edge_skill=data.get("edge", ""),
             quest_id=data.get("quest", ""),
             npc_id=data.get("npc", ""),
             item_id=data.get("item", ""),

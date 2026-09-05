@@ -6,23 +6,24 @@
 # Панель не растёт никогда: 6 боевых слотов и 1 расовый. Пассивное умение не
 # занимает слота вовсе - изученное работает (ADR 0016).
 #
-# ВЕТВИ. У каждого классового умения объявлена ветвь - тот же `tag`, которым оно
-# оставляет след в бою: напор (press), заслон (guard), финт (precision).
-# Ветвь развития и способ боя - одно и то же, а не два списка рядом. Ступени
-# ветви открываются вложенными в неё очками ([meta].branch_gates): чтобы взять
-# позднее умение напора, нужно вложить в напор, а не просто дожить до уровня.
-# Три числа на экране умений - вот вся сборка (ADR 0024).
-#
 # РАЗВИЛКИ. На четырёх уровнях из двадцати боевое умение приходит парой: два
 # умения, одно место, `fork` у обоих один. Взяв одно, второе закрываешь, пока не
 # разберёшь взятое у наставника. Поэтому боевых здесь 24, а изучить можно 20.
 #
-# ЧТО СТОИТ ОЧКО. Ранг стоит тем дороже, чем он выше ([meta].rank_costs): 1, 2,
-# 2, 3, 4 - двенадцать очков за умение, поднятое до предела. Сорок изучаемых
-# умений стоят 480 очков, а сто пятьдесят уровней дают 298: выучить всё нельзя,
-# и это главное, что отличает двух воинов одного уровня друг от друга. Предельный
-# ранг сверх силы возвращает умение на ход раньше - иначе четыре очка за пятый
-# ранг не отбивались бы ничем.
+# ЧТО СТОИТ ОЧКО. Очко умений приходит через уровень ([meta].levels_per_skill_point),
+# и ранг стоит одно очко ([meta].rank_cost): сорок изучаемых мест по пять рангов -
+# это 200 очков против 75, выдаваемых за сто пятьдесят уровней. Выучить всё
+# нельзя, и это главное, что отличает двух воинов одного уровня друг от друга
+# (ADR 0067).
+#
+# ЧТО ДАЁТ РАНГ. Не одну прибавку к силе, а четыре вещи сразу
+# (domain/rules/skills.rank_gain):
+#   сила       + rank_step за ранг, вдвое на пятом против первого;
+#   откат      через ранг короче на ход;
+#   сроки      через ранг длиннее на ход - кроме того, что отнимает ход;
+#   цена       на десятую долю ниже за ранг, до половины на пятом.
+# Прежде ранг прибавлял пятнадцатую долю силы и больше ничего, и очко в него
+# было потрачено впустую.
 #
 # ЧТО СТОИТ УМЕНИЕ В БОЮ. `cost` - это ПРОЦЕНТЫ от максимума запаса, а не число
 # (ADR 0058). Числом цена держалась ровно один уровень: Отвага, Чары и Прыть
@@ -30,52 +31,29 @@
 # значат одно и то же на всей полосе; игроку на боевом экране называется число.
 #
 # Развитие ровное: боевое умение каждые семь-восемь уровней, пассивное между
-# ними. Ступени ветви начинаются на 1, 31, 77 и 114 уровне
-# ([meta].branch_tier_levels).
+# ними.
 #
 # ПОЗДНЕЕ УМЕНИЕ НЕ БЬЁТ СИЛЬНЕЕ - ОНО ДЕЛАЕТ БОЛЬШЕ. Проценты урона у одной и
 # той же формы удара одинаковы на всех ступенях, и это не лень, а замер:
 # обычный бой на сто пятидесятом уровне и так укладывается в два хода
 # (tests/domain/test_combat_balance.py), и лишние четыре процента урона съедают
 # целый ход - бой становится бесплатным. Ступень платит не числом, а тем, что
-# умение делает: барьером, оглушением всех сразу, меткой, «не пасть», - и тем,
-# сколько за неё нужно вложить в ветвь.
+# умение делает: барьером, оглушением всех сразу, меткой, «не пасть».
 #
-# Глубина - в рангах с первого по пятый и в грани, выбираемой на третьем ранге,
-# и никогда в лишних кнопках. Обе грани каждого умения объявлены здесь; их коды
-# выводятся как "<code>_a" и "<code>_b" в порядке появления. См. docs/skills.md.
-#
-# Грань объявляет, что она *делает*, а не только как называется. Словарь -
-# в domain/rules/edges.py, и каждый ключ в нём это проценты или ходы:
-#   power / cost      прибавка к силе умения и поправка к стоимости, в процентах
-#   cooldown duration ходы: откат и срок действия, со знаком
-#   dot_turns         сколько ходов цель горит, истекает кровью или травится
-#   stun_turns        сколько ходов цель пропускает
-#   hits hit_power    сколько ударов добавилось и какой силы каждый
-#   splash            доля урона, достающаяся второй цели
-#   aoe               задевает всех
-#   pierce crit lifesteal   пробой брони, шанс крита, вампиризм - в процентах
-#   cleanse           сколько отрицательных эффектов снимается сверх прежнего
-#   heal barrier      лечение и барьер сверх основного, в процентах от максимума
-#   self_modifiers    прибавки себе, ключами из traits.toml
-#   target_modifiers  то же, но цели
-# Грань без единого такого ключа загрузчик не примет: она и была той самой
-# поломкой - обещание словами, за которым ничего не стоит. Текст грани обязан
-# описывать ровно объявленное, потому что игрок читает текст, а получает числа.
+# Глубина - в рангах с первого по пятый, и никогда в лишних кнопках. Граней у
+# умений нет: 256 подписей полгода обещали словами то, чего движок не делал
+# (ADR 0067). Ветвей тоже нет - они вернутся талантами. См. docs/skills.md.
 #
 # scaling: от какой характеристики считается обычный удар этого умения.
 # power: проценты на первом ранге; каждый ранг добавляет rank_step (по умолчанию
-#   0.15) от них. Для урона это проценты от обычного удара персонажа, где 100 -
+#   0.25) от них. Для урона это проценты от обычного удара персонажа, где 100 -
 #   одна «Атака». Для лечения и барьера - проценты от максимума здоровья. Для
 #   усилений, помех и состояний - размер самой прибавки. Абсолютных чисел здесь
 #   нет; см. docs/skills.md и ADR 0007.
-# tag: ветвь и след разом - напор (press), заслон (guard) или финт
-#   (precision). У классового умения объявлен всегда: без ветви умение некуда
-#   положить, и загрузчик такое не примет.
 # requires_stealth: умение бьёт только из незаметности (StatusKind.UNSEEN).
-#   Отказ до хода, как не то оружие: ход не тратится, следа нет.
-# fork: развилка, в которой стоит умение. У пары один и тот же код развилки,
-#   один уровень и одна ветвь.
+#   Отказ до хода, как не то оружие: ход не тратится.
+# fork: развилка, в которой стоит умение. У пары один и тот же код развилки и
+#   один уровень.
 # weapons: рода оружия, без которых умение не сработает - ids из items.toml
 #   [meta].weapon_types. Пусто - работает с любым и без оружия вовсе; выстрел без
 #   лука и удар в спину без кинжала - нет. Список может быть только уже того, что
@@ -84,16 +62,12 @@
 
 [meta]
 max_rank = 5
-edge_rank = 3
-default_rank_step = 0.15
-skill_point_per_level = 2
-# Чего стоит каждый ранг, с первого по пятый. Двенадцать очков за умение целиком.
-rank_costs = [1, 2, 2, 3, 4]
-# Сколько очков нужно вложить в ветвь, чтобы открылась её ступень. Первая открыта
-# всегда, поэтому первое число - ноль.
-branch_gates = [0, 20, 50, 90]
-# Уровни, с которых начинаются ступени ветви.
-branch_tier_levels = [1, 31, 77, 114]
+# Ранг прибавляет к силе четверть написанного: пятый ранг вдвое сильнее первого.
+default_rank_step = 0.25
+# Через сколько уровней приходит очко умений (ADR 0067).
+levels_per_skill_point = 2
+# Чего стоит ранг умения. Одно очко - любой, с первого по пятый.
+rank_cost = 1
 
 # Каждое боевое умение называет один из этих эффектов. Движок исполняет каждый,
 # и tests/domain/test_combat.py падает, если содержимое называет эффект, которого
@@ -253,12 +227,7 @@ target = "enemy"
 effect = "damage_slashing"
 power = 174
 scaling = "STR"
-tag = "press"
 text = "Рубящий удар на 174 процента обычного."
-edges = [
-    { name = "Тяжёлая рука", text = "Урон выше на 25 процентов. Откат дольше на 1 ход.", power = 25, cooldown = 1 },
-    { name = "Кровопускание", text = "Цель истекает кровью 3 хода.", dot_turns = 3 },
-]
 
 [[skill]]
 code = "warrior_rassechenie"
@@ -272,12 +241,7 @@ target = "enemy"
 effect = "damage_bleed"
 power = 215
 scaling = "STR"
-tag = "precision"
 text = "Разрывающий удар на 215 процентов обычного. Цель истекает кровью 3 хода."
-edges = [
-    { name = "Глубже", text = "Цель истекает кровью ещё 2 хода.", dot_turns = 2 },
-    { name = "Размах", text = "Задевает вторую цель на 50 процентов урона.", splash = 50 },
-]
 
 [[skill]]
 code = "warrior_tarannyy_udar"
@@ -291,12 +255,7 @@ target = "enemy"
 effect = "damage_bludgeoning"
 power = 215
 scaling = "STR"
-tag = "press"
 text = "Дробящий удар на 215 процентов обычного."
-edges = [
-    { name = "С разбега", text = "Урон выше на 30 процентов. Откат дольше на 1 ход.", power = 30, cooldown = 1 },
-    { name = "Сбить с ног", text = "Цель оглушена и пропускает 1 ход.", stun_turns = 1 },
-]
 
 [[skill]]
 code = "warrior_stoyka_shchita"
@@ -310,12 +269,7 @@ target = "self"
 effect = "buff_armor"
 power = 24
 scaling = "END"
-tag = "guard"
 text = "3 хода у вас броня выше на 24 процента."
-edges = [
-    { name = "Не сойти с места", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Опора", text = "Кроме того, получаемый урон ниже на 10 процентов.", self_modifiers = { damage_taken_percent = -10 } },
-]
 
 [[skill]]
 code = "warrior_provokatsiya"
@@ -329,12 +283,7 @@ target = "enemy"
 effect = "taunt"
 power = 25
 scaling = "END"
-tag = "guard"
 text = "2 хода цель бьёт по вам, а у вас броня выше на 25 процентов."
-edges = [
-    { name = "На весь двор", text = "Провокация ложится на всех противников.", aoe = true },
-    { name = "Затянуть", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "warrior_podrez"
@@ -348,12 +297,7 @@ target = "enemy"
 effect = "damage_weaken"
 power = 215
 scaling = "STR"
-tag = "precision"
 text = "Удар на 215 процентов обычного. У цели слабость: её удар слабее на 25 процентов, 2 хода."
-edges = [
-    { name = "По обеим", text = "Задевает всех противников.", aoe = true },
-    { name = "Надолго", text = "Слабость держится на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "warrior_klich_splocheniya"
@@ -367,12 +311,7 @@ target = "self"
 effect = "buff_damage"
 power = 24
 scaling = "END"
-tag = "press"
 text = "3 хода у вас урон выше на 24 процента."
-edges = [
-    { name = "Громче", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Плечом к плечу", text = "Кроме того, 3 хода у вас броня выше на 15 процентов.", self_modifiers = { armor_percent = 15 } },
-]
 
 [[skill]]
 code = "warrior_vikhr_klinkov"
@@ -388,12 +327,7 @@ weapons = ["sword", "axe", "greatsword"]
 effect = "damage_aoe"
 power = 154
 scaling = "STR"
-tag = "press"
 text = "Удар по всем противникам на 154 процентов обычного."
-edges = [
-    { name = "Второй оборот", text = "Бьёт ещё раз, каждый удар на 60 процентов силы.", hits = 1, hit_power = 60 },
-    { name = "Широкий круг", text = "Урон выше на 25 процентов. Откат дольше на 1 ход.", power = 25, cooldown = 1 },
-]
 
 [[skill]]
 code = "warrior_proboy_stroya"
@@ -408,12 +342,7 @@ target = "enemy"
 effect = "damage_pierce"
 power = 215
 scaling = "STR"
-tag = "press"
 text = "Удар на 215 процентов обычного. Не считается с 50 процентов брони цели."
-edges = [
-    { name = "Насквозь", text = "Броня цели не считается вовсе.", pierce = 50 },
-    { name = "Клином", text = "Задевает вторую цель на 50 процентов урона.", splash = 50 },
-]
 
 [[skill]]
 code = "warrior_udar_shchitom"
@@ -427,12 +356,7 @@ target = "enemy"
 effect = "damage_stun"
 power = 215
 scaling = "STR"
-tag = "guard"
 text = "Удар на 215 процентов обычного. Цель оглушена и пропускает 1 ход."
-edges = [
-    { name = "Всем весом", text = "Цель пропускает ещё 1 ход.", stun_turns = 1 },
-    { name = "Прикрыться", text = "Кроме того, 2 хода у вас броня выше на 20 процентов.", self_modifiers = { armor_percent = 20 } },
-]
 
 [[skill]]
 code = "warrior_oprokidyvanie"
@@ -446,12 +370,7 @@ target = "enemy"
 effect = "debuff_stun"
 power = 100
 scaling = "STR"
-tag = "precision"
 text = "Цель оглушена и пропускает 1 ход."
-edges = [
-    { name = "На спину", text = "Цель пропускает ещё 1 ход.", stun_turns = 1 },
-    { name = "Быстрее встать", text = "Откат короче на 2 хода.", cooldown = -2 },
-]
 
 [[skill]]
 code = "warrior_zheleznaya_volya"
@@ -465,12 +384,7 @@ target = "self"
 effect = "buff_damage_taken"
 power = 29
 scaling = "END"
-tag = "guard"
 text = "3 хода у вас получаемый урон ниже на 29 процентов."
-edges = [
-    { name = "Глубже вдохнуть", text = "Прибавка выше на 25 процентов.", power = 25 },
-    { name = "Стоять до конца", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "warrior_vskrytaya_rana"
@@ -485,12 +399,7 @@ target = "enemy"
 effect = "debuff_bleeding"
 power = 28
 scaling = "STR"
-tag = "precision"
 text = "Цель истекает кровью 4 хода."
-edges = [
-    { name = "Не зарастёт", text = "Цель истекает кровью ещё 3 хода.", dot_turns = 3 },
-    { name = "Обе руки", text = "Задевает всех противников.", aoe = true },
-]
 
 [[skill]]
 code = "warrior_krik_uzhasa"
@@ -505,12 +414,7 @@ target = "enemy"
 effect = "damage_fear"
 power = 215
 scaling = "STR"
-tag = "precision"
 text = "Дурманящий удар на 215 процентов обычного. Цель в страхе и пропускает 1 ход; страх спадёт от первого удара."
-edges = [
-    { name = "До костей", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "Не поднять глаз", text = "2 хода у цели точность ниже на 20 процентов.", target_modifiers = { accuracy_percent = -20 } },
-]
 
 [[skill]]
 code = "warrior_dobivanie"
@@ -524,12 +428,7 @@ target = "enemy"
 effect = "damage_execute"
 power = 215
 scaling = "STR"
-tag = "press"
 text = "Удар на 215 процента обычного. Тем сильнее, чем меньше здоровья осталось у цели."
-edges = [
-    { name = "Без замаха", text = "Откат короче на 1 ход.", cooldown = -1 },
-    { name = "Кровь за кровь", text = "Вам возвращается 20 процентов нанесённого урона.", lifesteal = 20 },
-]
 
 [[skill]]
 code = "warrior_otvetnyy_vypad"
@@ -543,12 +442,7 @@ target = "self"
 effect = "buff_counter"
 power = 28
 scaling = "END"
-tag = "guard"
 text = "3 хода вы отвечаете на каждый удар по вам, 28 процентов своего удара."
-edges = [
-    { name = "Резче ответ", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Дольше держит", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "warrior_razbityy_stroy"
@@ -562,12 +456,7 @@ target = "all_enemies"
 effect = "damage_aoe_weaken"
 power = 154
 scaling = "STR"
-tag = "precision"
 text = "Удар по всем противникам на 154 процентов обычного. У всех противников слабость: их удар слабее на 20 процентов, 2 хода."
-edges = [
-    { name = "Не собраться", text = "Слабость держится на 2 хода дольше.", duration = 2 },
-    { name = "По ногам", text = "Все противники истекают кровью 3 хода.", dot_turns = 3 },
-]
 
 [[skill]]
 code = "warrior_klinkovyy_shkval"
@@ -582,12 +471,7 @@ target = "enemy"
 effect = "damage_multi"
 power = 215
 scaling = "STR"
-tag = "press"
 text = "Бьёт 3 раза, каждый на 71 процента обычного удара."
-edges = [
-    { name = "Четвёртый", text = "Бьёт ещё раз, каждый удар на 85 процентов силы.", hits = 1, hit_power = 85 },
-    { name = "На излом", text = "Шанс критического удара выше на 20 процентов.", crit = 20 },
-]
 
 [[skill]]
 code = "warrior_bezoglyadnyy_razmen"
@@ -602,12 +486,7 @@ target = "enemy"
 effect = "damage_reckless"
 power = 191
 scaling = "STR"
-tag = "press"
 text = "Удар на 258 процента обычного, но этот ход вы получаете на четверть больше урона."
-edges = [
-    { name = "Не жалеть себя", text = "Урон выше на 35 процентов.", power = 35 },
-    { name = "Взять своё", text = "Вам возвращается 30 процентов нанесённого урона.", lifesteal = 30 },
-]
 
 [[skill]]
 code = "warrior_krepost"
@@ -621,12 +500,7 @@ target = "self"
 effect = "barrier"
 power = 35
 scaling = "END"
-tag = "guard"
 text = "Ставит барьер в 35 процентов вашего здоровья на 3 хода."
-edges = [
-    { name = "Толще стена", text = "Барьер выше ещё на 12 процентов вашего здоровья.", barrier = 12 },
-    { name = "Не пробить", text = "Кроме того, 3 хода у вас броня выше на 25 процентов.", self_modifiers = { armor_percent = 25 } },
-]
 
 [[skill]]
 code = "warrior_smertnyy_prigovor"
@@ -640,12 +514,7 @@ target = "enemy"
 effect = "debuff_death_mark"
 power = 30
 scaling = "STR"
-tag = "precision"
 text = "4 хода у цели получаемый урон выше на 30 процентов."
-edges = [
-    { name = "Всем видно", text = "Задевает всех противников.", aoe = true },
-    { name = "Не отменить", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "warrior_yarost_veterana"
@@ -659,12 +528,7 @@ target = "self"
 effect = "buff_berserk"
 power = 25
 scaling = "STR"
-tag = "press"
 text = "Берсерк: ваш урон выше на 25 процентов, и получаемый тоже, 3 хода."
-edges = [
-    { name = "До конца", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Кровь в глазах", text = "Кроме того, 3 хода вам возвращается 20 процентов нанесённого урона.", self_modifiers = { lifesteal_percent = 20 } },
-]
 
 [[skill]]
 code = "warrior_posledniy_rubezh"
@@ -679,12 +543,7 @@ target = "self"
 effect = "barrier_undying"
 power = 38
 scaling = "END"
-tag = "guard"
 text = "Ставит барьер в 38 процентов вашего здоровья на 3 хода. 3 хода вы не можете пасть."
-edges = [
-    { name = "Ни шагу", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Стена растёт", text = "Барьер выше ещё на 15 процентов вашего здоровья.", barrier = 15 },
-]
 
 [[skill]]
 code = "warrior_znamya_ne_padaet"
@@ -699,12 +558,7 @@ target = "self"
 effect = "heal_aoe"
 power = 24
 scaling = "END"
-tag = "guard"
 text = "Лечит вас и ваш отряд на 24 процента здоровья."
-edges = [
-    { name = "Всех до одного", text = "Лечит ещё на 10 процентов здоровья.", heal = 10 },
-    { name = "И раны закрыть", text = "Снимает по 2 отрицательных эффекта.", cleanse = 2 },
-]
 
 [[skill]]
 code = "warrior_tyazhelaya_ruka"
@@ -714,12 +568,7 @@ kind = "passive"
 level = 2
 effect = "physical_damage_percent"
 power = 4
-tag = "press"
 text = "Физический урон выше на 4 процента."
-edges = [
-    { name = "Тяжелее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Верная рука", text = "Кроме того, точность выше на 4 процента.", self_modifiers = { accuracy_percent = 4 } },
-]
 
 [[skill]]
 code = "warrior_zakalka"
@@ -729,12 +578,7 @@ kind = "passive"
 level = 5
 effect = "health_percent"
 power = 5
-tag = "guard"
 text = "Здоровье выше на 5 процентов."
-edges = [
-    { name = "Крепче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Ровное дыхание", text = "Кроме того, каждый ход вам возвращается 2 процента здоровья.", self_modifiers = { regen_per_turn_percent = 2 } },
-]
 
 [[skill]]
 code = "warrior_vernyy_glaz"
@@ -744,12 +588,7 @@ kind = "passive"
 level = 9
 effect = "accuracy_percent"
 power = 4
-tag = "precision"
 text = "Точность выше на 4 процента."
-edges = [
-    { name = "Зорче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Первый шаг", text = "Кроме того, инициатива выше на 4 процента.", self_modifiers = { initiative_percent = 4 } },
-]
 
 [[skill]]
 code = "warrior_khvatka_na_drevke"
@@ -759,12 +598,7 @@ kind = "passive"
 level = 14
 effect = "single_target_damage_percent"
 power = 5
-tag = "press"
 text = "Урон по одной цели выше на 5 процентов."
-edges = [
-    { name = "Крепче держать", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "На излом", text = "Кроме того, критический урон выше на 8 процентов.", self_modifiers = { crit_damage_percent = 8 } },
-]
 
 [[skill]]
 code = "warrior_privychka_k_latam"
@@ -774,12 +608,7 @@ kind = "passive"
 level = 20
 effect = "armor_percent"
 power = 5
-tag = "guard"
 text = "Броня выше на 5 процентов."
-edges = [
-    { name = "Пригнать по себе", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Не мешает", text = "Кроме того, инициатива выше на 5 процентов.", self_modifiers = { initiative_percent = 5 } },
-]
 
 [[skill]]
 code = "warrior_chuvstvo_rany"
@@ -789,12 +618,7 @@ kind = "passive"
 level = 26
 effect = "dot_damage_percent"
 power = 6
-tag = "precision"
 text = "Урон от кровотечений, яда и горения выше на 6 процентов."
-edges = [
-    { name = "Глубже", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "По живому", text = "Кроме того, урон по раненой цели выше на 5 процентов.", self_modifiers = { wounded_target_damage_percent = 5 } },
-]
 
 [[skill]]
 code = "warrior_stroevoy_shag"
@@ -804,12 +628,7 @@ kind = "passive"
 level = 33
 effect = "first_turn_damage_percent"
 power = 8
-tag = "press"
 text = "Урон в первый ход боя выше на 8 процентов."
-edges = [
-    { name = "Шире шаг", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Раньше всех", text = "Кроме того, инициатива выше на 6 процентов.", self_modifiers = { initiative_percent = 6 } },
-]
 
 [[skill]]
 code = "warrior_stoykost"
@@ -819,12 +638,7 @@ kind = "passive"
 level = 40
 effect = "damage_taken_percent"
 power = -5
-tag = "guard"
 text = "Получаемый урон ниже на 5 процентов."
-edges = [
-    { name = "Не согнуться", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Держать щит", text = "Кроме того, броня выше на 6 процентов.", self_modifiers = { armor_percent = 6 } },
-]
 
 [[skill]]
 code = "warrior_dobit_khromogo"
@@ -834,12 +648,7 @@ kind = "passive"
 level = 48
 effect = "wounded_target_damage_percent"
 power = 7
-tag = "precision"
 text = "Урон по раненой цели выше на 7 процентов."
-edges = [
-    { name = "Не упустить", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Точно в рану", text = "Кроме того, шанс критического удара выше на 5 процентов.", self_modifiers = { crit_chance_percent = 5 } },
-]
 
 [[skill]]
 code = "warrior_sila_v_plechakh"
@@ -849,12 +658,7 @@ kind = "passive"
 level = 55
 effect = "stat_STR"
 power = 3
-tag = "press"
 text = "Сила выше на 3."
-edges = [
-    { name = "Ещё шире", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Спина держит", text = "Кроме того, выносливость выше на 2.", self_modifiers = { stat_END = 2 } },
-]
 
 [[skill]]
 code = "warrior_dublenaya_kozha"
@@ -864,12 +668,7 @@ kind = "passive"
 level = 63
 effect = "resist_physical_percent"
 power = 6
-tag = "guard"
 text = "Сопротивление физическому урону выше на 6 процентов."
-edges = [
-    { name = "Толще", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И к чарам", text = "Кроме того, сопротивление магическому урону выше на 4 процента.", self_modifiers = { resist_magic_percent = 4 } },
-]
 
 [[skill]]
 code = "warrior_chitaet_zamakh"
@@ -879,12 +678,7 @@ kind = "passive"
 level = 72
 effect = "initiative_percent"
 power = 7
-tag = "precision"
 text = "Инициатива выше на 7 процентов."
-edges = [
-    { name = "Раньше", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Уйти с линии", text = "Кроме того, уклонение выше на 5 процентов.", self_modifiers = { dodge_percent = 5 } },
-]
 
 [[skill]]
 code = "warrior_udar_s_ottyazhkoy"
@@ -894,12 +688,7 @@ kind = "passive"
 level = 80
 effect = "crit_damage_percent"
 power = 9
-tag = "press"
 text = "Критический урон выше на 9 процентов."
-edges = [
-    { name = "До кости", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Чаще", text = "Кроме того, шанс критического удара выше на 5 процентов.", self_modifiers = { crit_chance_percent = 5 } },
-]
 
 [[skill]]
 code = "warrior_laty_po_ruke"
@@ -909,12 +698,7 @@ kind = "passive"
 level = 89
 effect = "resist_slashing_percent"
 power = 8
-tag = "guard"
 text = "Сопротивление рубящему урону выше на 8 процентов."
-edges = [
-    { name = "Плотнее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И к остриям", text = "Кроме того, сопротивление колющему урону выше на 6 процентов.", self_modifiers = { resist_piercing_percent = 6 } },
-]
 
 [[skill]]
 code = "warrior_slaboe_mesto"
@@ -924,12 +708,7 @@ kind = "passive"
 level = 98
 effect = "crit_chance_percent"
 power = 6
-tag = "precision"
 text = "Шанс критического удара выше на 6 процентов."
-edges = [
-    { name = "Видит сразу", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Бьёт глубже", text = "Кроме того, критический урон выше на 10 процентов.", self_modifiers = { crit_damage_percent = 10 } },
-]
 
 [[skill]]
 code = "warrior_protiv_bolshikh"
@@ -939,12 +718,7 @@ kind = "passive"
 level = 108
 effect = "elite_damage_percent"
 power = 9
-tag = "press"
 text = "Урон по элитным противникам и боссам выше на 9 процентов."
-edges = [
-    { name = "Не робеть", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Против стаи", text = "Кроме того, урон по всем противникам сразу выше на 6 процентов.", self_modifiers = { aoe_damage_percent = 6 } },
-]
 
 [[skill]]
 code = "warrior_dykhanie_v_boyu"
@@ -954,12 +728,7 @@ kind = "passive"
 level = 117
 effect = "regen_per_turn_percent"
 power = 4
-tag = "guard"
 text = "Каждый ход вам возвращается 4 процента здоровья."
-edges = [
-    { name = "Глубже", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Лечат лучше", text = "Кроме того, получаемое лечение выше на 10 процентов.", self_modifiers = { healing_taken_percent = 10 } },
-]
 
 [[skill]]
 code = "warrior_ne_daet_uyti"
@@ -969,12 +738,7 @@ kind = "passive"
 level = 127
 effect = "aoe_damage_percent"
 power = 9
-tag = "precision"
 text = "Урон по всем противникам сразу выше на 9 процентов."
-edges = [
-    { name = "Шире круг", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Никто не выйдет", text = "Кроме того, точность выше на 6 процентов.", self_modifiers = { accuracy_percent = 6 } },
-]
 
 [[skill]]
 code = "warrior_zhila"
@@ -984,12 +748,7 @@ kind = "passive"
 level = 137
 effect = "stat_END"
 power = 4
-tag = "press"
 text = "Выносливость выше на 4."
-edges = [
-    { name = "Толще", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И сила", text = "Кроме того, сила выше на 3.", self_modifiers = { stat_STR = 3 } },
-]
 
 [[skill]]
 code = "warrior_otvet_dospekha"
@@ -999,12 +758,7 @@ kind = "passive"
 level = 146
 effect = "reflect_percent"
 power = 9
-tag = "guard"
 text = "Обидчику возвращается 9 процентов полученного вами урона."
-edges = [
-    { name = "Больнее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Шипы", text = "Кроме того, броня выше на 8 процентов.", self_modifiers = { armor_percent = 8 } },
-]
 
 # =====================================================================
 # ВАРВАР. Ветви: напор - размен, в котором своё здоровье считают последним;
@@ -1024,12 +778,7 @@ target = "enemy"
 effect = "damage_slashing"
 power = 154
 scaling = "STR"
-tag = "press"
 text = "Рубящий удар на 154 процентов обычного."
-edges = [
-    { name = "Со всей дури", text = "Урон выше на 25 процентов. Откат дольше на 1 ход.", power = 25, cooldown = 1 },
-    { name = "Мимо не пройдёт", text = "Задевает вторую цель на 40 процентов урона.", splash = 40 },
-]
 
 [[skill]]
 code = "barbarian_razryvayushchiy_udar"
@@ -1043,12 +792,7 @@ target = "enemy"
 effect = "damage_bleed"
 power = 191
 scaling = "STR"
-tag = "precision"
 text = "Разрывающий удар на 191 процентов обычного. Цель истекает кровью 3 хода."
-edges = [
-    { name = "Рвать дальше", text = "Цель истекает кровью ещё 2 хода.", dot_turns = 2 },
-    { name = "Под ребро", text = "Не считается с 30 процентов брони цели.", pierce = 30 },
-]
 
 [[skill]]
 code = "barbarian_raskol_cherepa"
@@ -1062,12 +806,7 @@ target = "enemy"
 effect = "damage_bludgeoning"
 power = 191
 scaling = "STR"
-tag = "press"
 text = "Дробящий удар на 191 процентов обычного."
-edges = [
-    { name = "Сверху вниз", text = "Урон выше на 30 процентов. Откат дольше на 1 ход.", power = 30, cooldown = 1 },
-    { name = "В глазах темно", text = "Цель оглушена и пропускает 1 ход.", stun_turns = 1 },
-]
 
 [[skill]]
 code = "barbarian_tolstaya_shkura"
@@ -1081,12 +820,7 @@ target = "self"
 effect = "buff_armor"
 power = 22
 scaling = "END"
-tag = "guard"
 text = "3 хода у вас броня выше на 22 процента."
-edges = [
-    { name = "Задубела", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Не пробить", text = "Кроме того, получаемый урон ниже на 10 процентов.", self_modifiers = { damage_taken_percent = -10 } },
-]
 
 [[skill]]
 code = "barbarian_rev"
@@ -1100,12 +834,7 @@ target = "enemy"
 effect = "debuff_armor"
 power = 17
 scaling = "STR"
-tag = "guard"
 text = "2 хода у цели броня ниже на 17 процентов."
-edges = [
-    { name = "Громче", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Не смолкает", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "barbarian_podsech"
@@ -1119,12 +848,7 @@ target = "enemy"
 effect = "damage_weaken"
 power = 191
 scaling = "STR"
-tag = "precision"
 text = "Удар на 191 процентов обычного. У цели слабость: её удар слабее на 25 процентов, 2 хода."
-edges = [
-    { name = "По всем ногам", text = "Задевает всех противников.", aoe = true },
-    { name = "Не встанет", text = "Слабость держится на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "barbarian_zhazhda_krovi"
@@ -1138,12 +862,7 @@ target = "self"
 effect = "buff_frenzy"
 power = 26
 scaling = "STR"
-tag = "press"
 text = "3 хода у вас урон выше на 26 процентов, а броня ниже на 30."
-edges = [
-    { name = "Не унять", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Быстрее", text = "Кроме того, 3 хода у вас инициатива выше на 20 процентов.", self_modifiers = { initiative_percent = 20 } },
-]
 
 [[skill]]
 code = "barbarian_krugovoy_zamakh"
@@ -1158,12 +877,7 @@ target = "all_enemies"
 effect = "damage_aoe"
 power = 138
 scaling = "STR"
-tag = "press"
 text = "Удар по всем противникам на 138 процента обычного."
-edges = [
-    { name = "Второй круг", text = "Бьёт ещё раз, каждый удар на 60 процентов силы.", hits = 1, hit_power = 60 },
-    { name = "Шире размах", text = "Урон выше на 25 процентов. Откат дольше на 1 ход.", power = 25, cooldown = 1 },
-]
 
 [[skill]]
 code = "barbarian_sokrushit"
@@ -1178,12 +892,7 @@ target = "enemy"
 effect = "damage_savage"
 power = 152
 scaling = "STR"
-tag = "press"
 text = "Удар на 228 процентов обычного, но бьёт он неточно."
-edges = [
-    { name = "Тяжелее", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "Вернее", text = "Не считается с 40 процентов брони цели.", pierce = 40 },
-]
 
 [[skill]]
 code = "barbarian_ne_chuvstvuet_boli"
@@ -1197,12 +906,7 @@ target = "self"
 effect = "buff_damage_taken"
 power = 27
 scaling = "END"
-tag = "guard"
 text = "3 хода у вас получаемый урон ниже на 27 процентов."
-edges = [
-    { name = "Совсем не чувствует", text = "Прибавка выше на 25 процентов.", power = 25 },
-    { name = "Долго", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "barbarian_vzglyad_zverya"
@@ -1216,12 +920,7 @@ target = "enemy"
 effect = "debuff_fear"
 power = 100
 scaling = "STR"
-tag = "precision"
 text = "Цель в страхе и пропускает 1 ход; страх спадёт от первого удара."
-edges = [
-    { name = "Не поднимет глаз", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Чаще", text = "Откат короче на 2 хода.", cooldown = -2 },
-]
 
 [[skill]]
 code = "barbarian_krov_za_rany"
@@ -1235,12 +934,7 @@ target = "self"
 effect = "buff_lifesteal"
 power = 26
 scaling = "STR"
-tag = "guard"
 text = "3 хода вам возвращается 26 процентов нанесённого урона."
-edges = [
-    { name = "Жаднее", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Дольше пить", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "barbarian_rvanaya_rana"
@@ -1255,12 +949,7 @@ target = "enemy"
 effect = "debuff_bleeding"
 power = 26
 scaling = "STR"
-tag = "precision"
 text = "Цель истекает кровью 4 хода."
-edges = [
-    { name = "Не зарастёт", text = "Цель истекает кровью ещё 3 хода.", dot_turns = 3 },
-    { name = "Всем поровну", text = "Задевает всех противников.", aoe = true },
-]
 
 [[skill]]
 code = "barbarian_ustrashayushchiy_voy"
@@ -1275,12 +964,7 @@ target = "all_enemies"
 effect = "damage_aoe_fear"
 power = 138
 scaling = "STR"
-tag = "precision"
 text = "Дурманящий удар по всем противникам на 138 процента обычного. Все противники в страхе и пропускают 1 ход; страх спадёт от первого удара."
-edges = [
-    { name = "Громче", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "Разбегаются", text = "У всех противников точность ниже на 20 процентов, 2 хода.", target_modifiers = { accuracy_percent = -20 } },
-]
 
 [[skill]]
 code = "barbarian_dobit"
@@ -1294,12 +978,7 @@ target = "enemy"
 effect = "damage_execute"
 power = 191
 scaling = "STR"
-tag = "press"
 text = "Удар на 191 процентов обычного. Тем сильнее, чем меньше здоровья осталось у цели."
-edges = [
-    { name = "Без передышки", text = "Откат короче на 1 ход.", cooldown = -1 },
-    { name = "Досыта", text = "Вам возвращается 25 процентов нанесённого урона.", lifesteal = 25 },
-]
 
 [[skill]]
 code = "barbarian_zverinoe_uporstvo"
@@ -1313,12 +992,7 @@ target = "self"
 effect = "buff_health_regen"
 power = 16
 scaling = "END"
-tag = "guard"
 text = "Каждый ход вам возвращается 16 процентов здоровья, 4 хода."
-edges = [
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Стряхнуть", text = "Кроме того, снимает с вас 2 отрицательных эффекта.", cleanse = 2 },
-]
 
 [[skill]]
 code = "barbarian_smesti_vsekh"
@@ -1332,12 +1006,7 @@ target = "all_enemies"
 effect = "damage_aoe_execute"
 power = 139
 scaling = "STR"
-tag = "precision"
 text = "Удар по всем противникам на 139 процента обычного. Тем сильнее, чем меньше здоровья осталось у цели."
-edges = [
-    { name = "Не подняться", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "По коленям", text = "Все противники истекают кровью 3 хода.", dot_turns = 3 },
-]
 
 [[skill]]
 code = "barbarian_grad_udarov"
@@ -1352,12 +1021,7 @@ target = "enemy"
 effect = "damage_multi"
 power = 191
 scaling = "STR"
-tag = "press"
 text = "Бьёт 3 раза, каждый на 63 процентов обычного удара."
-edges = [
-    { name = "Четвёртый раз", text = "Бьёт ещё раз, каждый удар на 85 процентов силы.", hits = 1, hit_power = 85 },
-    { name = "Вразнос", text = "Шанс критического удара выше на 20 процентов.", crit = 20 },
-]
 
 [[skill]]
 code = "barbarian_bez_oglyadki"
@@ -1372,12 +1036,7 @@ target = "enemy"
 effect = "damage_reckless"
 power = 170
 scaling = "STR"
-tag = "press"
 text = "Удар на 230 процентов обычного, но этот ход вы получаете на четверть больше урона."
-edges = [
-    { name = "Совсем без оглядки", text = "Урон выше на 35 процентов.", power = 35 },
-    { name = "Своё вернуть", text = "Вам возвращается 30 процентов нанесённого урона.", lifesteal = 30 },
-]
 
 [[skill]]
 code = "barbarian_shkura_zverya"
@@ -1391,12 +1050,7 @@ target = "self"
 effect = "barrier"
 power = 33
 scaling = "END"
-tag = "guard"
 text = "Ставит барьер в 33 процента вашего здоровья на 3 хода."
-edges = [
-    { name = "Толще", text = "Барьер выше ещё на 12 процентов вашего здоровья.", barrier = 12 },
-    { name = "И шкура держит", text = "Кроме того, 3 хода у вас броня выше на 25 процентов.", self_modifiers = { armor_percent = 25 } },
-]
 
 [[skill]]
 code = "barbarian_gnilaya_rana"
@@ -1410,12 +1064,7 @@ target = "enemy"
 effect = "damage_heal_block"
 power = 191
 scaling = "STR"
-tag = "precision"
 text = "Оскверняющий удар на 191 процентов обычного. Цель не может лечиться 3 хода."
-edges = [
-    { name = "Глубже", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "Не заживёт", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "barbarian_bagrovaya_yarost"
@@ -1429,12 +1078,7 @@ target = "self"
 effect = "buff_berserk"
 power = 27
 scaling = "STR"
-tag = "press"
 text = "Берсерк: ваш урон выше на 27 процентов, и получаемый тоже, 3 хода."
-edges = [
-    { name = "До красной пелены", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Пить кровь", text = "Кроме того, 3 хода вам возвращается 25 процентов нанесённого урона.", self_modifiers = { lifesteal_percent = 25 } },
-]
 
 [[skill]]
 code = "barbarian_ne_upast"
@@ -1449,12 +1093,7 @@ target = "self"
 effect = "barrier_undying"
 power = 36
 scaling = "END"
-tag = "guard"
 text = "Ставит барьер в 36 процентов вашего здоровья на 3 хода. 3 хода вы не можете пасть."
-edges = [
-    { name = "Стоять дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Толще кожа", text = "Барьер выше ещё на 15 процентов вашего здоровья.", barrier = 15 },
-]
 
 [[skill]]
 code = "barbarian_vtoroe_serdtse"
@@ -1469,12 +1108,7 @@ target = "self"
 effect = "buff_second_wind"
 power = 20
 scaling = "END"
-tag = "guard"
 text = "Каждый ход вам возвращается 20 процентов здоровья, 3 хода. Каждый ход вам возвращается 10 процентов ярости, 3 хода."
-edges = [
-    { name = "Бьётся дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Разом", text = "Кроме того, сразу лечит на 15 процентов здоровья.", heal = 15 },
-]
 
 [[skill]]
 code = "barbarian_dikaya_sila"
@@ -1484,12 +1118,7 @@ kind = "passive"
 level = 2
 effect = "physical_damage_percent"
 power = 5
-tag = "press"
 text = "Физический урон выше на 5 процентов."
-edges = [
-    { name = "Дичее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Не мажет", text = "Кроме того, точность выше на 4 процента.", self_modifiers = { accuracy_percent = 4 } },
-]
 
 [[skill]]
 code = "barbarian_tolshcha_myshts"
@@ -1499,12 +1128,7 @@ kind = "passive"
 level = 5
 effect = "health_percent"
 power = 6
-tag = "guard"
 text = "Здоровье выше на 6 процентов."
-edges = [
-    { name = "Ещё толще", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Затягивается", text = "Кроме того, каждый ход вам возвращается 2 процента здоровья.", self_modifiers = { regen_per_turn_percent = 2 } },
-]
 
 [[skill]]
 code = "barbarian_zverinoe_chutye"
@@ -1514,12 +1138,7 @@ kind = "passive"
 level = 9
 effect = "accuracy_percent"
 power = 4
-tag = "precision"
 text = "Точность выше на 4 процента."
-edges = [
-    { name = "Острее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Первым чует", text = "Кроме того, инициатива выше на 4 процента.", self_modifiers = { initiative_percent = 4 } },
-]
 
 [[skill]]
 code = "barbarian_ranenyy_zver"
@@ -1529,12 +1148,7 @@ kind = "passive"
 level = 14
 effect = "low_health_damage_percent"
 power = 6
-tag = "press"
 text = "Ваш урон выше на 6 процентов, когда здоровья у вас мало."
-edges = [
-    { name = "Злее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Дороже отдать", text = "Кроме того, критический урон выше на 8 процентов.", self_modifiers = { crit_damage_percent = 8 } },
-]
 
 [[skill]]
 code = "barbarian_ne_znaet_broni"
@@ -1544,12 +1158,7 @@ kind = "passive"
 level = 20
 effect = "dodge_percent"
 power = 5
-tag = "guard"
 text = "Уклонение выше на 5 процентов."
-edges = [
-    { name = "Вёрткий", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Налегке", text = "Кроме того, инициатива выше на 5 процентов.", self_modifiers = { initiative_percent = 5 } },
-]
 
 [[skill]]
 code = "barbarian_rvat"
@@ -1559,12 +1168,7 @@ kind = "passive"
 level = 26
 effect = "dot_damage_percent"
 power = 6
-tag = "precision"
 text = "Урон от кровотечений, яда и горения выше на 6 процентов."
-edges = [
-    { name = "Глубже рвать", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "По живому", text = "Кроме того, урон по раненой цели выше на 5 процентов.", self_modifiers = { wounded_target_damage_percent = 5 } },
-]
 
 [[skill]]
 code = "barbarian_pervyy_natisk"
@@ -1574,12 +1178,7 @@ kind = "passive"
 level = 33
 effect = "first_turn_damage_percent"
 power = 8
-tag = "press"
 text = "Урон в первый ход боя выше на 8 процентов."
-edges = [
-    { name = "С места в галоп", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Вперёд всех", text = "Кроме того, инициатива выше на 6 процентов.", self_modifiers = { initiative_percent = 6 } },
-]
 
 [[skill]]
 code = "barbarian_terpit"
@@ -1589,12 +1188,7 @@ kind = "passive"
 level = 40
 effect = "damage_taken_percent"
 power = -5
-tag = "guard"
 text = "Получаемый урон ниже на 5 процентов."
-edges = [
-    { name = "Терпит больше", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Шкура толще", text = "Кроме того, броня выше на 6 процентов.", self_modifiers = { armor_percent = 6 } },
-]
 
 [[skill]]
 code = "barbarian_zapakh_krovi"
@@ -1604,12 +1198,7 @@ kind = "passive"
 level = 48
 effect = "wounded_target_damage_percent"
 power = 8
-tag = "precision"
 text = "Урон по раненой цели выше на 8 процентов."
-edges = [
-    { name = "Чует дальше", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "В рану", text = "Кроме того, шанс критического удара выше на 5 процентов.", self_modifiers = { crit_chance_percent = 5 } },
-]
 
 [[skill]]
 code = "barbarian_plechi"
@@ -1619,12 +1208,7 @@ kind = "passive"
 level = 55
 effect = "stat_STR"
 power = 4
-tag = "press"
 text = "Сила выше на 4."
-edges = [
-    { name = "Шире", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И спина", text = "Кроме того, выносливость выше на 2.", self_modifiers = { stat_END = 2 } },
-]
 
 [[skill]]
 code = "barbarian_zhivuchest"
@@ -1634,12 +1218,7 @@ kind = "passive"
 level = 63
 effect = "regen_per_turn_percent"
 power = 3
-tag = "guard"
 text = "Каждый ход вам возвращается 3 процента здоровья."
-edges = [
-    { name = "Затягивает быстрее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Крепче кость", text = "Кроме того, здоровье выше на 5 процентов.", self_modifiers = { health_percent = 5 } },
-]
 
 [[skill]]
 code = "barbarian_bystree_zamakh"
@@ -1649,12 +1228,7 @@ kind = "passive"
 level = 72
 effect = "initiative_percent"
 power = 7
-tag = "precision"
 text = "Инициатива выше на 7 процентов."
-edges = [
-    { name = "Ещё быстрее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Уйти с линии", text = "Кроме того, уклонение выше на 5 процентов.", self_modifiers = { dodge_percent = 5 } },
-]
 
 [[skill]]
 code = "barbarian_naotmash"
@@ -1664,12 +1238,7 @@ kind = "passive"
 level = 80
 effect = "crit_damage_percent"
 power = 10
-tag = "press"
 text = "Критический урон выше на 10 процентов."
-edges = [
-    { name = "До кости", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Чаще", text = "Кроме того, шанс критического удара выше на 5 процентов.", self_modifiers = { crit_chance_percent = 5 } },
-]
 
 [[skill]]
 code = "barbarian_dublenaya_spina"
@@ -1679,12 +1248,7 @@ kind = "passive"
 level = 89
 effect = "resist_physical_percent"
 power = 7
-tag = "guard"
 text = "Сопротивление физическому урону выше на 7 процентов."
-edges = [
-    { name = "Толще", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И к чарам", text = "Кроме того, сопротивление магическому урону выше на 5 процентов.", self_modifiers = { resist_magic_percent = 5 } },
-]
 
 [[skill]]
 code = "barbarian_mezhdu_reber"
@@ -1694,12 +1258,7 @@ kind = "passive"
 level = 98
 effect = "crit_chance_percent"
 power = 6
-tag = "precision"
 text = "Шанс критического удара выше на 6 процентов."
-edges = [
-    { name = "Видит щель", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Бьёт глубже", text = "Кроме того, критический урон выше на 10 процентов.", self_modifiers = { crit_damage_percent = 10 } },
-]
 
 [[skill]]
 code = "barbarian_na_velikanov"
@@ -1709,12 +1268,7 @@ kind = "passive"
 level = 108
 effect = "elite_damage_percent"
 power = 9
-tag = "press"
 text = "Урон по элитным противникам и боссам выше на 9 процентов."
-edges = [
-    { name = "Не робеть", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И на стаю", text = "Кроме того, урон по всем противникам сразу выше на 6 процентов.", self_modifiers = { aoe_damage_percent = 6 } },
-]
 
 [[skill]]
 code = "barbarian_pet_chuzhuyu_krov"
@@ -1724,12 +1278,7 @@ kind = "passive"
 level = 117
 effect = "lifesteal_percent"
 power = 7
-tag = "guard"
 text = "Вам возвращается 7 процентов нанесённого урона."
-edges = [
-    { name = "Жаднее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Заживает", text = "Кроме того, получаемое лечение выше на 10 процентов.", self_modifiers = { healing_taken_percent = 10 } },
-]
 
 [[skill]]
 code = "barbarian_vsekh_razom"
@@ -1739,12 +1288,7 @@ kind = "passive"
 level = 127
 effect = "aoe_damage_percent"
 power = 9
-tag = "precision"
 text = "Урон по всем противникам сразу выше на 9 процентов."
-edges = [
-    { name = "Шире круг", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Никто не уйдёт", text = "Кроме того, точность выше на 6 процентов.", self_modifiers = { accuracy_percent = 6 } },
-]
 
 [[skill]]
 code = "barbarian_ne_ostanovit"
@@ -1754,12 +1298,7 @@ kind = "passive"
 level = 137
 effect = "damage_percent"
 power = 6
-tag = "press"
 text = "Весь ваш урон выше на 6 процентов."
-edges = [
-    { name = "Разогнался", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И сила", text = "Кроме того, сила выше на 3.", self_modifiers = { stat_STR = 3 } },
-]
 
 [[skill]]
 code = "barbarian_shkura_derzhit"
@@ -1769,12 +1308,7 @@ kind = "passive"
 level = 146
 effect = "resist_bludgeoning_percent"
 power = 9
-tag = "guard"
 text = "Сопротивление дробящему урону выше на 9 процентов."
-edges = [
-    { name = "Держит крепче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И к разрывам", text = "Кроме того, сопротивление разрывающему урону выше на 7 процентов.", self_modifiers = { resist_rending_percent = 7 } },
-]
 
 # =====================================================================
 # ПАЛАДИН. Ветви: напор - молот и свет, которым бьют; заслон - чужая
@@ -1794,12 +1328,7 @@ target = "enemy"
 effect = "damage_holy"
 power = 186
 scaling = "STR"
-tag = "press"
 text = "Священный удар на 186 процента обычного."
-edges = [
-    { name = "Тяжелее молот", text = "Урон выше на 25 процентов. Откат дольше на 1 ход.", power = 25, cooldown = 1 },
-    { name = "Отблеск", text = "Задевает вторую цель на 40 процентов урона.", splash = 40 },
-]
 
 [[skill]]
 code = "paladin_izoblichenie"
@@ -1813,12 +1342,7 @@ target = "enemy"
 effect = "damage_pierce"
 power = 229
 scaling = "STR"
-tag = "precision"
 text = "Удар на 229 процента обычного. Не считается с 50 процентов брони цели."
-edges = [
-    { name = "Насквозь", text = "Броня цели не считается вовсе.", pierce = 50 },
-    { name = "С укором", text = "2 хода у цели урон ниже на 20 процентов.", target_modifiers = { damage_percent = -20 } },
-]
 
 [[skill]]
 code = "paladin_molot_pravdy"
@@ -1832,12 +1356,7 @@ target = "enemy"
 effect = "damage_bludgeoning"
 power = 229
 scaling = "STR"
-tag = "press"
 text = "Дробящий удар на 229 процента обычного."
-edges = [
-    { name = "С размаха", text = "Урон выше на 30 процентов. Откат дольше на 1 ход.", power = 30, cooldown = 1 },
-    { name = "До колен", text = "Цель оглушена и пропускает 1 ход.", stun_turns = 1 },
-]
 
 [[skill]]
 code = "paladin_shchit_very"
@@ -1851,12 +1370,7 @@ target = "self"
 effect = "barrier"
 power = 25
 scaling = "CHA"
-tag = "guard"
 text = "Ставит барьер в 25 процентов вашего здоровья на 3 хода."
-edges = [
-    { name = "Крепче", text = "Барьер выше ещё на 10 процентов вашего здоровья.", barrier = 10 },
-    { name = "Дольше держит", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "paladin_vyzov"
@@ -1870,12 +1384,7 @@ target = "all_enemies"
 effect = "taunt_aoe"
 power = 19
 scaling = "CHA"
-tag = "guard"
 text = "2 хода все противники бьют по вам, а урон у них ниже на 19 процентов."
-edges = [
-    { name = "Громче", text = "Урон противников ниже ещё на 30 процентов.", power = 30 },
-    { name = "Не отвести глаз", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "paladin_kara"
@@ -1889,12 +1398,7 @@ target = "enemy"
 effect = "damage_stun"
 power = 229
 scaling = "STR"
-tag = "precision"
 text = "Удар на 229 процента обычного. Цель оглушена и пропускает 1 ход."
-edges = [
-    { name = "Дважды", text = "Цель пропускает ещё 1 ход.", stun_turns = 1 },
-    { name = "Со светом", text = "Вам возвращается 15 процентов нанесённого урона.", lifesteal = 15 },
-]
 
 [[skill]]
 code = "paladin_blagoslovenie_oruzhiya"
@@ -1908,12 +1412,7 @@ target = "self"
 effect = "buff_empower"
 power = 25
 scaling = "CHA"
-tag = "press"
 text = "Усиление: ваш урон выше на 25 процентов, 3 хода."
-edges = [
-    { name = "Ярче", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Дольше держит", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "paladin_stolp_sveta"
@@ -1928,12 +1427,7 @@ target = "all_enemies"
 effect = "damage_aoe_light"
 power = 166
 scaling = "CHA"
-tag = "press"
 text = "Лучезарный удар по всем противникам на 166 процентов обычного."
-edges = [
-    { name = "Шире круг", text = "Урон выше на 25 процентов. Откат дольше на 1 ход.", power = 25, cooldown = 1 },
-    { name = "Ослепить", text = "У всех противников точность ниже на 20 процентов, 2 хода.", target_modifiers = { accuracy_percent = -20 } },
-]
 
 [[skill]]
 code = "paladin_vozmezdie"
@@ -1948,12 +1442,7 @@ target = "enemy"
 effect = "damage_holy"
 power = 230
 scaling = "STR"
-tag = "press"
 text = "Священный удар на 230 процент обычного."
-edges = [
-    { name = "Всей тяжестью", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "Свет лечит", text = "Вам возвращается 25 процентов нанесённого урона.", lifesteal = 25 },
-]
 
 [[skill]]
 code = "paladin_dlan_pomoshchi"
@@ -1967,12 +1456,7 @@ target = "self"
 effect = "heal"
 power = 20
 scaling = "CHA"
-tag = "guard"
 text = "Лечит вас на 20 процентов здоровья."
-edges = [
-    { name = "Полнее", text = "Лечит ещё на 10 процентов здоровья.", heal = 10 },
-    { name = "И очищает", text = "Кроме того, снимает с вас 2 отрицательных эффекта.", cleanse = 2 },
-]
 
 [[skill]]
 code = "paladin_okovy_very"
@@ -1986,12 +1470,7 @@ target = "enemy"
 effect = "debuff_stun"
 power = 100
 scaling = "CHA"
-tag = "precision"
 text = "Цель оглушена и пропускает 1 ход."
-edges = [
-    { name = "Не разорвать", text = "Цель пропускает ещё 1 ход.", stun_turns = 1 },
-    { name = "Куются быстрее", text = "Откат короче на 2 хода.", cooldown = -2 },
-]
 
 [[skill]]
 code = "paladin_krepost_dukha"
@@ -2005,12 +1484,7 @@ target = "self"
 effect = "buff_damage_taken"
 power = 28
 scaling = "CHA"
-tag = "guard"
 text = "3 хода у вас получаемый урон ниже на 28 процентов."
-edges = [
-    { name = "Твёрже", text = "Прибавка выше на 25 процентов.", power = 25 },
-    { name = "Дольше стоять", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "paladin_pechat_molchaniya"
@@ -2025,12 +1499,7 @@ target = "enemy"
 effect = "debuff_silence"
 power = 100
 scaling = "CHA"
-tag = "precision"
 text = "Цель молчит 2 хода: умения ей недоступны."
-edges = [
-    { name = "Дольше", text = "Цель молчит ещё 2 хода.", duration = 2 },
-    { name = "Сорвать заклинание", text = "Кроме того, цель не восстанавливает силы, 2 хода.", target_modifiers = { resource_regen_percent = -100 } },
-]
 
 [[skill]]
 code = "paladin_trepet"
@@ -2045,12 +1514,7 @@ target = "all_enemies"
 effect = "debuff_aoe_fear"
 power = 100
 scaling = "CHA"
-tag = "precision"
 text = "Все противники в страхе и пропускают 1 ход; страх спадёт от первого удара."
-edges = [
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Быстрее навести", text = "Откат короче на 2 хода.", cooldown = -2 },
-]
 
 [[skill]]
 code = "paladin_sud"
@@ -2064,12 +1528,7 @@ target = "enemy"
 effect = "damage_execute"
 power = 230
 scaling = "STR"
-tag = "press"
 text = "Удар на 230 процентов обычного. Тем сильнее, чем меньше здоровья осталось у цели."
-edges = [
-    { name = "Без промедления", text = "Откат короче на 1 ход.", cooldown = -1 },
-    { name = "Приговор", text = "Шанс критического удара выше на 20 процентов.", crit = 20 },
-]
 
 [[skill]]
 code = "paladin_vozdayanie"
@@ -2083,12 +1542,7 @@ target = "self"
 effect = "buff_reflect"
 power = 32
 scaling = "CHA"
-tag = "guard"
 text = "3 хода у вас обидчику возвращается 32 процента полученного урона."
-edges = [
-    { name = "Полной мерой", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "paladin_slovo_ukora"
@@ -2102,12 +1556,7 @@ target = "all_enemies"
 effect = "debuff_aoe_weakness"
 power = 30
 scaling = "CHA"
-tag = "precision"
 text = "У всех противников слабость 3 хода: их удар слабее на 30 процентов."
-edges = [
-    { name = "Не оправдаться", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "paladin_molot_i_svet"
@@ -2122,12 +1571,7 @@ target = "enemy"
 effect = "damage_multi"
 power = 230
 scaling = "STR"
-tag = "press"
 text = "Бьёт 3 раза, каждый на 76 процентов обычного удара."
-edges = [
-    { name = "Четвёртый удар", text = "Бьёт ещё раз, каждый удар на 85 процентов силы.", hits = 1, hit_power = 85 },
-    { name = "Каждый в цель", text = "Шанс критического удара выше на 20 процентов.", crit = 20 },
-]
 
 [[skill]]
 code = "paladin_tyazhest_kary"
@@ -2142,12 +1586,7 @@ target = "enemy"
 effect = "damage_pierce"
 power = 230
 scaling = "STR"
-tag = "press"
 text = "Удар на 230 процентов обычного. Не считается с 50 процентов брони цели."
-edges = [
-    { name = "Сквозь латы", text = "Броня цели не считается вовсе.", pierce = 50 },
-    { name = "Тяжелее", text = "Урон выше на 30 процентов.", power = 30 },
-]
 
 [[skill]]
 code = "paladin_milost"
@@ -2161,12 +1600,7 @@ target = "self"
 effect = "heal_aoe"
 power = 23
 scaling = "CHA"
-tag = "guard"
 text = "Лечит вас и ваш отряд на 23 процента здоровья."
-edges = [
-    { name = "Щедрее", text = "Лечит ещё на 10 процентов здоровья.", heal = 10 },
-    { name = "И снимает беды", text = "Снимает по 2 отрицательных эффекта.", cleanse = 2 },
-]
 
 [[skill]]
 code = "paladin_pechat_viny"
@@ -2180,12 +1614,7 @@ target = "enemy"
 effect = "debuff_death_mark"
 power = 30
 scaling = "CHA"
-tag = "precision"
 text = "4 хода у цели получаемый урон выше на 30 процентов."
-edges = [
-    { name = "На всех", text = "Задевает всех противников.", aoe = true },
-    { name = "Не искупить", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "paladin_gnev_nebes"
@@ -2199,12 +1628,7 @@ target = "all_enemies"
 effect = "damage_aoe_holy"
 power = 166
 scaling = "CHA"
-tag = "press"
 text = "Священный удар по всем противникам на 166 процентов обычного."
-edges = [
-    { name = "Небо ниже", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "И свет вернётся", text = "Вам возвращается 20 процентов нанесённого урона.", lifesteal = 20 },
-]
 
 [[skill]]
 code = "paladin_nezyblemost"
@@ -2219,12 +1643,7 @@ target = "self"
 effect = "barrier_undying"
 power = 37
 scaling = "CHA"
-tag = "guard"
 text = "Ставит барьер в 37 процентов вашего здоровья на 3 хода. 3 хода вы не можете пасть."
-edges = [
-    { name = "Дольше стоять", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Выше стена", text = "Барьер выше ещё на 15 процентов вашего здоровья.", barrier = 15 },
-]
 
 [[skill]]
 code = "paladin_svet_vo_tme"
@@ -2239,12 +1658,7 @@ target = "self"
 effect = "cleanse_barrier"
 power = 37
 scaling = "CHA"
-tag = "guard"
 text = "Ставит барьер в 37 процентов вашего здоровья на 3 хода. Снимает с вас отрицательные эффекты."
-edges = [
-    { name = "Ярче", text = "Барьер выше ещё на 15 процентов вашего здоровья.", barrier = 15 },
-    { name = "И лечит", text = "Кроме того, лечит вас на 15 процентов здоровья.", heal = 15 },
-]
 
 [[skill]]
 code = "paladin_pravednaya_sila"
@@ -2254,12 +1668,7 @@ kind = "passive"
 level = 2
 effect = "physical_damage_percent"
 power = 4
-tag = "press"
 text = "Физический урон выше на 4 процента."
-edges = [
-    { name = "Тяжелее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Вернее", text = "Кроме того, точность выше на 4 процента.", self_modifiers = { accuracy_percent = 4 } },
-]
 
 [[skill]]
 code = "paladin_obet_stoykosti"
@@ -2269,12 +1678,7 @@ kind = "passive"
 level = 5
 effect = "health_percent"
 power = 5
-tag = "guard"
 text = "Здоровье выше на 5 процентов."
-edges = [
-    { name = "Твёрже обет", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И раны реже", text = "Кроме того, получаемый урон ниже на 3 процента.", self_modifiers = { damage_taken_percent = -3 } },
-]
 
 [[skill]]
 code = "paladin_vzglyad_sudi"
@@ -2284,12 +1688,7 @@ kind = "passive"
 level = 9
 effect = "accuracy_percent"
 power = 4
-tag = "precision"
 text = "Точность выше на 4 процента."
-edges = [
-    { name = "Не отвести", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Первым увидит", text = "Кроме того, инициатива выше на 4 процента.", self_modifiers = { initiative_percent = 4 } },
-]
 
 [[skill]]
 code = "paladin_protiv_nezhiti"
@@ -2299,12 +1698,7 @@ kind = "passive"
 level = 14
 effect = "undead_damage_percent"
 power = 7
-tag = "press"
 text = "Урон по нежити выше на 7 процентов."
-edges = [
-    { name = "Не щадя", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И по зверю", text = "Кроме того, урон по зверям выше на 5 процентов.", self_modifiers = { beast_damage_percent = 5 } },
-]
 
 [[skill]]
 code = "paladin_tyazhelye_laty"
@@ -2314,12 +1708,7 @@ kind = "passive"
 level = 20
 effect = "armor_percent"
 power = 5
-tag = "guard"
 text = "Броня выше на 5 процентов."
-edges = [
-    { name = "Толще пластина", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Не тянут", text = "Кроме того, инициатива выше на 5 процентов.", self_modifiers = { initiative_percent = 5 } },
-]
 
 [[skill]]
 code = "paladin_slovo_vesomo"
@@ -2329,12 +1718,7 @@ kind = "passive"
 level = 26
 effect = "stat_CHA"
 power = 3
-tag = "precision"
 text = "Харизма выше на 3."
-edges = [
-    { name = "Слышнее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И запас", text = "Кроме того, запас сил выше на 6 процентов.", self_modifiers = { resource_percent = 6 } },
-]
 
 [[skill]]
 code = "paladin_svet_krepnet"
@@ -2344,12 +1728,7 @@ kind = "passive"
 level = 33
 effect = "magic_damage_percent"
 power = 7
-tag = "press"
 text = "Магический урон выше на 7 процентов."
-edges = [
-    { name = "Ярче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И сталь", text = "Кроме того, физический урон выше на 5 процентов.", self_modifiers = { physical_damage_percent = 5 } },
-]
 
 [[skill]]
 code = "paladin_ne_sognut"
@@ -2359,12 +1738,7 @@ kind = "passive"
 level = 40
 effect = "damage_taken_percent"
 power = -5
-tag = "guard"
 text = "Получаемый урон ниже на 5 процентов."
-edges = [
-    { name = "Совсем не согнуть", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Щит выше", text = "Кроме того, броня выше на 6 процентов.", self_modifiers = { armor_percent = 6 } },
-]
 
 [[skill]]
 code = "paladin_zastupnik"
@@ -2374,12 +1748,7 @@ kind = "passive"
 level = 48
 effect = "healing_done_percent"
 power = 8
-tag = "precision"
 text = "Ваше лечение выше на 8 процентов."
-edges = [
-    { name = "Щедрее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И себе", text = "Кроме того, получаемое лечение выше на 6 процентов.", self_modifiers = { healing_taken_percent = 6 } },
-]
 
 [[skill]]
 code = "paladin_sila_klyatvy"
@@ -2389,12 +1758,7 @@ kind = "passive"
 level = 55
 effect = "stat_STR"
 power = 3
-tag = "press"
 text = "Сила выше на 3."
-edges = [
-    { name = "Крепче клятва", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И спина", text = "Кроме того, выносливость выше на 2.", self_modifiers = { stat_END = 2 } },
-]
 
 [[skill]]
 code = "paladin_vera_berezhet"
@@ -2404,12 +1768,7 @@ kind = "passive"
 level = 63
 effect = "resist_magic_percent"
 power = 7
-tag = "guard"
 text = "Сопротивление магическому урону выше на 7 процентов."
-edges = [
-    { name = "Крепче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И к стали", text = "Кроме того, сопротивление физическому урону выше на 5 процентов.", self_modifiers = { resist_physical_percent = 5 } },
-]
 
 [[skill]]
 code = "paladin_pervym_v_stroy"
@@ -2419,12 +1778,7 @@ kind = "passive"
 level = 72
 effect = "initiative_percent"
 power = 7
-tag = "precision"
 text = "Инициатива выше на 7 процентов."
-edges = [
-    { name = "Ещё раньше", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И первый удар", text = "Кроме того, урон в первый ход боя выше на 6 процентов.", self_modifiers = { first_turn_damage_percent = 6 } },
-]
 
 [[skill]]
 code = "paladin_tyazhest_molota"
@@ -2434,12 +1788,7 @@ kind = "passive"
 level = 80
 effect = "crit_damage_percent"
 power = 9
-tag = "press"
 text = "Критический урон выше на 9 процентов."
-edges = [
-    { name = "Тяжелее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Чаще", text = "Кроме того, шанс критического удара выше на 5 процентов.", self_modifiers = { crit_chance_percent = 5 } },
-]
 
 [[skill]]
 code = "paladin_osvyashchennyy_dospekh"
@@ -2449,12 +1798,7 @@ kind = "passive"
 level = 89
 effect = "resist_negative_percent"
 power = 9
-tag = "guard"
 text = "Сопротивление оскверняющему урону выше на 9 процентов."
-edges = [
-    { name = "Ярче освящён", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И к дурману", text = "Кроме того, сопротивление дурманящему урону выше на 7 процентов.", self_modifiers = { resist_mental_percent = 7 } },
-]
 
 [[skill]]
 code = "paladin_vidit_lozh"
@@ -2464,12 +1808,7 @@ kind = "passive"
 level = 98
 effect = "crit_chance_percent"
 power = 6
-tag = "precision"
 text = "Шанс критического удара выше на 6 процентов."
-edges = [
-    { name = "Насквозь", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И бьёт больнее", text = "Кроме того, критический урон выше на 10 процентов.", self_modifiers = { crit_damage_percent = 10 } },
-]
 
 [[skill]]
 code = "paladin_protiv_velikikh"
@@ -2479,12 +1818,7 @@ kind = "passive"
 level = 108
 effect = "elite_damage_percent"
 power = 9
-tag = "press"
 text = "Урон по элитным противникам и боссам выше на 9 процентов."
-edges = [
-    { name = "Не отступит", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И по многим", text = "Кроме того, урон по всем противникам сразу выше на 6 процентов.", self_modifiers = { aoe_damage_percent = 6 } },
-]
 
 [[skill]]
 code = "paladin_rany_zakryvayutsya"
@@ -2494,12 +1828,7 @@ kind = "passive"
 level = 117
 effect = "healing_taken_percent"
 power = 9
-tag = "guard"
 text = "Получаемое лечение выше на 9 процентов."
-edges = [
-    { name = "Быстрее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И само", text = "Кроме того, каждый ход вам возвращается 3 процента здоровья.", self_modifiers = { regen_per_turn_percent = 3 } },
-]
 
 [[skill]]
 code = "paladin_svet_na_vsekh"
@@ -2509,12 +1838,7 @@ kind = "passive"
 level = 127
 effect = "aoe_damage_percent"
 power = 9
-tag = "precision"
 text = "Урон по всем противникам сразу выше на 9 процентов."
-edges = [
-    { name = "Шире", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И вернее", text = "Кроме того, точность выше на 6 процентов.", self_modifiers = { accuracy_percent = 6 } },
-]
 
 [[skill]]
 code = "paladin_ne_ustanet"
@@ -2524,12 +1848,7 @@ kind = "passive"
 level = 137
 effect = "stat_END"
 power = 4
-tag = "press"
 text = "Выносливость выше на 4."
-edges = [
-    { name = "Дольше", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И харизма", text = "Кроме того, харизма выше на 3.", self_modifiers = { stat_CHA = 3 } },
-]
 
 [[skill]]
 code = "paladin_otpoved"
@@ -2539,12 +1858,7 @@ kind = "passive"
 level = 146
 effect = "reflect_percent"
 power = 10
-tag = "guard"
 text = "Обидчику возвращается 10 процентов полученного вами урона."
-edges = [
-    { name = "Полнее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И щит крепче", text = "Кроме того, броня выше на 8 процентов.", self_modifiers = { armor_percent = 8 } },
-]
 
 # =====================================================================
 # СЛЕДОПЫТ. Ветви: напор - выстрел, который решает бой до размена;
@@ -2564,13 +1878,8 @@ target = "enemy"
 effect = "damage_piercing"
 power = 166
 scaling = "AGI"
-tag = "press"
 weapons = ["bow"]
 text = "Колющий выстрел на 166 процентов обычного."
-edges = [
-    { name = "Тугая тетива", text = "Урон выше на 25 процентов. Откат дольше на 1 ход.", power = 25, cooldown = 1 },
-    { name = "Навылет", text = "Не считается с 30 процентов брони цели.", pierce = 30 },
-]
 
 [[skill]]
 code = "ranger_otravlennaya_strela"
@@ -2584,13 +1893,8 @@ target = "enemy"
 effect = "damage_venom"
 power = 204
 scaling = "AGI"
-tag = "precision"
 weapons = ["bow"]
 text = "Ядовитый выстрел на 204 процентов обычного. Яд точит цель 3 хода."
-edges = [
-    { name = "Гуще состав", text = "Яд точит цель ещё 2 хода.", dot_turns = 2 },
-    { name = "Двойное остриё", text = "Задевает вторую цель на 40 процентов урона.", splash = 40 },
-]
 
 [[skill]]
 code = "ranger_probivayushchiy_vystrel"
@@ -2604,13 +1908,8 @@ target = "enemy"
 effect = "damage_pierce"
 power = 204
 scaling = "AGI"
-tag = "press"
 weapons = ["bow"]
 text = "Выстрел на 204 процентов обычного. Не считается с 50 процентов брони цели."
-edges = [
-    { name = "Бронебойный", text = "Броня цели не считается вовсе.", pierce = 50 },
-    { name = "Тяжёлое древко", text = "Урон выше на 30 процентов. Откат дольше на 1 ход.", power = 30, cooldown = 1 },
-]
 
 [[skill]]
 code = "ranger_otkhod"
@@ -2624,12 +1923,7 @@ target = "self"
 effect = "buff_dodge"
 power = 24
 scaling = "AGI"
-tag = "guard"
 text = "2 хода у вас уклонение выше на 24 процента."
-edges = [
-    { name = "Дальше отойти", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Не терять цель", text = "Кроме того, 2 хода у вас точность выше на 15 процентов.", self_modifiers = { accuracy_percent = 15 } },
-]
 
 [[skill]]
 code = "ranger_lovushka"
@@ -2643,12 +1937,7 @@ target = "enemy"
 effect = "debuff_root"
 power = 20
 scaling = "WIS"
-tag = "guard"
 text = "2 хода у цели инициатива и точность ниже на 20 процентов."
-edges = [
-    { name = "Зубья глубже", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Не выбраться", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "ranger_metka_okhotnika"
@@ -2662,12 +1951,7 @@ target = "enemy"
 effect = "debuff_vulnerable"
 power = 22
 scaling = "WIS"
-tag = "precision"
 text = "3 хода у цели получаемый урон выше на 22 процента."
-edges = [
-    { name = "Виднее", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "На всех", text = "Задевает всех противников.", aoe = true },
-]
 
 [[skill]]
 code = "ranger_sosredotochenie"
@@ -2681,12 +1965,7 @@ target = "self"
 effect = "buff_accuracy"
 power = 26
 scaling = "WIS"
-tag = "press"
 text = "3 хода у вас точность выше на 26 процентов."
-edges = [
-    { name = "Дыхание ровное", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "И рука тверда", text = "Кроме того, 3 хода у вас шанс критического удара выше на 15 процентов.", self_modifiers = { crit_chance_percent = 15 } },
-]
 
 [[skill]]
 code = "ranger_zalp"
@@ -2701,13 +1980,8 @@ target = "all_enemies"
 effect = "damage_aoe_pierce"
 power = 147
 scaling = "AGI"
-tag = "press"
 weapons = ["bow"]
 text = "Выстрел по всем противникам на 147 процент обычного. Не считается с 40 процентов брони цели."
-edges = [
-    { name = "Гуще", text = "Урон выше на 25 процентов. Откат дольше на 1 ход.", power = 25, cooldown = 1 },
-    { name = "Насквозь", text = "Броня целей не считается вовсе.", pierce = 60 },
-]
 
 [[skill]]
 code = "ranger_pronzayushchaya_strela"
@@ -2722,13 +1996,8 @@ target = "enemy"
 effect = "damage_double"
 power = 205
 scaling = "AGI"
-tag = "press"
 weapons = ["bow"]
 text = "Бьёт 2 раза, каждый на 113 процентов обычного удара."
-edges = [
-    { name = "Третья", text = "Бьёт ещё раз, каждый удар на 80 процентов силы.", hits = 1, hit_power = 80 },
-    { name = "Сквозь щит", text = "Не считается с 40 процентов брони цели.", pierce = 40 },
-]
 
 [[skill]]
 code = "ranger_uyti_v_zarosli"
@@ -2742,12 +2011,7 @@ target = "self"
 effect = "buff_evade_full"
 power = 100
 scaling = "AGI"
-tag = "guard"
 text = "Вы уходите от следующего удара по вам."
-edges = [
-    { name = "Быстрее вернуться", text = "Откат короче на 2 хода.", cooldown = -2 },
-    { name = "Ещё и раны", text = "Кроме того, снимает с вас 2 отрицательных эффекта.", cleanse = 2 },
-]
 
 [[skill]]
 code = "ranger_strela_v_koleno"
@@ -2761,13 +2025,8 @@ target = "enemy"
 effect = "damage_weaken"
 power = 205
 scaling = "AGI"
-tag = "precision"
 weapons = ["bow"]
 text = "Выстрел на 205 процентов обычного. У цели слабость: её удар слабее на 25 процентов, 2 хода."
-edges = [
-    { name = "Не встанет", text = "Слабость держится на 2 хода дольше.", duration = 2 },
-    { name = "По всем коленям", text = "Задевает всех противников.", aoe = true },
-]
 
 [[skill]]
 code = "ranger_zverinyy_sputnik"
@@ -2781,12 +2040,7 @@ target = "enemy"
 effect = "damage_companion"
 power = 205
 scaling = "WIS"
-tag = "guard"
 text = "Спутник бьёт на 123 процентов обычного удара. Цель истекает кровью 3 хода."
-edges = [
-    { name = "Злее", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "Не отпускает", text = "Цель истекает кровью ещё 3 хода.", dot_turns = 3 },
-]
 
 [[skill]]
 code = "ranger_gadyuchiy_yad"
@@ -2801,12 +2055,7 @@ target = "enemy"
 effect = "debuff_poison"
 power = 27
 scaling = "WIS"
-tag = "precision"
 text = "Яд точит цель 4 хода."
-edges = [
-    { name = "Гуще", text = "Яд точит цель ещё 3 хода.", dot_turns = 3 },
-    { name = "На всех", text = "Задевает всех противников.", aoe = true },
-]
 
 [[skill]]
 code = "ranger_strela_v_glaz"
@@ -2821,13 +2070,8 @@ target = "enemy"
 effect = "damage_crit"
 power = 205
 scaling = "AGI"
-tag = "precision"
 weapons = ["bow"]
 text = "Выстрел на 205 процентов обычного. Шанс критического удара выше на 12 процентов."
-edges = [
-    { name = "Вернее", text = "Шанс критического удара выше ещё на 20 процентов.", crit = 20 },
-    { name = "Больнее", text = "Урон выше на 30 процентов.", power = 30 },
-]
 
 [[skill]]
 code = "ranger_vystrel_na_dobivanie"
@@ -2841,13 +2085,8 @@ target = "enemy"
 effect = "damage_execute"
 power = 205
 scaling = "AGI"
-tag = "press"
 weapons = ["bow"]
 text = "Выстрел на 205 процентов обычного. Тем сильнее, чем меньше здоровья осталось у цели."
-edges = [
-    { name = "Без промедления", text = "Откат короче на 1 ход.", cooldown = -1 },
-    { name = "Наверняка", text = "Шанс критического удара выше на 20 процентов.", crit = 20 },
-]
 
 [[skill]]
 code = "ranger_dykhanie_lesa"
@@ -2861,12 +2100,7 @@ target = "self"
 effect = "heal_over_time"
 power = 10
 scaling = "WIS"
-tag = "guard"
 text = "Возвращает 10 процентов здоровья каждый ход, 3 хода подряд."
-edges = [
-    { name = "Дольше", text = "Действует ещё 2 хода.", dot_turns = 2 },
-    { name = "Полнее", text = "Кроме того, сразу лечит на 12 процентов здоровья.", heal = 12 },
-]
 
 [[skill]]
 code = "ranger_dozhd_strel"
@@ -2880,13 +2114,8 @@ target = "all_enemies"
 effect = "damage_aoe_bleed"
 power = 147
 scaling = "AGI"
-tag = "precision"
 weapons = ["bow"]
 text = "Разрывающий выстрел по всем противникам на 147 процента обычного. Все противники истекают кровью 3 хода."
-edges = [
-    { name = "Зазубрены", text = "Противники истекают кровью ещё 2 хода.", dot_turns = 2 },
-    { name = "Гуще", text = "Урон выше на 30 процентов.", power = 30 },
-]
 
 [[skill]]
 code = "ranger_troynoy_vystrel"
@@ -2901,13 +2130,8 @@ target = "enemy"
 effect = "damage_multi"
 power = 205
 scaling = "AGI"
-tag = "press"
 weapons = ["bow"]
 text = "Бьёт 3 раза, каждый на 68 процентов обычного удара."
-edges = [
-    { name = "Четвёртая стрела", text = "Бьёт ещё раз, каждый удар на 85 процентов силы.", hits = 1, hit_power = 85 },
-    { name = "Каждая в цель", text = "Шанс критического удара выше на 20 процентов.", crit = 20 },
-]
 
 [[skill]]
 code = "ranger_razryvnoy_nakonechnik"
@@ -2922,13 +2146,8 @@ target = "enemy"
 effect = "damage_bleed"
 power = 205
 scaling = "AGI"
-tag = "press"
 weapons = ["bow"]
 text = "Разрывающий выстрел на 205 процентов обычного. Цель истекает кровью 3 хода."
-edges = [
-    { name = "Зазубрины", text = "Цель истекает кровью ещё 3 хода.", dot_turns = 3 },
-    { name = "Тяжелее", text = "Урон выше на 30 процентов.", power = 30 },
-]
 
 [[skill]]
 code = "ranger_skrytsya_iz_vidu"
@@ -2942,12 +2161,7 @@ target = "self"
 effect = "buff_dodge"
 power = 33
 scaling = "AGI"
-tag = "guard"
 text = "2 хода у вас уклонение выше на 33 процента."
-edges = [
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "И не найдут", text = "Кроме того, 2 хода у вас получаемый урон ниже на 15 процентов.", self_modifiers = { damage_taken_percent = -15 } },
-]
 
 [[skill]]
 code = "ranger_smertelnaya_metka"
@@ -2961,12 +2175,7 @@ target = "enemy"
 effect = "debuff_death_mark"
 power = 30
 scaling = "WIS"
-tag = "precision"
 text = "4 хода у цели получаемый урон выше на 30 процентов."
-edges = [
-    { name = "На всех", text = "Задевает всех противников.", aoe = true },
-    { name = "Не сойдёт", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "ranger_sokolinyy_glaz"
@@ -2980,12 +2189,7 @@ target = "self"
 effect = "buff_crit"
 power = 30
 scaling = "AGI"
-tag = "press"
 text = "3 хода у вас шанс критического удара выше на 30 процентов."
-edges = [
-    { name = "Зорче", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "И бьёт глубже", text = "Кроме того, 3 хода у вас критический урон выше на 25 процентов.", self_modifiers = { crit_damage_percent = 25 } },
-]
 
 [[skill]]
 code = "ranger_vernyy_sputnik"
@@ -3000,12 +2204,7 @@ target = "self"
 effect = "buff_second_wind"
 power = 19
 scaling = "WIS"
-tag = "guard"
 text = "Каждый ход вам возвращается 19 процентов здоровья, 3 хода. Каждый ход вам возвращается 9 процентов фокуса, 3 хода."
-edges = [
-    { name = "Не отходит", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Прикрывает", text = "Кроме того, 3 хода у вас уклонение выше на 20 процентов.", self_modifiers = { dodge_percent = 20 } },
-]
 
 [[skill]]
 code = "ranger_ten_chashchi"
@@ -3020,12 +2219,7 @@ target = "self"
 effect = "cleanse_dodge"
 power = 4
 scaling = "AGI"
-tag = "guard"
 text = "Снимает с вас до 4 отрицательных эффектов. 3 хода у вас уклонение выше на 4 процента."
-edges = [
-    { name = "Чище", text = "Снимает ещё 2 отрицательных эффекта.", cleanse = 2 },
-    { name = "Глубже тень", text = "Прибавка к уклонению выше на 40 процентов.", power = 40 },
-]
 
 [[skill]]
 code = "ranger_tverdaya_ruka"
@@ -3035,12 +2229,7 @@ kind = "passive"
 level = 2
 effect = "physical_damage_percent"
 power = 4
-tag = "press"
 text = "Физический урон выше на 4 процента."
-edges = [
-    { name = "Твёрже", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И вернее", text = "Кроме того, точность выше на 4 процента.", self_modifiers = { accuracy_percent = 4 } },
-]
 
 [[skill]]
 code = "ranger_legkiy_shag"
@@ -3050,12 +2239,7 @@ kind = "passive"
 level = 5
 effect = "dodge_percent"
 power = 5
-tag = "guard"
 text = "Уклонение выше на 5 процентов."
-edges = [
-    { name = "Тише", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И быстрее", text = "Кроме того, инициатива выше на 4 процента.", self_modifiers = { initiative_percent = 4 } },
-]
 
 [[skill]]
 code = "ranger_glazomer"
@@ -3065,12 +2249,7 @@ kind = "passive"
 level = 9
 effect = "accuracy_percent"
 power = 5
-tag = "precision"
 text = "Точность выше на 5 процентов."
-edges = [
-    { name = "Точнее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И слабое место", text = "Кроме того, шанс критического удара выше на 4 процента.", self_modifiers = { crit_chance_percent = 4 } },
-]
 
 [[skill]]
 code = "ranger_pervyy_vystrel"
@@ -3080,12 +2259,7 @@ kind = "passive"
 level = 14
 effect = "first_turn_damage_percent"
 power = 8
-tag = "press"
 text = "Урон в первый ход боя выше на 8 процентов."
-edges = [
-    { name = "Раньше", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И встать первым", text = "Кроме того, инициатива выше на 6 процентов.", self_modifiers = { initiative_percent = 6 } },
-]
 
 [[skill]]
 code = "ranger_pokhodnaya_vyuchka"
@@ -3095,12 +2269,7 @@ kind = "passive"
 level = 20
 effect = "health_percent"
 power = 5
-tag = "guard"
 text = "Здоровье выше на 5 процентов."
-edges = [
-    { name = "Крепче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И привал", text = "Кроме того, каждый ход вам возвращается 2 процента здоровья.", self_modifiers = { regen_per_turn_percent = 2 } },
-]
 
 [[skill]]
 code = "ranger_sledopyt"
@@ -3110,12 +2279,7 @@ kind = "passive"
 level = 26
 effect = "beast_damage_percent"
 power = 7
-tag = "precision"
 text = "Урон по зверям выше на 7 процентов."
-edges = [
-    { name = "Знает повадки", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И по людям", text = "Кроме того, урон по человекоподобным выше на 5 процентов.", self_modifiers = { humanoid_damage_percent = 5 } },
-]
 
 [[skill]]
 code = "ranger_dalniy_boy"
@@ -3125,12 +2289,7 @@ kind = "passive"
 level = 33
 effect = "single_target_damage_percent"
 power = 7
-tag = "press"
 text = "Урон по одной цели выше на 7 процентов."
-edges = [
-    { name = "Ещё дальше", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И бьёт глубже", text = "Кроме того, критический урон выше на 8 процентов.", self_modifiers = { crit_damage_percent = 8 } },
-]
 
 [[skill]]
 code = "ranger_ukhodit_pervym"
@@ -3140,12 +2299,7 @@ kind = "passive"
 level = 40
 effect = "initiative_percent"
 power = 7
-tag = "guard"
 text = "Инициатива выше на 7 процентов."
-edges = [
-    { name = "Ещё раньше", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И с линии", text = "Кроме того, уклонение выше на 5 процентов.", self_modifiers = { dodge_percent = 5 } },
-]
 
 [[skill]]
 code = "ranger_yady_i_travy"
@@ -3155,12 +2309,7 @@ kind = "passive"
 level = 48
 effect = "dot_damage_percent"
 power = 8
-tag = "precision"
 text = "Урон от кровотечений, яда и горения выше на 8 процентов."
-edges = [
-    { name = "Гуще состав", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И по ране", text = "Кроме того, урон по раненой цели выше на 6 процентов.", self_modifiers = { wounded_target_damage_percent = 6 } },
-]
 
 [[skill]]
 code = "ranger_lovkost"
@@ -3170,12 +2319,7 @@ kind = "passive"
 level = 55
 effect = "stat_AGI"
 power = 3
-tag = "press"
 text = "Ловкость выше на 3."
-edges = [
-    { name = "Ещё ловчее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И мудрость", text = "Кроме того, мудрость выше на 2.", self_modifiers = { stat_WIS = 2 } },
-]
 
 [[skill]]
 code = "ranger_teplyy_plashch"
@@ -3185,12 +2329,7 @@ kind = "passive"
 level = 63
 effect = "resist_cold_percent"
 power = 8
-tag = "guard"
 text = "Сопротивление ледяному урону выше на 8 процентов."
-edges = [
-    { name = "Плотнее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И от огня", text = "Кроме того, сопротивление огненному урону выше на 6 процентов.", self_modifiers = { resist_fire_percent = 6 } },
-]
 
 [[skill]]
 code = "ranger_slaboe_mesto"
@@ -3200,12 +2339,7 @@ kind = "passive"
 level = 72
 effect = "crit_chance_percent"
 power = 6
-tag = "precision"
 text = "Шанс критического удара выше на 6 процентов."
-edges = [
-    { name = "Видит сразу", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И бьёт глубже", text = "Кроме того, критический урон выше на 10 процентов.", self_modifiers = { crit_damage_percent = 10 } },
-]
 
 [[skill]]
 code = "ranger_nakonechnik_granenyy"
@@ -3215,12 +2349,7 @@ kind = "passive"
 level = 80
 effect = "crit_damage_percent"
 power = 9
-tag = "press"
 text = "Критический урон выше на 9 процентов."
-edges = [
-    { name = "Острее грань", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И сквозь броню", text = "Кроме того, урон по одной цели выше на 6 процентов.", self_modifiers = { single_target_damage_percent = 6 } },
-]
 
 [[skill]]
 code = "ranger_chitaet_les"
@@ -3230,12 +2359,7 @@ kind = "passive"
 level = 89
 effect = "resist_nature_percent"
 power = 8
-tag = "guard"
 text = "Сопротивление природному урону выше на 8 процентов."
-edges = [
-    { name = "Знает всё", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И к яду", text = "Кроме того, сопротивление ядовитому урону выше на 7 процентов.", self_modifiers = { resist_poison_percent = 7 } },
-]
 
 [[skill]]
 code = "ranger_dobit_podranka"
@@ -3245,12 +2369,7 @@ kind = "passive"
 level = 98
 effect = "wounded_target_damage_percent"
 power = 8
-tag = "precision"
 text = "Урон по раненой цели выше на 8 процентов."
-edges = [
-    { name = "Не упустит", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И по следу", text = "Кроме того, урон по зверям выше на 6 процентов.", self_modifiers = { beast_damage_percent = 6 } },
-]
 
 [[skill]]
 code = "ranger_na_krupnogo_zverya"
@@ -3260,12 +2379,7 @@ kind = "passive"
 level = 108
 effect = "elite_damage_percent"
 power = 9
-tag = "press"
 text = "Урон по элитным противникам и боссам выше на 9 процентов."
-edges = [
-    { name = "Не дрогнет", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И на стаю", text = "Кроме того, урон по всем противникам сразу выше на 6 процентов.", self_modifiers = { aoe_damage_percent = 6 } },
-]
 
 [[skill]]
 code = "ranger_vtoroe_dykhanie"
@@ -3275,12 +2389,7 @@ kind = "passive"
 level = 117
 effect = "regen_per_turn_percent"
 power = 4
-tag = "guard"
 text = "Каждый ход вам возвращается 4 процента здоровья."
-edges = [
-    { name = "Ровнее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И травы помогают", text = "Кроме того, получаемое лечение выше на 10 процентов.", self_modifiers = { healing_taken_percent = 10 } },
-]
 
 [[skill]]
 code = "ranger_veerom"
@@ -3290,12 +2399,7 @@ kind = "passive"
 level = 127
 effect = "aoe_damage_percent"
 power = 9
-tag = "precision"
 text = "Урон по всем противникам сразу выше на 9 процентов."
-edges = [
-    { name = "Шире", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И не промажет", text = "Кроме того, точность выше на 6 процентов.", self_modifiers = { accuracy_percent = 6 } },
-]
 
 [[skill]]
 code = "ranger_vyderzhka"
@@ -3305,12 +2409,7 @@ kind = "passive"
 level = 137
 effect = "stat_WIS"
 power = 4
-tag = "press"
 text = "Мудрость выше на 4."
-edges = [
-    { name = "Ровнее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И ловкость", text = "Кроме того, ловкость выше на 3.", self_modifiers = { stat_AGI = 3 } },
-]
 
 [[skill]]
 code = "ranger_ne_dogonyat"
@@ -3320,12 +2419,7 @@ kind = "passive"
 level = 146
 effect = "flee_chance_percent"
 power = 12
-tag = "guard"
 text = "Уйти из боя удаётся на 12 процентов чаще."
-edges = [
-    { name = "Быстрее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И следов нет", text = "Кроме того, уклонение выше на 7 процентов.", self_modifiers = { dodge_percent = 7 } },
-]
 
 # =====================================================================
 # РАЗБОЙНИК. Ветви: напор - удар, ради которого всё и затевалось, в том
@@ -3344,14 +2438,9 @@ cost = 7
 cooldown = 0
 target = "enemy"
 effect = "damage_feint"
-power = 150
+power = 200
 scaling = "AGI"
-tag = "precision"
-text = "Удар на 127 процентов обычного. 2 хода у цели точность ниже на 25 процентов."
-edges = [
-    { name = "Обман глубже", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "И укол", text = "Урон выше на 30 процентов.", power = 30 },
-]
+text = "Удар на 170 процентов обычного. 2 хода у цели точность ниже на 25 процентов."
 
 [[skill]]
 code = "rogue_skrytnost"
@@ -3365,12 +2454,7 @@ target = "self"
 effect = "buff_vanish"
 power = 100
 scaling = "AGI"
-tag = "guard"
 text = "Вас нельзя выбрать целью, пока вы не сделаете что-то, кроме защиты. Удар по всем и раны выдают вас."
-edges = [
-    { name = "Быстрее вернуться", text = "Откат короче на 1 ход.", cooldown = -1 },
-    { name = "И стряхнуть", text = "Кроме того, снимает с вас 2 отрицательных эффекта.", cleanse = 2 },
-]
 
 [[skill]]
 code = "rogue_udar_v_spinu"
@@ -3382,16 +2466,11 @@ cost = 12
 cooldown = 3
 target = "enemy"
 effect = "damage_backstab"
-power = 260
+power = 340
 scaling = "AGI"
-tag = "press"
 weapons = ["dagger"]
 requires_stealth = true
-text = "Бьёт только из незаметности, и цель не успевает уклониться. Удар на 260 процентов обычного. Шанс критического удара выше на 12 процентов."
-edges = [
-    { name = "Под ребро", text = "Не считается с 30 процентов брони цели.", pierce = 30 },
-    { name = "Глубже", text = "Цель истекает кровью 3 хода.", dot_turns = 3 },
-]
+text = "Бьёт только из незаметности, и цель не успевает уклониться. Удар на 340 процентов обычного. Шанс критического удара выше на 12 процентов."
 
 [[skill]]
 code = "rogue_ukhod_v_ten"
@@ -3405,12 +2484,7 @@ target = "self"
 effect = "buff_dodge"
 power = 23
 scaling = "AGI"
-tag = "guard"
 text = "2 хода у вас уклонение выше на 23 процента."
-edges = [
-    { name = "Глубже тень", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "И бьёт из неё", text = "Кроме того, 2 хода у вас шанс критического удара выше на 15 процентов.", self_modifiers = { crit_chance_percent = 15 } },
-]
 
 [[skill]]
 code = "rogue_dymovaya_shashka"
@@ -3424,12 +2498,7 @@ target = "all_enemies"
 effect = "debuff_accuracy"
 power = 22
 scaling = "LCK"
-tag = "guard"
 text = "2 хода у всех противников точность ниже на 22 процента."
-edges = [
-    { name = "Гуще дым", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Не рассеется", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "rogue_otravlennyy_klinok"
@@ -3441,14 +2510,9 @@ cost = 10
 cooldown = 2
 target = "enemy"
 effect = "damage_venom"
-power = 156
+power = 203
 scaling = "AGI"
-tag = "precision"
-text = "Ядовитый удар на 156 процентов обычного. Яд точит цель 3 хода."
-edges = [
-    { name = "Гуще состав", text = "Яд точит цель ещё 2 хода.", dot_turns = 2 },
-    { name = "На оба лезвия", text = "Задевает вторую цель на 40 процентов урона.", splash = 40 },
-]
+text = "Ядовитый удар на 203 процентов обычного. Яд точит цель 3 хода."
 
 [[skill]]
 code = "rogue_raschetlivost"
@@ -3462,12 +2526,7 @@ target = "self"
 effect = "buff_crit"
 power = 27
 scaling = "LCK"
-tag = "press"
 text = "3 хода у вас шанс критического удара выше на 27 процентов."
-edges = [
-    { name = "Холоднее голова", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "И бьёт глубже", text = "Кроме того, 3 хода у вас критический урон выше на 25 процентов.", self_modifiers = { crit_damage_percent = 25 } },
-]
 
 [[skill]]
 code = "rogue_veer_klinkov"
@@ -3480,14 +2539,9 @@ cost = 14
 cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe"
-power = 113
+power = 147
 scaling = "AGI"
-tag = "press"
-text = "Удар по всем противникам на 113 процентов обычного."
-edges = [
-    { name = "Второй веер", text = "Бьёт ещё раз, каждый удар на 60 процентов силы.", hits = 1, hit_power = 60 },
-    { name = "Отравленные", text = "Все противники травятся 3 хода.", dot_turns = 3 },
-]
+text = "Удар по всем противникам на 147 процентов обычного."
 
 [[skill]]
 code = "rogue_podrez"
@@ -3500,14 +2554,9 @@ cost = 12
 cooldown = 2
 target = "enemy"
 effect = "damage_dot"
-power = 156
+power = 203
 scaling = "AGI"
-tag = "press"
-text = "Удар на 156 процентов обычного. Цель истекает кровью 3 хода."
-edges = [
-    { name = "Не зарастёт", text = "Цель истекает кровью ещё 3 хода.", dot_turns = 3 },
-    { name = "Резче", text = "Урон выше на 30 процентов.", power = 30 },
-]
+text = "Удар на 203 процентов обычного. Цель истекает кровью 3 хода."
 
 [[skill]]
 code = "rogue_ischeznovenie"
@@ -3519,16 +2568,11 @@ cost = 17
 cooldown = 3
 target = "enemy"
 effect = "damage_backstab_crit"
-power = 240
+power = 312
 scaling = "AGI"
-tag = "press"
 weapons = ["dagger"]
 requires_stealth = true
-text = "Бьёт только из незаметности, и цель не успевает уклониться. Удар на 240 процентов обычного. Бьёт критически всегда."
-edges = [
-    { name = "Глубже", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "И кровь", text = "Цель истекает кровью 4 хода.", dot_turns = 4 },
-]
+text = "Бьёт только из незаметности, и цель не успевает уклониться. Удар на 312 процентов обычного. Бьёт критически всегда."
 
 [[skill]]
 code = "rogue_fint"
@@ -3540,14 +2584,9 @@ cost = 12
 cooldown = 2
 target = "enemy"
 effect = "damage_feint"
-power = 156
+power = 203
 scaling = "AGI"
-tag = "precision"
-text = "Удар на 133 процентов обычного. 2 хода у цели точность ниже на 25 процентов."
-edges = [
-    { name = "Обман глубже", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "И укол", text = "Урон выше на 30 процентов.", power = 30 },
-]
+text = "Удар на 173 процентов обычного. 2 хода у цели точность ниже на 25 процентов."
 
 [[skill]]
 code = "rogue_skolzhenie"
@@ -3561,12 +2600,7 @@ target = "self"
 effect = "buff_dodge"
 power = 28
 scaling = "AGI"
-tag = "guard"
 text = "2 хода у вас уклонение выше на 28 процентов."
-edges = [
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "И быстрее", text = "Кроме того, 2 хода у вас инициатива выше на 20 процентов.", self_modifiers = { initiative_percent = 20 } },
-]
 
 [[skill]]
 code = "rogue_udavka"
@@ -3581,13 +2615,8 @@ target = "enemy"
 effect = "debuff_silence"
 power = 100
 scaling = "AGI"
-tag = "precision"
 requires_stealth = true
 text = "Бьёт только из незаметности. Цель молчит 2 хода: умения ей недоступны."
-edges = [
-    { name = "Туже", text = "Цель молчит ещё 2 хода.", duration = 2 },
-    { name = "Быстрее накинуть", text = "Откат короче на 2 хода.", cooldown = -2 },
-]
 
 [[skill]]
 code = "rogue_roscherk_po_zhilam"
@@ -3600,14 +2629,9 @@ cost = 12
 cooldown = 2
 target = "enemy"
 effect = "damage_initiative"
-power = 156
+power = 203
 scaling = "AGI"
-tag = "precision"
-text = "Удар на 156 процентов обычного. 2 хода у вас инициатива выше на 40 процентов."
-edges = [
-    { name = "Дольше держится", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "И глубже", text = "Цель истекает кровью 3 хода.", dot_turns = 3 },
-]
+text = "Удар на 203 процентов обычного. 2 хода у вас инициатива выше на 40 процентов."
 
 [[skill]]
 code = "rogue_dobivayushchiy_ukol"
@@ -3619,14 +2643,9 @@ cost = 14
 cooldown = 2
 target = "enemy"
 effect = "damage_execute"
-power = 156
+power = 203
 scaling = "AGI"
-tag = "press"
-text = "Удар на 156 процента обычного. Тем сильнее, чем меньше здоровья осталось у цели."
-edges = [
-    { name = "Без замаха", text = "Откат короче на 1 ход.", cooldown = -1 },
-    { name = "Наверняка", text = "Шанс критического удара выше на 20 процентов.", crit = 20 },
-]
+text = "Удар на 203 процента обычного. Тем сильнее, чем меньше здоровья осталось у цели."
 
 [[skill]]
 code = "rogue_uskolzanie"
@@ -3640,12 +2659,7 @@ target = "self"
 effect = "cleanse_dodge"
 power = 4
 scaling = "AGI"
-tag = "guard"
 text = "Снимает с вас до 4 отрицательных эффектов. 3 хода у вас уклонение выше на 4 процента."
-edges = [
-    { name = "Чище", text = "Снимает ещё 2 отрицательных эффекта.", cleanse = 2 },
-    { name = "Вёртче", text = "Прибавка к уклонению выше на 40 процентов.", power = 40 },
-]
 
 [[skill]]
 code = "rogue_smertelnaya_metka"
@@ -3659,12 +2673,7 @@ target = "enemy"
 effect = "debuff_death_mark"
 power = 28
 scaling = "LCK"
-tag = "precision"
 text = "4 хода у цели получаемый урон выше на 28 процентов."
-edges = [
-    { name = "На всех", text = "Задевает всех противников.", aoe = true },
-    { name = "Не стереть", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "rogue_kaskad_udarov"
@@ -3677,14 +2686,9 @@ cost = 15
 cooldown = 2
 target = "enemy"
 effect = "damage_multi"
-power = 156
+power = 203
 scaling = "AGI"
-tag = "press"
-text = "Бьёт 3 раза, каждый на 51 процента обычного удара."
-edges = [
-    { name = "Четвёртый", text = "Бьёт ещё раз, каждый удар на 85 процентов силы.", hits = 1, hit_power = 85 },
-    { name = "Каждый в цель", text = "Шанс критического удара выше на 20 процентов.", crit = 20 },
-]
+text = "Бьёт 3 раза, каждый на 66 процента обычного удара."
 
 [[skill]]
 code = "rogue_karmannaya_krazha"
@@ -3697,14 +2701,9 @@ cost = 13
 cooldown = 2
 target = "enemy"
 effect = "damage_steal"
-power = 156
+power = 203
 scaling = "LCK"
-tag = "press"
-text = "Удар на 156 процента обычного. Забирает часть золота у противника."
-edges = [
-    { name = "Ловчее пальцы", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "И кровь", text = "Вам возвращается 25 процентов нанесённого урона.", lifesteal = 25 },
-]
+text = "Удар на 203 процента обычного. Забирает часть золота у противника."
 
 [[skill]]
 code = "rogue_pryt"
@@ -3718,12 +2717,7 @@ target = "self"
 effect = "buff_haste"
 power = 24
 scaling = "AGI"
-tag = "guard"
 text = "Ускорение: ваша инициатива выше на 24 процента, 3 хода."
-edges = [
-    { name = "Ещё быстрее", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "rogue_yad_na_lezvii"
@@ -3737,12 +2731,7 @@ target = "enemy"
 effect = "debuff_poison"
 power = 29
 scaling = "AGI"
-tag = "precision"
 text = "Яд точит цель 4 хода."
-edges = [
-    { name = "Гуще", text = "Яд точит цель ещё 3 хода.", dot_turns = 3 },
-    { name = "На всех", text = "Задевает всех противников.", aoe = true },
-]
 
 [[skill]]
 code = "rogue_seriya"
@@ -3754,14 +2743,9 @@ cost = 17
 cooldown = 3
 target = "enemy"
 effect = "damage_double"
-power = 156
+power = 203
 scaling = "AGI"
-tag = "press"
-text = "Бьёт 2 раза, каждый на 86 процентов обычного удара."
-edges = [
-    { name = "Третий", text = "Бьёт ещё раз, каждый удар на 80 процентов силы.", hits = 1, hit_power = 80 },
-    { name = "Резче", text = "Урон выше на 30 процентов.", power = 30 },
-]
+text = "Бьёт 2 раза, каждый на 112 процентов обычного удара."
 
 [[skill]]
 code = "rogue_ne_naydut"
@@ -3776,12 +2760,7 @@ target = "self"
 effect = "buff_invulnerable"
 power = 100
 scaling = "AGI"
-tag = "guard"
 text = "1 ход вы неуязвимы."
-edges = [
-    { name = "Дольше не найдут", text = "Действует на 1 ход дольше.", duration = 1 },
-    { name = "Быстрее скрыться", text = "Откат короче на 2 хода.", cooldown = -2 },
-]
 
 [[skill]]
 code = "rogue_vtoroe_dno"
@@ -3796,12 +2775,7 @@ target = "self"
 effect = "buff_second_wind"
 power = 19
 scaling = "AGI"
-tag = "guard"
 text = "Каждый ход вам возвращается 19 процентов здоровья, 3 хода. Каждый ход вам возвращается 9 процентов прыти, 3 хода."
-edges = [
-    { name = "Глубже", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "И вёрткость", text = "Кроме того, 3 хода у вас уклонение выше на 20 процентов.", self_modifiers = { dodge_percent = 20 } },
-]
 
 [[skill]]
 code = "rogue_ottochennyy_klinok"
@@ -3811,12 +2785,7 @@ kind = "passive"
 level = 2
 effect = "physical_damage_percent"
 power = 5
-tag = "press"
 text = "Физический урон выше на 5 процентов."
-edges = [
-    { name = "Острее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И вернее", text = "Кроме того, точность выше на 4 процента.", self_modifiers = { accuracy_percent = 4 } },
-]
 
 [[skill]]
 code = "rogue_tikhiy_shag"
@@ -3826,12 +2795,7 @@ kind = "passive"
 level = 5
 effect = "dodge_percent"
 power = 6
-tag = "guard"
 text = "Уклонение выше на 6 процентов."
-edges = [
-    { name = "Тише", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И быстрее", text = "Кроме того, инициатива выше на 5 процентов.", self_modifiers = { initiative_percent = 5 } },
-]
 
 [[skill]]
 code = "rogue_vernyy_glaz"
@@ -3841,12 +2805,7 @@ kind = "passive"
 level = 9
 effect = "crit_chance_percent"
 power = 5
-tag = "precision"
 text = "Шанс критического удара выше на 5 процентов."
-edges = [
-    { name = "Зорче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И глубже", text = "Кроме того, критический урон выше на 8 процентов.", self_modifiers = { crit_damage_percent = 8 } },
-]
 
 [[skill]]
 code = "rogue_odin_udar"
@@ -3856,12 +2815,7 @@ kind = "passive"
 level = 14
 effect = "single_target_damage_percent"
 power = 7
-tag = "press"
 text = "Урон по одной цели выше на 7 процентов."
-edges = [
-    { name = "Вернее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И сразу", text = "Кроме того, урон в первый ход боя выше на 6 процентов.", self_modifiers = { first_turn_damage_percent = 6 } },
-]
 
 [[skill]]
 code = "rogue_chitaet_komnatu"
@@ -3871,12 +2825,7 @@ kind = "passive"
 level = 20
 effect = "initiative_percent"
 power = 6
-tag = "guard"
 text = "Инициатива выше на 6 процентов."
-edges = [
-    { name = "Раньше всех", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И уйдёт", text = "Кроме того, уклонение выше на 5 процентов.", self_modifiers = { dodge_percent = 5 } },
-]
 
 [[skill]]
 code = "rogue_znaet_yady"
@@ -3886,12 +2835,7 @@ kind = "passive"
 level = 26
 effect = "dot_damage_percent"
 power = 7
-tag = "precision"
 text = "Урон от кровотечений, яда и горения выше на 7 процентов."
-edges = [
-    { name = "Гуще", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И по ране", text = "Кроме того, урон по раненой цели выше на 5 процентов.", self_modifiers = { wounded_target_damage_percent = 5 } },
-]
 
 [[skill]]
 code = "rogue_iz_teni"
@@ -3901,12 +2845,7 @@ kind = "passive"
 level = 33
 effect = "first_turn_damage_percent"
 power = 9
-tag = "press"
 text = "Урон в первый ход боя выше на 9 процентов."
-edges = [
-    { name = "Незаметнее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И раньше", text = "Кроме того, инициатива выше на 6 процентов.", self_modifiers = { initiative_percent = 6 } },
-]
 
 [[skill]]
 code = "rogue_ne_po_mne_udar"
@@ -3916,12 +2855,7 @@ kind = "passive"
 level = 40
 effect = "damage_taken_percent"
 power = -5
-tag = "guard"
 text = "Получаемый урон ниже на 5 процентов."
-edges = [
-    { name = "Ещё реже", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И мимо", text = "Кроме того, уклонение выше на 5 процентов.", self_modifiers = { dodge_percent = 5 } },
-]
 
 [[skill]]
 code = "rogue_po_zhivomu"
@@ -3931,12 +2865,7 @@ kind = "passive"
 level = 48
 effect = "wounded_target_damage_percent"
 power = 8
-tag = "precision"
 text = "Урон по раненой цели выше на 8 процентов."
-edges = [
-    { name = "Не упустит", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И добьёт", text = "Кроме того, шанс критического удара выше на 5 процентов.", self_modifiers = { crit_chance_percent = 5 } },
-]
 
 [[skill]]
 code = "rogue_lovkost_ruk"
@@ -3946,12 +2875,7 @@ kind = "passive"
 level = 55
 effect = "stat_AGI"
 power = 4
-tag = "press"
 text = "Ловкость выше на 4."
-edges = [
-    { name = "Ловчее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И удача", text = "Кроме того, удача выше на 3.", self_modifiers = { stat_LCK = 3 } },
-]
 
 [[skill]]
 code = "rogue_zdorovye"
@@ -3961,12 +2885,7 @@ kind = "passive"
 level = 63
 effect = "health_percent"
 power = 5
-tag = "guard"
 text = "Здоровье выше на 5 процентов."
-edges = [
-    { name = "Крепче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И затягивается", text = "Кроме того, каждый ход вам возвращается 2 процента здоровья.", self_modifiers = { regen_per_turn_percent = 2 } },
-]
 
 [[skill]]
 code = "rogue_udacha"
@@ -3976,12 +2895,7 @@ kind = "passive"
 level = 72
 effect = "stat_LCK"
 power = 4
-tag = "precision"
 text = "Удача выше на 4."
-edges = [
-    { name = "Везёт чаще", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И добыча", text = "Кроме того, редкость добычи выше на 8 процентов.", self_modifiers = { rarity_percent = 8 } },
-]
 
 [[skill]]
 code = "rogue_v_samoe_serdtse"
@@ -3991,12 +2905,7 @@ kind = "passive"
 level = 80
 effect = "crit_damage_percent"
 power = 11
-tag = "press"
 text = "Критический урон выше на 11 процентов."
-edges = [
-    { name = "Глубже", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И чаще", text = "Кроме того, шанс критического удара выше на 5 процентов.", self_modifiers = { crit_chance_percent = 5 } },
-]
 
 [[skill]]
 code = "rogue_uydet_zhivym"
@@ -4006,12 +2915,7 @@ kind = "passive"
 level = 89
 effect = "flee_chance_percent"
 power = 12
-tag = "guard"
 text = "Уйти из боя удаётся на 12 процентов чаще."
-edges = [
-    { name = "Быстрее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И не догонят", text = "Кроме того, инициатива выше на 6 процентов.", self_modifiers = { initiative_percent = 6 } },
-]
 
 [[skill]]
 code = "rogue_tochnost"
@@ -4021,12 +2925,7 @@ kind = "passive"
 level = 98
 effect = "accuracy_percent"
 power = 7
-tag = "precision"
 text = "Точность выше на 7 процентов."
-edges = [
-    { name = "Вернее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И в слабое место", text = "Кроме того, шанс критического удара выше на 5 процентов.", self_modifiers = { crit_chance_percent = 5 } },
-]
 
 [[skill]]
 code = "rogue_protiv_bolshikh"
@@ -4036,12 +2935,7 @@ kind = "passive"
 level = 108
 effect = "elite_damage_percent"
 power = 9
-tag = "press"
 text = "Урон по элитным противникам и боссам выше на 9 процентов."
-edges = [
-    { name = "Не оробеет", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И по многим", text = "Кроме того, урон по всем противникам сразу выше на 6 процентов.", self_modifiers = { aoe_damage_percent = 6 } },
-]
 
 [[skill]]
 code = "rogue_krov_na_klinke"
@@ -4051,12 +2945,7 @@ kind = "passive"
 level = 117
 effect = "lifesteal_percent"
 power = 7
-tag = "guard"
 text = "Вам возвращается 7 процентов нанесённого урона."
-edges = [
-    { name = "Больше", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И заживает", text = "Кроме того, получаемое лечение выше на 10 процентов.", self_modifiers = { healing_taken_percent = 10 } },
-]
 
 [[skill]]
 code = "rogue_vsekh_razom"
@@ -4066,12 +2955,7 @@ kind = "passive"
 level = 127
 effect = "aoe_damage_percent"
 power = 9
-tag = "precision"
 text = "Урон по всем противникам сразу выше на 9 процентов."
-edges = [
-    { name = "Шире", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И не промажет", text = "Кроме того, точность выше на 6 процентов.", self_modifiers = { accuracy_percent = 6 } },
-]
 
 [[skill]]
 code = "rogue_bystrye_ruki"
@@ -4081,12 +2965,7 @@ kind = "passive"
 level = 137
 effect = "cooldown_reduction_percent"
 power = 8
-tag = "press"
 text = "Откаты ваших умений короче на 8 процентов."
-edges = [
-    { name = "Ещё быстрее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И дешевле", text = "Кроме того, умения стоят на 6 процентов меньше.", self_modifiers = { cost_reduction_percent = 6 } },
-]
 
 [[skill]]
 code = "rogue_znaet_ulovki"
@@ -4096,12 +2975,7 @@ kind = "passive"
 level = 146
 effect = "resist_mental_percent"
 power = 9
-tag = "guard"
 text = "Сопротивление дурманящему урону выше на 9 процентов."
-edges = [
-    { name = "Не поддаётся", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И к яду", text = "Кроме того, сопротивление ядовитому урону выше на 7 процентов.", self_modifiers = { resist_poison_percent = 7 } },
-]
 
 # =====================================================================
 # МАГ. Ветви: напор - огонь и всё, что бьёт по многим сразу; заслон -
@@ -4121,12 +2995,7 @@ target = "enemy"
 effect = "damage_fire"
 power = 199
 scaling = "INT"
-tag = "press"
 text = "Огненный удар на 199 процентов обычного."
-edges = [
-    { name = "Жарче", text = "Урон выше на 25 процентов. Откат дольше на 1 ход.", power = 25, cooldown = 1 },
-    { name = "Искры", text = "Задевает вторую цель на 40 процентов урона.", splash = 40 },
-]
 
 [[skill]]
 code = "mage_ledyanoe_kopye"
@@ -4140,12 +3009,7 @@ target = "enemy"
 effect = "damage_freeze"
 power = 245
 scaling = "INT"
-tag = "precision"
 text = "Ледяной удар на 245 процентов обычного. Цель заморожена 1 ход: пропускает ход и получает больше урона."
-edges = [
-    { name = "Толще лёд", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "Дольше не оттает", text = "Цель пропускает ещё 1 ход.", stun_turns = 1 },
-]
 
 [[skill]]
 code = "mage_charodeyskiy_razryad"
@@ -4159,12 +3023,7 @@ target = "enemy"
 effect = "damage_arcane"
 power = 245
 scaling = "INT"
-tag = "press"
 text = "Чародейский удар на 245 процентов обычного."
-edges = [
-    { name = "Сильнее", text = "Урон выше на 30 процентов. Откат дольше на 1 ход.", power = 30, cooldown = 1 },
-    { name = "Сквозь щиты", text = "Не считается с 40 процентов брони цели.", pierce = 40 },
-]
 
 [[skill]]
 code = "mage_kamennaya_kozha"
@@ -4178,12 +3037,7 @@ target = "self"
 effect = "barrier"
 power = 26
 scaling = "INT"
-tag = "guard"
 text = "Ставит барьер в 26 процентов вашего здоровья на 3 хода."
-edges = [
-    { name = "Толще", text = "Барьер выше ещё на 10 процентов вашего здоровья.", barrier = 10 },
-    { name = "Дольше держит", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "mage_stuzha"
@@ -4197,12 +3051,7 @@ target = "all_enemies"
 effect = "damage_aoe_slow"
 power = 177
 scaling = "INT"
-tag = "guard"
 text = "Ледяной удар по всем противникам на 177 процентов обычного. Все противники замедлены на 25 процентов, 2 хода."
-edges = [
-    { name = "Холоднее", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "Дольше", text = "Замедление держится на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "mage_razryv_char"
@@ -4216,12 +3065,7 @@ target = "enemy"
 effect = "damage_resource_block"
 power = 245
 scaling = "INT"
-tag = "precision"
 text = "Чародейский удар на 245 процентов обычного. Цель не восстанавливает силы 3 хода."
-edges = [
-    { name = "Глубже разрыв", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "И силы отнять", text = "Цель не восстанавливает силы вовсе, 2 хода.", target_modifiers = { resource_regen_percent = -100 } },
-]
 
 [[skill]]
 code = "mage_volna_plameni"
@@ -4235,12 +3079,7 @@ target = "all_enemies"
 effect = "damage_aoe_burn"
 power = 177
 scaling = "INT"
-tag = "press"
 text = "Огненный удар по всем противникам на 177 процентов обычного. Все противники горят 3 хода."
-edges = [
-    { name = "Жарче", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "Дольше горит", text = "Противники горят ещё 3 хода.", dot_turns = 3 },
-]
 
 [[skill]]
 code = "mage_tsepnaya_molniya"
@@ -4255,12 +3094,7 @@ target = "all_enemies"
 effect = "damage_chain"
 power = 177
 scaling = "INT"
-tag = "press"
 text = "Воздушный удар по всем противникам на 177 процентов обычного. Каждая следующая цель получает меньше предыдущей."
-edges = [
-    { name = "Ярче разряд", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "И оглушает", text = "Все противники оглушены и пропускают 1 ход.", stun_turns = 1 },
-]
 
 [[skill]]
 code = "mage_ispepelenie"
@@ -4275,12 +3109,7 @@ target = "enemy"
 effect = "damage_burn"
 power = 246
 scaling = "INT"
-tag = "press"
 text = "Огненный удар на 246 процентов обычного. Цель горит 3 хода."
-edges = [
-    { name = "Дотла", text = "Цель горит ещё 3 хода.", dot_turns = 3 },
-    { name = "Жарче", text = "Урон выше на 30 процентов.", power = 30 },
-]
 
 [[skill]]
 code = "mage_otsrochka"
@@ -4294,12 +3123,7 @@ target = "self"
 effect = "buff_free_cast"
 power = 100
 scaling = "INT"
-tag = "guard"
 text = "Следующее умение ничего не стоит."
-edges = [
-    { name = "Чаще", text = "Откат короче на 2 хода.", cooldown = -2 },
-    { name = "И силы вернутся", text = "Кроме того, 3 хода запас сил восстанавливается на 30 процентов быстрее.", self_modifiers = { resource_regen_percent = 30 } },
-]
 
 [[skill]]
 code = "mage_nevidimost"
@@ -4313,12 +3137,7 @@ target = "self"
 effect = "buff_vanish"
 power = 100
 scaling = "INT"
-tag = "guard"
 text = "Вас нельзя выбрать целью, пока вы не сделаете что-то, кроме защиты. Удар по всем и раны выдают вас."
-edges = [
-    { name = "Реже мелькать", text = "Откат короче на 2 хода.", cooldown = -2 },
-    { name = "И развеять", text = "Кроме того, снимает с вас 2 отрицательных эффекта.", cleanse = 2 },
-]
 
 [[skill]]
 code = "mage_ledyanoy_dospekh"
@@ -4332,12 +3151,7 @@ target = "self"
 effect = "buff_armor"
 power = 26
 scaling = "INT"
-tag = "guard"
 text = "3 хода у вас броня выше на 26 процентов."
-edges = [
-    { name = "Толще лёд", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "И холод жжёт", text = "Кроме того, 3 хода обидчику возвращается 20 процентов полученного урона.", self_modifiers = { reflect_percent = 20 } },
-]
 
 [[skill]]
 code = "mage_morok"
@@ -4352,12 +3166,7 @@ target = "enemy"
 effect = "debuff_confusion"
 power = 100
 scaling = "INT"
-tag = "precision"
 text = "Цель спутана 2 хода и бьёт куда попало."
-edges = [
-    { name = "Гуще морок", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Быстрее навести", text = "Откат короче на 2 хода.", cooldown = -2 },
-]
 
 [[skill]]
 code = "mage_ledyanaya_tyurma"
@@ -4372,12 +3181,7 @@ target = "enemy"
 effect = "debuff_freeze"
 power = 100
 scaling = "INT"
-tag = "precision"
 text = "Цель заморожена 1 ход: пропускает ход и получает больше урона."
-edges = [
-    { name = "Толще стены", text = "Цель пропускает ещё 1 ход.", stun_turns = 1 },
-    { name = "Быстрее сковать", text = "Откат короче на 2 хода.", cooldown = -2 },
-]
 
 [[skill]]
 code = "mage_meteor"
@@ -4391,12 +3195,7 @@ target = "all_enemies"
 effect = "damage_aoe_fire"
 power = 176
 scaling = "INT"
-tag = "press"
 text = "Огненный удар по всем противникам на 176 процента обычного."
-edges = [
-    { name = "Тяжелее камень", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "Экономный шар", text = "Стоит на 35 процентов меньше.", cost = -35 },
-]
 
 [[skill]]
 code = "mage_otrazhayushchiy_pokrov"
@@ -4410,12 +3209,7 @@ target = "self"
 effect = "buff_reflect"
 power = 31
 scaling = "INT"
-tag = "guard"
 text = "3 хода у вас обидчику возвращается 31 процент полученного урона."
-edges = [
-    { name = "Полнее", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "mage_pomrachenie"
@@ -4429,12 +3223,7 @@ target = "enemy"
 effect = "damage_confuse"
 power = 246
 scaling = "INT"
-tag = "precision"
 text = "Дурманящий удар на 246 процентов обычного. Цель спутана 2 хода и бьёт куда попало."
-edges = [
-    { name = "Гуще", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Больнее", text = "Урон выше на 30 процентов.", power = 30 },
-]
 
 [[skill]]
 code = "mage_charodeyskiy_shkval"
@@ -4449,12 +3238,7 @@ target = "enemy"
 effect = "damage_multi"
 power = 246
 scaling = "INT"
-tag = "press"
 text = "Бьёт 3 раза, каждый на 81 процента обычного удара."
-edges = [
-    { name = "Четвёртый разряд", text = "Бьёт ещё раз, каждый удар на 85 процентов силы.", hits = 1, hit_power = 85 },
-    { name = "Каждый в цель", text = "Шанс критического удара выше на 20 процентов.", crit = 20 },
-]
 
 [[skill]]
 code = "mage_pronzayushchiy_razryad"
@@ -4469,12 +3253,7 @@ target = "enemy"
 effect = "damage_pierce"
 power = 246
 scaling = "INT"
-tag = "press"
 text = "Удар на 246 процентов обычного. Не считается с 50 процентов брони цели."
-edges = [
-    { name = "Насквозь", text = "Броня цели не считается вовсе.", pierce = 50 },
-    { name = "Сильнее", text = "Урон выше на 30 процентов.", power = 30 },
-]
 
 [[skill]]
 code = "mage_po_pamyati"
@@ -4488,12 +3267,7 @@ target = "self"
 effect = "buff_cooldown_reset"
 power = 100
 scaling = "INT"
-tag = "guard"
 text = "Снимает откаты со всех ваших умений."
-edges = [
-    { name = "Чаще", text = "Откат короче на 2 хода.", cooldown = -2 },
-    { name = "И силы вернутся", text = "Кроме того, 3 хода запас сил восстанавливается на 40 процентов быстрее.", self_modifiers = { resource_regen_percent = 40 } },
-]
 
 [[skill]]
 code = "mage_slovo_sily"
@@ -4507,12 +3281,7 @@ target = "all_enemies"
 effect = "damage_aoe_freeze"
 power = 177
 scaling = "INT"
-tag = "precision"
 text = "Ледяной удар по всем противникам на 177 процентов обычного. Все противники заморожены 1 ход: пропускают ход и получают больше урона."
-edges = [
-    { name = "Дольше не оттают", text = "Противники пропускают ещё 1 ход.", stun_turns = 1 },
-    { name = "Холоднее", text = "Урон выше на 30 процентов.", power = 30 },
-]
 
 [[skill]]
 code = "mage_pozharishche"
@@ -4526,12 +3295,7 @@ target = "all_enemies"
 effect = "debuff_burning"
 power = 26
 scaling = "INT"
-tag = "press"
 text = "Все противники горят 3 хода."
-edges = [
-    { name = "Дольше горит", text = "Противники горят ещё 3 хода.", dot_turns = 3 },
-    { name = "Жарче", text = "Прибавка выше на 30 процентов.", power = 30 },
-]
 
 [[skill]]
 code = "mage_zerkalnyy_shchit"
@@ -4546,12 +3310,7 @@ target = "self"
 effect = "cleanse_barrier"
 power = 37
 scaling = "INT"
-tag = "guard"
 text = "Ставит барьер в 37 процентов вашего здоровья на 3 хода. Снимает с вас отрицательные эффекты."
-edges = [
-    { name = "Толще", text = "Барьер выше ещё на 15 процентов вашего здоровья.", barrier = 15 },
-    { name = "И отражает", text = "Кроме того, 3 хода обидчику возвращается 25 процентов полученного урона.", self_modifiers = { reflect_percent = 25 } },
-]
 
 [[skill]]
 code = "mage_vne_vremeni"
@@ -4566,12 +3325,7 @@ target = "self"
 effect = "buff_invulnerable"
 power = 100
 scaling = "INT"
-tag = "guard"
 text = "1 ход вы неуязвимы."
-edges = [
-    { name = "Дольше", text = "Действует на 1 ход дольше.", duration = 1 },
-    { name = "Чаще", text = "Откат короче на 2 хода.", cooldown = -2 },
-]
 
 [[skill]]
 code = "mage_nachatki_char"
@@ -4581,12 +3335,7 @@ kind = "passive"
 level = 2
 effect = "magic_damage_percent"
 power = 5
-tag = "press"
 text = "Магический урон выше на 5 процентов."
-edges = [
-    { name = "Крепче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И вернее", text = "Кроме того, точность выше на 4 процента.", self_modifiers = { accuracy_percent = 4 } },
-]
 
 [[skill]]
 code = "mage_zapas_char"
@@ -4596,12 +3345,7 @@ kind = "passive"
 level = 5
 effect = "resource_percent"
 power = 7
-tag = "guard"
 text = "Запас сил выше на 7 процентов."
-edges = [
-    { name = "Глубже", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И возвращается", text = "Кроме того, запас сил восстанавливается на 6 процентов быстрее.", self_modifiers = { resource_regen_percent = 6 } },
-]
 
 [[skill]]
 code = "mage_vyverennyy_zhest"
@@ -4611,12 +3355,7 @@ kind = "passive"
 level = 9
 effect = "accuracy_percent"
 power = 4
-tag = "precision"
 text = "Точность выше на 4 процента."
-edges = [
-    { name = "Точнее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И быстрее", text = "Кроме того, инициатива выше на 4 процента.", self_modifiers = { initiative_percent = 4 } },
-]
 
 [[skill]]
 code = "mage_plamya_poslushno"
@@ -4626,12 +3365,7 @@ kind = "passive"
 level = 14
 effect = "aoe_damage_percent"
 power = 8
-tag = "press"
 text = "Урон по всем противникам сразу выше на 8 процентов."
-edges = [
-    { name = "Шире", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И жарче", text = "Кроме того, урон от горения и яда выше на 6 процентов.", self_modifiers = { dot_damage_percent = 6 } },
-]
 
 [[skill]]
 code = "mage_ledyanoy_pokrov"
@@ -4641,12 +3375,7 @@ kind = "passive"
 level = 20
 effect = "armor_percent"
 power = 5
-tag = "guard"
 text = "Броня выше на 5 процентов."
-edges = [
-    { name = "Толще", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И реже достают", text = "Кроме того, получаемый урон ниже на 4 процента.", self_modifiers = { damage_taken_percent = -4 } },
-]
 
 [[skill]]
 code = "mage_dolgoe_gorenie"
@@ -4656,12 +3385,7 @@ kind = "passive"
 level = 26
 effect = "dot_damage_percent"
 power = 7
-tag = "precision"
 text = "Урон от кровотечений, яда и горения выше на 7 процентов."
-edges = [
-    { name = "Дольше", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И по обожжённым", text = "Кроме того, урон по раненой цели выше на 6 процентов.", self_modifiers = { wounded_target_damage_percent = 6 } },
-]
 
 [[skill]]
 code = "mage_pervoe_slovo"
@@ -4671,12 +3395,7 @@ kind = "passive"
 level = 33
 effect = "first_turn_damage_percent"
 power = 9
-tag = "press"
 text = "Урон в первый ход боя выше на 9 процентов."
-edges = [
-    { name = "Раньше", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И очередь", text = "Кроме того, инициатива выше на 6 процентов.", self_modifiers = { initiative_percent = 6 } },
-]
 
 [[skill]]
 code = "mage_chary_vozvrashchayutsya"
@@ -4686,12 +3405,7 @@ kind = "passive"
 level = 40
 effect = "resource_regen_percent"
 power = 8
-tag = "guard"
 text = "Запас сил восстанавливается на 8 процентов быстрее."
-edges = [
-    { name = "Быстрее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И глубже", text = "Кроме того, запас сил выше на 6 процентов.", self_modifiers = { resource_percent = 6 } },
-]
 
 [[skill]]
 code = "mage_skupaya_formula"
@@ -4701,12 +3415,7 @@ kind = "passive"
 level = 48
 effect = "cost_reduction_percent"
 power = 8
-tag = "precision"
 text = "Умения стоят на 8 процентов меньше."
-edges = [
-    { name = "Ещё скупее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И быстрее", text = "Кроме того, откаты ваших умений короче на 6 процентов.", self_modifiers = { cooldown_reduction_percent = 6 } },
-]
 
 [[skill]]
 code = "mage_intellekt"
@@ -4716,12 +3425,7 @@ kind = "passive"
 level = 55
 effect = "stat_INT"
 power = 4
-tag = "press"
 text = "Интеллект выше на 4."
-edges = [
-    { name = "Острее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И мудрость", text = "Кроме того, мудрость выше на 3.", self_modifiers = { stat_WIS = 3 } },
-]
 
 [[skill]]
 code = "mage_krepkiy_razum"
@@ -4731,12 +3435,7 @@ kind = "passive"
 level = 63
 effect = "resist_mental_percent"
 power = 8
-tag = "guard"
 text = "Сопротивление дурманящему урону выше на 8 процентов."
-edges = [
-    { name = "Крепче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И к чарам", text = "Кроме того, сопротивление чародейскому урону выше на 6 процентов.", self_modifiers = { resist_arcane_percent = 6 } },
-]
 
 [[skill]]
 code = "mage_bystroe_chtenie"
@@ -4746,12 +3445,7 @@ kind = "passive"
 level = 72
 effect = "cooldown_reduction_percent"
 power = 8
-tag = "precision"
 text = "Откаты ваших умений короче на 8 процентов."
-edges = [
-    { name = "Ещё быстрее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И дешевле", text = "Кроме того, умения стоят на 6 процентов меньше.", self_modifiers = { cost_reduction_percent = 6 } },
-]
 
 [[skill]]
 code = "mage_peregrev"
@@ -4761,12 +3455,7 @@ kind = "passive"
 level = 80
 effect = "crit_damage_percent"
 power = 10
-tag = "press"
 text = "Критический урон выше на 10 процентов."
-edges = [
-    { name = "Жарче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И чаще", text = "Кроме того, шанс критического удара выше на 5 процентов.", self_modifiers = { crit_chance_percent = 5 } },
-]
 
 [[skill]]
 code = "mage_soprotivlenie_charam"
@@ -4776,12 +3465,7 @@ kind = "passive"
 level = 89
 effect = "resist_arcane_percent"
 power = 9
-tag = "guard"
 text = "Сопротивление чародейскому урону выше на 9 процентов."
-edges = [
-    { name = "Крепче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И ко всякой магии", text = "Кроме того, сопротивление магическому урону выше на 6 процентов.", self_modifiers = { resist_magic_percent = 6 } },
-]
 
 [[skill]]
 code = "mage_slabina_v_zashchite"
@@ -4791,12 +3475,7 @@ kind = "passive"
 level = 98
 effect = "crit_chance_percent"
 power = 6
-tag = "precision"
 text = "Шанс критического удара выше на 6 процентов."
-edges = [
-    { name = "Видит сразу", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И бьёт больнее", text = "Кроме того, критический урон выше на 10 процентов.", self_modifiers = { crit_damage_percent = 10 } },
-]
 
 [[skill]]
 code = "mage_protiv_velikikh"
@@ -4806,12 +3485,7 @@ kind = "passive"
 level = 108
 effect = "elite_damage_percent"
 power = 9
-tag = "press"
 text = "Урон по элитным противникам и боссам выше на 9 процентов."
-edges = [
-    { name = "Не робеет", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И по нежити", text = "Кроме того, урон по нежити выше на 6 процентов.", self_modifiers = { undead_damage_percent = 6 } },
-]
 
 [[skill]]
 code = "mage_zdorovye_maga"
@@ -4821,12 +3495,7 @@ kind = "passive"
 level = 117
 effect = "health_percent"
 power = 6
-tag = "guard"
 text = "Здоровье выше на 6 процентов."
-edges = [
-    { name = "Крепче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И заживает", text = "Кроме того, каждый ход вам возвращается 3 процента здоровья.", self_modifiers = { regen_per_turn_percent = 3 } },
-]
 
 [[skill]]
 code = "mage_tochnyy_raschet"
@@ -4836,12 +3505,7 @@ kind = "passive"
 level = 127
 effect = "single_target_damage_percent"
 power = 9
-tag = "precision"
 text = "Урон по одной цели выше на 9 процентов."
-edges = [
-    { name = "Вернее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И не промахнётся", text = "Кроме того, точность выше на 6 процентов.", self_modifiers = { accuracy_percent = 6 } },
-]
 
 [[skill]]
 code = "mage_stikhiya_krepnet"
@@ -4851,12 +3515,7 @@ kind = "passive"
 level = 137
 effect = "damage_percent"
 power = 6
-tag = "press"
 text = "Весь ваш урон выше на 6 процентов."
-edges = [
-    { name = "Крепче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И интеллект", text = "Кроме того, интеллект выше на 3.", self_modifiers = { stat_INT = 3 } },
-]
 
 [[skill]]
 code = "mage_ne_obzhechsya"
@@ -4866,12 +3525,7 @@ kind = "passive"
 level = 146
 effect = "resist_fire_percent"
 power = 9
-tag = "guard"
 text = "Сопротивление огненному урону выше на 9 процентов."
-edges = [
-    { name = "Крепче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И к холоду", text = "Кроме того, сопротивление ледяному урону выше на 7 процентов.", self_modifiers = { resist_cold_percent = 7 } },
-]
 
 # =====================================================================
 # ЖРЕЦ. Ветви: напор - свет, которым бьют; заслон - лечение, покровы и
@@ -4891,12 +3545,7 @@ target = "enemy"
 effect = "damage_holy"
 power = 177
 scaling = "WIS"
-tag = "press"
 text = "Священный удар на 177 процентов обычного."
-edges = [
-    { name = "Ярче", text = "Урон выше на 25 процентов. Откат дольше на 1 ход.", power = 25, cooldown = 1 },
-    { name = "Отблеск", text = "Задевает вторую цель на 40 процентов урона.", splash = 40 },
-]
 
 [[skill]]
 code = "cleric_otpoved"
@@ -4910,12 +3559,7 @@ target = "enemy"
 effect = "damage_silence"
 power = 218
 scaling = "WIS"
-tag = "precision"
 text = "Чародейский удар на 218 процента обычного. Цель молчит 2 хода: умения ей недоступны."
-edges = [
-    { name = "Дольше молчит", text = "Молчание держится на 2 хода дольше.", duration = 2 },
-    { name = "Резче", text = "Урон выше на 30 процентов.", power = 30 },
-]
 
 [[skill]]
 code = "cleric_dlan_karayushchaya"
@@ -4929,12 +3573,7 @@ target = "enemy"
 effect = "damage_bludgeoning"
 power = 218
 scaling = "WIS"
-tag = "press"
 text = "Дробящий удар на 218 процента обычного."
-edges = [
-    { name = "Тяжелее", text = "Урон выше на 30 процентов. Откат дольше на 1 ход.", power = 30, cooldown = 1 },
-    { name = "До колен", text = "Цель оглушена и пропускает 1 ход.", stun_turns = 1 },
-]
 
 [[skill]]
 code = "cleric_slovo_istseleniya"
@@ -4948,12 +3587,7 @@ target = "self"
 effect = "heal"
 power = 18
 scaling = "WIS"
-tag = "guard"
 text = "Лечит вас на 18 процентов здоровья."
-edges = [
-    { name = "Полнее", text = "Лечит ещё на 10 процентов здоровья.", heal = 10 },
-    { name = "И очищает", text = "Кроме того, снимает с вас 2 отрицательных эффекта.", cleanse = 2 },
-]
 
 [[skill]]
 code = "cleric_pokrov"
@@ -4967,12 +3601,7 @@ target = "self"
 effect = "barrier"
 power = 25
 scaling = "WIS"
-tag = "guard"
 text = "Ставит барьер в 25 процентов вашего здоровья на 3 хода."
-edges = [
-    { name = "Плотнее", text = "Барьер выше ещё на 10 процентов вашего здоровья.", barrier = 10 },
-    { name = "Дольше держит", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "cleric_zapret"
@@ -4986,12 +3615,7 @@ target = "enemy"
 effect = "debuff_heal_block"
 power = 100
 scaling = "WIS"
-tag = "precision"
 text = "Цель не может лечиться 3 хода."
-edges = [
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Быстрее наложить", text = "Откат короче на 2 хода.", cooldown = -2 },
-]
 
 [[skill]]
 code = "cleric_luchezarnyy_udar"
@@ -5005,12 +3629,7 @@ target = "enemy"
 effect = "damage_light"
 power = 218
 scaling = "WIS"
-tag = "press"
 text = "Лучезарный удар на 218 процентов обычного."
-edges = [
-    { name = "Ярче", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "И слепит", text = "2 хода у цели точность ниже на 25 процентов.", target_modifiers = { accuracy_percent = -25 } },
-]
 
 [[skill]]
 code = "cleric_kara_nebes"
@@ -5025,12 +3644,7 @@ target = "all_enemies"
 effect = "damage_aoe_holy"
 power = 157
 scaling = "WIS"
-tag = "press"
 text = "Священный удар по всем противникам на 157 процент обычного."
-edges = [
-    { name = "Тяжелее", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "И свет вернётся", text = "Вам возвращается 20 процентов нанесённого урона.", lifesteal = 20 },
-]
 
 [[skill]]
 code = "cleric_izgnanie_nezhiti"
@@ -5045,12 +3659,7 @@ target = "enemy"
 effect = "damage_holy"
 power = 218
 scaling = "WIS"
-tag = "press"
 text = "Священный удар на 218 процентов обычного."
-edges = [
-    { name = "Не устоит", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "Сквозь плоть", text = "Не считается с 40 процентов брони цели.", pierce = 40 },
-]
 
 [[skill]]
 code = "cleric_ochishchenie"
@@ -5064,12 +3673,7 @@ target = "self"
 effect = "cleanse"
 power = 3
 scaling = "WIS"
-tag = "guard"
 text = "Снимает с вас до 3 отрицательных эффектов."
-edges = [
-    { name = "Дочиста", text = "Снимает ещё 2 отрицательных эффекта.", cleanse = 2 },
-    { name = "И лечит", text = "Кроме того, лечит вас на 12 процентов здоровья.", heal = 12 },
-]
 
 [[skill]]
 code = "cleric_umirotvorenie"
@@ -5083,12 +3687,7 @@ target = "enemy"
 effect = "damage_charm"
 power = 218
 scaling = "WIS"
-tag = "precision"
 text = "Дурманящий удар на 218 процентов обычного. Цель очарована 1 ход и бьёт по своим."
-edges = [
-    { name = "Дольше слушает", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Резче", text = "Урон выше на 30 процентов.", power = 30 },
-]
 
 [[skill]]
 code = "cleric_dlan_zhizni"
@@ -5102,12 +3701,7 @@ target = "self"
 effect = "heal_over_time"
 power = 9
 scaling = "WIS"
-tag = "guard"
 text = "Возвращает 9 процентов здоровья каждый ход, 3 хода подряд."
-edges = [
-    { name = "Дольше", text = "Действует ещё 2 хода.", dot_turns = 2 },
-    { name = "И сразу", text = "Кроме того, сразу лечит на 12 процентов здоровья.", heal = 12 },
-]
 
 [[skill]]
 code = "cleric_nemota"
@@ -5122,12 +3716,7 @@ target = "enemy"
 effect = "debuff_silence"
 power = 100
 scaling = "WIS"
-tag = "precision"
 text = "Цель молчит 2 хода: умения ей недоступны."
-edges = [
-    { name = "Дольше", text = "Цель молчит ещё 2 хода.", duration = 2 },
-    { name = "Быстрее наложить", text = "Откат короче на 2 хода.", cooldown = -2 },
-]
 
 [[skill]]
 code = "cleric_glas_ukorizny"
@@ -5142,12 +3731,7 @@ target = "all_enemies"
 effect = "damage_aoe_silence"
 power = 157
 scaling = "WIS"
-tag = "precision"
 text = "Чародейский удар по всем противникам на 157 процент обычного. Все противники молчат 2 хода: умения им недоступны."
-edges = [
-    { name = "Громче", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "Дольше молчат", text = "Молчание держится на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "cleric_sud_sveta"
@@ -5161,12 +3745,7 @@ target = "enemy"
 effect = "damage_execute"
 power = 218
 scaling = "WIS"
-tag = "press"
 text = "Удар на 218 процентов обычного. Тем сильнее, чем меньше здоровья осталось у цели."
-edges = [
-    { name = "Без промедления", text = "Откат короче на 1 ход.", cooldown = -1 },
-    { name = "Приговор", text = "Шанс критического удара выше на 20 процентов.", crit = 20 },
-]
 
 [[skill]]
 code = "cleric_vozlozhenie_ruk"
@@ -5180,12 +3759,7 @@ target = "self"
 effect = "heal_big"
 power = 25
 scaling = "WIS"
-tag = "guard"
 text = "Лечит вас на 25 процентов здоровья."
-edges = [
-    { name = "Полнее", text = "Лечит ещё на 12 процентов здоровья.", heal = 12 },
-    { name = "И снимает беду", text = "Кроме того, снимает с вас 3 отрицательных эффекта.", cleanse = 3 },
-]
 
 [[skill]]
 code = "cleric_okovy"
@@ -5199,12 +3773,7 @@ target = "enemy"
 effect = "debuff_stun"
 power = 100
 scaling = "WIS"
-tag = "precision"
 text = "Цель оглушена и пропускает 1 ход."
-edges = [
-    { name = "Крепче", text = "Цель пропускает ещё 1 ход.", stun_turns = 1 },
-    { name = "Быстрее сковать", text = "Откат короче на 2 хода.", cooldown = -2 },
-]
 
 [[skill]]
 code = "cleric_grad_sveta"
@@ -5219,12 +3788,7 @@ target = "enemy"
 effect = "damage_multi"
 power = 218
 scaling = "WIS"
-tag = "press"
 text = "Бьёт 3 раза, каждый на 72 процентов обычного удара."
-edges = [
-    { name = "Четвёртый луч", text = "Бьёт ещё раз, каждый удар на 85 процентов силы.", hits = 1, hit_power = 85 },
-    { name = "Каждый в цель", text = "Шанс критического удара выше на 20 процентов.", crit = 20 },
-]
 
 [[skill]]
 code = "cleric_oslepitelnyy_svet"
@@ -5239,12 +3803,7 @@ target = "all_enemies"
 effect = "damage_aoe_stun"
 power = 157
 scaling = "WIS"
-tag = "press"
 text = "Удар по всем противникам на 157 процента обычного. Все противники оглушены и пропускают 1 ход."
-edges = [
-    { name = "Ярче", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "Дважды", text = "Противники пропускают ещё 1 ход.", stun_turns = 1 },
-]
 
 [[skill]]
 code = "cleric_blagodat"
@@ -5258,12 +3817,7 @@ target = "self"
 effect = "heal_aoe"
 power = 23
 scaling = "WIS"
-tag = "guard"
 text = "Лечит вас и ваш отряд на 23 процента здоровья."
-edges = [
-    { name = "Щедрее", text = "Лечит ещё на 10 процентов здоровья.", heal = 10 },
-    { name = "И снимает беды", text = "Снимает по 2 отрицательных эффекта.", cleanse = 2 },
-]
 
 [[skill]]
 code = "cleric_pechat_nemoshchi"
@@ -5277,12 +3831,7 @@ target = "enemy"
 effect = "debuff_weakness"
 power = 30
 scaling = "WIS"
-tag = "precision"
 text = "У цели слабость 3 хода: её удар слабее на 30 процентов."
-edges = [
-    { name = "Глубже", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "На всех", text = "Задевает всех противников.", aoe = true },
-]
 
 [[skill]]
 code = "cleric_slovo_gneva"
@@ -5296,12 +3845,7 @@ target = "all_enemies"
 effect = "damage_aoe_holy"
 power = 157
 scaling = "WIS"
-tag = "press"
 text = "Священный удар по всем противникам на 157 процентов обычного."
-edges = [
-    { name = "Громче", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "И свет вернётся", text = "Вам возвращается 25 процентов нанесённого урона.", lifesteal = 25 },
-]
 
 [[skill]]
 code = "cleric_chudo"
@@ -5316,12 +3860,7 @@ target = "all_enemies"
 effect = "damage_and_heal"
 power = 123
 scaling = "WIS"
-tag = "guard"
 text = "Удар по всем противникам на 123 процентов обычного. Возвращает вам всё здоровье."
-edges = [
-    { name = "Сильнее", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "И чисто", text = "Кроме того, снимает с вас 3 отрицательных эффекта.", cleanse = 3 },
-]
 
 [[skill]]
 code = "cleric_blagoslovenie"
@@ -5336,12 +3875,7 @@ target = "self"
 effect = "buff_all_stats"
 power = 3
 scaling = "WIS"
-tag = "guard"
 text = "3 хода у вас все характеристики выше на 3."
-edges = [
-    { name = "Полнее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "cleric_svet_v_ruke"
@@ -5351,12 +3885,7 @@ kind = "passive"
 level = 2
 effect = "magic_damage_percent"
 power = 5
-tag = "press"
 text = "Магический урон выше на 5 процентов."
-edges = [
-    { name = "Ярче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И вернее", text = "Кроме того, точность выше на 4 процента.", self_modifiers = { accuracy_percent = 4 } },
-]
 
 [[skill]]
 code = "cleric_krepost_very"
@@ -5366,12 +3895,7 @@ kind = "passive"
 level = 5
 effect = "health_percent"
 power = 5
-tag = "guard"
 text = "Здоровье выше на 5 процентов."
-edges = [
-    { name = "Крепче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И раны реже", text = "Кроме того, получаемый урон ниже на 3 процента.", self_modifiers = { damage_taken_percent = -3 } },
-]
 
 [[skill]]
 code = "cleric_yasnyy_vzor"
@@ -5381,12 +3905,7 @@ kind = "passive"
 level = 9
 effect = "accuracy_percent"
 power = 4
-tag = "precision"
 text = "Точность выше на 4 процента."
-edges = [
-    { name = "Яснее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И раньше", text = "Кроме того, инициатива выше на 4 процента.", self_modifiers = { initiative_percent = 4 } },
-]
 
 [[skill]]
 code = "cleric_izgonyayushchiy"
@@ -5396,12 +3915,7 @@ kind = "passive"
 level = 14
 effect = "undead_damage_percent"
 power = 8
-tag = "press"
 text = "Урон по нежити выше на 8 процентов."
-edges = [
-    { name = "Не устоят", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И по зверю", text = "Кроме того, урон по зверям выше на 5 процентов.", self_modifiers = { beast_damage_percent = 5 } },
-]
 
 [[skill]]
 code = "cleric_zapas_very"
@@ -5411,12 +3925,7 @@ kind = "passive"
 level = 20
 effect = "resource_percent"
 power = 7
-tag = "guard"
 text = "Запас сил выше на 7 процентов."
-edges = [
-    { name = "Глубже", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И возвращается", text = "Кроме того, запас сил восстанавливается на 6 процентов быстрее.", self_modifiers = { resource_regen_percent = 6 } },
-]
 
 [[skill]]
 code = "cleric_slovo_dokhodit"
@@ -5426,12 +3935,7 @@ kind = "passive"
 level = 26
 effect = "healing_done_percent"
 power = 7
-tag = "precision"
 text = "Ваше лечение выше на 7 процентов."
-edges = [
-    { name = "Слышнее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И себе", text = "Кроме того, получаемое лечение выше на 6 процентов.", self_modifiers = { healing_taken_percent = 6 } },
-]
 
 [[skill]]
 code = "cleric_sila_slova"
@@ -5441,12 +3945,7 @@ kind = "passive"
 level = 33
 effect = "single_target_damage_percent"
 power = 7
-tag = "press"
 text = "Урон по одной цели выше на 7 процентов."
-edges = [
-    { name = "Весомее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И глубже", text = "Кроме того, критический урон выше на 8 процентов.", self_modifiers = { crit_damage_percent = 8 } },
-]
 
 [[skill]]
 code = "cleric_rany_zatyagivayutsya"
@@ -5456,12 +3955,7 @@ kind = "passive"
 level = 40
 effect = "regen_per_turn_percent"
 power = 3
-tag = "guard"
 text = "Каждый ход вам возвращается 3 процента здоровья."
-edges = [
-    { name = "Быстрее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И крепче", text = "Кроме того, здоровье выше на 5 процентов.", self_modifiers = { health_percent = 5 } },
-]
 
 [[skill]]
 code = "cleric_miloserdie"
@@ -5471,12 +3965,7 @@ kind = "passive"
 level = 48
 effect = "healing_taken_percent"
 power = 8
-tag = "precision"
 text = "Получаемое лечение выше на 8 процентов."
-edges = [
-    { name = "Полнее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И само", text = "Кроме того, каждый ход вам возвращается 3 процента здоровья.", self_modifiers = { regen_per_turn_percent = 3 } },
-]
 
 [[skill]]
 code = "cleric_mudrost"
@@ -5486,12 +3975,7 @@ kind = "passive"
 level = 55
 effect = "stat_WIS"
 power = 4
-tag = "press"
 text = "Мудрость выше на 4."
-edges = [
-    { name = "Глубже", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И харизма", text = "Кроме того, харизма выше на 3.", self_modifiers = { stat_CHA = 3 } },
-]
 
 [[skill]]
 code = "cleric_osvyashchen"
@@ -5501,12 +3985,7 @@ kind = "passive"
 level = 63
 effect = "resist_negative_percent"
 power = 8
-tag = "guard"
 text = "Сопротивление оскверняющему урону выше на 8 процентов."
-edges = [
-    { name = "Крепче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И к яду", text = "Кроме того, сопротивление ядовитому урону выше на 6 процентов.", self_modifiers = { resist_poison_percent = 6 } },
-]
 
 [[skill]]
 code = "cleric_skoroe_slovo"
@@ -5516,12 +3995,7 @@ kind = "passive"
 level = 72
 effect = "cooldown_reduction_percent"
 power = 8
-tag = "precision"
 text = "Откаты ваших умений короче на 8 процентов."
-edges = [
-    { name = "Скорее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И дешевле", text = "Кроме того, умения стоят на 6 процентов меньше.", self_modifiers = { cost_reduction_percent = 6 } },
-]
 
 [[skill]]
 code = "cleric_tyazhest_kadila"
@@ -5531,12 +4005,7 @@ kind = "passive"
 level = 80
 effect = "crit_damage_percent"
 power = 9
-tag = "press"
 text = "Критический урон выше на 9 процентов."
-edges = [
-    { name = "Тяжелее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И чаще", text = "Кроме того, шанс критического удара выше на 5 процентов.", self_modifiers = { crit_chance_percent = 5 } },
-]
 
 [[skill]]
 code = "cleric_dukh_krepok"
@@ -5546,12 +4015,7 @@ kind = "passive"
 level = 89
 effect = "resist_mental_percent"
 power = 9
-tag = "guard"
 text = "Сопротивление дурманящему урону выше на 9 процентов."
-edges = [
-    { name = "Крепче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И к чарам", text = "Кроме того, сопротивление магическому урону выше на 6 процентов.", self_modifiers = { resist_magic_percent = 6 } },
-]
 
 [[skill]]
 code = "cleric_vidit_slabost"
@@ -5561,12 +4025,7 @@ kind = "passive"
 level = 98
 effect = "crit_chance_percent"
 power = 6
-tag = "precision"
 text = "Шанс критического удара выше на 6 процентов."
-edges = [
-    { name = "Видит сразу", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И бьёт больнее", text = "Кроме того, критический урон выше на 10 процентов.", self_modifiers = { crit_damage_percent = 10 } },
-]
 
 [[skill]]
 code = "cleric_na_silnykh"
@@ -5576,12 +4035,7 @@ kind = "passive"
 level = 108
 effect = "elite_damage_percent"
 power = 9
-tag = "press"
 text = "Урон по элитным противникам и боссам выше на 9 процентов."
-edges = [
-    { name = "Не оробеет", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И по многим", text = "Кроме того, урон по всем противникам сразу выше на 6 процентов.", self_modifiers = { aoe_damage_percent = 6 } },
-]
 
 [[skill]]
 code = "cleric_polnaya_chasha"
@@ -5591,12 +4045,7 @@ kind = "passive"
 level = 117
 effect = "resource_regen_percent"
 power = 8
-tag = "guard"
 text = "Запас сил восстанавливается на 8 процентов быстрее."
-edges = [
-    { name = "Полнее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И глубже", text = "Кроме того, запас сил выше на 6 процентов.", self_modifiers = { resource_percent = 6 } },
-]
 
 [[skill]]
 code = "cleric_svet_na_mnogikh"
@@ -5606,12 +4055,7 @@ kind = "passive"
 level = 127
 effect = "aoe_damage_percent"
 power = 9
-tag = "precision"
 text = "Урон по всем противникам сразу выше на 9 процентов."
-edges = [
-    { name = "Шире", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И вернее", text = "Кроме того, точность выше на 6 процентов.", self_modifiers = { accuracy_percent = 6 } },
-]
 
 [[skill]]
 code = "cleric_vera_krepka"
@@ -5621,12 +4065,7 @@ kind = "passive"
 level = 137
 effect = "damage_percent"
 power = 6
-tag = "press"
 text = "Весь ваш урон выше на 6 процентов."
-edges = [
-    { name = "Крепче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И мудрость", text = "Кроме того, мудрость выше на 3.", self_modifiers = { stat_WIS = 3 } },
-]
 
 [[skill]]
 code = "cleric_svet_otvechaet"
@@ -5636,12 +4075,7 @@ kind = "passive"
 level = 146
 effect = "reflect_percent"
 power = 10
-tag = "guard"
 text = "Обидчику возвращается 10 процентов полученного вами урона."
-edges = [
-    { name = "Полнее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И щит крепче", text = "Кроме того, броня выше на 8 процентов.", self_modifiers = { armor_percent = 8 } },
-]
 
 # =====================================================================
 # ДРУИД. Ветви: напор - облики, когти и стая; заслон - кора, роща и
@@ -5661,12 +4095,7 @@ target = "enemy"
 effect = "damage_nature"
 power = 166
 scaling = "WIS"
-tag = "press"
 text = "Природный удар на 166 процентов обычного."
-edges = [
-    { name = "Глубже когти", text = "Урон выше на 25 процентов. Откат дольше на 1 ход.", power = 25, cooldown = 1 },
-    { name = "Обеими лапами", text = "Задевает вторую цель на 40 процентов урона.", splash = 40 },
-]
 
 [[skill]]
 code = "druid_shipy"
@@ -5680,12 +4109,7 @@ target = "enemy"
 effect = "damage_venom"
 power = 204
 scaling = "WIS"
-tag = "precision"
 text = "Ядовитый удар на 204 процентов обычного. Яд точит цель 3 хода."
-edges = [
-    { name = "Гуще сок", text = "Яд точит цель ещё 2 хода.", dot_turns = 2 },
-    { name = "Острее", text = "Не считается с 30 процентов брони цели.", pierce = 30 },
-]
 
 [[skill]]
 code = "druid_oblik_volka"
@@ -5699,12 +4123,7 @@ target = "self"
 effect = "buff_form_wolf"
 power = 22
 scaling = "WIS"
-tag = "press"
 text = "3 хода у вас урон и инициатива выше на 22 процента."
-edges = [
-    { name = "Крупнее зверь", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "druid_kora"
@@ -5718,12 +4137,7 @@ target = "self"
 effect = "buff_armor"
 power = 23
 scaling = "END"
-tag = "guard"
 text = "3 хода у вас броня выше на 23 процента."
-edges = [
-    { name = "Толще", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "И шипы", text = "Кроме того, 3 хода обидчику возвращается 18 процентов полученного урона.", self_modifiers = { reflect_percent = 18 } },
-]
 
 [[skill]]
 code = "druid_rodnik"
@@ -5737,12 +4151,7 @@ target = "self"
 effect = "buff_resource_regen"
 power = 12
 scaling = "WIS"
-tag = "guard"
 text = "Каждый ход вам возвращается 12 процентов запаса сил, 4 хода."
-edges = [
-    { name = "Полнее", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "druid_puty_korney"
@@ -5756,12 +4165,7 @@ target = "enemy"
 effect = "debuff_root"
 power = 21
 scaling = "WIS"
-tag = "precision"
 text = "2 хода у цели инициатива и точность ниже на 21 процент."
-edges = [
-    { name = "Крепче корни", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Не вырваться", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "druid_oblik_medvedya"
@@ -5775,12 +4179,7 @@ target = "self"
 effect = "buff_form_bear"
 power = 23
 scaling = "END"
-tag = "press"
 text = "3 хода у вас здоровье и броня выше на 23 процента."
-edges = [
-    { name = "Крупнее зверь", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "druid_roy"
@@ -5795,12 +4194,7 @@ target = "all_enemies"
 effect = "damage_aoe_nature"
 power = 147
 scaling = "WIS"
-tag = "press"
 text = "Природный удар по всем противникам на 147 процент обычного."
-edges = [
-    { name = "Гуще рой", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "И жалит", text = "Все противники травятся 3 хода.", dot_turns = 3 },
-]
 
 [[skill]]
 code = "druid_klyki"
@@ -5815,12 +4209,7 @@ target = "enemy"
 effect = "damage_bleed"
 power = 205
 scaling = "WIS"
-tag = "press"
 text = "Разрывающий удар на 205 процентов обычного. Цель истекает кровью 3 хода."
-edges = [
-    { name = "Не разжать", text = "Цель истекает кровью ещё 3 хода.", dot_turns = 3 },
-    { name = "И кровь на пользу", text = "Вам возвращается 25 процентов нанесённого урона.", lifesteal = 25 },
-]
 
 [[skill]]
 code = "druid_dykhanie_roshchi"
@@ -5834,12 +4223,7 @@ target = "self"
 effect = "heal_over_time"
 power = 9
 scaling = "WIS"
-tag = "guard"
 text = "Возвращает 9 процентов здоровья каждый ход, 3 хода подряд."
-edges = [
-    { name = "Дольше", text = "Действует ещё 2 хода.", dot_turns = 2 },
-    { name = "И сразу", text = "Кроме того, сразу лечит на 12 процентов здоровья.", heal = 12 },
-]
 
 [[skill]]
 code = "druid_otsepenenie"
@@ -5853,12 +4237,7 @@ target = "enemy"
 effect = "debuff_slow"
 power = 30
 scaling = "WIS"
-tag = "precision"
 text = "Цель замедлена на 30 процентов, 3 хода."
-edges = [
-    { name = "Глубже", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "druid_edinenie_s_zemley"
@@ -5872,12 +4251,7 @@ target = "self"
 effect = "buff_damage_taken"
 power = 27
 scaling = "END"
-tag = "guard"
 text = "3 хода у вас получаемый урон ниже на 27 процентов."
-edges = [
-    { name = "Глубже корни", text = "Прибавка выше на 25 процентов.", power = 25 },
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "druid_yadovitaya_pyltsa"
@@ -5892,12 +4266,7 @@ target = "enemy"
 effect = "debuff_poison"
 power = 27
 scaling = "WIS"
-tag = "precision"
 text = "Яд точит цель 4 хода."
-edges = [
-    { name = "Гуще", text = "Яд точит цель ещё 3 хода.", dot_turns = 3 },
-    { name = "На всех", text = "Задевает всех противников.", aoe = true },
-]
 
 [[skill]]
 code = "druid_okovy_stuzhi"
@@ -5912,12 +4281,7 @@ target = "all_enemies"
 effect = "debuff_aoe_slow"
 power = 30
 scaling = "WIS"
-tag = "precision"
 text = "Все противники замедлены на 30 процентов, 2 хода."
-edges = [
-    { name = "Глубже", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "druid_rasterzat"
@@ -5931,12 +4295,7 @@ target = "enemy"
 effect = "damage_lifesteal"
 power = 205
 scaling = "WIS"
-tag = "press"
 text = "Удар на 205 процентов обычного. Вам возвращается 30 процентов нанесённого урона."
-edges = [
-    { name = "Без передышки", text = "Откат короче на 1 ход.", cooldown = -1 },
-    { name = "Жаднее", text = "Возвращается ещё 25 процентов нанесённого урона.", lifesteal = 25 },
-]
 
 [[skill]]
 code = "druid_shkura_i_kora"
@@ -5950,12 +4309,7 @@ target = "self"
 effect = "barrier"
 power = 32
 scaling = "END"
-tag = "guard"
 text = "Ставит барьер в 32 процента вашего здоровья на 3 хода."
-edges = [
-    { name = "Толще", text = "Барьер выше ещё на 12 процентов вашего здоровья.", barrier = 12 },
-    { name = "И шипы", text = "Кроме того, 3 хода обидчику возвращается 20 процентов полученного урона.", self_modifiers = { reflect_percent = 20 } },
-]
 
 [[skill]]
 code = "druid_zov_zverya"
@@ -5969,12 +4323,7 @@ target = "enemy"
 effect = "debuff_charm"
 power = 100
 scaling = "WIS"
-tag = "precision"
 text = "Цель очарована 1 ход и бьёт по своим."
-edges = [
-    { name = "Дольше слушает", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Быстрее позвать", text = "Откат короче на 2 хода.", cooldown = -2 },
-]
 
 [[skill]]
 code = "druid_yarost_stai"
@@ -5989,12 +4338,7 @@ target = "enemy"
 effect = "damage_multi"
 power = 205
 scaling = "WIS"
-tag = "press"
 text = "Бьёт 3 раза, каждый на 68 процентов обычного удара."
-edges = [
-    { name = "Четвёртый", text = "Бьёт ещё раз, каждый удар на 85 процентов силы.", hits = 1, hit_power = 85 },
-    { name = "Каждый в цель", text = "Шанс критического удара выше на 20 процентов.", crit = 20 },
-]
 
 [[skill]]
 code = "druid_gnev_chashchi"
@@ -6009,12 +4353,7 @@ target = "all_enemies"
 effect = "damage_aoe_venom"
 power = 147
 scaling = "WIS"
-tag = "press"
 text = "Ядовитый удар по всем противникам на 147 процента обычного. Все противники травятся 3 хода."
-edges = [
-    { name = "Гуще яд", text = "Яд точит цели ещё 2 хода.", dot_turns = 2 },
-    { name = "Сильнее", text = "Урон выше на 30 процентов.", power = 30 },
-]
 
 [[skill]]
 code = "druid_zhivaya_voda"
@@ -6028,12 +4367,7 @@ target = "self"
 effect = "heal_aoe"
 power = 22
 scaling = "WIS"
-tag = "guard"
 text = "Лечит вас и ваш отряд на 22 процента здоровья."
-edges = [
-    { name = "Полнее", text = "Лечит ещё на 10 процентов здоровья.", heal = 10 },
-    { name = "И очищает", text = "Снимает по 2 отрицательных эффекта.", cleanse = 2 },
-]
 
 [[skill]]
 code = "druid_okovy_korney"
@@ -6047,12 +4381,7 @@ target = "enemy"
 effect = "debuff_stun"
 power = 100
 scaling = "WIS"
-tag = "precision"
 text = "Цель оглушена и пропускает 1 ход."
-edges = [
-    { name = "Крепче", text = "Цель пропускает ещё 1 ход.", stun_turns = 1 },
-    { name = "Быстрее оплести", text = "Откат короче на 2 хода.", cooldown = -2 },
-]
 
 [[skill]]
 code = "druid_avatar"
@@ -6066,12 +4395,7 @@ target = "self"
 effect = "buff_avatar"
 power = 26
 scaling = "WIS"
-tag = "press"
 text = "4 хода у вас урон выше на 26 процентов, и вас нельзя оглушить."
-edges = [
-    { name = "Крупнее", text = "Прибавка выше на 30 процентов.", power = 30 },
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-]
 
 [[skill]]
 code = "druid_krug_zhizni"
@@ -6086,12 +4410,7 @@ target = "self"
 effect = "buff_health_regen"
 power = 18
 scaling = "WIS"
-tag = "guard"
 text = "Каждый ход вам возвращается 18 процентов здоровья, 4 хода."
-edges = [
-    { name = "Дольше", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "И чисто", text = "Кроме того, снимает с вас 3 отрицательных эффекта.", cleanse = 3 },
-]
 
 [[skill]]
 code = "druid_nepreklonnost"
@@ -6106,12 +4425,7 @@ target = "self"
 effect = "barrier_undying"
 power = 36
 scaling = "END"
-tag = "guard"
 text = "Ставит барьер в 36 процентов вашего здоровья на 3 хода. 3 хода вы не можете пасть."
-edges = [
-    { name = "Дольше стоять", text = "Действует на 2 хода дольше.", duration = 2 },
-    { name = "Толще кора", text = "Барьер выше ещё на 15 процентов вашего здоровья.", barrier = 15 },
-]
 
 [[skill]]
 code = "druid_kogti_i_klyki"
@@ -6121,12 +4435,7 @@ kind = "passive"
 level = 2
 effect = "physical_damage_percent"
 power = 4
-tag = "press"
 text = "Физический урон выше на 4 процента."
-edges = [
-    { name = "Острее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И вернее", text = "Кроме того, точность выше на 4 процента.", self_modifiers = { accuracy_percent = 4 } },
-]
 
 [[skill]]
 code = "druid_tolstaya_kora"
@@ -6136,12 +4445,7 @@ kind = "passive"
 level = 5
 effect = "health_percent"
 power = 6
-tag = "guard"
 text = "Здоровье выше на 6 процентов."
-edges = [
-    { name = "Толще", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И затягивается", text = "Кроме того, каждый ход вам возвращается 2 процента здоровья.", self_modifiers = { regen_per_turn_percent = 2 } },
-]
 
 [[skill]]
 code = "druid_chutye_zverya"
@@ -6151,12 +4455,7 @@ kind = "passive"
 level = 9
 effect = "accuracy_percent"
 power = 4
-tag = "precision"
 text = "Точность выше на 4 процента."
-edges = [
-    { name = "Острее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И раньше", text = "Кроме того, инициатива выше на 4 процента.", self_modifiers = { initiative_percent = 4 } },
-]
 
 [[skill]]
 code = "druid_sila_roshchi"
@@ -6166,12 +4465,7 @@ kind = "passive"
 level = 14
 effect = "magic_damage_percent"
 power = 6
-tag = "press"
 text = "Магический урон выше на 6 процентов."
-edges = [
-    { name = "Гуще", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И когти", text = "Кроме того, физический урон выше на 4 процента.", self_modifiers = { physical_damage_percent = 4 } },
-]
 
 [[skill]]
 code = "druid_edinenie"
@@ -6181,12 +4475,7 @@ kind = "passive"
 level = 20
 effect = "resource_percent"
 power = 6
-tag = "guard"
 text = "Запас сил выше на 6 процентов."
-edges = [
-    { name = "Глубже", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И возвращается", text = "Кроме того, запас сил восстанавливается на 6 процентов быстрее.", self_modifiers = { resource_regen_percent = 6 } },
-]
 
 [[skill]]
 code = "druid_yad_i_shipy"
@@ -6196,12 +4485,7 @@ kind = "passive"
 level = 26
 effect = "dot_damage_percent"
 power = 8
-tag = "precision"
 text = "Урон от кровотечений, яда и горения выше на 8 процентов."
-edges = [
-    { name = "Гуще", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И по ране", text = "Кроме того, урон по раненой цели выше на 6 процентов.", self_modifiers = { wounded_target_damage_percent = 6 } },
-]
 
 [[skill]]
 code = "druid_staya_ryadom"
@@ -6211,12 +4495,7 @@ kind = "passive"
 level = 33
 effect = "aoe_damage_percent"
 power = 8
-tag = "press"
 text = "Урон по всем противникам сразу выше на 8 процентов."
-edges = [
-    { name = "Больше стая", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И злее", text = "Кроме того, урон по зверям выше на 6 процентов.", self_modifiers = { beast_damage_percent = 6 } },
-]
 
 [[skill]]
 code = "druid_zhivuchest"
@@ -6226,12 +4505,7 @@ kind = "passive"
 level = 40
 effect = "regen_per_turn_percent"
 power = 4
-tag = "guard"
 text = "Каждый ход вам возвращается 4 процента здоровья."
-edges = [
-    { name = "Быстрее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И крепче", text = "Кроме того, здоровье выше на 5 процентов.", self_modifiers = { health_percent = 5 } },
-]
 
 [[skill]]
 code = "druid_protiv_zverya"
@@ -6241,12 +4515,7 @@ kind = "passive"
 level = 48
 effect = "beast_damage_percent"
 power = 8
-tag = "precision"
 text = "Урон по зверям выше на 8 процентов."
-edges = [
-    { name = "Знает повадки", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И по нежити", text = "Кроме того, урон по нежити выше на 6 процентов.", self_modifiers = { undead_damage_percent = 6 } },
-]
 
 [[skill]]
 code = "druid_mudrost_lesa"
@@ -6256,12 +4525,7 @@ kind = "passive"
 level = 55
 effect = "stat_WIS"
 power = 4
-tag = "press"
 text = "Мудрость выше на 4."
-edges = [
-    { name = "Глубже", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И выносливость", text = "Кроме того, выносливость выше на 3.", self_modifiers = { stat_END = 3 } },
-]
 
 [[skill]]
 code = "druid_ne_beret_moroz"
@@ -6271,12 +4535,7 @@ kind = "passive"
 level = 63
 effect = "resist_cold_percent"
 power = 8
-tag = "guard"
 text = "Сопротивление ледяному урону выше на 8 процентов."
-edges = [
-    { name = "Крепче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И от огня", text = "Кроме того, сопротивление огненному урону выше на 6 процентов.", self_modifiers = { resist_fire_percent = 6 } },
-]
 
 [[skill]]
 code = "druid_bystree_vetra"
@@ -6286,12 +4545,7 @@ kind = "passive"
 level = 72
 effect = "initiative_percent"
 power = 7
-tag = "precision"
 text = "Инициатива выше на 7 процентов."
-edges = [
-    { name = "Ещё быстрее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И с линии", text = "Кроме того, уклонение выше на 5 процентов.", self_modifiers = { dodge_percent = 5 } },
-]
 
 [[skill]]
 code = "druid_khvatka_volka"
@@ -6301,12 +4555,7 @@ kind = "passive"
 level = 80
 effect = "crit_damage_percent"
 power = 9
-tag = "press"
 text = "Критический урон выше на 9 процентов."
-edges = [
-    { name = "Глубже", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И чаще", text = "Кроме того, шанс критического удара выше на 5 процентов.", self_modifiers = { crit_chance_percent = 5 } },
-]
 
 [[skill]]
 code = "druid_korni_derzhat"
@@ -6316,12 +4565,7 @@ kind = "passive"
 level = 89
 effect = "resist_nature_percent"
 power = 9
-tag = "guard"
 text = "Сопротивление природному урону выше на 9 процентов."
-edges = [
-    { name = "Глубже корни", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И к чарам", text = "Кроме того, сопротивление магическому урону выше на 6 процентов.", self_modifiers = { resist_magic_percent = 6 } },
-]
 
 [[skill]]
 code = "druid_slaboe_mesto"
@@ -6331,12 +4575,7 @@ kind = "passive"
 level = 98
 effect = "crit_chance_percent"
 power = 6
-tag = "precision"
 text = "Шанс критического удара выше на 6 процентов."
-edges = [
-    { name = "Видит сразу", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И бьёт глубже", text = "Кроме того, критический урон выше на 10 процентов.", self_modifiers = { crit_damage_percent = 10 } },
-]
 
 [[skill]]
 code = "druid_na_matyorykh"
@@ -6346,12 +4585,7 @@ kind = "passive"
 level = 108
 effect = "elite_damage_percent"
 power = 9
-tag = "press"
 text = "Урон по элитным противникам и боссам выше на 9 процентов."
-edges = [
-    { name = "Не оробеет", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И по многим", text = "Кроме того, урон по всем противникам сразу выше на 6 процентов.", self_modifiers = { aoe_damage_percent = 6 } },
-]
 
 [[skill]]
 code = "druid_obnovlenie_sil"
@@ -6361,12 +4595,7 @@ kind = "passive"
 level = 117
 effect = "healing_taken_percent"
 power = 9
-tag = "guard"
 text = "Получаемое лечение выше на 9 процентов."
-edges = [
-    { name = "Полнее", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И своё", text = "Кроме того, ваше лечение выше на 7 процентов.", self_modifiers = { healing_done_percent = 7 } },
-]
 
 [[skill]]
 code = "druid_protiv_dvunogikh"
@@ -6376,12 +4605,7 @@ kind = "passive"
 level = 127
 effect = "humanoid_damage_percent"
 power = 9
-tag = "precision"
 text = "Урон по человекоподобным выше на 9 процентов."
-edges = [
-    { name = "Знает их", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И вернее", text = "Кроме того, точность выше на 6 процентов.", self_modifiers = { accuracy_percent = 6 } },
-]
 
 [[skill]]
 code = "druid_sila_zemli"
@@ -6391,12 +4615,7 @@ kind = "passive"
 level = 137
 effect = "stat_END"
 power = 4
-tag = "press"
 text = "Выносливость выше на 4."
-edges = [
-    { name = "Глубже", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И мудрость", text = "Кроме того, мудрость выше на 3.", self_modifiers = { stat_WIS = 3 } },
-]
 
 [[skill]]
 code = "druid_ne_otravyat"
@@ -6406,12 +4625,7 @@ kind = "passive"
 level = 146
 effect = "resist_poison_percent"
 power = 9
-tag = "guard"
 text = "Сопротивление ядовитому урону выше на 9 процентов."
-edges = [
-    { name = "Крепче", text = "Прибавка выше на 40 процентов.", power = 40 },
-    { name = "И к кислоте", text = "Кроме того, сопротивление кислотному урону выше на 7 процентов.", self_modifiers = { resist_acid_percent = 7 } },
-]
 
 # --- расовые боевые умения: они занимают отдельный расовый слот и вне ветвей ---
 
@@ -6427,10 +4641,6 @@ target = "self"
 effect = "heal"
 power = 20
 text = "Восстанавливает 20 процентов здоровья."
-edges = [
-    { name = "Глубокий вдох", text = "Лечение выше на 25 процентов.", power = 25 },
-    { name = "Ровное дыхание", text = "У вас запас сил выше на 20 процентов.", self_modifiers = { resource_percent = 20 } },
-]
 
 [[skill]]
 code = "race_high_elf_mana_surge"
@@ -6444,10 +4654,6 @@ target = "self"
 effect = "buff_free_cast"
 power = 100
 text = "Следующее умение не тратит ресурс."
-edges = [
-    { name = "Дважды по памяти", text = "Стоит на 100 процентов дешевле.", cost = -100 },
-    { name = "Строго по школе", text = "Прибавка выше на 30 процентов.", power = 30 },
-]
 
 [[skill]]
 code = "race_wood_elf_true_shot"
@@ -6462,10 +4668,6 @@ effect = "damage_guaranteed_crit"
 power = 120
 scaling = "AGI"
 text = "Гарантированный критический удар."
-edges = [
-    { name = "Смертельная точность", text = "Урон выше на 40 процентов.", power = 40 },
-    { name = "Быстрая тетива", text = "Откат короче на 2 хода.", cooldown = -2 },
-]
 
 [[skill]]
 code = "race_dark_elf_gloom_cloud"
@@ -6479,10 +4681,6 @@ target = "all_enemies"
 effect = "debuff_accuracy"
 power = 50
 text = "Точность противников ниже на 50 процентов 2 хода."
-edges = [
-    { name = "Густой мрак", text = "Действует 4 хода.", duration = 2 },
-    { name = "Едкий мрак", text = "Цель теряет здоровье ещё 2 хода.", dot_turns = 2 },
-]
 
 [[skill]]
 code = "race_half_elf_charm"
@@ -6497,10 +4695,6 @@ effect = "avoid_combat"
 power = 50
 scaling = "CHA"
 text = "Шанс закончить бой с разумным противником миром."
-edges = [
-    { name = "Убеждение", text = "Прибавка выше на 25 процентов.", power = 25 },
-    { name = "Выгодная беседа", text = "У вас золото выше на 20 процентов.", self_modifiers = { gold_percent = 20 } },
-]
 
 [[skill]]
 code = "race_dwarf_ancestral_stance"
@@ -6514,10 +4708,6 @@ target = "self"
 effect = "buff_damage_taken"
 power = 30
 text = "Вы получаете на 30 процентов меньше урона 3 хода."
-edges = [
-    { name = "Несдвигаемость", text = "Прибавка выше на 45 процентов.", power = 45 },
-    { name = "Долгий упор", text = "Действует 5 ходов.", duration = 2 },
-]
 
 [[skill]]
 code = "race_gnome_cunning_trap"
@@ -6532,10 +4722,6 @@ effect = "damage_slow"
 power = 150
 scaling = "INT"
 text = "Урон и потеря инициативы у цели."
-edges = [
-    { name = "Зубчатая ловушка", text = "Цель пропускает ещё один ход.", stun_turns = 1 },
-    { name = "Двойная ловушка", text = "Задевает вторую цель на 100 процентов урона.", splash = 100 },
-]
 
 [[skill]]
 code = "race_halfling_nimbleness"
@@ -6549,10 +4735,6 @@ target = "self"
 effect = "buff_evade_full"
 power = 100
 text = "Вы полностью уклоняетесь от следующего удара."
-edges = [
-    { name = "Кувырок", text = "Действует 1 ход.", duration = 1 },
-    { name = "Подножка", text = "У вас возврат урона обидчику выше на 20 процентов.", self_modifiers = { reflect_percent = 20 } },
-]
 
 [[skill]]
 code = "race_orc_war_cry"
@@ -6566,10 +4748,6 @@ target = "self"
 effect = "buff_damage"
 power = 25
 text = "Ваш урон выше на 25 процентов 3 хода."
-edges = [
-    { name = "Хриплый рёв", text = "Прибавка выше на 20 процентов.", power = 20 },
-    { name = "Долгий рёв", text = "Действует 4 хода.", duration = 1 },
-]
 
 [[skill]]
 code = "race_half_orc_savage_blow"
@@ -6584,10 +4762,6 @@ effect = "damage_savage"
 power = 130
 scaling = "STR"
 text = "Урон выше на 50 процентов, точность ниже на 15."
-edges = [
-    { name = "Слепая сила", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "Выверенный удар", text = "У вас точность выше на 15 процентов.", self_modifiers = { accuracy_percent = 15 } },
-]
 
 [[skill]]
 code = "race_goblin_dirty_trick"
@@ -6602,10 +4776,6 @@ effect = "damage_steal"
 power = 150
 scaling = "AGI"
 text = "Урон и кража золота."
-edges = [
-    { name = "Ловкие руки", text = "Урон выше на 30 процентов.", power = 30 },
-    { name = "Песок в глаза", text = "У цели точность ниже на 30 процентов.", target_modifiers = { accuracy_percent = -30 } },
-]
 
 [[skill]]
 code = "race_troll_crushing_swing"
@@ -6620,10 +4790,6 @@ effect = "damage_aoe"
 power = 110
 scaling = "STR"
 text = "Удар по всем противникам."
-edges = [
-    { name = "Тяжёлый замах", text = "Урон выше на 40 процентов.", power = 40 },
-    { name = "Сотрясающий замах", text = "Задевает всех противников. У цели инициатива ниже на 20 процентов.", target_modifiers = { initiative_percent = -20 }, aoe = true },
-]
 
 [[skill]]
 code = "race_dragonborn_breath"
@@ -6638,10 +4804,6 @@ effect = "damage_aoe_fire"
 power = 115
 scaling = "CHA"
 text = "Стихийный урон по всем противникам."
-edges = [
-    { name = "Долгое дыхание", text = "Цель теряет здоровье ещё 2 хода.", dot_turns = 2 },
-    { name = "Сжатое дыхание", text = "У вас урон по одной цели выше на 100 процентов.", self_modifiers = { single_target_damage_percent = 100 } },
-]
 
 [[skill]]
 code = "race_tiefling_curse_seal"
@@ -6656,10 +4818,6 @@ effect = "debuff_vulnerable"
 power = 20
 scaling = "CHA"
 text = "Цель получает на 20 процентов больше урона 3 хода."
-edges = [
-    { name = "Тяжёлое клеймо", text = "Прибавка выше на 15 процентов.", power = 15 },
-    { name = "Широкое клеймо", text = "Задевает всех противников.", aoe = true },
-]
 
 [[skill]]
 code = "race_aasimar_healing_hand"
@@ -6674,10 +4832,6 @@ effect = "heal"
 power = 22
 scaling = "WIS"
 text = "Восстанавливает вам здоровье."
-edges = [
-    { name = "Полная чаша", text = "Лечение выше на 50 процентов.", power = 50 },
-    { name = "Промывание", text = "Снимает с вас 1 отрицательный эффект.", cleanse = 1 },
-]
 
 [[skill]]
 code = "race_lizardfolk_tail_drop"
@@ -6691,7 +4845,3 @@ target = "self"
 effect = "cleanse_dodge"
 power = 10
 text = "Снимает отрицательный эффект и даёт 10 процентов уклонения."
-edges = [
-    { name = "Полный сброс", text = "Снимает с вас все отрицательные эффекты.", cleanse = 9 },
-    { name = "Отдышаться", text = "Дополнительно лечит вас на 10 процентов здоровья.", heal = 10 },
-]

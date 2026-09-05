@@ -15,7 +15,6 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
 
-from mmorpg.domain.entities.combat import ActionTag
 from mmorpg.domain.entities.craft import Craft, CraftKind, CraftRules, Recipe
 from mmorpg.domain.entities.damage import DamageType
 from mmorpg.domain.entities.dice import MAX_SPREAD, Dice
@@ -43,64 +42,6 @@ class ItemKind(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class EdgeEffect:
-    """Поправка, которую грань вносит в умение.
-
-    Это содержимое: строка из ``skills.toml``, прочитанная загрузчиком. Что с ней
-    делать, знает ``domain/rules/edges.py``. Всё в процентах или в ходах - теми же
-    единицами описано и само умение (``Claude.md``, правило 7).
-    """
-
-    #: Прибавка к силе умения и поправка к стоимости, в процентах.
-    power: float = 0.0
-    cost: float = 0.0
-    #: Ходы: откат, срок действия, урон по времени, пропуск хода.
-    cooldown: int = 0
-    duration: int = 0
-    dot_turns: int = 0
-    stun_turns: int = 0
-    #: Сколько ударов добавилось и какой силы каждый, в процентах от урона умения.
-    hits: int = 0
-    hit_power: float = 100.0
-    #: Доля урона второй цели; задевает ли всех.
-    splash: float = 0.0
-    aoe: bool = False
-    #: Прибавки в процентах: игнорируемая броня, шанс крита, вампиризм.
-    pierce: float = 0.0
-    crit: float = 0.0
-    lifesteal: float = 0.0
-    #: Сколько отрицательных эффектов снимается сверх снятого умением.
-    cleanse: int = 0
-    #: Лечение и барьер сверх основного действия, в процентах от максимума
-    #: здоровья.
-    heal: float = 0.0
-    barrier: float = 0.0
-    #: Модификаторы сверх наложенных умением: ключи из ``traits.toml``.
-    self_modifiers: Mapping[str, float] = field(default_factory=lambda: MappingProxyType({}))
-    target_modifiers: Mapping[str, float] = field(default_factory=lambda: MappingProxyType({}))
-
-    @property
-    def empty(self) -> bool:
-        """Ничего не меняет: такой грани в содержимом быть не должно."""
-        return self == EdgeEffect()
-
-
-@dataclass(frozen=True, slots=True)
-class SkillEdge:
-    """Одна из двух правок умения, открывающихся на третьем ранге.
-
-    Грань меняет то, как умение себя ведёт, и никогда не добавляет кнопку.
-    ``effect`` - то, что она меняет: объявляется в ``skills.toml`` и исполняется
-    ``domain/rules/edges.py``. Именно он делает ``text`` правдой.
-    """
-
-    code: str
-    name: str
-    text: str
-    effect: EdgeEffect = field(default_factory=lambda: EdgeEffect())
-
-
-@dataclass(frozen=True, slots=True)
 class Skill:
     code: str
     name: str
@@ -111,16 +52,11 @@ class Skill:
     text: str
     effect: str
     power: float
-    edges: tuple[SkillEdge, SkillEdge]
     cost: int = 0
     cooldown: int = 0
     target: str = "self"
     scaling: StatCode | None = None
     rank_step: float = 0.15
-    #: След, который оставляет это умение. Не назван - выводится из эффекта через
-    #: ``skill_effects.tag_of``; содержимое называет его там, где эффект соврал бы, и
-    #: там, где класс иначе никогда не увидел бы все три тега.
-    tag: ActionTag | None = None
     #: Рода оружия, с которыми умение работает. Пусто - работает с любым и без
     #: оружия вовсе; выстрел без лука и удар в спину без кинжала - нет.
     weapon_types: tuple[str, ...] = ()
@@ -131,18 +67,9 @@ class Skill:
     #: умение целиком стоит на оружии, и его ``power`` это доля от его броска.
     dice: Dice | None = None
     #: Развилка, в которой стоит это умение. Умения одной развилки открываются на
-    #: одном уровне и в одной ветви, а изучить из них можно только одно, пока не
-    #: разберёшь взятое у наставника (ADR 0024). Пусто - умение ни с чем не спорит.
+    #: одном уровне, а изучить из них можно только одно, пока не разберёшь взятое
+    #: у наставника. Пусто - умение ни с чем не спорит.
     fork: str = ""
-
-    @property
-    def branch(self) -> ActionTag | None:
-        """Ветвь развития - тот же тег, которым умение оставляет след в бою.
-
-        Одно поле, а не два: ветвь «натиска» и есть то, чем в ней дерутся, и
-        пассивные умения ветви поддерживают ровно этот способ боя.
-        """
-        return self.tag
 
     @property
     def owner(self) -> str:
@@ -155,13 +82,6 @@ class Skill:
     def power_at_rank(self, rank: int) -> float:
         """Сила растёт с рангом линейно; ранг 1 - это написанное значение."""
         return self.power * (1.0 + self.rank_step * (rank - 1))
-
-    def edge(self, code: str) -> SkillEdge:
-        for edge in self.edges:
-            if edge.code == code:
-                return edge
-        msg = f"skill {self.code} has no edge {code}"
-        raise KeyError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -736,42 +656,29 @@ class ProgressionRules:
     racial_slots: int
     traits_at_creation: int
     max_rank: int
-    edge_rank: int
-    skill_point_per_level: int
-    #: Чего стоит каждый ранг, с первого по последний. Ранг тем дороже, чем он
-    #: выше: дерево дороже дохода, выучить всё нельзя, и «что взять» - вопрос
-    #: (ADR 0024).
-    rank_costs: tuple[int, ...]
-    #: Сколько очков нужно вложить в ветвь, чтобы открыть её ступени со второй по
-    #: четвёртую. Первая открыта всегда, поэтому первое число - ноль.
-    branch_gates: tuple[int, ...]
-    #: Уровни, с которых начинаются ступени ветви. Ступень умения читается по
-    #: его уровню открытия, а не пишется у каждого: соврать нечем.
-    branch_tier_levels: tuple[int, ...]
+    #: Через сколько уровней приходит очко умений. Два: очко за каждый уровень
+    #: раздавало больше, чем дерево стоит, и «что взять» переставало быть
+    #: вопросом (ADR 0067).
+    levels_per_skill_point: int
+    #: Чего стоит ранг умения. Одно число на все ранги: ранг платит тем, что
+    #: умение делает, а не тем, чего он стоит (ADR 0067).
+    rank_cost: int
 
     def innate_stat_value(self, level: int) -> int:
         """Что каждая характеристика имеет на этом уровне до всяких прибавок."""
         return self.base_stat_value + round(self.stat_growth_per_level * max(0, level - 1))
 
-    def rank_cost(self, rank: int) -> int:
-        """Чего стоит подъём на ``rank``. Вне таблицы - последняя её цена."""
-        if rank < 1:
-            return 0
-        return self.rank_costs[min(rank, len(self.rank_costs)) - 1]
-
     def full_rank_cost(self) -> int:
         """Во что обходится одно умение, поднятое до предела."""
-        return sum(self.rank_costs[: self.max_rank])
+        return self.rank_cost * self.max_rank
 
-    def tier_of_level(self, level: int) -> int:
-        """Ступень ветви, на которой стоит умение, открывающееся на этом уровне."""
-        return sum(1 for edge in self.branch_tier_levels if level >= edge) or 1
+    def skill_points_at(self, level: int) -> int:
+        """Сколько очков умений выдано к этому уровню - всего, с первого.
 
-    def gate_for_tier(self, tier: int) -> int:
-        """Сколько очков в ветви требует эта ступень."""
-        if tier < 1:
-            return 0
-        return self.branch_gates[min(tier, len(self.branch_gates)) - 1]
+        Очко приходит через уровень, поэтому счёт ведётся делением, а не
+        умножением: иначе «каждые два» было бы правдой только в одну сторону.
+        """
+        return max(0, level) // max(1, self.levels_per_skill_point)
 
 
 @dataclass(frozen=True, slots=True)

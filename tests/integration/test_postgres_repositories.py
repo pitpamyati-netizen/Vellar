@@ -103,7 +103,6 @@ def a_character(
             actives=("cleave", None, None, None, None, None),
             racial="stonesense",
             ranks=MappingProxyType({"cleave": 3, "toughness": 1}),
-            edges=MappingProxyType({"cleave": "wide"}),
         ),
         equipment=Equipment(MappingProxyType({"weapon": "iron_axe"})),
         city_id=city_id,
@@ -284,7 +283,6 @@ async def test_a_character_survives_a_round_trip(pool, clean_user) -> None:
     # расового возвращается заполненным, хотя в строке хранился только тот один ранг,
     # который поднимали.
     assert dict(read.loadout.ranks) == {"cleave": 3, "toughness": 1, "stonesense": 1}
-    assert dict(read.loadout.edges) == {"cleave": "wide"}
     assert dict(read.equipment.items) == {"weapon": "iron_axe"}
     assert read.health == 33
     assert read.bank_gold == 900

@@ -8,32 +8,33 @@
 Таймеров нет нигде: очередь стоит и ждёт нажатия. Выход из брошенного боя один -
 кнопка «Сдаться»: она отдаёт бой, а не отменяет его.
 
-Два правила делают бой разменом, а не гонкой урона, и ни одно не добавляет
-кнопки (круга контр - «тег X бьёт тег Y» - нет, ADR 0050):
+Тегов, следа и намерений в бою нет: игроку не нужно вести счёт стойкам, чтобы
+бить (ADR 0066). Противники при этом не одинаковы - они **дерутся по-разному**, и
+разница вся в том, что каждый делает в свой ход (``EnemyRole``):
 
-- **намерение** - у того, за кого ходит движок, повадка постоянная, от породы
-  (``INTENT_CYCLE`` по имени породы и месту в строю). Перебивают её раны и почти
-  павшая цель; эпик и босс в заслон не встают. Живой игрок объявляет собственным
-  следом. Стойка одинаково открывает своего и чужого: заслон удваивает броню и
-  бьёт вполсилы, а объявивший напор - **breached**: удар по нему мимо брони, его
-  собственный ответ вполсилы;
-- **след** - повтор тега даёт разгон и усиливает удар (``MOMENTUM_*``), а три
-  разных тега подряд - разнобой: противник теряет ближайший ход.
+- **громила** бьёт всегда, а на исходе сил приходит в ярость и бьёт сильнее;
+- **воин** держит строй: раненым он закрывается, и его приходится добивать;
+- **разбойник** метит в слабого: цель, которой осталась треть, он бьёт наверняка;
+- **заклинатель** раз в несколько кругов бьёт всю сторону своим родом урона;
+- **знахарь** раз в несколько кругов поднимает самого раненого в стае.
+
+Приём породы - настоящий ход, а не множитель: его слышно, он приходит по кругу
+и объявляется событием ``ROLE_MOVE``.
 
 Всякая величина - удар, умение, лечение - названа процентом от того, что растёт
 само: удар считается костями оружия, лечение и щит - долей максимума здоровья
 (ADR 0007, 0015).
 
 Вся случайность идёт от семени, переданного снаружи, поэтому бой воспроизводим.
-У намерений случайности нет вовсе: они чистая функция состояния боя, и экран с
-движком всегда называют одно и то же.
+У повадок случайности нет вовсе: чей сейчас приём, - чистая функция состояния
+боя, и экран с движком всегда называют одно и то же.
 """
 
 from __future__ import annotations
 
 import random
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import replace
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import (
@@ -41,7 +42,6 @@ from mmorpg.domain.entities.combat import (
     DEFENDERS,
     MAX_SIDE,
     ActionKind,
-    ActionTag,
     BattleAction,
     BattleEvent,
     BattleOutcome,
@@ -49,19 +49,17 @@ from mmorpg.domain.entities.combat import (
     Combatant,
     CombatantKind,
     EventKind,
-    Trace,
 )
 from mmorpg.domain.entities.content import GameContent, Skill
 from mmorpg.domain.entities.damage import UNARMED, DamageType
 from mmorpg.domain.entities.dice import Dice
 from mmorpg.domain.entities.effects import ActiveEffect, EffectStack, status_effect
-from mmorpg.domain.entities.location import Enemy, EnemyRank
+from mmorpg.domain.entities.location import Enemy, EnemyRank, EnemyRole
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.entities.statuses import DOT_STATUSES, StatusKind, status_spec
 from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.procgen.enemies import RANK_FACTORS, group_scale
 from mmorpg.domain.procgen.seeds import derive, rng, to_int
-from mmorpg.domain.rules import edges as edge_rules
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules import skills as skill_rules
@@ -74,16 +72,13 @@ from mmorpg.domain.rules.skill_effects import (
     EffectSpec,
     Inflict,
     cleansed_count,
-    recharged,
     spec_for,
-    tag_of_skill,
 )
 from mmorpg.domain.rules.stats import DerivedStats, derived_stats, primary_stats
 
 __all__ = [
     "ATTACKERS",
     "DEFENDERS",
-    "MOMENTUM_DAMAGE_PERCENT",
     "act",
     "blow_of",
     "blow_range",
@@ -93,12 +88,13 @@ __all__ = [
     "defend_dodge",
     "hero_combatant",
     "incoming_damage_factor",
-    "intent_of",
     "is_low_health",
     "join_battle",
     "joinable",
     "monster_combatant",
     "open_battle",
+    "role_move_due",
+    "role_of",
     "situational_damage",
     "spend_dot",
 ]
@@ -165,39 +161,27 @@ ARMOR_SOFTENER_BASE = gear.ARMOR_SOFTENER_BASE
 ARMOR_SOFTENER_PER_LEVEL = gear.ARMOR_SOFTENER_PER_LEVEL
 armor_factor = gear.armor_factor
 
-# --- темп: намерение, след, разгон -----------------------------------
+# --- повадки пород ---------------------------------------------------
+#
+# Противники различаются тем, что делают в свой ход, а не множителем к урону
+# (ADR 0066). Приём приходит по кругу и разведён по бойцам номером, поэтому
+# стая не делает одно и то же разом, а случайности здесь нет вовсе.
 
-#: Повадка бойца, за которого ходит движок: её задаёт порода (по её инициативе),
-#: поэтому вся стая волков стоит на экране ровным строем одного намерения.
-#: Держится весь бой, пока обстоятельства не перебьют (ADR 0050).
-INTENT_CYCLE = (ActionTag.PRESS, ActionTag.PRECISION, ActionTag.GUARD)
-#: Эпик и босс в глухую оборону не встают и раненые не цепенеют: они хозяева
-#: логова, весь бой давят. Открытость напора - их цена за длину боя.
-INTENT_ELITE = (ActionTag.PRESS,)
-#: Четверть здоровья - и зверь перестаёт разменивать удары.
+#: Через сколько кругов породе приходит её приём. Три: каждый ход это уже не
+#: приём, а обычный удар.
+ROLE_MOVE_EVERY = 3
+#: Какой долей своего удара заклинатель бьёт всю сторону сразу.
+CASTER_SWEEP_SCALE = 0.5
+#: Какую долю максимума знахарь возвращает самому раненому в стае.
+HEALER_SHARE = 0.25
+#: Ниже какой доли своего здоровья знахарь берётся поднимать товарища.
+HEALER_CALL_RATIO = 0.6
+#: Четверть здоровья - и воин закрывается, а громила приходит в ярость.
 WOUNDED_RATIO = 0.25
-#: Треть здоровья у цели - и боец бросает повадку и добивает.
-FINISH_RATIO = 1.0 / 3.0
-#: Что объявленная стойка делает с бронёй того, кто её объявил, когда по нему
-#: бьют. Повадка держится весь бой, а не круг, поэтому заслон - меньше, чем
-#: удвоение: оно растягивало бой с породой-заслоном втрое (ADR 0050).
-INTENT_ARMOR: dict[ActionTag, float] = {
-    ActionTag.PRESS: 0.75,
-    ActionTag.PRECISION: 1.0,
-    ActionTag.GUARD: 1.5,
-}
-#: И с уроном его собственного удара.
-INTENT_DAMAGE: dict[ActionTag, float] = {
-    ActionTag.PRESS: 1.0,
-    ActionTag.PRECISION: 0.95,
-    ActionTag.GUARD: 0.5,
-}
-#: Два одинаковых тега подряд - разгон.
-MOMENTUM_STREAK = 2
-#: Прибавка за каждый повтор сверх первого: третий тег подряд стоит +50%.
-MOMENTUM_DAMAGE_PERCENT = 25.0
-#: Удар того, кого застали на замахе напора, доходит вполсилы.
-BREACH_ANSWER_SCALE = 0.5
+#: Во сколько раз сильнее бьёт раненый громила.
+BRUTE_FURY_SCALE = 1.5
+#: Треть здоровья у цели - и разбойник бьёт наверняка.
+ROGUE_FINISH_RATIO = 1.0 / 3.0
 
 # --- защита ------------------------------------------------------------
 #
@@ -347,83 +331,109 @@ def _order_for(combatants: Sequence[Combatant], seed: bytes, round_number: int) 
     return tuple(one.id for one in sorted((one for one in combatants if one.alive), key=key))
 
 
-# --- намерение и темп -------------------------------------------------
+# --- повадка породы ---------------------------------------------------
 
 
-def intent_of(state: BattleState, combatant: Combatant) -> ActionTag | None:
-    """Что этот боец объявляет на свой следующий ход.
+def role_of(combatant: Combatant) -> EnemyRole | None:
+    """Как дерётся этот боец. ``None`` - за ним стоит персонаж, а не порода."""
+    return combatant.enemy.role if combatant.enemy is not None else None
 
-    Чистая функция от состояния боя: экран печатает объявление, движок держит
-    обещание, случайности здесь нет. За живого игрока объявляет его собственный
-    след. За кого ходит движок - у того постоянная повадка от породы и места в
-    строю (``INTENT_CYCLE``), пока обстоятельства её не перебьют: сам ранен - в
-    заслон, цель почти пала - в напор (ADR 0050).
+
+def is_wounded(combatant: Combatant) -> bool:
+    """Осталась ли бойцу четверть здоровья или меньше."""
+    return combatant.health <= max(1, combatant.max_health) * WOUNDED_RATIO
+
+
+def role_move_due(state: BattleState, combatant: Combatant) -> bool:
+    """Пришёл ли этому бойцу его приём в этот круг.
+
+    Чистая функция круга и номера: приём приходит через ``ROLE_MOVE_EVERY``
+    кругов, и номер разводит стаю - трое заклинателей не бьют по всем разом.
     """
-    if combatant.live:
-        return combatant.trace.last
-    # Эпик и босс - хозяева логова: в глухую оборону не встают и раненые не
-    # цепенеют, весь бой давят и метят. У обычного противника четверть здоровья -
-    # и он бросает размен.
-    elite = combatant.rank is not EnemyRank.NORMAL
-    if not elite and combatant.health * 4 <= max(1, combatant.max_health):
-        return ActionTag.GUARD
-    target = state.target_for(combatant.id)
-    if target is not None and target.health <= max(1, target.max_health) * FINISH_RATIO:
-        return ActionTag.PRESS
-    # Повадка постоянна весь бой и у каждого бойца стаи своя: место в строю
-    # разводит троих по трём намерениям, а порода (сумма кодов имени) решает, с
-    # какого из них начать (ADR 0050).
-    key = sum(map(ord, combatant.enemy.archetype_id)) if combatant.enemy is not None else 0
-    place = [one.id for one in state.combatants if one.side == combatant.side].index(combatant.id)
-    if elite:
-        return INTENT_ELITE[(key + place) % len(INTENT_ELITE)]
-    return INTENT_CYCLE[(key + place) % len(INTENT_CYCLE)]
+    return (state.round + combatant.id) % ROLE_MOVE_EVERY == 0
 
 
-@dataclass(frozen=True, slots=True)
-class TurnTempo:
-    """Всё, что правила тегов решают о ходе, посчитанное до самого хода.
+def _worst_ally(state: BattleState, actor: Combatant) -> Combatant | None:
+    """Самый раненый в стае, кроме самого знахаря. ``None`` - поднимать некого."""
+    hurt = [
+        one
+        for one in state.allies_of(actor.id)
+        if one.alive and one.id != actor.id and one.health < one.max_health * HEALER_CALL_RATIO
+    ]
+    if not hurt:
+        return None
+    return min(hurt, key=lambda one: (one.health / max(1, one.max_health), one.id))
 
-    Считать заранее приходится: разгон меняет урон того самого действия, которое
-    его и заработало, а разнобой решает, останется ли ход за бойцом.
+
+def role_action(state: BattleState, actor: Combatant, target_id: int) -> BattleAction | None:
+    """Что повадка велит этому бойцу сделать вместо обычного удара.
+
+    ``None`` - ничего особенного: бьёт, как бьют все. Эпик и босс своих приёмов
+    не бросают, но и не закрываются: хозяин логова весь бой давит.
     """
+    role = role_of(actor)
+    if role is None:
+        return None
+    elite = actor.rank is not EnemyRank.NORMAL
+    if role is EnemyRole.WARRIOR and not elite and is_wounded(actor):
+        # Раненый воин закрывается - тем и держится. Отдельной кнопки для этого
+        # не нужно: «Защититься» есть у всякого (ADR 0025).
+        return BattleAction(kind=ActionKind.DEFEND)
+    if not role_move_due(state, actor):
+        return None
+    if role is EnemyRole.CASTER and state.visible_foes_of(actor.id):
+        return BattleAction(kind=ActionKind.ROLE, target=target_id)
+    if role is EnemyRole.HEALER and _worst_ally(state, actor) is not None:
+        return BattleAction(kind=ActionKind.ROLE, target=target_id)
+    return None
 
-    intents: Mapping[int, ActionTag | None]
-    tag: ActionTag | None = None
-    streak: int = 0
-    #: Три разных тега подряд: противник, на ком размен сломался, теряет ход.
-    breakthrough: bool = False
-    #: Что объявил на этот ход тот, кто ходит. У живого игрока объявления нет -
-    #: за него стоит ``tag`` (тег выбранного действия).
-    own_intent: ActionTag | None = None
 
-    @property
-    def momentum(self) -> bool:
-        return self.streak >= MOMENTUM_STREAK
+def _role_move(
+    content: GameContent,
+    roster: Mapping[int, Character],
+    state: BattleState,
+    actor: Combatant,
+    source: random.Random,
+) -> BattleState:
+    """Приём породы: удар заклинателя по всем или рука знахаря.
 
-    def breached(self, combatant_id: int) -> bool:
-        """Застали ли эту цель на замахе напора.
-
-        Напор - это и «бью сильнее», и «открыт», и открыт одинаково с обеих
-        сторон: удар по объявившему мимо брони, его ответ вполсилы (ADR 0050).
-        """
-        return self.intents.get(combatant_id) is ActionTag.PRESS
-
-    def armor_scale(self, combatant_id: int) -> float:
-        """Что объявленная этой целью стойка делает с её же бронёй в этот ход.
-
-        Заслон броню поднимает; напор выносит её из счёта целиком (цель на замахе);
-        финт не трогает. Для живого игрока «объявление» - это его последний тег
-        (``intent_of``).
-        """
-        if self.breached(combatant_id):
-            return 0.0
-        intent = self.intents.get(combatant_id)
-        return INTENT_ARMOR[intent] if intent is not None else 1.0
-
-    @property
-    def damage_scale(self) -> float:
-        return 1.0 + MOMENTUM_DAMAGE_PERCENT * max(0, self.streak - 1) / 100.0
+    Обычный удар в этот ход не наносится: приём и есть ход. Прочие повадки сюда
+    не доходят - им приём не объявляют (``role_action``).
+    """
+    role = role_of(actor)
+    working = state.with_events(
+        BattleEvent(kind=EventKind.ROLE_MOVE, actor_id=actor.id, actor=actor.name)
+    )
+    if role is EnemyRole.HEALER:
+        mended = _worst_ally(working, actor)
+        if mended is None:  # pragma: no cover - приём объявляют, только когда есть кого
+            return working
+        return _heal(
+            working,
+            mended.id,
+            round(mended.max_health * HEALER_SHARE),
+            _modifiers_of(content, roster, mended),
+        )
+    power = float(actor.enemy.damage if actor.enemy else 1) * CASTER_SWEEP_SCALE
+    for foe in working.visible_foes_of(actor.id):
+        current = working.by_id(foe.id)
+        if current is None or not current.alive:  # pragma: no cover - цель могла пасть
+            continue
+        striker = working.by_id(actor.id)
+        if striker is None or not striker.alive:  # pragma: no cover
+            break
+        working, _ = _strike(
+            content,
+            roster,
+            working,
+            actor=striker,
+            target=current,
+            power=power,
+            spec=None,
+            skill_name="",
+            source=source,
+        )
+    return working
 
 
 # --- один ход ---------------------------------------------------------
@@ -531,13 +541,10 @@ def _take_turn(
     # её не снимает - иначе умение гасило бы само себя (ADR 0043).
     was_unseen = actor.effects.has(StatusKind.UNSEEN)
 
-    tempo = _tempo(content, roster, state, actor, action)
-    working = _announce_tempo(state, actor, tempo)
-    working = _perform(content, roster, working, actor.id, action, tempo, source)
+    working = _perform(content, roster, state, actor.id, action, source)
 
     updated = working.by_id(actor_id)
     if updated is not None:
-        updated = replace(updated, trace=_advanced_trace(updated.trace, tempo))
         if (
             was_unseen
             and action.kind is not ActionKind.DEFEND
@@ -575,35 +582,7 @@ def _take_turn(
     if working.is_over:
         return working
 
-    if tempo.breakthrough:
-        # Размен сломан: тот, на ком он сломался, теряет ближайший ход.
-        working = _off_balance(working, actor, _target_of(working, actor, action.target))
     return _advance(working, seed)
-
-
-def _off_balance(state: BattleState, actor: Combatant, target: Combatant | None) -> BattleState:
-    """Сбить с ритма того, на ком размен сломался: он пропустит ближайший ход.
-
-    Одного, а не всю сторону: в бою четверых три разных тега отнимали бы у
-    противника целый круг, и один игрок решал бы бой за весь отряд (ADR 0021).
-    """
-    working = state.with_events(
-        BattleEvent(kind=EventKind.BREAKTHROUGH, actor_id=actor.id, actor=actor.name)
-    )
-    shaken = target if target is not None else next(iter(working.foes_of(actor.id)), None)
-    if shaken is None or not shaken.alive:
-        return working
-    current = working.by_id(shaken.id)
-    if current is None or not current.alive:  # pragma: no cover - цель могла пасть
-        return working
-    return _inflicted(
-        working,
-        current.id,
-        Inflict(kind=StatusKind.STUN, turns=1),
-        power=0.0,
-        skill_name="",
-        source_code="breakthrough",
-    )
 
 
 def _advance(state: BattleState, seed: bytes) -> BattleState:
@@ -655,100 +634,12 @@ def _refusal(
             return None
 
 
-def _tempo(
-    content: GameContent,
-    roster: Mapping[int, Character],
-    state: BattleState,
-    actor: Combatant,
-    action: BattleAction,
-) -> TurnTempo:
-    """Намерения противной стороны, тег бойца и то, что из этого следует."""
-    intents = {
-        one.id: intent_of(state, one)
-        for one in state.combatants
-        if one.alive and one.id != actor.id
-    }
-    tag = _action_tag(content, roster, state, actor, action)
-    # Объявленное самим ходящим: по нему считается сила его удара и то, можно ли
-    # от удара увернуться. У живого игрока объявления нет.
-    own = None if actor.live else intent_of(state, actor)
-    if tag is None or actor.effects.control() is not None:
-        return TurnTempo(intents=intents, own_intent=own)
-
-    trace = actor.trace
-    # Разгон - награда за выбор, а выбор делает тот, за кем стоит персонаж. Порода
-    # бьёт одним и тем же тегом всегда, и разгона за однообразие ей не полагается.
-    # Своя стойка у неё есть - её объявляет ``intent_of``.
-    if not actor.is_hero:
-        return TurnTempo(intents=intents, streak=1, own_intent=own)
-    return TurnTempo(
-        intents=intents,
-        tag=tag,
-        streak=trace.streak + 1 if trace.last is tag else 1,
-        breakthrough=trace.breaks_with(tag),
-        own_intent=own,
-    )
-
-
-def _action_tag(
-    content: GameContent,
-    roster: Mapping[int, Character],
-    state: BattleState,
-    actor: Combatant,
-    action: BattleAction,
-) -> ActionTag | None:
-    """След, который оставит это действие, или ``None``, когда следа нет."""
-    match action.kind:
-        case ActionKind.ATTACK:
-            return ActionTag.PRESS
-        case ActionKind.DEFEND:
-            return ActionTag.GUARD
-        case ActionKind.ITEM:
-            return ActionTag.GUARD if action.item_id is not None else None
-        case ActionKind.FLEE | ActionKind.FOCUS | ActionKind.YIELD:
-            return None
-        case ActionKind.SKILL | ActionKind.RACIAL:
-            attempt = _attempt_skill(content, roster, state, actor, action)
-            return None if isinstance(attempt, BattleEvent) else tag_of_skill(attempt[0])
-
-
-def _announce_tempo(state: BattleState, actor: Combatant, tempo: TurnTempo) -> BattleState:
-    working = state
-    if tempo.momentum:
-        working = working.with_events(
-            BattleEvent(
-                kind=EventKind.MOMENTUM,
-                actor_id=actor.id,
-                actor=actor.name,
-                amount=tempo.streak,
-            )
-        )
-    for one in working.foes_of(actor.id):
-        if tempo.breached(one.id):
-            working = working.with_events(
-                BattleEvent(kind=EventKind.BREACH, target_id=one.id, target=one.name)
-            )
-    return working
-
-
-def _advanced_trace(trace: Trace, tempo: TurnTempo) -> Trace:
-    """Разнобой тратит след, всё прочее его удлиняет; ход без тега не трогает.
-
-    Без траты следа вечное «напор - заслон - финт» ломало бы каждый ход с
-    четвёртого, и противник не ходил бы больше никогда.
-    """
-    if tempo.tag is None:
-        return trace
-    return Trace() if tempo.breakthrough else trace.push(tempo.tag)
-
-
 def _perform(
     content: GameContent,
     roster: Mapping[int, Character],
     state: BattleState,
     actor_id: int,
     action: BattleAction,
-    tempo: TurnTempo,
     source: random.Random,
 ) -> BattleState:
     actor = state.by_id(actor_id)
@@ -756,11 +647,13 @@ def _perform(
         return state
     match action.kind:
         case ActionKind.ATTACK:
-            return _basic_attack(content, roster, state, actor, action.target, tempo, source)
+            return _basic_attack(content, roster, state, actor, action.target, source)
         case ActionKind.DEFEND:
             return _defend(state, actor)
         case ActionKind.SKILL | ActionKind.RACIAL:
-            return _use_skill(content, roster, state, actor, action, tempo, source)
+            return _use_skill(content, roster, state, actor, action, source)
+        case ActionKind.ROLE:
+            return _role_move(content, roster, state, actor, source)
         case ActionKind.ITEM:
             return _use_item(content, roster, state, actor, action)
         case ActionKind.FLEE:
@@ -829,7 +722,6 @@ def _basic_attack(
     state: BattleState,
     actor: Combatant,
     requested: int,
-    tempo: TurnTempo,
     source: random.Random,
 ) -> BattleState:
     target = _target_of(state, actor, requested)
@@ -847,10 +739,10 @@ def _basic_attack(
         power = blow_roll(content, character, source, actor.effects) * BASIC_ATTACK_PERCENT / 100.0
         skill_name = "Атака"
     else:
-        # За кого ходит движок, тот бьёт так, как объявил: натиск сильнее,
-        # оборона слабее.
-        intent = tempo.own_intent or intent_of(state, actor) or ActionTag.PRESS
-        power = float(actor.enemy.damage if actor.enemy else 1) * INTENT_DAMAGE[intent]
+        # Порода бьёт своим ударом; громила на исходе сил бьёт сильнее - это и
+        # есть вся его повадка (ADR 0066).
+        fury = BRUTE_FURY_SCALE if role_of(actor) is EnemyRole.BRUTE and is_wounded(actor) else 1.0
+        power = float(actor.enemy.damage if actor.enemy else 1) * fury
         skill_name = ""
 
     struck, _ = _strike(
@@ -862,7 +754,6 @@ def _basic_attack(
         power=power,
         spec=None,
         skill_name=skill_name,
-        tempo=tempo,
         source=source,
     )
     return struck
@@ -998,7 +889,7 @@ def _attempt_skill(
     modifiers = mods.collect_modifiers(content, character, actor.effects)
     cost = round(
         _skill_cost(skill, modifiers, free=actor.free_cast, max_resource=actor.max_resource)
-        * skill_rules.cost_factor(character, skill)
+        * skill_rules.cost_factor(character.loadout.rank_of(skill.code))
     )
     if cost > actor.resource:
         return BattleEvent(kind=EventKind.NOT_ENOUGH_RESOURCE, skill_name=skill.name, amount=cost)
@@ -1011,7 +902,6 @@ def _use_skill(
     state: BattleState,
     actor: Combatant,
     action: BattleAction,
-    tempo: TurnTempo,
     source: random.Random,
 ) -> BattleState:
     attempt = _attempt_skill(content, roster, state, actor, action)
@@ -1021,14 +911,11 @@ def _use_skill(
 
     skill, cost = attempt
     rank = character.loadout.rank_of(skill.code)
-    # Грань переписывает и силу, и само действие: что именно - объявлено в
-    # содержимом и разобрано в ``domain/rules/edges.py``.
-    edge = skill_rules.chosen_edge(character, skill)
-    power = skill.power_at_rank(rank) * edge_rules.power_factor(edge)
-    spec = edge_rules.applied(spec_for(skill.effect), edge)
-    cooldown = recharged(edge_rules.cooldown_of(skill.cooldown, edge), spec, power)
-    if rank >= content.rules.max_rank:
-        cooldown = max(0, cooldown - skill_rules.MASTERY_COOLDOWN)
+    # Ранг меняет умение вчетвером сразу: сила, откат, срок наложенного и цена
+    # (``rules/skills.rank_gain``, ADR 0067). Цена уже посчитана в ``_attempt_skill``.
+    power = skill.power_at_rank(rank)
+    spec = skill_rules.at_rank(spec_for(skill.effect), rank)
+    cooldown = skill_rules.cooldown_at_rank(skill, rank)
     reduction = mods.collect_modifiers(content, character, actor.effects).get(
         "cooldown_reduction_percent", 0.0
     )
@@ -1042,7 +929,7 @@ def _use_skill(
         spent = spent.with_cooldown(skill.code, cooldown + 1)
     working = state.replace_combatant(spent)
     return _apply_spec(
-        content, roster, working, spent.id, skill, spec, power, action.target, tempo, source
+        content, roster, working, spent.id, skill, spec, power, action.target, source
     )
 
 
@@ -1076,7 +963,6 @@ def _apply_spec(
     spec: EffectSpec,
     power: float,
     requested: int,
-    tempo: TurnTempo,
     source: random.Random,
 ) -> BattleState:
     working = state
@@ -1130,7 +1016,6 @@ def _apply_spec(
                     + (own_dice.roll(source) * rank_scale if own_dice is not None else 0.0),
                     spec=spec,
                     skill_name=skill.name,
-                    tempo=tempo,
                     source=source,
                 )
                 if hit and target.id not in landed:
@@ -1158,7 +1043,6 @@ def _apply_spec(
             blow=blow,
             power=power,
             skill_name=skill.name,
-            tempo=tempo,
             source=source,
         )
 
@@ -1516,7 +1400,6 @@ def _splash(
     blow: float,
     power: float,
     skill_name: str,
-    tempo: TurnTempo,
     source: random.Random,
 ) -> BattleState:
     """Вторая цель, которую задевает одноцелевой удар. Только от грани."""
@@ -1537,7 +1420,6 @@ def _splash(
         power=blow * power / 100.0 * spec.damage_scale * spec.splash,
         spec=spec,
         skill_name=skill_name,
-        tempo=tempo,
         source=source,
     )
     return struck
@@ -1834,7 +1716,6 @@ def _strike(
     power: float,
     spec: EffectSpec | None,
     skill_name: str,
-    tempo: TurnTempo,
     source: random.Random,
     answering: bool = False,
 ) -> tuple[BattleState, bool]:
@@ -1892,11 +1773,8 @@ def _strike(
             - accuracy_penalty,
         ),
     )
-    # Не уклоняются от объявленного породой финта и от удара из незаметности:
-    # первый нацелен заранее, второго цель не видит (ADR 0050).
-    dodgeable = tempo.own_intent is not ActionTag.PRECISION and not (
-        spec is not None and spec.always_hits
-    )
+    # От удара из незаметности не уклоняются: цель его не видит (ADR 0043).
+    dodgeable = not (spec is not None and spec.always_hits)
     if dodgeable and source.uniform(0, 100) > hit_chance:
         # По герою - «уклонился», по породе - «промах». Одно и то же число, но
         # игрок слышит в нём своё уклонение, а не чужую неловкость: за первым
@@ -1927,7 +1805,6 @@ def _strike(
         attacker_health_ratio=actor.health / max(1, actor.max_health),
         round_number=state.round,
     )
-    raw *= tempo.damage_scale if not answering else 1.0
     if spec is not None and spec.execute_scaling:
         missing = 1.0 - target.health / max(1, target.max_health)
         raw *= 1.0 + missing * spec.execute_scaling
@@ -1937,20 +1814,18 @@ def _strike(
     raw *= mods.percent(target_mods, "damage_taken_percent")
 
     pierce = spec.pierce if spec is not None else 0.0
-    # Заслон удваивает броню цели; напор выносит её из счёта целиком (цель на
-    # замахе); финт брони не трогает (``TurnTempo.armor_scale``).
-    effective_armor = (
-        _armor_of(content, roster, target) * (1.0 - pierce) * tempo.armor_scale(target.id)
-    )
+    effective_armor = _armor_of(content, roster, target) * (1.0 - pierce)
     raw *= armor_factor(effective_armor, target.level)
     raw *= incoming_damage_factor(target_mods, struck_with)
-    # Удар того, кого застали на замахе напора, доходит вполсилы: он открылся, и
-    # платит этим же ходом, а не следующим.
-    if actor.breached:
-        raw *= BREACH_ANSWER_SCALE
 
     stats = _stats_of(content, roster, actor)
-    guaranteed = spec is not None and spec.guaranteed_crit
+    # Разбойник добивает наверняка: цель, которой осталась треть, он бьёт в
+    # слабое место (ADR 0066).
+    finishing = (
+        role_of(actor) is EnemyRole.ROGUE
+        and target.health <= max(1, target.max_health) * ROGUE_FINISH_RATIO
+    )
+    guaranteed = finishing or (spec is not None and spec.guaranteed_crit)
     crit_chance = (stats.crit_chance if stats is not None else 0.0) + (
         spec.crit_bonus if spec is not None else 0.0
     )
@@ -1963,8 +1838,6 @@ def _strike(
     # Испуганного приводит в чувство первый же удар, а ушедшего из виду - выдаёт:
     # оба спадают от долетевшего удара (``_shed_on_hit``).
     hurt, revealed = _shed_on_hit(hurt)
-    if tempo.breached(target.id):
-        hurt = replace(hurt, breached=True)
     # Пока держится «Последний рубеж», боец не падает.
     if not hurt.alive and target.effects.modifiers().get(UNDYING, 0.0) > 0:
         hurt = replace(hurt, health=1)
@@ -2026,7 +1899,6 @@ def _strike(
             attacker_id=actor.id,
             target_id=hurt.id,
             taken=amount,
-            tempo=tempo,
             source=source,
         )
     return working, True
@@ -2082,7 +1954,6 @@ def _answered(
     attacker_id: int,
     target_id: int,
     taken: int,
-    tempo: TurnTempo,
     source: random.Random,
 ) -> BattleState:
     """Чем цель отвечает тому, кто по ней только что попал.
@@ -2135,7 +2006,6 @@ def _answered(
             power=blow_roll(content, character, source, defender.effects) * counter / 100.0,
             spec=None,
             skill_name=named,
-            tempo=tempo,
             source=source,
             answering=True,
         )
@@ -2309,8 +2179,7 @@ def _upkeep(
         return state
 
     modifiers = _modifiers_of(content, roster, one)
-    # Брешь живёт до ответа: он только что походил - снимаем.
-    updated = replace(one.tick_cooldowns(), breached=False)
+    updated = one.tick_cooldowns()
 
     # Состояния платят по счёту до того, как срок укоротится: горение на три
     # хода жжёт три раза, а не два.
@@ -2535,14 +2404,18 @@ def _chosen_by_engine(
 ) -> BattleAction:
     """Ход того, за кем не стоит живой игрок.
 
-    Порода бьёт тем, чем объявила. Персонаж под управлением движка - слепок
-    противника на арене - дерётся своими умениями: он и есть тот игрок, только
-    решает за него движок (ADR 0021).
+    Порода дерётся по своей повадке: воин раненым закрывается, заклинатель раз
+    в несколько кругов бьёт всю сторону, знахарь поднимает своего, а громила и
+    разбойник просто бьют - у них повадка ложится в сам удар (ADR 0066).
+    Персонаж под управлением движка - слепок противника на арене - дерётся своими
+    умениями: он и есть тот игрок, только решает за него движок (ADR 0021).
     """
     target = _forced_target(state, actor) or _weakest_foe(state, actor)
     target_id = target.id if target is not None else 0
     if not actor.is_hero:
-        return BattleAction(kind=ActionKind.ATTACK, target=target_id)
+        return role_action(state, actor, target_id) or BattleAction(
+            kind=ActionKind.ATTACK, target=target_id
+        )
 
     source = rng(derive(seed, "engine", state.round, actor.id))
     character = roster.get(actor.id)

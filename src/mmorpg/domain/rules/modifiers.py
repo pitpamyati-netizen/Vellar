@@ -16,7 +16,6 @@ from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.damage import RESIST_KEYS
 from mmorpg.domain.entities.effects import EffectStack
 from mmorpg.domain.entities.stats import StatBlock, StatCode
-from mmorpg.domain.rules import edges as edge_rules
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import houses as house_rules
 from mmorpg.domain.rules import repair
@@ -166,19 +165,15 @@ def passive_modifiers(content: GameContent, character: Character) -> dict[str, f
 
     Изучено - значит работает: слотов у пассивных умений нет (ADR 0016).
 
-    Грань пассивного умения считается здесь и больше нигде: у пассивного умения нет
-    ни хода, ни цели, поэтому всё, что грань может ему сделать, - поднять его
-    собственную прибавку и добавить свою.
+    Ранг пассивного умения виден только здесь: у пассивного нет ни хода, ни
+    отката, ни цены, и всё, что ранг ему прибавляет, - размер самой прибавки.
     """
     bundles: list[Mapping[str, float]] = []
     # Изученное переживает содержимое: умения, которого больше нет, здесь просто
     # нет (``Claude.md``, правило 8) - ``known_passives`` отбирает по реестру.
     for skill in skill_rules.known_passives(content, character):
         rank = character.loadout.rank_of(skill.code)
-        edge = skill_rules.chosen_edge(character, skill)
-        bundles.append({skill.effect: skill.power_at_rank(rank) * edge_rules.power_factor(edge)})
-        if edge is not None and edge.self_modifiers:
-            bundles.append(dict(edge.self_modifiers))
+        bundles.append({skill.effect: skill.power_at_rank(rank)})
     return merge(*bundles)
 
 

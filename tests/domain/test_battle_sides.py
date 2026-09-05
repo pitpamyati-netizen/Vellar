@@ -235,15 +235,15 @@ def test_a_duel_pays_no_experience(content: GameContent) -> None:
     assert state.loot == ()
 
 
-def test_every_hero_keeps_their_own_trace(content: GameContent) -> None:
-    """След - у бойца, а не у боя: в поединке двоих их два, и они разные."""
+def test_a_turn_belongs_to_one_fighter(content: GameContent) -> None:
+    """Ход - у бойца, а не у боя: сходил один, и очередь ушла к другому."""
     left = [(a_hero("Аргус", 1), True)]
     right = [(a_hero("Корин", 3), True)]
     state, roster = build(content, left, right)
+    first = state.active
     after = strike(content, roster, state)
-    first, second = after.by_id(1), after.by_id(2)
-    assert first is not None and second is not None
-    assert first.trace != second.trace, "сходил один - след появился у него"
+    assert first is not None and after.active is not None
+    assert after.active.id != first.id, "сходил один - очередь у другого"
 
 
 # --- вмешательство в чужой бой (ADR 0065) ------------------------------

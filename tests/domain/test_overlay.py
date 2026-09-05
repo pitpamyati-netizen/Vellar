@@ -763,15 +763,17 @@ def test_a_keeper_tunes_stat_points_per_level(content: GameContent) -> None:
 
     assert world.rules.stat_points_per_level == 7
     # Всё, что не трогали, осталось как в файлах.
-    assert world.rules.rank_costs == content.rules.rank_costs
+    assert world.rules.rank_cost == content.rules.rank_cost
     assert world.rules.base_stat_value == content.rules.base_stat_value
 
 
-def test_a_keeper_rewrites_the_rank_ladder(content: GameContent) -> None:
-    world = apply(content, _meta(content, rank_costs="1, 1, 2, 2, 3"))
+def test_a_keeper_reprices_the_rank_and_the_income(content: GameContent) -> None:
+    world = apply(content, _meta(content, rank_cost="2", levels_per_skill_point="3"))
 
-    assert world.rules.rank_costs == (1, 1, 2, 2, 3)
-    assert world.rules.rank_cost(3) == 2
+    assert world.rules.rank_cost == 2
+    assert world.rules.full_rank_cost() == 2 * world.rules.max_rank
+    assert world.rules.levels_per_skill_point == 3
+    assert world.rules.skill_points_at(9) == 3
 
 
 def test_dropping_the_meta_edit_restores_the_files(content: GameContent) -> None:
@@ -783,11 +785,8 @@ def test_dropping_the_meta_edit_restores_the_files(content: GameContent) -> None
 def test_meta_refuses_values_that_break_the_rules(content: GameContent) -> None:
     assert refused_for(content, _meta(content, stat_points_per_level="-1"), "меньше нуля")
     assert refused_for(content, _meta(content, base_stat_value="500"), "не тюнинг")
-    assert refused_for(content, _meta(content, rank_costs="1, 2"), "по одному на ранг")
-    assert refused_for(content, _meta(content, rank_costs="1, -2, 2, 3, 4"), "отрицательных")
-    assert refused_for(content, _meta(content, branch_gates="4, 2, 1"), "всегда 0")
-    assert refused_for(content, _meta(content, branch_gates="0, 8, 4"), "по возрастанию")
-    assert refused_for(content, _meta(content, rank_costs="раз, два"), "целые числа через запятую")
+    assert refused_for(content, _meta(content, rank_cost="-1"), "меньше нуля")
+    assert refused_for(content, _meta(content, levels_per_skill_point="-2"), "меньше нуля")
 
 
 def test_a_broken_meta_edit_does_not_touch_the_world(content: GameContent) -> None:

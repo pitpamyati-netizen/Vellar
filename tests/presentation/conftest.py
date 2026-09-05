@@ -25,7 +25,7 @@ from mmorpg.domain.entities import (
     SkillLoadout,
     StatBlock,
 )
-from mmorpg.domain.entities.combat import ActionTag, BattleState, Trace
+from mmorpg.domain.entities.combat import BattleState
 from mmorpg.domain.entities.content import Item
 from mmorpg.domain.entities.craft import CraftLog, CraftProgress
 from mmorpg.domain.entities.location import (
@@ -250,19 +250,15 @@ def crowded_fight(content: GameContent, fighter: Character) -> BattleState:
         )
         for index, name in enumerate(("Серый волк", "Волчица", "Вожак стаи"))
     )
-    state = build_battle(content, fighter, pack)
-    hero = state.by_id(1)
-    assert hero is not None
-    marked = state.replace_combatant(replace(hero, trace=Trace((ActionTag.GUARD, ActionTag.PRESS))))
-    return replace(marked, round=7)
+    return replace(build_battle(content, fighter, pack), round=7)
 
 
 @pytest.fixture(scope="session")
 def duel_fight(content: GameContent, fighter: Character) -> BattleState:
     """Поединок двоих живых: у обоих панель, ход у того, кто быстрее.
 
-    Экран боя обязан звучать и с этой стороны: «Против вас» здесь - человек, а
-    намерения у человека нет, есть след (ADR 0021).
+    Экран боя обязан звучать и с этой стороны: «Против вас» здесь - человек, и
+    повадки у него нет: за ним стоит игрок (ADR 0021, 0066).
     """
     other = replace(fighter, id=77, user_id=99, name="Мирна")
     left = hero_combatant(content, fighter, combatant_id=1, side=0, live=True)
@@ -310,7 +306,6 @@ def sealbearer(fighter: Character) -> Character:
         loadout=replace(
             fighter.loadout,
             ranks=MappingProxyType({"warrior_rassechenie": 5, "warrior_provokatsiya": 5}),
-            edges=MappingProxyType({"warrior_rassechenie": "warrior_rassechenie_a"}),
         ),
     )
 
@@ -852,7 +847,6 @@ def all_screens(
         keeper_screens.skill_learn_screen(content, hero, PageState(page=2)),
         keeper_screens.keeper_skill_screen(content, fighter, "warrior_rassechenie"),
         keeper_screens.keeper_skill_screen(content, fighter, "race_human_second_wind"),
-        keeper_screens.skill_edge_screen(content, fighter, "warrior_rassechenie"),
         keeper_screens.skill_slot_screen(content, fighter, "warrior_rassechenie"),
         keeper_screens.stats_edit_screen(replace(fighter, unspent_stat_points=6)),
         keeper_screens.stats_edit_screen(fighter, chosen="STR", notice="Сила: 4."),
@@ -1087,7 +1081,6 @@ def all_screens(
         skill_screens.slots_screen(content, fighter),
         skill_screens.pick_screen(content, fighter, 2, PageState()),
         skill_screens.pick_screen(content, hero, 0, PageState()),
-        skill_screens.edge_screen(content, fighter, content.skill("warrior_rassechenie")),
         craft_screens.crafts_screen(content, hero),
         craft_screens.crafts_screen(content, craftsman),
         craft_screens.craft_screen(content, craftsman, content.craft("mining"), {}),

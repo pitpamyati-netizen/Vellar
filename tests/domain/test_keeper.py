@@ -15,7 +15,11 @@ from mmorpg.domain.entities import Character, GameContent, SkillLoadout
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.rules import keeper
 from mmorpg.domain.rules import skills as skill_rules
-from mmorpg.domain.rules.progression import MAX_LEVEL, experience_to_reach
+from mmorpg.domain.rules.progression import (
+    MAX_LEVEL,
+    experience_to_reach,
+    skill_points_between,
+)
 from mmorpg.domain.rules.stats import derived_stats
 
 
@@ -54,7 +58,7 @@ def test_a_level_brings_the_points_a_level_brings(content: GameContent, hero: Ch
     grown, level_up = keeper.raise_level(content, hero)
 
     assert level_up.stat_points == rules.stat_points_per_level
-    assert level_up.skill_points == rules.skill_point_per_level
+    assert level_up.skill_points == skill_points_between(3, 4, rules.levels_per_skill_point)
     assert grown.unspent_stat_points == rules.stat_points_per_level
 
 
@@ -92,7 +96,7 @@ def test_a_named_level_is_climbed_one_step_at_a_time(content: GameContent, hero:
     assert grown.level == 7
     assert level_up.previous_level == 3
     assert level_up.stat_points == rules.stat_points_per_level * 4
-    assert level_up.skill_points == rules.skill_point_per_level * 4
+    assert level_up.skill_points == skill_points_between(3, 7, rules.levels_per_skill_point)
     assert grown.experience == experience_to_reach(7)
 
 
@@ -208,7 +212,6 @@ def warrior() -> Character:
             actives=("warrior_rassechenie", None, None, None, None, None),
             racial="race_human_second_wind",
             ranks=MappingProxyType({"warrior_rassechenie": 3, "race_human_second_wind": 1}),
-            edges=MappingProxyType({"warrior_rassechenie": "warrior_rassechenie_a"}),
         ),
     )
 
@@ -243,23 +246,6 @@ def test_a_rank_of_zero_forgets_the_skill_and_frees_its_slot(
     assert not skill_rules.is_known(gone, "warrior_rassechenie")
     assert "warrior_rassechenie" not in gone.loadout.actives
     assert keeper.set_skill_rank(content, warrior, "race_human_second_wind", 0) is None
-
-
-def test_lowering_the_rank_past_the_edge_rank_clears_the_edge(
-    content: GameContent, warrior: Character
-) -> None:
-    lowered = keeper.set_skill_rank(content, warrior, "warrior_rassechenie", 1)
-
-    assert lowered is not None
-    assert lowered.loadout.edge_of("warrior_rassechenie") is None
-
-
-def test_an_edge_that_is_not_on_the_skill_is_refused(
-    content: GameContent, warrior: Character
-) -> None:
-    assert keeper.set_skill_edge(content, warrior, "warrior_rassechenie", "нет-такой") is None
-    cleared = keeper.set_skill_edge(content, warrior, "warrior_rassechenie", "")
-    assert cleared is not None and cleared.loadout.edge_of("warrior_rassechenie") is None
 
 
 def test_respec_returns_every_class_point_and_keeps_the_racial(

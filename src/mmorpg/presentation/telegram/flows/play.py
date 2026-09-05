@@ -725,10 +725,6 @@ def _render(
                 state.list_page,
                 state.notice,
             )
-        case ScreenId.SKILL_EDGE if content.has_skill(state.edge_skill):
-            return skill_screens.edge_screen(content, character, content.skill(state.edge_skill))
-        case ScreenId.SKILL_EDGE:
-            return skill_screens.skills_screen(content, character, state.skill_page, state.notice)
         case ScreenId.CRAFT if content.has_craft(state.craft_id):
             here = known_city(content, state.city_id, character.city_id)
             return craft_screens.craft_screen(
@@ -1123,8 +1119,6 @@ def advance(
             return _handle_slots(content, character, state, command)
         case ScreenId.SKILL_PICK:
             return _handle_pick(content, character, state, command)
-        case ScreenId.SKILL_EDGE:
-            return _handle_edge(content, character, state, command)
         case ScreenId.TAVERN:
             return _handle_tavern(content, character, state, command)
         case ScreenId.SUMMARY:
@@ -1822,20 +1816,15 @@ def _handle_skills(
     for skill in pool:
         if not command.argument.startswith(f"{skill.name} —"):
             continue
-        if skill_rules.needs_edge(content, character, skill):
-            return replace(state, edge_skill=skill.code).at(ScreenId.SKILL_EDGE)
         learned = skill_rules.learn(content, character, skill)
         if learned is None:
             return state.with_notice(skill_screens.refusal(content, character, skill))
         rank = learned.loadout.rank_of(skill.code)
         said = f"{skill.name}: ранг {rank}. Осталось очков: {learned.unspent_skill_points}."
-        if skill_rules.needs_edge(content, learned, skill):
-            return (
-                replace(state, edge_skill=skill.code)
-                .storing(PendingWrite(character=learned))
-                .at(ScreenId.SKILL_EDGE)
-                .with_notice(said)
-            )
+        # Что ранг дал, говорится сразу: очко, о котором молчат, потрачено
+        # впустую (ADR 0067).
+        if gained := skill_screens.rank_gain_words(rank):
+            said = f"{said} Теперь {gained}."
         if skill.is_active and skill.code not in learned.loadout.equipped_actives():
             said += " Положите его в слот, иначе в бою его не будет."
         return state.storing(PendingWrite(character=learned)).with_notice(said)
@@ -1883,29 +1872,6 @@ def _handle_pick(
         )
         return mark_task(placed, character, TutorialTask.SKILL_SLOT)
     return state.with_notice("Нажмите умение из списка.")
-
-
-def _handle_edge(
-    content: GameContent, character: Character, state: PlayState, command: Command
-) -> PlayState:
-    if not content.has_skill(state.edge_skill):
-        return go_back(replace(state, edge_skill="")).with_notice("Этого умения в игре больше нет.")
-    if command.intent is not Intent.SELECT:
-        return state.with_notice("Выберите одну из двух граней.")
-    skill = content.skill(state.edge_skill)
-    for edge in skill.edges:
-        if not skill_screens.edge_label(edge.name).matches(command.argument):
-            continue
-        chosen = skill_rules.choose_edge(character, skill, edge.code)
-        if chosen is None:
-            return state.with_notice("Грань этого умения уже выбрана.")
-        # Говорится прямо, что press на умение снова покупает ранг: выбор грани
-        # ранга не поднимает, и без этой фразы экран читается как заевший.
-        said = f"{skill.name}: грань «{edge.name}» выбрана."
-        if character.loadout.rank_of(skill.code) < content.rules.max_rank:
-            said += " Ранг снова растёт за очко умений."
-        return state.storing(PendingWrite(character=chosen)).at(ScreenId.SKILLS).with_notice(said)
-    return state.with_notice("Выберите одну из двух граней.")
 
 
 # --- городские службы -------------------------------------------------

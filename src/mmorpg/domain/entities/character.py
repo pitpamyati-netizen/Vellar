@@ -35,7 +35,6 @@ class SkillLoadout:
     actives: tuple[str | None, ...] = (None,) * ACTIVE_SLOTS
     racial: str | None = None
     ranks: Mapping[str, int] = field(default_factory=dict)
-    edges: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if len(self.actives) != ACTIVE_SLOTS:
@@ -59,9 +58,6 @@ class SkillLoadout:
         """Ранг умения; единица, как только умение вообще изучено."""
         return self.ranks.get(skill_code, 1)
 
-    def edge_of(self, skill_code: str) -> str | None:
-        return self.edges.get(skill_code)
-
     def equipped_actives(self) -> tuple[str, ...]:
         return tuple(code for code in self.actives if code is not None)
 
@@ -74,11 +70,6 @@ class SkillLoadout:
         ranks = dict(self.ranks)
         ranks[skill_code] = rank
         return replace(self, ranks=MappingProxyType(ranks))
-
-    def with_edge(self, skill_code: str, edge_code: str) -> SkillLoadout:
-        edges = dict(self.edges)
-        edges[skill_code] = edge_code
-        return replace(self, edges=MappingProxyType(edges))
 
 
 @dataclass(frozen=True, slots=True)

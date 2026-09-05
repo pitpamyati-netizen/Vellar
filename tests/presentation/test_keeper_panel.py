@@ -696,7 +696,6 @@ def walk_to(panel: Panel, screen: ScreenId) -> Panel:
             ScreenId.KEEPER_SKILLS
             | ScreenId.KEEPER_SKILL
             | ScreenId.KEEPER_SKILL_LEARN
-            | ScreenId.KEEPER_SKILL_EDGE
             | ScreenId.KEEPER_SKILL_SLOT
         ):
             skilled = Character(
@@ -724,8 +723,6 @@ def walk_to(panel: Panel, screen: ScreenId) -> Panel:
             walked = walked.press(walked.button_with("Рассечение"))
             if screen is ScreenId.KEEPER_SKILL:
                 return walked
-            if screen is ScreenId.KEEPER_SKILL_EDGE:
-                return walked.press(labels.KEEPER_SKILL_EDGE_BTN.text)
             return walked.press(labels.KEEPER_SKILL_SLOT_BTN.text)
         case ScreenId.KEEPER_STATS_EDIT:
             walked = walk_to(panel, ScreenId.KEEPER_PLAYER)
@@ -993,19 +990,6 @@ def test_respec_returns_points_and_keeps_the_racial(with_players: Panel) -> None
     assert card.target.unspent_skill_points > 0
     assert "race_human_second_wind" in card.target.loadout.ranks
     assert "warrior_rassechenie" not in card.target.loadout.ranks
-
-
-def test_an_edge_is_chosen_from_the_card(with_players: Panel) -> None:
-    card = _skilled(with_players)
-    card.press(card.button_with("Рассечение"), labels.KEEPER_SKILL_EDGE_BTN.text)
-    edge = next(
-        text for text in card.buttons() if text not in {labels.BACK.text, labels.MAIN_MENU.text}
-    )
-    card.press(edge)
-
-    assert card.target is not None
-    assert card.target.loadout.edge_of("warrior_rassechenie") is not None
-    assert card.state.screen is ScreenId.KEEPER_SKILL
 
 
 def test_a_skill_is_dropped_into_a_slot(with_players: Panel) -> None:
