@@ -919,6 +919,16 @@ async def _settle_world(
                 f"Сточено до конца: {name}. Вещь не даёт ничего, пока её не починят в кузнице."
                 for name in won.broken
             )
+            # Шкуры с туш: свежевание случается там, где случился бой, и только у
+            # того, у кого в слоте нож (ADR 0062).
+            if won.skinned_id and content.has_item(won.skinned_id):
+                await inventory.add(character.id, won.skinned_id, won.skinned_count)
+                payout.extra.append(
+                    f"Снято шкур: {content.item(won.skinned_id).name}, "
+                    f"{won.skinned_count} штук. Работы записано: {won.skinned_work}."
+                )
+            if won.knife_broken:
+                payout.extra.append("Нож свежевателя сточился и рассыпался. Новый берут в лавке.")
             # Выигранный бой - один из шагов обучения, и засчитывает его сама
             # победа, где бы она ни случилась. За шаг платят тут же (ADR 0038);
             # уровень от опыта подхватит ``progression.growth`` в ``_finish``.

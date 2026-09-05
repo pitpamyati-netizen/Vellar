@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from random import Random
 
@@ -37,10 +37,28 @@ CRAFT_QUALITY_KEY = "craft_quality_percent"
 SALVAGE_YIELD_KEY = "salvage_yield_percent"
 
 
+def rank_cost(rules: CraftRules, rank: int) -> int:
+    """Сколько работы стоит шаг с этого ранга на следующий.
+
+    Ранг стоит тем больше, чем он выше, - то же правило, что и у дерева умений
+    (ADR 0024, 0062): десять рангов с одинаковой ценой были бы десятью первыми,
+    и «гранд мастер» значил бы ровно то же, что «ученик», только позже.
+    """
+    return max(1, rules.experience_per_rank) * max(1, rank)
+
+
+def earned_at(rules: CraftRules, rank: int) -> int:
+    """Вся работа, которую надо сделать, чтобы дойти до этого ранга."""
+    return sum(rank_cost(rules, step) for step in range(1, max(1, rank)))
+
+
 def rank_of(rules: CraftRules, experience: int) -> int:
     """Первый ранг - там, где начинают все; двигает его работа."""
-    earned = 1 + max(0, experience) // rules.experience_per_rank
-    return min(rules.max_rank, earned)
+    done = max(0, experience)
+    rank = 1
+    while rank < rules.max_rank and done >= earned_at(rules, rank + 1):
+        rank += 1
+    return rank
 
 
 def rank_name(rules: CraftRules, rank: int) -> str:
@@ -54,9 +72,15 @@ def into_rank(rules: CraftRules, experience: int) -> tuple[int, int]:
     На последнем ранге заполнять нечего, и пара — это ``(0, 0)``: экран говорит «выше
     некуда» вместо полосы, которая никогда не двигается.
     """
-    if rank_of(rules, experience) >= rules.max_rank:
+    rank = rank_of(rules, experience)
+    if rank >= rules.max_rank:
         return 0, 0
-    return max(0, experience) % rules.experience_per_rank, rules.experience_per_rank
+    return max(0, experience) - earned_at(rules, rank), rank_cost(rules, rank)
+
+
+def tier_of_rank(rules: CraftRules, rank: int) -> int:
+    """Уровень ступени снаряжения, которую делает этот ранг (ADR 0062)."""
+    return rules.tier_of(rank)
 
 
 def character_rank(content: GameContent, character: Character, craft_id: str) -> int:
@@ -78,6 +102,32 @@ def gather_amount(content: GameContent, character: Character, craft_id: str) -> 
     amount = rules.gather_base + rules.gather_per_rank * (rank - 1)
     modifiers = collect_modifiers(content, character)
     return max(1, round(amount * percent(modifiers, GATHER_YIELD_KEY)))
+
+
+def gather_work(rules: CraftRules, rank: int) -> int:
+    """Сколько работы записывает одна отработанная жила на этом ранге.
+
+    Растёт с рангом, как и всё прочее: восемь единиц за горсть лома не двигали
+    бы ранг мастера вовсе, и сбор перестал бы быть дорогой наверх (ADR 0062).
+    """
+    return max(1, rules.gather_experience * max(1, rank))
+
+
+def best_per_source(content: GameContent, item_ids: Sequence[str]) -> tuple[str, ...]:
+    """Лучшее сырьё каждого рода из списка: по одному на род.
+
+    Лестницы сырья идут пятью ступенями (ADR 0062), и все они лежат в земле
+    высокого уровня разом. Без этого отбора кирка в глубокой штольне выносила бы
+    железный лом в четырёх случаях из пяти: место решает, какая ступень тут
+    лежит, а не бросок.
+    """
+    best: dict[str, str] = {}
+    for item_id in item_ids:
+        item = content.item(item_id)
+        current = best.get(item.source)
+        if current is None or content.item(current).level < item.level:
+            best[item.source] = item_id
+    return tuple(best.values())
 
 
 def yields_here(

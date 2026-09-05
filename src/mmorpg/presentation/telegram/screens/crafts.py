@@ -19,13 +19,19 @@
 from __future__ import annotations
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import GameContent
+from mmorpg.domain.entities.content import GameContent, ItemKind
 from mmorpg.domain.entities.craft import Craft, Recipe
+from mmorpg.domain.procgen import items as gear_procgen
 from mmorpg.domain.rules import crafts as craft_rules
 from mmorpg.domain.rules import tools as tool_rules
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import head
+from mmorpg.presentation.telegram.screens.paginated import (
+    ListEntry,
+    PageState,
+    paginated_screen,
+)
 
 # Что есть у игрока в том виде, в каком это передаёт ветка: вещь - и сколько её в сумке.
 Owned = dict[str, int]
@@ -41,6 +47,19 @@ def rank_line(content: GameContent, character: Character, craft: Craft) -> str:
     if not needed:
         return f"ранг {rank} из {rules.max_rank}, {name}, выше некуда"
     return f"ранг {rank} из {rules.max_rank}, {name}, до следующего {needed - done} работы"
+
+
+def tier_line(content: GameContent, rank: int) -> str:
+    """Какой ступени вещи выходят из-под рук на этом ранге. Пусто - ступеней нет.
+
+    Ранг в Велларе - это не число рецептов, а ступень изделия (ADR 0062): одна и
+    та же кольчуга у ученика ветхая, а у гранд-мастера немеркнущая.
+    """
+    level = craft_rules.tier_of_rank(content.craft_rules, rank)
+    tier = gear_procgen.tier_at(content, level) if level else None
+    if tier is None:
+        return ""
+    return f"Ступень работы: {tier.named('f').lower()}, вещи {level} уровня."
 
 
 def craft_button(content: GameContent, character: Character, craft: Craft) -> Label:
@@ -59,10 +78,64 @@ def crafts_screen(content: GameContent, character: Character, notice: str = "") 
     return Screen(id=ScreenId.CRAFTS, lines=tuple(lines), rows=tuple(rows))
 
 
+def output_name(content: GameContent, recipe: Recipe) -> str:
+    """Как называется то, что выйдет из этой работы.
+
+    У снаряжения имя берётся без ведущего аффикса: какой он будет, решает бросок
+    при работе (ADR 0059), и обещать «печатку силача» там, где из-под рук выйдет
+    «печатка удачи», - это врать кнопкой.
+    """
+    parsed = gear_procgen.parse_gear_id(recipe.output_id)
+    if parsed is None:
+        return content.item(recipe.output_id).name
+    archetype_id, level, rarity_id, _ = parsed
+    if not content.has_gear_archetype(archetype_id) or not content.has_rarity(rarity_id):
+        return content.item(recipe.output_id).name
+    return gear_procgen.name_of(
+        content, content.gear_archetype(archetype_id), level, content.rarity(rarity_id)
+    )
+
+
 def recipe_button(content: GameContent, recipe: Recipe) -> Label:
     """Рецепт называет свою цену в сырье до того, как его нажали."""
     needs = ", ".join(f"{content.item(need.item_id).name} {need.count}" for need in recipe.inputs)
-    return label(f"{content.item(recipe.output_id).name} — нужно: {needs}")
+    return label(f"{output_name(content, recipe)} — нужно: {needs}")
+
+
+#: Разделы списка работ. Ремесло делает разное - сырьё, доспех, оружие, мелочь, -
+#: и мастер, которому нужно одно точило, не должен слушать сорок кольчуг
+#: (правило доступности 13).
+CRAFT_SECTIONS: tuple[str, ...] = ("Сырьё", "Доспех", "Оружие", "Украшения", "Расходники")
+
+
+def section_of(content: GameContent, recipe: Recipe) -> str:
+    """В каком разделе списка стоит эта работа."""
+    item = content.item(recipe.output_id)
+    if item.kind is ItemKind.MATERIAL:
+        return "Сырьё"
+    if item.kind is ItemKind.CONSUMABLE:
+        return "Расходники"
+    if item.is_weapon:
+        return "Оружие"
+    if item.is_armor:
+        return "Доспех"
+    return "Украшения"
+
+
+def open_recipes(content: GameContent, character: Character, craft: Craft) -> tuple[Recipe, ...]:
+    """Работы, что этому мастеру по руке, начиная с последних (ADR 0062).
+
+    Ранг открывает ступень, но не закрывает пройденных: точило ученика куют и
+    гранд-мастером, и заказчик со сводки просит именно его. Порядок обратный
+    рангу нарочно - то, ради чего экран открыли, лежит на первой странице.
+    """
+    rank = craft_rules.character_rank(content, character, craft.id)
+    return tuple(
+        sorted(
+            (recipe for recipe in content.recipes_of(craft.id) if recipe.rank <= rank),
+            key=lambda recipe: (-recipe.rank, output_name(content, recipe)),
+        )
+    )
 
 
 def craft_screen(
@@ -71,6 +144,7 @@ def craft_screen(
     craft: Craft,
     owned: Owned,
     *,
+    page: PageState | None = None,
     biomes: frozenset[str] = frozenset(),
     place: str = "",
     notice: str = "",
@@ -82,25 +156,45 @@ def craft_screen(
     (``domain/rules/crafts.yields_here``).
     """
     rank = craft_rules.character_rank(content, character, craft.id)
-    lines = [
-        *head(f"{craft.name}: {rank_line(content, character, craft)}.", notice),
-        craft.description,
-    ]
-    rows: list[tuple[Label, ...]] = []
-
     if craft.gathers:
-        lines.extend(gathering_lines(content, character, craft, biomes=biomes, place=place))
-        return Screen(id=ScreenId.CRAFT, lines=tuple(lines), rows=tuple(rows))
+        lines = [
+            *head(f"{craft.name}: {rank_line(content, character, craft)}.", notice),
+            craft.description,
+            *gathering_lines(content, character, craft, biomes=biomes, place=place),
+        ]
+        return Screen(id=ScreenId.CRAFT, lines=tuple(lines), rows=())
 
     recipes = content.recipes_of(craft.id)
-    open_now = [recipe for recipe in recipes if recipe.rank <= rank]
+    open_now = open_recipes(content, character, craft)
+    state = page or PageState()
+    query = state.filters.query.casefold()
+    section = state.filters.category
+    listed = [
+        recipe
+        for recipe in open_now
+        if (not query or query in output_name(content, recipe).casefold())
+        and (not section or section_of(content, recipe) == section)
+    ]
     later = len(recipes) - len(open_now)
-    lines.append(f"Рецептов открыто: {len(open_now)} из {len(recipes)}.")
-    if later:
-        lines.append(f"Ещё {later} откроется с рангом.")
-    lines.append("Материалы уходят из сумки, готовое кладут туда же.")
-    rows.extend((recipe_button(content, recipe),) for recipe in open_now)
-    return Screen(id=ScreenId.CRAFT, lines=tuple(lines), rows=tuple(rows))
+    lead = [
+        notice,
+        craft.description,
+        tier_line(content, rank),
+        f"Работ открыто: {len(open_now)} из {len(recipes)}."
+        + (f" Ещё {later} откроется с рангом." if later else ""),
+        "Материалы уходят из сумки, готовое кладут туда же.",
+    ]
+    return paginated_screen(
+        screen_id=ScreenId.CRAFT,
+        title=f"{craft.name}: {rank_line(content, character, craft)}",
+        entries=tuple(
+            ListEntry(key=recipe.id, text=recipe_button(content, recipe).text) for recipe in listed
+        ),
+        state=state,
+        lead_lines=tuple(line for line in lead if line),
+        empty_text="Работ, что вам по руке, здесь пока нет.",
+        categories=CRAFT_SECTIONS,
+    )
 
 
 def gathering_lines(

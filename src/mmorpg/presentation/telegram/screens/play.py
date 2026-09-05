@@ -9,10 +9,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from types import MappingProxyType
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, GameContent, Location
 from mmorpg.domain.entities.location import (
+    Enemy,
     GeneratedLocation,
     LocationNode,
     NodeKind,
@@ -79,6 +81,15 @@ NODE_DESCRIPTIONS: dict[NodeKind, str] = {
 
 # Что считает узел, сказанное словами самой вещи: «Противников: 2 из 3» читается как
 # место, в котором что-то есть, а «осталось 2» — как остаток.
+#: Каким словом экран называет то, что в узле стоит (ADR 0063). У боя это те,
+#: кто ждёт, у жилы - то, что в ней лежит.
+WATCH_WORDS: dict[NodeKind, str] = {
+    NodeKind.BATTLE: "Здесь ждут",
+    NodeKind.ELITE_BATTLE: "Здесь ждёт",
+    NodeKind.BOSS_BATTLE: "Здесь ждёт",
+    NodeKind.GATHER: "Здесь берут",
+}
+
 NODE_COUNT_WORDS: dict[NodeKind, str] = {
     NodeKind.BATTLE: "Противников",
     NodeKind.ELITE_BATTLE: "Эпических противников",
@@ -351,6 +362,32 @@ def invite_label(name: str) -> Label:
     return label(f"Позвать в отряд: {name}", "🤝")
 
 
+def pack_line(pack: Sequence[Enemy]) -> str:
+    """Стая словами: кто в ней и сколько (ADR 0063).
+
+    Имена складываются, а не перечисляются подряд: «Серый волк, 3 штуки» - это
+    одна строка, а три «Серых волка» подряд - три одинаковые строки, которые
+    диктор читает трижды.
+    """
+    counted: dict[str, int] = {}
+    for enemy in pack:
+        counted[enemy.name] = counted.get(enemy.name, 0) + 1
+    return ", ".join(
+        name if count == 1 else f"{name}, {count} {plural(count, 'штука', 'штуки', 'штук')}"
+        for name, count in counted.items()
+    )
+
+
+def node_action(kind: NodeKind, watch: str = "") -> Label:
+    """Кнопка действия узла, назвавшая то, к чему она ведёт.
+
+    Слово действия стоит первым и не меняется: по нему ветка узнаёт нажатие, и
+    по нему же игрок узнаёт кнопку, которую нажимал вчера (ADR 0063).
+    """
+    action = NODE_ACTIONS[kind]
+    return label(f"{action}: {watch}" if watch else action)
+
+
 def node_left_line(standing: Standing, kind: NodeKind) -> str:
     """Сколько тут ещё есть — словами, без псевдографики.
 
@@ -393,6 +430,7 @@ def location_screen(
     roamer: Roamer | None = None,
     mood: LocationMood = LocationMood.UNTOUCHED,
     tool_note: str = "",
+    watch: Mapping[int, str] = MappingProxyType({}),
     notice: str = "",
 ) -> Screen:
     """Узел локации: что здесь, кто здесь и куда отсюда.
@@ -400,6 +438,11 @@ def location_screen(
     ``tool_note`` - одна строка об инструменте, и только у жилы: чем её берут и
     надолго ли этого хватит (``screens/crafts.tool_line``, ADR 0056). Услышать
     отказ нужно до нажатия, а не после.
+
+    ``watch`` - что стоит в узле, названное словами: стая по именам, жила по
+    сырью (``flows/play.node_watch``, ADR 0063). Экран не гадает и не хранит:
+    и то и другое - чистые функции от сида, и названы они теми же числами, с
+    какими их соберёт бой.
     """
     neighbours = tuple(location.node(index) for index in node.links)
     # Подземелье этого узла, если оно тут и свободно, - только тогда рисуется кнопка.
@@ -429,6 +472,9 @@ def location_screen(
         lines.append(node_left_line(here, node.kind))
     else:
         lines.append(f"{NODE_DESCRIPTIONS[node.kind].capitalize()}.")
+        seen = watch.get(node.index, "")
+        if seen:
+            lines.append(f"{WATCH_WORDS.get(node.kind, 'Здесь')}: {seen}.")
         risk = risk_line(node, character_level)
         if risk:
             lines.append(risk)
@@ -483,8 +529,13 @@ def location_screen(
         # пусто" значит обещать, что там когда-то что-то будет.
         door = neighbour.kind in {NodeKind.ENTRANCE, NodeKind.EXIT}
         mark = "" if door or not left_at(neighbour.index).empty else ", сейчас пусто"
+        # Что там стоит, видно отсюда: соседний узел в одном переходе, и идти в
+        # него вслепую значит выбирать наугад (ADR 0063).
+        seen = watch.get(neighbour.index, "")
+        tail = f" — {seen}" if seen and not mark else ""
         lines.append(
-            f"Узел {neighbour.index}: {neighbour.name}, {NODE_DESCRIPTIONS[neighbour.kind]}{mark}."
+            f"Узел {neighbour.index}: {neighbour.name}, "
+            f"{NODE_DESCRIPTIONS[neighbour.kind]}{mark}{tail}."
         )
 
     # Кто здесь ещё, идёт после выхода и перед соседями: это новость, а не перемещение,
@@ -495,7 +546,7 @@ def location_screen(
     elif pvp:
         lines.append("Здесь вольная земля: на этом узле могут напасть. Сейчас никого нет.")
 
-    action = label(NODE_ACTIONS[node.kind])
+    action = node_action(node.kind, "" if here.empty else watch.get(node.index, ""))
     rows: list[tuple[Label, ...]] = [(action,)]
     if roamer_open is not None:
         rows.insert(0, (labels.ENTER_ROAMER,))

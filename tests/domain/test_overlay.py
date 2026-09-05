@@ -693,7 +693,8 @@ def test_a_recipe_cannot_hang_on_a_gathering_craft(content: GameContent) -> None
 
 
 def test_a_recipe_rank_stays_inside_the_ladder(content: GameContent) -> None:
-    assert refused_for(content, _recipe(rank="9"), "С какого ранга")
+    beyond = str(content.craft_rules.max_rank + 1)
+    assert refused_for(content, _recipe(rank=beyond), "С какого ранга")
     assert accepted(content, _recipe(rank=str(content.craft_rules.max_rank)))
 
 

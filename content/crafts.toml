@@ -5,9 +5,16 @@
 # превращают его в вещи, которые уже есть в items.toml: здесь не выдумывают новых
 # вещей, поэтому лавка, сумка и таблицы добычи остаются одним списком.
 #
-# Ранги зарабатывают работой: `experience_per_rank` работы - это один ранг, вплоть
-# до `max_rank`. Ранг никогда не запирает экран, только рецепты: панель и кнопки
-# держат ту же форму и на первом ранге, и на пятом.
+# У каждого делающего ремесла свой цех, и цеха не пересекаются (ADR 0062):
+# кузнец кует железо - тяжёлый и кольчужный доспех, клинки, украшения из металла;
+# кожевник выделывает шкуры и шьёт лёгкий доспех; портной ткёт и шьёт тканое;
+# древодел точит древки, луки и посохи; алхимик варит; стряпуха кормит.
+# Собирают руду, травы, шкуры, рыбу и лес, и у каждого сбора свой инструмент.
+#
+# Ранги зарабатывают работой, и каждый следующий дороже прошлого:
+# ранг r -> r+1 стоит `experience_per_rank * r` работы, всего рангов `max_rank`.
+# Ранг никогда не запирает экран, только рецепты: панель и кнопки держат ту же
+# форму и на первом ранге, и на десятом.
 #
 # Сырьё берут не отсюда: в узлах локации и только инструментом, надетым в слот
 # «Инструмент» (docs/crafts.md, ADR 0056). Ремесло отвечает за то, сколько сырья
@@ -23,13 +30,35 @@
 # не работает ни одно ремесло.
 
 [meta]
-max_rank = 5
-experience_per_rank = 100
-rank_names = ["Ученик", "Подручный", "Мастеровой", "Мастер", "Гранд мастер"]
+max_rank = 10
+# Столько работы стоит первый шаг вверх; каждый следующий ранг стоит во столько же
+# раз больше своего номера. Всего до гранд-мастера - 2700 работы: ремесло идёт
+# рядом с полосой уровней, а не обгоняет её за вечер.
+experience_per_rank = 60
+rank_names = [
+    "Ученик",
+    "Подручный",
+    "Подмастерье",
+    "Мастеровой",
+    "Умелец",
+    "Мастер",
+    "Старший мастер",
+    "Знатный мастер",
+    "Великий мастер",
+    "Гранд мастер",
+]
 
-# Сбор: сколько приносит одна стража работы, до всяких прибавок.
+# Ступень снаряжения, которую делает ранг: `rank_tiers[ранг - 1]` - уровень
+# ступени из items.toml. Это и есть то, чем ремесло покрывает всю игру, а не пару
+# первых уровней: рецепт один, а вещь из-под рук выходит той ступени, до которой
+# мастер дорос (ADR 0062). Ступени, которых здесь нет, берут добычей и в лавке.
+rank_tiers = [5, 12, 24, 35, 46, 57, 76, 95, 113, 140]
+
+# Сбор: сколько приносит одна отработанная жила, до всяких прибавок.
 gather_base = 2
 gather_per_rank = 1
+# Работа за одну жилу растёт с рангом, как и всё прочее: восемь единиц за горсть
+# лома не двигали бы ранг мастера вовсе.
 gather_experience = 8
 
 # Качество сделанной вещи. Хорошая работа платит прежде всего самой вещью:
@@ -46,11 +75,225 @@ qualities = [
     { id = "fine", name = "Отменное", extra = 1, refund_percent = 50, rarity_step = 2 },
 ]
 good_chance_base = 12.0
-good_chance_per_rank = 6.0
+good_chance_per_rank = 4.0
 fine_chance_base = 4.0
-fine_chance_per_rank = 3.0
+fine_chance_per_rank = 2.0
 
-# --- Gathering ---
+# --- Лестницы сырья и изделий -----------------------------------------------
+#
+# `[[family]]` - лестница из пяти ступеней, по одной на каждые два ранга. Ступень
+# знает свой ранг: рецепт, написанный один раз, на первом ранге берёт железный лом,
+# а на девятом - небесное железо, и выпускает вещь своей ступени. Так и получается,
+# что рецептов немного, а покрывают они всю полосу (ADR 0062).
+#
+# `gathered_by` - собирающее ремесло, которому эта лестница принадлежит; у него
+# ступени становятся находками, а `level` и `biomes` говорят, с какого уровня и в
+# какой земле их берут. Лестница без `gathered_by` руками не берётся: её делают.
+
+[[family]]
+id = "ore"
+name = "руда"
+gathered_by = "mining"
+# Лом и то, что лежит глубже всего, берут везде: камень есть под всякой дорогой.
+grades = [
+    { item = "iron_scrap", rank = 1, level = 1 },
+    # Средние ступени руды разборчивее прочих: болотную берут у воды, горную - в
+    # камне. Кто стоит не на своей земле, кует ступенью ниже или едет дальше.
+    { item = "bog_iron", rank = 3, level = 24, biomes = [
+        "болото", "река", "берег", "море", "разлом", "кратер", "порт",
+        "корабли", "овраги", "тундра",
+    ] },
+    { item = "mountain_ore", rank = 5, level = 46, biomes = [
+        "горы", "скалы", "холмы", "ущелье", "карьер", "шахта", "плато",
+        "вершина", "вулкан", "пепел", "утёсы", "край", "кузни", "крепость",
+    ] },
+    { item = "cave_crystal", rank = 7, level = 76 },
+    { item = "sky_iron", rank = 9, level = 113 },
+]
+
+[[family]]
+id = "herb"
+name = "травы"
+gathered_by = "herbalism"
+biomes = [
+    "луга", "лес", "сады", "река", "холмы", "дорога", "берег", "болото",
+    "овраги", "тундра", "снега", "плато", "курганы", "пустошь",
+]
+grades = [
+    { item = "meadow_herbs", rank = 1, level = 1 },
+    { item = "grove_resin", rank = 3, level = 24 },
+    { item = "frost_lichen", rank = 5, level = 46 },
+    { item = "bitter_root", rank = 7, level = 76 },
+    { item = "night_bloom", rank = 9, level = 113 },
+]
+
+[[family]]
+id = "fiber"
+name = "волокно"
+gathered_by = "herbalism"
+biomes = [
+    "луга", "лес", "сады", "река", "холмы", "дорога", "берег", "болото",
+    "овраги", "тундра", "руины", "крепость", "порт", "корабли",
+]
+grades = [
+    { item = "meadow_fiber", rank = 1, level = 1 },
+    { item = "river_tow", rank = 3, level = 24 },
+    { item = "mountain_flax", rank = 5, level = 46 },
+    { item = "resin_thread", rank = 7, level = 76 },
+    { item = "snow_down", rank = 9, level = 113 },
+]
+
+# Шкуры лежат везде: зверьё есть на всякой дороге, а снимают его не только с жилы,
+# но и с того, что осталось после боя (ADR 0062).
+[[family]]
+id = "hide"
+name = "шкуры"
+gathered_by = "skinning"
+grades = [
+    { item = "wolf_pelt", rank = 1, level = 1 },
+    { item = "thick_hide", rank = 3, level = 24 },
+    { item = "scaled_hide", rank = 5, level = 46 },
+    { item = "plated_hide", rank = 7, level = 76 },
+    { item = "frost_hide", rank = 9, level = 113 },
+]
+
+[[family]]
+id = "fish"
+name = "рыба"
+gathered_by = "fishing"
+biomes = [
+    "река", "берег", "море", "болото", "порт", "корабли", "разлом",
+    "пещеры", "снега", "тундра",
+]
+grades = [
+    { item = "river_fish", rank = 1, level = 1 },
+    { item = "lake_fish", rank = 3, level = 24 },
+    { item = "sea_fish", rank = 5, level = 46 },
+    { item = "deep_fish", rank = 7, level = 76 },
+    { item = "ice_fish", rank = 9, level = 113 },
+]
+
+[[family]]
+id = "wood"
+name = "древесина"
+gathered_by = "logging"
+biomes = [
+    "лес", "сады", "болото", "река", "берег", "холмы", "овраги", "луга",
+    "дорога", "курганы", "корабли", "порт", "чертоги", "тундра",
+]
+grades = [
+    { item = "dry_branch", rank = 1, level = 1 },
+    { item = "ash_log", rank = 3, level = 24 },
+    { item = "oak_log", rank = 5, level = 46 },
+    { item = "resin_log", rank = 7, level = 76 },
+    { item = "stone_log", rank = 9, level = 113 },
+]
+
+# Делаемое сырьё: его не берут руками, его выделывают из сырого.
+
+[[family]]
+id = "bar"
+name = "слитки"
+grades = [
+    { item = "crude_ingot", rank = 1 },
+    { item = "iron_ingot", rank = 3 },
+    { item = "steel_ingot", rank = 5 },
+    { item = "deep_ingot", rank = 7 },
+    { item = "sky_ingot", rank = 9 },
+]
+
+[[family]]
+id = "leather"
+name = "кожа"
+grades = [
+    { item = "rawhide_leather", rank = 1 },
+    { item = "tanned_leather", rank = 3 },
+    { item = "dense_leather", rank = 5 },
+    { item = "plated_leather", rank = 7 },
+    { item = "frost_leather", rank = 9 },
+]
+
+[[family]]
+id = "cloth"
+name = "ткань"
+grades = [
+    { item = "coarse_cloth", rank = 1 },
+    { item = "woolen_cloth", rank = 3 },
+    { item = "dense_cloth", rank = 5 },
+    { item = "fine_linen", rank = 7 },
+    { item = "patterned_linen", rank = 9 },
+]
+
+[[family]]
+id = "board"
+name = "брус"
+grades = [
+    { item = "hewn_board", rank = 1 },
+    { item = "ash_beam", rank = 3 },
+    { item = "oak_beam", rank = 5 },
+    { item = "resin_beam", rank = 7 },
+    { item = "stone_beam", rank = 9 },
+]
+
+# Лестницы расходников: у зелья, точила и снеди тоже есть ступень, и на десятом
+# ранге варят не то же, что на первом.
+
+[[family]]
+id = "healing"
+name = "зелья лечения"
+grades = [
+    { item = "small_healing_potion", rank = 1 },
+    { item = "healing_potion", rank = 3 },
+    { item = "strong_healing_potion", rank = 5 },
+    { item = "great_healing_potion", rank = 7 },
+    { item = "full_healing_potion", rank = 9 },
+]
+
+[[family]]
+id = "draught"
+name = "настои"
+grades = [
+    { item = "small_resource_draught", rank = 1 },
+    { item = "resource_draught", rank = 3 },
+    { item = "strong_resource_draught", rank = 5 },
+    { item = "great_resource_draught", rank = 7 },
+    { item = "full_resource_draught", rank = 9 },
+]
+
+[[family]]
+id = "whetstone"
+name = "точила"
+grades = [
+    { item = "whetstone", rank = 1 },
+    { item = "hard_whetstone", rank = 3 },
+    { item = "steel_whetstone", rank = 5 },
+    { item = "deep_whetstone", rank = 7 },
+    { item = "sky_whetstone", rank = 9 },
+]
+
+[[family]]
+id = "stew"
+name = "горячее"
+grades = [
+    { item = "fish_stew", rank = 1 },
+    { item = "thick_stew", rank = 3 },
+    { item = "fish_pie", rank = 5 },
+    { item = "smoked_catch", rank = 7 },
+    { item = "feast_table", rank = 9 },
+]
+
+[[family]]
+id = "ration"
+name = "снедь"
+grades = [
+    { item = "road_ration", rank = 1 },
+    { item = "hearty_ration", rank = 3 },
+    { item = "spiced_ration", rank = 5 },
+    { item = "rich_ration", rank = 7 },
+    { item = "feast_ration", rank = 9 },
+]
+
+# --- Сбор ---
 
 [[craft]]
 id = "mining"
@@ -58,42 +301,13 @@ name = "Горное дело"
 kind = "gathering"
 stat = "END"
 description = "Бьёте породу в осыпях и старых выработках у дороги."
-yields = [
-    { item = "iron_scrap", level = 1, biomes = [
-        "дорога", "руины", "шахта", "карьер", "крепость", "кузни", "тоннели",
-        "склепы", "город мёртвых", "порт", "корабли", "башня", "чертоги",
-        "тронный зал", "подземелье",
-    ] },
-    { item = "bog_iron", level = 3, biomes = [
-        "болото", "река", "берег", "море", "разлом", "кратер",
-    ] },
-    { item = "mountain_ore", level = 4, biomes = [
-        "горы", "скалы", "холмы", "ущелье", "карьер", "шахта", "плато",
-        "вершина", "вулкан", "пепел", "утёсы", "край",
-    ] },
-    { item = "cave_crystal", level = 6, biomes = [
-        "пещеры", "подземелье", "тоннели", "склепы", "разлом", "курганы",
-    ] },
-]
 
 [[craft]]
 id = "herbalism"
 name = "Травничество"
 kind = "gathering"
 stat = "WIS"
-description = "Берёте траву и смолу там, где другие проходят мимо."
-yields = [
-    { item = "meadow_herbs", level = 1, biomes = [
-        "луга", "лес", "сады", "река", "холмы", "дорога", "берег", "плато",
-        "овраги", "тундра", "небо",
-    ] },
-    { item = "grove_resin", level = 3, biomes = [
-        "лес", "сады", "болото", "курганы", "роща", "чертоги",
-    ] },
-    { item = "frost_lichen", level = 7, biomes = [
-        "снега", "тундра", "горы", "скалы", "вершина", "утёсы", "ущелье",
-    ] },
-]
+description = "Берёте траву, смолу и волокно там, где другие проходят мимо."
 
 [[craft]]
 id = "skinning"
@@ -101,18 +315,50 @@ name = "Свежевание"
 kind = "gathering"
 stat = "AGI"
 description = "Снимаете шкуру с добычи ножом и правите её прямо в дороге."
-yields = [
-    { item = "wolf_pelt", level = 1 },
-]
 
-# --- Making ---
+[[craft]]
+id = "fishing"
+name = "Рыбная ловля"
+kind = "gathering"
+stat = "LCK"
+description = "Сидите с удочкой у воды и вытаскиваете то, что взяло."
+
+[[craft]]
+id = "logging"
+name = "Лесное дело"
+kind = "gathering"
+stat = "STR"
+description = "Валите сушняк и кряжи и вытёсываете из них то, что унесёте."
+
+# --- Работа руками ---
 
 [[craft]]
 id = "smithing"
 name = "Кузнечное дело"
 kind = "making"
 stat = "STR"
-description = "Куёте железо в городской кузне: за угол платите, за работу берёте."
+description = "Плавите руду и куёте железо: кольчугу, латы, клинки, оковку."
+
+[[craft]]
+id = "leatherwork"
+name = "Кожевенное дело"
+kind = "making"
+stat = "AGI"
+description = "Выделываете шкуры и шьёте из них лёгкий доспех и мелочь в дорогу."
+
+[[craft]]
+id = "tailoring"
+name = "Портняжное дело"
+kind = "making"
+stat = "CHA"
+description = "Прядёте волокно, ткёте и шьёте тканое: то, в чём ходят чародеи."
+
+[[craft]]
+id = "woodworking"
+name = "Древодельное дело"
+kind = "making"
+stat = "END"
+description = "Тешете брус и точите древки, луки, посохи и всё, что держат в руках."
 
 [[craft]]
 id = "alchemy"
@@ -122,47 +368,401 @@ stat = "INT"
 description = "Варите настои по счёту и весу, без обещаний чуда."
 
 [[craft]]
-id = "leatherwork"
-name = "Кожевенное дело"
+id = "cooking"
+name = "Стряпня"
 kind = "making"
-stat = "AGI"
-description = "Выделываете шкуры, добытые в дороге, и шьёте из них."
+stat = "WIS"
+description = "Варите улов с травами: горячее в дорогу и снедь перед схваткой."
 
-# --- Рецепты ---
+# --- Работы ---
+#
+# `[[line]]` - одна работа, написанная один раз и открытая на каждом ранге:
+# ступень изделия берётся из `rank_tiers`, а сырьё - из той ступени лестницы,
+# что этому рангу под руку. `gear` - вид снаряжения из items.toml,
+# `output_family` - лестница расходников или делаемого сырья.
+#
 # Партия всегда стоит больше того сырья, что в неё ушло: работа, платящая меньше,
 # чем продажа сырья, - ловушка, и tests/content её не пропускает.
 
-[[recipe]]
+# Кузнец: плавка, кольчуга и латы, железные клинки, оковка украшений.
+
+[[line]]
+id = "smith_ingot"
+craft = "smithing"
+output_family = "bar"
+inputs = [{ family = "ore", count = 2 }]
+experience = 8
+
+[[line]]
 id = "smith_whetstone"
 craft = "smithing"
-rank = 1
-inputs = [{ item = "iron_scrap", count = 2 }]
-output = { item = "whetstone", count = 1 }
-experience = 12
+output_family = "whetstone"
+inputs = [{ family = "ore", count = 2 }]
+experience = 10
 
-[[recipe]]
-id = "smith_iron_helm"
+[[line]]
+id = "smith_medium_head"
 craft = "smithing"
-rank = 2
-inputs = [{ item = "mountain_ore", count = 2 }, { item = "iron_scrap", count = 1 }]
-output = { item = "medium_head@5#common", count = 1 }
-experience = 25
+gear = "medium_head"
+inputs = [{ family = "bar", count = 2 }, { family = "hide", count = 1 }]
+experience = 18
 
-[[recipe]]
-id = "smith_chain_shirt"
+[[line]]
+id = "smith_medium_body"
 craft = "smithing"
-rank = 3
-inputs = [{ item = "mountain_ore", count = 5 }, { item = "iron_scrap", count = 3 }]
-output = { item = "medium_body@5#uncommon", count = 1 }
-experience = 40
+gear = "medium_body"
+inputs = [{ family = "bar", count = 3 }, { family = "hide", count = 1 }]
+experience = 22
 
-[[recipe]]
-id = "alchemy_small_healing"
+[[line]]
+id = "smith_medium_hands"
+craft = "smithing"
+gear = "medium_hands"
+inputs = [{ family = "bar", count = 2 }]
+experience = 16
+
+[[line]]
+id = "smith_medium_feet"
+craft = "smithing"
+gear = "medium_feet"
+inputs = [{ family = "bar", count = 2 }]
+experience = 16
+
+[[line]]
+id = "smith_heavy_head"
+craft = "smithing"
+gear = "heavy_head"
+inputs = [{ family = "bar", count = 3 }, { family = "hide", count = 1 }]
+experience = 20
+
+[[line]]
+id = "smith_heavy_body"
+craft = "smithing"
+gear = "heavy_body"
+inputs = [{ family = "bar", count = 4 }, { family = "hide", count = 1 }]
+experience = 26
+
+[[line]]
+id = "smith_heavy_hands"
+craft = "smithing"
+gear = "heavy_hands"
+inputs = [{ family = "bar", count = 3 }]
+experience = 18
+
+[[line]]
+id = "smith_heavy_feet"
+craft = "smithing"
+gear = "heavy_feet"
+inputs = [{ family = "bar", count = 3 }]
+experience = 18
+
+[[line]]
+id = "smith_dagger"
+craft = "smithing"
+gear = "dagger"
+inputs = [{ family = "bar", count = 1 }, { family = "wood", count = 1 }]
+experience = 14
+
+[[line]]
+id = "smith_short_sword"
+craft = "smithing"
+gear = "short_sword"
+inputs = [{ family = "bar", count = 2 }, { family = "wood", count = 1 }]
+experience = 18
+
+[[line]]
+id = "smith_sword"
+craft = "smithing"
+gear = "sword"
+inputs = [{ family = "bar", count = 2 }, { family = "wood", count = 1 }]
+experience = 18
+
+[[line]]
+id = "smith_greatsword"
+craft = "smithing"
+gear = "greatsword"
+inputs = [{ family = "bar", count = 3 }, { family = "wood", count = 1 }]
+experience = 22
+
+[[line]]
+id = "smith_axe"
+craft = "smithing"
+gear = "axe"
+inputs = [{ family = "bar", count = 2 }, { family = "wood", count = 1 }]
+experience = 18
+
+[[line]]
+id = "smith_mace"
+craft = "smithing"
+gear = "mace"
+inputs = [{ family = "bar", count = 2 }, { family = "wood", count = 1 }]
+experience = 18
+
+[[line]]
+id = "smith_spear"
+craft = "smithing"
+gear = "spear"
+inputs = [{ family = "bar", count = 1 }, { family = "wood", count = 2 }]
+experience = 18
+
+[[line]]
+id = "smith_rapier"
+craft = "smithing"
+gear = "rapier"
+inputs = [{ family = "bar", count = 2 }, { family = "wood", count = 1 }]
+experience = 18
+
+[[line]]
+id = "smith_warhammer"
+craft = "smithing"
+gear = "warhammer"
+inputs = [{ family = "bar", count = 3 }, { family = "wood", count = 1 }]
+experience = 22
+
+[[line]]
+id = "smith_claws"
+craft = "smithing"
+gear = "claws"
+inputs = [{ family = "bar", count = 2 }, { family = "hide", count = 1 }]
+experience = 18
+
+[[line]]
+id = "smith_scythe"
+craft = "smithing"
+gear = "scythe"
+inputs = [{ family = "bar", count = 2 }, { family = "wood", count = 2 }]
+experience = 20
+
+[[line]]
+id = "smith_symbol"
+craft = "smithing"
+gear = "symbol"
+inputs = [{ family = "bar", count = 2 }, { family = "fiber", count = 1 }]
+experience = 18
+
+[[line]]
+id = "smith_ring"
+craft = "smithing"
+gear = "ring"
+rarity = "uncommon"
+inputs = [{ family = "bar", count = 1 }, { family = "ore", count = 1 }]
+experience = 16
+
+[[line]]
+id = "smith_signet"
+craft = "smithing"
+gear = "signet"
+rarity = "uncommon"
+inputs = [{ family = "bar", count = 1 }, { family = "ore", count = 1 }]
+experience = 16
+
+[[line]]
+id = "smith_bracelet"
+craft = "smithing"
+gear = "bracelet"
+rarity = "uncommon"
+inputs = [{ family = "bar", count = 1 }, { family = "hide", count = 1 }]
+experience = 16
+
+# Кожевник: выделка и всё лёгкое.
+
+[[line]]
+id = "leather_tan"
+craft = "leatherwork"
+output_family = "leather"
+inputs = [{ family = "hide", count = 2 }]
+experience = 8
+
+[[line]]
+id = "leather_head"
+craft = "leatherwork"
+gear = "light_head"
+inputs = [{ family = "leather", count = 2 }, { family = "fiber", count = 1 }]
+experience = 18
+
+[[line]]
+id = "leather_body"
+craft = "leatherwork"
+gear = "light_body"
+inputs = [{ family = "leather", count = 3 }, { family = "fiber", count = 1 }]
+experience = 22
+
+[[line]]
+id = "leather_hands"
+craft = "leatherwork"
+gear = "light_hands"
+inputs = [{ family = "leather", count = 2 }]
+experience = 16
+
+[[line]]
+id = "leather_feet"
+craft = "leatherwork"
+gear = "light_feet"
+inputs = [{ family = "leather", count = 2 }]
+experience = 16
+
+[[line]]
+id = "leather_charm"
+craft = "leatherwork"
+gear = "charm"
+rarity = "uncommon"
+inputs = [{ family = "leather", count = 1 }, { family = "fiber", count = 1 }]
+experience = 16
+
+[[line]]
+id = "leather_talisman"
+craft = "leatherwork"
+gear = "talisman"
+rarity = "uncommon"
+inputs = [{ family = "leather", count = 1 }, { family = "hide", count = 1 }]
+experience = 16
+
+# Портной: пряжа, ткань и всё тканое.
+
+[[line]]
+id = "tailor_weave"
+craft = "tailoring"
+output_family = "cloth"
+inputs = [{ family = "fiber", count = 2 }]
+experience = 8
+
+[[line]]
+id = "tailor_head"
+craft = "tailoring"
+gear = "cloth_head"
+inputs = [{ family = "cloth", count = 2 }, { family = "fiber", count = 1 }]
+experience = 18
+
+[[line]]
+id = "tailor_body"
+craft = "tailoring"
+gear = "cloth_body"
+inputs = [{ family = "cloth", count = 3 }, { family = "fiber", count = 1 }]
+experience = 22
+
+[[line]]
+id = "tailor_hands"
+craft = "tailoring"
+gear = "cloth_hands"
+inputs = [{ family = "cloth", count = 2 }]
+experience = 16
+
+[[line]]
+id = "tailor_feet"
+craft = "tailoring"
+gear = "cloth_feet"
+inputs = [{ family = "cloth", count = 2 }]
+experience = 16
+
+[[line]]
+id = "tailor_tome"
+craft = "tailoring"
+gear = "tome"
+inputs = [{ family = "cloth", count = 2 }, { family = "leather", count = 1 }]
+experience = 20
+
+[[line]]
+id = "tailor_pendant"
+craft = "tailoring"
+gear = "pendant"
+rarity = "uncommon"
+inputs = [{ family = "cloth", count = 1 }, { family = "fiber", count = 1 }]
+experience = 16
+
+[[line]]
+id = "tailor_amulet"
+craft = "tailoring"
+gear = "amulet"
+rarity = "uncommon"
+inputs = [{ family = "cloth", count = 1 }, { family = "bar", count = 1 }]
+experience = 16
+
+# Древодел: брус, древки и всё, что точат.
+
+[[line]]
+id = "wood_beam"
+craft = "woodworking"
+output_family = "board"
+inputs = [{ family = "wood", count = 2 }]
+experience = 8
+
+[[line]]
+id = "wood_bow"
+craft = "woodworking"
+gear = "bow"
+inputs = [{ family = "board", count = 2 }, { family = "fiber", count = 1 }]
+experience = 20
+
+[[line]]
+id = "wood_crossbow"
+craft = "woodworking"
+gear = "crossbow"
+inputs = [{ family = "board", count = 2 }, { family = "bar", count = 1 }]
+experience = 22
+
+[[line]]
+id = "wood_staff"
+craft = "woodworking"
+gear = "staff"
+inputs = [{ family = "board", count = 2 }, { family = "fiber", count = 1 }]
+experience = 20
+
+[[line]]
+id = "wood_wand"
+craft = "woodworking"
+gear = "wand"
+inputs = [{ family = "board", count = 1 }, { family = "bar", count = 1 }]
+experience = 16
+
+[[line]]
+id = "wood_totem"
+craft = "woodworking"
+gear = "totem"
+inputs = [{ family = "board", count = 2 }, { family = "hide", count = 1 }]
+experience = 20
+
+[[line]]
+id = "wood_orb"
+craft = "woodworking"
+gear = "orb"
+inputs = [{ family = "board", count = 1 }, { family = "ore", count = 2 }]
+experience = 20
+
+# Алхимик: зелья и настои.
+
+[[line]]
+id = "alchemy_healing"
 craft = "alchemy"
-rank = 1
-inputs = [{ item = "meadow_herbs", count = 2 }]
-output = { item = "small_healing_potion", count = 1 }
+output_family = "healing"
+inputs = [{ family = "herb", count = 3 }]
 experience = 12
+
+[[line]]
+id = "alchemy_draught"
+craft = "alchemy"
+output_family = "draught"
+inputs = [{ family = "herb", count = 2 }, { family = "wood", count = 1 }]
+experience = 12
+
+# Стряпуха: горячее и снедь.
+
+[[line]]
+id = "cook_stew"
+craft = "cooking"
+output_family = "stew"
+inputs = [{ family = "fish", count = 2 }, { family = "herb", count = 1 }]
+experience = 10
+
+[[line]]
+id = "cook_ration"
+craft = "cooking"
+output_family = "ration"
+inputs = [{ family = "fish", count = 1 }, { family = "herb", count = 2 }]
+experience = 10
+
+# --- Штучные рецепты ---
+#
+# То, у чего лестницы нет: расти этим вещам некуда, и они написаны как есть.
 
 [[recipe]]
 id = "alchemy_antidote"
@@ -173,73 +773,9 @@ output = { item = "antidote", count = 1 }
 experience = 22
 
 [[recipe]]
-id = "alchemy_draught"
-craft = "alchemy"
-rank = 3
-inputs = [{ item = "meadow_herbs", count = 3 }, { item = "grove_resin", count = 1 }]
-output = { item = "resource_draught", count = 1 }
-experience = 38
-
-[[recipe]]
 id = "alchemy_flash_grenade"
 craft = "alchemy"
-rank = 3
-inputs = [{ item = "meadow_herbs", count = 2 }, { item = "cave_crystal", count = 1 }]
+rank = 4
+inputs = [{ item = "grove_resin", count = 2 }, { item = "bog_iron", count = 1 }]
 output = { item = "flash_grenade", count = 1 }
 experience = 40
-
-[[recipe]]
-id = "leather_jacket"
-craft = "leatherwork"
-rank = 1
-inputs = [{ item = "wolf_pelt", count = 1 }]
-output = { item = "cloth_body@1#common", count = 1 }
-experience = 14
-
-[[recipe]]
-id = "light_body@5#common"
-craft = "leatherwork"
-rank = 2
-inputs = [{ item = "wolf_pelt", count = 3 }, { item = "grove_resin", count = 1 }]
-output = { item = "light_body@5#common", count = 1 }
-experience = 26
-
-[[recipe]]
-id = "leather_bracers"
-craft = "leatherwork"
-rank = 3
-inputs = [
-    { item = "wolf_pelt", count = 6 },
-    { item = "iron_scrap", count = 2 },
-    { item = "grove_resin", count = 1 },
-]
-output = { item = "medium_hands@5#uncommon", count = 1 }
-experience = 42
-
-# Рецепты четвёртого ранга: работа для тех, кто дошёл до дальних краёв. Сырьё для
-# них лежит не у заставы — болотная руда, пещерный кристалл и мёрзлый лишайник
-# берутся там, где для этого есть земля.
-
-[[recipe]]
-id = "smith_stone_maul"
-craft = "smithing"
-rank = 4
-inputs = [{ item = "mountain_ore", count = 6 }, { item = "bog_iron", count = 3 }]
-output = { item = "mace@9#rare", count = 1 }
-experience = 60
-
-[[recipe]]
-id = "alchemy_healing"
-craft = "alchemy"
-rank = 4
-inputs = [{ item = "meadow_herbs", count = 3 }, { item = "frost_lichen", count = 1 }]
-output = { item = "healing_potion", count = 1 }
-experience = 55
-
-[[recipe]]
-id = "leather_silent_steps"
-craft = "leatherwork"
-rank = 4
-inputs = [{ item = "wolf_pelt", count = 6 }, { item = "cave_crystal", count = 2 }]
-output = { item = "light_feet@9#rare", count = 1 }
-experience = 64

@@ -249,6 +249,19 @@ class Player:
         data = await self.state.get_data()
         return PlayState.deserialise(data["play"])
 
+    async def act(self, kind: NodeKind) -> Screen:
+        """Нажать действие узла, как его нажимает игрок.
+
+        Кнопка узла называет то, к чему ведёт («Вступить в бой: Серый волк,
+        3 штуки», ADR 0063), поэтому её берут с экрана, а не выписывают руками.
+        """
+        wanted = play_screens.NODE_ACTIONS[kind]
+        found = [
+            text for row in self.sent.last.button_texts() for text in row if text.startswith(wanted)
+        ]
+        assert found, f"кнопки {wanted!r} на экране нет"
+        return await self.press(found[0])
+
 
 @pytest.fixture
 async def player(
@@ -321,6 +334,47 @@ async def walk_to(player: Player, content: GameContent, kind: NodeKind) -> int:
     return target
 
 
+# --- узел называет то, что в нём стоит (ADR 0063) ---------------------
+
+
+async def test_a_battle_node_names_who_waits_there(player: Player, content: GameContent) -> None:
+    """«Вступить в бой» не говорило ничего: игрок узнавал стаю, уже стоя в бою.
+
+    Имена в кнопке и в теле - те же, с какими бой её и соберёт: стая это чистая
+    функция от сида, и назвать её можно до нажатия (ADR 0063).
+    """
+    await walk_to(player, content, NodeKind.BATTLE)
+    screen = player.sent.last
+    action = next(
+        text
+        for row in screen.button_texts()
+        for text in row
+        if text.startswith(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
+    )
+    named = action.split(": ", 1)[1]
+    assert named, "the button says who waits"
+    assert "Здесь ждут" in screen.text() or "Здесь ждёт" in screen.text()
+    assert named in screen.text()
+
+    # И это ровно те, кто вышел в бой.
+    fight = await player.act(NodeKind.BATTLE)
+    assert any(part in fight.text() for part in named.split(",")[:1])
+
+
+async def test_a_vein_names_what_lies_in_it(player: Player, content: GameContent) -> None:
+    """Жила называет сырьё, а не «собрать сырьё»: род и ступень видны до нажатия."""
+    await walk_to(player, content, NodeKind.GATHER)
+    screen = player.sent.last
+    action = next(
+        text
+        for row in screen.button_texts()
+        for text in row
+        if text.startswith(play_screens.NODE_ACTIONS[NodeKind.GATHER])
+    )
+    assert ": " in action, action
+    assert "Здесь берут:" in screen.text()
+
+
 # --- цикл -------------------------------------------------------------
 
 
@@ -345,7 +399,7 @@ async def test_a_fresh_location_reads_as_untouched(
 async def test_a_battle_node_actually_starts_a_fight(player: Player, content: GameContent) -> None:
     """То единственное, на чём стоит всё остальное: бой открывается."""
     await walk_to(player, content, NodeKind.BATTLE)
-    screen = await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
+    screen = await player.act(NodeKind.BATTLE)
     assert screen.id is ScreenId.COMBAT
     assert screen.text().startswith("Бой. Круг 1.")
     # Первая кнопка - обычный удар; её надпись теперь называет след, который он
@@ -360,7 +414,7 @@ async def test_a_fight_ends_and_the_result_is_stored(
     argus: Character,
 ) -> None:
     await walk_to(player, content, NodeKind.BATTLE)
-    await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
+    await player.act(NodeKind.BATTLE)
 
     for _ in range(40):
         screen = await player.press("Атака")
@@ -387,7 +441,7 @@ async def test_a_won_fight_takes_one_pack_out_of_the_node(
 ) -> None:
     """Узел - не рубильник: в нём стоит несколько стай, и он их отсчитывает."""
     node = await walk_to(player, content, NodeKind.BATTLE)
-    await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
+    await player.act(NodeKind.BATTLE)
     for _ in range(40):
         outcome = (await player.press("Атака")).text()
         if outcome.startswith(("Победа.", "Поражение.")):
@@ -416,7 +470,7 @@ async def test_an_emptied_node_says_when_it_fills_up_again(
     for _ in range(size):
         await deltas.take("farhold", 1, node, wave=0, size=size, now=int(time.time()), ttl=600)
 
-    refused = await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
+    refused = await player.act(NodeKind.BATTLE)
     assert "пусто" in refused.text()
     assert "минут" in refused.text()
 
@@ -426,7 +480,7 @@ async def test_the_service_row_still_works_on_an_outcome_screen(
 ) -> None:
     """A fight that swallowed "Главное меню" would be a trap, not a screen."""
     await walk_to(player, content, NodeKind.BATTLE)
-    await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
+    await player.act(NodeKind.BATTLE)
     for _ in range(40):
         if (await player.press("Атака")).text().startswith(("Победа.", "Поражение.")):
             break
@@ -452,7 +506,7 @@ async def test_a_quiet_node_pays_and_is_remembered(
             await walk_to(player, content, kind)
         except AssertionError:
             continue
-        screen = await player.press(play_screens.NODE_ACTIONS[kind])
+        screen = await player.act(kind)
         assert "сделано" in screen.text()
         assert "Опыт:" in screen.text()
         stored = await characters.get_active(ACCOUNT)
@@ -485,7 +539,7 @@ async def test_a_new_level_arrives_as_its_own_message(
             await walk_to(player, content, kind)
         except AssertionError:
             continue
-        screen = await player.press(play_screens.NODE_ACTIONS[kind])
+        screen = await player.act(kind)
         break
     else:  # pragma: no cover - у этого сида тихий узел есть всегда
         pytest.fail("this seed produced no quiet node at all")
@@ -517,7 +571,7 @@ async def test_a_level_taken_in_a_fight_is_announced_too(
     await characters.save(almost)
 
     await walk_to(player, content, NodeKind.BATTLE)
-    await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
+    await player.act(NodeKind.BATTLE)
     for _ in range(40):
         text = (await player.press("Атака")).text()
         if text.startswith(("Победа.", "Поражение.")):
@@ -541,7 +595,7 @@ async def test_a_step_that_takes_no_level_answers_once(
 ) -> None:
     """Второе сообщение приходит только тогда, когда есть о чём."""
     await walk_to(player, content, NodeKind.BATTLE)
-    await player.press(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
+    await player.act(NodeKind.BATTLE)
     assert aside.texts == []
 
 
@@ -670,7 +724,7 @@ async def test_what_one_player_took_is_gone_for_everybody(
         is not None
     )
     node = await walk_to(player, content, quiet)
-    await player.press(play_screens.NODE_ACTIONS[quiet])
+    await player.act(quiet)
 
     stored = await deltas.state("farhold", 1, now=int(time.time()))
     assert stored.node(node).taken == 1, "the node was worked and nobody was told"

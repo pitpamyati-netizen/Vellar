@@ -155,7 +155,7 @@ def test_the_tool_decides_what_a_nameless_vein_gives(
         content, miner, vein(), seed("gather", 2), tool=content.item(SICKLE)
     )
     assert content.item(with_pick.item_id).source in {"руда", "обломки"}
-    assert content.item(with_sickle.item_id).source == "травы"
+    assert content.item(with_sickle.item_id).source in {"травы", "волокно"}
     assert with_sickle.craft_id == "herbalism"
 
 

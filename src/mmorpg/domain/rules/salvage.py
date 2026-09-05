@@ -39,15 +39,21 @@ SALVAGE_SHARE = 0.08
 SALVAGE_MAX = 12
 
 #: Во что разбирается вещь: род - источник сырья. Железо идёт в железо, кожа в
-#: кожу, а украшение - в обломки, потому что ничего другого в нём нет.
+#: кожу, тканое в волокно, а украшение - в руду, потому что ничего другого в нём
+#: нет. Цеха и здесь не путаются: что кузнец сковал, то в руду и вернётся
+#: (ADR 0062).
 _ARMOR_SOURCES: dict[str, str] = {
     "heavy": "руда",
     "medium": "руда",
     "light": "шкуры",
-    "cloth": "шкуры",
+    "cloth": "волокно",
 }
+#: Оружие, у которого главное - древко или ложе, разбирается в древесину, а не в
+#: железо: с лука снимают не сталь.
+_WOODEN_WEAPONS: frozenset[str] = frozenset({"bow", "crossbow", "staff", "wand", "totem"})
 _WEAPON_SOURCE = "руда"
-_FALLBACK_SOURCE = "обломки"
+_WOOD_SOURCE = "древесина"
+_FALLBACK_SOURCE = "руда"
 
 #: Сколько стоит перековка - долей от цены самой вещи. Дорого нарочно: перековка
 #: не должна быть дешевле того, чтобы сходить и выбить другую вещь.
@@ -59,7 +65,7 @@ def source_of(content: GameContent, item: Item) -> str:
     if item.is_armor:
         return _ARMOR_SOURCES.get(item.armor_type, _FALLBACK_SOURCE)
     if item.is_weapon:
-        return _WEAPON_SOURCE
+        return _WOOD_SOURCE if item.weapon_type in _WOODEN_WEAPONS else _WEAPON_SOURCE
     return _FALLBACK_SOURCE
 
 

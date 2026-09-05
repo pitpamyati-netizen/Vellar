@@ -91,3 +91,78 @@ def test_quality_pays_more_the_better_it_is(content: GameContent) -> None:
     assert good.extra >= plain.extra
     assert fine.extra + fine.refund_percent > good.extra + good.refund_percent
     assert rules.fine_chance_base < rules.good_chance_base
+
+
+# --- цеха и лестницы (ADR 0062) ---------------------------------------
+
+
+def test_each_kind_of_armour_belongs_to_exactly_one_craft(content: GameContent) -> None:
+    """Кузнец кует железо, кожевник шьёт кожу, портной - тканое. Цеха не пересекаются."""
+    from mmorpg.domain.procgen import items as gear_procgen
+
+    workshops: dict[str, set[str]] = {}
+    for recipe in content.recipes:
+        parsed = gear_procgen.parse_gear_id(recipe.output_id)
+        if parsed is None:
+            continue
+        armor_type = content.item(recipe.output_id).armor_type
+        if armor_type:
+            workshops.setdefault(armor_type, set()).add(recipe.craft_id)
+
+    assert workshops, "no craft makes armour at all"
+    for armor_type, crafts in workshops.items():
+        assert len(crafts) == 1, f"{armor_type} is made by {sorted(crafts)}"
+    assert workshops["heavy"] == workshops["medium"] == {"smithing"}
+    assert workshops["light"] == {"leatherwork"}
+    assert workshops["cloth"] == {"tailoring"}
+
+
+def test_the_recipes_cover_the_whole_road(content: GameContent) -> None:
+    """Ремесло идёт до конца полосы: у каждого ранга своя ступень, и последняя - последняя.
+
+    Рецепты, кончавшиеся на девятом уровне, делали ремесло делом первой недели
+    (ADR 0062).
+    """
+    from mmorpg.domain.procgen import items as gear_procgen
+
+    rules = content.craft_rules
+    assert len(rules.rank_tiers) == rules.max_rank
+    tiers = {tier.level for tier in content.gear_tiers}
+    assert set(rules.rank_tiers) <= tiers
+    assert rules.rank_tiers[-1] == max(tiers), "the last rank makes the last tier"
+
+    made_at: dict[int, set[int]] = {}
+    for recipe in content.recipes:
+        parsed = gear_procgen.parse_gear_id(recipe.output_id)
+        if parsed is not None:
+            made_at.setdefault(recipe.rank, set()).add(parsed[1])
+    for rank in range(1, rules.max_rank + 1):
+        assert made_at.get(rank), f"rank {rank} makes no gear at all"
+        assert made_at[rank] == {rules.tier_of(rank)}, rank
+
+
+def test_every_making_craft_climbs_to_the_last_rank(content: GameContent) -> None:
+    """Ремесло, которое кончается на середине, - это ремесло без последних рангов.
+
+    Ступенью ниже потолка кончают те, у кого лестница расходников: она меняется
+    раз в два ранга, и повторять зелье девятого ранга десятым значит рисовать две
+    одинаковые кнопки (ADR 0062).
+    """
+    for craft in content.crafts_of_kind(CraftKind.MAKING):
+        ranks = {recipe.rank for recipe in content.recipes_of(craft.id)}
+        assert max(ranks) >= content.craft_rules.max_rank - 1, craft.id
+
+
+def test_a_gathering_craft_brings_a_ladder_of_five(content: GameContent) -> None:
+    """У сырья есть ступени, и они разведены по полосе: не одна руда на все сто пятьдесят."""
+    for craft in content.crafts_of_kind(CraftKind.GATHERING):
+        levels = sorted({produced.level for produced in craft.yields})
+        assert len(levels) >= 5, craft.id
+        assert levels[0] == 1 and levels[-1] > 100, craft.id
+
+
+def test_every_tool_has_a_craft_and_every_gathering_craft_a_tool(content: GameContent) -> None:
+    """Пять сборов, пять инструментов: ремесло без своего инструмента не работает."""
+    crafts = {craft.id for craft in content.crafts_of_kind(CraftKind.GATHERING)}
+    tools = {kind.craft for kind in content.tool_types}
+    assert crafts == tools

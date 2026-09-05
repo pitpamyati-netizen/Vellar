@@ -79,8 +79,8 @@ def test_a_higher_rank_gathers_more(content: GameContent, miner: Character) -> N
 
 def test_what_lies_in_the_ground_depends_on_where_it_is(content: GameContent) -> None:
     """Одна и та же жила в горах и на болоте отдаёт разное."""
-    stony = craft_rules.yields_here(content, level=20, biomes=frozenset({"горы"}))
-    boggy = craft_rules.yields_here(content, level=20, biomes=frozenset({"болото"}))
+    stony = craft_rules.yields_here(content, level=50, biomes=frozenset({"горы"}))
+    boggy = craft_rules.yields_here(content, level=50, biomes=frozenset({"болото"}))
     assert stony and boggy
     assert set(stony) != set(boggy)
     assert "mountain_ore" in stony
@@ -145,8 +145,16 @@ def test_a_recipe_above_the_rank_is_refused(content: GameContent, miner: Charact
 
 
 def test_quality_decides_what_comes_out(content: GameContent, miner: Character) -> None:
-    """На многих партиях всплывает каждая ступень, и лучшая стоит больше."""
-    recipe = content.recipes_of("smithing")[0]
+    """На многих партиях всплывает каждая ступень, и лучшая стоит больше.
+
+    Спрос со счёта - с того, у чего редкости нет: точило и зелье качество платит
+    лишней штукой, а снаряжению - редкостью (ADR 0060).
+    """
+    recipe = next(
+        one
+        for one in content.recipes_of("smithing")
+        if gear_procgen.parse_gear_id(one.output_id) is None
+    )
     owned = {need.item_id: need.count * 3 for need in recipe.inputs}
     seen = {
         craft_rules.make(content, miner, recipe, owned, seed=seed("craft", index))[1]
@@ -217,3 +225,57 @@ def test_crafts_split_into_gathering_and_making(content: GameContent) -> None:
     making = content.crafts_of_kind(CraftKind.MAKING)
     assert gathering and making
     assert len(gathering) + len(making) == len(content.crafts)
+
+
+# --- лестница рангов и ступеней (ADR 0062) ----------------------------
+
+
+def test_a_rank_costs_more_the_higher_it_is(content: GameContent) -> None:
+    """Десять рангов с одной ценой - это десять первых, только позже (ADR 0024, 0062)."""
+    rules = content.craft_rules
+    steps = [craft_rules.rank_cost(rules, rank) for rank in range(1, rules.max_rank)]
+    assert steps == sorted(steps)
+    assert steps[-1] > steps[0]
+    assert craft_rules.earned_at(rules, 1) == 0
+    for rank in range(1, rules.max_rank + 1):
+        assert craft_rules.rank_of(rules, craft_rules.earned_at(rules, rank)) == rank
+        assert craft_rules.rank_of(rules, craft_rules.earned_at(rules, rank) - 1) == max(
+            1, rank - 1
+        )
+
+
+def test_a_rank_names_the_tier_it_makes(content: GameContent) -> None:
+    """Ранг - это ступень изделия, а не число рецептов."""
+    rules = content.craft_rules
+    tiers = [craft_rules.tier_of_rank(rules, rank) for rank in range(1, rules.max_rank + 1)]
+    assert tiers == sorted(tiers)
+    assert len(set(tiers)) == rules.max_rank
+    assert tiers[-1] == max(tier.level for tier in content.gear_tiers)
+
+
+def test_the_same_work_grows_with_the_rank(content: GameContent) -> None:
+    """Одна работа, написанная один раз, идёт по всей полосе: сырьё и ступень растут."""
+    lines = [
+        one for one in content.recipes_of("smithing") if one.id.startswith("smith_medium_body")
+    ]
+    assert len(lines) == content.craft_rules.max_rank
+    made = [content.item(one.output_id) for one in lines]
+    assert [item.level for item in made] == sorted(item.level for item in made)
+    assert made[0].level < made[-1].level
+    assert made[0].armor < made[-1].armor
+    # И берётся оно из разного: слиток первого ранга и слиток девятого - не одно и то же.
+    assert lines[0].inputs[0].item_id != lines[-1].inputs[0].item_id
+
+
+def test_gathering_writes_more_work_the_higher_the_rank(content: GameContent) -> None:
+    rules = content.craft_rules
+    assert craft_rules.gather_work(rules, 1) < craft_rules.gather_work(rules, rules.max_rank)
+
+
+def test_the_ground_gives_its_own_grade_and_not_the_whole_ladder(content: GameContent) -> None:
+    """На глубине берут глубинное: место решает ступень, а не бросок (ADR 0062)."""
+    deep = craft_rules.yields_here(content, level=150, sources=("руда",))
+    assert len(deep) > 1, "the ore ladder has grades"
+    best = craft_rules.best_per_source(content, deep)
+    assert len(best) == 1
+    assert content.item(best[0]).level == max(content.item(one).level for one in deep)

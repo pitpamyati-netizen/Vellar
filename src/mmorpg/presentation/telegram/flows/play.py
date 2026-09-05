@@ -21,6 +21,7 @@ from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, Dungeon, GameContent, Item
 from mmorpg.domain.entities.location import (
     GeneratedLocation,
+    LocationNode,
     LocationState,
     NodeKind,
     Presence,
@@ -50,6 +51,7 @@ from mmorpg.domain.rules import turning as turning_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.domain.rules.tutorial import TutorialTask
+from mmorpg.presentation.telegram.flows import combat as fight_flow
 from mmorpg.presentation.telegram.flows import keeper as keeper_flow
 from mmorpg.presentation.telegram.flows.state import (
     LIST_PAGE_FIELD,
@@ -210,6 +212,116 @@ def node_fight_seed(world_seed: str, session: LocationSession, wave: int) -> byt
     (``domain/rules/nodes.py``).
     """
     return derive(visit_seed(world_seed, session), "fight", session.node, wave)
+
+
+def node_watch(
+    content: GameContent,
+    *,
+    world_seed: str,
+    session: LocationSession,
+    location: GeneratedLocation,
+    index: int,
+    standing: Mapping[int, node_rules.Standing],
+    state: LocationState,
+    tool: Item | None = None,
+) -> str:
+    """Что стоит в этом узле - названное словами (ADR 0063).
+
+    «Вступить в бой» не говорило игроку ничего: он узнавал, кто перед ним, уже
+    стоя в бою. Узел ничего не хранит, а стая, находка и её ступень - чистые
+    функции от сида (``Claude.md``, правило 8), поэтому назвать их можно **до**
+    нажатия и ровно теми же числами, какими их соберёт бой.
+
+    Пусто - о таком узле сказать нечего: дверь, пустая волна, святилище.
+    """
+    node = location.node(index)
+    left = standing.get(index)
+    if left is None or left.empty or node.kind in {NodeKind.ENTRANCE, NodeKind.EXIT}:
+        return ""
+    if node.kind.is_combat:
+        seed = derive(
+            derive(visit_seed(world_seed, session), "fight", index, left.wave), left.taken
+        )
+        odds = dungeon_rules.affix_odds(node.kind.rank, mood_rules.mood_of(state))
+        pack = fight_flow.spawn_for_node(
+            content,
+            seed=seed,
+            biome=location.biome,
+            level=max(1, node.level),
+            rank=node.kind.rank,
+            affix_chance=odds.chance,
+            affix_count=odds.count,
+        )
+        return screens.pack_line(pack)
+    if node.kind is NodeKind.GATHER:
+        return _vein_line(content, location, node, tool)
+    return ""
+
+
+def _watched(
+    content: GameContent,
+    *,
+    world_seed: str,
+    session: LocationSession,
+    location: GeneratedLocation,
+    standing: Mapping[int, node_rules.Standing],
+    state: LocationState,
+    tool: Item | None = None,
+) -> dict[int, str]:
+    """Что стоит в этом узле и в тех, куда отсюда ведут тропы (ADR 0063).
+
+    Дальше соседей экран не смотрит: узлов в локации до двадцати восьми, а
+    собирать стаю для каждого - работа впустую ради строки, которую никто не
+    услышит.
+    """
+    here = location.node(session.node)
+    return {
+        index: line
+        for index in (here.index, *here.links)
+        if (
+            line := node_watch(
+                content,
+                world_seed=world_seed,
+                session=session,
+                location=location,
+                index=index,
+                standing=standing,
+                state=state,
+                tool=tool,
+            )
+        )
+    }
+
+
+#: Сколько находок жила называет на экране. Безымянная жила отдаёт то, что берёт
+#: инструмент, и без инструмента их набирается по одной на каждое ремесло: пять
+#: имён в кнопке - это не подсказка, а список.
+VEIN_NAMES = 3
+
+
+def _vein_line(
+    content: GameContent, location: GeneratedLocation, node: LocationNode, tool: Item | None = None
+) -> str:
+    """Что лежит в этой жиле: род сырья и та его ступень, что берут на этой глубине.
+
+    Считается ровно так же, как считает сам сбор (``adventure._gather``): жила,
+    назвавшая своё сырьё, стоит на своём, а безымянная отдаёт то, что берёт
+    инструмент в руках.
+    """
+    wanted = adventure.GATHER_SOURCES.get(node.name, "")
+    sources = (wanted,) if wanted else (tool_rules.sources_of(content, tool) if tool else ())
+    here = craft_rules.best_per_source(
+        content,
+        craft_rules.yields_here(
+            content, level=node.level, biomes=frozenset({location.biome}), sources=sources
+        ),
+    )
+    if not here:
+        here = craft_rules.best_per_source(
+            content, craft_rules.yields_here(content, level=node.level, sources=sources)
+        )
+    named = ", ".join(content.item(item_id).name for item_id in here[:VEIN_NAMES])
+    return f"{named} и другое" if len(here) > VEIN_NAMES else named
 
 
 def dungeon_run_seed(world_seed: str, descent: Descent) -> bytes:
@@ -449,10 +561,20 @@ def _render(
                 content, world_seed, state.session, epoch=node_rules.location_epoch(here_now)
             )
             standing_here = location.node(state.session.node)
+            counted = node_standing(content, world_seed, state.session, here_now, clock.now)
             return screens.location_screen(
                 location,
                 standing_here,
-                standing=node_standing(content, world_seed, state.session, here_now, clock.now),
+                standing=counted,
+                watch=_watched(
+                    content,
+                    world_seed=world_seed,
+                    session=state.session,
+                    location=location,
+                    standing=counted,
+                    state=here_now,
+                    tool=tool_rules.tool_of(content, character),
+                ),
                 character_level=character.level,
                 others=neighbours,
                 pvp=_location_allows_pvp(content, state.session),
@@ -519,6 +641,7 @@ def _render(
                 character,
                 content.craft(state.craft_id),
                 _bag(shelf),
+                page=state.list_page,
                 biomes=here.biomes,
                 place=here.name,
                 notice=state.notice,
@@ -628,6 +751,8 @@ def list_sections(content: GameContent, screen: ScreenId) -> tuple[str, ...]:
             return shop_screens.ITEM_SECTIONS
         case ScreenId.SKILLS:
             return skill_screens.SKILL_SECTIONS
+        case ScreenId.CRAFT:
+            return craft_screens.CRAFT_SECTIONS
         case _:
             return ()
 
@@ -1234,6 +1359,9 @@ def _handle_craft(
     if not content.has_craft(state.craft_id):
         return go_back(state).with_notice("Такого ремесла в игре больше нет.")
     craft = content.craft(state.craft_id)
+    listed = _search_and_filters(content, state, command)
+    if listed is not None:
+        return listed
     if command.intent is not Intent.SELECT:
         # У собирающего ремесла кнопок нет вовсе: сырьё берут у жилы и только
         # инструментом (ADR 0056), поэтому и отвечать ему нужно об этом, а не о
@@ -1243,8 +1371,10 @@ def _handle_craft(
         return state.with_notice("Нажмите кнопку работы или «Назад».")
 
     owned = _bag(goods)
-    for recipe in content.recipes_of(craft.id):
-        if not command.argument.startswith(content.item(recipe.output_id).name):
+    # Только те работы, что мастеру по руке: рецепт выше ранга кнопки не рисует, и
+    # нажать его нечем (``screens/crafts.open_recipes``).
+    for recipe in craft_screens.open_recipes(content, character, craft):
+        if not command.argument.startswith(craft_screens.output_name(content, recipe)):
             continue
         # Уже сделанная работа входит в сид, поэтому две партии подряд - не одна и та же
         # партия дважды.
@@ -2262,7 +2392,8 @@ def _handle_location(
         return state.with_notice("Нажмите переход или действие узла.")
 
     if screens.LEAVE_LOCATION.matches(command.argument) or (
-        node.kind is NodeKind.EXIT and command.argument == screens.NODE_ACTIONS[NodeKind.EXIT]
+        node.kind is NodeKind.EXIT
+        and command.argument.startswith(screens.NODE_ACTIONS[NodeKind.EXIT])
     ):
         return (
             replace(state, session=LocationSession())
@@ -2298,7 +2429,9 @@ def _handle_location(
         if screens.node_button(neighbour).matches(command.argument):
             return replace(state, session=replace(state.session, node=neighbour.index))
 
-    if command.argument == screens.NODE_ACTIONS[node.kind]:
+    # Кнопка узла называет то, к чему ведёт («Вступить в бой: Серый волк, 3 штуки»),
+    # и потому узнаётся по слову действия, а не по строке целиком (ADR 0063).
+    if command.argument.startswith(screens.NODE_ACTIONS[node.kind]):
         return _resolve_node_action(
             content, character, state, location, world_seed, location_state, now
         )

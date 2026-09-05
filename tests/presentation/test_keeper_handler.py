@@ -152,6 +152,21 @@ class Keeper:
         assert found, f"кнопки со словом {needle!r} нет: {self.buttons()}"
         return found[0]
 
+    async def walk_to(self, needle: str, pages: int = 200) -> str:
+        """Кнопка со словом, найденная хоть на какой странице списка.
+
+        Список вещей в панели длиной во всё содержимое игры, и та, что нужна,
+        лежит не на первой странице: смотритель листает, и тест листает с ним.
+        """
+        for _ in range(pages):
+            found = [text for text in self.buttons() if needle in text]
+            if found:
+                return found[0]
+            forward = [text for text in self.buttons() if labels.NEXT_PAGE.text in text]
+            assert forward, f"кнопки со словом {needle!r} нет и листать некуда"
+            await self.press(forward[0])
+        raise AssertionError(f"кнопки со словом {needle!r} нет ни на одной странице")
+
 
 @pytest.fixture
 def sent(monkeypatch: pytest.MonkeyPatch) -> Recorder:
@@ -405,7 +420,7 @@ async def test_a_recipe_is_created_and_its_composition_typed_in(
     # Поле «ключ=число» не разматывается само — за парой набирают следующую.
     await keeper.press(labels.BACK.text)
     await keeper.press(keeper.button_with(output_field.name))
-    await keeper.press(keeper.button_with(out_name))
+    await keeper.press(await keeper.walk_to(out_name))
 
     stored = [record for record in await overlays.all() if record.kind is OverlayKind.RECIPE]
     assert stored and stored[0].pairs("inputs") == (("iron_scrap", "2"),)

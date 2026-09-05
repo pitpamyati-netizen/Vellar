@@ -507,6 +507,9 @@ LIST_PAGE_FIELD: dict[ScreenId, str] = {
     ScreenId.TRANSFER_ITEM: "list_page",
     ScreenId.SKILL_PICK: "list_page",
     ScreenId.DUNGEON: "list_page",
+    # Работ у ремесла столько, сколько ступеней в игре (ADR 0062): список листают
+    # и ищут по нему, как по сумке.
+    ScreenId.CRAFT: "list_page",
     ScreenId.SKILLS: "skill_page",
     ScreenId.MENTOR: "mentor_page",
     ScreenId.QUEST_BOARD: "board_page",

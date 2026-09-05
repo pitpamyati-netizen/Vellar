@@ -335,15 +335,28 @@ def test_all_problems_are_reported_together(tmp_path: Path) -> None:
     assert any("no_such_skill" in problem for problem in problems)
 
 
-def test_every_material_says_what_kind_of_stock_it_is(content: GameContent) -> None:
-    """Сырьё без вида падало бы из любого узла: травы из рудной жилы и наоборот."""
+def test_every_gathered_material_says_what_kind_of_stock_it_is(content: GameContent) -> None:
+    """Сырьё без вида падало бы из любого узла: травы из рудной жилы и наоборот.
+
+    Спрос только с того, что берут руками. Слиток, кожа, сукно и брус вида не
+    имеют нарочно: их не берут в земле, их делают, и лежат они только в сумке
+    (ADR 0062).
+    """
     from mmorpg.domain.entities.content import ItemKind
     from mmorpg.domain.rules.adventure import GATHER_SOURCES
 
     materials = [item for item in content.items if item.kind is ItemKind.MATERIAL]
     assert materials
+
+    gathered = {
+        entry.item_id for craft in content.crafts if craft.gathers for entry in craft.yields
+    }
+    assert gathered
     for item in materials:
-        assert item.source, item.id
+        if item.id in gathered:
+            assert item.source, item.id
+        else:
+            assert not item.source, item.id
 
     known = set(GATHER_SOURCES.values())
     for wanted in known:

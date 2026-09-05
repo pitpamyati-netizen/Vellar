@@ -124,11 +124,9 @@ _CATEGORY_NAMES: dict[_Category, tuple[str, ...]] = {
         "Останки",
         "Чужой лагерь",
         "Прогалина",
-        "Старая делянка",
         "Приметное место",
         "Осыпь",
         "Промоина",
-        "Бурелом",
         "Заброшенный шурф",
         "Каменная гряда",
     ),
@@ -143,6 +141,34 @@ _CATEGORY_NAMES: dict[_Category, tuple[str, ...]] = {
 }
 
 _DOOR_NAMES: dict[NodeKind, str] = {NodeKind.ENTRANCE: "Вход", NodeKind.EXIT: "Выход"}
+
+#: Что за находка бывает только в этой земле. Имя узла - единственное, что
+#: говорит игроку, чем эту жилу берут (``rules/adventure.GATHER_SOURCES``), и
+#: удить в горах так же нелепо, как валить лес на леднике: заводь ставится там,
+#: где есть вода, делянка - там, где есть лес (ADR 0062).
+_BIOME_NAMES: dict[str, tuple[str, ...]] = {
+    "река": ("Заводь", "Омут", "Отмель"),
+    "берег": ("Заводь", "Отмель"),
+    "море": ("Отмель",),
+    "болото": ("Омут", "Заводь"),
+    "порт": ("Отмель",),
+    "корабли": ("Отмель",),
+    "затопленные ходы": ("Омут",),
+    "лес": ("Бурелом", "Старая делянка"),
+    "сады": ("Старая делянка",),
+    "роща": ("Бурелом", "Старая делянка"),
+    "луга": ("Старая делянка",),
+    "тундра": ("Бурелом",),
+}
+
+
+def _finding_names(biome: str) -> tuple[str, ...]:
+    """Имена узлов-находок этой земли: общие плюс те, что бывают только здесь.
+
+    Бросок остаётся ровно один, поэтому порядок обращений к сиду не сдвигается
+    (ADR 0061): меняется список, а не число бросков.
+    """
+    return (*_CATEGORY_NAMES[_Category.FINDING], *_BIOME_NAMES.get(biome, ()))
 
 
 def generate_location(
@@ -180,7 +206,7 @@ def generate_location(
     categories = _place_categories(era, pool, dead_ends, count - 3)
     composition = _relay_combat(era, categories, composition)
     kinds = _lay_kinds(era, categories, composition)
-    names = tuple(_pick_name(era, category) for category in categories)
+    names = tuple(_pick_name(era, category, biome) for category in categories)
     links = _lay_paths(era, count, tree, depths, dead_ends)
 
     ordered_kinds = (NodeKind.ENTRANCE, *kinds, NodeKind.EXIT)
@@ -414,8 +440,8 @@ def _lay_paths(
     return links
 
 
-def _pick_name(era: random.Random, category: _Category) -> str:
-    options = _CATEGORY_NAMES[category]
+def _pick_name(era: random.Random, category: _Category, biome: str = "") -> str:
+    options = _finding_names(biome) if category is _Category.FINDING else _CATEGORY_NAMES[category]
     return options[era.randrange(len(options))]
 
 

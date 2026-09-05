@@ -117,6 +117,18 @@ class CraftRules:
     good_chance_per_rank: float
     fine_chance_base: float
     fine_chance_per_rank: float
+    #: Ступень снаряжения, которую делает каждый ранг: уровень ступени из
+    #: ``items.toml`` (ADR 0062). Одна работа, написанная один раз, выпускает
+    #: вещь той ступени, до которой мастер дорос, - потому рецепты и покрывают
+    #: всю полосу, а не первые её уровни.
+    rank_tiers: tuple[int, ...] = ()
+
+    def tier_of(self, rank: int) -> int:
+        """Уровень ступени, которую делает этот ранг. Ноль - ступеней не объявлено."""
+        if not self.rank_tiers:
+            return 0
+        index = min(max(rank, 1), len(self.rank_tiers)) - 1
+        return self.rank_tiers[index]
 
     def quality(self, quality_id: str) -> QualityTier:
         for tier in self.qualities:

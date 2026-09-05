@@ -12,6 +12,7 @@ from __future__ import annotations
 import itertools
 import tomllib
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, NamedTuple
@@ -1828,6 +1829,7 @@ def _build_craft_rules(raw: Mapping[str, Any], problems: list[str]) -> CraftRule
         good_chance_per_rank=float(meta.get("good_chance_per_rank", 0.0)),
         fine_chance_base=float(meta.get("fine_chance_base", 0.0)),
         fine_chance_per_rank=float(meta.get("fine_chance_per_rank", 0.0)),
+        rank_tiers=tuple(int(level) for level in meta.get("rank_tiers", ())),
     )
     if rules.experience_per_rank < 1:
         problems.append("crafts.toml: [meta].experience_per_rank must be at least 1")
@@ -1836,9 +1838,170 @@ def _build_craft_rules(raw: Mapping[str, Any], problems: list[str]) -> CraftRule
             f"crafts.toml: [meta].rank_names must name all {rules.max_rank} ranks, "
             f"found {len(rules.rank_names)}"
         )
+    if len(rules.rank_tiers) != rules.max_rank:
+        problems.append(
+            f"crafts.toml: [meta].rank_tiers must name a tier for all {rules.max_rank} "
+            f"ranks, found {len(rules.rank_tiers)}"
+        )
+    if list(rules.rank_tiers) != sorted(rules.rank_tiers):
+        problems.append("crafts.toml: [meta].rank_tiers must climb, not fall")
     if {tier.id for tier in qualities} != {"plain", "good", "fine"}:
         problems.append("crafts.toml: [meta].qualities must be exactly plain, good and fine")
     return rules
+
+
+@dataclass(frozen=True, slots=True)
+class _Family:
+    """Лестница сырья или изделий: по ступени на каждые два ранга (ADR 0062).
+
+    Одна работа, написанная один раз, берёт ту ступень, что рангу под руку, и
+    выпускает ту, до которой мастер дорос. Так рецепты и покрывают всю полосу, а
+    не первые её уровни.
+    """
+
+    id: str
+    name: str
+    gathered_by: str
+    #: ``(идентификатор вещи, с какого ранга)``, по возрастанию ранга.
+    grades: tuple[tuple[str, int], ...]
+
+    def at(self, rank: int) -> str:
+        """Ступень лестницы, что под руку этому рангу. Пусто - лестница пуста."""
+        found = ""
+        for item_id, from_rank in self.grades:
+            if from_rank <= rank:
+                found = item_id
+        return found or (self.grades[0][0] if self.grades else "")
+
+
+def _parse_families(
+    raw: Mapping[str, Any], item_ids: set[str], problems: list[str]
+) -> tuple[dict[str, _Family], dict[str, list[CraftYield]]]:
+    """Лестницы и находки, которые они приносят своим собирающим ремёслам."""
+    families: dict[str, _Family] = {}
+    gathered: dict[str, list[CraftYield]] = {}
+    for entry in raw.get("family", ()):
+        family_id = str(entry.get("id", ""))
+        if not family_id:
+            problems.append("crafts.toml: a [[family]] has no id")
+            continue
+        if family_id in families:
+            problems.append(f"crafts.toml: duplicate family {family_id!r}")
+            continue
+        shared = tuple(str(biome) for biome in entry.get("biomes", ()))
+        craft_id = str(entry.get("gathered_by", ""))
+        grades: list[tuple[str, int]] = []
+        for grade in entry.get("grades", ()):
+            item_id = str(grade.get("item", ""))
+            if item_id not in item_ids:
+                problems.append(f"crafts.toml: family {family_id} names unknown item {item_id!r}")
+                continue
+            rank = int(grade.get("rank", 1))
+            grades.append((item_id, rank))
+            if not craft_id:
+                continue
+            gathered.setdefault(craft_id, []).append(
+                CraftYield(
+                    item_id=item_id,
+                    level=int(grade.get("level", 1)),
+                    biomes=tuple(str(biome) for biome in grade.get("biomes", shared)),
+                )
+            )
+        if not grades:
+            problems.append(f"crafts.toml: family {family_id} has no grades")
+            continue
+        if [rank for _, rank in grades] != sorted(rank for _, rank in grades):
+            problems.append(f"crafts.toml: family {family_id} lists grades out of order")
+        families[family_id] = _Family(
+            id=family_id,
+            name=str(entry.get("name", family_id)),
+            gathered_by=craft_id,
+            grades=tuple(grades),
+        )
+    return families, gathered
+
+
+def _expand_lines(
+    raw: Mapping[str, Any],
+    families: Mapping[str, _Family],
+    rules: CraftRules,
+    making: set[str],
+    item_ids: set[str],
+    problems: list[str],
+) -> list[Recipe]:
+    """Развернуть работы в рецепты: одна строка - по рецепту на каждый ранг.
+
+    Ранги идут первыми, а работы вторыми, поэтому рецепты одного ремесла лежат
+    по возрастанию ранга - так их и читает экран (``tests/content``).
+    """
+    lines = list(raw.get("line", ()))
+    recipes: list[Recipe] = []
+    for rank in range(1, max(1, rules.max_rank) + 1):
+        for entry in lines:
+            line_id = str(entry.get("id", ""))
+            craft_id = str(entry.get("craft", ""))
+            if craft_id not in making:
+                if rank == 1:
+                    problems.append(f"crafts.toml: line {line_id} hangs on {craft_id!r}")
+                continue
+            start = max(1, int(entry.get("from_rank", 1)))
+            if rank < start:
+                continue
+
+            inputs: list[RecipeInput] = []
+            for need in entry.get("inputs", ()):
+                family = families.get(str(need.get("family", "")))
+                if family is None:
+                    if rank == 1:
+                        problems.append(
+                            f"crafts.toml: line {line_id} needs unknown family "
+                            f"{need.get('family')!r}"
+                        )
+                    continue
+                inputs.append(
+                    RecipeInput(item_id=family.at(rank), count=max(1, int(need.get("count", 1))))
+                )
+            if not inputs:
+                continue
+
+            output_id = _line_output(entry, families, rules, rank)
+            if output_id not in item_ids:
+                problems.append(f"crafts.toml: line {line_id} makes unknown item {output_id!r}")
+                continue
+            # Лестница расходников и делаемого сырья меняет ступень раз в два ранга,
+            # а снаряжение - каждый ранг. Повторять одно и то же зелье на двух
+            # соседних рангах значит рисовать две одинаковые кнопки (правила
+            # доступности 5-7).
+            if rank > start and output_id == _line_output(entry, families, rules, rank - 1):
+                continue
+
+            recipes.append(
+                Recipe(
+                    id=f"{line_id}@{rank}",
+                    craft_id=craft_id,
+                    rank=rank,
+                    inputs=tuple(inputs),
+                    output_id=output_id,
+                    output_count=max(1, int(entry.get("count", 1))),
+                    # Работа растёт вместе с рангом, потому что растёт и его цена:
+                    # иначе поздние ранги брались бы теми же тремя партиями, что и
+                    # первые, только их было бы вдесятеро больше.
+                    experience=max(1, int(entry.get("experience", 10))) * rank,
+                )
+            )
+    return recipes
+
+
+def _line_output(
+    entry: Mapping[str, Any], families: Mapping[str, _Family], rules: CraftRules, rank: int
+) -> str:
+    """Что выходит из этой работы на этом ранге: вещь своей ступени или сырьё."""
+    gear = str(entry.get("gear", ""))
+    if gear:
+        rarity = str(entry.get("rarity", "common"))
+        return item_procgen.gear_id(gear, rules.tier_of(rank), rarity)
+    family = families.get(str(entry.get("output_family", "")))
+    return family.at(rank) if family is not None else ""
 
 
 def _parse_crafts(
@@ -1847,6 +2010,7 @@ def _parse_crafts(
     rules: CraftRules,
     problems: list[str],
 ) -> tuple[tuple[Craft, ...], tuple[Recipe, ...]]:
+    families, gathered = _parse_families(raw, item_ids, problems)
     known_kinds = {kind.value for kind in CraftKind}
     crafts: list[Craft] = []
     for entry in raw.get("craft", ()):
@@ -1860,7 +2024,9 @@ def _parse_crafts(
             problems.append(f"crafts.toml: {craft_id} leans on unknown stat {stat_raw!r}")
             continue
 
-        yields: list[CraftYield] = []
+        # Находки приходят из лестниц (``[[family]]`` с ``gathered_by``); список
+        # прямо у ремесла остаётся для того, что в лестницу не встало.
+        yields: list[CraftYield] = list(gathered.get(craft_id, ()))
         for produced in entry.get("yields", ()):
             item_id = str(produced.get("item", ""))
             if item_id not in item_ids:
@@ -1942,6 +2108,11 @@ def _parse_crafts(
                 experience=int(entry.get("experience", 0)),
             )
         )
+
+    recipes.extend(_expand_lines(raw, families, rules, making, item_ids, problems))
+    # По возрастанию ранга, устойчиво: рецепты ремесла читает экран, а он открывает
+    # их снизу вверх, и штучный рецепт не должен вклиниваться в лестницу.
+    recipes.sort(key=lambda recipe: recipe.rank)
     return tuple(crafts), tuple(recipes)
 
 

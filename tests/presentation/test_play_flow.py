@@ -34,6 +34,16 @@ def step(content: GameContent, hero: Character, state: PlayState, *messages: str
     return current
 
 
+def node_button(content: GameContent, hero: Character, state: PlayState, action: str) -> str:
+    """Точный текст кнопки узла: она называет то, к чему ведёт (ADR 0063)."""
+    drawn = render(content, hero, state, world_seed=WORLD_SEED)
+    for row in drawn.rows:
+        for pressed in row:
+            if pressed.text.startswith(action):
+                return pressed.text
+    raise AssertionError(f"кнопки {action!r} на экране нет")
+
+
 @pytest.fixture
 def menu(hero: Character) -> PlayState:
     return begin(hero)
@@ -324,7 +334,7 @@ def test_working_a_node_takes_one_thing_out_of_it(
 
     at_node = replace(in_location, session=replace(in_location.session, node=gather.index))
     armed = replace(hero, equipment=hero.equipment.equip("tool", "pick@1#common"))
-    done = step(content, armed, at_node, "Собрать сырьё")
+    done = step(content, armed, at_node, node_button(content, armed, at_node, "Собрать сырьё"))
     assert done.pending.node_take == gather.index
     assert "сделано" in done.notice
 
@@ -339,7 +349,7 @@ def test_a_vein_without_a_tool_is_refused_and_stays_untouched(
         pytest.skip("this seed produced no gathering node")
 
     at_node = replace(in_location, session=replace(in_location.session, node=gather.index))
-    refused = step(content, hero, at_node, "Собрать сырьё")
+    refused = step(content, hero, at_node, node_button(content, hero, at_node, "Собрать сырьё"))
     assert "Собирать нечем" in refused.notice
     assert refused.pending.empty
 
@@ -410,7 +420,9 @@ def test_a_combat_node_hands_over_to_the_fight_screen(
     at_node = replace(in_location, session=replace(in_location.session, node=battle.index))
     from mmorpg.presentation.telegram.screens.play import NODE_ACTIONS
 
-    fighting = step(content, hero, at_node, NODE_ACTIONS[battle.kind])
+    fighting = step(
+        content, hero, at_node, node_button(content, hero, at_node, NODE_ACTIONS[battle.kind])
+    )
     assert fighting.screen is ScreenId.COMBAT
 
 

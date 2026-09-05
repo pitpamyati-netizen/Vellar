@@ -100,9 +100,11 @@ slots = [
 # Сколько инструмент выдержит, решает его редкость (`durability` выше), и
 # больше редкость ему не даёт ничего.
 tool_types = [
-    { id = "pick", name = "Кирка", craft = "mining", sources = ["руда", "обломки"] },
-    { id = "sickle", name = "Серп", craft = "herbalism", sources = ["травы"] },
+    { id = "pick", name = "Кирка", craft = "mining", sources = ["руда"] },
+    { id = "sickle", name = "Серп", craft = "herbalism", sources = ["травы", "волокно"] },
     { id = "skinning_knife", name = "Нож свежевателя", craft = "skinning", sources = ["шкуры"] },
+    { id = "fishing_rod", name = "Удочка", craft = "fishing", sources = ["рыба"] },
+    { id = "logging_axe", name = "Топор дровосека", craft = "logging", sources = ["древесина"] },
 ]
 
 # Рода оружия. Род решает, чем игрок бьёт, и говорит о себе двумя числами.
@@ -640,7 +642,28 @@ gender = "m"
 slot = "tool"
 tool_type = "skinning_knife"
 
+[[gear]]
+id = "fishing_rod"
+noun = "удочка"
+gender = "f"
+slot = "tool"
+tool_type = "fishing_rod"
+
+[[gear]]
+id = "logging_axe"
+noun = "топор дровосека"
+gender = "m"
+slot = "tool"
+tool_type = "logging_axe"
+
 # --- Consumables ---
+#
+# Расходники идут лестницами: своя ступень на каждые два ранга ремесла, потому
+# что зелье, сваренное на сотом уровне, обязано лечить больше того, что варят на
+# первом. Сила - всегда доля от запаса, а не написанное число (ADR 0007).
+
+# Зелья лечения. Лечат долей запаса здоровья, а не написанным числом:
+# зелье на сорок здоровья к сотому уровню не стоит ничего (ADR 0007).
 
 [[item]]
 id = "small_healing_potion"
@@ -658,33 +681,103 @@ id = "healing_potion"
 name = "Зелье лечения"
 kind = "consumable"
 slot = "none"
+rarity = "common"
+level = 24
+price = 120
+stack = 20
+effect = { kind = "heal_percent", power = 25 }
+
+[[item]]
+id = "strong_healing_potion"
+name = "Крепкое зелье лечения"
+kind = "consumable"
+slot = "none"
 rarity = "uncommon"
-level = 10
-price = 90
+level = 46
+price = 240
 stack = 20
 effect = { kind = "heal_percent", power = 35 }
+
+[[item]]
+id = "great_healing_potion"
+name = "Большое зелье лечения"
+kind = "consumable"
+slot = "none"
+rarity = "uncommon"
+level = 76
+price = 420
+stack = 20
+effect = { kind = "heal_percent", power = 45 }
+
+[[item]]
+id = "full_healing_potion"
+name = "Полное зелье лечения"
+kind = "consumable"
+slot = "none"
+rarity = "rare"
+level = 113
+price = 700
+stack = 20
+effect = { kind = "heal_percent", power = 60 }
+
+# Настои: возвращают запас класса - ярость, чары, сосредоточение.
+
+[[item]]
+id = "small_resource_draught"
+name = "Малый настой сосредоточения"
+kind = "consumable"
+slot = "none"
+rarity = "common"
+level = 1
+price = 30
+stack = 20
+effect = { kind = "restore_resource_percent", power = 20 }
 
 [[item]]
 id = "resource_draught"
 name = "Настой сосредоточения"
 kind = "consumable"
 slot = "none"
-rarity = "uncommon"
-level = 8
-price = 80
+rarity = "common"
+level = 24
+price = 110
 stack = 20
-effect = { kind = "restore_resource_percent", power = 40 }
+effect = { kind = "restore_resource_percent", power = 35 }
 
 [[item]]
-id = "antidote"
-name = "Противоядие"
+id = "strong_resource_draught"
+name = "Крепкий настой сосредоточения"
 kind = "consumable"
 slot = "none"
-rarity = "common"
-level = 5
-price = 45
-stack = 10
-effect = { kind = "cleanse", power = 1 }
+rarity = "uncommon"
+level = 46
+price = 220
+stack = 20
+effect = { kind = "restore_resource_percent", power = 50 }
+
+[[item]]
+id = "great_resource_draught"
+name = "Большой настой сосредоточения"
+kind = "consumable"
+slot = "none"
+rarity = "uncommon"
+level = 76
+price = 380
+stack = 20
+effect = { kind = "restore_resource_percent", power = 65 }
+
+[[item]]
+id = "full_resource_draught"
+name = "Полный настой сосредоточения"
+kind = "consumable"
+slot = "none"
+rarity = "rare"
+level = 113
+price = 620
+stack = 20
+effect = { kind = "restore_resource_percent", power = 80 }
+
+# Точила: правят лезвие перед боем. Работа кузнеца, а не стряпухи.
 
 [[item]]
 id = "whetstone"
@@ -692,10 +785,181 @@ name = "Точильный камень"
 kind = "consumable"
 slot = "none"
 rarity = "common"
-level = 4
+level = 1
 price = 50
 stack = 10
 effect = { kind = "buff_damage_percent", power = 15, turns = 3 }
+
+[[item]]
+id = "hard_whetstone"
+name = "Твёрдое точило"
+kind = "consumable"
+slot = "none"
+rarity = "common"
+level = 24
+price = 150
+stack = 10
+effect = { kind = "buff_damage_percent", power = 18, turns = 3 }
+
+[[item]]
+id = "steel_whetstone"
+name = "Стальное точило"
+kind = "consumable"
+slot = "none"
+rarity = "uncommon"
+level = 46
+price = 300
+stack = 10
+effect = { kind = "buff_damage_percent", power = 21, turns = 3 }
+
+[[item]]
+id = "deep_whetstone"
+name = "Глубинное точило"
+kind = "consumable"
+slot = "none"
+rarity = "uncommon"
+level = 76
+price = 520
+stack = 10
+effect = { kind = "buff_damage_percent", power = 24, turns = 3 }
+
+[[item]]
+id = "sky_whetstone"
+name = "Небесное точило"
+kind = "consumable"
+slot = "none"
+rarity = "rare"
+level = 113
+price = 820
+stack = 10
+effect = { kind = "buff_damage_percent", power = 28, turns = 3 }
+
+# Горячее: варится из улова и трав, поднимает на ноги в дороге.
+
+[[item]]
+id = "fish_stew"
+name = "Уха"
+kind = "consumable"
+slot = "none"
+rarity = "common"
+level = 1
+price = 20
+stack = 20
+effect = { kind = "heal_percent", power = 20 }
+
+[[item]]
+id = "thick_stew"
+name = "Густая уха"
+kind = "consumable"
+slot = "none"
+rarity = "common"
+level = 24
+price = 80
+stack = 20
+effect = { kind = "heal_percent", power = 30 }
+
+[[item]]
+id = "fish_pie"
+name = "Рыбный пирог"
+kind = "consumable"
+slot = "none"
+rarity = "common"
+level = 46
+price = 170
+stack = 20
+effect = { kind = "heal_percent", power = 40 }
+
+[[item]]
+id = "smoked_catch"
+name = "Копчёный улов"
+kind = "consumable"
+slot = "none"
+rarity = "uncommon"
+level = 76
+price = 300
+stack = 20
+effect = { kind = "heal_percent", power = 50 }
+
+[[item]]
+id = "feast_table"
+name = "Праздничный стол"
+kind = "consumable"
+slot = "none"
+rarity = "uncommon"
+level = 113
+price = 500
+stack = 20
+effect = { kind = "heal_percent", power = 65 }
+
+# Снедь в дорогу: съеденное перед схваткой держит руку три хода.
+
+[[item]]
+id = "road_ration"
+name = "Дорожная снедь"
+kind = "consumable"
+slot = "none"
+rarity = "common"
+level = 1
+price = 30
+stack = 10
+effect = { kind = "buff_damage_percent", power = 8, turns = 3 }
+
+[[item]]
+id = "hearty_ration"
+name = "Сытная снедь"
+kind = "consumable"
+slot = "none"
+rarity = "common"
+level = 24
+price = 110
+stack = 10
+effect = { kind = "buff_damage_percent", power = 12, turns = 3 }
+
+[[item]]
+id = "spiced_ration"
+name = "Пряная снедь"
+kind = "consumable"
+slot = "none"
+rarity = "common"
+level = 46
+price = 220
+stack = 10
+effect = { kind = "buff_damage_percent", power = 16, turns = 3 }
+
+[[item]]
+id = "rich_ration"
+name = "Богатая снедь"
+kind = "consumable"
+slot = "none"
+rarity = "uncommon"
+level = 76
+price = 380
+stack = 10
+effect = { kind = "buff_damage_percent", power = 20, turns = 3 }
+
+[[item]]
+id = "feast_ration"
+name = "Пиршественная снедь"
+kind = "consumable"
+slot = "none"
+rarity = "uncommon"
+level = 113
+price = 620
+stack = 10
+effect = { kind = "buff_damage_percent", power = 24, turns = 3 }
+
+# Штучное: у противоядия и гранаты лестницы нет - им некуда расти.
+
+[[item]]
+id = "antidote"
+name = "Противоядие"
+kind = "consumable"
+slot = "none"
+rarity = "common"
+level = 1
+price = 45
+stack = 10
+effect = { kind = "cleanse", power = 1 }
 
 [[item]]
 id = "flash_grenade"
@@ -710,33 +974,38 @@ effect = { kind = "flashbang", power = 20, turns = 2 }
 
 # --- Materials ---
 #
-# source: что это за сырьё. По нему узел решает, что в нём вообще может лежать:
-# из зарослей не выкапывают руду, а с останков не срезают травы. Значения —
-# "травы", "руда", "шкуры", "обломки"; материал без source годится отовсюду.
+# source: что это за сырьё. По нему узел решает, что в нём может лежать, а
+# tool_types выше - каким инструментом это берут: из зарослей не выкапывают руду, а
+# с останков не срезают травы. Роды сырья - руда, травы, волокно, шкуры, древесина,
+# рыба. Материал без source руками не берут вовсе: слитки, кожу, сукно и брус
+# делают из сырого, и лежат они только в сумке.
+#
+# Сырьё идёт лестницами по пять ступеней (content/crafts.toml, [[family]]): по
+# одной на каждые два ранга ремесла. Ступень решает, с какого уровня её берут и в
+# какой земле она лежит, - потому кольчуга сотого уровня и кольчуга первого куются
+# из разного, а не из одного и того же лома.
 
-[[item]]
-# Ключ остался волчьим с первой недели разработки, а падала эта шкура и с
-# кабана, и с грифона — игроки это заметили первым делом. Шкура здесь одна на
-# всё зверьё: имя её называет то, чем она и является.
-id = "wolf_pelt"
-name = "Звериная шкура"
-kind = "material"
-source = "шкуры"
-slot = "none"
-rarity = "common"
-level = 1
-price = 12
-stack = 99
 
 [[item]]
 id = "iron_scrap"
 name = "Железный лом"
 kind = "material"
-source = "обломки"
+source = "руда"
 slot = "none"
 rarity = "common"
 level = 1
-price = 8
+price = 4
+stack = 99
+
+[[item]]
+id = "bog_iron"
+name = "Болотная руда"
+kind = "material"
+source = "руда"
+slot = "none"
+rarity = "common"
+level = 24
+price = 20
 stack = 99
 
 [[item]]
@@ -746,44 +1015,8 @@ kind = "material"
 source = "руда"
 slot = "none"
 rarity = "common"
-level = 8
-price = 22
-stack = 99
-
-[[item]]
-id = "meadow_herbs"
-name = "Луговые травы"
-kind = "material"
-source = "травы"
-slot = "none"
-rarity = "common"
-level = 1
-price = 6
-stack = 99
-
-[[item]]
-id = "grove_resin"
-name = "Смола рощи"
-kind = "material"
-source = "травы"
-slot = "none"
-rarity = "uncommon"
-level = 6
-price = 30
-stack = 99
-
-# Сырьё, которое лежит не везде: у каждого материала в crafts.toml есть биомы, и
-# города берут из своей земли, а не из общего списка.
-
-[[item]]
-id = "bog_iron"
-name = "Болотная руда"
-kind = "material"
-source = "руда"
-slot = "none"
-rarity = "common"
-level = 5
-price = 18
+level = 46
+price = 38
 stack = 99
 
 [[item]]
@@ -793,8 +1026,414 @@ kind = "material"
 source = "руда"
 slot = "none"
 rarity = "uncommon"
-level = 12
-price = 44
+level = 76
+price = 62
+stack = 99
+
+[[item]]
+id = "sky_iron"
+name = "Небесное железо"
+kind = "material"
+source = "руда"
+slot = "none"
+rarity = "uncommon"
+level = 113
+price = 95
+stack = 99
+
+
+[[item]]
+id = "crude_ingot"
+name = "Кричное железо"
+kind = "material"
+slot = "none"
+rarity = "common"
+level = 1
+price = 11
+stack = 99
+
+[[item]]
+id = "iron_ingot"
+name = "Железный слиток"
+kind = "material"
+slot = "none"
+rarity = "common"
+level = 24
+price = 52
+stack = 99
+
+[[item]]
+id = "steel_ingot"
+name = "Стальной слиток"
+kind = "material"
+slot = "none"
+rarity = "common"
+level = 46
+price = 99
+stack = 99
+
+[[item]]
+id = "deep_ingot"
+name = "Глубинный слиток"
+kind = "material"
+slot = "none"
+rarity = "uncommon"
+level = 76
+price = 161
+stack = 99
+
+[[item]]
+id = "sky_ingot"
+name = "Небесный слиток"
+kind = "material"
+slot = "none"
+rarity = "uncommon"
+level = 113
+price = 247
+stack = 99
+
+
+[[item]]
+id = "wolf_pelt"
+name = "Звериная шкура"
+kind = "material"
+source = "шкуры"
+slot = "none"
+rarity = "common"
+level = 1
+price = 4
+stack = 99
+
+[[item]]
+id = "thick_hide"
+name = "Толстая шкура"
+kind = "material"
+source = "шкуры"
+slot = "none"
+rarity = "common"
+level = 24
+price = 20
+stack = 99
+
+[[item]]
+id = "scaled_hide"
+name = "Чешуйчатая шкура"
+kind = "material"
+source = "шкуры"
+slot = "none"
+rarity = "common"
+level = 46
+price = 38
+stack = 99
+
+[[item]]
+id = "plated_hide"
+name = "Панцирная шкура"
+kind = "material"
+source = "шкуры"
+slot = "none"
+rarity = "uncommon"
+level = 76
+price = 62
+stack = 99
+
+[[item]]
+id = "frost_hide"
+name = "Морозная шкура"
+kind = "material"
+source = "шкуры"
+slot = "none"
+rarity = "uncommon"
+level = 113
+price = 95
+stack = 99
+
+
+[[item]]
+id = "rawhide_leather"
+name = "Сыромятная кожа"
+kind = "material"
+slot = "none"
+rarity = "common"
+level = 1
+price = 11
+stack = 99
+
+[[item]]
+id = "tanned_leather"
+name = "Дублёная кожа"
+kind = "material"
+slot = "none"
+rarity = "common"
+level = 24
+price = 52
+stack = 99
+
+[[item]]
+id = "dense_leather"
+name = "Плотная кожа"
+kind = "material"
+slot = "none"
+rarity = "common"
+level = 46
+price = 99
+stack = 99
+
+[[item]]
+id = "plated_leather"
+name = "Панцирная кожа"
+kind = "material"
+slot = "none"
+rarity = "uncommon"
+level = 76
+price = 161
+stack = 99
+
+[[item]]
+id = "frost_leather"
+name = "Морозная кожа"
+kind = "material"
+slot = "none"
+rarity = "uncommon"
+level = 113
+price = 247
+stack = 99
+
+
+[[item]]
+id = "meadow_fiber"
+name = "Луговое волокно"
+kind = "material"
+source = "волокно"
+slot = "none"
+rarity = "common"
+level = 1
+price = 4
+stack = 99
+
+[[item]]
+id = "river_tow"
+name = "Речная кудель"
+kind = "material"
+source = "волокно"
+slot = "none"
+rarity = "common"
+level = 24
+price = 20
+stack = 99
+
+[[item]]
+id = "mountain_flax"
+name = "Горный лён"
+kind = "material"
+source = "волокно"
+slot = "none"
+rarity = "common"
+level = 46
+price = 38
+stack = 99
+
+[[item]]
+id = "resin_thread"
+name = "Смолёная нить"
+kind = "material"
+source = "волокно"
+slot = "none"
+rarity = "uncommon"
+level = 76
+price = 62
+stack = 99
+
+[[item]]
+id = "snow_down"
+name = "Снежный пух"
+kind = "material"
+source = "волокно"
+slot = "none"
+rarity = "uncommon"
+level = 113
+price = 95
+stack = 99
+
+
+[[item]]
+id = "coarse_cloth"
+name = "Холст"
+kind = "material"
+slot = "none"
+rarity = "common"
+level = 1
+price = 11
+stack = 99
+
+[[item]]
+id = "woolen_cloth"
+name = "Сукно"
+kind = "material"
+slot = "none"
+rarity = "common"
+level = 24
+price = 52
+stack = 99
+
+[[item]]
+id = "dense_cloth"
+name = "Плотное сукно"
+kind = "material"
+slot = "none"
+rarity = "common"
+level = 46
+price = 99
+stack = 99
+
+[[item]]
+id = "fine_linen"
+name = "Тонкое полотно"
+kind = "material"
+slot = "none"
+rarity = "uncommon"
+level = 76
+price = 161
+stack = 99
+
+[[item]]
+id = "patterned_linen"
+name = "Узорное полотно"
+kind = "material"
+slot = "none"
+rarity = "uncommon"
+level = 113
+price = 247
+stack = 99
+
+
+[[item]]
+id = "dry_branch"
+name = "Сухой сук"
+kind = "material"
+source = "древесина"
+slot = "none"
+rarity = "common"
+level = 1
+price = 4
+stack = 99
+
+[[item]]
+id = "ash_log"
+name = "Ясеневый кряж"
+kind = "material"
+source = "древесина"
+slot = "none"
+rarity = "common"
+level = 24
+price = 20
+stack = 99
+
+[[item]]
+id = "oak_log"
+name = "Дубовый кряж"
+kind = "material"
+source = "древесина"
+slot = "none"
+rarity = "common"
+level = 46
+price = 38
+stack = 99
+
+[[item]]
+id = "resin_log"
+name = "Смолистый кряж"
+kind = "material"
+source = "древесина"
+slot = "none"
+rarity = "uncommon"
+level = 76
+price = 62
+stack = 99
+
+[[item]]
+id = "stone_log"
+name = "Каменное дерево"
+kind = "material"
+source = "древесина"
+slot = "none"
+rarity = "uncommon"
+level = 113
+price = 95
+stack = 99
+
+
+[[item]]
+id = "hewn_board"
+name = "Тёсаная доска"
+kind = "material"
+slot = "none"
+rarity = "common"
+level = 1
+price = 11
+stack = 99
+
+[[item]]
+id = "ash_beam"
+name = "Ясеневый брус"
+kind = "material"
+slot = "none"
+rarity = "common"
+level = 24
+price = 52
+stack = 99
+
+[[item]]
+id = "oak_beam"
+name = "Дубовый брус"
+kind = "material"
+slot = "none"
+rarity = "common"
+level = 46
+price = 99
+stack = 99
+
+[[item]]
+id = "resin_beam"
+name = "Смолёный брус"
+kind = "material"
+slot = "none"
+rarity = "uncommon"
+level = 76
+price = 161
+stack = 99
+
+[[item]]
+id = "stone_beam"
+name = "Каменный брус"
+kind = "material"
+slot = "none"
+rarity = "uncommon"
+level = 113
+price = 247
+stack = 99
+
+
+[[item]]
+id = "meadow_herbs"
+name = "Луговые травы"
+kind = "material"
+source = "травы"
+slot = "none"
+rarity = "common"
+level = 1
+price = 4
+stack = 99
+
+[[item]]
+id = "grove_resin"
+name = "Смола рощи"
+kind = "material"
+source = "травы"
+slot = "none"
+rarity = "common"
+level = 24
+price = 20
 stack = 99
 
 [[item]]
@@ -803,7 +1442,85 @@ name = "Мёрзлый лишайник"
 kind = "material"
 source = "травы"
 slot = "none"
+rarity = "common"
+level = 46
+price = 38
+stack = 99
+
+[[item]]
+id = "bitter_root"
+name = "Горький корень"
+kind = "material"
+source = "травы"
+slot = "none"
 rarity = "uncommon"
-level = 14
-price = 36
+level = 76
+price = 62
+stack = 99
+
+[[item]]
+id = "night_bloom"
+name = "Ночной цвет"
+kind = "material"
+source = "травы"
+slot = "none"
+rarity = "uncommon"
+level = 113
+price = 95
+stack = 99
+
+
+[[item]]
+id = "river_fish"
+name = "Речная рыба"
+kind = "material"
+source = "рыба"
+slot = "none"
+rarity = "common"
+level = 1
+price = 4
+stack = 99
+
+[[item]]
+id = "lake_fish"
+name = "Озёрная рыба"
+kind = "material"
+source = "рыба"
+slot = "none"
+rarity = "common"
+level = 24
+price = 20
+stack = 99
+
+[[item]]
+id = "sea_fish"
+name = "Морская рыба"
+kind = "material"
+source = "рыба"
+slot = "none"
+rarity = "common"
+level = 46
+price = 38
+stack = 99
+
+[[item]]
+id = "deep_fish"
+name = "Глубинная рыба"
+kind = "material"
+source = "рыба"
+slot = "none"
+rarity = "uncommon"
+level = 76
+price = 62
+stack = 99
+
+[[item]]
+id = "ice_fish"
+name = "Ледяная рыба"
+kind = "material"
+source = "рыба"
+slot = "none"
+rarity = "uncommon"
+level = 113
+price = 95
 stack = 99

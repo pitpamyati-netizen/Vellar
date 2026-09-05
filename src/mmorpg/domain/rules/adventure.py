@@ -12,12 +12,13 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import BattleState
 from mmorpg.domain.entities.content import GameContent, Item, ItemKind
-from mmorpg.domain.entities.location import LocationNode, NodeKind
+from mmorpg.domain.entities.location import Enemy, EnemyKind, LocationNode, NodeKind
 from mmorpg.domain.procgen.enemies import gold_at
 from mmorpg.domain.procgen.seeds import rng
 from mmorpg.domain.rules import crafts as craft_rules
@@ -77,6 +78,15 @@ EVENT_REWARD_KEY = "event_reward_percent"
 GATHER_SOURCES: dict[str, str] = {
     "Заросли": "травы",
     "Останки": "шкуры",
+    "Осыпь": "руда",
+    "Заброшенный шурф": "руда",
+    "Каменная гряда": "руда",
+    "Прогалина": "волокно",
+    "Бурелом": "древесина",
+    "Старая делянка": "древесина",
+    "Заводь": "рыба",
+    "Омут": "рыба",
+    "Отмель": "рыба",
 }
 
 
@@ -94,6 +104,13 @@ class Aftermath:
     #: Что сточилось до конца этим боем - именами вещей. Сломанное остаётся
     #: надетым, но не даёт ничего до кузницы (ADR 0057).
     broken: tuple[str, ...] = ()
+    #: Что снято с туш ножом свежевателя и сколько (ADR 0062). Пусто - свежевать
+    #: было нечего или нечем.
+    skinned_id: str = ""
+    skinned_count: int = 0
+    #: Работа, записанная в свежевание, и то, доработал ли нож своё.
+    skinned_work: int = 0
+    knife_broken: bool = False
 
     @property
     def levelled(self) -> bool:
@@ -173,14 +190,69 @@ def resolve_victory(
     # Бой точит надетое, и выигранный тоже: доспех держит удары независимо от
     # того, кто в итоге упал (``domain/rules/repair.py``, ADR 0057).
     worn, broke = repair_rules.wear(content, grown, repair_rules.WEAR_PER_FIGHT)
+    skinned = _skin(content, worn, fallen)
     return Aftermath(
-        character=worn,
+        character=skinned.character,
         experience=earned(content, paid, share_experience),
         gold=share_gold,
         loot=share_loot,
         level_up=level_up,
         quest_steps=steps,
         broken=tuple(item.name for item in broke),
+        skinned_id=skinned.item_id,
+        skinned_count=skinned.count,
+        skinned_work=skinned.experience,
+        knife_broken=skinned.tool_broken,
+    )
+
+
+#: Кого свежуют. Шкуру снимают со зверя и с твари; с гуманоида её не снимают,
+#: потому что это уже не ремесло, а с нежити и стихии снимать нечего (ADR 0062).
+SKINNABLE: frozenset[EnemyKind] = frozenset({EnemyKind.BEAST, EnemyKind.ABERRATION})
+
+#: Род сырья, который даёт освежёванная туша.
+HIDE_SOURCE = "шкуры"
+
+
+def _skin(content: GameContent, character: Character, fallen: Sequence[Enemy]) -> Gathered:
+    """Снять шкуру с того, что осталось на месте боя (ADR 0062).
+
+    Тот же уговор, что и у жилы: без ножа в слоте «Инструмент» шкуры не будет
+    вовсе, ступень шкуры решает уровень туши, а сколько её вышло - ранг
+    свежевания. Нож стачивается на одну работу за бой, сколько бы туш ни лежало:
+    цена берётся за работу, а не за каждую тушу.
+    """
+    tool = tool_rules.tool_of(content, character)
+    if tool is None or not tool_rules.takes(content, tool, HIDE_SOURCE):
+        return Gathered(character=character)
+    if tool_rules.left(content, character, tool) <= 0:
+        return Gathered(character=character)
+
+    carcasses = [enemy for enemy in fallen if enemy.kind in SKINNABLE]
+    if not carcasses:
+        return Gathered(character=character)
+
+    level = max(enemy.level for enemy in carcasses)
+    here = craft_rules.best_per_source(
+        content, craft_rules.yields_here(content, level=level, sources=(HIDE_SOURCE,))
+    )
+    if not here:
+        return Gathered(character=character)
+
+    craft_id = tool_rules.craft_of(content, tool)
+    rank = craft_rules.character_rank(content, character, craft_id)
+    experience = craft_rules.gather_work(content.craft_rules, rank)
+    worked = character.with_crafts(character.crafts.with_experience(craft_id, experience))
+    count = min(len(carcasses), craft_rules.gather_amount(content, worked, craft_id))
+    worked, broken = tool_rules.wear(content, worked, tool)
+    return Gathered(
+        character=worked,
+        item_id=here[0],
+        count=max(1, count),
+        craft_id=craft_id,
+        experience=experience,
+        tool_broken=broken,
+        tool_left=0 if broken else tool_rules.left(content, worked, tool),
     )
 
 
@@ -306,18 +378,29 @@ def _gather(
 
     wanted = GATHER_SOURCES.get(node.name, "")
     sources = (wanted,) if wanted else tool_rules.sources_of(content, tool)
-    here = craft_rules.yields_here(content, level=character.level, biomes=biomes, sources=sources)
+    # Ступень сырья решает **место**, а не тот, кто в него пришёл: в жиле уровня
+    # пять лежит железный лом, в глубокой штольне - небесное железо, и мастер,
+    # вернувшийся на первую локацию, выносит оттуда то же, что и новичок
+    # (ADR 0062). Поэтому уровень берётся у узла.
+    here = craft_rules.yields_here(content, level=node.level, biomes=biomes, sources=sources)
     if not here:
         # Земля, в которой этому ремеслу нечего взять, не остаётся немой: жила
         # отдаёт то, что вообще бывает такого рода, - иначе игрок стачивал бы
         # инструмент о пустое место, ничего об этом не зная.
-        here = craft_rules.yields_here(content, level=character.level, sources=sources)
-    item_id = source.choice(here) if here else ""
+        here = craft_rules.yields_here(content, level=node.level, sources=sources)
+    richest = craft_rules.best_per_source(content, here)
+    item_id = source.choice(richest) if richest else ""
     if not item_id:
         return Gathered(character=character)
 
     craft_id = tool_rules.craft_of(content, tool) or craft_rules.craft_of_source(content, item_id)
-    experience = content.craft_rules.gather_experience if craft_id else 0
+    experience = (
+        craft_rules.gather_work(
+            content.craft_rules, craft_rules.character_rank(content, character, craft_id)
+        )
+        if craft_id
+        else 0
+    )
     worked = character
     if craft_id:
         worked = character.with_crafts(character.crafts.with_experience(craft_id, experience))

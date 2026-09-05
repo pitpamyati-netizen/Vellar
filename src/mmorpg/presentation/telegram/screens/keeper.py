@@ -470,6 +470,11 @@ def _standing(record: OverlayRecord, stored: OverlayRecord | None) -> str:
 # --- одно поле ---------------------------------------------------------
 
 
+#: Сколько знаков значения поля читается на экране. Дальше - многоточие: поле
+#: правят набором, а не перечитыванием того, что в нём уже лежит.
+SHOWN_LIMIT = 300
+
+
 def field_screen(
     content: GameContent,
     record: OverlayRecord,
@@ -478,8 +483,12 @@ def field_screen(
     notice: str = "",
 ) -> Screen:
     """Значение одного поля: выбрать из списка или набрать сообщением."""
+    # Значение читается вслух, и потому оно укорочено: у поля-таблицы в нём может
+    # лежать пять находок с полусотней биомов, и экран перестал бы влезать в
+    # сообщение (правило доступности 4). Строки целиком стоят кнопками ниже.
+    now = overlay_rules.clipped(overlay_rules.shown(content, spec, record), SHOWN_LIMIT)
     lead = [
-        notice or f"{spec.name}. Сейчас: {overlay_rules.shown(content, spec, record)}.",
+        notice or f"{spec.name}. Сейчас: {now}.",
         _how_to_fill(spec),
     ]
     if spec.hint:

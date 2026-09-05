@@ -88,6 +88,22 @@ def button(
     raise AssertionError(f"no button starts with {prefix!r}")
 
 
+def sought(
+    content: GameContent,
+    hero: Character,
+    state: PlayState,
+    query: str,
+    goods: Goods | None = None,
+) -> PlayState:
+    """Список работ, суженный поиском.
+
+    Работ у ремесла столько, сколько в игре ступеней (ADR 0062), поэтому нужную
+    ищут, а не листают: «Поиск», потом слово. Тест ходит той же дорогой, что и
+    игрок.
+    """
+    return step(content, hero, state, "Поиск", query, goods=goods)
+
+
 def pressable(
     content: GameContent, hero: Character, state: PlayState, goods: Goods | None = None
 ) -> str:
@@ -166,7 +182,8 @@ def test_a_batch_spends_from_the_bag_and_pays_in_items(
     content: GameContent, hero: Character, bag: Goods
 ) -> None:
     listed = step(content, hero, begin(hero), "Ремёсла", goods=bag)
-    state = step(content, hero, listed, button(content, hero, listed, "Кузнечное дело"), goods=bag)
+    smithy = step(content, hero, listed, button(content, hero, listed, "Кузнечное дело"), goods=bag)
+    state = sought(content, hero, smithy, "Точильный", bag)
     made = step(
         content, hero, state, button(content, hero, state, "Точильный камень", bag), goods=bag
     )
@@ -184,7 +201,8 @@ def test_missing_materials_are_named_and_nothing_is_written(
     empty = Goods(gold=0)
     listed = step(content, hero, begin(hero), "Ремёсла", goods=empty)
     smithy = button(content, hero, listed, "Кузнечное дело")
-    state = step(content, hero, listed, smithy, goods=empty)
+    opened = step(content, hero, listed, smithy, goods=empty)
+    state = sought(content, hero, opened, "Точильный", empty)
     refused = step(
         content, hero, state, button(content, hero, state, "Точильный камень", empty), goods=empty
     )
@@ -196,10 +214,11 @@ def test_recipes_above_the_rank_are_not_offered(
     content: GameContent, hero: Character, bag: Goods
 ) -> None:
     listed = step(content, hero, begin(hero), "Ремёсла", goods=bag)
-    state = step(content, hero, listed, button(content, hero, listed, "Кузнечное дело"), goods=bag)
+    smithy = step(content, hero, listed, button(content, hero, listed, "Кузнечное дело"), goods=bag)
+    state = sought(content, hero, smithy, "шишак", bag)
     offered = pressable(content, hero, state, bag)
-    assert "Простой шишак" in offered, "rank two is open"
-    assert "Простая кольчуга доброй ковки" not in offered, "rank three is not"
+    assert "Добрый шишак" in offered, "rank two is open"
+    assert "Кованый шишак" not in offered, "rank three is not"
     assert "откроется с рангом" in screen(content, hero, state, bag).text()
 
 
