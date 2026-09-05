@@ -190,6 +190,34 @@ def class_screen(content: GameContent, draft: CharacterDraft, notice: str = "") 
     )
 
 
+def own_gear_line(content: GameContent, class_id: str) -> str:
+    """Чем этот класс дерётся и в чём ходит - своим (ADR 0064).
+
+    Доспех у класса один, и это надо услышать до выбора, а не на карточке первой
+    находки: чужое не запрещено, но каждая чужая часть стоит точности и
+    инициативы (``equipment.proficiency_penalty``).
+    """
+    klass = content.character_class(class_id)
+    armour = ", ".join(
+        content.armor_type(kind).name.lower()
+        for kind in klass.armor_types
+        if content.has_armor_type(kind)
+    )
+    weapons = ", ".join(
+        content.weapon_type(kind).name.lower()
+        for kind in klass.weapon_types
+        if content.has_weapon_type(kind)
+    )
+    parts = []
+    if armour:
+        parts.append(f"Носит {armour}")
+    if weapons:
+        parts.append(f"оружие — {weapons}")
+    if not parts:
+        return ""
+    return f"{', '.join(parts)}. Чужое надеть можно, но в нём точность и инициатива ниже."
+
+
 def class_details_screen(content: GameContent, class_id: str) -> Screen:
     klass = content.character_class(class_id)
     key_stats = ", ".join(STAT_NAMES[code].lower() for code in klass.key_stats)
@@ -202,6 +230,7 @@ def class_details_screen(content: GameContent, class_id: str) -> Screen:
             # класс выбирают. Вместо неё - то, чего кнопка сказать не может.
             klass.power,
             f"Ключевые характеристики: {key_stats}. Очки идут прежде всего в них.",
+            own_gear_line(content, class_id),
             f"Ресурс: {klass.resource.name}. Умения тратят его, и он копится сам.",
             "Умений у класса шестьдесят: двадцать боевых и сорок пассивных. "
             "В панель встанут шесть боевых, и этот выбор — ваш почерк в бою; "
