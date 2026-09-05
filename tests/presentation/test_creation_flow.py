@@ -174,13 +174,13 @@ def test_changing_the_race_restates_its_bonuses(
 def test_races_beyond_the_first_page_are_reachable(
     content: GameContent, named: CreationState
 ) -> None:
-    """16 рас на страницах по 8 записей: поздним нужен ряд перемещения."""
-    assert advance(content, named, "Орк").draft.race_id == "", "Орк is not on page 1"
+    """16 рас не влезают на одну страницу: поздним нужен ряд перемещения."""
+    assert advance(content, named, "Тифлинг").draft.race_id == "", "Тифлинг is not on page 1"
     second_page = advance(content, named, "Следующая страница")
     assert second_page.race_page.page == 2
-    chosen = advance(content, second_page, "Орк")
-    assert chosen.draft.race_id == "orc"
-    assert "плюс 3 к силе" in chosen.notice
+    chosen = advance(content, second_page, "Тифлинг")
+    assert chosen.draft.race_id == "tiefling"
+    assert "плюс 2 к харизме" in chosen.notice
 
 
 def test_back_from_the_first_step_leaves_creation(content: GameContent) -> None:

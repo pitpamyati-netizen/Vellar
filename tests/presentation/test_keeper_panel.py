@@ -1314,16 +1314,16 @@ def test_a_crowded_guild_is_paged_and_numbers_stay_whole(with_players: Panel) ->
     card.press(labels.KEEPER_GUILD_BTN.text)
     assert card.state.screen is ScreenId.KEEPER_GUILD
     assert card.screen().fits_message_limit(), f"{len(card.screen().text())} знаков"
-    assert "Страница 1 из 4" in card.screen().text()
-    assert labels.keeper_group_kick_label(12).text not in card.buttons()
+    assert "Страница 1 из 3" in card.screen().text()
+    assert labels.keeper_group_kick_label(14).text not in card.buttons()
 
     card.press(labels.NEXT_PAGE.text)
     assert card.screen().fits_message_limit()
-    assert "12. Соклановец12" in card.screen().text()
-    assert labels.keeper_group_kick_label(12).text in card.buttons()
+    assert "14. Соклановец14" in card.screen().text()
+    assert labels.keeper_group_kick_label(14).text in card.buttons()
 
-    card.press(labels.keeper_group_kick_label(12).text)
-    assert card.target_guild is not None and not card.target_guild.has(12)
+    card.press(labels.keeper_group_kick_label(14).text)
+    assert card.target_guild is not None and not card.target_guild.has(14)
 
 
 def test_the_guild_vault_is_set_by_a_typed_number(with_players: Panel) -> None:
