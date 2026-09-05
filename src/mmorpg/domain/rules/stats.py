@@ -21,6 +21,7 @@ from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules import repair
+from mmorpg.domain.rules import subclass as subclass_rules
 from mmorpg.domain.rules.curves import softened
 
 #: Убывающая отдача живёт в ``rules/curves``: её считают и здесь, и в сборе
@@ -125,7 +126,9 @@ def derived_stats(
     effects: EffectStack | None = None,
 ) -> DerivedStats:
     """Посчитать все производные числа по сырой записи персонажа."""
-    klass = content.character_class(character.class_id)
+    # Класс берётся с поправками взятых ступеней (ADR 0069): сетка обязана быть
+    # одной и той же во всех формулах, поэтому её собирает одно место.
+    klass = subclass_rules.class_of(content, character)
     modifiers = mods.collect_modifiers(content, character, effects)
     stats = primary_stats(content, character, effects)
     level = character.level

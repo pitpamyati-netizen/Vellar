@@ -216,6 +216,57 @@ class StatMilestone:
 
 
 @dataclass(frozen=True, slots=True)
+class SubclassGate:
+    """Чем оплачен вход в подкласс (ADR 0069).
+
+    ``level``   уровень, ниже которого подкласса не берут;
+    ``remorts`` сколько уходов под новое имя должно быть за плечами;
+    ``stats``   пороги характеристик - те же вложенные очки, что считает веха.
+
+    Три условия, и они складываются: ступень берут, когда выполнены все. Гибрид
+    второй ступени тем и гибрид, что просит две характеристики сразу, а не одну
+    повыше.
+    """
+
+    level: int = 1
+    remorts: int = 0
+    stats: Mapping[StatCode, int] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class Subclass:
+    """Ступень специализации класса (ADR 0069).
+
+    Подкласс НЕ ДАЁТ НИ ОДНОЙ НОВОЙ КНОПКИ. Панель остаётся шесть боевых плюс
+    один расовый, экранов не прибавляется. Всё, что подкласс делает, - это две
+    вещи, и обе уже умеет считать движок:
+
+    ``modifiers`` пассивный свёрток прибавок, как техника дома и расовая
+                  способность. Ключи проверяются по ``EFFECTIVE_KEYS``: прибавка,
+                  которой никто не считает, - обещание, а не механика (ADR 0018).
+    ``scaling``   правка классовой сетки (ADR 0068). Названная характеристика
+                  получает новый выход **вместо** классового, неназванная
+                  остаётся как была. Берсерк переписывает силу и броню, и
+                  берсерком его делает именно это, а не строка в описании.
+
+    ``tier`` - ступень, а не порядковый номер: на каждой ступени берут ровно один
+    подкласс, и взятые ступени **складываются**. Дредноут на сто пятидесятом -
+    это берсерк, ставший гибридом, ставший дредноутом, а не кто-то третий.
+    """
+
+    id: str
+    class_id: str
+    tier: int
+    name: str
+    role: str
+    text: str
+    lore: str = ""
+    gate: SubclassGate = field(default_factory=SubclassGate)
+    modifiers: Mapping[str, float] = field(default_factory=dict)
+    scaling: Mapping[StatCode, StatScaling] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
 class CharacterClass:
     id: str
     name: str
@@ -802,6 +853,9 @@ class GameContent:
     npcs: tuple[Npc, ...]
     turnings: tuple[Turning, ...]
     houses: tuple[House, ...]
+    #: Ступени специализации классов (ADR 0069). Пусто - подклассов в игре нет,
+    #: и экран их не предлагает: содержимое переживает код.
+    subclasses: tuple[Subclass, ...]
     #: Какое голосование открыто сейчас. Пусто - совет ничего не спрашивает.
     open_turning_id: str
 
@@ -825,6 +879,7 @@ class GameContent:
     _npcs_by_id: Mapping[str, Npc]
     _turnings_by_id: Mapping[str, Turning]
     _houses_by_id: Mapping[str, House]
+    _subclasses_by_id: Mapping[str, Subclass]
     _house_by_city: Mapping[str, House]
 
     #: Каким словом вещь называет прибавку к характеристике: «меч силача».
@@ -872,6 +927,7 @@ class GameContent:
         npcs: Sequence[Npc] = (),
         turnings: Sequence[Turning] = (),
         houses: Sequence[House] = (),
+        subclasses: Sequence[Subclass] = (),
         open_turning_id: str = "",
         stat_words: Mapping[str, str] | None = None,
         assemble: Callable[[GameContent, str], Item | None] | None = None,
@@ -910,6 +966,7 @@ class GameContent:
             npcs=tuple(npcs),
             turnings=tuple(turnings),
             houses=tuple(houses),
+            subclasses=tuple(subclasses),
             open_turning_id=open_turning_id,
             _races_by_id=MappingProxyType({race.id: race for race in races}),
             _classes_by_id=MappingProxyType({klass.id: klass for klass in classes}),
@@ -933,6 +990,7 @@ class GameContent:
             _npcs_by_id=MappingProxyType({npc.id: npc for npc in npcs}),
             _turnings_by_id=MappingProxyType({turning.id: turning for turning in turnings}),
             _houses_by_id=MappingProxyType({house.id: house for house in houses}),
+            _subclasses_by_id=MappingProxyType({one.id: one for one in subclasses}),
             _house_by_city=MappingProxyType(
                 {city_id: house for house in houses for city_id in house.seats}
             ),
@@ -1098,6 +1156,24 @@ class GameContent:
 
     def has_house(self, house_id: str) -> bool:
         return house_id in self._houses_by_id
+
+    def subclass(self, subclass_id: str) -> Subclass:
+        return self._subclasses_by_id[subclass_id]
+
+    def has_subclass(self, subclass_id: str) -> bool:
+        return subclass_id in self._subclasses_by_id
+
+    def subclasses_of(self, class_id: str, tier: int | None = None) -> tuple[Subclass, ...]:
+        """Подклассы этого класса, по ступеням и в порядке содержимого."""
+        return tuple(
+            one
+            for one in self.subclasses
+            if one.class_id == class_id and (tier is None or one.tier == tier)
+        )
+
+    def subclass_tiers(self, class_id: str) -> tuple[int, ...]:
+        """Ступени, объявленные у этого класса, по возрастанию."""
+        return tuple(sorted({one.tier for one in self.subclasses_of(class_id)}))
 
     def house_of_city(self, city_id: str) -> House | None:
         """Дом, который держит этот город, или ``None`` (Гнездно — ничей)."""

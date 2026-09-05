@@ -318,6 +318,7 @@ GUILD_TRANSFER = label("Передать соклановцу", "🎁")
 
 # --- великие дома (``domain/rules/houses.py``) ---
 
+SUBCLASS = label("Ступень", "🧭")
 HOUSE_JOIN = label("Вступить в дом", "🏰")
 HOUSE_LEAVE = label("Уйти из дома", "🚪")
 

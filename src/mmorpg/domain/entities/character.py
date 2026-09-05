@@ -169,6 +169,11 @@ class Character:
     # В каком великом доме состоит игрок (``domain/rules/houses.py``, ADR 0049).
     # Пусто - ни в каком. Даёт доступ к технике дома; уход под новое имя не трогает.
     house_id: str = ""
+    # Взятые ступени специализации (``domain/rules/subclass.py``, ADR 0069). На
+    # каждой ступени берут один подкласс, и взятые складываются: дредноут - это
+    # берсерк, ставший гибридом, ставший дредноутом, а не кто-то третий. Порядок
+    # значения не имеет: свёрток прибавок складывается, а не накапливается.
+    subclass_ids: tuple[str, ...] = ()
     # Конец пути (``domain/rules/turning.py``). ``remorts`` - сколько раз игрок
     # брал у Престола новое имя: каждый уход сбрасывал уровень до первого и оставлял
     # нажитое. ``turning_cycle``/``turning_answer`` - ответ, который он дал на
@@ -223,6 +228,12 @@ class Character:
     def with_arena_credit(self, held: int) -> Character:
         """Записать, сколько с тебя держит арена. Никогда не меньше нуля."""
         return replace(self, arena_credit=max(0, held))
+
+    def with_subclass(self, subclass_id: str) -> Character:
+        """Взять ступень специализации. Взятое не отбирают и не берут дважды."""
+        if subclass_id in self.subclass_ids:
+            return self
+        return replace(self, subclass_ids=(*self.subclass_ids, subclass_id))
 
     def with_house(self, house_id: str) -> Character:
         """Вступить в дом или (пустой ``house_id``) выйти из него."""

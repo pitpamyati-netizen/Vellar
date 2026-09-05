@@ -21,6 +21,7 @@ from mmorpg.domain.rules import houses as house_rules
 from mmorpg.domain.rules import milestones as milestone_rules
 from mmorpg.domain.rules import repair
 from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules import subclass as subclass_rules
 from mmorpg.domain.rules.curves import softened
 
 STAT_MODIFIER_PREFIX = "stat_"
@@ -141,10 +142,20 @@ def scaling_modifiers(content: GameContent, character: Character) -> dict[str, f
     Считается от **вложенного**, как и веха, и по той же причине: свёрток не
     может спрашивать сам себя (``domain/rules/milestones.py``).
     """
-    klass = content.character_class(character.class_id)
+    klass = subclass_rules.class_of(content, character)
     raw = klass.summed(milestone_rules.invested_stats(content, character), "healing")
     healing = softened(raw, HEALING_SOFTENER, HEALING_CEILING)
     return {"healing_done_percent": round(healing, 2)} if healing else {}
+
+
+def subclass_modifiers(content: GameContent, character: Character) -> dict[str, float]:
+    """Что дают взятые ступени специализации (ADR 0069).
+
+    Тот же пассивный свёрток, что у техники дома и расовой способности: подкласс
+    не добавляет ни кнопки, ни слота, и всё, что он обещает прибавкой, лежит в
+    общем словаре и проверяется по ``EFFECTIVE_KEYS``.
+    """
+    return subclass_rules.modifiers(content, character)
 
 
 def house_modifiers(content: GameContent, character: Character) -> Mapping[str, float]:
@@ -229,6 +240,7 @@ def collect_modifiers(
         # выбором при создании (ADR 0068).
         milestone_modifiers(content, character),
         scaling_modifiers(content, character),
+        subclass_modifiers(content, character),
         race_modifiers(content, character),
         house_modifiers(content, character),
         passive_modifiers(content, character),

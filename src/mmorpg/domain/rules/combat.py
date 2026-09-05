@@ -63,6 +63,7 @@ from mmorpg.domain.procgen.seeds import derive, rng, to_int
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules import subclass as subclass_rules
 from mmorpg.domain.rules.progression import experience_reward
 from mmorpg.domain.rules.skill_effects import (
     COUNTER,
@@ -795,7 +796,7 @@ def _blow_parts(
     крошечного коэффициента, то есть почти ни от чего. Это и есть классовый
     бонус к умению: он не написан отдельной цифрой, он следует из сетки.
     """
-    klass = content.character_class(character.class_id)
+    klass = subclass_rules.class_of(content, character)
     if scaling is None:
         scaling = klass.key_stats[0] if klass.key_stats else None
     primary = primary_stats(content, character, effects)

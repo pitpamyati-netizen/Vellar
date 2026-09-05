@@ -907,6 +907,11 @@ def stats_screen(
             )
         ),
     ]
+    # Вехи идут после чисел и до кнопок: они и есть ответ на «куда вкладывать»
+    # (ADR 0068). При выключенных описаниях остаётся одна строка о взятых.
+    lines.extend(
+        milestone_lines(content, character) if verbose else milestone_lines(content, character)[:1]
+    )
     rows: list[tuple[Label, ...]] = []
     if character.unspent_stat_points:
         stat_names = list(STAT_NAMES.values())
@@ -916,4 +921,8 @@ def stats_screen(
         ]
     else:
         lines.append("Свободных очков нет: их даёт новый уровень.")
+    # Ступень специализации живёт здесь же: подкласс переписывает сетку
+    # характеристик, и смотреть на него отдельно от них незачем (ADR 0069).
+    if content.subclasses_of(character.class_id):
+        rows.append((labels.SUBCLASS,))
     return Screen(id=ScreenId.STATS, lines=tuple(lines), rows=tuple(rows))

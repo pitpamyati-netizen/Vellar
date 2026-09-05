@@ -1,0 +1,582 @@
+# Ступени специализации: кем воин становится, оставаясь воином (ADR 0069).
+#
+# Класс отвечает на вопрос «как ты дерёшься». Подкласс отвечает на вопрос «каким
+# именно ты стал», и отвечает трижды за дорогу.
+#
+# ============================================================================
+# ТРИ СТУПЕНИ
+# ============================================================================
+#
+#   tier 0 — 30 уровень, уходов не нужно. Первая развилка: чем этот класс будет
+#            заниматься. Берсерк или защитник, элементалист или некромант.
+#   tier 1 — 75 уровень и один уход. Гибрид: просит ДВЕ характеристики сразу,
+#            и потому его нельзя взять, просто налив в ведущую.
+#   tier 3 — 150 уровень и три ухода. Последнее слово. Ступень названа третьей,
+#            а не второй, потому что её меряют уходами, а уходов к ней три.
+#
+# Ступени БЕРУТ ПО ПОРЯДКУ и они СКЛАДЫВАЮТСЯ. Дредноут на сто пятидесятом — это
+# берсерк, ставший гибридом, ставший дредноутом, а не кто-то третий. Поэтому
+# правки сеток накладываются по возрастанию ступени: поздняя договаривает раннюю.
+#
+# ВЫБОР НЕОБРАТИМ. Ступень берут один раз; обратимый выбор — не выбор, а настройка.
+#
+# ============================================================================
+# ЧТО ПОДКЛАСС ДЕЛАЕТ
+# ============================================================================
+#
+# Ровно две вещи, и обе движок уже считает.
+#
+# ``modifiers`` — пассивный свёрток прибавок, как техника дома (ADR 0049) и
+#   расовая способность. Ключи из общего словаря traits.toml [meta].modifier_keys
+#   и проверяются по EFFECTIVE_KEYS: прибавка, которой никто не считает, —
+#   обещание, а не механика (ADR 0018).
+#
+# ``[subclass.scaling]`` — правка классовой сетки (ADR 0068). Названная
+#   характеристика получает НОВЫЙ ВЫХОД ВМЕСТО классового, неназванная остаётся
+#   как была. Берсерком берсерка делает именно это — сила у него ведёт удар
+#   сильнее, а броню держит хуже, — а не строка в описании.
+#
+#   Заменяется целиком, а не сдвигается. Подкласс говорит, ЧЕМ ОЧКО СТАЛО:
+#   сдвиг пришлось бы читать вместе с тем, от чего он считается, и экран
+#   характеристик не смог бы назвать одно честное число.
+#
+# ЧЕГО ПОДКЛАСС НЕ ДЕЛАЕТ: не даёт ни одной новой кнопки, ни слота, ни экрана.
+# Панель остаётся шесть боевых плюс один расовый. Игру слушают целиком, и всякая
+# ступень, добавляющая слот, добавляет и то, что игрок обязан удержать в голове.
+#
+# ``gate`` — чем оплачен вход: уровень, уходы и пороги характеристик. Все три
+# условия складываются. Отказ называется целиком и до нажатия.
+
+[meta]
+tiers = [
+    { tier = 0, name = "Путь", text = "Первая развилка: чем этот класс будет заниматься." },
+    { tier = 1, name = "Гибрид", text = "Две характеристики сразу и один уход за плечами." },
+    { tier = 3, name = "Венец", text = "Последнее слово: сто пятьдесят уровней и три ухода." },
+]
+
+# ============================================================================
+# ВОИН
+# ============================================================================
+
+[[subclass]]
+id = "warrior_vanguard"
+class_id = "warrior"
+tier = 0
+name = "Передовой"
+role = "Первым в пролом"
+text = "Первый удар сильнее на 12 процентов, ходите на 6 процентов раньше, брони на 5 процентов меньше."
+lore = "Передового не назначают — им становится тот, кто однажды шагнул раньше приказа и остался жив. Второй раз за ним уже идут."
+gate = { level = 30 }
+modifiers = { first_turn_damage_percent = 12, initiative_percent = 6, armor_percent = -5 }
+
+[subclass.scaling]
+STR = { blow = 2.5, health = 0.4 }
+AGI = { blow = 0.35 }
+
+[[subclass]]
+id = "warrior_warden"
+class_id = "warrior"
+tier = 0
+name = "Заградитель"
+role = "Держать проход"
+text = "Удар по вам слабее на 8 процентов, брони на 10 процентов больше, ваш удар слабее на 4 процента."
+lore = "Заградитель считает бой не ударами, а шагами, которых противник не сделал. Их обычно ноль, и это лучший счёт из возможных."
+gate = { level = 30 }
+modifiers = { damage_taken_percent = -8, armor_percent = 10, damage_percent = -4 }
+
+[subclass.scaling]
+END = { blow = 0.3, health = 7.0, resource = 1.2, armor = 1.75 }
+
+[[subclass]]
+id = "warrior_ironsworn"
+class_id = "warrior"
+tier = 1
+name = "Клятый железом"
+role = "Гибрид: сила и выносливость"
+text = "Здоровья на 8 процентов больше, физический удар сильнее на 7 процентов, отражаете 4 процента полученного."
+lore = "Клятву дают железу, а не Престолу: железо не отменяет указов и не переписывает грамот. Оно просто есть, пока его не сломали."
+gate = { level = 75, remorts = 1, stats = { STR = 140, END = 120 } }
+modifiers = { health_percent = 8, physical_damage_percent = 7, reflect_percent = 4 }
+
+[subclass.scaling]
+STR = { blow = 2.6, health = 1.2 }
+END = { blow = 0.5, health = 6.5, resource = 1.2, armor = 1.6 }
+
+[[subclass]]
+id = "warrior_dreadnought"
+class_id = "warrior"
+tier = 3
+name = "Дредноут"
+role = "Венец: тот, кого обходят"
+text = "Удар по вам слабее на 10 процентов, физический удар сильнее на 12, здоровья на 10 процентов больше, ходите на 8 процентов позже."
+lore = "Про дредноута не рассказывают, как он бился. Рассказывают, где он стоял — и что дорога с тех пор идёт в обход."
+gate = { level = 150, remorts = 3, stats = { STR = 240, END = 200 } }
+modifiers = { damage_taken_percent = -10, physical_damage_percent = 12, health_percent = 10, initiative_percent = -8 }
+
+[subclass.scaling]
+STR = { blow = 3.0, health = 1.6 }
+END = { blow = 0.6, health = 7.5, resource = 1.4, armor = 1.9 }
+
+# ============================================================================
+# ВАРВАР
+# ============================================================================
+
+[[subclass]]
+id = "barbarian_berserk"
+class_id = "barbarian"
+tier = 0
+name = "Берсерк"
+role = "Ярость вместо брони"
+text = "Вы бьёте на 12 процентов сильнее, держите удар на 10 процентов хуже, Ярость копится на 15 процентов быстрее."
+lore = "Берсерк не входит в ярость и не выходит из неё. Он просто перестаёт замечать разницу между тем, что болит, и тем, что мешает."
+gate = { level = 30 }
+modifiers = { damage_percent = 12, damage_taken_percent = 10, resource_regen_percent = 15 }
+
+[subclass.scaling]
+STR = { blow = 2.7, health = 0.5, resource = 0.8 }
+END = { blow = 0.2, health = 5.8, armor = 1.2 }
+
+[[subclass]]
+id = "barbarian_totemic"
+class_id = "barbarian"
+tier = 0
+name = "Тотемный"
+role = "Живучесть и долгий бой"
+text = "Здоровья на 10 процентов больше, каждый ход возвращается 2 процента здоровья, первый удар слабее на 8 процентов."
+lore = "Тотемный носит на себе кость зверя, которого не он убил. Договор простой: пока кость цела, устать нельзя."
+gate = { level = 30 }
+modifiers = { health_percent = 10, regen_per_turn_percent = 2, first_turn_damage_percent = -8 }
+
+[subclass.scaling]
+STR = { blow = 2.1, health = 1.2, resource = 0.5 }
+END = { blow = 0.3, health = 7.2, armor = 1.7 }
+
+[[subclass]]
+id = "barbarian_bloodbound"
+class_id = "barbarian"
+tier = 1
+name = "Кровопийца"
+role = "Гибрид: сила и выносливость"
+text = "Возвращаете себе 8 процентов нанесённого урона, по раненому бьёте на 10 процентов сильнее."
+lore = "Он не пьёт кровь — это байка застав. Он просто дерётся тем лучше, чем меньше в нём осталось целого, и объяснить этого не может сам."
+gate = { level = 75, remorts = 1, stats = { STR = 150, END = 110 } }
+modifiers = { lifesteal_percent = 8, wounded_target_damage_percent = 10, low_health_damage_percent = 8 }
+
+[subclass.scaling]
+STR = { blow = 2.8, health = 1.0, resource = 0.9 }
+END = { blow = 0.3, health = 6.6, armor = 1.5 }
+
+[[subclass]]
+id = "barbarian_stormborn"
+class_id = "barbarian"
+tier = 3
+name = "Обвальный"
+role = "Венец: то, что пережидают"
+text = "Вы бьёте на 16 процентов сильнее, возвращаете 10 процентов нанесённого, держите удар на 8 процентов хуже."
+lore = "Про обвал не спрашивают, зачем он сошёл. Его пережидают в стороне и считают, что уцелело."
+gate = { level = 150, remorts = 3, stats = { STR = 250, END = 140 } }
+modifiers = { damage_percent = 16, lifesteal_percent = 10, damage_taken_percent = 8 }
+
+[subclass.scaling]
+STR = { blow = 3.2, health = 1.2, resource = 1.0 }
+END = { blow = 0.3, health = 6.8, armor = 1.4 }
+
+# ============================================================================
+# ПАЛАДИН
+# ============================================================================
+
+[[subclass]]
+id = "paladin_shieldbearer"
+class_id = "paladin"
+tier = 0
+name = "Щитоносец"
+role = "Стоять за чужую спину"
+text = "Удар по вам слабее на 10 процентов, брони на 8 процентов больше, ваш удар слабее на 5 процентов."
+lore = "Щитоносцу не ставят памятников: памятник ставят тому, кого он прикрыл. Он и не спорит — за этим и шёл."
+gate = { level = 30 }
+modifiers = { damage_taken_percent = -10, armor_percent = 8, damage_percent = -5 }
+
+[subclass.scaling]
+END = { blow = 0.2, health = 6.8, armor = 1.8 }
+CHA = { blow = 0.5, resource = 1.8, healing = 0.035 }
+
+[[subclass]]
+id = "paladin_zealot"
+class_id = "paladin"
+tier = 0
+name = "Ревнитель"
+role = "Свет как оружие"
+text = "Вы бьёте на 10 процентов сильнее, святой урон вредит вам на 15 процентов меньше, лечение слабее на 8 процентов."
+lore = "Ревнитель читает грамоту Престола как приговор, а не как указ, и приводит его в исполнение сам. Это редко нравится тем, кто грамоту писал."
+gate = { level = 30 }
+modifiers = { damage_percent = 10, resist_holy_percent = 15, healing_done_percent = -8 }
+
+[subclass.scaling]
+STR = { blow = 2.7, health = 0.6 }
+CHA = { blow = 0.8, resource = 1.3, healing = 0.015 }
+
+[[subclass]]
+id = "paladin_lightbinder"
+class_id = "paladin"
+tier = 1
+name = "Светоплёт"
+role = "Гибрид: сила и харизма"
+text = "Лечите на 14 процентов сильнее, вас лечат на 8 процентов лучше, Благодать возвращается на 12 процентов быстрее."
+lore = "Свет не плетут — так говорят те, кто не пробовал. Плетут, и нитка рвётся ровно там, где ты сам её отпустил."
+gate = { level = 75, remorts = 1, stats = { STR = 120, CHA = 130 } }
+modifiers = { healing_done_percent = 14, healing_taken_percent = 8, resource_regen_percent = 12 }
+
+[subclass.scaling]
+STR = { blow = 2.4, health = 0.8 }
+CHA = { blow = 0.8, resource = 2.0, healing = 0.05 }
+
+[[subclass]]
+id = "paladin_hierarch"
+class_id = "paladin"
+tier = 3
+name = "Первопрестольный"
+role = "Венец: за кем идут"
+text = "Лечите на 18 процентов сильнее, удар по вам слабее на 10 процентов, вы бьёте на 8 процентов сильнее."
+lore = "Первопрестольного не выбирают ни Престол, ни дома. Его называют так те, кто за ним пошёл, — и переспорить их некому."
+gate = { level = 150, remorts = 3, stats = { STR = 200, CHA = 200 } }
+modifiers = { healing_done_percent = 18, damage_taken_percent = -10, damage_percent = 8 }
+
+[subclass.scaling]
+STR = { blow = 2.8, health = 1.0 }
+CHA = { blow = 1.0, resource = 2.2, healing = 0.055 }
+END = { blow = 0.3, health = 6.6, armor = 1.7 }
+
+# ============================================================================
+# СЛЕДОПЫТ
+# ============================================================================
+
+[[subclass]]
+id = "ranger_sharpshooter"
+class_id = "ranger"
+tier = 0
+name = "Меткий"
+role = "Одна цель, один выстрел"
+text = "По одиночной цели бьёте на 12 процентов сильнее, точность выше на 6, по всем сразу — на 10 процентов слабее."
+lore = "Меткий не считает выстрелы. Он считает те, которые пришлось делать дважды, и таких у него за год — три."
+gate = { level = 30 }
+modifiers = { single_target_damage_percent = 12, accuracy_percent = 6, aoe_damage_percent = -10 }
+
+[subclass.scaling]
+AGI = { blow = 2.5, health = 0.4 }
+WIS = { blow = 0.6, resource = 1.6 }
+
+[[subclass]]
+id = "ranger_beastwarden"
+class_id = "ranger"
+tier = 0
+name = "Звероблюститель"
+role = "Знать зверя лучше зверя"
+text = "По зверью бьёте на 18 процентов сильнее, природный урон вредит вам на 12 процентов меньше."
+lore = "Звероблюститель не любит зверьё и не боится его. Он знает, где оно ночует, чем кормится и в какую сторону побежит, — и этого хватает."
+gate = { level = 30 }
+modifiers = { beast_damage_percent = 18, resist_nature_percent = 12, dot_damage_percent = 8 }
+
+[subclass.scaling]
+AGI = { blow = 2.2, health = 0.5 }
+WIS = { blow = 0.9, resource = 1.8, healing = 0.025 }
+
+[[subclass]]
+id = "ranger_pathwarden"
+class_id = "ranger"
+tier = 1
+name = "Троповод"
+role = "Гибрид: ловкость и мудрость"
+text = "Ходите на 10 процентов раньше, Фокус возвращается на 14 процентов быстрее, уклонения на 4 больше."
+lore = "Троповод берётся довести до места и доводит. О том, сколько троп он для этого забраковал, спрашивать не принято."
+gate = { level = 75, remorts = 1, stats = { AGI = 140, WIS = 120 } }
+modifiers = { initiative_percent = 10, resource_regen_percent = 14, dodge_percent = 4 }
+
+[subclass.scaling]
+AGI = { blow = 2.5, health = 0.5 }
+WIS = { blow = 1.0, resource = 2.0 }
+
+[[subclass]]
+id = "ranger_windless"
+class_id = "ranger"
+tier = 3
+name = "Безветренный"
+role = "Венец: расстояние ничего не решает"
+text = "По одиночной цели бьёте на 16 процентов сильнее, решающий удар злее на 20, точность выше на 6 процентов."
+lore = "Безветренный стреляет в бурю так же, как в затишье. Спорить с этим пробовали дважды, и оба раза недолго."
+gate = { level = 150, remorts = 3, stats = { AGI = 240, WIS = 180 } }
+modifiers = { single_target_damage_percent = 16, crit_damage_percent = 20, accuracy_percent = 6 }
+
+[subclass.scaling]
+AGI = { blow = 3.0, health = 0.6 }
+WIS = { blow = 1.1, resource = 2.2 }
+LCK = { blow = 0.4 }
+
+# ============================================================================
+# РАЗБОЙНИК
+# ============================================================================
+
+[[subclass]]
+id = "rogue_cutthroat"
+class_id = "rogue"
+tier = 0
+name = "Душегуб"
+role = "Один удар и тишина"
+text = "Решающий удар случается на 6 процентов чаще и злее на 20, здоровья на 8 процентов меньше."
+lore = "Душегуб не дерётся. Драка — это когда обе стороны знают, что началось; у него так не выходит ни разу."
+gate = { level = 30 }
+modifiers = { crit_chance_percent = 6, crit_damage_percent = 20, health_percent = -8 }
+
+[subclass.scaling]
+AGI = { blow = 2.5, health = 0.3, resource = 1.1 }
+LCK = { blow = 0.8 }
+
+[[subclass]]
+id = "rogue_balladeer"
+class_id = "rogue"
+tier = 0
+name = "Сказитель"
+role = "Слово дороже клинка"
+text = "В лавке уступают охотнее, добыча ценнее на 8 процентов, золота на 12 процентов больше, удар слабее на 6."
+lore = "Сказителя пускают туда, куда не пустили бы разбойника, и рассказывают ему то, чего не рассказали бы страже. Клинок он при этом носит тот же самый."
+gate = { level = 30 }
+modifiers = { gold_percent = 12, rarity_percent = 8, reputation_percent = 15, damage_percent = -6 }
+
+[subclass.scaling]
+AGI = { blow = 2.0, health = 0.4, resource = 1.0 }
+CHA = { blow = 0.5, resource = 0.6 }
+LCK = { blow = 0.7 }
+
+[[subclass]]
+id = "rogue_shadowblade"
+class_id = "rogue"
+tier = 1
+name = "Клинок тени"
+role = "Гибрид: ловкость и удача"
+text = "Уклонения на 6 больше, ходите на 10 процентов раньше, решающий удар на 5 процентов чаще."
+lore = "Клинок тени берут не за то, что он умеет исчезать, а за то, что умеет появляться — ровно там, где никто не смотрел."
+gate = { level = 75, remorts = 1, stats = { AGI = 140, LCK = 120 } }
+modifiers = { dodge_percent = 6, initiative_percent = 10, crit_chance_percent = 5 }
+
+[subclass.scaling]
+AGI = { blow = 2.6, health = 0.4, resource = 1.2 }
+LCK = { blow = 1.0 }
+
+[[subclass]]
+id = "rogue_phantom"
+class_id = "rogue"
+tier = 3
+name = "Призрак"
+role = "Венец: между двумя ударами сердца"
+text = "Решающий удар на 8 процентов чаще и злее на 25, по одиночной цели бьёте на 12 процентов сильнее."
+lore = "Призраком его назвали в книге управы — за то, что вписать было нечего: ни имени, ни примет, ни дня, когда его видели."
+gate = { level = 150, remorts = 3, stats = { AGI = 240, LCK = 200 } }
+modifiers = { crit_chance_percent = 8, crit_damage_percent = 25, single_target_damage_percent = 12 }
+
+[subclass.scaling]
+AGI = { blow = 3.1, health = 0.4, resource = 1.3 }
+LCK = { blow = 1.3 }
+
+# ============================================================================
+# МАГ
+# ============================================================================
+
+[[subclass]]
+id = "mage_elementalist"
+class_id = "mage"
+tier = 0
+name = "Стихийник"
+role = "Считать огонь"
+text = "Удар по всем сильнее на 14 процентов, огненный и холодный урон вредят вам на 10 процентов меньше, по одной цели бьёте на 8 процентов слабее."
+lore = "Стихийник не повелевает огнём: он его считает. Ошибку в счёте обычно замечает тот, кто стоял слишком близко."
+gate = { level = 30 }
+modifiers = { aoe_damage_percent = 14, resist_fire_percent = 10, resist_cold_percent = 10, single_target_damage_percent = -8 }
+
+[subclass.scaling]
+INT = { blow = 2.7, resource = 2.6 }
+
+[[subclass]]
+id = "mage_mentalist"
+class_id = "mage"
+tier = 0
+name = "Мыслитель"
+role = "Ум против ума"
+text = "Рассудочный урон вредит вам на 20 процентов меньше, умения стоят на 10 процентов дешевле, Чар на 10 процентов больше."
+lore = "Мыслителя трудно застать врасплох и невозможно переспорить. Второе он считает достижением, первое — привычкой."
+gate = { level = 30 }
+modifiers = { resist_mental_percent = 20, cost_reduction_percent = 10, resource_percent = 10 }
+
+[subclass.scaling]
+INT = { blow = 2.3, resource = 3.0 }
+WIS = { blow = 0.5, resource = 0.8, healing = 0.02 }
+
+[[subclass]]
+id = "mage_necromancer"
+class_id = "mage"
+tier = 0
+name = "Некромант"
+role = "То, что уже кончилось"
+text = "Негативный урон от вас сильнее, по нежити бьёте на 15 процентов сильнее, яд и горение точат на 14 процентов злее."
+lore = "Некромант занимается тем, что все уже списали, и потому его работу редко видят вовремя. Управа держит его на учёте и платит вперёд."
+gate = { level = 30 }
+modifiers = { undead_damage_percent = 15, dot_damage_percent = 14, resist_negative_percent = 15, healing_taken_percent = -10 }
+
+[subclass.scaling]
+INT = { blow = 2.6, resource = 2.5 }
+END = { blow = 0.0, health = 5.4, armor = 1.35 }
+
+[[subclass]]
+id = "mage_aetherblade"
+class_id = "mage"
+tier = 1
+name = "Клинок эфира"
+role = "Гибрид: интеллект и ловкость"
+text = "Ходите на 12 процентов раньше, по одиночной цели бьёте на 12 процентов сильнее, уклонения на 5 больше."
+lore = "Клинок эфира держат не рукой — счётом, и он тупится от усталости, а не от железа. Заточить его нельзя, можно только выспаться."
+gate = { level = 75, remorts = 1, stats = { INT = 150, AGI = 100 } }
+modifiers = { initiative_percent = 12, single_target_damage_percent = 12, dodge_percent = 5 }
+
+[subclass.scaling]
+INT = { blow = 2.8, resource = 2.6 }
+AGI = { blow = 0.7 }
+
+[[subclass]]
+id = "mage_archivist"
+class_id = "mage"
+tier = 3
+name = "Архивариус"
+role = "Венец: чистая арифметика"
+text = "Магический удар сильнее на 14 процентов, удар по всем — на 12, умения стоят на 12 процентов дешевле."
+lore = "Архивариус помнит все чары, что были записаны, и половину тех, что записать не успели. Второе он считает своей настоящей работой."
+gate = { level = 150, remorts = 3, stats = { INT = 280, WIS = 140 } }
+modifiers = { magic_damage_percent = 14, aoe_damage_percent = 12, cost_reduction_percent = 12 }
+
+[subclass.scaling]
+INT = { blow = 3.2, resource = 3.0 }
+WIS = { blow = 0.6, resource = 0.8, healing = 0.02 }
+
+# ============================================================================
+# ЖРЕЦ
+# ============================================================================
+
+[[subclass]]
+id = "cleric_mender"
+class_id = "cleric"
+tier = 0
+name = "Врачеватель"
+role = "Поднять на ноги"
+text = "Лечите на 16 процентов сильнее, вас лечат на 8 процентов лучше, ваш удар слабее на 8 процентов."
+lore = "Врачевателя зовут, когда уже поздно, и он приходит. Из всего, что он умеет, самое трудное — остаться, когда лечить уже нечего."
+gate = { level = 30 }
+modifiers = { healing_done_percent = 16, healing_taken_percent = 8, damage_percent = -8 }
+
+[subclass.scaling]
+WIS = { blow = 1.9, resource = 2.4, healing = 0.075 }
+
+[[subclass]]
+id = "cleric_inquisitor"
+class_id = "cleric"
+tier = 0
+name = "Дознатчик"
+role = "Слово, которое бьёт"
+text = "Вы бьёте на 12 процентов сильнее, по нежити — на 15, лечите на 10 процентов слабее."
+lore = "Дознатчик задаёт три вопроса и на четвёртый уже не рассчитывает. Управа считает это перегибом и всё-таки посылает его первым."
+gate = { level = 30 }
+modifiers = { damage_percent = 12, undead_damage_percent = 15, healing_done_percent = -10 }
+
+[subclass.scaling]
+WIS = { blow = 2.6, resource = 2.0, healing = 0.035 }
+STR = { blow = 0.5 }
+
+[[subclass]]
+id = "cleric_oathkeeper"
+class_id = "cleric"
+tier = 1
+name = "Хранитель слова"
+role = "Гибрид: мудрость и харизма"
+text = "Вера возвращается на 16 процентов быстрее, лечите на 10 процентов сильнее, рассудочный урон вредит на 15 процентов меньше."
+lore = "Хранитель слова помнит обещания, которые давали при нём, — все, и дословно. Это делает его плохим собеседником и незаменимым свидетелем."
+gate = { level = 75, remorts = 1, stats = { WIS = 150, CHA = 100 } }
+modifiers = { resource_regen_percent = 16, healing_done_percent = 10, resist_mental_percent = 15 }
+
+[subclass.scaling]
+WIS = { blow = 2.4, resource = 2.4, healing = 0.06 }
+CHA = { blow = 0.6, resource = 0.8, healing = 0.03 }
+
+[[subclass]]
+id = "cleric_lastword"
+class_id = "cleric"
+tier = 3
+name = "Последнее слово"
+role = "Венец: тот, за кем уже пришли"
+text = "Лечите на 22 процента сильнее, здоровья на 10 процентов больше, удар по вам слабее на 8 процентов."
+lore = "Он поднимал тех, за кем уже пришли. Дважды это сочли ошибкой счёта, на третий раз перестали считать."
+gate = { level = 150, remorts = 3, stats = { WIS = 280, CHA = 140 } }
+modifiers = { healing_done_percent = 22, health_percent = 10, damage_taken_percent = -8 }
+
+[subclass.scaling]
+WIS = { blow = 2.8, resource = 2.6, healing = 0.08 }
+CHA = { blow = 0.7, resource = 0.9, healing = 0.03 }
+
+# ============================================================================
+# ДРУИД
+# ============================================================================
+
+[[subclass]]
+id = "druid_shapechanger"
+class_id = "druid"
+tier = 0
+name = "Перевёртыш"
+role = "Облик вместо доспеха"
+text = "Вы бьёте на 12 процентов сильнее, здоровья на 8 процентов больше, лечите на 10 процентов слабее."
+lore = "Перевёртышу проще быть медведем, чем вернуться человеком, и он об этом никому не говорит. Возвращается всё равно каждый раз."
+gate = { level = 30 }
+modifiers = { damage_percent = 12, health_percent = 8, healing_done_percent = -10 }
+
+[subclass.scaling]
+WIS = { blow = 2.4, resource = 2.0, healing = 0.025 }
+END = { blow = 0.5, health = 6.6, resource = 0.4, armor = 1.5 }
+
+[[subclass]]
+id = "druid_greenwarden"
+class_id = "druid"
+tier = 0
+name = "Зеленщик"
+role = "Долгий яд и долгая жизнь"
+text = "Яд, горение и кровотечение от вас точат на 16 процентов сильнее, каждый ход возвращается 2 процента здоровья."
+lore = "Зеленщик знает, что растёт у дороги и что из этого убивает. Разница между двумя списками, по его словам, только в том, сколько подождать."
+gate = { level = 30 }
+modifiers = { dot_damage_percent = 16, regen_per_turn_percent = 2, resist_poison_percent = 15 }
+
+[subclass.scaling]
+WIS = { blow = 2.2, resource = 2.2, healing = 0.05 }
+END = { blow = 0.4, health = 6.2, resource = 0.4, armor = 1.4 }
+
+[[subclass]]
+id = "druid_stonebound"
+class_id = "druid"
+tier = 1
+name = "Каменнорождённый"
+role = "Гибрид: мудрость и выносливость"
+text = "Удар по вам слабее на 10 процентов, брони на 8 процентов больше, здоровья на 8 процентов больше."
+lore = "Каменнорождённый договорился не с лесом, а с тем, что под ним. Камень отвечает медленно, зато никогда не передумывает."
+gate = { level = 75, remorts = 1, stats = { WIS = 140, END = 120 } }
+modifiers = { damage_taken_percent = -10, armor_percent = 8, health_percent = 8 }
+
+[subclass.scaling]
+WIS = { blow = 2.3, resource = 2.2, healing = 0.045 }
+END = { blow = 0.6, health = 7.0, resource = 0.5, armor = 1.7 }
+
+[[subclass]]
+id = "druid_oldcompact"
+class_id = "druid"
+tier = 3
+name = "Старший договор"
+role = "Венец: лес больше не спрашивает"
+text = "Вы бьёте на 12 процентов сильнее, лечите на 14, яд и горение точат на 16 процентов злее, удар по вам слабее на 6."
+lore = "Старший договор не подписывают — его вспоминают. Лес перестаёт спрашивать зачем и делает, о чём попросили, ровно один раз в день."
+gate = { level = 150, remorts = 3, stats = { WIS = 260, END = 160 } }
+modifiers = { damage_percent = 12, healing_done_percent = 14, dot_damage_percent = 16, damage_taken_percent = -6 }
+
+[subclass.scaling]
+WIS = { blow = 2.8, resource = 2.6, healing = 0.06 }
+END = { blow = 0.6, health = 7.0, resource = 0.5, armor = 1.6 }

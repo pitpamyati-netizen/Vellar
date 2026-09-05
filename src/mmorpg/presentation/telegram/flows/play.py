@@ -48,6 +48,7 @@ from mmorpg.domain.rules import repair as repair_rules
 from mmorpg.domain.rules import roamer as roamer_rules
 from mmorpg.domain.rules import salvage as salvage_rules
 from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules import subclass as subclass_rules
 from mmorpg.domain.rules import tools as tool_rules
 from mmorpg.domain.rules import turning as turning_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
@@ -85,6 +86,7 @@ from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import settings as settings_screens
 from mmorpg.presentation.telegram.screens import shop as shop_screens
 from mmorpg.presentation.telegram.screens import skills as skill_screens
+from mmorpg.presentation.telegram.screens import subclass as subclass_screens
 from mmorpg.presentation.telegram.screens import transfer as transfer_screens
 from mmorpg.presentation.telegram.screens import tutorial as tutorial_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
@@ -713,6 +715,8 @@ def _render(
             return chamber_screens.remort_screen(content, character, state.notice)
         case ScreenId.HOUSE:
             return house_screens.house_screen(content, character, city, state.notice)
+        case ScreenId.SUBCLASS:
+            return subclass_screens.subclass_screen(content, character, state.notice)
         case ScreenId.SKILLS:
             return skill_screens.skills_screen(content, character, state.skill_page, state.notice)
         case ScreenId.SKILL_SLOTS:
@@ -1089,6 +1093,8 @@ def advance(
             return _handle_chamber(content, character, state, command)
         case ScreenId.HOUSE:
             return _handle_house(content, character, state, command)
+        case ScreenId.SUBCLASS:
+            return _handle_subclass(content, character, state, command)
         case ScreenId.TURNING:
             return _handle_turning(content, character, state, command)
         case ScreenId.CHAMBER_REMORT:
@@ -1266,6 +1272,27 @@ def _handle_house(
             "Вы ушли из дома. Техника закрылась."
         )
     return state.with_notice("Нажмите кнопку из списка или «Назад».")
+
+
+def _handle_subclass(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    """Взять ступень специализации. Выбор необратим, и это сказано на экране."""
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите ступень из списка или «Назад».")
+    tier = subclass_rules.open_tier(content, character)
+    if tier is None:
+        return state.with_notice("Все ступени пройдены.")
+    for one in subclass_rules.offered(content, character, tier):
+        if not subclass_screens.choose_label(one.name).matches(command.argument):
+            continue
+        chosen = subclass_rules.choose(content, character, one.id)
+        if chosen is None:
+            return state.with_notice(subclass_rules.refusal(content, character, one))
+        return state.storing(PendingWrite(character=chosen)).with_notice(
+            subclass_screens.chosen_line(one)
+        )
+    return state.with_notice("Нажмите ступень из списка или «Назад».")
 
 
 def _handle_turning(
@@ -1593,6 +1620,8 @@ def _handle_stats(character: Character, state: PlayState, command: Command) -> P
     """Очко на нажатие. Экран, на котором отвечают, говорит, что это очко купило."""
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите характеристику, чтобы вложить очко.")
+    if labels.SUBCLASS.matches(command.argument):
+        return state.at(ScreenId.SUBCLASS)
     for code, stat_name in STAT_NAMES.items():
         if not screens.spend_label(stat_name).matches(command.argument):
             continue

@@ -45,6 +45,8 @@ from mmorpg.domain.entities.content import (
     SpecialProperty,
     StatMilestone,
     StatScaling,
+    Subclass,
+    SubclassGate,
     ToolType,
     Trait,
     Turning,
@@ -75,6 +77,7 @@ CONTENT_FILES = (
     "world.toml",
     "races.toml",
     "classes.toml",
+    "subclasses.toml",
     "traits.toml",
     "skills.toml",
     "items.toml",
@@ -182,6 +185,7 @@ def load_content(content_dir: Path) -> GameContent:
     crafts, recipes = _parse_crafts(raw["crafts.toml"], item_ids, craft_rules, problems)
     turnings, open_turning_id = _parse_turnings(raw["turnings.toml"], problems)
     houses = _parse_houses(raw["houses.toml"], problems)
+    subclasses = _parse_subclasses(raw["subclasses.toml"], modifier_keys, classes, problems)
 
     rules = _build_rules(raw, problems)
 
@@ -193,6 +197,7 @@ def load_content(content_dir: Path) -> GameContent:
     _validate_crafts(crafts, recipes, problems)
     _validate_tools(crafts, gear, problems)
     _validate_quest_rewards(quests, gear, problems)
+    _validate_subclasses(subclasses, classes, problems)
 
     parts: dict[str, Any] = {
         "races": races,
@@ -222,6 +227,7 @@ def load_content(content_dir: Path) -> GameContent:
         "rules": rules,
         "turnings": turnings,
         "houses": houses,
+        "subclasses": subclasses,
         "open_turning_id": open_turning_id,
     }
 
@@ -677,6 +683,137 @@ def _parse_milestones(
             )
         )
     return tuple(parsed)
+
+
+def _parse_subclasses(
+    raw: Mapping[str, Any],
+    modifier_keys: frozenset[str],
+    classes: Sequence[CharacterClass],
+    problems: list[str],
+) -> tuple[Subclass, ...]:
+    """Ступени специализации (ADR 0069).
+
+    Подкласс не заводит ни кнопок, ни слотов, поэтому проверять у него нужно
+    ровно то же, что у техники дома: чтобы прибавка была настоящей, а сетка
+    правила существующие характеристики.
+    """
+    known_classes = {klass.id for klass in classes}
+    parsed: list[Subclass] = []
+    seen: set[str] = set()
+    for entry in raw.get("subclass", ()):
+        subclass_id = str(entry.get("id", ""))
+        if not subclass_id:
+            problems.append("subclasses.toml: an entry has no id")
+            continue
+        if subclass_id in seen:
+            problems.append(f"subclasses.toml: duplicate id {subclass_id}")
+            continue
+        seen.add(subclass_id)
+        class_id = str(entry.get("class_id", ""))
+        if class_id not in known_classes:
+            problems.append(f"subclasses.toml: {subclass_id} belongs to unknown class {class_id!r}")
+            continue
+        modifiers = {str(key): float(value) for key, value in entry.get("modifiers", {}).items()}
+        unknown = sorted(set(modifiers) - modifier_keys)
+        if unknown:
+            problems.append(f"subclasses.toml: {subclass_id} promises unknown keys {unknown}")
+        scaling = _parse_subclass_scaling(subclass_id, entry.get("scaling", {}), problems)
+        gate = _parse_subclass_gate(subclass_id, entry.get("gate", {}), problems)
+        try:
+            tier = int(entry["tier"])
+            name = str(entry["name"])
+        except (KeyError, ValueError) as error:
+            problems.append(f"subclasses.toml: {subclass_id}: {error}")
+            continue
+        parsed.append(
+            Subclass(
+                id=subclass_id,
+                class_id=class_id,
+                tier=tier,
+                name=name,
+                role=str(entry.get("role", "")),
+                text=str(entry.get("text", "")),
+                lore=str(entry.get("lore", "")),
+                gate=gate,
+                modifiers=modifiers,
+                scaling=scaling,
+            )
+        )
+    return tuple(parsed)
+
+
+def _parse_subclass_scaling(
+    subclass_id: str, raw: Mapping[str, Any], problems: list[str]
+) -> Mapping[StatCode, StatScaling]:
+    """Правка классовой сетки. Названная характеристика заменяется целиком.
+
+    В отличие от сетки класса, здесь называют не все семь, а только те, что
+    меняются: подкласс договаривает класс, а не переписывает его с нуля.
+    """
+    parsed: dict[StatCode, StatScaling] = {}
+    for code_name, values in raw.items():
+        try:
+            code = StatCode(code_name)
+        except ValueError:
+            problems.append(f"subclasses.toml: {subclass_id} scales unknown stat {code_name!r}")
+            continue
+        stray = sorted(set(values) - SCALING_CHANNELS)
+        if stray:
+            problems.append(
+                f"subclasses.toml: {subclass_id}.{code_name} names outputs {stray} nothing sums"
+            )
+            continue
+        parsed[code] = StatScaling(**{key: float(value) for key, value in values.items()})
+    return parsed
+
+
+def _parse_subclass_gate(
+    subclass_id: str, raw: Mapping[str, Any], problems: list[str]
+) -> SubclassGate:
+    """Чем оплачен вход: уровень, уходы и пороги характеристик."""
+    stats: dict[StatCode, int] = {}
+    for code_name, threshold in raw.get("stats", {}).items():
+        try:
+            stats[StatCode(code_name)] = int(threshold)
+        except ValueError:
+            problems.append(f"subclasses.toml: {subclass_id} gates on unknown stat {code_name!r}")
+    return SubclassGate(
+        level=int(raw.get("level", 1)),
+        remorts=int(raw.get("remorts", 0)),
+        stats=stats,
+    )
+
+
+#: Сколько ступеней специализации несёт каждый класс. Восемь классов и три
+#: ступени: класс, у которого их меньше, - это класс, чей игрок на тридцатом
+#: уровне не получит ничего, а сосед получит.
+SUBCLASS_TIERS = (0, 1, 3)
+
+
+def _validate_subclasses(
+    subclasses: Sequence[Subclass], classes: Sequence[CharacterClass], problems: list[str]
+) -> None:
+    """У каждого класса каждая ступень, и на каждой есть из чего выбирать.
+
+    Ступень с одним подклассом - это не развилка, а коридор с надписью: игроку
+    показывают выбор, которого нет.
+    """
+    for klass in classes:
+        for tier in SUBCLASS_TIERS:
+            here = [one for one in subclasses if one.class_id == klass.id and one.tier == tier]
+            if not here:
+                problems.append(f"subclasses.toml: {klass.id} has no tier {tier}")
+            elif tier == 0 and len(here) < 2:
+                problems.append(f"subclasses.toml: {klass.id} tier 0 is a corridor, not a fork")
+    for one in subclasses:
+        if one.tier not in SUBCLASS_TIERS:
+            problems.append(f"subclasses.toml: {one.id} stands on unknown tier {one.tier}")
+        if not one.text:
+            problems.append(f"subclasses.toml: {one.id} says nothing about what it does")
+        if not one.modifiers and not one.scaling:
+            # Ступень без прибавок и без правки сетки - это выбор, который ничего
+            # не меняет, и худшая из возможных кнопок (``Claude.md``, правило 9).
+            problems.append(f"subclasses.toml: {one.id} changes nothing")
 
 
 def _validate_skill_weapons(

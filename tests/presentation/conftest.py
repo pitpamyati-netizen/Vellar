@@ -73,6 +73,7 @@ from mmorpg.presentation.telegram.screens import party as party_screens
 from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import settings as settings_screens
 from mmorpg.presentation.telegram.screens import skills as skill_screens
+from mmorpg.presentation.telegram.screens import subclass as subclass_screens
 from mmorpg.presentation.telegram.screens import transfer as transfer_screens
 from mmorpg.presentation.telegram.screens import tutorial as tutorial_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
@@ -1046,6 +1047,18 @@ def all_screens(
         chamber_screens.turning_screen(content, fighter),
         chamber_screens.turning_screen(content, sealbearer),
         chamber_screens.turning_screen(content, sealbearer, tally={"toll_low": 3, "toll_keep": 3}),
+        # Ступени специализации: пусто, открытая развилка, взятая первая и
+        # закрытая вторая (ADR 0069).
+        subclass_screens.subclass_screen(content, hero),
+        subclass_screens.subclass_screen(content, replace(fighter, level=40)),
+        subclass_screens.subclass_screen(
+            content, replace(fighter, level=40, subclass_ids=("warrior_vanguard",))
+        ),
+        subclass_screens.subclass_screen(
+            content,
+            replace(fighter, level=80, remorts=1, subclass_ids=("warrior_vanguard",)),
+            notice="Вы стали: Передовой.",
+        ),
         house_screens.house_screen(content, fighter, content.city("farhold")),
         house_screens.house_screen(content, hero, content.city("farhold")),
         house_screens.house_screen(
