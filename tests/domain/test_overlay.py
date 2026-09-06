@@ -12,9 +12,11 @@ from dataclasses import replace
 import pytest
 
 from mmorpg.domain.entities import Character, GameContent
+from mmorpg.domain.entities import content as content_entities
 from mmorpg.domain.entities.location import Enemy, EnemyKind
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.quest import ObjectiveKind, QuestLog
+from mmorpg.domain.procgen import items as gear_procgen
 from mmorpg.domain.rules import modifiers as modifier_rules
 from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules import quests as quest_rules
@@ -92,6 +94,38 @@ def test_taking_the_edit_back_gives_back_the_very_same_world(content: GameConten
     assert [enemy.id for enemy in back.enemy_archetypes] == [
         enemy.id for enemy in content.enemy_archetypes
     ]
+
+
+def test_an_edit_carries_the_whole_world_across_the_rebuild(content: GameContent) -> None:
+    """Правка меняет названное - и ничего кроме.
+
+    Мир с правкой пересобирается заново, и пересборка перечисляла поля руками:
+    отставший список молча уносил инструменты, дома, подклассы, пороги родов,
+    слова прибавок и сборщик вещей. Держится по подписи ``GameContent.build``,
+    чтобы новое поле нельзя было забыть.
+    """
+    edited = apply(content, DOVEN)
+
+    for key in content_entities._BUILD_KEYS:
+        field = content_entities._BUILD_FIELDS.get(key, key)
+        if field == "npcs":  # ровно то, что эта правка и заводит
+            continue
+        assert getattr(edited, field) == getattr(content, field), f"правка потеряла {field}"
+
+
+def test_a_found_item_is_still_assembled_in_an_edited_world(content: GameContent) -> None:
+    """Вещь с оттиском собирается по имени, и правка смотрителя ей не помеха.
+
+    Без сборщика прилавок и кузница падали на каждой находке: в реестре лежат
+    эталоны, а оттиск собирается по требованию (ADR 0059).
+    """
+    stamped = gear_procgen.gear_id(
+        content.gear_archetypes[0].id, content.gear_tiers[0].level, "rare", 3
+    )
+
+    edited = apply(content, DOVEN)
+
+    assert edited.item(stamped).id == content.item(stamped).id
 
 
 # --- задания -----------------------------------------------------------

@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -1136,6 +1137,19 @@ class GameContent:
             _assemble=assemble,
         )
 
+    def rebuilt(self, **changes: object) -> GameContent:
+        """Тот же мир с изменённой частью и заново собранными указателями.
+
+        Всё, чего не назвали, переносится как есть - и переносится по подписи
+        :meth:`build`, а не по списку, написанному руками. Список рано или
+        поздно отстаёт, и отстаёт молча: правка смотрителя пересобирала мир,
+        забыв про инструменты, дома, подклассы, пороги родов и **сборщик
+        вещей**, - и на прилавке с найденной вещью игра падала, потому что
+        собрать вещь с оттиском стало нечем (ADR 0059).
+        """
+        kept = {key: getattr(self, _BUILD_FIELDS.get(key, key)) for key in _BUILD_KEYS}
+        return GameContent.build(**(kept | changes))
+
     # --- указатели ---------------------------------------------------
 
     def race(self, race_id: str) -> Race:
@@ -1411,3 +1425,13 @@ class GameContent:
         if modifier_key in self.inverted_modifiers:
             return value < 0
         return value > 0
+
+
+#: Под каким именем реестр держит то, что ``build`` принимает под своим. Расходится
+#: ровно одно: сборщик вещей подаёт загрузчик снаружи, и лежит он служебным полем.
+_BUILD_FIELDS: Mapping[str, str] = MappingProxyType({"assemble": "_assemble"})
+
+#: Что ``GameContent.build`` принимает - и, значит, что обязана перенести
+#: пересборка (:meth:`GameContent.rebuilt`). Берётся у самой подписи: поле,
+#: добавленное в ``build`` и забытое в пересборке, пропадает из мира беззвучно.
+_BUILD_KEYS: tuple[str, ...] = tuple(inspect.signature(GameContent.build).parameters)

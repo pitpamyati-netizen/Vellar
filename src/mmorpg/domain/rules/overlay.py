@@ -1194,36 +1194,25 @@ def _rebuilt(
     rules: ProgressionRules | None = None,
     rebirths: Sequence[Rebirth] | None = None,
 ) -> GameContent:
-    return GameContent.build(
-        races=content.races,
-        classes=content.classes,
-        traits=content.traits if traits is None else traits,
-        items=content.items,
-        skills=content.skills,
-        cities=cities,
-        rarities=content.rarities,
-        slots=content.slots,
-        weapon_types=content.weapon_types,
-        armor_types=content.armor_types,
-        # Справочники и ступени нового имени тоже пересобираются: снаряжение
-        # глубокого спуска собирается из них (ADR 0039, 0070).
-        gear_tiers=content.gear_tiers,
-        gear_archetypes=content.gear_archetypes,
-        special_properties=content.special_properties,
-        enemy_archetypes=content.enemy_archetypes if enemies is None else enemies,
-        elite_titles=content.elite_titles,
-        affixes=content.affixes,
-        trait_categories=content.trait_categories,
-        inverted_modifiers=content.inverted_modifiers,
-        rules=content.rules if rules is None else rules,
-        craft_rules=content.craft_rules,
-        quests=content.quests if quests is None else quests,
-        crafts=content.crafts if crafts is None else crafts,
-        recipes=content.recipes if recipes is None else recipes,
-        npcs=npcs,
-        rebirths=content.rebirths if rebirths is None else rebirths,
-        rebirth_titles=content.rebirth_titles,
-    )
+    """Мир с правками: названное - новое, всё прочее переносится как было.
+
+    Переносит :meth:`GameContent.rebuilt`, а не перечисление руками: правка
+    смотрителя пересобирала мир по списку полей, а список отстал от реестра и
+    молча уносил с собой инструменты, дома, подклассы, пороги родов, слова
+    прибавок и сборщик вещей - и одна правка гасила игру целыми частями.
+    """
+    changed: dict[str, object] = {"cities": cities, "npcs": npcs}
+    named = {
+        "traits": traits,
+        "enemy_archetypes": enemies,
+        "crafts": crafts,
+        "quests": quests,
+        "recipes": recipes,
+        "rules": rules,
+        "rebirths": rebirths,
+    }
+    changed.update({key: value for key, value in named.items() if value is not None})
+    return content.rebuilt(**changed)
 
 
 def _apply_cities(content: GameContent, records: Sequence[OverlayRecord]) -> tuple[City, ...]:
