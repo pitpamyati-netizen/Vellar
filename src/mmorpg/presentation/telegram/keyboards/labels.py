@@ -123,7 +123,7 @@ ROOM_STAIRS = label("Ход наверх", "🚪")
 # --- Новое имя (эндгейм, ``domain/rules/turning.py``) ---
 
 TURNING = label("Просить новое имя", "🏵")
-TURNING_QUESTION = label("Голосование", "🧮")
+LEGACY = label("Наследие", "🧾")
 
 # --- смотритель (только ADMIN_IDS; обычные игроки этого ряда не видят) ---
 

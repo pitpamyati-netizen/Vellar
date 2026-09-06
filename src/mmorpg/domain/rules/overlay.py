@@ -25,9 +25,8 @@ from mmorpg.domain.entities.content import (
     Location,
     Npc,
     ProgressionRules,
+    Rebirth,
     Trait,
-    Turning,
-    TurningOption,
 )
 from mmorpg.domain.entities.craft import Craft, CraftKind, CraftYield, Recipe, RecipeInput
 from mmorpg.domain.entities.damage import DamageType
@@ -143,7 +142,7 @@ TITLES: Mapping[OverlayKind, tuple[str, str]] = {
     OverlayKind.CRAFT: ("Ремесло", "Ремёсла"),
     OverlayKind.RECIPE: ("Рецепт", "Рецепты"),
     OverlayKind.META: ("Опорные числа", "Опорные числа"),
-    OverlayKind.TURNING: ("Вопрос совета", "Вопросы совета"),
+    OverlayKind.TURNING: ("Новое имя", "Ступени нового имени"),
 }
 
 #: Разновидности, которые нельзя убрать из игры: без них игра не собирается.
@@ -313,21 +312,22 @@ FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
         FieldSpec("output_count", "Сколько за раз", FieldKind.NUMBER, required=True),
         FieldSpec("experience", "Опыт за работу", FieldKind.NUMBER),
     ),
+    # Ступени нового имени (ADR 0070). Правятся только числа и слова: номер
+    # ступени и то, что она открывает, остаются за файлами — порядок дороги
+    # держит замысел, а не баланс (``Claude.md``, правило 7).
     OverlayKind.TURNING: (
         FieldSpec("name", "Название", required=True, limit=NAME_LIMIT),
-        FieldSpec("question", "Вопрос совета", required=True),
-        FieldSpec("text", "Как объясняют"),
-        FieldSpec("open", "Открыть его сейчас", FieldKind.FLAG),
+        FieldSpec("level", "С какого уровня просят", FieldKind.NUMBER, required=True),
         FieldSpec(
-            "options",
-            "Ответы",
-            FieldKind.ROWS,
-            row_columns=("ключ", "имя", "как объясняют"),
-            row_required=2,
+            "stat_bonus",
+            "Прибавка к характеристикам, процентов",
+            FieldKind.NUMBER,
             required=True,
-            limit=MAX_TEXT * 6,
-            hint="toll_low | Брать меньше | Дешевле — больше сделок",
         ),
+        FieldSpec("legacy_slots", "Сколько вех унесёт", FieldKind.NUMBER),
+        FieldSpec("stat_points", "Очков сверх первого уровня", FieldKind.NUMBER),
+        FieldSpec("text", "Что это даёт, словами игрока", required=True),
+        FieldSpec("lore", "Как это выглядит"),
     ),
     # Опорные числа: белый список ``ProgressionRules``. Только то, что двигает
     # баланс числом, — не то, что держит дорогу (число уровней, счёт слотов,
@@ -606,14 +606,7 @@ def listing(content: GameContent, kind: OverlayKind) -> tuple[tuple[str, str], .
         case OverlayKind.META:
             return ((META_ID, "Опорные числа игры"),)
         case OverlayKind.TURNING:
-            return tuple(
-                (
-                    turning.id,
-                    f"{turning.name}"
-                    + (" — открыто" if turning.id == content.open_turning_id else ""),
-                )
-                for turning in content.turnings
-            )
+            return tuple((one.id, f"{one.name} — с {one.level} уровня") for one in content.rebirths)
         case _:
             return tuple(
                 (city.id, f"{city.name} — уровни с {city.level_min} по {city.level_max}")
@@ -665,8 +658,8 @@ def snapshot(content: GameContent, kind: OverlayKind, entity_id: str) -> dict[st
         case OverlayKind.META:
             return _meta_fields(content.rules)
         case OverlayKind.TURNING:
-            vote = next((t for t in content.turnings if t.id == entity_id), None)
-            return _turning_fields(content, vote) if vote is not None else {}
+            step = next((one for one in content.rebirths if one.id == entity_id), None)
+            return _rebirth_fields(step) if step is not None else {}
         case _:
             return {}
 
@@ -762,13 +755,15 @@ def _craft_fields(craft: Craft) -> dict[str, str]:
     }
 
 
-def _turning_fields(content: GameContent, turning: Turning) -> dict[str, str]:
+def _rebirth_fields(step: Rebirth) -> dict[str, str]:
     return {
-        "name": turning.name,
-        "question": turning.question,
-        "text": turning.text,
-        "open": "да" if turning.id == content.open_turning_id else "нет",
-        "options": _rows_str((one.id, one.name, one.text) for one in turning.options),
+        "name": step.name,
+        "level": str(step.level),
+        "stat_bonus": _plain_number(step.stat_bonus),
+        "legacy_slots": str(step.legacy_slots),
+        "stat_points": str(step.stat_points),
+        "text": step.text,
+        "lore": step.lore,
     }
 
 
@@ -974,14 +969,15 @@ def _shape_problems(content: GameContent, record: OverlayRecord) -> list[str]:
         case OverlayKind.META:
             return _meta_problems(content, record)
         case OverlayKind.TURNING:
-            return _turning_problems(record)
+            return _rebirth_problems(record)
     return []
 
 
-def _turning_problems(record: OverlayRecord) -> list[str]:
-    options = record.rows("options")
-    if 0 < len(options) < 2:
-        return ["Ответов: голосование считает голоса между ответами, а их меньше двух."]
+def _rebirth_problems(record: OverlayRecord) -> list[str]:
+    """Ступень, которая ничего не прибавляет, стирает полторы сотни уровней даром."""
+    bonus = record.value("stat_bonus").replace(",", ".").strip()
+    if bonus and _is_number(bonus) and float(bonus) <= 0:
+        return ["Прибавка: уход стирает дорогу целиком, и за это обязан платить."]
     return []
 
 
@@ -1102,6 +1098,11 @@ def _removal_problems(content: GameContent, record: OverlayRecord) -> tuple[str,
     return ()
 
 
+def _plain_number(value: float) -> str:
+    """Число словами панели: без хвоста «.0» там, где он ничего не значит."""
+    return str(int(value)) if float(value).is_integer() else str(value)
+
+
 def _is_number(value: str) -> bool:
     return value.lstrip("-").isdigit()
 
@@ -1157,9 +1158,7 @@ def apply(content: GameContent, records: Sequence[OverlayRecord]) -> GameContent
     )
     quests = _apply_quests(staged, npcs, _good(staged, records, OverlayKind.QUEST))
     recipes = _apply_recipes(staged, _good(staged, records, OverlayKind.RECIPE))
-    turnings, open_turning_id = _apply_turnings(
-        content, _good(content, records, OverlayKind.TURNING)
-    )
+    rebirths = _apply_rebirths(content, _good(content, records, OverlayKind.TURNING))
     return _rebuilt(
         content,
         cities=cities,
@@ -1170,8 +1169,7 @@ def apply(content: GameContent, records: Sequence[OverlayRecord]) -> GameContent
         enemies=enemies,
         recipes=recipes,
         rules=rules,
-        turnings=turnings,
-        open_turning_id=open_turning_id,
+        rebirths=rebirths,
     )
 
 
@@ -1194,8 +1192,7 @@ def _rebuilt(
     crafts: Sequence[Craft] | None = None,
     recipes: Sequence[Recipe] | None = None,
     rules: ProgressionRules | None = None,
-    turnings: Sequence[Turning] | None = None,
-    open_turning_id: str | None = None,
+    rebirths: Sequence[Rebirth] | None = None,
 ) -> GameContent:
     return GameContent.build(
         races=content.races,
@@ -1208,8 +1205,8 @@ def _rebuilt(
         slots=content.slots,
         weapon_types=content.weapon_types,
         armor_types=content.armor_types,
-        # Справочники и голосования тоже пересобираются: снаряжение глубокого спуска
-        # собирается из них, а совет спрашивает из turnings (ADR 0039).
+        # Справочники и ступени нового имени тоже пересобираются: снаряжение
+        # глубокого спуска собирается из них (ADR 0039, 0070).
         gear_tiers=content.gear_tiers,
         gear_archetypes=content.gear_archetypes,
         special_properties=content.special_properties,
@@ -1224,8 +1221,8 @@ def _rebuilt(
         crafts=content.crafts if crafts is None else crafts,
         recipes=content.recipes if recipes is None else recipes,
         npcs=npcs,
-        turnings=content.turnings if turnings is None else turnings,
-        open_turning_id=(content.open_turning_id if open_turning_id is None else open_turning_id),
+        rebirths=content.rebirths if rebirths is None else rebirths,
+        rebirth_titles=content.rebirth_titles,
     )
 
 
@@ -1472,39 +1469,49 @@ def _craft_from(content: GameContent, record: OverlayRecord) -> Craft:
     )
 
 
-def _apply_turnings(
-    content: GameContent, records: Sequence[OverlayRecord]
-) -> tuple[tuple[Turning, ...], str]:
-    """Голосования совета с правками. Флаг ``open`` у любой правки делает её
-    голосование открытым; иначе открытое остаётся тем, что назвал ``[meta].open``.
+def _apply_rebirths(content: GameContent, records: Sequence[OverlayRecord]) -> tuple[Rebirth, ...]:
+    """Ступени нового имени с правками смотрителя (ADR 0070).
+
+    Номер ступени и то, что она открывает, правкой не трогаются: за файлами
+    остаётся порядок дороги, а панели отдаются числа.
     """
     dropped = {record.entity_id for record in records if record.removed}
-    by_id = {t.id: t for t in content.turnings if t.id not in dropped}
-    open_id = content.open_turning_id if content.open_turning_id not in dropped else ""
+    by_id = {one.id: one for one in content.rebirths if one.id not in dropped}
     for record in records:
         if record.removed:
             continue
-        by_id[record.entity_id] = _turning_from(record)
-        if record.flag("open"):
-            open_id = record.entity_id
-    return tuple(by_id.values()), open_id
+        by_id[record.entity_id] = _rebirth_from(record, by_id.get(record.entity_id))
+    return tuple(sorted(by_id.values(), key=lambda one: one.rank))
 
 
-def _turning_from(record: OverlayRecord) -> Turning:
-    return Turning(
+def _rebirth_from(record: OverlayRecord, was: Rebirth | None) -> Rebirth:
+    return Rebirth(
         id=record.entity_id,
+        rank=was.rank if was is not None else 0,
         name=record.value("name"),
-        question=record.value("question"),
+        level=_int_or(record.value("level"), was.level if was else 1),
+        stat_bonus=_float_or(record.value("stat_bonus"), was.stat_bonus if was else 0.0),
+        legacy_slots=_int_or(record.value("legacy_slots"), was.legacy_slots if was else 0),
+        stat_points=_int_or(record.value("stat_points"), was.stat_points if was else 0),
         text=record.value("text"),
-        options=tuple(
-            TurningOption(
-                id=cells[0],
-                name=cells[1] if len(cells) > 1 else cells[0],
-                text=cells[2] if len(cells) > 2 else "",
-            )
-            for cells in record.rows("options")
-        ),
+        lore=record.value("lore"),
+        unlocks=was.unlocks if was is not None else (),
     )
+
+
+def _int_or(raw: str, fallback: int) -> int:
+    """Число из правки; неразборчивое читается как прежнее (``Claude.md``, правило 8)."""
+    try:
+        return int(float(raw.replace(",", ".").strip()))
+    except ValueError:
+        return fallback
+
+
+def _float_or(raw: str, fallback: float) -> float:
+    try:
+        return float(raw.replace(",", ".").strip())
+    except ValueError:
+        return fallback
 
 
 def _apply_recipes(content: GameContent, records: Sequence[OverlayRecord]) -> tuple[Recipe, ...]:
@@ -1626,22 +1633,18 @@ def to_toml(content: GameContent, record: OverlayRecord) -> str:
 def _turning_toml(record: OverlayRecord) -> str:
     lines = [
         f"# правка {record.entity_id} — проверьте и вставьте в content/turnings.toml",
-        "[[turning]]",
+        "[[rebirth]]",
         f"id = {_toml_str(record.entity_id)}",
         f"name = {_toml_str(record.value('name'))}",
-        f"question = {_toml_str(record.value('question'))}",
+        f"level = {_toml_num(record.value('level'))}",
+        f"stat_bonus = {_toml_num(record.value('stat_bonus'))}",
+        f"legacy_slots = {_toml_num(record.value('legacy_slots'))}",
+        f"stat_points = {_toml_num(record.value('stat_points'))}",
+        f"text = {_toml_str(record.value('text'))}",
     ]
-    if record.value("text"):
-        lines.append(f"text = {_toml_str(record.value('text'))}")
-    if record.flag("open"):
-        lines.append(f"# и в [meta]: open = {_toml_str(record.entity_id)}")
-    for cells in record.rows("options"):
-        lines.append("")
-        lines.append("[[turning.options]]")
-        lines.append(f"id = {_toml_str(cells[0])}")
-        lines.append(f"name = {_toml_str(cells[1] if len(cells) > 1 else cells[0])}")
-        if len(cells) > 2 and cells[2]:
-            lines.append(f"text = {_toml_str(cells[2])}")
+    if record.value("lore"):
+        lines.append(f"lore = {_toml_str(record.value('lore'))}")
+    lines.append("# rank и unlocks правкой не трогаются: порядок дороги живёт в файле.")
     return "\n".join(lines)
 
 

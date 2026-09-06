@@ -475,7 +475,6 @@ def render(
     neighbours: Sequence[Presence] = (),
     fights: Sequence[Engagement] = (),
     arena_table: Sequence[Character] = (),
-    tally: Mapping[str, int] | None = None,
     keeper: KeeperView | None = None,
     party: PartyView | None = None,
     guild: GuildView | None = None,
@@ -493,7 +492,6 @@ def render(
         neighbours=neighbours,
         fights=fights,
         arena_table=arena_table,
-        tally=tally,
         keeper=keeper,
         party=party,
         guild=guild,
@@ -523,7 +521,6 @@ def _render(
     neighbours: Sequence[Presence] = (),
     fights: Sequence[Engagement] = (),
     arena_table: Sequence[Character] = (),
-    tally: Mapping[str, int] | None = None,
     keeper: KeeperView | None = None,
     party: PartyView | None = None,
     guild: GuildView | None = None,
@@ -707,10 +704,8 @@ def _render(
             return arena_screens.arena_screen(character, arena_table, state.notice)
         case ScreenId.CHAMBER:
             return chamber_screens.chamber_screen(content, character, state.notice)
-        case ScreenId.TURNING:
-            return chamber_screens.turning_screen(
-                content, character, tally=tally or {}, notice=state.notice
-            )
+        case ScreenId.LEGACY:
+            return chamber_screens.legacy_screen(content, character, state.notice)
         case ScreenId.CHAMBER_REMORT:
             return chamber_screens.remort_screen(content, character, state.notice)
         case ScreenId.HOUSE:
@@ -1095,8 +1090,8 @@ def advance(
             return _handle_house(content, character, state, command)
         case ScreenId.SUBCLASS:
             return _handle_subclass(content, character, state, command)
-        case ScreenId.TURNING:
-            return _handle_turning(content, character, state, command)
+        case ScreenId.LEGACY:
+            return _handle_legacy(content, character, state, command)
         case ScreenId.CHAMBER_REMORT:
             return _handle_remort(content, character, state, command)
         case ScreenId.INVENTORY:
@@ -1231,16 +1226,16 @@ def _handle_arena(character: Character, state: PlayState, command: Command) -> P
 def _handle_chamber(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    """Управа: две двери — новое имя и голосование."""
+    """Управа: две двери — новое имя и наследие."""
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите кнопку из списка или «Назад».")
     if labels.TURNING.matches(command.argument):
-        refused = turning_rules.refusal(character)
+        refused = turning_rules.refusal(content, character)
         if refused:
             return state.with_notice(refused)
         return state.at(ScreenId.CHAMBER_REMORT)
-    if labels.TURNING_QUESTION.matches(command.argument):
-        return state.at(ScreenId.TURNING)
+    if labels.LEGACY.matches(command.argument):
+        return state.at(ScreenId.LEGACY)
     return state.with_notice("Нажмите кнопку из списка или «Назад».")
 
 
@@ -1295,29 +1290,40 @@ def _handle_subclass(
     return state.with_notice("Нажмите ступень из списка или «Назад».")
 
 
-def _handle_turning(
+def _handle_legacy(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    """Голосование: по кнопке на ответ, и голос весит столько, сколько уходов."""
+    """Наследие: назвать веху, которая уйдёт с вами через сброс, или снять её.
+
+    Называет игрок, а не порядок в файле: какая веха была для этой сборки
+    главной, знает он один (ADR 0070).
+    """
     if command.intent is not Intent.SELECT:
-        return state.with_notice("Нажмите ответ или «Назад».")
-    turning = content.open_turning()
-    if turning is None:
-        return state.with_notice("Совет сейчас ни о чём не спрашивает.")
-    for option in turning.options:
-        if not chamber_screens.answer_label(option.name).matches(command.argument):
+        return state.with_notice("Нажмите веху из списка или «Назад».")
+    for trait_id in character.legacy_ids:
+        if not content.has_trait(trait_id):
             continue
-        voted = turning_rules.answer(character, turning, option.id)
-        if voted is None:
-            if not turning_rules.may_answer(character):
-                return state.with_notice("Голос дают за уход: сперва новое имя, потом ответ.")
-            return state.with_notice(f"Ваш голос уже отдан за: {option.name}.")
-        weight = turning_rules.voice(voted)
-        return state.storing(PendingWrite(character=voted)).with_notice(
-            f"Голос отдан за: {option.name}. Он весит {weight} "
-            f"{format_screens.plural(weight, 'уход', 'ухода', 'уходов')}."
+        trait = content.trait(trait_id)
+        if not chamber_screens.drop_label(trait.name).matches(command.argument):
+            continue
+        dropped = turning_rules.drop(character, trait_id)
+        if dropped is None:
+            return state.with_notice("Этой вехи в наследии нет.")
+        return state.storing(PendingWrite(character=dropped)).with_notice(
+            f"«{trait.name}» больше не уйдёт с вами. Место освободилось."
         )
-    return state.with_notice("Нажмите ответ или «Назад».")
+    for trait_id in turning_rules.may_carry(content, character):
+        trait = content.trait(trait_id)
+        if not chamber_screens.carry_label(trait.name).matches(command.argument):
+            continue
+        carried = turning_rules.carry(content, character, trait_id)
+        if carried is None:
+            slots = turning_rules.legacy_slots(content, character)
+            return state.with_notice(f"Мест в наследии больше нет: их {slots}.")
+        return state.storing(PendingWrite(character=carried)).with_notice(
+            f"«{trait.name}» уйдёт с вами и будет работать после сброса."
+        )
+    return state.with_notice("Нажмите веху из списка или «Назад».")
 
 
 def _handle_remort(
@@ -1326,9 +1332,9 @@ def _handle_remort(
     """Новое имя. Нажатие здесь сбрасывает уровень до первого: экран предупреждал."""
     if command.intent is not Intent.SELECT or not labels.CONFIRM.matches(command.argument):
         return state.with_notice("Нажмите «Подтвердить» или «Назад».")
-    reborn = turning_rules.become(character)
+    reborn = turning_rules.become(content, character)
     if reborn is None:
-        return state.at(ScreenId.CHAMBER).with_notice(turning_rules.refusal(character))
+        return state.at(ScreenId.CHAMBER).with_notice(turning_rules.refusal(content, character))
     return (
         state.storing(PendingWrite(character=reborn.character))
         .at(ScreenId.CHAMBER)

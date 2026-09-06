@@ -590,37 +590,41 @@ class Npc:
 
 
 @dataclass(frozen=True, slots=True)
-class TurningOption:
-    """Один ответ в голосовании Большого совета."""
+class Rebirth:
+    """Одна ступень нового имени (ADR 0070).
 
-    id: str
-    name: str
-    text: str = ""
+    Уровень кончается трижды - на семьдесят пятом, на сотом и на сто пятидесятом,
+    - и каждый раз приключенец идёт в управу и просит у Престола новое имя.
+    Уровень падает до первого, розданные очки возвращаются нерозданными, и дорога
+    начинается заново - но каждый раз с человеком, который стал больше.
 
+    ``level``        с какого уровня эту ступень просят;
+    ``stat_bonus``   на сколько процентов выше становятся все характеристики -
+                     навсегда и поверх всего прочего;
+    ``legacy_slots`` сколько вех разрешено унести с собой через сброс;
+    ``stat_points``  сколько нераспределённых очков даётся сверх положенных
+                     первому уровню;
+    ``unlocks``      какие ступени специализации открывает этот уход. Список
+                     ПОВТОРЯЕТ то, что и так написано у подклассов (``gate.remorts``),
+                     и держится ровно затем, чтобы игрок прочитал его до ухода;
+                     загрузчик сверяет оба места и не даёт им разойтись.
 
-@dataclass(frozen=True, slots=True)
-class Turning:
-    """Голосование Большого совета: вопрос и ответы, между которыми считают голоса.
-
-    Сам вопрос ничего не решает в правилах - он собирает счёт. Итог виден на
-    экране и уходит в канал, а числа правит тот, кто считает итог цикла
-    (``docs/endgame.md``).
+    Прибавка ступени не складывается с прибавкой предыдущей: у второго ухода
+    написано, каким ты стал после второго, а не насколько вырос со сравнения с
+    первым. Складывать проценты значило бы, что число на экране нельзя проверить,
+    не помня всей дороги.
     """
 
     id: str
+    rank: int
     name: str
-    question: str
+    level: int
+    stat_bonus: float = 0.0
+    legacy_slots: int = 0
+    stat_points: int = 0
     text: str = ""
-    options: tuple[TurningOption, ...] = ()
-
-    def has_option(self, option_id: str) -> bool:
-        return any(option.id == option_id for option in self.options)
-
-    def option(self, option_id: str) -> TurningOption:
-        for option in self.options:
-            if option.id == option_id:
-                return option
-        raise KeyError(option_id)
+    lore: str = ""
+    unlocks: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -851,13 +855,13 @@ class GameContent:
     inverted_modifiers: frozenset[str]
     rules: ProgressionRules
     npcs: tuple[Npc, ...]
-    turnings: tuple[Turning, ...]
+    rebirths: tuple[Rebirth, ...]
+    #: Титулы за уходы, по порядку (``turnings.toml [meta].titles``).
+    rebirth_titles: tuple[str, ...]
     houses: tuple[House, ...]
     #: Ступени специализации классов (ADR 0069). Пусто - подклассов в игре нет,
     #: и экран их не предлагает: содержимое переживает код.
     subclasses: tuple[Subclass, ...]
-    #: Какое голосование открыто сейчас. Пусто - совет ничего не спрашивает.
-    open_turning_id: str
 
     _races_by_id: Mapping[str, Race]
     _classes_by_id: Mapping[str, CharacterClass]
@@ -877,7 +881,7 @@ class GameContent:
     _crafts_by_id: Mapping[str, Craft]
     _recipes_by_id: Mapping[str, Recipe]
     _npcs_by_id: Mapping[str, Npc]
-    _turnings_by_id: Mapping[str, Turning]
+    _rebirths_by_id: Mapping[str, Rebirth]
     _houses_by_id: Mapping[str, House]
     _subclasses_by_id: Mapping[str, Subclass]
     _house_by_city: Mapping[str, House]
@@ -925,10 +929,10 @@ class GameContent:
         crafts: Sequence[Craft] = (),
         recipes: Sequence[Recipe] = (),
         npcs: Sequence[Npc] = (),
-        turnings: Sequence[Turning] = (),
+        rebirths: Sequence[Rebirth] = (),
+        rebirth_titles: Sequence[str] = (),
         houses: Sequence[House] = (),
         subclasses: Sequence[Subclass] = (),
-        open_turning_id: str = "",
         stat_words: Mapping[str, str] | None = None,
         assemble: Callable[[GameContent, str], Item | None] | None = None,
     ) -> GameContent:
@@ -964,10 +968,10 @@ class GameContent:
             inverted_modifiers=inverted_modifiers,
             rules=rules,
             npcs=tuple(npcs),
-            turnings=tuple(turnings),
+            rebirths=tuple(rebirths),
+            rebirth_titles=tuple(rebirth_titles),
             houses=tuple(houses),
             subclasses=tuple(subclasses),
-            open_turning_id=open_turning_id,
             _races_by_id=MappingProxyType({race.id: race for race in races}),
             _classes_by_id=MappingProxyType({klass.id: klass for klass in classes}),
             _traits_by_id=MappingProxyType({trait.id: trait for trait in traits}),
@@ -988,7 +992,7 @@ class GameContent:
             _crafts_by_id=MappingProxyType({craft.id: craft for craft in crafts}),
             _recipes_by_id=MappingProxyType({recipe.id: recipe for recipe in recipes}),
             _npcs_by_id=MappingProxyType({npc.id: npc for npc in npcs}),
-            _turnings_by_id=MappingProxyType({turning.id: turning for turning in turnings}),
+            _rebirths_by_id=MappingProxyType({one.id: one for one in rebirths}),
             _houses_by_id=MappingProxyType({house.id: house for house in houses}),
             _subclasses_by_id=MappingProxyType({one.id: one for one in subclasses}),
             _house_by_city=MappingProxyType(
@@ -1131,23 +1135,29 @@ class GameContent:
             )
         )
 
-    # --- голосования ------------------------------------------------------
+    # --- новое имя --------------------------------------------------------
 
-    def turning(self, turning_id: str) -> Turning:
-        return self._turnings_by_id[turning_id]
+    def rebirth(self, rebirth_id: str) -> Rebirth:
+        return self._rebirths_by_id[rebirth_id]
 
-    def has_turning(self, turning_id: str) -> bool:
-        return turning_id in self._turnings_by_id
+    def has_rebirth(self, rebirth_id: str) -> bool:
+        return rebirth_id in self._rebirths_by_id
 
-    def open_turning(self) -> Turning | None:
-        """Вопрос, на который сейчас отвечают, или ``None``.
+    def rebirth_at(self, rank: int) -> Rebirth | None:
+        """Ступень нового имени с этим номером, или ``None``.
 
-        Содержимое переживает сохранённое состояние: вопрос, которого больше нет
-        в файлах, не открыт (``Claude.md``, правило 8).
+        Содержимое переживает персонажа (``Claude.md``, правило 8): игрок,
+        уходивший больше раз, чем ступеней осталось в файлах, не роняет экран -
+        ему просто нечего брать дальше.
         """
-        if not self.open_turning_id or not self.has_turning(self.open_turning_id):
-            return None
-        return self.turning(self.open_turning_id)
+        for one in self.rebirths:
+            if one.rank == rank:
+                return one
+        return None
+
+    def last_rebirth(self) -> int:
+        """Номер последней объявленной ступени. Ноль - ступеней нет вовсе."""
+        return max((one.rank for one in self.rebirths), default=0)
 
     # --- дома ------------------------------------------------------------
 

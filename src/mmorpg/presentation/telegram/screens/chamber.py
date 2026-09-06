@@ -1,18 +1,18 @@
-"""Управа: новое имя и голос в Большом совете.
+"""Управа: новое имя и наследие (ADR 0070).
 
-Три экрана. Управа говорит, кто ты сейчас и о чём спрашивает совет. Новое имя —
-это одна кнопка и предупреждение перед ней: уровень падает до первого.
-Голосование вынесено отдельно не для порядка — у вопроса столько строк, сколько
-ответов, и в одном сообщении с управой он бы туда не влез (``docs/accessibility.md``,
-правило 11).
+Три экрана. Управа говорит, кто ты сейчас и что даст следующая ступень. Наследие —
+это выбор вех, которые уйдут с тобой через сброс. Новое имя — одна кнопка и
+предупреждение перед ней.
 
-Всё, что случится по нажатию, названо до него: сколько уровней теряешь, что
-остаётся, сколько очков и какой титул прибавит уход (``domain/rules/turning.py``).
+Наследие вынесено отдельным экраном не для порядка: вех у героя к сто пятидесятому
+уровню пять, и строка с кнопкой у каждой в одном сообщении с управой не помещается
+(``docs/accessibility.md``, правило 11).
+
+Всё, что случится по нажатию, названо до него: что теряешь, что остаётся, сколько
+очков и какой титул прибавит уход (``domain/rules/turning.py``).
 """
 
 from __future__ import annotations
-
-from collections.abc import Mapping
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
@@ -23,17 +23,30 @@ from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import head, plural
 
 
-def answer_label(option_name: str) -> Label:
-    return label(f"Ответить: {option_name}")
+def carry_label(trait_name: str) -> Label:
+    return label(f"Унести: {trait_name}")
 
 
-def standing_line(character: Character) -> str:
-    """Кто игрок для Престола: сколько уходов и под каким титулом."""
+def drop_label(trait_name: str) -> Label:
+    return label(f"Оставить: {trait_name}")
+
+
+def standing_line(content: GameContent, character: Character) -> str:
+    """Кто игрок для Престола: сколько имён и под каким титулом."""
     count = character.remorts
     if count <= 0:
         return "Нового имени вы ещё не просили."
-    word = plural(count, "уход", "ухода", "уходов")
-    return f"Уходов за плечами: {count} {word}. Титул: {turning_rules.title(count)}."
+    word = plural(count, "имя", "имени", "имён")
+    title = turning_rules.title(content, count)
+    return f"Имён за плечами: {count} {word}. Титул: {title}."
+
+
+def bonus_line(content: GameContent, character: Character) -> str:
+    """Что взятые имена дают прямо сейчас. Пусто — ни одного не брали."""
+    bonus = turning_rules.stat_bonus(content, character)
+    if bonus <= 0:
+        return ""
+    return f"Ваши характеристики выше на {bonus:g} процентов — это плата за пройденное."
 
 
 def chamber_screen(
@@ -41,31 +54,84 @@ def chamber_screen(
     character: Character,
     notice: str = "",
 ) -> Screen:
-    """Управа: кто ты для Престола и о чём спрашивает совет."""
-    turning = content.open_turning()
-    refused = turning_rules.refusal(character)
+    """Управа: кто ты для Престола и что даст следующее имя."""
+    step = turning_rules.next_rebirth(content, character)
+    refused = turning_rules.refusal(content, character)
 
     lines = [
         *head("Управа.", notice),
-        "Престольная контора: книга, печать и вопросы совета.",
-        "Новое имя просят со сто пятидесятого уровня: уровень падает до первого, а золото, "
-        "вещи и изученные умения остаются при вас. За уход дают очки характеристик "
-        "и титул.",
-        standing_line(character),
+        "Престольная контора: книга, печать и лист на каждое имя.",
+        standing_line(content, character),
     ]
-    if turning is None:
-        lines.append("Совет сейчас ни о чём не спрашивает.")
-    else:
-        lines.append(f"Открыт вопрос совета: {turning.name}. {turning.question}")
+    standing = bonus_line(content, character)
+    if standing:
+        lines.append(standing)
+
+    if step is None:
+        lines.append("Ступеней больше нет: вы прошли все, какие Престол ведёт в книге.")
+        return Screen(id=ScreenId.CHAMBER, lines=tuple(lines))
+
+    lines.append(f"Следующее: «{step.name}», с {step.level} уровня. {step.text}")
+    if step.lore:
+        lines.append(step.lore)
+    if step.unlocks:
+        opened = [content.subclass(one).name for one in step.unlocks if content.has_subclass(one)]
+        if opened:
+            lines.append("Оно откроет ступени специализации: " + ", ".join(opened) + ".")
     if refused:
         lines.append(refused)
 
     rows: list[tuple[Label, ...]] = []
     if not refused:
         rows.append((labels.TURNING,))
-    if turning is not None:
-        rows.append((labels.TURNING_QUESTION,))
+    if step.legacy_slots:
+        rows.append((labels.LEGACY,))
     return Screen(id=ScreenId.CHAMBER, lines=tuple(lines), rows=tuple(rows))
+
+
+def legacy_screen(
+    content: GameContent,
+    character: Character,
+    notice: str = "",
+) -> Screen:
+    """Наследие: какие вехи уйдут с вами через сброс.
+
+    Называет игрок, а не порядок в файле: какая веха была для этой сборки
+    главной, знает он один.
+    """
+    slots = turning_rules.legacy_slots(content, character)
+    lines = [*head("Наследие.", notice)]
+    if not slots:
+        lines.append(
+            "Наследие даёт новое имя, а ступеней у вас больше нет. Уносить некуда и нечего."
+        )
+        return Screen(id=ScreenId.LEGACY, lines=tuple(lines))
+
+    word = plural(slots, "веху", "вехи", "вех")
+    lines.append(
+        f"Уход возвращает розданные очки нерозданными: характеристики упадут, и вехи "
+        f"вместе с ними. Унести с собой можно {slots} {word} — они будут работать, "
+        "чего бы ни показывали характеристики."
+    )
+
+    named = tuple(one for one in character.legacy_ids if content.has_trait(one))
+    if named:
+        lines.append("Названы: " + ", ".join(content.trait(one).name for one in named) + ".")
+    else:
+        lines.append("Пока не названо ничего.")
+    lines.append(f"Занято мест: {len(named)} из {slots}.")
+
+    rows: list[tuple[Label, ...]] = []
+    for trait_id in named:
+        rows.append((drop_label(content.trait(trait_id).name),))
+    if len(named) < slots:
+        for trait_id in turning_rules.may_carry(content, character):
+            trait = content.trait(trait_id)
+            lines.append(f"{trait.name}: {trait.text}")
+            rows.append((carry_label(trait.name),))
+    if not rows:
+        lines.append("Вех вы пока не брали: их дают пороги характеристик.")
+    return Screen(id=ScreenId.LEGACY, lines=tuple(lines), rows=tuple(rows))
 
 
 def remort_screen(
@@ -74,86 +140,50 @@ def remort_screen(
     notice: str = "",
 ) -> Screen:
     """Новое имя: что теряешь, что остаётся, что прибавит. Кнопка тут необратима."""
-    refused = turning_rules.refusal(character)
+    refused = turning_rules.refusal(content, character)
     if refused:
         return Screen(id=ScreenId.CHAMBER_REMORT, lines=(refused,))
 
-    gift = turning_rules.stat_gift(character.remorts)
-    next_title = turning_rules.title(character.remorts + 1)
-    gift_line = (
-        f"Нераспределённых очков характеристик станет на {gift} больше."
-        if gift
-        else "Очков характеристик этот уход уже не прибавит: потолок прибавки взят."
-    )
-    lines = (
-        *head("Новое имя.", notice),
-        "Уровень упадёт до первого, опыт обнулится. Дорогу с первого до сто пятидесятого "
-        "предстоит пройти заново.",
-        "Останутся при вас: золото и банк, всё снаряжение, дерево умений с рангами "
-        "и гранями, черты, ремёсла, задания и счёт арены.",
-        gift_line,
-        f"Титул после ухода: {next_title}.",
-        "Нажмёте «Подтвердить» — уход совершится сразу.",
-    )
+    step = turning_rules.next_rebirth(content, character)
+    assert step is not None  # refusal() сказал бы, что ступени нет
+    points = content.rules.free_points_at_creation + step.stat_points
+    carried = tuple(one for one in character.legacy_ids if content.has_trait(one))[
+        : step.legacy_slots
+    ]
+
+    lines = [
+        *head(f"Новое имя: {step.name}.", notice),
+        "Уровень упадёт до первого, опыт обнулится. Дорогу предстоит пройти заново.",
+        "Розданные очки характеристик вернутся нерозданными: собраться можно будет иначе.",
+        "Останутся при вас: золото и банк, всё снаряжение, дерево умений с рангами, "
+        "черты, ремёсла, задания, счёт арены, дом и взятые ступени специализации.",
+        f"Характеристики станут выше на {step.stat_bonus:g} процентов — навсегда.",
+        f"Нераспределённых очков на первом уровне будет {points}.",
+    ]
+    if carried:
+        lines.append(
+            "С вами уйдут вехи: " + ", ".join(content.trait(one).name for one in carried) + "."
+        )
+    elif step.legacy_slots:
+        word = plural(step.legacy_slots, "веху", "вехи", "вех")
+        lines.append(
+            f"Наследие пусто, а унести можно {step.legacy_slots} {word}. "
+            "Назвать их — на экране «Наследие»."
+        )
+    lines.append(f"Титул после ухода: {turning_rules.title(content, character.remorts + 1)}.")
+    lines.append("Нажмёте «Подтвердить» — уход совершится сразу.")
+
     return Screen(
         id=ScreenId.CHAMBER_REMORT,
-        lines=lines,
+        lines=tuple(lines),
         rows=((labels.CONFIRM,),),
     )
 
 
-def turning_screen(
-    content: GameContent,
-    character: Character,
-    *,
-    tally: Mapping[str, int] | None = None,
-    notice: str = "",
-) -> Screen:
-    """Голосование совета: сам вопрос, счёт по нему и кнопка на каждый ответ."""
-    turning = content.open_turning()
-    counted = tally or {}
-    if turning is None:
-        return Screen(
-            id=ScreenId.TURNING,
-            lines=(
-                notice or "Совет сейчас ни о чём не спрашивает.",
-                "Совет считает прошлый цикл. Новое имя берут и без вопроса: голос за ним остаётся.",
-            ),
-        )
-
-    total = sum(counted.values())
-    lines = [
-        *head(f"Голосование: {turning.name}.", notice),
-        turning.question,
-        turning.text,
-        f"Подано голосов: {total}. Голос весит столько, сколько за ним уходов.",
-    ]
-    lines.extend(
-        f"{option.name}: голосов {counted.get(option.id, 0)}. {option.text}"
-        for option in turning.options
-    )
-
-    ahead = turning_rules.leading(counted)
-    if ahead and turning.has_option(ahead):
-        lines.append(f"Впереди: {turning.option(ahead).name}.")
-    elif total:
-        lines.append("Впереди никто: голоса разошлись поровну.")
-
-    mine = turning_rules.answered(character, turning)
-    if mine and turning.has_option(mine):
-        lines.append(f"Ваш голос отдан за: {turning.option(mine).name}. Его можно переменить.")
-    elif turning_rules.may_answer(character):
-        lines.append("Ваш голос ещё не подан.")
-    else:
-        lines.append("Голос дают за уход: пока нового имени нет, совет слушает, но не считает.")
-
-    rows: tuple[tuple[Label, ...], ...] = ()
-    if turning_rules.may_answer(character):
-        rows = tuple((answer_label(option.name),) for option in turning.options)
-    return Screen(id=ScreenId.TURNING, lines=tuple(lines), rows=rows)
-
-
 def reborn_line(result: turning_rules.Reborn) -> str:
     """Что сказать про совершённый уход, в одну строку."""
-    got = f" Очков характеристик прибавилось: {result.stat_points}." if result.stat_points else ""
-    return f"Новое имя взято. Престол вписал вас как «{result.title}». Уровень: 1.{got}"
+    carried = f" Вех ушло с вами: {result.carried}." if result.carried else ""
+    return (
+        f"Новое имя взято: «{result.step.name}». Престол вписал вас как «{result.title}». "
+        f"Уровень: 1. Нераспределённых очков: {result.stat_points}.{carried}"
+    )

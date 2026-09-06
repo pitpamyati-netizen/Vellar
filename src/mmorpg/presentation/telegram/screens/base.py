@@ -65,7 +65,7 @@ class ScreenId(StrEnum):
     ARENA = "arena"
     CHAMBER = "chamber"
     CHAMBER_REMORT = "chamber_remort"
-    TURNING = "turning"
+    LEGACY = "legacy"
     HOUSE = "house"
     SUBCLASS = "subclass"
     NPCS = "npcs"

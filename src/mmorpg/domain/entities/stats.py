@@ -69,6 +69,15 @@ class StatBlock:
         """Сумма отрицательных значений по модулю."""
         return -sum(value for _, value in self if value < 0)
 
+    def scaled(self, factor: float) -> StatBlock:
+        """Все семь, умноженные на ``factor`` и округлённые вниз.
+
+        Вниз нарочно: прибавка процентом обязана быть проверяемой глазом, а
+        округление к ближайшему давало бы «плюс один» там, где обещан ноль целых
+        четыре десятых (ADR 0070).
+        """
+        return StatBlock(**{code.value: int(value * factor) for code, value in self})
+
     def with_change(self, code: StatCode, delta: int) -> StatBlock:
         """Вернуть копию, в которой одна характеристика сдвинута на ``delta``."""
         values = {name.value: value for name, value in self}

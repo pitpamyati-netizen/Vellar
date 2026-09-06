@@ -728,12 +728,12 @@ def test_a_pairs_field_is_shown_key_by_value(content: GameContent) -> None:
     assert overlay_rules.shown(content, spec, empty) == "не заполнено"
 
 
-def test_any_edit_keeps_turnings_and_deep_dungeon_gear(content: GameContent) -> None:
+def test_any_edit_keeps_rebirths_and_deep_dungeon_gear(content: GameContent) -> None:
     """Пересборка мира с правкой не роняет то, что в неё не передавали явно."""
     world = apply(content, DOVEN)
 
-    assert world.turnings == content.turnings
-    assert world.open_turning_id == content.open_turning_id
+    assert world.rebirths == content.rebirths
+    assert world.rebirth_titles == content.rebirth_titles
     assert world.gear_archetypes == content.gear_archetypes
     assert world.gear_tiers == content.gear_tiers
 
@@ -859,50 +859,57 @@ def test_a_resident_edit_has_no_file_home(content: GameContent) -> None:
     assert OverlayKind.NPC not in overlay_rules.EXPORTABLE
 
 
-# --- голосования Палаты и находки сбора: вложенные списки (ADR 0046) --
+# --- ступени нового имени и находки сбора (ADR 0046, 0070) ------------
 
 
-def _turning(**fields: str) -> OverlayRecord:
-    base = {
-        "name": "Мосты",
-        "question": "Чинить ли мосты на перевале?",
-        "options": "yes | Чинить | Дороже, но целее\nno | Не чинить | Дешевле, объезд длиннее",
-    }
+def _rebirth(entity_id: str = "rebirth_1", **fields: str) -> OverlayRecord:
+    """Карточка ступени, как её открывает панель: свести с файлом, потом поправить."""
+    return OverlayRecord(kind=OverlayKind.TURNING, entity_id=entity_id, fields=dict(fields))
+
+
+def _card(content: GameContent, entity_id: str = "rebirth_1", **fields: str) -> OverlayRecord:
+    card = overlay_rules.effective(content, (), OverlayKind.TURNING, entity_id)
     return OverlayRecord(
-        kind=OverlayKind.TURNING, entity_id="keeper_turning_1", fields=base | fields
+        kind=OverlayKind.TURNING, entity_id=entity_id, fields=dict(card.fields) | fields
     )
 
 
-def test_a_keeper_adds_a_turning_with_its_options(content: GameContent) -> None:
-    world = apply(content, _turning())
+def test_a_keeper_moves_the_numbers_of_a_rebirth(content: GameContent) -> None:
+    """Панель правит числа ступени: порог, прибавку, слоты и очки."""
+    world = apply(content, _card(content, stat_bonus="35", legacy_slots="2", level="80"))
 
-    added = next((t for t in world.turnings if t.id == "keeper_turning_1"), None)
-    assert added is not None
-    assert [one.id for one in added.options] == ["yes", "no"]
-    assert added.options[0].name == "Чинить"
-
-
-def test_a_turning_with_one_answer_is_refused(content: GameContent) -> None:
-    assert refused_for(content, _turning(options="only | Единственный"), "меньше двух")
+    step = next(one for one in world.rebirths if one.id == "rebirth_1")
+    assert step.level == 80
+    assert step.stat_bonus == 35
+    assert step.legacy_slots == 2
 
 
-def test_the_open_flag_makes_the_turning_the_one_being_asked(content: GameContent) -> None:
-    world = apply(content, _turning(open="да"))
+def test_a_rebirth_that_gives_nothing_is_refused(content: GameContent) -> None:
+    """Уход стирает дорогу целиком и обязан за это платить."""
+    assert refused_for(content, _card(content, stat_bonus="0"), "обязан платить")
 
-    assert world.open_turning_id == "keeper_turning_1"
+
+def test_an_edit_never_moves_the_order_of_the_road(content: GameContent) -> None:
+    """Номер ступени и то, что она открывает, правкой не трогаются."""
+    world = apply(content, _card(content, stat_bonus="35"))
+
+    step = next(one for one in world.rebirths if one.id == "rebirth_1")
+    before = next(one for one in content.rebirths if one.id == "rebirth_1")
+    assert step.rank == before.rank
+    assert step.unlocks == before.unlocks
 
 
-def test_a_turning_edit_exports_with_nested_option_tables(content: GameContent) -> None:
+def test_a_rebirth_edit_exports_as_a_rebirth_table(content: GameContent) -> None:
     edited = overlay_rules.effective(
-        content, (_turning(),), OverlayKind.TURNING, "keeper_turning_1"
+        content, (_card(content, stat_bonus="35"),), OverlayKind.TURNING, "rebirth_1"
     )
 
     fragment = overlay_rules.to_toml(content, edited)
 
-    assert "[[turning]]" in fragment and "[[turning.options]]" in fragment
-    parsed = _toml_entry(fragment, "turning")
-    assert parsed["question"].startswith("Чинить")
-    assert [one["id"] for one in parsed["options"]] == ["yes", "no"]
+    assert "[[rebirth]]" in fragment
+    parsed = _toml_entry(fragment, "rebirth")
+    assert parsed["stat_bonus"] == 35
+    assert parsed["id"] == "rebirth_1"
 
 
 def _mining_with_yields(content: GameContent, yields: str) -> OverlayRecord:

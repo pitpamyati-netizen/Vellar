@@ -174,13 +174,13 @@ class Character:
     # берсерк, ставший гибридом, ставший дредноутом, а не кто-то третий. Порядок
     # значения не имеет: свёрток прибавок складывается, а не накапливается.
     subclass_ids: tuple[str, ...] = ()
-    # Конец пути (``domain/rules/turning.py``). ``remorts`` - сколько раз игрок
-    # брал у Престола новое имя: каждый уход сбрасывал уровень до первого и оставлял
-    # нажитое. ``turning_cycle``/``turning_answer`` - ответ, который он дал на
-    # открытый вопрос Большого совета, и на какой именно вопрос.
+    # Конец пути (``domain/rules/turning.py``, ADR 0070). ``remorts`` - сколько раз
+    # игрок брал у Престола новое имя: уход сбрасывает уровень до первого и
+    # возвращает розданные очки нерозданными, а взамен поднимает характеристики
+    # процентом навсегда. ``legacy_ids`` - вехи, названные наследием: они работают
+    # и тогда, когда характеристики упали ниже их порога (ADR 0068).
     remorts: int = 0
-    turning_cycle: str = ""
-    turning_answer: str = ""
+    legacy_ids: tuple[str, ...] = ()
     # Какие шаги обучения уже позади, битовой маской (``mmorpg.domain.rules.tutorial``).
     # Ноль - игрок, который только что пришёл.
     tutorial: int = 0
@@ -239,10 +239,9 @@ class Character:
         """Вступить в дом или (пустой ``house_id``) выйти из него."""
         return replace(self, house_id=house_id)
 
-    def with_turning_answer(self, cycle: str, option: str) -> Character:
-        """Ответить на голосование. Ответ всегда назван вместе с вопросом:
-        голос, поданный за прошлый цикл, в этом не считается."""
-        return replace(self, turning_cycle=cycle, turning_answer=option)
+    def with_legacy(self, trait_ids: tuple[str, ...]) -> Character:
+        """Назвать вехи, которые уйдут с вами через сброс (ADR 0070)."""
+        return replace(self, legacy_ids=trait_ids)
 
     def as_admin(self, is_admin: bool) -> Character:
         return replace(self, is_admin=is_admin)

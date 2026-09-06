@@ -117,8 +117,8 @@ def a_character(
         arena_losses=1,
         arena_credit=120,
         remorts=2,
-        turning_cycle="toll",
-        turning_answer="toll_keep",
+        legacy_ids=("ms_warrior_grip",),
+        subclass_ids=("warrior_vanguard",),
         house_id="borderland",
         is_admin=True,
     )
@@ -297,10 +297,12 @@ async def test_a_character_survives_a_round_trip(pool, clean_user) -> None:
     # То, что держит Круг, - тоже сохранённое золото: без него победе после перезапуска
     # не из чего было бы платиться (``domain/rules/arena.py``).
     assert (read.arena_wins, read.arena_losses, read.arena_credit) == (3, 1, 120)
-    # Число уходов и голос в совете тоже хранятся (``domain/rules/turning.py``).
+    # Число имён, наследие и взятые ступени тоже хранятся: это выбор игрока,
+    # а не производное (``Claude.md``, правило 8; ADR 0069, 0070).
     assert read.remorts == 2
     assert read.house_id == "borderland"
-    assert (read.turning_cycle, read.turning_answer) == ("toll", "toll_keep")
+    assert read.legacy_ids == ("ms_warrior_grip",)
+    assert read.subclass_ids == ("warrior_vanguard",)
 
 
 async def test_saving_a_character_updates_every_column(pool, clean_user) -> None:
@@ -321,8 +323,8 @@ async def test_saving_a_character_updates_every_column(pool, clean_user) -> None
             crafts=CraftLog(MappingProxyType({"smithing": CraftProgress(experience=40)})),
             arena_credit=60,
             remorts=3,
-            turning_cycle="gates",
-            turning_answer="gates_one",
+            legacy_ids=("ms_warrior_breach", "ms_warrior_footing"),
+            subclass_ids=("warrior_vanguard", "warrior_ironsworn"),
             house_id="stone",
             is_admin=True,
         )
@@ -340,50 +342,8 @@ async def test_saving_a_character_updates_every_column(pool, clean_user) -> None
     assert read.arena_credit == 60
     assert read.remorts == 3
     assert read.house_id == "stone"
-    assert (read.turning_cycle, read.turning_answer) == ("gates", "gates_one")
-
-
-async def test_the_tally_counts_new_names_and_only_of_this_cycle(pool, clean_user) -> None:
-    """Голос весит столько, сколько уходов за ним, и считается по своему циклу."""
-    await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user, username="tester"))
-    characters = PostgresCharacterRepository(pool)
-
-    await characters.create(
-        replace(
-            a_character(clean_user, name=f"Голос{clean_user}"),
-            remorts=2,
-            turning_cycle="toll",
-            turning_answer="toll_low",
-        )
-    )
-    await characters.create(
-        replace(
-            a_character(clean_user, name=f"Второй{clean_user}"),
-            remorts=1,
-            turning_cycle="toll",
-            turning_answer="toll_low",
-        )
-    )
-    # Ответ на прошлый вопрос в этом счёте не участвует.
-    await characters.create(
-        replace(
-            a_character(clean_user, name=f"Прошлый{clean_user}"),
-            remorts=5,
-            turning_cycle="gates",
-            turning_answer="gates_one",
-        )
-    )
-    # Уходов нет - голоса нет, даже если ответ записан.
-    await characters.create(
-        replace(
-            a_character(clean_user, name=f"Немой{clean_user}"),
-            remorts=0,
-            turning_cycle="toll",
-            turning_answer="toll_high",
-        )
-    )
-
-    assert dict(await characters.turning_tally("toll")) == {"toll_low": 3}
+    assert read.legacy_ids == ("ms_warrior_breach", "ms_warrior_footing")
+    assert read.subclass_ids == ("warrior_vanguard", "warrior_ironsworn")
 
 
 async def test_gold_is_spent_in_one_step_or_not_at_all(pool, clean_user) -> None:

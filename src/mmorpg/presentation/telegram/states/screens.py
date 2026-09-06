@@ -67,7 +67,7 @@ class Play(StatesGroup):
     arena = State()
     chamber = State()
     chamber_remort = State()
-    turning = State()
+    legacy = State()
     house = State()
     subclass = State()
     npcs = State()
@@ -166,7 +166,7 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.ARENA: Play.arena,
     ScreenId.CHAMBER: Play.chamber,
     ScreenId.CHAMBER_REMORT: Play.chamber_remort,
-    ScreenId.TURNING: Play.turning,
+    ScreenId.LEGACY: Play.legacy,
     ScreenId.HOUSE: Play.house,
     ScreenId.SUBCLASS: Play.subclass,
     ScreenId.NPCS: Play.npcs,
@@ -265,7 +265,7 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.ARENA: ScreenId.CITY,
     ScreenId.CHAMBER: ScreenId.CITY,
     ScreenId.CHAMBER_REMORT: ScreenId.CHAMBER,
-    ScreenId.TURNING: ScreenId.CHAMBER,
+    ScreenId.LEGACY: ScreenId.CHAMBER,
     ScreenId.HOUSE: ScreenId.CITY,
     # Ступень открывают с экрана характеристик: подкласс переписывает сетку, и
     # смотреть на него отдельно от характеристик незачем (ADR 0069).

@@ -1,4 +1,4 @@
-"""Управа: новое имя и голос — нажатиями, как их нажимает игрок."""
+"""Управа: новое имя и наследие — нажатиями, как их нажимает игрок (ADR 0070)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ from dataclasses import replace
 import pytest
 
 from mmorpg.domain.entities import Character, GameContent
-from mmorpg.domain.rules import turning as turning_rules
+from mmorpg.domain.entities.stats import StatBlock
+from mmorpg.domain.rules import milestones as milestone_rules
 from mmorpg.presentation.telegram.flows.play import Clock, PlayState, advance, begin, render
 from mmorpg.presentation.telegram.screens.base import ScreenId
 
@@ -17,16 +18,19 @@ CLOCK = Clock(now=1_700_000_000, shop_rotation=100)
 
 @pytest.fixture
 def elder(content: GameContent) -> Character:
-    """Триста уровней, нового имени ещё не просил."""
+    """Семьдесят пятый уровень с собранной силой: первое имя ему уже дадут."""
+    first = content.rebirth_at(1)
+    assert first is not None
     return Character(
         id=1,
         user_id=42,
         name="Аргус",
         race_id="human",
         class_id="warrior",
-        level=turning_rules.MIN_LEVEL,
+        level=first.level,
         gold=400,
         unspent_stat_points=2,
+        allocated=StatBlock(STR=280),
     )
 
 
@@ -42,12 +46,12 @@ def in_chamber(content: GameContent, elder: Character) -> PlayState:
     return step(content, elder, begin(elder), "Мир", "Управа")
 
 
-def test_the_chamber_stands_in_every_city(content: GameContent, elder: Character) -> None:
+def test_the_chamber_stands_in_every_city(content: GameContent) -> None:
     for city in content.cities:
         assert "chamber" in city.services, city.id
 
 
-def test_a_new_name_resets_the_level_and_keeps_the_haul(
+def test_a_new_name_resets_the_allocation_and_keeps_the_haul(
     content: GameContent, elder: Character, in_chamber: PlayState
 ) -> None:
     assert in_chamber.screen is ScreenId.CHAMBER
@@ -59,19 +63,46 @@ def test_a_new_name_resets_the_level_and_keeps_the_haul(
     assert done.screen is ScreenId.CHAMBER
     stored = done.pending.character
     assert stored is not None
+    first = content.rebirth_at(1)
+    assert first is not None
     assert stored.level == 1
     assert stored.gold == 400
     assert stored.remorts == 1
-    assert stored.unspent_stat_points == 2 + turning_rules.STAT_GIFT_PER_REMORT
-    assert "Вписанный" in done.notice
+    # Розданное вернулось нерозданным — вот что делает уход уходом.
+    assert stored.allocated == StatBlock()
+    assert stored.unspent_stat_points == content.rules.free_points_at_creation + first.stat_points
+    assert content.rebirth_titles[0] in done.notice
 
 
-def test_nobody_short_of_the_last_level_is_let_in(content: GameContent, elder: Character) -> None:
-    young = replace(elder, level=100)
+def test_the_chamber_names_the_price_before_the_button(
+    content: GameContent, elder: Character, in_chamber: PlayState
+) -> None:
+    """Всё, что случится по нажатию, названо до него."""
+    shown = render(content, elder, in_chamber, world_seed=WORLD_SEED)
+    first = content.rebirth_at(1)
+    assert first is not None
+    assert first.name in shown.text()
+    assert "Ступень" in shown.text() or "ступени специализации" in shown.text()
+
+    warned = render(
+        content,
+        elder,
+        step(content, elder, in_chamber, "Просить новое имя"),
+        world_seed=WORLD_SEED,
+    )
+    body = warned.text()
+    assert "вернутся нерозданными" in body
+    assert "навсегда" in body
+
+
+def test_nobody_short_of_the_threshold_is_let_in(content: GameContent, elder: Character) -> None:
+    young = replace(elder, level=40)
     in_chamber = step(content, young, begin(young), "Мир", "Управа")
     shown = render(content, young, in_chamber, world_seed=WORLD_SEED)
-    assert f"с {turning_rules.MIN_LEVEL} уровня" in shown.text()
-    assert all("новое имя" not in item.text.lower() for row in shown.rows for item in row)
+    first = content.rebirth_at(1)
+    assert first is not None
+    assert f"с {first.level} уровня" in shown.text()
+    assert all("просить новое имя" not in item.text.lower() for row in shown.rows for item in row)
 
     # Кнопки нового имени на экране нет вовсе, а нажатая мимо неё уводит не дальше
     # самой управы (доступность, правило 12).
@@ -79,43 +110,56 @@ def test_nobody_short_of_the_last_level_is_let_in(content: GameContent, elder: C
     assert refused.screen is ScreenId.CHAMBER
 
 
-def test_the_question_is_answered_by_those_who_paid_for_a_voice(
+def test_a_milestone_is_named_and_then_carried_through_the_reset(
     content: GameContent, elder: Character, in_chamber: PlayState
 ) -> None:
-    turning = content.open_turning()
-    assert turning is not None
-    option = turning.options[0]
+    """Наследие — ответ ровно на ту потерю, которую наносит уход."""
+    taken = milestone_rules.reached(content, elder)
+    assert taken, "герою нужна хотя бы одна веха, чтобы было что уносить"
+    kept = taken[0]
 
-    asked = step(content, elder, in_chamber, "Голосование")
-    assert asked.screen is ScreenId.TURNING
-    silent = render(content, elder, asked, world_seed=WORLD_SEED)
-    assert all("Ответить" not in item.text for row in silent.rows for item in row)
-    assert "Голос дают за уход" in silent.text()
+    on_legacy = step(content, elder, in_chamber, "Наследие")
+    assert on_legacy.screen is ScreenId.LEGACY
+    listed = render(content, elder, on_legacy, world_seed=WORLD_SEED)
+    assert content.trait(kept.trait_id).name in listed.text()
 
-    reborn = replace(elder, remorts=2)
-    voting = step(content, reborn, begin(reborn), "Мир", "Управа", "Голосование")
-    voted = step(content, reborn, voting, f"Ответить: {option.name}")
-    stored = voted.pending.character
+    named = step(content, elder, on_legacy, f"Унести: {content.trait(kept.trait_id).name}")
+    carrier = named.pending.character
+    assert carrier is not None
+    assert carrier.legacy_ids == (kept.trait_id,)
+
+    confirm = step(content, carrier, begin(carrier), "Мир", "Управа", "Просить новое имя")
+    done = step(content, carrier, confirm, "Подтвердить")
+    stored = done.pending.character
     assert stored is not None
-    assert (stored.turning_cycle, stored.turning_answer) == (turning.id, option.id)
-    assert "весит 2" in voted.notice
+    assert stored.legacy_ids == (kept.trait_id,)
+    # Порогом она больше не держится, а наследием — держится.
+    assert kept.trait_id not in milestone_rules.trait_ids(content, stored)
 
 
-def test_the_tally_is_shown_where_the_vote_is_cast(content: GameContent, elder: Character) -> None:
-    turning = content.open_turning()
-    assert turning is not None
-    reborn = replace(
-        elder, remorts=1, turning_cycle=turning.id, turning_answer=turning.options[0].id
+def test_a_named_milestone_can_be_taken_back(
+    content: GameContent, elder: Character, in_chamber: PlayState
+) -> None:
+    taken = milestone_rules.reached(content, elder)
+    kept = taken[0]
+    carrier = replace(elder, legacy_ids=(kept.trait_id,))
+
+    on_legacy = step(content, carrier, begin(carrier), "Мир", "Управа", "Наследие")
+    shown = render(content, carrier, on_legacy, world_seed=WORLD_SEED)
+    assert "Занято мест: 1 из 1." in shown.text()
+
+    freed = step(content, carrier, on_legacy, f"Оставить: {content.trait(kept.trait_id).name}")
+    stored = freed.pending.character
+    assert stored is not None
+    assert stored.legacy_ids == ()
+
+
+def test_the_last_step_closes_the_book(content: GameContent, elder: Character) -> None:
+    """Пройдя все ступени, игрок слышит об этом, а не видит молчащую кнопку."""
+    done = replace(elder, level=150, remorts=len(content.rebirths))
+    in_chamber = step(content, done, begin(done), "Мир", "Управа")
+    shown = render(content, done, in_chamber, world_seed=WORLD_SEED)
+    assert "Ступеней больше нет" in shown.text()
+    assert not shown.rows or all(
+        "просить новое имя" not in item.text.lower() for row in shown.rows for item in row
     )
-    asked = step(content, reborn, begin(reborn), "Мир", "Управа", "Голосование")
-
-    shown = render(
-        content,
-        reborn,
-        asked,
-        world_seed=WORLD_SEED,
-        tally={turning.options[0].id: 4, turning.options[1].id: 1},
-    )
-    assert "Подано голосов: 5." in shown.text()
-    assert f"Впереди: {turning.options[0].name}." in shown.text()
-    assert f"Ваш голос отдан за: {turning.options[0].name}." in shown.text()

@@ -45,7 +45,25 @@ def invested_stats(content: GameContent, character: Character) -> StatBlock:
     if content.has_race(character.race_id):
         total = total + content.race(character.race_id).bonuses
     klass = content.character_class(character.class_id)
-    return total + klass.bonuses + character.allocated
+    return grown(content, character, total + klass.bonuses + character.allocated)
+
+
+def grown(content: GameContent, character: Character, stats: StatBlock) -> StatBlock:
+    """Характеристики, поднятые прибавкой за взятые имена (ADR 0070).
+
+    Уход возвращает розданные очки нерозданными и платит за это процентом ко
+    всему сразу - навсегда. Считается процент здесь, в одном месте, и потому
+    одинаково входит и в веху, и в порог подкласса, и в итоговые числа: иначе
+    прибавка работала бы в одних формулах и молчала в других.
+
+    Проценты не складываются по пройденным ступеням: у второй написано, каким ты
+    стал ПОСЛЕ неё. Ступень, которой в содержимом больше нет, не прибавляет
+    ничего (``Claude.md``, правило 8).
+    """
+    step = content.rebirth_at(character.remorts) if character.remorts else None
+    if step is None or step.stat_bonus <= 0:
+        return stats
+    return stats.scaled(1.0 + step.stat_bonus / 100.0)
 
 
 def reached(content: GameContent, character: Character) -> tuple[StatMilestone, ...]:

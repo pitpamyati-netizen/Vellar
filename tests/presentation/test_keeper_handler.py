@@ -947,25 +947,27 @@ async def test_a_mute_is_stored_on_the_account_and_written_down(
     assert (await keeper_log.latest())[0].action == KeeperAction.UNMUTE
 
 
-async def test_a_keeper_adds_a_turning_and_edits_its_answers(
+async def test_a_keeper_moves_the_numbers_of_a_rebirth(
     keeper: Keeper, registry: ContentRegistry
 ) -> None:
-    await keeper.press(labels.KEEPER.text, labels.KEEPER_WORLD.text, "Вопросы совета")
-    await keeper.press(labels.KEEPER_ADD.text)
-    await keeper.press(keeper.button_with("Название"))
-    await keeper.press("Мосты")
-    await keeper.press(keeper.button_with("Вопрос совета"))
-    await keeper.press("Чинить ли мосты?")
+    """Ступень нового имени правится числами: порог, прибавка, слоты (ADR 0070).
 
-    await keeper.press(keeper.button_with("Ответы"))
-    await keeper.press("fix | Чинить | Дороже, но целее")
-    await keeper.press("skip | Не чинить | Дешевле")
+    Номер ступени и то, что она открывает, панели не отдаются: порядок дороги
+    держит замысел, а не баланс.
+    """
+    await keeper.press(labels.KEEPER.text, labels.KEEPER_WORLD.text, "Ступени нового имени")
+    await keeper.press(keeper.button_with("Первое имя"))
 
-    added = next(t for t in registry.current.turnings if t.id.startswith("keeper_turning"))
-    assert added.question == "Чинить ли мосты?"
-    assert {"fix", "skip"} <= {one.id for one in added.options}
-    fix = next(one for one in added.options if one.id == "fix")
-    assert fix.name == "Чинить" and fix.text == "Дороже, но целее"
+    await keeper.press(keeper.button_with("Прибавка к характеристикам"))
+    await keeper.press("35")
+    await keeper.press(keeper.button_with("Сколько вех унесёт"))
+    await keeper.press("2")
+
+    edited = next(one for one in registry.current.rebirths if one.id == "rebirth_1")
+    assert edited.stat_bonus == 35
+    assert edited.legacy_slots == 2
+    assert edited.rank == 1
+    assert edited.unlocks
 
 
 async def test_maintenance_mode_is_toggled_from_the_ops_screen(

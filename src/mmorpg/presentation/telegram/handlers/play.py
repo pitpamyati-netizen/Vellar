@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import replace
 
 from aiogram import Bot, F, Router
@@ -367,7 +367,6 @@ async def play(
     )
     company = await _company(updated, character, locations, now)
     engaged = await _fights(updated, locations, content, settings, here, now)
-    counted = await _tally(content, updated, characters)
     shown = await _keeper_view(
         updated,
         character,
@@ -403,7 +402,6 @@ async def play(
         clock=clock,
         neighbours=company,
         fights=engaged,
-        tally=counted,
         keeper=shown,
         party=gathered,
         guild=guild_view,
@@ -434,7 +432,6 @@ async def render_play(
     clock: Clock | None = None,
     neighbours: Sequence[Presence] = (),
     fights: Sequence[Engagement] = (),
-    tally: Mapping[str, int] | None = None,
     keeper: KeeperView | None = None,
     party: party_screens.PartyView | None = None,
     guild: guild_screens.GuildView | None = None,
@@ -456,7 +453,6 @@ async def render_play(
         clock=clock,
         neighbours=neighbours,
         fights=fights,
-        tally=tally,
         keeper=keeper,
         party=party,
         guild=guild,
@@ -465,20 +461,6 @@ async def render_play(
     )
     await send_screen(message, screen, emoji=emoji)
     return screen
-
-
-async def _tally(
-    content: GameContent,
-    flow: PlayState,
-    characters: CharacterRepository,
-) -> Mapping[str, int]:
-    """Голоса за открытый вопрос. Считаются только там, где их показывают."""
-    if flow.screen is not ScreenId.TURNING:
-        return {}
-    turning = content.open_turning()
-    if turning is None:
-        return {}
-    return await characters.turning_tally(turning.id)
 
 
 async def _company(

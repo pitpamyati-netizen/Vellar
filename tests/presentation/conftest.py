@@ -290,17 +290,17 @@ def boss_fight(content: GameContent, fighter: Character) -> BattleState:
 
 @pytest.fixture(scope="session")
 def sealbearer(fighter: Character) -> Character:
-    """Тот, кто дошёл до конца и уже брал новое имя: один уход, свой голос.
+    """Тот, кто дошёл до конца и уже брал новое имя: одно имя за плечами.
 
-    Титул «Вписанный», голос в совете за ним есть, и на открытый вопрос он уже
-    ответил.
+    Титул «Вписанный», характеристики выше на своё, и одну веху он уже назвал
+    наследием следующего ухода (ADR 0070).
     """
     return replace(
         fighter,
-        level=300,
+        level=150,
         remorts=1,
-        turning_cycle="toll",
-        turning_answer="toll_keep",
+        allocated=StatBlock(STR=300, END=120),
+        legacy_ids=("ms_warrior_grip",),
         equipment=Equipment(
             MappingProxyType({"trinket": "ring@12#legendary", "body": "heavy_body@12#legendary"})
         ),
@@ -670,7 +670,7 @@ def all_screens(
                 (OverlayKind.LOCATION, "quiet_meadows", 1),
                 (OverlayKind.ENEMY, "grey_wolf", 1),
                 (OverlayKind.CITY, "farhold", 1),
-                (OverlayKind.TURNING, "toll", 1),
+                (OverlayKind.TURNING, "rebirth_1", 1),
                 (OverlayKind.CRAFT, "mining", 1),
             )
         ),
@@ -735,7 +735,7 @@ def all_screens(
                 PageState(),
             )
             for kind, entity_id, field_key in (
-                (OverlayKind.TURNING, "toll", "options"),
+                (OverlayKind.TURNING, "rebirth_1", "text"),
                 (OverlayKind.CRAFT, "mining", "yields"),
             )
         ),
@@ -1044,9 +1044,11 @@ def all_screens(
         chamber_screens.chamber_screen(content, fighter),
         chamber_screens.chamber_screen(content, sealbearer, notice="Новое имя взято."),
         chamber_screens.remort_screen(content, sealbearer),
-        chamber_screens.turning_screen(content, fighter),
-        chamber_screens.turning_screen(content, sealbearer),
-        chamber_screens.turning_screen(content, sealbearer, tally={"toll_low": 3, "toll_keep": 3}),
+        # Наследие: пусто у того, кому нечего нести, названо у прошедшего дорогу,
+        # и закрыто у того, кто взял все имена (ADR 0070).
+        chamber_screens.legacy_screen(content, fighter),
+        chamber_screens.legacy_screen(content, sealbearer),
+        chamber_screens.legacy_screen(content, replace(sealbearer, remorts=3)),
         # Ступени специализации: пусто, открытая развилка, взятая первая и
         # закрытая вторая (ADR 0069).
         subclass_screens.subclass_screen(content, hero),

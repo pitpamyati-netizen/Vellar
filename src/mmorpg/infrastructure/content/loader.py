@@ -40,6 +40,7 @@ from mmorpg.domain.entities.content import (
     Race,
     RacePassive,
     Rarity,
+    Rebirth,
     Skill,
     SkillKind,
     SpecialProperty,
@@ -49,8 +50,6 @@ from mmorpg.domain.entities.content import (
     SubclassGate,
     ToolType,
     Trait,
-    Turning,
-    TurningOption,
     WeaponType,
 )
 from mmorpg.domain.entities.craft import (
@@ -183,7 +182,7 @@ def load_content(content_dir: Path) -> GameContent:
     )
     craft_rules = _build_craft_rules(raw["crafts.toml"], problems)
     crafts, recipes = _parse_crafts(raw["crafts.toml"], item_ids, craft_rules, problems)
-    turnings, open_turning_id = _parse_turnings(raw["turnings.toml"], problems)
+    rebirths, rebirth_titles = _parse_rebirths(raw["turnings.toml"], problems)
     houses = _parse_houses(raw["houses.toml"], problems)
     subclasses = _parse_subclasses(raw["subclasses.toml"], modifier_keys, classes, problems)
 
@@ -198,6 +197,7 @@ def load_content(content_dir: Path) -> GameContent:
     _validate_tools(crafts, gear, problems)
     _validate_quest_rewards(quests, gear, problems)
     _validate_subclasses(subclasses, classes, problems)
+    _validate_rebirth_unlocks(rebirths, subclasses, problems)
 
     parts: dict[str, Any] = {
         "races": races,
@@ -225,10 +225,10 @@ def load_content(content_dir: Path) -> GameContent:
         "granted_trait_categories": granted_categories,
         "inverted_modifiers": inverted_modifiers,
         "rules": rules,
-        "turnings": turnings,
+        "rebirths": rebirths,
+        "rebirth_titles": rebirth_titles,
         "houses": houses,
         "subclasses": subclasses,
-        "open_turning_id": open_turning_id,
     }
 
     if problems:
@@ -1495,50 +1495,90 @@ def _parse_affixes(raw: Mapping[str, Any], problems: list[str]) -> tuple[EnemyAf
     return tuple(parsed)
 
 
-def _parse_turnings(raw: Mapping[str, Any], problems: list[str]) -> tuple[tuple[Turning, ...], str]:
-    """Голосования Большого совета и то из них, что открыто сейчас.
+def _parse_rebirths(
+    raw: Mapping[str, Any], problems: list[str]
+) -> tuple[tuple[Rebirth, ...], tuple[str, ...]]:
+    """Ступени нового имени и титулы за них (ADR 0070).
 
-    Вопрос без ответов - тупик на экране, поэтому их требуется не меньше двух.
-    Открытым может быть только вопрос, который в файле есть.
+    Ступень, которая ничего не прибавляет, - это кнопка, стирающая полторы сотни
+    уровней даром, поэтому прибавка к характеристикам требуется. Номера идут
+    подряд с единицы: пропуск означал бы ступень, до которой нельзя дойти.
     """
-    parsed: list[Turning] = []
-    for entry in raw.get("turning", ()):
-        turning_id = str(entry.get("id", ""))
-        if not turning_id:
+    parsed: list[Rebirth] = []
+    for entry in raw.get("rebirth", ()):
+        rebirth_id = str(entry.get("id", ""))
+        if not rebirth_id:
             problems.append("turnings.toml: an entry has no id")
             continue
-        options = tuple(
-            TurningOption(
-                id=str(option.get("id", "")),
-                name=str(option.get("name", "")),
-                text=str(option.get("text", "")),
-            )
-            for option in entry.get("options", ())
-        )
-        if len(options) < 2:
-            problems.append(f"turnings.toml: {turning_id} must offer at least 2 options")
-        if any(not option.id or not option.name for option in options):
-            problems.append(f"turnings.toml: {turning_id} has an option without an id or a name")
-        _check_unique((option.id for option in options), f"turnings.toml: {turning_id}", problems)
-        question = str(entry.get("question", ""))
-        if not question:
-            problems.append(f"turnings.toml: {turning_id} asks nothing")
+        try:
+            rank = int(entry["rank"])
+            level = int(entry["level"])
+        except (KeyError, ValueError) as error:
+            problems.append(f"turnings.toml: {rebirth_id}: {error}")
+            continue
+        bonus = float(entry.get("stat_bonus", 0.0))
+        if bonus <= 0:
+            problems.append(f"turnings.toml: {rebirth_id} costs a whole band and gives nothing")
+        if not entry.get("text"):
+            problems.append(f"turnings.toml: {rebirth_id} says nothing about what it does")
         parsed.append(
-            Turning(
-                id=turning_id,
-                name=str(entry.get("name", turning_id)),
-                question=question,
+            Rebirth(
+                id=rebirth_id,
+                rank=rank,
+                name=str(entry.get("name", rebirth_id)),
+                level=level,
+                stat_bonus=bonus,
+                legacy_slots=int(entry.get("legacy_slots", 0)),
+                stat_points=int(entry.get("stat_points", 0)),
                 text=str(entry.get("text", "")),
-                options=options,
+                lore=str(entry.get("lore", "")),
+                unlocks=tuple(str(one) for one in entry.get("unlocks", ())),
             )
         )
-    _check_unique((turning.id for turning in parsed), "turnings.toml", problems)
+    _check_unique((one.id for one in parsed), "turnings.toml", problems)
 
-    open_id = str(raw.get("meta", {}).get("open", ""))
-    if open_id and all(turning.id != open_id for turning in parsed):
-        problems.append(f"turnings.toml: [meta].open names unknown turning {open_id!r}")
-        open_id = ""
-    return tuple(parsed), open_id
+    ranks = sorted(one.rank for one in parsed)
+    if ranks and ranks != list(range(1, len(ranks) + 1)):
+        problems.append(f"turnings.toml: ranks {ranks} skip a step")
+    ordered = sorted(parsed, key=lambda one: one.rank)
+    for earlier, later in itertools.pairwise(ordered):
+        if later.level <= earlier.level:
+            problems.append(f"turnings.toml: {later.id} is not asked later than {earlier.id}")
+        if later.stat_bonus <= earlier.stat_bonus:
+            problems.append(f"turnings.toml: {later.id} is not worth more than {earlier.id}")
+
+    titles = tuple(str(one) for one in raw.get("meta", {}).get("titles", ()))
+    if len(titles) < len(parsed):
+        problems.append("turnings.toml: [meta].titles names fewer titles than there are steps")
+    return tuple(ordered), titles
+
+
+def _validate_rebirth_unlocks(
+    rebirths: Sequence[Rebirth], subclasses: Sequence[Subclass], problems: list[str]
+) -> None:
+    """Список открываемого обязан совпадать с тем, что написано у подклассов.
+
+    ``unlocks`` повторяет ``gate.remorts`` нарочно - чтобы игрок прочитал цену
+    вместе с покупкой, - и ровно поэтому обязан быть сверен: два места, которые
+    говорят об одном и расходятся, хуже одного, которое молчит.
+    """
+    by_id = {one.id: one for one in subclasses}
+    for step in rebirths:
+        for subclass_id in step.unlocks:
+            one = by_id.get(subclass_id)
+            if one is None:
+                problems.append(
+                    f"turnings.toml: {step.id} unlocks unknown subclass {subclass_id!r}"
+                )
+            elif one.gate.remorts != step.rank:
+                problems.append(
+                    f"turnings.toml: {step.id} claims {subclass_id}, "
+                    f"which asks for {one.gate.remorts} rebirths"
+                )
+        promised = {one.id for one in subclasses if one.gate.remorts == step.rank}
+        missed = sorted(promised - set(step.unlocks))
+        if missed:
+            problems.append(f"turnings.toml: {step.id} forgets to name {missed}")
 
 
 def _parse_quests(

@@ -306,14 +306,6 @@ class CharacterRepository(Protocol):
     async def arena_table(self, *, limit: int = 10) -> tuple[Character, ...]:
         """Таблица сезона: больше побед - выше."""
 
-    async def turning_tally(self, cycle_id: str) -> Mapping[str, int]:
-        """Голоса за голосование этого цикла: ответ и сколько уходов за ним.
-
-        Голос весит столько, сколько раз подавший брал новое имя, до потолка
-        (``domain/rules/turning.py``). Ответ на прошлый вопрос в этом счёте не
-        участвует: цикл назван прямо в запросе.
-        """
-
     async def find_by_name(self, name: str) -> Character | None:
         """Персонаж по имени, без учёта регистра. Имена в игре уникальны."""
 

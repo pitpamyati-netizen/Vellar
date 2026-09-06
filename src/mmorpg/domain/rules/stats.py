@@ -19,6 +19,7 @@ from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.effects import EffectStack
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.rules import equipment as gear
+from mmorpg.domain.rules import milestones as milestone_rules
 from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules import repair
 from mmorpg.domain.rules import subclass as subclass_rules
@@ -111,13 +112,17 @@ def primary_stats(
     klass = content.character_class(character.class_id)
     modifiers = mods.collect_modifiers(content, character, effects)
 
-    return (
+    # Прибавка за взятые имена ложится на нажитое самим персонажем и НЕ на то,
+    # что даёт снаряжение: процент за уход - это про человека, а не про кольцо
+    # (ADR 0070). Считает её одно место - ``milestones.grown``, - поэтому веха,
+    # порог подкласса и это число всегда говорят об одних и тех же семи.
+    own = (
         StatBlock.uniform(rules.innate_stat_value(character.level))
         + race.bonuses
         + klass.bonuses
         + character.allocated
-        + mods.stat_bonuses(modifiers)
     )
+    return milestone_rules.grown(content, character, own) + mods.stat_bonuses(modifiers)
 
 
 def derived_stats(

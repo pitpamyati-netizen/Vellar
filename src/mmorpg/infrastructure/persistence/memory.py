@@ -8,10 +8,7 @@
 from __future__ import annotations
 
 import time
-from collections import Counter
-from collections.abc import Mapping
 from dataclasses import replace
-from types import MappingProxyType
 
 from mmorpg.domain.entities.character import Character, InventoryEntry
 from mmorpg.domain.entities.moderation import Ban, KeeperEntry
@@ -24,7 +21,6 @@ from mmorpg.domain.ports.repositories import (
     PlayerFilter,
     User,
 )
-from mmorpg.domain.rules import turning as turning_rules
 from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
 from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
 from mmorpg.domain.rules.party import Party
@@ -265,16 +261,6 @@ class InMemoryCharacterRepository:
             key=lambda character: (-character.arena_wins, -character.level, character.name),
         )
         return tuple(ranked[:limit])
-
-    async def turning_tally(self, cycle_id: str) -> Mapping[str, int]:
-        counted: Counter[str] = Counter()
-        for character in self._characters.values():
-            if character.turning_cycle != cycle_id or not character.turning_answer:
-                continue
-            if not turning_rules.may_answer(character):
-                continue
-            counted[character.turning_answer] += turning_rules.voice(character)
-        return MappingProxyType(dict(counted))
 
     async def find_by_name(self, name: str) -> Character | None:
         folded = name.strip().casefold()
