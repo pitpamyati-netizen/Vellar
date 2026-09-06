@@ -762,19 +762,6 @@ def test_a_pairs_field_is_shown_key_by_value(content: GameContent) -> None:
     assert overlay_rules.shown(content, spec, empty) == "не заполнено"
 
 
-def test_any_edit_keeps_rebirths_and_deep_dungeon_gear(content: GameContent) -> None:
-    """Пересборка мира с правкой не роняет то, что в неё не передавали явно."""
-    world = apply(content, DOVEN)
-
-    assert world.rebirths == content.rebirths
-    assert world.rebirth_titles == content.rebirth_titles
-    assert world.gear_archetypes == content.gear_archetypes
-    assert world.gear_tiers == content.gear_tiers
-
-
-# --- опорные числа ----------------------------------------------------
-
-
 def _meta(content: GameContent, **fields: str) -> OverlayRecord:
     snap = overlay_rules.snapshot(content, OverlayKind.META, overlay_rules.META_ID)
     return OverlayRecord(
@@ -891,59 +878,6 @@ def test_a_resident_edit_has_no_file_home(content: GameContent) -> None:
 
     assert "в content/ не хранятся" in overlay_rules.to_toml(apply(content, DOVEN), resident)
     assert OverlayKind.NPC not in overlay_rules.EXPORTABLE
-
-
-# --- ступени нового имени и находки сбора (ADR 0046, 0070) ------------
-
-
-def _rebirth(entity_id: str = "rebirth_1", **fields: str) -> OverlayRecord:
-    """Карточка ступени, как её открывает панель: свести с файлом, потом поправить."""
-    return OverlayRecord(kind=OverlayKind.TURNING, entity_id=entity_id, fields=dict(fields))
-
-
-def _card(content: GameContent, entity_id: str = "rebirth_1", **fields: str) -> OverlayRecord:
-    card = overlay_rules.effective(content, (), OverlayKind.TURNING, entity_id)
-    return OverlayRecord(
-        kind=OverlayKind.TURNING, entity_id=entity_id, fields=dict(card.fields) | fields
-    )
-
-
-def test_a_keeper_moves_the_numbers_of_a_rebirth(content: GameContent) -> None:
-    """Панель правит числа ступени: порог, прибавку, слоты и очки."""
-    world = apply(content, _card(content, stat_bonus="35", legacy_slots="2", level="80"))
-
-    step = next(one for one in world.rebirths if one.id == "rebirth_1")
-    assert step.level == 80
-    assert step.stat_bonus == 35
-    assert step.legacy_slots == 2
-
-
-def test_a_rebirth_that_gives_nothing_is_refused(content: GameContent) -> None:
-    """Уход стирает дорогу целиком и обязан за это платить."""
-    assert refused_for(content, _card(content, stat_bonus="0"), "обязан платить")
-
-
-def test_an_edit_never_moves_the_order_of_the_road(content: GameContent) -> None:
-    """Номер ступени и то, что она открывает, правкой не трогаются."""
-    world = apply(content, _card(content, stat_bonus="35"))
-
-    step = next(one for one in world.rebirths if one.id == "rebirth_1")
-    before = next(one for one in content.rebirths if one.id == "rebirth_1")
-    assert step.rank == before.rank
-    assert step.unlocks == before.unlocks
-
-
-def test_a_rebirth_edit_exports_as_a_rebirth_table(content: GameContent) -> None:
-    edited = overlay_rules.effective(
-        content, (_card(content, stat_bonus="35"),), OverlayKind.TURNING, "rebirth_1"
-    )
-
-    fragment = overlay_rules.to_toml(content, edited)
-
-    assert "[[rebirth]]" in fragment
-    parsed = _toml_entry(fragment, "rebirth")
-    assert parsed["stat_bonus"] == 35
-    assert parsed["id"] == "rebirth_1"
 
 
 def _mining_with_yields(content: GameContent, yields: str) -> OverlayRecord:

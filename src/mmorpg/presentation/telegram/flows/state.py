@@ -255,6 +255,9 @@ class PlayState:
     craft_id: str = ""
     dungeon_pick: str = ""
     npc_id: str = ""
+    #: Ветка специализации, испытание которой открыто (ADR 0074). Это выбор
+    #: игрока, а не переходное: он уходит с экрана испытания и возвращается.
+    subclass_id: str = ""
     # Что правит смотритель: разновидность, сущность, поле, чужой персонаж. Всё
     # остальное панель читает заново на каждом шаге, потому что мир между двумя
     # нажатиями мог измениться - в том числе её же прошлым нажатием.
@@ -341,6 +344,7 @@ class PlayState:
                 "dungeon_pick": self.dungeon_pick,
                 "quest": self.quest_id,
                 "npc": self.npc_id,
+                "subclass": self.subclass_id,
                 "item": self.item_id,
                 "transfer": [self.transfer_scope, self.transfer_to, self.transfer_item],
                 "searching": self.searching,
@@ -440,6 +444,7 @@ class PlayState:
             dungeon_pick=str(data.get("dungeon_pick", "")),
             quest_id=data.get("quest", ""),
             npc_id=data.get("npc", ""),
+            subclass_id=str(data.get("subclass", "")),
             item_id=data.get("item", ""),
             searching=bool(data.get("searching", False)),
             craft_id=str(craft_id),

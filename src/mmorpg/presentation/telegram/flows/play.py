@@ -18,7 +18,7 @@ from dataclasses import replace
 
 from mmorpg import economy_log
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import City, Dungeon, GameContent, Item
+from mmorpg.domain.entities.content import City, Dungeon, GameContent, Item, Subclass
 from mmorpg.domain.entities.location import (
     Enemy,
     Engagement,
@@ -50,7 +50,6 @@ from mmorpg.domain.rules import salvage as salvage_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules import subclass as subclass_rules
 from mmorpg.domain.rules import tools as tool_rules
-from mmorpg.domain.rules import turning as turning_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.domain.rules.tutorial import TutorialTask
@@ -72,7 +71,6 @@ from mmorpg.presentation.telegram.flows.state import (
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.routing import Command, Intent, resolve
 from mmorpg.presentation.telegram.screens import arena as arena_screens
-from mmorpg.presentation.telegram.screens import chamber as chamber_screens
 from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import crafts as craft_screens
 from mmorpg.presentation.telegram.screens import dungeon as dungeon_screens
@@ -115,7 +113,6 @@ SERVICES: dict[str, tuple[str, ScreenId]] = {
     labels.SHOP.text: ("shop", ScreenId.SHOP),
     labels.DUNGEONS.text: ("dungeons", ScreenId.DUNGEON),
     labels.ARENA.text: ("arena", ScreenId.ARENA),
-    labels.CHAMBER.text: ("chamber", ScreenId.CHAMBER),
     labels.HOUSE.text: ("house", ScreenId.HOUSE),
     labels.TAVERN.text: ("tavern", ScreenId.TAVERN),
     labels.SUMMARY.text: ("summary", ScreenId.SUMMARY),
@@ -702,16 +699,12 @@ def _render(
             return tutorial_screens.tutorial_screen(character, state.notice)
         case ScreenId.ARENA:
             return arena_screens.arena_screen(character, arena_table, state.notice)
-        case ScreenId.CHAMBER:
-            return chamber_screens.chamber_screen(content, character, state.notice)
-        case ScreenId.LEGACY:
-            return chamber_screens.legacy_screen(content, character, state.notice)
-        case ScreenId.CHAMBER_REMORT:
-            return chamber_screens.remort_screen(content, character, state.notice)
         case ScreenId.HOUSE:
             return house_screens.house_screen(content, character, city, state.notice)
         case ScreenId.SUBCLASS:
             return subclass_screens.subclass_screen(content, character, state.notice)
+        case ScreenId.SUBCLASS_TRIAL:
+            return _trial_screen(content, character, state)
         case ScreenId.SKILLS:
             return skill_screens.skills_screen(content, character, state.skill_page, state.notice)
         case ScreenId.SKILL_SLOTS:
@@ -1084,16 +1077,12 @@ def advance(
             return _handle_tutorial(content, character, state, command)
         case ScreenId.ARENA:
             return _handle_arena(character, state, command)
-        case ScreenId.CHAMBER:
-            return _handle_chamber(content, character, state, command)
         case ScreenId.HOUSE:
             return _handle_house(content, character, state, command)
         case ScreenId.SUBCLASS:
             return _handle_subclass(content, character, state, command)
-        case ScreenId.LEGACY:
-            return _handle_legacy(content, character, state, command)
-        case ScreenId.CHAMBER_REMORT:
-            return _handle_remort(content, character, state, command)
+        case ScreenId.SUBCLASS_TRIAL:
+            return _handle_subclass_trial(content, character, state, command)
         case ScreenId.INVENTORY:
             return _handle_inventory(content, character, state, command, shelf)
         case ScreenId.ITEM:
@@ -1223,22 +1212,6 @@ def _handle_arena(character: Character, state: PlayState, command: Command) -> P
     return replace(state, fight="arena").at(ScreenId.COMBAT)
 
 
-def _handle_chamber(
-    content: GameContent, character: Character, state: PlayState, command: Command
-) -> PlayState:
-    """Управа: две двери — новое имя и наследие."""
-    if command.intent is not Intent.SELECT:
-        return state.with_notice("Нажмите кнопку из списка или «Назад».")
-    if labels.TURNING.matches(command.argument):
-        refused = turning_rules.refusal(content, character)
-        if refused:
-            return state.with_notice(refused)
-        return state.at(ScreenId.CHAMBER_REMORT)
-    if labels.LEGACY.matches(command.argument):
-        return state.at(ScreenId.LEGACY)
-    return state.with_notice("Нажмите кнопку из списка или «Назад».")
-
-
 def _handle_house(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
@@ -1269,77 +1242,86 @@ def _handle_house(
     return state.with_notice("Нажмите кнопку из списка или «Назад».")
 
 
+def _open_subclass(content: GameContent, character: Character, state: PlayState) -> Subclass | None:
+    """Ветка, испытание которой открыто. ``None`` - её больше нет в содержимом.
+
+    Сохранённому состоянию не верят (``Claude.md``, правило 8): ветку могли
+    вычеркнуть из ``subclasses.toml``, пока игрок стоял на её экране.
+    """
+    if not content.has_subclass(state.subclass_id):
+        return None
+    one = content.subclass(state.subclass_id)
+    return one if one.class_id == character.class_id else None
+
+
+def _trial_screen(content: GameContent, character: Character, state: PlayState) -> Screen:
+    """Экран испытания. Ветки нет - вместо падения обычный экран ступени."""
+    one = _open_subclass(content, character, state)
+    if one is None:
+        return subclass_screens.subclass_screen(content, character, "Этой ветки в игре больше нет.")
+    return subclass_screens.trial_screen(content, character, one, state.notice)
+
+
 def _handle_subclass(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    """Взять ступень специализации. Выбор необратим, и это сказано на экране."""
+    """Развилка: открыть испытание ветки или взять её. Выбор необратим."""
     if command.intent is not Intent.SELECT:
-        return state.with_notice("Нажмите ступень из списка или «Назад».")
+        return state.with_notice("Нажмите ветку из списка или «Назад».")
     tier = subclass_rules.open_tier(content, character)
     if tier is None:
-        return state.with_notice("Все ступени пройдены.")
+        return state.with_notice("Дерево пройдено до конца.")
     for one in subclass_rules.offered(content, character, tier):
+        if subclass_screens.trial_label(one.name).matches(command.argument):
+            return replace(state, subclass_id=one.id).at(ScreenId.SUBCLASS_TRIAL)
         if not subclass_screens.choose_label(one.name).matches(command.argument):
             continue
         chosen = subclass_rules.choose(content, character, one.id)
         if chosen is None:
             return state.with_notice(subclass_rules.refusal(content, character, one))
         return state.storing(PendingWrite(character=chosen)).with_notice(
-            subclass_screens.chosen_line(one)
+            subclass_screens.chosen_line(content, one)
         )
-    return state.with_notice("Нажмите ступень из списка или «Назад».")
+    return state.with_notice("Нажмите ветку из списка или «Назад».")
 
 
-def _handle_legacy(
+def _handle_subclass_trial(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    """Наследие: назвать веху, которая уйдёт с вами через сброс, или снять её.
+    """Испытание: взяться за шаг или сдать досчитанный.
 
-    Называет игрок, а не порядок в файле: какая веха была для этой сборки
-    главной, знает он один (ADR 0070).
+    Задания испытания - обычные задания движка (ADR 0074), поэтому берутся и
+    сдаются теми же правилами: счётчик двигают бои и узлы, а не этот экран.
     """
     if command.intent is not Intent.SELECT:
-        return state.with_notice("Нажмите веху из списка или «Назад».")
-    for trait_id in character.legacy_ids:
-        if not content.has_trait(trait_id):
-            continue
-        trait = content.trait(trait_id)
-        if not chamber_screens.drop_label(trait.name).matches(command.argument):
-            continue
-        dropped = turning_rules.drop(character, trait_id)
-        if dropped is None:
-            return state.with_notice("Этой вехи в наследии нет.")
-        return state.storing(PendingWrite(character=dropped)).with_notice(
-            f"«{trait.name}» больше не уйдёт с вами. Место освободилось."
+        return state.with_notice("Нажмите кнопку испытания или «Назад».")
+    one = _open_subclass(content, character, state)
+    if one is None:
+        return state.at(ScreenId.SUBCLASS).with_notice("Этой ветки в игре больше нет.")
+    step = subclass_rules.trial_step(content, character, one)
+    if step is None:
+        return state.with_notice("Испытание пройдено целиком.")
+    if labels.TRIAL_TAKE.matches(command.argument):
+        if character.quests.is_taken(step.id):
+            return state.with_notice("Это задание уже у вас на руках.")
+        taken = quest_rules.take(content, character, step)
+        if taken is character:
+            return state.with_notice(
+                f"Испытание берут с {step.level} уровня. Ваш уровень: {character.level}."
+            )
+        return state.storing(PendingWrite(character=taken)).with_notice(
+            f"Испытание принято: {step.name}."
         )
-    for trait_id in turning_rules.may_carry(content, character):
-        trait = content.trait(trait_id)
-        if not chamber_screens.carry_label(trait.name).matches(command.argument):
-            continue
-        carried = turning_rules.carry(content, character, trait_id)
-        if carried is None:
-            slots = turning_rules.legacy_slots(content, character)
-            return state.with_notice(f"Мест в наследии больше нет: их {slots}.")
-        return state.storing(PendingWrite(character=carried)).with_notice(
-            f"«{trait.name}» уйдёт с вами и будет работать после сброса."
-        )
-    return state.with_notice("Нажмите веху из списка или «Назад».")
-
-
-def _handle_remort(
-    content: GameContent, character: Character, state: PlayState, command: Command
-) -> PlayState:
-    """Новое имя. Нажатие здесь сбрасывает уровень до первого: экран предупреждал."""
-    if command.intent is not Intent.SELECT or not labels.CONFIRM.matches(command.argument):
-        return state.with_notice("Нажмите «Подтвердить» или «Назад».")
-    reborn = turning_rules.become(content, character)
-    if reborn is None:
-        return state.at(ScreenId.CHAMBER).with_notice(turning_rules.refusal(content, character))
-    return (
-        state.storing(PendingWrite(character=reborn.character))
-        .at(ScreenId.CHAMBER)
-        .with_notice(chamber_screens.reborn_line(reborn))
-    )
+    if labels.HAND_IN.matches(command.argument):
+        payout = quest_rules.hand_in(content, character, step)
+        if payout is None:
+            return state.with_notice("Сдавать нечего: шаг не досчитан.")
+        done, total = subclass_rules.trial_progress(content, payout.character, one)
+        said = f"Шаг испытания сдан: {step.name}. Пройдено {done} из {total}."
+        if done >= total:
+            said += f" Испытание кончено — ветку «{one.name}» берут на экране «Ступень»."
+        return state.storing(PendingWrite(character=payout.character)).with_notice(said)
+    return state.with_notice("Нажмите кнопку испытания или «Назад».")
 
 
 def _walk_to_tutorial_step(

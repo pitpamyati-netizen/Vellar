@@ -877,8 +877,6 @@ def _blank(
                 "output_count": "1",
                 "experience": "10",
             }
-        case OverlayKind.TURNING:
-            fields = {"options": "yes | Да\nno | Нет"}
         case _:
             pass
     return OverlayRecord(

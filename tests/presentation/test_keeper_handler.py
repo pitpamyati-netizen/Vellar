@@ -947,29 +947,6 @@ async def test_a_mute_is_stored_on_the_account_and_written_down(
     assert (await keeper_log.latest())[0].action == KeeperAction.UNMUTE
 
 
-async def test_a_keeper_moves_the_numbers_of_a_rebirth(
-    keeper: Keeper, registry: ContentRegistry
-) -> None:
-    """Ступень нового имени правится числами: порог, прибавка, слоты (ADR 0070).
-
-    Номер ступени и то, что она открывает, панели не отдаются: порядок дороги
-    держит замысел, а не баланс.
-    """
-    await keeper.press(labels.KEEPER.text, labels.KEEPER_WORLD.text, "Ступени нового имени")
-    await keeper.press(keeper.button_with("Первое имя"))
-
-    await keeper.press(keeper.button_with("Прибавка к характеристикам"))
-    await keeper.press("35")
-    await keeper.press(keeper.button_with("Сколько вех унесёт"))
-    await keeper.press("2")
-
-    edited = next(one for one in registry.current.rebirths if one.id == "rebirth_1")
-    assert edited.stat_bonus == 35
-    assert edited.legacy_slots == 2
-    assert edited.rank == 1
-    assert edited.unlocks
-
-
 async def test_maintenance_mode_is_toggled_from_the_ops_screen(
     keeper: Keeper, cache: InMemoryStateCache
 ) -> None:

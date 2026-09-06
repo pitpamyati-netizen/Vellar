@@ -4849,3 +4849,1613 @@ target = "self"
 effect = "cleanse_dodge"
 power = 10
 text = "Снимает отрицательный эффект и даёт 10 процентов уклонения."
+
+# УМЕНИЯ ВЕТОК СПЕЦИАЛИЗАЦИИ (ADR 0074)
+#
+# По одному боевому умению на каждую из ста двенадцати веток дерева
+# (subclasses.toml). owner = "subclass:<id>": такое умение приходит не с
+# уровнем, а с выбором, и до выбора его в списке изучаемых нет вовсе.
+#
+# Дальше всё как у классового: ранг стоит очка, место в панели - одно из
+# шести, откат и цена считаются теми же правилами. Три ветки за дорогу -
+# три умения, которых у соседа по классу не будет.
+
+# ==========================================================================
+# УМЕНИЯ ВЕТОК: ВОИН
+# ==========================================================================
+
+[[skill]]
+code = "warrior_gladiator_vihr_areny"
+name = "Вихрь арены"
+owner = "subclass:warrior_gladiator"
+kind = "active"
+level = 30
+cost = 12
+cooldown = 2
+target = "enemy"
+effect = "damage_double"
+power = 168
+scaling = "STR"
+text = "Бьёт 2 раза, каждый на 92 процента обычного удара."
+
+[[skill]]
+code = "warrior_knight_klyatva_schita"
+name = "Клятва щита"
+owner = "subclass:warrior_knight"
+kind = "active"
+level = 30
+cost = 12
+cooldown = 3
+target = "self"
+effect = "buff_armor"
+power = 30
+scaling = "END"
+text = "3 хода у вас броня выше на 30 процентов."
+
+[[skill]]
+code = "warrior_blackknight_chernyy_obet"
+name = "Чёрный обет"
+owner = "subclass:warrior_blackknight"
+kind = "active"
+level = 75
+cost = 14
+cooldown = 2
+target = "enemy"
+effect = "damage_lifesteal"
+power = 205
+scaling = "STR"
+text = "Удар на 205 процентов обычного. Вам возвращается 30 процентов нанесённого урона."
+
+[[skill]]
+code = "warrior_duelist_razryv_distantsii"
+name = "Разрыв дистанции"
+owner = "subclass:warrior_duelist"
+kind = "active"
+level = 75
+cost = 13
+cooldown = 2
+target = "enemy"
+effect = "damage_feint"
+power = 195
+scaling = "STR"
+text = "Удар на 166 процентов обычного. 2 хода у цели точность ниже на 25 процентов."
+
+[[skill]]
+code = "warrior_sentinel_ne_proydut"
+name = "Не пройдут"
+owner = "subclass:warrior_sentinel"
+kind = "active"
+level = 75
+cost = 15
+cooldown = 3
+target = "all_enemies"
+effect = "taunt_aoe"
+power = 25
+scaling = "END"
+text = "2 хода все противники бьют по вам, а урон у них ниже на 25 процентов."
+
+[[skill]]
+code = "warrior_warlord_prikaz_rubit"
+name = "Приказ рубить"
+owner = "subclass:warrior_warlord"
+kind = "active"
+level = 75
+cost = 16
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_slashing"
+power = 148
+scaling = "STR"
+text = "Рубящий удар по всем противникам на 148 процентов обычного."
+
+[[skill]]
+code = "warrior_bannerman_znamya_ne_padaet"
+name = "Знамя не падает"
+owner = "subclass:warrior_bannerman"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 5
+target = "self"
+effect = "buff_second_wind"
+power = 22
+scaling = "CHA"
+text = "Каждый ход вам возвращается 22 процента здоровья и половина того же в запас, 3 хода."
+
+[[skill]]
+code = "warrior_blademaster_roscherk_na_volos"
+name = "Росчерк на волос"
+owner = "subclass:warrior_blademaster"
+kind = "active"
+level = 150
+cost = 16
+cooldown = 3
+target = "enemy"
+effect = "damage_guaranteed_crit"
+power = 132
+scaling = "STR"
+text = "Гарантированный критический удар на 132 процента обычного."
+
+[[skill]]
+code = "warrior_bulwark_stena_v_odin_rost"
+name = "Стена в один рост"
+owner = "subclass:warrior_bulwark"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 4
+target = "self"
+effect = "barrier"
+power = 36
+scaling = "END"
+text = "Ставит барьер в 36 процентов вашего здоровья на 3 хода."
+
+[[skill]]
+code = "warrior_deathknight_mogilnyy_klinok"
+name = "Могильный клинок"
+owner = "subclass:warrior_deathknight"
+kind = "active"
+level = 150
+cost = 17
+cooldown = 3
+target = "enemy"
+effect = "damage_negative"
+power = 225
+scaling = "STR"
+text = "Оскверняющий удар на 225 процентов обычного."
+
+[[skill]]
+code = "warrior_dreadnought_hod_drednouta"
+name = "Ход дредноута"
+owner = "subclass:warrior_dreadnought"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 4
+target = "all_enemies"
+effect = "damage_aoe_stun"
+power = 150
+scaling = "STR"
+text = "Удар по всем противникам на 150 процентов обычного. Цели оглушены 1 ход."
+
+[[skill]]
+code = "warrior_headsman_posledniy_schet"
+name = "Последний счёт"
+owner = "subclass:warrior_headsman"
+kind = "active"
+level = 150
+cost = 16
+cooldown = 3
+target = "enemy"
+effect = "damage_execute"
+power = 210
+scaling = "STR"
+text = "Удар на 210 процентов обычного. Тем сильнее, чем меньше здоровья осталось у цели."
+
+[[skill]]
+code = "warrior_oathbreaker_klinok_beret_svoe"
+name = "Клинок берёт своё"
+owner = "subclass:warrior_oathbreaker"
+kind = "active"
+level = 150
+cost = 16
+cooldown = 2
+target = "enemy"
+effect = "damage_reckless"
+power = 220
+scaling = "STR"
+text = "Удар на 297 процентов обычного, но этот ход вы получаете на четверть больше урона."
+
+[[skill]]
+code = "warrior_shieldbearer_otboy_v_schit"
+name = "Отбой в щит"
+owner = "subclass:warrior_shieldbearer"
+kind = "active"
+level = 150
+cost = 17
+cooldown = 3
+target = "self"
+effect = "buff_counter"
+power = 30
+scaling = "END"
+text = "3 хода вы отвечаете на каждый удар по вам, 30 процентов своего удара."
+
+# ==========================================================================
+# УМЕНИЯ ВЕТОК: ВАРВАР
+# ==========================================================================
+
+[[skill]]
+code = "barbarian_berserk_pervaya_krov"
+name = "Первая кровь"
+owner = "subclass:barbarian_berserk"
+kind = "active"
+level = 30
+cost = 12
+cooldown = 3
+target = "self"
+effect = "buff_berserk"
+power = 25
+scaling = "STR"
+text = "Берсерк: ваш урон выше на 25 процентов, и получаемый тоже, 3 хода."
+
+[[skill]]
+code = "barbarian_totemic_golos_predka"
+name = "Голос предка"
+owner = "subclass:barbarian_totemic"
+kind = "active"
+level = 30
+cost = 14
+cooldown = 4
+target = "self"
+effect = "buff_all_stats"
+power = 5
+scaling = "WIS"
+text = "3 хода у вас все характеристики выше на 5."
+
+[[skill]]
+code = "barbarian_bloodrager_glotok"
+name = "Глоток"
+owner = "subclass:barbarian_bloodrager"
+kind = "active"
+level = 75
+cost = 14
+cooldown = 2
+target = "enemy"
+effect = "damage_lifesteal"
+power = 200
+scaling = "STR"
+text = "Удар на 200 процентов обычного. Вам возвращается 30 процентов нанесённого урона."
+
+[[skill]]
+code = "barbarian_reaver_razval"
+name = "Развал"
+owner = "subclass:barbarian_reaver"
+kind = "active"
+level = 75
+cost = 15
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_rending"
+power = 152
+scaling = "STR"
+text = "Разрывающий удар по всем противникам на 152 процента обычного."
+
+[[skill]]
+code = "barbarian_spiritseer_dym_i_golosa"
+name = "Дым и голоса"
+owner = "subclass:barbarian_spiritseer"
+kind = "active"
+level = 75
+cost = 15
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_fear"
+power = 130
+scaling = "WIS"
+text = "Дурманящий удар по всем противникам на 130 процентов обычного. Цели напуганы 1 ход."
+
+[[skill]]
+code = "barbarian_thundershaman_raskat"
+name = "Раскат"
+owner = "subclass:barbarian_thundershaman"
+kind = "active"
+level = 75
+cost = 16
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_air"
+power = 150
+scaling = "STR"
+text = "Воздушный удар по всем противникам на 150 процентов обычного."
+
+[[skill]]
+code = "barbarian_ancestorcaller_ne_otpustyat"
+name = "Не отпустят"
+owner = "subclass:barbarian_ancestorcaller"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 5
+target = "self"
+effect = "barrier_undying"
+power = 36
+scaling = "WIS"
+text = "Ставит барьер в 36 процентов вашего здоровья на 3 хода. 3 хода вы не можете пасть."
+
+[[skill]]
+code = "barbarian_bloodchief_krov_za_krov"
+name = "Кровь за кровь"
+owner = "subclass:barbarian_bloodchief"
+kind = "active"
+level = 150
+cost = 17
+cooldown = 4
+target = "self"
+effect = "buff_frenzy"
+power = 28
+scaling = "STR"
+text = "3 хода у вас урон выше на 28 процентов, а броня ниже на 30."
+
+[[skill]]
+code = "barbarian_butcher_razdelka"
+name = "Разделка"
+owner = "subclass:barbarian_butcher"
+kind = "active"
+level = 150
+cost = 16
+cooldown = 2
+target = "enemy"
+effect = "damage_bleed"
+power = 225
+scaling = "STR"
+text = "Разрывающий удар на 225 процентов обычного. Цель истекает кровью 3 хода."
+
+[[skill]]
+code = "barbarian_destroyer_obval"
+name = "Обвал"
+owner = "subclass:barbarian_destroyer"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_bludgeoning"
+power = 165
+scaling = "STR"
+text = "Дробящий удар по всем противникам на 165 процентов обычного."
+
+[[skill]]
+code = "barbarian_devourer_nenasytnost"
+name = "Ненасытность"
+owner = "subclass:barbarian_devourer"
+kind = "active"
+level = 150
+cost = 17
+cooldown = 4
+target = "self"
+effect = "buff_lifesteal"
+power = 30
+scaling = "STR"
+text = "3 хода вам возвращается 30 процентов нанесённого урона."
+
+[[skill]]
+code = "barbarian_spiritlord_svita"
+name = "Свита"
+owner = "subclass:barbarian_spiritlord"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_mental"
+power = 152
+scaling = "WIS"
+text = "Дурманящий удар по всем противникам на 152 процента обычного."
+
+[[skill]]
+code = "barbarian_stormward_grom_v_ruke"
+name = "Гром в руке"
+owner = "subclass:barbarian_stormward"
+kind = "active"
+level = 150
+cost = 17
+cooldown = 3
+target = "enemy"
+effect = "damage_air"
+power = 218
+scaling = "STR"
+text = "Воздушный удар на 218 процентов обычного."
+
+[[skill]]
+code = "barbarian_thunderer_molot_nebes"
+name = "Молот небес"
+owner = "subclass:barbarian_thunderer"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_air"
+power = 168
+scaling = "STR"
+text = "Воздушный удар по всем противникам на 168 процентов обычного."
+
+# ==========================================================================
+# УМЕНИЯ ВЕТОК: ПАЛАДИН
+# ==========================================================================
+
+[[skill]]
+code = "paladin_crusader_pravyy_udar"
+name = "Правый удар"
+owner = "subclass:paladin_crusader"
+kind = "active"
+level = 30
+cost = 12
+cooldown = 2
+target = "enemy"
+effect = "damage_holy"
+power = 190
+scaling = "STR"
+text = "Священный удар на 190 процентов обычного."
+
+[[skill]]
+code = "paladin_templar_zaslon"
+name = "Заслон"
+owner = "subclass:paladin_templar"
+kind = "active"
+level = 30
+cost = 13
+cooldown = 3
+target = "enemy"
+effect = "taunt"
+power = 28
+scaling = "CHA"
+text = "2 хода цель бьёт по вам, а у вас броня выше на 28 процентов."
+
+[[skill]]
+code = "paladin_champion_vyzov_na_sebya"
+name = "Вызов на себя"
+owner = "subclass:paladin_champion"
+kind = "active"
+level = 75
+cost = 16
+cooldown = 3
+target = "all_enemies"
+effect = "taunt_aoe"
+power = 26
+scaling = "CHA"
+text = "2 хода все противники бьют по вам, а урон у них ниже на 26 процентов."
+
+[[skill]]
+code = "paladin_defender_pokrov"
+name = "Покров"
+owner = "subclass:paladin_defender"
+kind = "active"
+level = 75
+cost = 16
+cooldown = 4
+target = "self"
+effect = "barrier"
+power = 32
+scaling = "CHA"
+text = "Ставит барьер в 32 процента вашего здоровья на 3 хода."
+
+[[skill]]
+code = "paladin_inquisitor_doznanie"
+name = "Дознание"
+owner = "subclass:paladin_inquisitor"
+kind = "active"
+level = 75
+cost = 15
+cooldown = 3
+target = "enemy"
+effect = "damage_heal_block"
+power = 205
+scaling = "STR"
+text = "Оскверняющий удар на 205 процентов обычного. Цель не может лечиться 3 хода."
+
+[[skill]]
+code = "paladin_lightbearer_stolp_sveta"
+name = "Столп света"
+owner = "subclass:paladin_lightbearer"
+kind = "active"
+level = 75
+cost = 16
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_light"
+power = 145
+scaling = "CHA"
+text = "Лучезарный удар по всем противникам на 145 процентов обычного."
+
+[[skill]]
+code = "paladin_bastionfaith_svod"
+name = "Свод"
+owner = "subclass:paladin_bastionfaith"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 4
+target = "self"
+effect = "cleanse_barrier"
+power = 36
+scaling = "CHA"
+text = "Ставит барьер в 36 процентов вашего здоровья на 3 хода. Снимает с вас отрицательные эффекты."
+
+[[skill]]
+code = "paladin_exorcist_izgnanie"
+name = "Изгнание"
+owner = "subclass:paladin_exorcist"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_holy"
+power = 158
+scaling = "STR"
+text = "Священный удар по всем противникам на 158 процентов обычного."
+
+[[skill]]
+code = "paladin_judge_prigovor"
+name = "Приговор"
+owner = "subclass:paladin_judge"
+kind = "active"
+level = 150
+cost = 17
+cooldown = 3
+target = "enemy"
+effect = "debuff_death_mark"
+power = 32
+scaling = "CHA"
+text = "4 хода у цели получаемый урон выше на 32 процента."
+
+[[skill]]
+code = "paladin_martyr_chuzhaya_rana"
+name = "Чужая рана"
+owner = "subclass:paladin_martyr"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 4
+target = "self"
+effect = "heal_aoe"
+power = 26
+scaling = "CHA"
+text = "Лечит вас и ваш отряд на 26 процентов здоровья."
+
+[[skill]]
+code = "paladin_oathkeeper_obet_derzhit"
+name = "Обет держит"
+owner = "subclass:paladin_oathkeeper"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 4
+target = "self"
+effect = "cleanse"
+power = 3
+scaling = "CHA"
+text = "Снимает с вас до 3 отрицательных эффектов."
+
+[[skill]]
+code = "paladin_paragon_ne_past"
+name = "Не пасть"
+owner = "subclass:paladin_paragon"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 5
+target = "self"
+effect = "barrier_undying"
+power = 38
+scaling = "CHA"
+text = "Ставит барьер в 38 процентов вашего здоровья на 3 хода. 3 хода вы не можете пасть."
+
+[[skill]]
+code = "paladin_sunknight_polden"
+name = "Полдень"
+owner = "subclass:paladin_sunknight"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 4
+target = "all_enemies"
+effect = "damage_aoe_light"
+power = 172
+scaling = "CHA"
+text = "Лучезарный удар по всем противникам на 172 процента обычного."
+
+[[skill]]
+code = "paladin_zealot_slovo_i_mech"
+name = "Слово и меч"
+owner = "subclass:paladin_zealot"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_holy"
+power = 165
+scaling = "STR"
+text = "Священный удар по всем противникам на 165 процентов обычного."
+
+# ==========================================================================
+# УМЕНИЯ ВЕТОК: СЛЕДОПЫТ
+# ==========================================================================
+
+[[skill]]
+code = "ranger_archer_dalniy_vystrel"
+name = "Дальний выстрел"
+owner = "subclass:ranger_archer"
+kind = "active"
+level = 30
+cost = 12
+cooldown = 2
+target = "enemy"
+effect = "damage_pierce"
+power = 195
+scaling = "AGI"
+text = "Удар на 195 процентов обычного. Не считается с 50 процентов брони цели."
+
+[[skill]]
+code = "ranger_beastmaster_svistnut_svoih"
+name = "Свистнуть своих"
+owner = "subclass:ranger_beastmaster"
+kind = "active"
+level = 30
+cost = 14
+cooldown = 3
+target = "enemy"
+effect = "damage_companion"
+power = 180
+scaling = "WIS"
+text = "Спутник бьёт на 108 процентов обычного удара. Цель истекает кровью 3 хода."
+
+[[skill]]
+code = "ranger_beastlord_staya"
+name = "Стая"
+owner = "subclass:ranger_beastlord"
+kind = "active"
+level = 75
+cost = 16
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_rending"
+power = 145
+scaling = "WIS"
+text = "Разрывающий удар по всем противникам на 145 процентов обычного."
+
+[[skill]]
+code = "ranger_huntsman_iz_zasady"
+name = "Из засады"
+owner = "subclass:ranger_huntsman"
+kind = "active"
+level = 75
+cost = 14
+cooldown = 2
+target = "enemy"
+effect = "damage_backstab"
+power = 205
+scaling = "AGI"
+text = "Удар на 205 процентов обычного, и цель не успевает уклониться. Шанс критического удара выше на 12 процентов."
+
+[[skill]]
+code = "ranger_sniper_vystrel_v_shov"
+name = "Выстрел в шов"
+owner = "subclass:ranger_sniper"
+kind = "active"
+level = 75
+cost = 15
+cooldown = 3
+target = "enemy"
+effect = "damage_crit"
+power = 215
+scaling = "AGI"
+text = "Удар на 215 процентов обычного. Шанс критического удара выше на 12 процентов."
+
+[[skill]]
+code = "ranger_thicketward_tropa_uvodit"
+name = "Тропа уводит"
+owner = "subclass:ranger_thicketward"
+kind = "active"
+level = 75
+cost = 15
+cooldown = 3
+target = "self"
+effect = "buff_dodge"
+power = 30
+scaling = "AGI"
+text = "2 хода у вас уклонение выше на 30 процентов."
+
+[[skill]]
+code = "ranger_falconer_sokol"
+name = "Сокол"
+owner = "subclass:ranger_falconer"
+kind = "active"
+level = 150
+cost = 17
+cooldown = 3
+target = "enemy"
+effect = "damage_air"
+power = 218
+scaling = "WIS"
+text = "Воздушный удар на 218 процентов обычного."
+
+[[skill]]
+code = "ranger_hawkeye_odin_vzglyad"
+name = "Один взгляд"
+owner = "subclass:ranger_hawkeye"
+kind = "active"
+level = 150
+cost = 17
+cooldown = 3
+target = "enemy"
+effect = "damage_guaranteed_crit"
+power = 132
+scaling = "AGI"
+text = "Гарантированный критический удар на 132 процента обычного."
+
+[[skill]]
+code = "ranger_monsterhunter_slaboe_mesto"
+name = "Слабое место"
+owner = "subclass:ranger_monsterhunter"
+kind = "active"
+level = 150
+cost = 17
+cooldown = 3
+target = "enemy"
+effect = "damage_pierce"
+power = 228
+scaling = "AGI"
+text = "Удар на 228 процентов обычного. Не считается с 50 процентов брони цели."
+
+[[skill]]
+code = "ranger_shadowshot_uyti_i_udarit"
+name = "Уйти и ударить"
+owner = "subclass:ranger_shadowshot"
+kind = "active"
+level = 150
+cost = 17
+cooldown = 4
+target = "self"
+effect = "buff_vanish"
+power = 30
+scaling = "AGI"
+text = "Вас нельзя выбрать целью, пока вы не сделаете что-то, кроме защиты. Удар по всем и раны выдают вас."
+
+[[skill]]
+code = "ranger_trapper_silok"
+name = "Силок"
+owner = "subclass:ranger_trapper"
+kind = "active"
+level = 150
+cost = 16
+cooldown = 3
+target = "enemy"
+effect = "debuff_root"
+power = 32
+scaling = "AGI"
+text = "2 хода у цели инициатива и точность ниже на 32 процента."
+
+[[skill]]
+code = "ranger_wayfarer_vtoroe_dyhanie_dorogi"
+name = "Второе дыхание дороги"
+owner = "subclass:ranger_wayfarer"
+kind = "active"
+level = 150
+cost = 17
+cooldown = 4
+target = "self"
+effect = "buff_second_wind"
+power = 22
+scaling = "WIS"
+text = "Каждый ход вам возвращается 22 процента здоровья и половина того же в запас, 3 хода."
+
+[[skill]]
+code = "ranger_wolfchief_zagon"
+name = "Загон"
+owner = "subclass:ranger_wolfchief"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_bleed"
+power = 158
+scaling = "WIS"
+text = "Разрывающий удар по всем противникам на 158 процентов обычного. Цели истекают кровью 3 хода."
+
+[[skill]]
+code = "ranger_woodward_chascha_smykaetsya"
+name = "Чаща смыкается"
+owner = "subclass:ranger_woodward"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 3
+target = "all_enemies"
+effect = "debuff_aoe_slow"
+power = 30
+scaling = "WIS"
+text = "2 хода все противники замедлены на 30 процентов."
+
+# ==========================================================================
+# УМЕНИЯ ВЕТОК: РАЗБОЙНИК
+# ==========================================================================
+
+[[skill]]
+code = "rogue_assassin_path_tihaya_rabota"
+name = "Тихая работа"
+owner = "subclass:rogue_assassin_path"
+kind = "active"
+level = 30
+cost = 13
+cooldown = 3
+target = "enemy"
+effect = "damage_backstab_crit"
+power = 200
+scaling = "AGI"
+text = "Удар на 200 процентов обычного, и цель не успевает уклониться. Бьёт критически всегда."
+
+[[skill]]
+code = "rogue_trickster_podnozhka"
+name = "Подножка"
+owner = "subclass:rogue_trickster"
+kind = "active"
+level = 30
+cost = 11
+cooldown = 2
+target = "enemy"
+effect = "damage_feint"
+power = 175
+scaling = "AGI"
+text = "Удар на 149 процентов обычного. 2 хода у цели точность ниже на 25 процентов."
+
+[[skill]]
+code = "rogue_bard_pohodnaya_pesn"
+name = "Походная песнь"
+owner = "subclass:rogue_bard"
+kind = "active"
+level = 75
+cost = 15
+cooldown = 4
+target = "self"
+effect = "buff_all_stats"
+power = 6
+scaling = "CHA"
+text = "3 хода у вас все характеристики выше на 6."
+
+[[skill]]
+code = "rogue_poisoner_smazat_klinok"
+name = "Смазать клинок"
+owner = "subclass:rogue_poisoner"
+kind = "active"
+level = 75
+cost = 14
+cooldown = 2
+target = "enemy"
+effect = "damage_venom"
+power = 195
+scaling = "AGI"
+text = "Ядовитый удар на 195 процентов обычного. Цель отравлена 3 хода."
+
+[[skill]]
+code = "rogue_scout_ne_zametili"
+name = "Не заметили"
+owner = "subclass:rogue_scout"
+kind = "active"
+level = 75
+cost = 14
+cooldown = 3
+target = "enemy"
+effect = "damage_initiative"
+power = 190
+scaling = "AGI"
+text = "Удар на 190 процентов обычного. 2 хода у вас инициатива выше на 40 процентов."
+
+[[skill]]
+code = "rogue_shadow_ischeznut"
+name = "Исчезнуть"
+owner = "subclass:rogue_shadow"
+kind = "active"
+level = 75
+cost = 14
+cooldown = 4
+target = "self"
+effect = "buff_vanish"
+power = 28
+scaling = "AGI"
+text = "Вас нельзя выбрать целью, пока вы не сделаете что-то, кроме защиты. Удар по всем и раны выдают вас."
+
+[[skill]]
+code = "rogue_assassin_tochka"
+name = "Точка"
+owner = "subclass:rogue_assassin"
+kind = "active"
+level = 150
+cost = 17
+cooldown = 3
+target = "enemy"
+effect = "damage_execute"
+power = 225
+scaling = "AGI"
+text = "Удар на 225 процентов обычного. Тем сильнее, чем меньше здоровья осталось у цели."
+
+[[skill]]
+code = "rogue_bountyhunter_po_gramote"
+name = "По грамоте"
+owner = "subclass:rogue_bountyhunter"
+kind = "active"
+level = 150
+cost = 17
+cooldown = 3
+target = "enemy"
+effect = "debuff_death_mark"
+power = 32
+scaling = "AGI"
+text = "4 хода у цели получаемый урон выше на 32 процента."
+
+[[skill]]
+code = "rogue_burglar_vzyat_svoe"
+name = "Взять своё"
+owner = "subclass:rogue_burglar"
+kind = "active"
+level = 150
+cost = 16
+cooldown = 3
+target = "enemy"
+effect = "damage_steal"
+power = 200
+scaling = "AGI"
+text = "Удар на 200 процентов обычного. Забирает часть золота у противника."
+
+[[skill]]
+code = "rogue_minstrel_dolgaya_pesnya"
+name = "Долгая песня"
+owner = "subclass:rogue_minstrel"
+kind = "active"
+level = 150
+cost = 17
+cooldown = 4
+target = "self"
+effect = "heal_over_time"
+power = 10
+scaling = "CHA"
+text = "Возвращает 10 процентов здоровья каждый ход, 3 хода подряд."
+
+[[skill]]
+code = "rogue_nightblade_iz_temnoty"
+name = "Из темноты"
+owner = "subclass:rogue_nightblade"
+kind = "active"
+level = 150
+cost = 17
+cooldown = 3
+target = "enemy"
+effect = "damage_backstab_crit"
+power = 228
+scaling = "AGI"
+text = "Удар на 228 процентов обычного, и цель не успевает уклониться. Бьёт критически всегда."
+
+[[skill]]
+code = "rogue_phantom_ni_sleda"
+name = "Ни следа"
+owner = "subclass:rogue_phantom"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 5
+target = "self"
+effect = "buff_evade_full"
+power = 100
+scaling = "AGI"
+text = "Вы уходите от следующего удара по вам."
+
+[[skill]]
+code = "rogue_plagueblade_povetrie"
+name = "Поветрие"
+owner = "subclass:rogue_plagueblade"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_venom"
+power = 152
+scaling = "AGI"
+text = "Ядовитый удар по всем противникам на 152 процента обычного. Цели отравлены 3 хода."
+
+[[skill]]
+code = "rogue_skald_boevaya_visa"
+name = "Боевая виса"
+owner = "subclass:rogue_skald"
+kind = "active"
+level = 150
+cost = 17
+cooldown = 4
+target = "self"
+effect = "buff_empower"
+power = 30
+scaling = "CHA"
+text = "Усиление: ваш урон выше на 30 процентов, 3 хода."
+
+# ==========================================================================
+# УМЕНИЯ ВЕТОК: МАГ
+# ==========================================================================
+
+[[skill]]
+code = "mage_elementalist_razlad_stihiy"
+name = "Разлад стихий"
+owner = "subclass:mage_elementalist"
+kind = "active"
+level = 30
+cost = 13
+cooldown = 2
+target = "all_enemies"
+effect = "damage_aoe_arcane"
+power = 140
+scaling = "INT"
+text = "Чародейский удар по всем противникам на 140 процентов обычного."
+
+[[skill]]
+code = "mage_occultist_tihiy_sglaz"
+name = "Тихий сглаз"
+owner = "subclass:mage_occultist"
+kind = "active"
+level = 30
+cost = 13
+cooldown = 2
+target = "enemy"
+effect = "damage_negative"
+power = 190
+scaling = "INT"
+text = "Оскверняющий удар на 190 процентов обычного."
+
+[[skill]]
+code = "mage_cryomancer_okovy_stuzhi"
+name = "Оковы стужи"
+owner = "subclass:mage_cryomancer"
+kind = "active"
+level = 75
+cost = 16
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_freeze"
+power = 142
+scaling = "INT"
+text = "Ледяной удар по всем противникам на 142 процента обычного. Цели скованы стужей 1 ход."
+
+[[skill]]
+code = "mage_necromancer_podnyat_pavshego"
+name = "Поднять павшего"
+owner = "subclass:mage_necromancer"
+kind = "active"
+level = 75
+cost = 16
+cooldown = 3
+target = "enemy"
+effect = "damage_companion"
+power = 190
+scaling = "INT"
+text = "Спутник бьёт на 114 процентов обычного удара. Цель истекает кровью 3 хода."
+
+[[skill]]
+code = "mage_psion_chuzhaya_mysl"
+name = "Чужая мысль"
+owner = "subclass:mage_psion"
+kind = "active"
+level = 75
+cost = 15
+cooldown = 3
+target = "enemy"
+effect = "damage_confuse"
+power = 205
+scaling = "INT"
+text = "Дурманящий удар на 205 процентов обычного. Цель спутана 2 хода и бьёт куда попало."
+
+[[skill]]
+code = "mage_pyromancer_polymya"
+name = "Полымя"
+owner = "subclass:mage_pyromancer"
+kind = "active"
+level = 75
+cost = 16
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_burn"
+power = 150
+scaling = "INT"
+text = "Палящий удар по всем противникам на 150 процентов обычного. Цели горят 3 хода."
+
+[[skill]]
+code = "mage_bonelord_kostyanoy_stroy"
+name = "Костяной строй"
+owner = "subclass:mage_bonelord"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_negative"
+power = 158
+scaling = "INT"
+text = "Оскверняющий удар по всем противникам на 158 процентов обычного."
+
+[[skill]]
+code = "mage_frostlord_vse_zamret"
+name = "Всё замрёт"
+owner = "subclass:mage_frostlord"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 4
+target = "all_enemies"
+effect = "damage_aoe_freeze"
+power = 165
+scaling = "INT"
+text = "Ледяной удар по всем противникам на 165 процентов обычного. Цели скованы стужей 1 ход."
+
+[[skill]]
+code = "mage_illusionist_morok"
+name = "Морок"
+owner = "subclass:mage_illusionist"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_mental"
+power = 160
+scaling = "INT"
+text = "Дурманящий удар по всем противникам на 160 процентов обычного."
+
+[[skill]]
+code = "mage_incinerator_pepel"
+name = "Пепел"
+owner = "subclass:mage_incinerator"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_fire"
+power = 172
+scaling = "INT"
+text = "Палящий удар по всем противникам на 172 процента обычного."
+
+[[skill]]
+code = "mage_infernal_pech"
+name = "Печь"
+owner = "subclass:mage_infernal"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 3
+target = "enemy"
+effect = "damage_fire"
+power = 232
+scaling = "INT"
+text = "Палящий удар на 232 процента обычного."
+
+[[skill]]
+code = "mage_mindlord_chuzhaya_volya"
+name = "Чужая воля"
+owner = "subclass:mage_mindlord"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 4
+target = "enemy"
+effect = "damage_charm"
+power = 215
+scaling = "INT"
+text = "Дурманящий удар на 215 процентов обычного. Цель очарована 1 ход и бьёт по своим."
+
+[[skill]]
+code = "mage_plaguecaster_mor"
+name = "Мор"
+owner = "subclass:mage_plaguecaster"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_poison"
+power = 155
+scaling = "INT"
+text = "Ядовитый удар по всем противникам на 155 процентов обычного. Цели отравлены 3 хода."
+
+[[skill]]
+code = "mage_stormcaller_nenaste"
+name = "Ненастье"
+owner = "subclass:mage_stormcaller"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 3
+target = "all_enemies"
+effect = "damage_chain"
+power = 160
+scaling = "INT"
+text = "Воздушный удар по всем противникам на 160 процентов обычного. Каждая следующая цель получает меньше предыдущей."
+
+# ==========================================================================
+# УМЕНИЯ ВЕТОК: ЖРЕЦ
+# ==========================================================================
+
+[[skill]]
+code = "cleric_healer_skoraya_ruka"
+name = "Скорая рука"
+owner = "subclass:cleric_healer"
+kind = "active"
+level = 30
+cost = 12
+cooldown = 3
+target = "self"
+effect = "heal"
+power = 22
+scaling = "WIS"
+text = "Лечит вас на 22 процента здоровья."
+
+[[skill]]
+code = "cleric_monk_udar_ladonyu"
+name = "Удар ладонью"
+owner = "subclass:cleric_monk"
+kind = "active"
+level = 30
+cost = 12
+cooldown = 2
+target = "enemy"
+effect = "damage_bludgeoning"
+power = 195
+scaling = "WIS"
+text = "Дробящий удар на 195 процентов обычного."
+
+[[skill]]
+code = "cleric_ascetic_post"
+name = "Пост"
+owner = "subclass:cleric_ascetic"
+kind = "active"
+level = 75
+cost = 15
+cooldown = 4
+target = "self"
+effect = "buff_damage_taken"
+power = 30
+scaling = "WIS"
+text = "3 хода у вас получаемый урон ниже на 30 процентов."
+
+[[skill]]
+code = "cleric_herbalist_otvar"
+name = "Отвар"
+owner = "subclass:cleric_herbalist"
+kind = "active"
+level = 75
+cost = 15
+cooldown = 4
+target = "self"
+effect = "heal_over_time"
+power = 10
+scaling = "WIS"
+text = "Возвращает 10 процентов здоровья каждый ход, 3 хода подряд."
+
+[[skill]]
+code = "cleric_oracle_znamenie"
+name = "Знамение"
+owner = "subclass:cleric_oracle"
+kind = "active"
+level = 75
+cost = 15
+cooldown = 4
+target = "self"
+effect = "buff_haste"
+power = 28
+scaling = "WIS"
+text = "Ускорение: ваша инициатива выше на 28 процентов, 3 хода."
+
+[[skill]]
+code = "cleric_punisher_kara"
+name = "Кара"
+owner = "subclass:cleric_punisher"
+kind = "active"
+level = 75
+cost = 15
+cooldown = 3
+target = "enemy"
+effect = "damage_holy"
+power = 210
+scaling = "WIS"
+text = "Священный удар на 210 процентов обычного."
+
+[[skill]]
+code = "cleric_banisher_proch"
+name = "Прочь"
+owner = "subclass:cleric_banisher"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_holy"
+power = 160
+scaling = "WIS"
+text = "Священный удар по всем противникам на 160 процентов обычного."
+
+[[skill]]
+code = "cleric_enlightened_pustaya_ruka"
+name = "Пустая рука"
+owner = "subclass:cleric_enlightened"
+kind = "active"
+level = 150
+cost = 17
+cooldown = 3
+target = "enemy"
+effect = "damage_multi"
+power = 205
+scaling = "WIS"
+text = "Бьёт 3 раза, каждый на 68 процентов обычного удара."
+
+[[skill]]
+code = "cleric_hermit_tishina"
+name = "Тишина"
+owner = "subclass:cleric_hermit"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 4
+target = "self"
+effect = "cleanse_barrier"
+power = 34
+scaling = "WIS"
+text = "Ставит барьер в 34 процента вашего здоровья на 3 хода. Снимает с вас отрицательные эффекты."
+
+[[skill]]
+code = "cleric_lifewarden_krug_zhizni"
+name = "Круг жизни"
+owner = "subclass:cleric_lifewarden"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 4
+target = "self"
+effect = "heal_aoe"
+power = 26
+scaling = "WIS"
+text = "Лечит вас и ваш отряд на 26 процентов здоровья."
+
+[[skill]]
+code = "cleric_miracleworker_vtoroe_rozhdenie"
+name = "Второе рождение"
+owner = "subclass:cleric_miracleworker"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 4
+target = "self"
+effect = "heal_big"
+power = 30
+scaling = "WIS"
+text = "Лечит вас на 30 процентов здоровья."
+
+[[skill]]
+code = "cleric_prophet_prorochestvo"
+name = "Пророчество"
+owner = "subclass:cleric_prophet"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_light"
+power = 158
+scaling = "WIS"
+text = "Лучезарный удар по всем противникам на 158 процентов обычного."
+
+[[skill]]
+code = "cleric_seer_na_hod_vpered"
+name = "На ход вперёд"
+owner = "subclass:cleric_seer"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 6
+target = "self"
+effect = "buff_cooldown_reset"
+power = 100
+scaling = "WIS"
+text = "Снимает откаты со всех ваших умений."
+
+[[skill]]
+code = "cleric_vengeance_vozmezdie"
+name = "Возмездие"
+owner = "subclass:cleric_vengeance"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 3
+target = "enemy"
+effect = "damage_holy"
+power = 230
+scaling = "WIS"
+text = "Священный удар на 230 процентов обычного."
+
+# ==========================================================================
+# УМЕНИЯ ВЕТОК: ДРУИД
+# ==========================================================================
+
+[[skill]]
+code = "druid_shapeshifter_obernutsya"
+name = "Обернуться"
+owner = "subclass:druid_shapeshifter"
+kind = "active"
+level = 30
+cost = 13
+cooldown = 3
+target = "self"
+effect = "buff_form_wolf"
+power = 25
+scaling = "WIS"
+text = "3 хода у вас урон и инициатива выше на 25 процентов."
+
+[[skill]]
+code = "druid_treewarden_korni_derzhat"
+name = "Корни держат"
+owner = "subclass:druid_treewarden"
+kind = "active"
+level = 30
+cost = 13
+cooldown = 3
+target = "enemy"
+effect = "debuff_root"
+power = 28
+scaling = "WIS"
+text = "2 хода у цели инициатива и точность ниже на 28 процентов."
+
+[[skill]]
+code = "druid_bearspirit_medvezhya_shkura"
+name = "Медвежья шкура"
+owner = "subclass:druid_bearspirit"
+kind = "active"
+level = 75
+cost = 15
+cooldown = 3
+target = "self"
+effect = "buff_form_bear"
+power = 28
+scaling = "WIS"
+text = "3 хода у вас здоровье и броня выше на 28 процентов."
+
+[[skill]]
+code = "druid_thornweaver_ternovnik"
+name = "Терновник"
+owner = "subclass:druid_thornweaver"
+kind = "active"
+level = 75
+cost = 16
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_nature"
+power = 145
+scaling = "WIS"
+text = "Природный удар по всем противникам на 145 процентов обычного."
+
+[[skill]]
+code = "druid_weatherward_hmar"
+name = "Хмарь"
+owner = "subclass:druid_weatherward"
+kind = "active"
+level = 75
+cost = 16
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_air"
+power = 145
+scaling = "WIS"
+text = "Воздушный удар по всем противникам на 145 процентов обычного."
+
+[[skill]]
+code = "druid_wolfskin_volchya_hvatka"
+name = "Волчья хватка"
+owner = "subclass:druid_wolfskin"
+kind = "active"
+level = 75
+cost = 15
+cooldown = 2
+target = "enemy"
+effect = "damage_bleed"
+power = 205
+scaling = "WIS"
+text = "Разрывающий удар на 205 процентов обычного. Цель истекает кровью 3 хода."
+
+[[skill]]
+code = "druid_firstbeast_zverinaya_stat"
+name = "Звериная стать"
+owner = "subclass:druid_firstbeast"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 5
+target = "self"
+effect = "buff_avatar"
+power = 30
+scaling = "WIS"
+text = "4 хода у вас урон выше на 30 процентов, и вас нельзя оглушить."
+
+[[skill]]
+code = "druid_mistward_pelena"
+name = "Пелена"
+owner = "subclass:druid_mistward"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 3
+target = "all_enemies"
+effect = "debuff_accuracy"
+power = 30
+scaling = "WIS"
+text = "2 хода у всех противников точность ниже на 30 процентов."
+
+[[skill]]
+code = "druid_moonhunter_lunnyy_brosok"
+name = "Лунный бросок"
+owner = "subclass:druid_moonhunter"
+kind = "active"
+level = 150
+cost = 17
+cooldown = 3
+target = "enemy"
+effect = "damage_backstab"
+power = 222
+scaling = "WIS"
+text = "Удар на 222 процента обычного, и цель не успевает уклониться. Шанс критического удара выше на 12 процентов."
+
+[[skill]]
+code = "druid_packleader_staya_beret"
+name = "Стая берёт"
+owner = "subclass:druid_packleader"
+kind = "active"
+level = 150
+cost = 18
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_bleed"
+power = 158
+scaling = "WIS"
+text = "Разрывающий удар по всем противникам на 158 процентов обычного. Цели истекают кровью 3 хода."
+
+[[skill]]
+code = "druid_stonehide_kamen_derzhit"
+name = "Камень держит"
+owner = "subclass:druid_stonehide"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 4
+target = "self"
+effect = "barrier"
+power = 36
+scaling = "WIS"
+text = "Ставит барьер в 36 процентов вашего здоровья на 3 хода."
+
+[[skill]]
+code = "druid_stormlord_groza"
+name = "Гроза"
+owner = "subclass:druid_stormlord"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 3
+target = "all_enemies"
+effect = "damage_chain"
+power = 165
+scaling = "WIS"
+text = "Воздушный удар по всем противникам на 165 процентов обычного. Каждая следующая цель получает меньше предыдущей."
+
+[[skill]]
+code = "druid_thornlord_ternovaya_stena"
+name = "Терновая стена"
+owner = "subclass:druid_thornlord"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_nature"
+power = 168
+scaling = "WIS"
+text = "Природный удар по всем противникам на 168 процентов обычного."
+
+[[skill]]
+code = "druid_venomweaver_dolgiy_yad"
+name = "Долгий яд"
+owner = "subclass:druid_venomweaver"
+kind = "active"
+level = 150
+cost = 19
+cooldown = 3
+target = "all_enemies"
+effect = "damage_aoe_poison"
+power = 155
+scaling = "WIS"
+text = "Ядовитый удар по всем противникам на 155 процентов обычного. Цели отравлены 3 хода."

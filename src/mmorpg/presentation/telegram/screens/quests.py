@@ -214,8 +214,14 @@ def offer_screen(
 
 def step_line(content: GameContent, step: QuestStep) -> str:
     mark = "готово, можно сдавать" if step.done else "в работе"
-    city = content.city(step.quest.city_id).name
-    return f"{step.quest.name}: {step.progress} из {step.quest.target_count}, {mark}. {city}."
+    # У испытания ветки города нет вовсе (ADR 0074): его выдал наставник, и
+    # сдают его там же, на экране «Ступень».
+    where = (
+        "Испытание ветки"
+        if step.quest.is_trial or not content.has_city(step.quest.city_id)
+        else content.city(step.quest.city_id).name
+    )
+    return f"{step.quest.name}: {step.progress} из {step.quest.target_count}, {mark}. {where}."
 
 
 def journal_screen(

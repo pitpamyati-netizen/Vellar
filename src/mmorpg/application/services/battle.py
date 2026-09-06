@@ -37,7 +37,6 @@ from mmorpg.domain.entities.effects import ActiveEffect, EffectStack, status_eff
 from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
 from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.ports.repositories import StateCache
-from mmorpg.domain.procgen import enemies as enemy_procgen
 from mmorpg.domain.rules.combat import hero_combatant, monster_combatant, open_battle
 from mmorpg.logging import get_logger
 
@@ -175,12 +174,7 @@ def begin(
         roster[next_id] = character
         next_id += 1
 
-    # Порода крепчает по взятым именам того из живых, кто прошёл дальше всех
-    # (ADR 0072). По лучшему, а не по каждому: стая одна, и разной для двоих
-    # в одном бою она быть не может.
-    taken = max((one.remorts for one, _ in (*attackers, *defenders)), default=0)
     for enemy in enemies:
-        enemy = enemy_procgen.hardened(enemy, taken, content.enemy_scaling)
         one = monster_combatant(enemy, combatant_id=next_id, side=1)
         # Прозвища-модификаторы ложатся эффектом прямо на этого бойца, а не через
         # ``opening_effects`` (те по стороне): отражение, вампиризм, лишняя броня

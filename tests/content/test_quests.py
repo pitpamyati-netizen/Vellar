@@ -7,9 +7,25 @@
 
 from __future__ import annotations
 
+import itertools
+
 from mmorpg.domain.entities import GameContent
 from mmorpg.domain.entities.quest import ObjectiveKind
 from tests.content.conftest import FORBIDDEN_WORDS
+
+
+def contracts(content: GameContent) -> tuple:
+    """Городская работа: всё, что выдаёт доска.
+
+    Испытание ветки - тоже задание движка, но не работа города (ADR 0074): у
+    него нет ни города, ни платы золотом, и спрашивать с него городское нечего.
+    """
+    return tuple(quest for quest in content.quests if not quest.is_trial)
+
+
+def trials(content: GameContent) -> tuple:
+    """Задания испытаний веток, все до одного."""
+    return tuple(quest for quest in content.quests if quest.is_trial)
 
 
 def test_the_first_act_is_actually_written(content: GameContent) -> None:
@@ -22,7 +38,7 @@ def test_the_first_act_is_actually_written(content: GameContent) -> None:
 
 def test_every_contract_belongs_to_a_city_that_exists(content: GameContent) -> None:
     known = {city.id for city in content.cities}
-    assert all(quest.city_id in known for quest in content.quests)
+    assert all(quest.city_id in known for quest in contracts(content))
 
 
 def test_every_reward_item_exists(content: GameContent) -> None:
@@ -46,13 +62,13 @@ def test_the_chain_never_loops_and_always_starts_somewhere(content: GameContent)
 
 
 def test_a_contract_never_asks_before_its_city_opens(content: GameContent) -> None:
-    for quest in content.quests:
+    for quest in contracts(content):
         city = content.city(quest.city_id)
         assert city.unlock_level <= quest.level <= city.level_max, quest.id
 
 
 def test_a_contract_that_follows_another_comes_later(content: GameContent) -> None:
-    for quest in content.quests:
+    for quest in contracts(content):
         if quest.follows:
             assert content.quest(quest.follows).level <= quest.level, quest.id
 
@@ -64,7 +80,7 @@ def test_the_price_grows_with_the_level(content: GameContent) -> None:
 
 
 def test_every_contract_names_a_price_and_a_person(content: GameContent) -> None:
-    for quest in content.quests:
+    for quest in contracts(content):
         assert quest.giver.strip(), quest.id
         assert quest.terms.strip(), quest.id
         assert quest.reward_gold > 0, quest.id
@@ -132,3 +148,33 @@ def test_the_first_contract_of_the_act_says_where_to_go(content: GameContent) ->
     assert first.location_slot, "первое задание обязано называть локацию"
     location = content.city("farhold").location(first.location_slot)
     assert location.name in first.terms, "наниматель называет место своими словами"
+
+
+# --- испытания веток (ADR 0074) ---------------------------------------
+
+
+def test_every_trial_belongs_to_a_branch_and_to_no_city(content: GameContent) -> None:
+    """У испытания есть ветка и нет города: доска его не покажет никогда."""
+    for quest in trials(content):
+        assert content.has_subclass(quest.trial_for), quest.id
+        assert not quest.city_id, quest.id
+        assert quest.level == content.subclass(quest.trial_for).level
+
+
+def test_every_branch_has_a_trial_chained_in_order(content: GameContent) -> None:
+    """Три задания подряд, и каждое следующее ждёт предыдущего."""
+    for one in content.subclasses:
+        steps = [content.quest(quest_id) for quest_id in one.trial_ids]
+        assert len(steps) == 3, one.id
+        assert not steps[0].follows
+        for earlier, later in itertools.pairwise(steps):
+            assert later.follows == earlier.id, one.id
+
+
+def test_a_trial_pays_with_the_branch_and_not_with_gold(content: GameContent) -> None:
+    """Плата за дорогу названа в конце дороги, а не по шагам."""
+    for quest in trials(content):
+        assert quest.reward_gold == 0, quest.id
+        assert quest.reward_experience == 0, quest.id
+        assert quest.terms.strip(), quest.id
+        assert quest.name.strip(), quest.id

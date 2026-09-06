@@ -27,6 +27,7 @@ from dataclasses import dataclass, replace
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, OwnerKind, Skill, SkillKind
 from mmorpg.domain.entities.statuses import CONTROL_STATUSES
+from mmorpg.domain.rules import subclass as subclass_rules
 from mmorpg.domain.rules.skill_effects import EffectSpec, Inflict
 
 #: Через сколько рангов откат укорачивается на ход и наложенное держится на ход
@@ -40,6 +41,11 @@ RANK_COST_STEP = 0.1
 
 #: Дешевле этой доли умение не станет ни на каком ранге.
 MIN_COST_FACTOR = 0.5
+
+#: Чьи боевые умения занимают шесть слотов панели и разбираются у наставника.
+#: Умение ветки специализации - такое же умение класса, только пришедшее не с
+#: уровнем, а с выбором (ADR 0074); расовое стоит отдельно и своим слотом.
+_PANEL_OWNERS = frozenset({OwnerKind.CLASS, OwnerKind.SUBCLASS})
 
 
 def known_codes(character: Character) -> frozenset[str]:
@@ -56,15 +62,21 @@ def _class_pool(content: GameContent, character: Character, kind: SkillKind) -> 
 
 
 def teachable(content: GameContent, character: Character) -> tuple[Skill, ...]:
-    """Все умения класса персонажа, открытые его уровнем, изученные или нет.
+    """Всё, чему этого персонажа можно учить, изученное или нет.
 
-    Список устойчив: умение, однажды появившись, держит своё место, поэтому игрок
-    может запомнить «четвёртое» между заходами в игру.
+    Умения класса, открытые его уровнем, расовое - и умения взятых веток
+    специализации (ADR 0074): ветка даёт доступ, а ранг в нём стоит очка, как у
+    всякого другого умения.
+
+    Список устойчив: умение, однажды появившись, держит своё место, поэтому
+    игрок может запомнить «четвёртое» между заходами в игру. Умения веток
+    дописываются В КОНЕЦ и по возрастанию ступени - взятая ветка не должна
+    сдвигать то, что игрок уже выучил считать по номерам.
     """
     actives = _class_pool(content, character, SkillKind.ACTIVE)
     passives = _class_pool(content, character, SkillKind.PASSIVE)
     racial = content.racial_active(character.race_id)
-    return (*actives, *passives, racial)
+    return (*actives, *passives, racial, *subclass_rules.skills(content, character))
 
 
 def cost_to_learn(content: GameContent, character: Character, skill: Skill) -> int:
@@ -150,7 +162,7 @@ def forget(content: GameContent, character: Character, skill: Skill) -> Characte
     """
     if not is_known(character, skill.code):
         return None
-    if skill.owner_kind is not OwnerKind.CLASS or skill.code == character.loadout.racial:
+    if skill.owner_kind not in _PANEL_OWNERS or skill.code == character.loadout.racial:
         return None
     refund = spent_on(content, character, skill.code)
     ranks = {key: value for key, value in character.loadout.ranks.items() if key != skill.code}
@@ -165,14 +177,14 @@ def forget(content: GameContent, character: Character, skill: Skill) -> Characte
 def forgettable(content: GameContent, character: Character) -> tuple[Skill, ...]:
     """Что наставник действительно может разобрать - и вернуть за это очки.
 
-    Только умения класса: расовое не выбирали, очков за него не платили, и
-    забрать его не выйдет (см. ``forget``).
+    Умения класса и взятых веток: расовое не выбирали, очков за него не
+    платили, и забрать его не выйдет (см. ``forget``).
     """
     return tuple(
         content.skill(code)
         for code in sorted(known_codes(character))
         if content.has_skill(code)
-        and content.skill(code).owner_kind is OwnerKind.CLASS
+        and content.skill(code).owner_kind in _PANEL_OWNERS
         and code != character.loadout.racial
     )
 
@@ -222,7 +234,7 @@ def equippable(content: GameContent, character: Character) -> tuple[Skill, ...]:
         for code in sorted(known_codes(character))
         if content.has_skill(code)
         and content.skill(code).kind is SkillKind.ACTIVE
-        and content.skill(code).owner_kind is OwnerKind.CLASS
+        and content.skill(code).owner_kind in _PANEL_OWNERS
         and code not in in_panel
     )
 

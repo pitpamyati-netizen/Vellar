@@ -116,9 +116,7 @@ def a_character(
         arena_wins=3,
         arena_losses=1,
         arena_credit=120,
-        remorts=2,
-        legacy_ids=("ms_warrior_grip",),
-        subclass_ids=("warrior_vanguard",),
+        subclass_ids=("warrior_gladiator",),
         house_id="borderland",
         is_admin=True,
     )
@@ -299,10 +297,8 @@ async def test_a_character_survives_a_round_trip(pool, clean_user) -> None:
     assert (read.arena_wins, read.arena_losses, read.arena_credit) == (3, 1, 120)
     # Число имён, наследие и взятые ступени тоже хранятся: это выбор игрока,
     # а не производное (``Claude.md``, правило 8; ADR 0069, 0070).
-    assert read.remorts == 2
     assert read.house_id == "borderland"
-    assert read.legacy_ids == ("ms_warrior_grip",)
-    assert read.subclass_ids == ("warrior_vanguard",)
+    assert read.subclass_ids == ("warrior_gladiator",)
 
 
 async def test_saving_a_character_updates_every_column(pool, clean_user) -> None:
@@ -322,9 +318,7 @@ async def test_saving_a_character_updates_every_column(pool, clean_user) -> None
             quests=QuestLog(taken=MappingProxyType({"farhold_tallies": 3}), done=()),
             crafts=CraftLog(MappingProxyType({"smithing": CraftProgress(experience=40)})),
             arena_credit=60,
-            remorts=3,
-            legacy_ids=("ms_warrior_breach", "ms_warrior_footing"),
-            subclass_ids=("warrior_vanguard", "warrior_ironsworn"),
+            subclass_ids=("warrior_gladiator", "warrior_duelist"),
             house_id="stone",
             is_admin=True,
         )
@@ -340,10 +334,8 @@ async def test_saving_a_character_updates_every_column(pool, clean_user) -> None
     assert read.crafts.progress("smithing").experience == 40
     assert read.crafts.progress("mining").experience == 0, "the whole document is replaced"
     assert read.arena_credit == 60
-    assert read.remorts == 3
     assert read.house_id == "stone"
-    assert read.legacy_ids == ("ms_warrior_breach", "ms_warrior_footing")
-    assert read.subclass_ids == ("warrior_vanguard", "warrior_ironsworn")
+    assert read.subclass_ids == ("warrior_gladiator", "warrior_duelist")
 
 
 async def test_gold_is_spent_in_one_step_or_not_at_all(pool, clean_user) -> None:

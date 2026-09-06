@@ -80,7 +80,6 @@ KINDS: tuple[OverlayKind, ...] = (
     OverlayKind.TRAIT,
     OverlayKind.CRAFT,
     OverlayKind.RECIPE,
-    OverlayKind.TURNING,
     OverlayKind.META,
 )
 

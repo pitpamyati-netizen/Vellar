@@ -60,7 +60,6 @@ from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.handlers import creation as handlers_creation
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.screens import arena as arena_screens
-from mmorpg.presentation.telegram.screens import chamber as chamber_screens
 from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import combat as combat_screens
 from mmorpg.presentation.telegram.screens import crafts as craft_screens
@@ -288,19 +287,32 @@ def boss_fight(content: GameContent, fighter: Character) -> BattleState:
     return build_battle(content, fighter, (boss,))
 
 
+def _mid_trial(content: GameContent, fighter: Character) -> Character:
+    """Тот, кто взял первый шаг испытания и досчитал его до конца."""
+    one = content.subclass("warrior_gladiator")
+    first = one.trial_ids[0]
+    log = fighter.quests.take(first).advanced(first, 99)
+    return replace(fighter, level=40, quests=log)
+
+
+def _trial_done(content: GameContent, fighter: Character) -> Character:
+    """Тот, у кого испытание пройдено целиком и ветка ещё не взята."""
+    one = content.subclass("warrior_gladiator")
+    return replace(fighter, level=40, quests=QuestLog(done=one.trial_ids))
+
+
 @pytest.fixture(scope="session")
 def sealbearer(fighter: Character) -> Character:
-    """Тот, кто дошёл до конца и уже брал новое имя: одно имя за плечами.
+    """Тот, кто дошёл до конца полосы: сто пятидесятый уровень и полное дерево.
 
-    Титул «Вписанный», характеристики выше на своё, и одну веху он уже назвал
-    наследием следующего ухода (ADR 0070).
+    Три ветки за плечами - Гладиатор, Дуэлянт, Мастер клинка (ADR 0074), - и
+    вложено в силу столько, сколько на этой дороге и вкладывают.
     """
     return replace(
         fighter,
         level=150,
-        remorts=1,
         allocated=StatBlock(STR=300, END=120),
-        legacy_ids=("ms_warrior_grip",),
+        subclass_ids=("warrior_gladiator", "warrior_duelist", "warrior_blademaster"),
         equipment=Equipment(
             MappingProxyType({"trinket": "ring@12#legendary", "body": "heavy_body@12#legendary"})
         ),
@@ -670,7 +682,6 @@ def all_screens(
                 (OverlayKind.LOCATION, "quiet_meadows", 1),
                 (OverlayKind.ENEMY, "grey_wolf", 1),
                 (OverlayKind.CITY, "farhold", 1),
-                (OverlayKind.TURNING, "rebirth_1", 1),
                 (OverlayKind.CRAFT, "mining", 1),
             )
         ),
@@ -734,10 +745,7 @@ def all_screens(
                 overlay_rules.spec_of(kind, field_key),
                 PageState(),
             )
-            for kind, entity_id, field_key in (
-                (OverlayKind.TURNING, "rebirth_1", "text"),
-                (OverlayKind.CRAFT, "mining", "yields"),
-            )
+            for kind, entity_id, field_key in ((OverlayKind.CRAFT, "mining", "yields"),)
         ),
         keeper_screens.field_screen(
             edited,
@@ -1041,25 +1049,28 @@ def all_screens(
         tutorial_screens.tutorial_screen(replace(hero, tutorial=0b000111)),
         tutorial_screens.tutorial_screen(replace(hero, tutorial=0b111111)),
         _with_tutorial_hint(skill_screens.slots_screen(content, hero), ScreenId.SKILL_SLOTS, hero),
-        chamber_screens.chamber_screen(content, fighter),
-        chamber_screens.chamber_screen(content, sealbearer, notice="Новое имя взято."),
-        chamber_screens.remort_screen(content, sealbearer),
-        # Наследие: пусто у того, кому нечего нести, названо у прошедшего дорогу,
-        # и закрыто у того, кто взял все имена (ADR 0070).
-        chamber_screens.legacy_screen(content, fighter),
-        chamber_screens.legacy_screen(content, sealbearer),
-        chamber_screens.legacy_screen(content, replace(sealbearer, remorts=3)),
-        # Ступени специализации: пусто, открытая развилка, взятая первая и
-        # закрытая вторая (ADR 0069).
+        # Дерево специализации: пусто, открытая развилка, взятая первая ветка,
+        # закрытая вторая и пройденное дерево целиком (ADR 0074).
         subclass_screens.subclass_screen(content, hero),
         subclass_screens.subclass_screen(content, replace(fighter, level=40)),
         subclass_screens.subclass_screen(
-            content, replace(fighter, level=40, subclass_ids=("warrior_vanguard",))
+            content, replace(fighter, level=40, subclass_ids=("warrior_gladiator",))
         ),
         subclass_screens.subclass_screen(
             content,
-            replace(fighter, level=80, remorts=1, subclass_ids=("warrior_vanguard",)),
-            notice="Вы стали: Передовой.",
+            replace(fighter, level=80, subclass_ids=("warrior_gladiator",)),
+            notice="Вы стали: Гладиатор.",
+        ),
+        subclass_screens.subclass_screen(content, sealbearer),
+        # Испытание: не взято, взято и досчитано, пройдено целиком.
+        subclass_screens.trial_screen(
+            content, replace(fighter, level=40), content.subclass("warrior_gladiator")
+        ),
+        subclass_screens.trial_screen(
+            content, _mid_trial(content, fighter), content.subclass("warrior_gladiator")
+        ),
+        subclass_screens.trial_screen(
+            content, _trial_done(content, fighter), content.subclass("warrior_gladiator")
         ),
         house_screens.house_screen(content, fighter, content.city("farhold")),
         house_screens.house_screen(content, hero, content.city("farhold")),

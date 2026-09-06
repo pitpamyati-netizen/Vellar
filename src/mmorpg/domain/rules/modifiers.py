@@ -22,7 +22,6 @@ from mmorpg.domain.rules import milestones as milestone_rules
 from mmorpg.domain.rules import repair
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules import subclass as subclass_rules
-from mmorpg.domain.rules import turning as turning_rules
 from mmorpg.domain.rules.curves import softened
 
 STAT_MODIFIER_PREFIX = "stat_"
@@ -149,24 +148,12 @@ def scaling_modifiers(content: GameContent, character: Character) -> dict[str, f
     return {"healing_done_percent": round(healing, 2)} if healing else {}
 
 
-def legacy_modifiers(content: GameContent, character: Character) -> dict[str, float]:
-    """Вехи, унесённые через сброс (ADR 0070).
-
-    Та же черта и тот же словарь, что у вехи, взятой порогом, - и нарочно та же:
-    наследие не должно быть отдельной механикой, иначе игроку пришлось бы держать
-    в голове два разных списка прибавок. Сюда попадают только вехи, которые
-    сейчас **не** держатся своими характеристиками: иначе одна и та же вошла бы в
-    свёрток дважды.
-    """
-    return trait_modifiers(content, turning_rules.legacy_trait_ids(content, character))
-
-
 def subclass_modifiers(content: GameContent, character: Character) -> dict[str, float]:
-    """Что дают взятые ступени специализации (ADR 0069).
+    """Что дают взятые ветки специализации (ADR 0074).
 
-    Тот же пассивный свёрток, что у техники дома и расовой способности: подкласс
-    не добавляет ни кнопки, ни слота, и всё, что он обещает прибавкой, лежит в
-    общем словаре и проверяется по ``EFFECTIVE_KEYS``.
+    Тот же пассивный свёрток, что у техники дома и расовой способности: всё, что
+    ветка обещает прибавкой, лежит в общем словаре и проверяется по
+    ``EFFECTIVE_KEYS``. Умение ветки идёт другой дорогой - через панель.
     """
     return subclass_rules.modifiers(content, character)
 
@@ -259,7 +246,6 @@ def collect_modifiers(
         # Вехи характеристик - такие же черты, только выданные порогом, а не
         # выбором при создании (ADR 0068).
         milestone_modifiers(content, character),
-        legacy_modifiers(content, character),
         scaling_modifiers(content, character),
         subclass_modifiers(content, character),
         race_modifiers(content, character),

@@ -14,7 +14,7 @@
 | `skills.toml` | по 24 боевых (изучаемо 20) и 20 пассивных на класс, 1 боевое на расу |
 | `items.toml` | виды снаряжения, ступени, редкости, расходники, сырьё |
 | `crafts.toml` | собирающие и делающие ремёсла, рецепты, правила ранга и качества |
-| `turnings.toml` | вопросы Большого совета, открытый назван в `[meta].open` |
+| `subclasses.toml` | дерево специализации: 112 веток, их испытания и умения |
 | `houses.toml` | семь домов: два города каждый, техника дома свёртком прибавок |
 
 ## Общие правила
@@ -271,7 +271,7 @@ level_min = 140
 level_max = 150
 unlock_level = 140
 unlock_requires = ["city:last_beacon"]
-services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "forge", "arena", "house", "chamber"]
+services = ["shop", "locations", "dungeons", "tavern", "summary", "mentor", "bank", "forge", "arena", "house"]
 
 [[city.dungeon]]
 id = "shell_ways"

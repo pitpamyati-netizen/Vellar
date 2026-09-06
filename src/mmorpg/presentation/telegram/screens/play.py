@@ -244,7 +244,6 @@ CITY_SERVICES: tuple[tuple[str, Label], ...] = (
     ("shop", labels.SHOP),
     ("dungeons", labels.DUNGEONS),
     ("arena", labels.ARENA),
-    ("chamber", labels.CHAMBER),
     ("house", labels.HOUSE),
     ("tavern", labels.TAVERN),
     ("summary", labels.SUMMARY),

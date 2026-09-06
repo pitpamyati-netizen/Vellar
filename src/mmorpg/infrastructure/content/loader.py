@@ -12,7 +12,7 @@ from __future__ import annotations
 import itertools
 import tomllib
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, NamedTuple
@@ -25,7 +25,6 @@ from mmorpg.domain.entities.content import (
     ClassResource,
     Dungeon,
     EnemyAffix,
-    EnemyScaling,
     EquipSlot,
     GameContent,
     GearArchetype,
@@ -44,14 +43,13 @@ from mmorpg.domain.entities.content import (
     Race,
     RacePassive,
     Rarity,
-    Rebirth,
     Skill,
     SkillKind,
     SpecialProperty,
     StatMilestone,
     StatScaling,
     Subclass,
-    SubclassGate,
+    SubclassTrial,
     ToolType,
     Trait,
     WeaponType,
@@ -88,7 +86,6 @@ CONTENT_FILES = (
     "enemies.toml",
     "quests.toml",
     "crafts.toml",
-    "turnings.toml",
     "houses.toml",
 )
 
@@ -181,16 +178,18 @@ def load_content(content_dir: Path) -> GameContent:
         gear.gear_archetypes, gear.gear_tiers, gear.rarities
     )
     enemies, elite_titles, affixes = _parse_enemies(raw["enemies.toml"], item_ids, problems)
-    enemy_scaling = _parse_enemy_scaling(raw["enemies.toml"], problems)
     _validate_enemies(enemies, cities, problems)
-    quests = _parse_quests(
-        raw["quests.toml"], item_ids, cities, {enemy.id for enemy in enemies}, problems
-    )
+    enemy_ids = {enemy.id for enemy in enemies}
+    quests = _parse_quests(raw["quests.toml"], item_ids, cities, enemy_ids, problems)
     craft_rules = _build_craft_rules(raw["crafts.toml"], problems)
     crafts, recipes = _parse_crafts(raw["crafts.toml"], item_ids, craft_rules, problems)
-    rebirths, rebirth_titles = _parse_rebirths(raw["turnings.toml"], problems)
     houses = _parse_houses(raw["houses.toml"], problems)
     subclasses = _parse_subclasses(raw["subclasses.toml"], modifier_keys, classes, problems)
+    # Испытание ветки - это обычные задания движка (ADR 0074): те же счётчики,
+    # тот же журнал, та же сдача. Города у них нет, поэтому городская доска их
+    # не покажет никогда, а разворачиваются они здесь - рядом с прочими.
+    subclasses, trials = _expand_trials(subclasses, item_ids, enemy_ids, problems)
+    quests = (*quests, *trials)
     loot_rules, requirements, class_affixes = _parse_loot(
         raw["item_generator.toml"], modifier_keys, gear, classes, problems
     )
@@ -205,8 +204,7 @@ def load_content(content_dir: Path) -> GameContent:
     _validate_crafts(crafts, recipes, problems)
     _validate_tools(crafts, gear, problems)
     _validate_quest_rewards(quests, gear, problems)
-    _validate_subclasses(subclasses, classes, problems)
-    _validate_rebirth_unlocks(rebirths, subclasses, problems)
+    _validate_subclasses(subclasses, classes, skills, problems)
 
     parts: dict[str, Any] = {
         "races": races,
@@ -234,12 +232,9 @@ def load_content(content_dir: Path) -> GameContent:
         "granted_trait_categories": granted_categories,
         "inverted_modifiers": inverted_modifiers,
         "rules": rules,
-        "rebirths": rebirths,
-        "rebirth_titles": rebirth_titles,
         "houses": houses,
         "subclasses": subclasses,
         "loot_rules": loot_rules,
-        "enemy_scaling": enemy_scaling,
         "gear_requirements": requirements,
         "class_affixes": class_affixes,
     }
@@ -707,26 +702,6 @@ def _parse_milestones(
     return tuple(parsed)
 
 
-def _parse_enemy_scaling(raw: Mapping[str, Any], problems: list[str]) -> EnemyScaling:
-    """Насколько порода крепчает за каждое взятое имя (ADR 0072).
-
-    Ответ мира на прибавку за уход обязан быть МЕНЬШЕ самой прибавки: иначе уход
-    ничего не даёт, а игрок платит за него полутора сотнями уровней.
-    """
-    meta = raw.get("meta", {})
-    scaling = EnemyScaling(
-        health_per_rebirth=float(meta.get("hp_multiplier_per_rebirth", 0.0)),
-        damage_per_rebirth=float(meta.get("damage_multiplier_per_rebirth", 0.0)),
-    )
-    for name, value in (
-        ("hp_multiplier_per_rebirth", scaling.health_per_rebirth),
-        ("damage_multiplier_per_rebirth", scaling.damage_per_rebirth),
-    ):
-        if value < 0.0:
-            problems.append(f"enemies.toml: [meta].{name} cannot be negative")
-    return scaling
-
-
 def _parse_loot(
     raw: Mapping[str, Any],
     modifier_keys: frozenset[str],
@@ -833,11 +808,11 @@ def _parse_subclasses(
     classes: Sequence[CharacterClass],
     problems: list[str],
 ) -> tuple[Subclass, ...]:
-    """Ступени специализации (ADR 0069).
+    """Дерево специализации (ADR 0074).
 
-    Подкласс не заводит ни кнопок, ни слотов, поэтому проверять у него нужно
-    ровно то же, что у техники дома: чтобы прибавка была настоящей, а сетка
-    правила существующие характеристики.
+    У ветки проверяется то же, что у техники дома, - чтобы прибавка была
+    настоящей, а сетка правила существующие характеристики, - плюс то, чего у
+    техники дома нет: из какой ветки она растёт и чем оплачен вход.
     """
     known_classes = {klass.id for klass in classes}
     parsed: list[Subclass] = []
@@ -860,7 +835,7 @@ def _parse_subclasses(
         if unknown:
             problems.append(f"subclasses.toml: {subclass_id} promises unknown keys {unknown}")
         scaling = _parse_subclass_scaling(subclass_id, entry.get("scaling", {}), problems)
-        gate = _parse_subclass_gate(subclass_id, entry.get("gate", {}), problems)
+        trial = _parse_subclass_trial(subclass_id, entry.get("trial", ()), problems)
         try:
             tier = int(entry["tier"])
             name = str(entry["name"])
@@ -876,7 +851,10 @@ def _parse_subclasses(
                 role=str(entry.get("role", "")),
                 text=str(entry.get("text", "")),
                 lore=str(entry.get("lore", "")),
-                gate=gate,
+                parent=str(entry.get("parent", "")),
+                level=int(entry.get("level", 1)),
+                skill_code=str(entry.get("skill", "")),
+                trial=trial,
                 modifiers=modifiers,
                 scaling=scaling,
             )
@@ -890,7 +868,7 @@ def _parse_subclass_scaling(
     """Правка классовой сетки. Названная характеристика заменяется целиком.
 
     В отличие от сетки класса, здесь называют не все семь, а только те, что
-    меняются: подкласс договаривает класс, а не переписывает его с нуля.
+    меняются: ветка договаривает класс, а не переписывает его с нуля.
     """
     parsed: dict[StatCode, StatScaling] = {}
     for code_name, values in raw.items():
@@ -909,53 +887,224 @@ def _parse_subclass_scaling(
     return parsed
 
 
-def _parse_subclass_gate(
-    subclass_id: str, raw: Mapping[str, Any], problems: list[str]
-) -> SubclassGate:
-    """Чем оплачен вход: уровень, уходы и пороги характеристик."""
-    stats: dict[StatCode, int] = {}
-    for code_name, threshold in raw.get("stats", {}).items():
-        try:
-            stats[StatCode(code_name)] = int(threshold)
-        except ValueError:
-            problems.append(f"subclasses.toml: {subclass_id} gates on unknown stat {code_name!r}")
-    return SubclassGate(
-        level=int(raw.get("level", 1)),
-        remorts=int(raw.get("remorts", 0)),
-        stats=stats,
-    )
+def _parse_subclass_trial(
+    subclass_id: str, raw: Sequence[Any], problems: list[str]
+) -> tuple[SubclassTrial, ...]:
+    """Шаги испытания, по порядку. Проверяются как обычные задания."""
+    known_objectives = {kind.value for kind in ObjectiveKind}
+    steps: list[SubclassTrial] = []
+    for entry in raw:
+        objective = str(entry.get("objective", ""))
+        if objective not in known_objectives:
+            problems.append(
+                f"subclasses.toml: {subclass_id} trial has unknown objective {objective!r}"
+            )
+            continue
+        count = int(entry.get("count", 0))
+        if count < 1:
+            problems.append(f"subclasses.toml: {subclass_id} trial counts to less than one")
+            continue
+        steps.append(
+            SubclassTrial(
+                name=str(entry.get("name", "")),
+                objective=objective,
+                target_count=count,
+                target_kind=str(entry.get("target_kind", "")),
+                text=str(entry.get("text", "")),
+            )
+        )
+    return tuple(steps)
 
 
-#: Сколько ступеней специализации несёт каждый класс. Восемь классов и три
-#: ступени: класс, у которого их меньше, - это класс, чей игрок на тридцатом
-#: уровне не получит ничего, а сосед получит.
-SUBCLASS_TIERS = (0, 1, 3)
+#: Сколько заданий в испытании ветки. Три: одно - это поручение, два - пара
+#: поручений, а цепочка начинается с трёх (ADR 0074).
+TRIAL_STEPS = 3
+
+#: Кто выдаёт испытание. У наставника нет ни города, ни имени: испытание
+#: принадлежит ветке, а не заставе, и берут его на экране ступени.
+TRIAL_GIVER = "Наставник"
+
+
+def _expand_trials(
+    subclasses: Sequence[Subclass],
+    item_ids: set[str],
+    enemy_ids: set[str],
+    problems: list[str],
+) -> tuple[tuple[Subclass, ...], tuple[Quest, ...]]:
+    """Развернуть испытания в обычные задания и сшить их цепочкой (ADR 0074).
+
+    Задание испытания - настоящее задание: тот же счётчик, тот же журнал, та же
+    сдача. Города у него нет, поэтому городская доска его не покажет никогда, -
+    его выдаёт наставник на экране ступени.
+
+    Платит испытание веткой, а не золотом: ``reward_gold`` и ``reward_experience``
+    у шагов нулевые нарочно. Плата за дорогу названа в конце дороги.
+    """
+    enemy_kinds = {kind.value for kind in EnemyKind}
+    grown: list[Subclass] = []
+    quests: list[Quest] = []
+    for one in subclasses:
+        if len(one.trial) != TRIAL_STEPS:
+            problems.append(
+                f"subclasses.toml: {one.id} has {len(one.trial)} trial steps, "
+                f"expected {TRIAL_STEPS}"
+            )
+        ids: list[str] = []
+        previous = ""
+        for number, step in enumerate(one.trial, start=1):
+            objective = ObjectiveKind(step.objective)
+            if step.target_kind and not _trial_target_known(
+                objective, step.target_kind, item_ids, enemy_ids, enemy_kinds
+            ):
+                problems.append(
+                    f"subclasses.toml: {one.id} trial narrows to unknown "
+                    f"target {step.target_kind!r}"
+                )
+            quest_id = f"{one.id}_trial_{number}"
+            quests.append(
+                Quest(
+                    id=quest_id,
+                    city_id="",
+                    level=one.level,
+                    name=step.name,
+                    giver=TRIAL_GIVER,
+                    intro="",
+                    terms=step.text,
+                    objective=objective,
+                    target_count=step.target_count,
+                    target_kind=step.target_kind,
+                    follows=previous,
+                    trial_for=one.id,
+                )
+            )
+            ids.append(quest_id)
+            previous = quest_id
+        grown.append(replace(one, trial_ids=tuple(ids)))
+    return tuple(grown), tuple(quests)
+
+
+def _trial_target_known(
+    objective: ObjectiveKind,
+    target: str,
+    item_ids: set[str],
+    enemy_ids: set[str],
+    enemy_kinds: set[str],
+) -> bool:
+    """Есть ли в игре то, что просит шаг испытания."""
+    match objective:
+        case ObjectiveKind.SEARCH:
+            return target in SEARCHABLE_NODES
+        case ObjectiveKind.CRAFT:
+            return target in item_ids
+        case _:
+            return target in enemy_kinds or target in enemy_ids
+
+
+#: Ступени дерева и уровни, на которых их берут (ADR 0074). Класс, у которого
+#: ступени нет, - это класс, чей игрок на тридцатом уровне не получит ничего, а
+#: сосед получит.
+SUBCLASS_TIERS: Mapping[int, int] = MappingProxyType({1: 30, 2: 75, 3: 150})
+
+#: Сколько веток растёт из каждой. Развилка с одной веткой - это коридор с
+#: надписью: игроку показывают выбор, которого нет.
+BRANCHES_PER_NODE = 2
 
 
 def _validate_subclasses(
-    subclasses: Sequence[Subclass], classes: Sequence[CharacterClass], problems: list[str]
+    subclasses: Sequence[Subclass],
+    classes: Sequence[CharacterClass],
+    skills: Sequence[Skill],
+    problems: list[str],
 ) -> None:
-    """У каждого класса каждая ступень, и на каждой есть из чего выбирать.
+    """Дерево должно быть деревом: у каждой ветки родитель, у каждой развилки - две.
 
-    Ступень с одним подклассом - это не развилка, а коридор с надписью: игроку
-    показывают выбор, которого нет.
+    Проверяется целиком, а не по записи: половина ошибок дерева видна только
+    вместе - сирота, тупик, ветка не своего класса, развилка из одной.
     """
-    for klass in classes:
-        for tier in SUBCLASS_TIERS:
-            here = [one for one in subclasses if one.class_id == klass.id and one.tier == tier]
-            if not here:
-                problems.append(f"subclasses.toml: {klass.id} has no tier {tier}")
-            elif tier == 0 and len(here) < 2:
-                problems.append(f"subclasses.toml: {klass.id} tier 0 is a corridor, not a fork")
+    by_id = {one.id: one for one in subclasses}
+    codes = {skill.code: skill for skill in skills}
     for one in subclasses:
         if one.tier not in SUBCLASS_TIERS:
             problems.append(f"subclasses.toml: {one.id} stands on unknown tier {one.tier}")
+            continue
+        if one.level != SUBCLASS_TIERS[one.tier]:
+            problems.append(
+                f"subclasses.toml: {one.id} is tier {one.tier} but asks for level {one.level}"
+            )
         if not one.text:
             problems.append(f"subclasses.toml: {one.id} says nothing about what it does")
         if not one.modifiers and not one.scaling:
-            # Ступень без прибавок и без правки сетки - это выбор, который ничего
-            # не меняет, и худшая из возможных кнопок (``Claude.md``, правило 9).
             problems.append(f"subclasses.toml: {one.id} changes nothing")
+        _check_subclass_parent(one, by_id, problems)
+        _check_subclass_skill(one, codes, problems)
+
+    first = min(SUBCLASS_TIERS)
+    last = max(SUBCLASS_TIERS)
+    for klass in classes:
+        here = [one for one in subclasses if one.class_id == klass.id]
+        roots = [one for one in here if not one.parent]
+        if len(roots) != BRANCHES_PER_NODE:
+            problems.append(
+                f"subclasses.toml: {klass.id} has {len(roots)} first branches, "
+                f"expected {BRANCHES_PER_NODE}"
+            )
+        for one in here:
+            if one.tier == last:
+                continue
+            children = [other for other in here if other.parent == one.id]
+            if len(children) != BRANCHES_PER_NODE:
+                problems.append(
+                    f"subclasses.toml: {one.id} branches into {len(children)}, "
+                    f"expected {BRANCHES_PER_NODE}"
+                )
+        if not any(one.tier == first for one in roots):
+            problems.append(f"subclasses.toml: {klass.id} has no tier {first}")
+
+
+def _check_subclass_parent(
+    one: Subclass, by_id: Mapping[str, Subclass], problems: list[str]
+) -> None:
+    """Из чего эта ветка растёт: корень - только на первой ступени, и не иначе."""
+    first = min(SUBCLASS_TIERS)
+    if not one.parent:
+        if one.tier != first:
+            problems.append(f"subclasses.toml: {one.id} is tier {one.tier} and grows from nothing")
+        return
+    if one.tier == first:
+        problems.append(f"subclasses.toml: {one.id} is a first branch and needs no parent")
+        return
+    parent = by_id.get(one.parent)
+    if parent is None:
+        problems.append(f"subclasses.toml: {one.id} grows from unknown {one.parent!r}")
+        return
+    if parent.class_id != one.class_id:
+        problems.append(f"subclasses.toml: {one.id} grows from another class")
+    if parent.tier != one.tier - 1:
+        problems.append(f"subclasses.toml: {one.id} skips a tier over {one.parent}")
+
+
+def _check_subclass_skill(one: Subclass, codes: Mapping[str, Skill], problems: list[str]) -> None:
+    """Ветка обязана чему-то учить, и учить своим умением (ADR 0074).
+
+    Ветка без умения - это опять одни числа, ради которых решение и переделывали.
+    """
+    if not one.skill_code:
+        problems.append(f"subclasses.toml: {one.id} teaches nothing")
+        return
+    skill = codes.get(one.skill_code)
+    if skill is None:
+        problems.append(f"subclasses.toml: {one.id} teaches unknown skill {one.skill_code!r}")
+        return
+    if skill.owner != f"{OwnerKind.SUBCLASS.value}:{one.id}":
+        problems.append(
+            f"skills.toml: {skill.code} is taught by {one.id} but owned by {skill.owner}"
+        )
+    if skill.kind is not SkillKind.ACTIVE:
+        problems.append(f"skills.toml: {skill.code} is a branch skill and must be active")
+    if skill.level != one.level:
+        problems.append(
+            f"skills.toml: {skill.code} opens at {skill.level}, but {one.id} comes at {one.level}"
+        )
 
 
 def _validate_skill_weapons(
@@ -1635,92 +1784,6 @@ def _parse_affixes(raw: Mapping[str, Any], problems: list[str]) -> tuple[EnemyAf
             f"enemies.toml: нужно хотя бы {MINIMUM_AFFIXES} прозвищ, а объявлено {len(parsed)}"
         )
     return tuple(parsed)
-
-
-def _parse_rebirths(
-    raw: Mapping[str, Any], problems: list[str]
-) -> tuple[tuple[Rebirth, ...], tuple[str, ...]]:
-    """Ступени нового имени и титулы за них (ADR 0070).
-
-    Ступень, которая ничего не прибавляет, - это кнопка, стирающая полторы сотни
-    уровней даром, поэтому прибавка к характеристикам требуется. Номера идут
-    подряд с единицы: пропуск означал бы ступень, до которой нельзя дойти.
-    """
-    parsed: list[Rebirth] = []
-    for entry in raw.get("rebirth", ()):
-        rebirth_id = str(entry.get("id", ""))
-        if not rebirth_id:
-            problems.append("turnings.toml: an entry has no id")
-            continue
-        try:
-            rank = int(entry["rank"])
-            level = int(entry["level"])
-        except (KeyError, ValueError) as error:
-            problems.append(f"turnings.toml: {rebirth_id}: {error}")
-            continue
-        bonus = float(entry.get("stat_bonus", 0.0))
-        if bonus <= 0:
-            problems.append(f"turnings.toml: {rebirth_id} costs a whole band and gives nothing")
-        if not entry.get("text"):
-            problems.append(f"turnings.toml: {rebirth_id} says nothing about what it does")
-        parsed.append(
-            Rebirth(
-                id=rebirth_id,
-                rank=rank,
-                name=str(entry.get("name", rebirth_id)),
-                level=level,
-                stat_bonus=bonus,
-                legacy_slots=int(entry.get("legacy_slots", 0)),
-                stat_points=int(entry.get("stat_points", 0)),
-                text=str(entry.get("text", "")),
-                lore=str(entry.get("lore", "")),
-                unlocks=tuple(str(one) for one in entry.get("unlocks", ())),
-            )
-        )
-    _check_unique((one.id for one in parsed), "turnings.toml", problems)
-
-    ranks = sorted(one.rank for one in parsed)
-    if ranks and ranks != list(range(1, len(ranks) + 1)):
-        problems.append(f"turnings.toml: ranks {ranks} skip a step")
-    ordered = sorted(parsed, key=lambda one: one.rank)
-    for earlier, later in itertools.pairwise(ordered):
-        if later.level <= earlier.level:
-            problems.append(f"turnings.toml: {later.id} is not asked later than {earlier.id}")
-        if later.stat_bonus <= earlier.stat_bonus:
-            problems.append(f"turnings.toml: {later.id} is not worth more than {earlier.id}")
-
-    titles = tuple(str(one) for one in raw.get("meta", {}).get("titles", ()))
-    if len(titles) < len(parsed):
-        problems.append("turnings.toml: [meta].titles names fewer titles than there are steps")
-    return tuple(ordered), titles
-
-
-def _validate_rebirth_unlocks(
-    rebirths: Sequence[Rebirth], subclasses: Sequence[Subclass], problems: list[str]
-) -> None:
-    """Список открываемого обязан совпадать с тем, что написано у подклассов.
-
-    ``unlocks`` повторяет ``gate.remorts`` нарочно - чтобы игрок прочитал цену
-    вместе с покупкой, - и ровно поэтому обязан быть сверен: два места, которые
-    говорят об одном и расходятся, хуже одного, которое молчит.
-    """
-    by_id = {one.id: one for one in subclasses}
-    for step in rebirths:
-        for subclass_id in step.unlocks:
-            one = by_id.get(subclass_id)
-            if one is None:
-                problems.append(
-                    f"turnings.toml: {step.id} unlocks unknown subclass {subclass_id!r}"
-                )
-            elif one.gate.remorts != step.rank:
-                problems.append(
-                    f"turnings.toml: {step.id} claims {subclass_id}, "
-                    f"which asks for {one.gate.remorts} rebirths"
-                )
-        promised = {one.id for one in subclasses if one.gate.remorts == step.rank}
-        missed = sorted(promised - set(step.unlocks))
-        if missed:
-            problems.append(f"turnings.toml: {step.id} forgets to name {missed}")
 
 
 def _parse_quests(

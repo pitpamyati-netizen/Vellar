@@ -65,11 +65,9 @@ class Play(StatesGroup):
     dungeon = State()
     dungeon_pick = State()
     arena = State()
-    chamber = State()
-    chamber_remort = State()
-    legacy = State()
     house = State()
     subclass = State()
+    subclass_trial = State()
     npcs = State()
     npc = State()
     party = State()
@@ -164,11 +162,9 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.DUNGEON: Play.dungeon,
     ScreenId.DUNGEON_PICK: Play.dungeon_pick,
     ScreenId.ARENA: Play.arena,
-    ScreenId.CHAMBER: Play.chamber,
-    ScreenId.CHAMBER_REMORT: Play.chamber_remort,
-    ScreenId.LEGACY: Play.legacy,
     ScreenId.HOUSE: Play.house,
     ScreenId.SUBCLASS: Play.subclass,
+    ScreenId.SUBCLASS_TRIAL: Play.subclass_trial,
     ScreenId.NPCS: Play.npcs,
     ScreenId.NPC: Play.npc,
     ScreenId.PARTY: Play.party,
@@ -263,13 +259,11 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.DUNGEON: ScreenId.CITY,
     ScreenId.DUNGEON_PICK: ScreenId.DUNGEON,
     ScreenId.ARENA: ScreenId.CITY,
-    ScreenId.CHAMBER: ScreenId.CITY,
-    ScreenId.CHAMBER_REMORT: ScreenId.CHAMBER,
-    ScreenId.LEGACY: ScreenId.CHAMBER,
     ScreenId.HOUSE: ScreenId.CITY,
     # Ступень открывают с экрана характеристик: подкласс переписывает сетку, и
     # смотреть на него отдельно от характеристик незачем (ADR 0069).
     ScreenId.SUBCLASS: ScreenId.STATS,
+    ScreenId.SUBCLASS_TRIAL: ScreenId.SUBCLASS,
     ScreenId.NPCS: ScreenId.CITY,
     ScreenId.NPC: ScreenId.NPCS,
     ScreenId.PARTY: ScreenId.MAIN_MENU,

@@ -324,6 +324,10 @@ def test_a_search_quest_target_is_stocked_in_its_location(content: GameContent) 
     for quest in content.quests:
         if quest.objective is not ObjectiveKind.SEARCH or not quest.target_kind:
             continue
+        # Испытание ветки не привязано ни к городу, ни к локации (ADR 0074):
+        # его считают по всей дороге, и проверять здесь у него нечего.
+        if quest.is_trial:
+            continue
         city = content.city(quest.city_id)
         loc = city.location(quest.location_slot)
         for epoch in (0, 1, 2, 5, 11):

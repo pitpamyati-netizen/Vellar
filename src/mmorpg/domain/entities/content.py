@@ -34,6 +34,9 @@ class SkillKind(StrEnum):
 class OwnerKind(StrEnum):
     CLASS = "class"
     RACE = "race"
+    #: Умение ветки специализации (ADR 0074). Приходит не с уровнем, а с
+    #: выбранным подклассом, и ранг в нём стоит очка, как у всякого другого.
+    SUBCLASS = "subclass"
 
 
 class ItemKind(StrEnum):
@@ -221,42 +224,48 @@ class StatMilestone:
 
 
 @dataclass(frozen=True, slots=True)
-class SubclassGate:
-    """Чем оплачен вход в подкласс (ADR 0069).
+class SubclassTrial:
+    """Один шаг испытания ветки (ADR 0074).
 
-    ``level``   уровень, ниже которого подкласса не берут;
-    ``remorts`` сколько уходов под новое имя должно быть за плечами;
-    ``stats``   пороги характеристик - те же вложенные очки, что считает веха.
-
-    Три условия, и они складываются: ступень берут, когда выполнены все. Гибрид
-    второй ступени тем и гибрид, что просит две характеристики сразу, а не одну
-    повыше.
+    Испытание - это цепочка обычных заданий, и шаг описывает одно из них: что
+    считается и сколько. Загрузчик разворачивает шаги в настоящие ``Quest`` со
+    сцепкой ``follows``, поэтому счётчики, журнал и сдача у ветки те же самые,
+    что у работы с городской доски.
     """
 
-    level: int = 1
-    remorts: int = 0
-    stats: Mapping[StatCode, int] = field(default_factory=dict)
+    name: str
+    objective: str
+    target_count: int
+    target_kind: str = ""
+    text: str = ""
 
 
 @dataclass(frozen=True, slots=True)
 class Subclass:
-    """Ступень специализации класса (ADR 0069).
+    """Ветка дерева специализации (ADR 0074).
 
-    Подкласс НЕ ДАЁТ НИ ОДНОЙ НОВОЙ КНОПКИ. Панель остаётся шесть боевых плюс
-    один расовый, экранов не прибавляется. Всё, что подкласс делает, - это две
-    вещи, и обе уже умеет считать движок:
+    Класс - корень, и дерево ветвится трижды: на тридцатом уровне, на семьдесят
+    пятом и на сто пятидесятом, каждый раз надвое. Псионик приходит из
+    Оккультиста и ниоткуда больше, и потому «кем я стал» читается дорогой, а не
+    списком.
 
-    ``modifiers`` пассивный свёрток прибавок, как техника дома и расовая
-                  способность. Ключи проверяются по ``EFFECTIVE_KEYS``: прибавка,
-                  которой никто не считает, - обещание, а не механика (ADR 0018).
-    ``scaling``   правка классовой сетки (ADR 0068). Названная характеристика
-                  получает новый выход **вместо** классового, неназванная
-                  остаётся как была. Берсерк переписывает силу и броню, и
-                  берсерком его делает именно это, а не строка в описании.
+    ``parent``     из какой ветки эта растёт. Пусто - первая ступень;
+    ``level``      с какого уровня ветку берут. Порогов характеристик нет вовсе:
+                   на «сколько ты вложил» отвечают вехи (ADR 0068), а ветка
+                   отвечает на «кем ты захотел стать»;
+    ``trial``      цепочка заданий, которой оплачен вход;
+    ``trial_ids``  во что она развёрнута загрузчиком, по порядку;
+    ``skill_code`` боевое умение ветки (``owner = "subclass:<id>"``). Взяв ветку,
+                   игрок получает его в список изучаемых: ранг стоит очка, место
+                   в панели - наравне со всеми (ADR 0067);
+    ``modifiers``  пассивный свёрток прибавок, как техника дома. Ключи
+                   проверяются по ``EFFECTIVE_KEYS`` (ADR 0018);
+    ``scaling``    правка классовой сетки (ADR 0068): названная характеристика
+                   получает новый выход вместо классового, неназванная остаётся
+                   как была.
 
-    ``tier`` - ступень, а не порядковый номер: на каждой ступени берут ровно один
-    подкласс, и взятые ступени **складываются**. Дредноут на сто пятидесятом -
-    это берсерк, ставший гибридом, ставший дредноутом, а не кто-то третий.
+    Взятые ветки СКЛАДЫВАЮТСЯ: Иллюзионист - это Оккультист, ставший Псиоником,
+    ставший Иллюзионистом, а не кто-то третий.
     """
 
     id: str
@@ -266,7 +275,11 @@ class Subclass:
     role: str
     text: str
     lore: str = ""
-    gate: SubclassGate = field(default_factory=SubclassGate)
+    parent: str = ""
+    level: int = 1
+    skill_code: str = ""
+    trial: tuple[SubclassTrial, ...] = ()
+    trial_ids: tuple[str, ...] = ()
     modifiers: Mapping[str, float] = field(default_factory=dict)
     scaling: Mapping[StatCode, StatScaling] = field(default_factory=dict)
 
@@ -503,32 +516,6 @@ class SpecialProperty:
 
 
 @dataclass(frozen=True, slots=True)
-class EnemyScaling:
-    """Насколько порода крепчает за каждое взятое имя (ADR 0072).
-
-    Уход платит процентом ко всем характеристикам навсегда (ADR 0070), и без
-    ответа мира второй проход по полосе шёл бы по тем же противникам человеком,
-    который стал в полтора раза больше. Порода отвечает - но отвечает МЕНЬШЕ, чем
-    прибавка: перерождённый обязан остаться сильнее себя прежнего, иначе уход
-    ничего не даёт и брать его незачем.
-
-    ПЛАТА НЕ РАСТЁТ. Ни золото, ни опыт: содержимое, подстроившееся под игрока,
-    не платит как свежий вызов (ADR 0019). Крепчает только то, что стоит ходов.
-    """
-
-    health_per_rebirth: float = 0.0
-    damage_per_rebirth: float = 0.0
-
-    def hardening(self, remorts: int) -> tuple[float, float]:
-        """Во сколько раз крепче здоровье и злее удар у породы против этого героя."""
-        taken = max(0, remorts)
-        return (
-            1.0 + self.health_per_rebirth * taken,
-            1.0 + self.damage_per_rebirth * taken,
-        )
-
-
-@dataclass(frozen=True, slots=True)
 class GearRequirement:
     """Чего род снаряжения просит от того, кто его надел (ADR 0071).
 
@@ -701,44 +688,6 @@ class Npc:
     def title(self) -> str:
         """Как его называют одной строкой: имя и занятие, если оно названо."""
         return f"{self.name}, {self.role}" if self.role else self.name
-
-
-@dataclass(frozen=True, slots=True)
-class Rebirth:
-    """Одна ступень нового имени (ADR 0070).
-
-    Уровень кончается трижды - на семьдесят пятом, на сотом и на сто пятидесятом,
-    - и каждый раз приключенец идёт в управу и просит у Престола новое имя.
-    Уровень падает до первого, розданные очки возвращаются нерозданными, и дорога
-    начинается заново - но каждый раз с человеком, который стал больше.
-
-    ``level``        с какого уровня эту ступень просят;
-    ``stat_bonus``   на сколько процентов выше становятся все характеристики -
-                     навсегда и поверх всего прочего;
-    ``legacy_slots`` сколько вех разрешено унести с собой через сброс;
-    ``stat_points``  сколько нераспределённых очков даётся сверх положенных
-                     первому уровню;
-    ``unlocks``      какие ступени специализации открывает этот уход. Список
-                     ПОВТОРЯЕТ то, что и так написано у подклассов (``gate.remorts``),
-                     и держится ровно затем, чтобы игрок прочитал его до ухода;
-                     загрузчик сверяет оба места и не даёт им разойтись.
-
-    Прибавка ступени не складывается с прибавкой предыдущей: у второго ухода
-    написано, каким ты стал после второго, а не насколько вырос со сравнения с
-    первым. Складывать проценты значило бы, что число на экране нельзя проверить,
-    не помня всей дороги.
-    """
-
-    id: str
-    rank: int
-    name: str
-    level: int
-    stat_bonus: float = 0.0
-    legacy_slots: int = 0
-    stat_points: int = 0
-    text: str = ""
-    lore: str = ""
-    unlocks: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -969,14 +918,10 @@ class GameContent:
     inverted_modifiers: frozenset[str]
     rules: ProgressionRules
     npcs: tuple[Npc, ...]
-    rebirths: tuple[Rebirth, ...]
     #: Опорные числа находки и то, чего просит род снаряжения (ADR 0071).
     loot_rules: LootRules
-    enemy_scaling: EnemyScaling
     gear_requirements: tuple[GearRequirement, ...]
     class_affixes: tuple[ClassAffix, ...]
-    #: Титулы за уходы, по порядку (``turnings.toml [meta].titles``).
-    rebirth_titles: tuple[str, ...]
     houses: tuple[House, ...]
     #: Ступени специализации классов (ADR 0069). Пусто - подклассов в игре нет,
     #: и экран их не предлагает: содержимое переживает код.
@@ -1000,7 +945,6 @@ class GameContent:
     _crafts_by_id: Mapping[str, Craft]
     _recipes_by_id: Mapping[str, Recipe]
     _npcs_by_id: Mapping[str, Npc]
-    _rebirths_by_id: Mapping[str, Rebirth]
     _requirements_by_kind: Mapping[str, GearRequirement]
     _class_affixes_by_id: Mapping[str, ClassAffix]
     _class_kinds: Mapping[str, tuple[str, ...]]
@@ -1051,10 +995,7 @@ class GameContent:
         crafts: Sequence[Craft] = (),
         recipes: Sequence[Recipe] = (),
         npcs: Sequence[Npc] = (),
-        rebirths: Sequence[Rebirth] = (),
-        rebirth_titles: Sequence[str] = (),
         loot_rules: LootRules | None = None,
-        enemy_scaling: EnemyScaling | None = None,
         gear_requirements: Sequence[GearRequirement] = (),
         class_affixes: Sequence[ClassAffix] = (),
         houses: Sequence[House] = (),
@@ -1094,10 +1035,7 @@ class GameContent:
             inverted_modifiers=inverted_modifiers,
             rules=rules,
             npcs=tuple(npcs),
-            rebirths=tuple(rebirths),
-            rebirth_titles=tuple(rebirth_titles),
             loot_rules=loot_rules or LootRules(),
-            enemy_scaling=enemy_scaling or EnemyScaling(),
             gear_requirements=tuple(gear_requirements),
             class_affixes=tuple(class_affixes),
             _requirements_by_kind=MappingProxyType({one.kind: one for one in gear_requirements}),
@@ -1127,7 +1065,6 @@ class GameContent:
             _crafts_by_id=MappingProxyType({craft.id: craft for craft in crafts}),
             _recipes_by_id=MappingProxyType({recipe.id: recipe for recipe in recipes}),
             _npcs_by_id=MappingProxyType({npc.id: npc for npc in npcs}),
-            _rebirths_by_id=MappingProxyType({one.id: one for one in rebirths}),
             _houses_by_id=MappingProxyType({house.id: house for house in houses}),
             _subclasses_by_id=MappingProxyType({one.id: one for one in subclasses}),
             _house_by_city=MappingProxyType(
@@ -1309,28 +1246,6 @@ class GameContent:
             if one.min_item_level <= level and wanted & set(self._class_kinds.get(one.class_id, ()))
         )
 
-    def rebirth(self, rebirth_id: str) -> Rebirth:
-        return self._rebirths_by_id[rebirth_id]
-
-    def has_rebirth(self, rebirth_id: str) -> bool:
-        return rebirth_id in self._rebirths_by_id
-
-    def rebirth_at(self, rank: int) -> Rebirth | None:
-        """Ступень нового имени с этим номером, или ``None``.
-
-        Содержимое переживает персонажа (``Claude.md``, правило 8): игрок,
-        уходивший больше раз, чем ступеней осталось в файлах, не роняет экран -
-        ему просто нечего брать дальше.
-        """
-        for one in self.rebirths:
-            if one.rank == rank:
-                return one
-        return None
-
-    def last_rebirth(self) -> int:
-        """Номер последней объявленной ступени. Ноль - ступеней нет вовсе."""
-        return max((one.rank for one in self.rebirths), default=0)
-
     # --- дома ------------------------------------------------------------
 
     def house(self, house_id: str) -> House:
@@ -1356,6 +1271,18 @@ class GameContent:
     def subclass_tiers(self, class_id: str) -> tuple[int, ...]:
         """Ступени, объявленные у этого класса, по возрастанию."""
         return tuple(sorted({one.tier for one in self.subclasses_of(class_id)}))
+
+    def subclass_roots(self, class_id: str) -> tuple[Subclass, ...]:
+        """Первая развилка класса: ветки, которые ни из чего не растут."""
+        return tuple(one for one in self.subclasses_of(class_id) if not one.parent)
+
+    def subclass_children(self, subclass_id: str) -> tuple[Subclass, ...]:
+        """Во что эта ветка ветвится дальше. Пусто - дальше ничего нет."""
+        return tuple(one for one in self.subclasses if one.parent == subclass_id)
+
+    def subclass_skills(self, subclass_id: str) -> tuple[Skill, ...]:
+        """Умения ветки (ADR 0074). Пусто - ветка ничему не учит."""
+        return self.skills_of(f"{OwnerKind.SUBCLASS.value}:{subclass_id}")
 
     def house_of_city(self, city_id: str) -> House | None:
         """Дом, который держит этот город, или ``None`` (Гнездно — ничей)."""
@@ -1386,7 +1313,7 @@ class GameContent:
         return code in self._skills_by_code
 
     def skills_of(self, owner: str, kind: SkillKind | None = None) -> tuple[Skill, ...]:
-        """Умения, принадлежащие ``class:<id>`` или ``race:<id>``."""
+        """Умения, принадлежащие ``class:<id>``, ``race:<id>`` или ``subclass:<id>``."""
         found = self._skills_by_owner.get(owner, ())
         if kind is None:
             return found

@@ -25,7 +25,6 @@ from mmorpg.domain.entities.content import (
     Location,
     Npc,
     ProgressionRules,
-    Rebirth,
     Trait,
 )
 from mmorpg.domain.entities.craft import Craft, CraftKind, CraftYield, Recipe, RecipeInput
@@ -142,7 +141,6 @@ TITLES: Mapping[OverlayKind, tuple[str, str]] = {
     OverlayKind.CRAFT: ("Ремесло", "Ремёсла"),
     OverlayKind.RECIPE: ("Рецепт", "Рецепты"),
     OverlayKind.META: ("Опорные числа", "Опорные числа"),
-    OverlayKind.TURNING: ("Новое имя", "Ступени нового имени"),
 }
 
 #: Разновидности, которые нельзя убрать из игры: без них игра не собирается.
@@ -161,7 +159,6 @@ CREATABLE: frozenset[OverlayKind] = frozenset(
         OverlayKind.TRAIT,
         OverlayKind.CRAFT,
         OverlayKind.RECIPE,
-        OverlayKind.TURNING,
     }
 )
 
@@ -311,23 +308,6 @@ FIELDS: Mapping[OverlayKind, tuple[FieldSpec, ...]] = {
         FieldSpec("output", "Что выходит", FieldKind.CHOICE, source=Source.ITEM, required=True),
         FieldSpec("output_count", "Сколько за раз", FieldKind.NUMBER, required=True),
         FieldSpec("experience", "Опыт за работу", FieldKind.NUMBER),
-    ),
-    # Ступени нового имени (ADR 0070). Правятся только числа и слова: номер
-    # ступени и то, что она открывает, остаются за файлами — порядок дороги
-    # держит замысел, а не баланс (``Claude.md``, правило 7).
-    OverlayKind.TURNING: (
-        FieldSpec("name", "Название", required=True, limit=NAME_LIMIT),
-        FieldSpec("level", "С какого уровня просят", FieldKind.NUMBER, required=True),
-        FieldSpec(
-            "stat_bonus",
-            "Прибавка к характеристикам, процентов",
-            FieldKind.NUMBER,
-            required=True,
-        ),
-        FieldSpec("legacy_slots", "Сколько вех унесёт", FieldKind.NUMBER),
-        FieldSpec("stat_points", "Очков сверх первого уровня", FieldKind.NUMBER),
-        FieldSpec("text", "Что это даёт, словами игрока", required=True),
-        FieldSpec("lore", "Как это выглядит"),
     ),
     # Опорные числа: белый список ``ProgressionRules``. Только то, что двигает
     # баланс числом, — не то, что держит дорогу (число уровней, счёт слотов,
@@ -605,8 +585,6 @@ def listing(content: GameContent, kind: OverlayKind) -> tuple[tuple[str, str], .
             return tuple((recipe.id, _recipe_title(content, recipe)) for recipe in content.recipes)
         case OverlayKind.META:
             return ((META_ID, "Опорные числа игры"),)
-        case OverlayKind.TURNING:
-            return tuple((one.id, f"{one.name} — с {one.level} уровня") for one in content.rebirths)
         case _:
             return tuple(
                 (city.id, f"{city.name} — уровни с {city.level_min} по {city.level_max}")
@@ -657,9 +635,6 @@ def snapshot(content: GameContent, kind: OverlayKind, entity_id: str) -> dict[st
             return _recipe_fields(recipe) if recipe is not None else {}
         case OverlayKind.META:
             return _meta_fields(content.rules)
-        case OverlayKind.TURNING:
-            step = next((one for one in content.rebirths if one.id == entity_id), None)
-            return _rebirth_fields(step) if step is not None else {}
         case _:
             return {}
 
@@ -752,18 +727,6 @@ def _craft_fields(craft: Craft) -> dict[str, str]:
         "yields": _rows_str(
             (one.item_id, str(one.level), ", ".join(one.biomes)) for one in craft.yields
         ),
-    }
-
-
-def _rebirth_fields(step: Rebirth) -> dict[str, str]:
-    return {
-        "name": step.name,
-        "level": str(step.level),
-        "stat_bonus": _plain_number(step.stat_bonus),
-        "legacy_slots": str(step.legacy_slots),
-        "stat_points": str(step.stat_points),
-        "text": step.text,
-        "lore": step.lore,
     }
 
 
@@ -968,16 +931,6 @@ def _shape_problems(content: GameContent, record: OverlayRecord) -> list[str]:
             return _recipe_problems(content, record)
         case OverlayKind.META:
             return _meta_problems(content, record)
-        case OverlayKind.TURNING:
-            return _rebirth_problems(record)
-    return []
-
-
-def _rebirth_problems(record: OverlayRecord) -> list[str]:
-    """Ступень, которая ничего не прибавляет, стирает полторы сотни уровней даром."""
-    bonus = record.value("stat_bonus").replace(",", ".").strip()
-    if bonus and _is_number(bonus) and float(bonus) <= 0:
-        return ["Прибавка: уход стирает дорогу целиком, и за это обязан платить."]
     return []
 
 
@@ -1158,7 +1111,6 @@ def apply(content: GameContent, records: Sequence[OverlayRecord]) -> GameContent
     )
     quests = _apply_quests(staged, npcs, _good(staged, records, OverlayKind.QUEST))
     recipes = _apply_recipes(staged, _good(staged, records, OverlayKind.RECIPE))
-    rebirths = _apply_rebirths(content, _good(content, records, OverlayKind.TURNING))
     return _rebuilt(
         content,
         cities=cities,
@@ -1169,7 +1121,6 @@ def apply(content: GameContent, records: Sequence[OverlayRecord]) -> GameContent
         enemies=enemies,
         recipes=recipes,
         rules=rules,
-        rebirths=rebirths,
     )
 
 
@@ -1192,7 +1143,6 @@ def _rebuilt(
     crafts: Sequence[Craft] | None = None,
     recipes: Sequence[Recipe] | None = None,
     rules: ProgressionRules | None = None,
-    rebirths: Sequence[Rebirth] | None = None,
 ) -> GameContent:
     """Мир с правками: названное - новое, всё прочее переносится как было.
 
@@ -1209,7 +1159,6 @@ def _rebuilt(
         "quests": quests,
         "recipes": recipes,
         "rules": rules,
-        "rebirths": rebirths,
     }
     changed.update({key: value for key, value in named.items() if value is not None})
     return content.rebuilt(**changed)
@@ -1458,36 +1407,6 @@ def _craft_from(content: GameContent, record: OverlayRecord) -> Craft:
     )
 
 
-def _apply_rebirths(content: GameContent, records: Sequence[OverlayRecord]) -> tuple[Rebirth, ...]:
-    """Ступени нового имени с правками смотрителя (ADR 0070).
-
-    Номер ступени и то, что она открывает, правкой не трогаются: за файлами
-    остаётся порядок дороги, а панели отдаются числа.
-    """
-    dropped = {record.entity_id for record in records if record.removed}
-    by_id = {one.id: one for one in content.rebirths if one.id not in dropped}
-    for record in records:
-        if record.removed:
-            continue
-        by_id[record.entity_id] = _rebirth_from(record, by_id.get(record.entity_id))
-    return tuple(sorted(by_id.values(), key=lambda one: one.rank))
-
-
-def _rebirth_from(record: OverlayRecord, was: Rebirth | None) -> Rebirth:
-    return Rebirth(
-        id=record.entity_id,
-        rank=was.rank if was is not None else 0,
-        name=record.value("name"),
-        level=_int_or(record.value("level"), was.level if was else 1),
-        stat_bonus=_float_or(record.value("stat_bonus"), was.stat_bonus if was else 0.0),
-        legacy_slots=_int_or(record.value("legacy_slots"), was.legacy_slots if was else 0),
-        stat_points=_int_or(record.value("stat_points"), was.stat_points if was else 0),
-        text=record.value("text"),
-        lore=record.value("lore"),
-        unlocks=was.unlocks if was is not None else (),
-    )
-
-
 def _int_or(raw: str, fallback: int) -> int:
     """Число из правки; неразборчивое читается как прежнее (``Claude.md``, правило 8)."""
     try:
@@ -1549,7 +1468,6 @@ EXPORTABLE: frozenset[OverlayKind] = frozenset(
         OverlayKind.CRAFT,
         OverlayKind.RECIPE,
         OverlayKind.META,
-        OverlayKind.TURNING,
     }
 )
 
@@ -1562,7 +1480,6 @@ _TOML_FILE: Mapping[OverlayKind, str] = {
     OverlayKind.CRAFT: "content/crafts.toml",
     OverlayKind.RECIPE: "content/crafts.toml",
     OverlayKind.META: "нескольких файлов [meta] по одному числу",
-    OverlayKind.TURNING: "content/turnings.toml",
 }
 
 _TOML_SECTION: Mapping[OverlayKind, str] = {
@@ -1573,7 +1490,6 @@ _TOML_SECTION: Mapping[OverlayKind, str] = {
     OverlayKind.TRAIT: "[[trait]]",
     OverlayKind.CRAFT: "[[craft]]",
     OverlayKind.RECIPE: "[[recipe]]",
-    OverlayKind.TURNING: "[[turning]]",
 }
 
 
@@ -1599,8 +1515,6 @@ def to_toml(content: GameContent, record: OverlayRecord) -> str:
         return "# Жители в content/ не хранятся — эта правка так и живёт в базе."
     if record.kind is OverlayKind.META:
         return _meta_toml(content, record)
-    if record.kind is OverlayKind.TURNING:
-        return _turning_toml(record)
 
     header = (
         f"# правка {record.entity_id} — проверьте и вставьте в {_TOML_FILE[record.kind]}\n"
@@ -1617,24 +1531,6 @@ def to_toml(content: GameContent, record: OverlayRecord) -> str:
     }
     body = builders[record.kind](content, record)
     return "\n".join([header, f"id = {_toml_str(record.entity_id)}", *body])
-
-
-def _turning_toml(record: OverlayRecord) -> str:
-    lines = [
-        f"# правка {record.entity_id} — проверьте и вставьте в content/turnings.toml",
-        "[[rebirth]]",
-        f"id = {_toml_str(record.entity_id)}",
-        f"name = {_toml_str(record.value('name'))}",
-        f"level = {_toml_num(record.value('level'))}",
-        f"stat_bonus = {_toml_num(record.value('stat_bonus'))}",
-        f"legacy_slots = {_toml_num(record.value('legacy_slots'))}",
-        f"stat_points = {_toml_num(record.value('stat_points'))}",
-        f"text = {_toml_str(record.value('text'))}",
-    ]
-    if record.value("lore"):
-        lines.append(f"lore = {_toml_str(record.value('lore'))}")
-    lines.append("# rank и unlocks правкой не трогаются: порядок дороги живёт в файле.")
-    return "\n".join(lines)
 
 
 def _quest_toml(content: GameContent, record: OverlayRecord) -> list[str]:

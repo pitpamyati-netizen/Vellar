@@ -136,8 +136,20 @@ def test_skill_codes_and_names_are_unique(content: GameContent) -> None:
 
 
 def test_skill_catalogue_size(content: GameContent) -> None:
-    """8 классов по 60 умений плюс 16 расовых боевых."""
-    assert len(content.skills) == 8 * (ACTIVES_PER_CLASS + PASSIVES_PER_CLASS) + 16
+    """8 классов по 60 умений, 16 расовых боевых и по одному на каждую ветку."""
+    branches = len(content.subclasses)
+    assert len(content.skills) == 8 * (ACTIVES_PER_CLASS + PASSIVES_PER_CLASS) + 16 + branches
+
+
+def test_every_branch_teaches_one_active_of_its_own(content: GameContent) -> None:
+    """Ветка обязана чему-то учить, иначе это опять одни числа (ADR 0074)."""
+    for one in content.subclasses:
+        taught = content.subclass_skills(one.id)
+        assert len(taught) == 1, one.id
+        skill = taught[0]
+        assert skill.code == one.skill_code
+        assert skill.kind is SkillKind.ACTIVE
+        assert skill.level == one.level
 
 
 @pytest.mark.parametrize("rank", [1, 2, 3, 4, 5])
