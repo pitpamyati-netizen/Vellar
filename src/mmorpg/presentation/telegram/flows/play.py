@@ -1113,7 +1113,7 @@ def advance(
         case ScreenId.CHARACTER:
             return _handle_character(content, character, state, command)
         case ScreenId.STATS:
-            return _handle_stats(character, state, command)
+            return _handle_stats(content, character, state, command)
         case ScreenId.SKILLS:
             return _handle_skills(content, character, state, command)
         case ScreenId.SKILL_SLOTS:
@@ -1622,7 +1622,9 @@ def _handle_character(
     return state.with_notice("Нажмите кнопку из списка.")
 
 
-def _handle_stats(character: Character, state: PlayState, command: Command) -> PlayState:
+def _handle_stats(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
     """Очко на нажатие. Экран, на котором отвечают, говорит, что это очко купило."""
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите характеристику, чтобы вложить очко.")
@@ -1638,9 +1640,12 @@ def _handle_stats(character: Character, state: PlayState, command: Command) -> P
             allocated=character.allocated.with_change(StatCode(code), 1),
             unspent_stat_points=character.unspent_stat_points - 1,
         )
-        return state.storing(PendingWrite(character=stronger)).with_notice(
-            f"{stat_name} повышена. Осталось очков: {stronger.unspent_stat_points}."
-        )
+        said = f"{stat_name} повышена. Осталось очков: {stronger.unspent_stat_points}."
+        # Взятая веха объявляется тем же нажатием, которым её взяли (ADR 0068):
+        # порог, о котором молчат, ничем не отличается от порога, которого нет.
+        if taken := screens.milestone_taken(content, character, stronger):
+            said = f"{said} {taken}"
+        return state.storing(PendingWrite(character=stronger)).with_notice(said)
     return state.with_notice("Нажмите характеристику, чтобы вложить очко.")
 
 
@@ -1858,7 +1863,7 @@ def _handle_skills(
         said = f"{skill.name}: ранг {rank}. Осталось очков: {learned.unspent_skill_points}."
         # Что ранг дал, говорится сразу: очко, о котором молчат, потрачено
         # впустую (ADR 0067).
-        if gained := skill_screens.rank_gain_words(rank):
+        if gained := skill_screens.rank_gain_words(rank, skill, content):
             said = f"{said} Теперь {gained}."
         if skill.is_active and skill.code not in learned.loadout.equipped_actives():
             said += " Положите его в слот, иначе в бою его не будет."

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import City, GameContent, Location
+from mmorpg.domain.entities.content import City, GameContent, Location, StatMilestone
 from mmorpg.domain.entities.location import (
     Enemy,
     GeneratedLocation,
@@ -22,6 +22,7 @@ from mmorpg.domain.entities.location import (
     Presence,
     Roamer,
 )
+from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.rules import economy as economy_rules
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import repair as repair_rules
@@ -847,25 +848,91 @@ def stat_effect_lines(content: GameContent, character: Character) -> tuple[str, 
     return tuple(lines)
 
 
+#: Характеристика в родительном: «ещё 18 очков силы». Именительный из
+#: ``creation.STAT_NAMES`` в этой строке звучал как «18 очков в сила».
+STAT_OF: dict[StatCode, str] = {
+    StatCode.STR: "силы",
+    StatCode.AGI: "ловкости",
+    StatCode.END: "выносливости",
+    StatCode.INT: "интеллекта",
+    StatCode.WIS: "мудрости",
+    StatCode.CHA: "харизмы",
+    StatCode.LCK: "удачи",
+}
+
+
+def milestone_gift(content: GameContent, milestone: StatMilestone) -> str:
+    """Что веха даёт - числами, а не именем.
+
+    Веха платит обычной чертой (ADR 0068), и черта эта нигде больше не показана:
+    ни экрана, ни кнопки у неё нет. Значит назвать её прибавки обязан тот
+    единственный экран, где о вехе вообще заходит речь, - иначе взятая веха
+    неотличима от невзятой, и игрок честно не понимает, работает она или нет.
+    """
+    from mmorpg.presentation.telegram.screens.items import modifier_line
+
+    if not milestone.trait_id or not content.has_trait(milestone.trait_id):
+        return ""
+    trait = content.trait(milestone.trait_id)
+    given = ", ".join(modifier_line(content, key, value) for key, value in trait.modifiers.items())
+    return given
+
+
+def milestone_taken(content: GameContent, before: Character, after: Character) -> str:
+    """Вехи, взятые этим самым очком. Пусто - очко порога не перешло.
+
+    Объявляется тем же нажатием, которым порог перешли: веха, о которой узнают
+    только зайдя на экран заново, читается как «ничего не случилось».
+    """
+    from mmorpg.domain.rules import milestones as milestone_rules
+
+    was = {one.trait_id or one.name for one in milestone_rules.reached(content, before)}
+    fresh = [
+        one
+        for one in milestone_rules.reached(content, after)
+        if (one.trait_id or one.name) not in was
+    ]
+    if not fresh:
+        return ""
+    said = []
+    for one in fresh:
+        gift = milestone_gift(content, one)
+        said.append(f"Взята веха «{one.name}»: {gift}." if gift else f"Взята веха «{one.name}».")
+    return " ".join(said)
+
+
 def milestone_lines(content: GameContent, character: Character) -> tuple[str, ...]:
     """Взятые вехи и ближайшая невзятая по каждой характеристике (ADR 0068).
 
     Это и есть цель, ради которой характеристику СОБИРАЮТ, а не размазывают:
     «до Пролома семь очков силы» — тот довод, которого у раздачи очков не было.
+
+    Взятая веха называет свои прибавки числами: черта, которую она платит, нигде
+    больше не показана, и молчание о ней значило бы, что вехи не работают.
     """
     from mmorpg.domain.rules import milestones as milestone_rules
-    from mmorpg.presentation.telegram.screens.creation import STAT_NAMES
 
     taken = milestone_rules.reached(content, character)
-    lines: list[str] = []
+    pending = milestone_rules.pending(content, character)
+    lines: list[str] = [
+        "Веха — это порог характеристики: собрав её до порога, вы получаете "
+        "названную прибавку навсегда. Считается вложенное: основа, уровни, раса, "
+        "класс и розданные очки, но не снаряжение."
+    ]
     if taken:
-        lines.append("Взятые вехи: " + ", ".join(item.name for item in taken) + ".")
+        for one in taken:
+            gift = milestone_gift(content, one)
+            lines.append(
+                f"Веха «{one.name}» взята: {gift}." if gift else f"Веха «{one.name}» взята."
+            )
+    elif pending:
+        lines.append("Взятых вех пока нет.")
     else:
-        lines.append("Вех пока нет: первая приходит на тридцати очках.")
-    for item, short in milestone_rules.pending(content, character):
+        lines.append("Вех у этого класса нет.")
+    for item, short in pending:
         word = plural(short, "очко", "очка", "очков")
         lines.append(
-            f"До вехи «{item.name}» — {short} {word} в {STAT_NAMES[item.stat].lower()}. {item.text}"
+            f"До вехи «{item.name}» — ещё {short} {word} {STAT_OF[item.stat]}. {item.text}"
         )
     return tuple(lines)
 
@@ -909,9 +976,10 @@ def stats_screen(
     ]
     # Вехи идут после чисел и до кнопок: они и есть ответ на «куда вкладывать»
     # (ADR 0068). При выключенных описаниях остаётся одна строка о взятых.
-    lines.extend(
-        milestone_lines(content, character) if verbose else milestone_lines(content, character)[:1]
-    )
+    milestones = milestone_lines(content, character)
+    # При выключенных описаниях остаётся то, ради чего эти строки и стоят: что
+    # такое веха и первая из взятых.
+    lines.extend(milestones if verbose else milestones[:2])
     rows: list[tuple[Label, ...]] = []
     if character.unspent_stat_points:
         stat_names = list(STAT_NAMES.values())

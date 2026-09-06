@@ -64,6 +64,10 @@
 max_rank = 5
 # Ранг прибавляет к силе четверть написанного: пятый ранг вдвое сильнее первого.
 default_rank_step = 0.25
+# У пассивки ранг не укорачивает откат и не удешевляет ход - у неё нет ни того,
+# ни другого, - и потому её ранг обязан платить одной только силой, и платить
+# заметно: половину написанного за ранг, то есть втрое к пятому (ADR 0073).
+passive_rank_step = 0.5
 # Через сколько уровней приходит очко умений (ADR 0067).
 levels_per_skill_point = 2
 # Чего стоит ранг умения. Одно очко - любой, с первого по пятый.
@@ -567,8 +571,8 @@ owner = "class:warrior"
 kind = "passive"
 level = 2
 effect = "physical_damage_percent"
-power = 4
-text = "Физический урон выше на 4 процента."
+power = 6
+text = "Поднимает физический урон."
 
 [[skill]]
 code = "warrior_zakalka"
@@ -577,8 +581,8 @@ owner = "class:warrior"
 kind = "passive"
 level = 5
 effect = "health_percent"
-power = 5
-text = "Здоровье выше на 5 процентов."
+power = 8
+text = "Поднимает здоровье."
 
 [[skill]]
 code = "warrior_vernyy_glaz"
@@ -587,8 +591,8 @@ owner = "class:warrior"
 kind = "passive"
 level = 9
 effect = "accuracy_percent"
-power = 4
-text = "Точность выше на 4 процента."
+power = 6
+text = "Поднимает точность."
 
 [[skill]]
 code = "warrior_khvatka_na_drevke"
@@ -596,9 +600,9 @@ name = "Хватка на древке"
 owner = "class:warrior"
 kind = "passive"
 level = 14
-effect = "single_target_damage_percent"
-power = 5
-text = "Урон по одной цели выше на 5 процентов."
+effect = "damage_percent"
+power = 8
+text = "Поднимает весь ваш урон."
 
 [[skill]]
 code = "warrior_privychka_k_latam"
@@ -607,8 +611,8 @@ owner = "class:warrior"
 kind = "passive"
 level = 20
 effect = "armor_percent"
-power = 5
-text = "Броня выше на 5 процентов."
+power = 8
+text = "Поднимает броню."
 
 [[skill]]
 code = "warrior_chuvstvo_rany"
@@ -616,9 +620,9 @@ name = "Чувство раны"
 owner = "class:warrior"
 kind = "passive"
 level = 26
-effect = "dot_damage_percent"
-power = 6
-text = "Урон от кровотечений, яда и горения выше на 6 процентов."
+effect = "crit_chance_percent"
+power = 9
+text = "Поднимает шанс критического удара."
 
 [[skill]]
 code = "warrior_stroevoy_shag"
@@ -626,9 +630,9 @@ name = "Строевой шаг"
 owner = "class:warrior"
 kind = "passive"
 level = 33
-effect = "first_turn_damage_percent"
-power = 8
-text = "Урон в первый ход боя выше на 8 процентов."
+effect = "initiative_percent"
+power = 12
+text = "Поднимает инициативу."
 
 [[skill]]
 code = "warrior_stoykost"
@@ -637,8 +641,8 @@ owner = "class:warrior"
 kind = "passive"
 level = 40
 effect = "damage_taken_percent"
-power = -5
-text = "Получаемый урон ниже на 5 процентов."
+power = -8
+text = "Снижает получаемый урон."
 
 [[skill]]
 code = "warrior_dobit_khromogo"
@@ -646,9 +650,9 @@ name = "Добить хромого"
 owner = "class:warrior"
 kind = "passive"
 level = 48
-effect = "wounded_target_damage_percent"
-power = 7
-text = "Урон по раненой цели выше на 7 процентов."
+effect = "crit_damage_percent"
+power = 10
+text = "Поднимает критический урон."
 
 [[skill]]
 code = "warrior_sila_v_plechakh"
@@ -657,8 +661,8 @@ owner = "class:warrior"
 kind = "passive"
 level = 55
 effect = "stat_STR"
-power = 3
-text = "Сила выше на 3."
+power = 4
+text = "Поднимает силу."
 
 [[skill]]
 code = "warrior_dublenaya_kozha"
@@ -667,8 +671,8 @@ owner = "class:warrior"
 kind = "passive"
 level = 63
 effect = "resist_physical_percent"
-power = 6
-text = "Сопротивление физическому урону выше на 6 процентов."
+power = 9
+text = "Поднимает сопротивление физическому урону."
 
 [[skill]]
 code = "warrior_chitaet_zamakh"
@@ -677,8 +681,8 @@ owner = "class:warrior"
 kind = "passive"
 level = 72
 effect = "initiative_percent"
-power = 7
-text = "Инициатива выше на 7 процентов."
+power = 10
+text = "Поднимает инициативу."
 
 [[skill]]
 code = "warrior_udar_s_ottyazhkoy"
@@ -687,8 +691,8 @@ owner = "class:warrior"
 kind = "passive"
 level = 80
 effect = "crit_damage_percent"
-power = 9
-text = "Критический урон выше на 9 процентов."
+power = 14
+text = "Поднимает критический урон."
 
 [[skill]]
 code = "warrior_laty_po_ruke"
@@ -697,8 +701,8 @@ owner = "class:warrior"
 kind = "passive"
 level = 89
 effect = "resist_slashing_percent"
-power = 8
-text = "Сопротивление рубящему урону выше на 8 процентов."
+power = 12
+text = "Поднимает сопротивление рубящему урону."
 
 [[skill]]
 code = "warrior_slaboe_mesto"
@@ -707,18 +711,18 @@ owner = "class:warrior"
 kind = "passive"
 level = 98
 effect = "crit_chance_percent"
-power = 6
-text = "Шанс критического удара выше на 6 процентов."
+power = 9
+text = "Поднимает шанс критического удара."
 
 [[skill]]
 code = "warrior_protiv_bolshikh"
-name = "Против больших"
+name = "Ломит силой"
 owner = "class:warrior"
 kind = "passive"
 level = 108
-effect = "elite_damage_percent"
-power = 9
-text = "Урон по элитным противникам и боссам выше на 9 процентов."
+effect = "damage_percent"
+power = 14
+text = "Поднимает весь ваш урон."
 
 [[skill]]
 code = "warrior_dykhanie_v_boyu"
@@ -727,8 +731,8 @@ owner = "class:warrior"
 kind = "passive"
 level = 117
 effect = "regen_per_turn_percent"
-power = 4
-text = "Каждый ход вам возвращается 4 процента здоровья."
+power = 6
+text = "Каждый ход возвращает часть здоровья."
 
 [[skill]]
 code = "warrior_ne_daet_uyti"
@@ -736,9 +740,9 @@ name = "Не даёт уйти"
 owner = "class:warrior"
 kind = "passive"
 level = 127
-effect = "aoe_damage_percent"
-power = 9
-text = "Урон по всем противникам сразу выше на 9 процентов."
+effect = "accuracy_percent"
+power = 14
+text = "Поднимает точность."
 
 [[skill]]
 code = "warrior_zhila"
@@ -747,8 +751,8 @@ owner = "class:warrior"
 kind = "passive"
 level = 137
 effect = "stat_END"
-power = 4
-text = "Выносливость выше на 4."
+power = 6
+text = "Поднимает выносливость."
 
 [[skill]]
 code = "warrior_otvet_dospekha"
@@ -757,8 +761,8 @@ owner = "class:warrior"
 kind = "passive"
 level = 146
 effect = "reflect_percent"
-power = 9
-text = "Обидчику возвращается 9 процентов полученного вами урона."
+power = 14
+text = "Возвращает обидчику часть полученного вами урона."
 
 # =====================================================================
 # ВАРВАР. Ветви: напор - размен, в котором своё здоровье считают последним;
@@ -1117,8 +1121,8 @@ owner = "class:barbarian"
 kind = "passive"
 level = 2
 effect = "physical_damage_percent"
-power = 5
-text = "Физический урон выше на 5 процентов."
+power = 8
+text = "Поднимает физический урон."
 
 [[skill]]
 code = "barbarian_tolshcha_myshts"
@@ -1127,8 +1131,8 @@ owner = "class:barbarian"
 kind = "passive"
 level = 5
 effect = "health_percent"
-power = 6
-text = "Здоровье выше на 6 процентов."
+power = 9
+text = "Поднимает здоровье."
 
 [[skill]]
 code = "barbarian_zverinoe_chutye"
@@ -1137,8 +1141,8 @@ owner = "class:barbarian"
 kind = "passive"
 level = 9
 effect = "accuracy_percent"
-power = 4
-text = "Точность выше на 4 процента."
+power = 6
+text = "Поднимает точность."
 
 [[skill]]
 code = "barbarian_ranenyy_zver"
@@ -1146,9 +1150,9 @@ name = "Раненый зверь"
 owner = "class:barbarian"
 kind = "passive"
 level = 14
-effect = "low_health_damage_percent"
-power = 6
-text = "Ваш урон выше на 6 процентов, когда здоровья у вас мало."
+effect = "damage_percent"
+power = 9
+text = "Поднимает весь ваш урон."
 
 [[skill]]
 code = "barbarian_ne_znaet_broni"
@@ -1157,8 +1161,8 @@ owner = "class:barbarian"
 kind = "passive"
 level = 20
 effect = "dodge_percent"
-power = 5
-text = "Уклонение выше на 5 процентов."
+power = 8
+text = "Поднимает уклонение."
 
 [[skill]]
 code = "barbarian_rvat"
@@ -1166,9 +1170,9 @@ name = "Рвать"
 owner = "class:barbarian"
 kind = "passive"
 level = 26
-effect = "dot_damage_percent"
-power = 6
-text = "Урон от кровотечений, яда и горения выше на 6 процентов."
+effect = "crit_damage_percent"
+power = 9
+text = "Поднимает критический урон."
 
 [[skill]]
 code = "barbarian_pervyy_natisk"
@@ -1176,9 +1180,9 @@ name = "Первый натиск"
 owner = "class:barbarian"
 kind = "passive"
 level = 33
-effect = "first_turn_damage_percent"
-power = 8
-text = "Урон в первый ход боя выше на 8 процентов."
+effect = "initiative_percent"
+power = 12
+text = "Поднимает инициативу."
 
 [[skill]]
 code = "barbarian_terpit"
@@ -1187,8 +1191,8 @@ owner = "class:barbarian"
 kind = "passive"
 level = 40
 effect = "damage_taken_percent"
-power = -5
-text = "Получаемый урон ниже на 5 процентов."
+power = -8
+text = "Снижает получаемый урон."
 
 [[skill]]
 code = "barbarian_zapakh_krovi"
@@ -1196,9 +1200,9 @@ name = "Запах крови"
 owner = "class:barbarian"
 kind = "passive"
 level = 48
-effect = "wounded_target_damage_percent"
-power = 8
-text = "Урон по раненой цели выше на 8 процентов."
+effect = "crit_chance_percent"
+power = 12
+text = "Поднимает шанс критического удара."
 
 [[skill]]
 code = "barbarian_plechi"
@@ -1207,8 +1211,8 @@ owner = "class:barbarian"
 kind = "passive"
 level = 55
 effect = "stat_STR"
-power = 4
-text = "Сила выше на 4."
+power = 6
+text = "Поднимает силу."
 
 [[skill]]
 code = "barbarian_zhivuchest"
@@ -1217,8 +1221,8 @@ owner = "class:barbarian"
 kind = "passive"
 level = 63
 effect = "regen_per_turn_percent"
-power = 3
-text = "Каждый ход вам возвращается 3 процента здоровья."
+power = 4
+text = "Каждый ход возвращает часть здоровья."
 
 [[skill]]
 code = "barbarian_bystree_zamakh"
@@ -1227,8 +1231,8 @@ owner = "class:barbarian"
 kind = "passive"
 level = 72
 effect = "initiative_percent"
-power = 7
-text = "Инициатива выше на 7 процентов."
+power = 10
+text = "Поднимает инициативу."
 
 [[skill]]
 code = "barbarian_naotmash"
@@ -1237,8 +1241,8 @@ owner = "class:barbarian"
 kind = "passive"
 level = 80
 effect = "crit_damage_percent"
-power = 10
-text = "Критический урон выше на 10 процентов."
+power = 15
+text = "Поднимает критический урон."
 
 [[skill]]
 code = "barbarian_dublenaya_spina"
@@ -1247,8 +1251,8 @@ owner = "class:barbarian"
 kind = "passive"
 level = 89
 effect = "resist_physical_percent"
-power = 7
-text = "Сопротивление физическому урону выше на 7 процентов."
+power = 10
+text = "Поднимает сопротивление физическому урону."
 
 [[skill]]
 code = "barbarian_mezhdu_reber"
@@ -1257,18 +1261,18 @@ owner = "class:barbarian"
 kind = "passive"
 level = 98
 effect = "crit_chance_percent"
-power = 6
-text = "Шанс критического удара выше на 6 процентов."
+power = 9
+text = "Поднимает шанс критического удара."
 
 [[skill]]
 code = "barbarian_na_velikanov"
-name = "На великанов"
+name = "Валит с ног"
 owner = "class:barbarian"
 kind = "passive"
 level = 108
-effect = "elite_damage_percent"
-power = 9
-text = "Урон по элитным противникам и боссам выше на 9 процентов."
+effect = "damage_percent"
+power = 14
+text = "Поднимает весь ваш урон."
 
 [[skill]]
 code = "barbarian_pet_chuzhuyu_krov"
@@ -1277,18 +1281,18 @@ owner = "class:barbarian"
 kind = "passive"
 level = 117
 effect = "lifesteal_percent"
-power = 7
-text = "Вам возвращается 7 процентов нанесённого урона."
+power = 10
+text = "Возвращает вам часть нанесённого урона здоровьем."
 
 [[skill]]
 code = "barbarian_vsekh_razom"
-name = "Всех разом"
+name = "Размах"
 owner = "class:barbarian"
 kind = "passive"
 level = 127
-effect = "aoe_damage_percent"
-power = 9
-text = "Урон по всем противникам сразу выше на 9 процентов."
+effect = "accuracy_percent"
+power = 14
+text = "Поднимает точность."
 
 [[skill]]
 code = "barbarian_ne_ostanovit"
@@ -1297,8 +1301,8 @@ owner = "class:barbarian"
 kind = "passive"
 level = 137
 effect = "damage_percent"
-power = 6
-text = "Весь ваш урон выше на 6 процентов."
+power = 9
+text = "Поднимает весь ваш урон."
 
 [[skill]]
 code = "barbarian_shkura_derzhit"
@@ -1307,8 +1311,8 @@ owner = "class:barbarian"
 kind = "passive"
 level = 146
 effect = "resist_bludgeoning_percent"
-power = 9
-text = "Сопротивление дробящему урону выше на 9 процентов."
+power = 14
+text = "Поднимает сопротивление дробящему урону."
 
 # =====================================================================
 # ПАЛАДИН. Ветви: напор - молот и свет, которым бьют; заслон - чужая
@@ -1667,8 +1671,8 @@ owner = "class:paladin"
 kind = "passive"
 level = 2
 effect = "physical_damage_percent"
-power = 4
-text = "Физический урон выше на 4 процента."
+power = 6
+text = "Поднимает физический урон."
 
 [[skill]]
 code = "paladin_obet_stoykosti"
@@ -1677,8 +1681,8 @@ owner = "class:paladin"
 kind = "passive"
 level = 5
 effect = "health_percent"
-power = 5
-text = "Здоровье выше на 5 процентов."
+power = 8
+text = "Поднимает здоровье."
 
 [[skill]]
 code = "paladin_vzglyad_sudi"
@@ -1687,18 +1691,18 @@ owner = "class:paladin"
 kind = "passive"
 level = 9
 effect = "accuracy_percent"
-power = 4
-text = "Точность выше на 4 процента."
+power = 6
+text = "Поднимает точность."
 
 [[skill]]
 code = "paladin_protiv_nezhiti"
-name = "Против нежити"
+name = "Праведный гнев"
 owner = "class:paladin"
 kind = "passive"
 level = 14
-effect = "undead_damage_percent"
-power = 7
-text = "Урон по нежити выше на 7 процентов."
+effect = "damage_percent"
+power = 10
+text = "Поднимает весь ваш урон."
 
 [[skill]]
 code = "paladin_tyazhelye_laty"
@@ -1707,8 +1711,8 @@ owner = "class:paladin"
 kind = "passive"
 level = 20
 effect = "armor_percent"
-power = 5
-text = "Броня выше на 5 процентов."
+power = 8
+text = "Поднимает броню."
 
 [[skill]]
 code = "paladin_slovo_vesomo"
@@ -1717,8 +1721,8 @@ owner = "class:paladin"
 kind = "passive"
 level = 26
 effect = "stat_CHA"
-power = 3
-text = "Харизма выше на 3."
+power = 4
+text = "Поднимает харизму."
 
 [[skill]]
 code = "paladin_svet_krepnet"
@@ -1727,8 +1731,8 @@ owner = "class:paladin"
 kind = "passive"
 level = 33
 effect = "magic_damage_percent"
-power = 7
-text = "Магический урон выше на 7 процентов."
+power = 10
+text = "Поднимает магический урон."
 
 [[skill]]
 code = "paladin_ne_sognut"
@@ -1737,8 +1741,8 @@ owner = "class:paladin"
 kind = "passive"
 level = 40
 effect = "damage_taken_percent"
-power = -5
-text = "Получаемый урон ниже на 5 процентов."
+power = -8
+text = "Снижает получаемый урон."
 
 [[skill]]
 code = "paladin_zastupnik"
@@ -1747,8 +1751,8 @@ owner = "class:paladin"
 kind = "passive"
 level = 48
 effect = "healing_done_percent"
-power = 8
-text = "Ваше лечение выше на 8 процентов."
+power = 12
+text = "Поднимает ваше лечение."
 
 [[skill]]
 code = "paladin_sila_klyatvy"
@@ -1757,8 +1761,8 @@ owner = "class:paladin"
 kind = "passive"
 level = 55
 effect = "stat_STR"
-power = 3
-text = "Сила выше на 3."
+power = 4
+text = "Поднимает силу."
 
 [[skill]]
 code = "paladin_vera_berezhet"
@@ -1767,8 +1771,8 @@ owner = "class:paladin"
 kind = "passive"
 level = 63
 effect = "resist_magic_percent"
-power = 7
-text = "Сопротивление магическому урону выше на 7 процентов."
+power = 10
+text = "Поднимает сопротивление магическому урону."
 
 [[skill]]
 code = "paladin_pervym_v_stroy"
@@ -1777,8 +1781,8 @@ owner = "class:paladin"
 kind = "passive"
 level = 72
 effect = "initiative_percent"
-power = 7
-text = "Инициатива выше на 7 процентов."
+power = 10
+text = "Поднимает инициативу."
 
 [[skill]]
 code = "paladin_tyazhest_molota"
@@ -1787,8 +1791,8 @@ owner = "class:paladin"
 kind = "passive"
 level = 80
 effect = "crit_damage_percent"
-power = 9
-text = "Критический урон выше на 9 процентов."
+power = 14
+text = "Поднимает критический урон."
 
 [[skill]]
 code = "paladin_osvyashchennyy_dospekh"
@@ -1797,8 +1801,8 @@ owner = "class:paladin"
 kind = "passive"
 level = 89
 effect = "resist_negative_percent"
-power = 9
-text = "Сопротивление оскверняющему урону выше на 9 процентов."
+power = 14
+text = "Поднимает сопротивление оскверняющему урону."
 
 [[skill]]
 code = "paladin_vidit_lozh"
@@ -1807,18 +1811,18 @@ owner = "class:paladin"
 kind = "passive"
 level = 98
 effect = "crit_chance_percent"
-power = 6
-text = "Шанс критического удара выше на 6 процентов."
+power = 9
+text = "Поднимает шанс критического удара."
 
 [[skill]]
 code = "paladin_protiv_velikikh"
-name = "Против великих"
+name = "Не отступит"
 owner = "class:paladin"
 kind = "passive"
 level = 108
-effect = "elite_damage_percent"
-power = 9
-text = "Урон по элитным противникам и боссам выше на 9 процентов."
+effect = "armor_percent"
+power = 14
+text = "Поднимает броню."
 
 [[skill]]
 code = "paladin_rany_zakryvayutsya"
@@ -1827,8 +1831,8 @@ owner = "class:paladin"
 kind = "passive"
 level = 117
 effect = "healing_taken_percent"
-power = 9
-text = "Получаемое лечение выше на 9 процентов."
+power = 14
+text = "Поднимает получаемое вами лечение."
 
 [[skill]]
 code = "paladin_svet_na_vsekh"
@@ -1836,9 +1840,9 @@ name = "Свет на всех"
 owner = "class:paladin"
 kind = "passive"
 level = 127
-effect = "aoe_damage_percent"
-power = 9
-text = "Урон по всем противникам сразу выше на 9 процентов."
+effect = "magic_damage_percent"
+power = 14
+text = "Поднимает магический урон."
 
 [[skill]]
 code = "paladin_ne_ustanet"
@@ -1847,8 +1851,8 @@ owner = "class:paladin"
 kind = "passive"
 level = 137
 effect = "stat_END"
-power = 4
-text = "Выносливость выше на 4."
+power = 6
+text = "Поднимает выносливость."
 
 [[skill]]
 code = "paladin_otpoved"
@@ -1857,8 +1861,8 @@ owner = "class:paladin"
 kind = "passive"
 level = 146
 effect = "reflect_percent"
-power = 10
-text = "Обидчику возвращается 10 процентов полученного вами урона."
+power = 15
+text = "Возвращает обидчику часть полученного вами урона."
 
 # =====================================================================
 # СЛЕДОПЫТ. Ветви: напор - выстрел, который решает бой до размена;
@@ -2228,8 +2232,8 @@ owner = "class:ranger"
 kind = "passive"
 level = 2
 effect = "physical_damage_percent"
-power = 4
-text = "Физический урон выше на 4 процента."
+power = 6
+text = "Поднимает физический урон."
 
 [[skill]]
 code = "ranger_legkiy_shag"
@@ -2238,8 +2242,8 @@ owner = "class:ranger"
 kind = "passive"
 level = 5
 effect = "dodge_percent"
-power = 5
-text = "Уклонение выше на 5 процентов."
+power = 8
+text = "Поднимает уклонение."
 
 [[skill]]
 code = "ranger_glazomer"
@@ -2248,8 +2252,8 @@ owner = "class:ranger"
 kind = "passive"
 level = 9
 effect = "accuracy_percent"
-power = 5
-text = "Точность выше на 5 процентов."
+power = 8
+text = "Поднимает точность."
 
 [[skill]]
 code = "ranger_pervyy_vystrel"
@@ -2257,9 +2261,9 @@ name = "Первый выстрел"
 owner = "class:ranger"
 kind = "passive"
 level = 14
-effect = "first_turn_damage_percent"
-power = 8
-text = "Урон в первый ход боя выше на 8 процентов."
+effect = "initiative_percent"
+power = 12
+text = "Поднимает инициативу."
 
 [[skill]]
 code = "ranger_pokhodnaya_vyuchka"
@@ -2268,8 +2272,8 @@ owner = "class:ranger"
 kind = "passive"
 level = 20
 effect = "health_percent"
-power = 5
-text = "Здоровье выше на 5 процентов."
+power = 8
+text = "Поднимает здоровье."
 
 [[skill]]
 code = "ranger_sledopyt"
@@ -2277,9 +2281,9 @@ name = "Следопыт"
 owner = "class:ranger"
 kind = "passive"
 level = 26
-effect = "beast_damage_percent"
-power = 7
-text = "Урон по зверям выше на 7 процентов."
+effect = "accuracy_percent"
+power = 10
+text = "Поднимает точность."
 
 [[skill]]
 code = "ranger_dalniy_boy"
@@ -2287,9 +2291,9 @@ name = "Дальний бой"
 owner = "class:ranger"
 kind = "passive"
 level = 33
-effect = "single_target_damage_percent"
-power = 7
-text = "Урон по одной цели выше на 7 процентов."
+effect = "damage_percent"
+power = 10
+text = "Поднимает весь ваш урон."
 
 [[skill]]
 code = "ranger_ukhodit_pervym"
@@ -2298,8 +2302,8 @@ owner = "class:ranger"
 kind = "passive"
 level = 40
 effect = "initiative_percent"
-power = 7
-text = "Инициатива выше на 7 процентов."
+power = 10
+text = "Поднимает инициативу."
 
 [[skill]]
 code = "ranger_yady_i_travy"
@@ -2307,9 +2311,9 @@ name = "Яды и травы"
 owner = "class:ranger"
 kind = "passive"
 level = 48
-effect = "dot_damage_percent"
-power = 8
-text = "Урон от кровотечений, яда и горения выше на 8 процентов."
+effect = "crit_damage_percent"
+power = 12
+text = "Поднимает критический урон."
 
 [[skill]]
 code = "ranger_lovkost"
@@ -2318,8 +2322,8 @@ owner = "class:ranger"
 kind = "passive"
 level = 55
 effect = "stat_AGI"
-power = 3
-text = "Ловкость выше на 3."
+power = 4
+text = "Поднимает ловкость."
 
 [[skill]]
 code = "ranger_teplyy_plashch"
@@ -2328,8 +2332,8 @@ owner = "class:ranger"
 kind = "passive"
 level = 63
 effect = "resist_cold_percent"
-power = 8
-text = "Сопротивление ледяному урону выше на 8 процентов."
+power = 12
+text = "Поднимает сопротивление ледяному урону."
 
 [[skill]]
 code = "ranger_slaboe_mesto"
@@ -2338,8 +2342,8 @@ owner = "class:ranger"
 kind = "passive"
 level = 72
 effect = "crit_chance_percent"
-power = 6
-text = "Шанс критического удара выше на 6 процентов."
+power = 9
+text = "Поднимает шанс критического удара."
 
 [[skill]]
 code = "ranger_nakonechnik_granenyy"
@@ -2348,8 +2352,8 @@ owner = "class:ranger"
 kind = "passive"
 level = 80
 effect = "crit_damage_percent"
-power = 9
-text = "Критический урон выше на 9 процентов."
+power = 14
+text = "Поднимает критический урон."
 
 [[skill]]
 code = "ranger_chitaet_les"
@@ -2358,8 +2362,8 @@ owner = "class:ranger"
 kind = "passive"
 level = 89
 effect = "resist_nature_percent"
-power = 8
-text = "Сопротивление природному урону выше на 8 процентов."
+power = 12
+text = "Поднимает сопротивление природному урону."
 
 [[skill]]
 code = "ranger_dobit_podranka"
@@ -2367,19 +2371,19 @@ name = "Добить подранка"
 owner = "class:ranger"
 kind = "passive"
 level = 98
-effect = "wounded_target_damage_percent"
-power = 8
-text = "Урон по раненой цели выше на 8 процентов."
+effect = "crit_chance_percent"
+power = 12
+text = "Поднимает шанс критического удара."
 
 [[skill]]
 code = "ranger_na_krupnogo_zverya"
-name = "На крупного зверя"
+name = "Бьёт наверняка"
 owner = "class:ranger"
 kind = "passive"
 level = 108
-effect = "elite_damage_percent"
-power = 9
-text = "Урон по элитным противникам и боссам выше на 9 процентов."
+effect = "damage_percent"
+power = 14
+text = "Поднимает весь ваш урон."
 
 [[skill]]
 code = "ranger_vtoroe_dykhanie"
@@ -2388,8 +2392,8 @@ owner = "class:ranger"
 kind = "passive"
 level = 117
 effect = "regen_per_turn_percent"
-power = 4
-text = "Каждый ход вам возвращается 4 процента здоровья."
+power = 6
+text = "Каждый ход возвращает часть здоровья."
 
 [[skill]]
 code = "ranger_veerom"
@@ -2397,9 +2401,9 @@ name = "Веером"
 owner = "class:ranger"
 kind = "passive"
 level = 127
-effect = "aoe_damage_percent"
-power = 9
-text = "Урон по всем противникам сразу выше на 9 процентов."
+effect = "physical_damage_percent"
+power = 14
+text = "Поднимает физический урон."
 
 [[skill]]
 code = "ranger_vyderzhka"
@@ -2408,8 +2412,8 @@ owner = "class:ranger"
 kind = "passive"
 level = 137
 effect = "stat_WIS"
-power = 4
-text = "Мудрость выше на 4."
+power = 6
+text = "Поднимает мудрость."
 
 [[skill]]
 code = "ranger_ne_dogonyat"
@@ -2417,9 +2421,9 @@ name = "Не догонят"
 owner = "class:ranger"
 kind = "passive"
 level = 146
-effect = "flee_chance_percent"
-power = 12
-text = "Уйти из боя удаётся на 12 процентов чаще."
+effect = "dodge_percent"
+power = 18
+text = "Поднимает уклонение."
 
 # =====================================================================
 # РАЗБОЙНИК. Ветви: напор - удар, ради которого всё и затевалось, в том
@@ -2784,8 +2788,8 @@ owner = "class:rogue"
 kind = "passive"
 level = 2
 effect = "physical_damage_percent"
-power = 5
-text = "Физический урон выше на 5 процентов."
+power = 8
+text = "Поднимает физический урон."
 
 [[skill]]
 code = "rogue_tikhiy_shag"
@@ -2794,8 +2798,8 @@ owner = "class:rogue"
 kind = "passive"
 level = 5
 effect = "dodge_percent"
-power = 6
-text = "Уклонение выше на 6 процентов."
+power = 9
+text = "Поднимает уклонение."
 
 [[skill]]
 code = "rogue_vernyy_glaz"
@@ -2804,8 +2808,8 @@ owner = "class:rogue"
 kind = "passive"
 level = 9
 effect = "crit_chance_percent"
-power = 5
-text = "Шанс критического удара выше на 5 процентов."
+power = 8
+text = "Поднимает шанс критического удара."
 
 [[skill]]
 code = "rogue_odin_udar"
@@ -2813,9 +2817,9 @@ name = "Один удар"
 owner = "class:rogue"
 kind = "passive"
 level = 14
-effect = "single_target_damage_percent"
-power = 7
-text = "Урон по одной цели выше на 7 процентов."
+effect = "damage_percent"
+power = 10
+text = "Поднимает весь ваш урон."
 
 [[skill]]
 code = "rogue_chitaet_komnatu"
@@ -2824,8 +2828,8 @@ owner = "class:rogue"
 kind = "passive"
 level = 20
 effect = "initiative_percent"
-power = 6
-text = "Инициатива выше на 6 процентов."
+power = 9
+text = "Поднимает инициативу."
 
 [[skill]]
 code = "rogue_znaet_yady"
@@ -2833,9 +2837,9 @@ name = "Знает яды"
 owner = "class:rogue"
 kind = "passive"
 level = 26
-effect = "dot_damage_percent"
-power = 7
-text = "Урон от кровотечений, яда и горения выше на 7 процентов."
+effect = "crit_damage_percent"
+power = 10
+text = "Поднимает критический урон."
 
 [[skill]]
 code = "rogue_iz_teni"
@@ -2843,9 +2847,9 @@ name = "Из тени"
 owner = "class:rogue"
 kind = "passive"
 level = 33
-effect = "first_turn_damage_percent"
-power = 9
-text = "Урон в первый ход боя выше на 9 процентов."
+effect = "initiative_percent"
+power = 14
+text = "Поднимает инициативу."
 
 [[skill]]
 code = "rogue_ne_po_mne_udar"
@@ -2854,8 +2858,8 @@ owner = "class:rogue"
 kind = "passive"
 level = 40
 effect = "damage_taken_percent"
-power = -5
-text = "Получаемый урон ниже на 5 процентов."
+power = -8
+text = "Снижает получаемый урон."
 
 [[skill]]
 code = "rogue_po_zhivomu"
@@ -2863,9 +2867,9 @@ name = "По живому"
 owner = "class:rogue"
 kind = "passive"
 level = 48
-effect = "wounded_target_damage_percent"
-power = 8
-text = "Урон по раненой цели выше на 8 процентов."
+effect = "crit_chance_percent"
+power = 12
+text = "Поднимает шанс критического удара."
 
 [[skill]]
 code = "rogue_lovkost_ruk"
@@ -2874,8 +2878,8 @@ owner = "class:rogue"
 kind = "passive"
 level = 55
 effect = "stat_AGI"
-power = 4
-text = "Ловкость выше на 4."
+power = 6
+text = "Поднимает ловкость."
 
 [[skill]]
 code = "rogue_zdorovye"
@@ -2884,8 +2888,8 @@ owner = "class:rogue"
 kind = "passive"
 level = 63
 effect = "health_percent"
-power = 5
-text = "Здоровье выше на 5 процентов."
+power = 8
+text = "Поднимает здоровье."
 
 [[skill]]
 code = "rogue_udacha"
@@ -2894,8 +2898,8 @@ owner = "class:rogue"
 kind = "passive"
 level = 72
 effect = "stat_LCK"
-power = 4
-text = "Удача выше на 4."
+power = 6
+text = "Поднимает удачу."
 
 [[skill]]
 code = "rogue_v_samoe_serdtse"
@@ -2904,8 +2908,8 @@ owner = "class:rogue"
 kind = "passive"
 level = 80
 effect = "crit_damage_percent"
-power = 11
-text = "Критический урон выше на 11 процентов."
+power = 16
+text = "Поднимает критический урон."
 
 [[skill]]
 code = "rogue_uydet_zhivym"
@@ -2913,9 +2917,9 @@ name = "Уйдёт живым"
 owner = "class:rogue"
 kind = "passive"
 level = 89
-effect = "flee_chance_percent"
-power = 12
-text = "Уйти из боя удаётся на 12 процентов чаще."
+effect = "dodge_percent"
+power = 18
+text = "Поднимает уклонение."
 
 [[skill]]
 code = "rogue_tochnost"
@@ -2924,18 +2928,18 @@ owner = "class:rogue"
 kind = "passive"
 level = 98
 effect = "accuracy_percent"
-power = 7
-text = "Точность выше на 7 процентов."
+power = 10
+text = "Поднимает точность."
 
 [[skill]]
 code = "rogue_protiv_bolshikh"
-name = "Против больших"
+name = "Бьёт точно"
 owner = "class:rogue"
 kind = "passive"
 level = 108
-effect = "elite_damage_percent"
-power = 9
-text = "Урон по элитным противникам и боссам выше на 9 процентов."
+effect = "accuracy_percent"
+power = 14
+text = "Поднимает точность."
 
 [[skill]]
 code = "rogue_krov_na_klinke"
@@ -2944,18 +2948,18 @@ owner = "class:rogue"
 kind = "passive"
 level = 117
 effect = "lifesteal_percent"
-power = 7
-text = "Вам возвращается 7 процентов нанесённого урона."
+power = 10
+text = "Возвращает вам часть нанесённого урона здоровьем."
 
 [[skill]]
 code = "rogue_vsekh_razom"
-name = "Всех разом"
+name = "Отточен до края"
 owner = "class:rogue"
 kind = "passive"
 level = 127
-effect = "aoe_damage_percent"
-power = 9
-text = "Урон по всем противникам сразу выше на 9 процентов."
+effect = "physical_damage_percent"
+power = 14
+text = "Поднимает физический урон."
 
 [[skill]]
 code = "rogue_bystrye_ruki"
@@ -2964,8 +2968,8 @@ owner = "class:rogue"
 kind = "passive"
 level = 137
 effect = "cooldown_reduction_percent"
-power = 8
-text = "Откаты ваших умений короче на 8 процентов."
+power = 12
+text = "Укорачивает откаты умений."
 
 [[skill]]
 code = "rogue_znaet_ulovki"
@@ -2974,8 +2978,8 @@ owner = "class:rogue"
 kind = "passive"
 level = 146
 effect = "resist_mental_percent"
-power = 9
-text = "Сопротивление дурманящему урону выше на 9 процентов."
+power = 14
+text = "Поднимает сопротивление дурманящему урону."
 
 # =====================================================================
 # МАГ. Ветви: напор - огонь и всё, что бьёт по многим сразу; заслон -
@@ -3334,8 +3338,8 @@ owner = "class:mage"
 kind = "passive"
 level = 2
 effect = "magic_damage_percent"
-power = 5
-text = "Магический урон выше на 5 процентов."
+power = 8
+text = "Поднимает магический урон."
 
 [[skill]]
 code = "mage_zapas_char"
@@ -3344,8 +3348,8 @@ owner = "class:mage"
 kind = "passive"
 level = 5
 effect = "resource_percent"
-power = 7
-text = "Запас сил выше на 7 процентов."
+power = 10
+text = "Поднимает запас сил."
 
 [[skill]]
 code = "mage_vyverennyy_zhest"
@@ -3354,8 +3358,8 @@ owner = "class:mage"
 kind = "passive"
 level = 9
 effect = "accuracy_percent"
-power = 4
-text = "Точность выше на 4 процента."
+power = 6
+text = "Поднимает точность."
 
 [[skill]]
 code = "mage_plamya_poslushno"
@@ -3363,9 +3367,9 @@ name = "Пламя послушно"
 owner = "class:mage"
 kind = "passive"
 level = 14
-effect = "aoe_damage_percent"
-power = 8
-text = "Урон по всем противникам сразу выше на 8 процентов."
+effect = "magic_damage_percent"
+power = 12
+text = "Поднимает магический урон."
 
 [[skill]]
 code = "mage_ledyanoy_pokrov"
@@ -3374,8 +3378,8 @@ owner = "class:mage"
 kind = "passive"
 level = 20
 effect = "armor_percent"
-power = 5
-text = "Броня выше на 5 процентов."
+power = 8
+text = "Поднимает броню."
 
 [[skill]]
 code = "mage_dolgoe_gorenie"
@@ -3383,9 +3387,9 @@ name = "Долгое горение"
 owner = "class:mage"
 kind = "passive"
 level = 26
-effect = "dot_damage_percent"
-power = 7
-text = "Урон от кровотечений, яда и горения выше на 7 процентов."
+effect = "crit_damage_percent"
+power = 10
+text = "Поднимает критический урон."
 
 [[skill]]
 code = "mage_pervoe_slovo"
@@ -3393,9 +3397,9 @@ name = "Первое слово"
 owner = "class:mage"
 kind = "passive"
 level = 33
-effect = "first_turn_damage_percent"
-power = 9
-text = "Урон в первый ход боя выше на 9 процентов."
+effect = "initiative_percent"
+power = 14
+text = "Поднимает инициативу."
 
 [[skill]]
 code = "mage_chary_vozvrashchayutsya"
@@ -3404,8 +3408,8 @@ owner = "class:mage"
 kind = "passive"
 level = 40
 effect = "resource_regen_percent"
-power = 8
-text = "Запас сил восстанавливается на 8 процентов быстрее."
+power = 12
+text = "Ускоряет восстановление запаса сил."
 
 [[skill]]
 code = "mage_skupaya_formula"
@@ -3414,8 +3418,8 @@ owner = "class:mage"
 kind = "passive"
 level = 48
 effect = "cost_reduction_percent"
-power = 8
-text = "Умения стоят на 8 процентов меньше."
+power = 12
+text = "Снижает цену умений."
 
 [[skill]]
 code = "mage_intellekt"
@@ -3424,8 +3428,8 @@ owner = "class:mage"
 kind = "passive"
 level = 55
 effect = "stat_INT"
-power = 4
-text = "Интеллект выше на 4."
+power = 6
+text = "Поднимает интеллект."
 
 [[skill]]
 code = "mage_krepkiy_razum"
@@ -3434,8 +3438,8 @@ owner = "class:mage"
 kind = "passive"
 level = 63
 effect = "resist_mental_percent"
-power = 8
-text = "Сопротивление дурманящему урону выше на 8 процентов."
+power = 12
+text = "Поднимает сопротивление дурманящему урону."
 
 [[skill]]
 code = "mage_bystroe_chtenie"
@@ -3444,8 +3448,8 @@ owner = "class:mage"
 kind = "passive"
 level = 72
 effect = "cooldown_reduction_percent"
-power = 8
-text = "Откаты ваших умений короче на 8 процентов."
+power = 12
+text = "Укорачивает откаты умений."
 
 [[skill]]
 code = "mage_peregrev"
@@ -3454,8 +3458,8 @@ owner = "class:mage"
 kind = "passive"
 level = 80
 effect = "crit_damage_percent"
-power = 10
-text = "Критический урон выше на 10 процентов."
+power = 15
+text = "Поднимает критический урон."
 
 [[skill]]
 code = "mage_soprotivlenie_charam"
@@ -3464,8 +3468,8 @@ owner = "class:mage"
 kind = "passive"
 level = 89
 effect = "resist_arcane_percent"
-power = 9
-text = "Сопротивление чародейскому урону выше на 9 процентов."
+power = 14
+text = "Поднимает сопротивление чародейскому урону."
 
 [[skill]]
 code = "mage_slabina_v_zashchite"
@@ -3474,18 +3478,18 @@ owner = "class:mage"
 kind = "passive"
 level = 98
 effect = "crit_chance_percent"
-power = 6
-text = "Шанс критического удара выше на 6 процентов."
+power = 9
+text = "Поднимает шанс критического удара."
 
 [[skill]]
 code = "mage_protiv_velikikh"
-name = "Против великих"
+name = "Чары крепче"
 owner = "class:mage"
 kind = "passive"
 level = 108
-effect = "elite_damage_percent"
-power = 9
-text = "Урон по элитным противникам и боссам выше на 9 процентов."
+effect = "magic_damage_percent"
+power = 14
+text = "Поднимает магический урон."
 
 [[skill]]
 code = "mage_zdorovye_maga"
@@ -3494,8 +3498,8 @@ owner = "class:mage"
 kind = "passive"
 level = 117
 effect = "health_percent"
-power = 6
-text = "Здоровье выше на 6 процентов."
+power = 9
+text = "Поднимает здоровье."
 
 [[skill]]
 code = "mage_tochnyy_raschet"
@@ -3503,9 +3507,9 @@ name = "Точный расчёт"
 owner = "class:mage"
 kind = "passive"
 level = 127
-effect = "single_target_damage_percent"
-power = 9
-text = "Урон по одной цели выше на 9 процентов."
+effect = "accuracy_percent"
+power = 14
+text = "Поднимает точность."
 
 [[skill]]
 code = "mage_stikhiya_krepnet"
@@ -3514,8 +3518,8 @@ owner = "class:mage"
 kind = "passive"
 level = 137
 effect = "damage_percent"
-power = 6
-text = "Весь ваш урон выше на 6 процентов."
+power = 9
+text = "Поднимает весь ваш урон."
 
 [[skill]]
 code = "mage_ne_obzhechsya"
@@ -3524,8 +3528,8 @@ owner = "class:mage"
 kind = "passive"
 level = 146
 effect = "resist_fire_percent"
-power = 9
-text = "Сопротивление огненному урону выше на 9 процентов."
+power = 14
+text = "Поднимает сопротивление огненному урону."
 
 # =====================================================================
 # ЖРЕЦ. Ветви: напор - свет, которым бьют; заслон - лечение, покровы и
@@ -3884,8 +3888,8 @@ owner = "class:cleric"
 kind = "passive"
 level = 2
 effect = "magic_damage_percent"
-power = 5
-text = "Магический урон выше на 5 процентов."
+power = 8
+text = "Поднимает магический урон."
 
 [[skill]]
 code = "cleric_krepost_very"
@@ -3894,8 +3898,8 @@ owner = "class:cleric"
 kind = "passive"
 level = 5
 effect = "health_percent"
-power = 5
-text = "Здоровье выше на 5 процентов."
+power = 8
+text = "Поднимает здоровье."
 
 [[skill]]
 code = "cleric_yasnyy_vzor"
@@ -3904,18 +3908,18 @@ owner = "class:cleric"
 kind = "passive"
 level = 9
 effect = "accuracy_percent"
-power = 4
-text = "Точность выше на 4 процента."
+power = 6
+text = "Поднимает точность."
 
 [[skill]]
 code = "cleric_izgonyayushchiy"
-name = "Изгоняющий"
+name = "Изгоняющее слово"
 owner = "class:cleric"
 kind = "passive"
 level = 14
-effect = "undead_damage_percent"
-power = 8
-text = "Урон по нежити выше на 8 процентов."
+effect = "magic_damage_percent"
+power = 12
+text = "Поднимает магический урон."
 
 [[skill]]
 code = "cleric_zapas_very"
@@ -3924,8 +3928,8 @@ owner = "class:cleric"
 kind = "passive"
 level = 20
 effect = "resource_percent"
-power = 7
-text = "Запас сил выше на 7 процентов."
+power = 10
+text = "Поднимает запас сил."
 
 [[skill]]
 code = "cleric_slovo_dokhodit"
@@ -3934,8 +3938,8 @@ owner = "class:cleric"
 kind = "passive"
 level = 26
 effect = "healing_done_percent"
-power = 7
-text = "Ваше лечение выше на 7 процентов."
+power = 10
+text = "Поднимает ваше лечение."
 
 [[skill]]
 code = "cleric_sila_slova"
@@ -3943,9 +3947,9 @@ name = "Сила слова"
 owner = "class:cleric"
 kind = "passive"
 level = 33
-effect = "single_target_damage_percent"
-power = 7
-text = "Урон по одной цели выше на 7 процентов."
+effect = "damage_percent"
+power = 10
+text = "Поднимает весь ваш урон."
 
 [[skill]]
 code = "cleric_rany_zatyagivayutsya"
@@ -3954,8 +3958,8 @@ owner = "class:cleric"
 kind = "passive"
 level = 40
 effect = "regen_per_turn_percent"
-power = 3
-text = "Каждый ход вам возвращается 3 процента здоровья."
+power = 4
+text = "Каждый ход возвращает часть здоровья."
 
 [[skill]]
 code = "cleric_miloserdie"
@@ -3964,8 +3968,8 @@ owner = "class:cleric"
 kind = "passive"
 level = 48
 effect = "healing_taken_percent"
-power = 8
-text = "Получаемое лечение выше на 8 процентов."
+power = 12
+text = "Поднимает получаемое вами лечение."
 
 [[skill]]
 code = "cleric_mudrost"
@@ -3974,8 +3978,8 @@ owner = "class:cleric"
 kind = "passive"
 level = 55
 effect = "stat_WIS"
-power = 4
-text = "Мудрость выше на 4."
+power = 6
+text = "Поднимает мудрость."
 
 [[skill]]
 code = "cleric_osvyashchen"
@@ -3984,8 +3988,8 @@ owner = "class:cleric"
 kind = "passive"
 level = 63
 effect = "resist_negative_percent"
-power = 8
-text = "Сопротивление оскверняющему урону выше на 8 процентов."
+power = 12
+text = "Поднимает сопротивление оскверняющему урону."
 
 [[skill]]
 code = "cleric_skoroe_slovo"
@@ -3994,8 +3998,8 @@ owner = "class:cleric"
 kind = "passive"
 level = 72
 effect = "cooldown_reduction_percent"
-power = 8
-text = "Откаты ваших умений короче на 8 процентов."
+power = 12
+text = "Укорачивает откаты умений."
 
 [[skill]]
 code = "cleric_tyazhest_kadila"
@@ -4004,8 +4008,8 @@ owner = "class:cleric"
 kind = "passive"
 level = 80
 effect = "crit_damage_percent"
-power = 9
-text = "Критический урон выше на 9 процентов."
+power = 14
+text = "Поднимает критический урон."
 
 [[skill]]
 code = "cleric_dukh_krepok"
@@ -4014,8 +4018,8 @@ owner = "class:cleric"
 kind = "passive"
 level = 89
 effect = "resist_mental_percent"
-power = 9
-text = "Сопротивление дурманящему урону выше на 9 процентов."
+power = 14
+text = "Поднимает сопротивление дурманящему урону."
 
 [[skill]]
 code = "cleric_vidit_slabost"
@@ -4024,18 +4028,18 @@ owner = "class:cleric"
 kind = "passive"
 level = 98
 effect = "crit_chance_percent"
-power = 6
-text = "Шанс критического удара выше на 6 процентов."
+power = 9
+text = "Поднимает шанс критического удара."
 
 [[skill]]
 code = "cleric_na_silnykh"
-name = "На сильных"
+name = "Слово тяжелеет"
 owner = "class:cleric"
 kind = "passive"
 level = 108
-effect = "elite_damage_percent"
-power = 9
-text = "Урон по элитным противникам и боссам выше на 9 процентов."
+effect = "crit_damage_percent"
+power = 14
+text = "Поднимает критический урон."
 
 [[skill]]
 code = "cleric_polnaya_chasha"
@@ -4044,18 +4048,18 @@ owner = "class:cleric"
 kind = "passive"
 level = 117
 effect = "resource_regen_percent"
-power = 8
-text = "Запас сил восстанавливается на 8 процентов быстрее."
+power = 12
+text = "Ускоряет восстановление запаса сил."
 
 [[skill]]
 code = "cleric_svet_na_mnogikh"
-name = "Свет на многих"
+name = "Свет не гаснет"
 owner = "class:cleric"
 kind = "passive"
 level = 127
-effect = "aoe_damage_percent"
-power = 9
-text = "Урон по всем противникам сразу выше на 9 процентов."
+effect = "magic_damage_percent"
+power = 14
+text = "Поднимает магический урон."
 
 [[skill]]
 code = "cleric_vera_krepka"
@@ -4064,8 +4068,8 @@ owner = "class:cleric"
 kind = "passive"
 level = 137
 effect = "damage_percent"
-power = 6
-text = "Весь ваш урон выше на 6 процентов."
+power = 9
+text = "Поднимает весь ваш урон."
 
 [[skill]]
 code = "cleric_svet_otvechaet"
@@ -4074,8 +4078,8 @@ owner = "class:cleric"
 kind = "passive"
 level = 146
 effect = "reflect_percent"
-power = 10
-text = "Обидчику возвращается 10 процентов полученного вами урона."
+power = 15
+text = "Возвращает обидчику часть полученного вами урона."
 
 # =====================================================================
 # ДРУИД. Ветви: напор - облики, когти и стая; заслон - кора, роща и
@@ -4434,8 +4438,8 @@ owner = "class:druid"
 kind = "passive"
 level = 2
 effect = "physical_damage_percent"
-power = 4
-text = "Физический урон выше на 4 процента."
+power = 6
+text = "Поднимает физический урон."
 
 [[skill]]
 code = "druid_tolstaya_kora"
@@ -4444,8 +4448,8 @@ owner = "class:druid"
 kind = "passive"
 level = 5
 effect = "health_percent"
-power = 6
-text = "Здоровье выше на 6 процентов."
+power = 9
+text = "Поднимает здоровье."
 
 [[skill]]
 code = "druid_chutye_zverya"
@@ -4454,8 +4458,8 @@ owner = "class:druid"
 kind = "passive"
 level = 9
 effect = "accuracy_percent"
-power = 4
-text = "Точность выше на 4 процента."
+power = 6
+text = "Поднимает точность."
 
 [[skill]]
 code = "druid_sila_roshchi"
@@ -4464,8 +4468,8 @@ owner = "class:druid"
 kind = "passive"
 level = 14
 effect = "magic_damage_percent"
-power = 6
-text = "Магический урон выше на 6 процентов."
+power = 9
+text = "Поднимает магический урон."
 
 [[skill]]
 code = "druid_edinenie"
@@ -4474,8 +4478,8 @@ owner = "class:druid"
 kind = "passive"
 level = 20
 effect = "resource_percent"
-power = 6
-text = "Запас сил выше на 6 процентов."
+power = 9
+text = "Поднимает запас сил."
 
 [[skill]]
 code = "druid_yad_i_shipy"
@@ -4483,9 +4487,9 @@ name = "Яд и шипы"
 owner = "class:druid"
 kind = "passive"
 level = 26
-effect = "dot_damage_percent"
-power = 8
-text = "Урон от кровотечений, яда и горения выше на 8 процентов."
+effect = "crit_damage_percent"
+power = 12
+text = "Поднимает критический урон."
 
 [[skill]]
 code = "druid_staya_ryadom"
@@ -4493,9 +4497,9 @@ name = "Стая рядом"
 owner = "class:druid"
 kind = "passive"
 level = 33
-effect = "aoe_damage_percent"
-power = 8
-text = "Урон по всем противникам сразу выше на 8 процентов."
+effect = "damage_percent"
+power = 12
+text = "Поднимает весь ваш урон."
 
 [[skill]]
 code = "druid_zhivuchest"
@@ -4504,18 +4508,18 @@ owner = "class:druid"
 kind = "passive"
 level = 40
 effect = "regen_per_turn_percent"
-power = 4
-text = "Каждый ход вам возвращается 4 процента здоровья."
+power = 6
+text = "Каждый ход возвращает часть здоровья."
 
 [[skill]]
 code = "druid_protiv_zverya"
-name = "Против зверя"
+name = "Звериная хватка"
 owner = "class:druid"
 kind = "passive"
 level = 48
-effect = "beast_damage_percent"
-power = 8
-text = "Урон по зверям выше на 8 процентов."
+effect = "physical_damage_percent"
+power = 12
+text = "Поднимает физический урон."
 
 [[skill]]
 code = "druid_mudrost_lesa"
@@ -4524,8 +4528,8 @@ owner = "class:druid"
 kind = "passive"
 level = 55
 effect = "stat_WIS"
-power = 4
-text = "Мудрость выше на 4."
+power = 6
+text = "Поднимает мудрость."
 
 [[skill]]
 code = "druid_ne_beret_moroz"
@@ -4534,8 +4538,8 @@ owner = "class:druid"
 kind = "passive"
 level = 63
 effect = "resist_cold_percent"
-power = 8
-text = "Сопротивление ледяному урону выше на 8 процентов."
+power = 12
+text = "Поднимает сопротивление ледяному урону."
 
 [[skill]]
 code = "druid_bystree_vetra"
@@ -4544,8 +4548,8 @@ owner = "class:druid"
 kind = "passive"
 level = 72
 effect = "initiative_percent"
-power = 7
-text = "Инициатива выше на 7 процентов."
+power = 10
+text = "Поднимает инициативу."
 
 [[skill]]
 code = "druid_khvatka_volka"
@@ -4554,8 +4558,8 @@ owner = "class:druid"
 kind = "passive"
 level = 80
 effect = "crit_damage_percent"
-power = 9
-text = "Критический урон выше на 9 процентов."
+power = 14
+text = "Поднимает критический урон."
 
 [[skill]]
 code = "druid_korni_derzhat"
@@ -4564,8 +4568,8 @@ owner = "class:druid"
 kind = "passive"
 level = 89
 effect = "resist_nature_percent"
-power = 9
-text = "Сопротивление природному урону выше на 9 процентов."
+power = 14
+text = "Поднимает сопротивление природному урону."
 
 [[skill]]
 code = "druid_slaboe_mesto"
@@ -4574,18 +4578,18 @@ owner = "class:druid"
 kind = "passive"
 level = 98
 effect = "crit_chance_percent"
-power = 6
-text = "Шанс критического удара выше на 6 процентов."
+power = 9
+text = "Поднимает шанс критического удара."
 
 [[skill]]
 code = "druid_na_matyorykh"
-name = "На матёрых"
+name = "Гнев рощи"
 owner = "class:druid"
 kind = "passive"
 level = 108
-effect = "elite_damage_percent"
-power = 9
-text = "Урон по элитным противникам и боссам выше на 9 процентов."
+effect = "magic_damage_percent"
+power = 14
+text = "Поднимает магический урон."
 
 [[skill]]
 code = "druid_obnovlenie_sil"
@@ -4594,18 +4598,18 @@ owner = "class:druid"
 kind = "passive"
 level = 117
 effect = "healing_taken_percent"
-power = 9
-text = "Получаемое лечение выше на 9 процентов."
+power = 14
+text = "Поднимает получаемое вами лечение."
 
 [[skill]]
 code = "druid_protiv_dvunogikh"
-name = "Против двуногих"
+name = "Лес отвечает"
 owner = "class:druid"
 kind = "passive"
 level = 127
-effect = "humanoid_damage_percent"
-power = 9
-text = "Урон по человекоподобным выше на 9 процентов."
+effect = "damage_percent"
+power = 14
+text = "Поднимает весь ваш урон."
 
 [[skill]]
 code = "druid_sila_zemli"
@@ -4614,8 +4618,8 @@ owner = "class:druid"
 kind = "passive"
 level = 137
 effect = "stat_END"
-power = 4
-text = "Выносливость выше на 4."
+power = 6
+text = "Поднимает выносливость."
 
 [[skill]]
 code = "druid_ne_otravyat"
@@ -4624,8 +4628,8 @@ owner = "class:druid"
 kind = "passive"
 level = 146
 effect = "resist_poison_percent"
-power = 9
-text = "Сопротивление ядовитому урону выше на 9 процентов."
+power = 14
+text = "Поднимает сопротивление ядовитому урону."
 
 # --- расовые боевые умения: они занимают отдельный расовый слот и вне ветвей ---
 

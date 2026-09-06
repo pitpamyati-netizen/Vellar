@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from mmorpg.domain.rules.modifiers import EFFECTIVE_KEYS
 from mmorpg.presentation.telegram.keyboards.labels import label
 from mmorpg.presentation.telegram.routing import (
     Intent,
@@ -20,6 +21,7 @@ from mmorpg.presentation.telegram.screens.format import (
     percent,
     turns,
 )
+from mmorpg.presentation.telegram.screens.items import MODIFIER_NAMES
 from mmorpg.presentation.telegram.states.screens import (
     BACK_TARGET,
     CREATION_ORDER,
@@ -221,3 +223,14 @@ def test_long_text_is_paginated_on_line_boundaries() -> None:
 
 def test_short_text_stays_one_message() -> None:
     assert paginate_text("Одна строка") == ("Одна строка",)
+
+
+def test_every_modifier_the_engine_counts_has_a_russian_name() -> None:
+    """Ключ без перевода игрок слышит ключом: «resist_mental_percent плюс 8».
+
+    Читаются эти имена везде, где прибавку называют вслух, - карточка вещи,
+    карточка пассивки, взятая веха, - и потому словарь обязан накрывать всё, что
+    движок считает (``modifiers.EFFECTIVE_KEYS``).
+    """
+    assert not EFFECTIVE_KEYS - set(MODIFIER_NAMES)
+    assert not set(MODIFIER_NAMES) - EFFECTIVE_KEYS

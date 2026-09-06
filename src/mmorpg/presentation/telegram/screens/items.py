@@ -22,6 +22,7 @@ from collections.abc import Mapping, Sequence
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, Item
+from mmorpg.domain.entities.damage import DAMAGE_TYPE_NAMES, DamageType
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import milestones as milestone_rules
 from mmorpg.domain.rules import repair as repair_rules
@@ -30,6 +31,20 @@ from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import amount, number, percent
 from mmorpg.presentation.telegram.screens.format import gold as gold_words
+
+
+def _dative(adjective: str) -> str:
+    """Прилагательное рода урона в дательном: «колющий» - «колющему».
+
+    Три окончания на всю игру, и других у мужского рода не бывает: словарь родов
+    один (``entities/damage.DAMAGE_TYPE_NAMES``), и склонять его руками во втором
+    месте значило бы завести второй словарь.
+    """
+    for ending, dative in (("ий", "ему"), ("ый", "ому"), ("ой", "ому")):
+        if adjective.endswith(ending):
+            return adjective[: -len(ending)] + dative
+    return adjective
+
 
 #: Как называется каждый ключ модификатора по-русски. Ключи объявлены в
 #: ``traits.toml [meta].modifier_keys``; вещь, умение и особенность говорят на
@@ -90,7 +105,17 @@ MODIFIER_NAMES: dict[str, str] = {
     "undead_damage_percent": "урон по мертвякам",
     "humanoid_damage_percent": "урон по людям",
     "reputation_percent": "доброе имя",
+    # Броня числом, а не процентом: столько её даёт закрывшемуся собственный
+    # уровень (``combat.DEFEND_ARMOR_PER_LEVEL``).
+    "armor_flat": "броня числом",
 }
+
+#: Сопротивления называются от самих родов урона, а не переписываются руками:
+#: род, добавленный в ``DamageType``, обязан заговорить сам, иначе игрок увидит
+#: ключ вместо слова. Полутора десятками строк ниже это ловит тест.
+MODIFIER_NAMES.update(
+    {one.resist_key: f"сопротивление {_dative(DAMAGE_TYPE_NAMES[one])} урону" for one in DamageType}
+)
 
 #: Ключи, которые называют число, а не проценты: прибавка к характеристике.
 FLAT_PREFIX = "stat_"

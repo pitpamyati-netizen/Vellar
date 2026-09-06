@@ -169,5 +169,66 @@ def test_a_skill_outside_a_fork_argues_with_nobody(content: GameContent) -> None
     assert skill_rules.fork_rivals(content, plain) == ()
 
 
+# --- пассивки --------------------------------------------------------
+
+
+def test_every_class_skill_and_the_racial_one_reach_the_top_rank(
+    content: GameContent, warrior: Character
+) -> None:
+    """Потолок ранга один - пятый, и он один и тот же у классового и расового.
+
+    Проверяется каждое умение, открытое полосой: расовое сюда входит наравне с
+    классовыми, потому что именно на нём чаще всего и говорят «выше не идёт».
+    """
+    rich = replace(warrior, level=content.rules.max_character_level, unspent_skill_points=999)
+    for skill in skill_rules.teachable(content, rich):
+        walked = rich
+        for expected in range(1, content.rules.max_rank + 1):
+            raised = skill_rules.learn(content, walked, skill)
+            assert raised is not None, (skill.code, expected)
+            walked = raised
+            assert walked.loadout.rank_of(skill.code) == expected
+        assert skill_rules.learn(content, walked, skill) is None
+        assert skill_rules.cost_to_learn(content, walked, skill) == 0
+
+
+def test_a_passive_works_in_every_fight_of_its_class(content: GameContent) -> None:
+    """У пассивки не бывает условия: она работает во всяком бою (ADR 0073).
+
+    Условные ключи - урон по раненым, урон в первый ход, урон по эпическим -
+    остаются у черт и снаряжения, но пассивное умение, которое им платит, платит
+    только иногда, а очко за него берут всегда.
+    """
+    conditional = {
+        "single_target_damage_percent",
+        "aoe_damage_percent",
+        "first_turn_damage_percent",
+        "low_health_damage_percent",
+        "wounded_target_damage_percent",
+        "elite_damage_percent",
+        "beast_damage_percent",
+        "undead_damage_percent",
+        "humanoid_damage_percent",
+        "dot_damage_percent",
+        "flee_chance_percent",
+    }
+    for skill in content.skills:
+        if skill.kind is SkillKind.PASSIVE:
+            assert skill.effect not in conditional, skill.code
+
+
+def test_a_rank_of_a_passive_pays_with_size(content: GameContent) -> None:
+    """Ранг пассивке платит одним - размером прибавки, и платит заметно.
+
+    Отката, срока и цены у пассивки нет вовсе, поэтому всё, что ранг ей даёт,
+    обязано лежать в самом числе: пятый ранг втрое против первого.
+    """
+    for skill in content.skills:
+        if skill.kind is not SkillKind.PASSIVE:
+            continue
+        assert abs(skill.power_at_rank(5)) > abs(skill.power_at_rank(1)) * 2.5, skill.code
+        assert skill_rules.rank_gain(5).changes_anything
+
+
 # Что ранг делает в настоящем бою, проверяет ``test_combat``: там есть очередь,
 # откаты и запас, а здесь только дерево.

@@ -70,9 +70,17 @@ def roll_assortment(
     вообще не продаётся - заодно с ними.
     """
     source = rng(shop_seed(world_seed, city_id, rotation))
-    low = max(1, character_level - LEVEL_WINDOW_BELOW)
     widened = int(max(0.0, reputation) / REPUTATION_PER_STEP)
     high = character_level + LEVEL_WINDOW_ABOVE + widened
+    # Окно считается по уровням, а снаряжение стоит только на ступенях
+    # (``items.toml``, ADR 0052), и между ступенями их шаг больше окна: на
+    # девятнадцатом уровне ближайшая ступень - двенадцатая, и прилавок с окном
+    # 16-21 не выкладывал НИ ОДНОЙ вещи, оставляя игроку полку инструментов и
+    # склянки. Поэтому нижняя граница опускается до ступени покупателя: лавка
+    # торгует тем, что на нём и надето.
+    tier = gear_procgen.tier_at(content, character_level)
+    floor = min(character_level - LEVEL_WINDOW_BELOW, tier.level if tier else character_level)
+    low = max(1, floor)
 
     # Полка инструментов стоит до всякого броска и не зависит ни от сида, ни от
     # нужды города: сточенную кирку меняют там, где стоят.

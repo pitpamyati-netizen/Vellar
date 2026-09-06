@@ -81,12 +81,21 @@ def points_word(count: int) -> str:
     return f"{count} очков"
 
 
-def rank_gain_words(rank: int) -> str:
+def rank_gain_words(
+    rank: int, skill: Skill | None = None, content: GameContent | None = None
+) -> str:
     """Что ранг уже прибавил этому умению. Пусто - первый ранг ничего не прибавил.
 
     Называется ровно то, что считает движок (``skill_rules.rank_gain``): очко,
     вложенное в ранг, обязано быть слышно, а не подразумеваться (ADR 0067).
+
+    У пассивного умения нет ни отката, ни срока, ни цены, и говорить о них
+    значило бы обещать то, чего движок ему не считает (``Claude.md``, правило 7).
+    Ранг пассивке даёт ровно одно - размер самой прибавки
+    (``modifiers.passive_modifiers``), - и называется здесь именно он, числом.
     """
+    if skill is not None and content is not None and not skill.is_active:
+        return passive_power_words(content, skill, rank)
     gain = skill_rules.rank_gain(rank)
     parts = []
     if gain.cooldown_cut:
@@ -96,6 +105,18 @@ def rank_gain_words(rank: int) -> str:
     if gain.cost_factor < 1.0:
         parts.append(f"цена ниже на {round((1.0 - gain.cost_factor) * 100)} процентов")
     return ", ".join(parts)
+
+
+def passive_power_words(content: GameContent, skill: Skill, rank: int) -> str:
+    """Что пассивка даёт сейчас - и что даст следующий ранг.
+
+    Обе величины числами: текст умения в ``skills.toml`` называет силу первого
+    ранга и с рангом не меняется, поэтому без этой строки пассивка на пятом
+    ранге выглядела бы ровно так же, как на первом.
+    """
+    from mmorpg.presentation.telegram.screens.items import modifier_line
+
+    return modifier_line(content, skill.effect, skill.power_at_rank(max(1, rank)))
 
 
 def skill_state(content: GameContent, character: Character, skill: Skill) -> str:
@@ -110,14 +131,22 @@ def skill_state(content: GameContent, character: Character, skill: Skill) -> str
         taken = skill_rules.fork_taken(content, character, skill)
         if taken is not None:
             return f"закрыто развилкой: взято {taken.name}"
-        return f"не изучено, {points_word(skill_rules.cost_to_learn(content, character, skill))}"
+        price = points_word(skill_rules.cost_to_learn(content, character, skill))
+        if not skill.is_active:
+            return f"не изучено, {price} даст {passive_power_words(content, skill, 1)}"
+        return f"не изучено, {price}"
     rank = character.loadout.rank_of(skill.code)
     said = f"ранг {rank} из {rules.max_rank}"
-    if gained := rank_gain_words(rank):
+    if gained := rank_gain_words(rank, skill, content):
         said = f"{said}: {gained}"
     if rank >= rules.max_rank:
         return f"{said}, выше некуда"
     cost = skill_rules.cost_to_learn(content, character, skill)
+    # Пассивка объявляет, во что превратится её прибавка: очко, купившее «плюс
+    # шесть» вместо «плюс пяти», обязано быть названо до нажатия, а не после.
+    if not skill.is_active:
+        next_rank = passive_power_words(content, skill, rank + 1)
+        return f"{said}, следующий за {points_word(cost)} даст {next_rank}"
     return f"{said}, следующий за {points_word(cost)}"
 
 
@@ -251,12 +280,13 @@ def slots_screen(content: GameContent, character: Character, notice: str = "") -
         "Пассивные умения слотов не занимают: изученное работает всегда.",
     ]
     if working:
-        lines.append(
-            "Работают сейчас: "
-            + ", ".join(
-                f"{skill.name}, ранг {character.loadout.rank_of(skill.code)}" for skill in working
-            )
-            + "."
+        # Пассивка называет не только ранг, но и то, что она даёт этим рангом:
+        # иначе изученное молчит, и игрок не знает, работает ли оно вообще.
+        lines.append("Работают сейчас:")
+        lines.extend(
+            f"{skill.name}, ранг {character.loadout.rank_of(skill.code)}: "
+            f"{passive_power_words(content, skill, character.loadout.rank_of(skill.code))}."
+            for skill in working
         )
     rows: list[tuple[Label, ...]] = [
         (slot_label(content, character, slot),) for slot in range(rules.active_slots)

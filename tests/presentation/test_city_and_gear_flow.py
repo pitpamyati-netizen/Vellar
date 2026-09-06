@@ -13,6 +13,8 @@ from dataclasses import fields, replace
 import pytest
 
 from mmorpg.domain.entities import Character, GameContent, SkillLoadout
+from mmorpg.domain.entities.content import OwnerKind
+from mmorpg.domain.rules import milestones as milestone_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.combat import blow_range
 from mmorpg.domain.rules.economy import mentor_price, sell_price
@@ -26,6 +28,7 @@ from mmorpg.presentation.telegram.flows.play import (
     render,
 )
 from mmorpg.presentation.telegram.screens import city as city_screens
+from mmorpg.presentation.telegram.screens import creation as creation_screens
 from mmorpg.presentation.telegram.screens import play as play_screens
 from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import skills as skill_screens
@@ -456,6 +459,64 @@ def test_the_first_rank_promises_nothing_extra(content: GameContent, hero: Chara
     said = skill_screens.skill_entry_text(content, fresh, skill)
     assert "откат короче" not in said
     assert "следующий за" in said
+
+
+def test_a_passive_names_its_own_number_and_promises_nothing_else(
+    content: GameContent, hero: Character
+) -> None:
+    """У пассивки нет ни отката, ни срока, ни цены, и обещать их ей нечем.
+
+    Прежде карточка пассивки повторяла слово в слово карточку боевого умения:
+    «откат короче на ход, сроки длиннее на ход, цена ниже на 20 процентов» - и
+    ни одного из трёх движок пассивке не считает. Зато то единственное, что ранг
+    ей даёт, - размер прибавки, - не называлось нигде.
+    """
+    passive = next(
+        skill
+        for skill in skill_rules.teachable(content, hero)
+        if not skill.is_active and skill.owner_kind is OwnerKind.CLASS
+    )
+    fresh = replace(hero, loadout=replace(hero.loadout, ranks={passive.code: 1}))
+    said = skill_screens.skill_state(content, fresh, passive)
+    for promise in ("откат", "сроки", "цена ниже"):
+        assert promise not in said
+    assert skill_screens.passive_power_words(content, passive, 1) in said
+    # И то, во что превратится прибавка следующим очком, названо до нажатия.
+    assert skill_screens.passive_power_words(content, passive, 2) in said
+
+    # Ранг слышно числом: пятый крупнее первого, и оба сказаны вслух.
+    grown = replace(hero, loadout=replace(hero.loadout, ranks={passive.code: 5}))
+    assert skill_screens.passive_power_words(content, passive, 5) in skill_screens.skill_state(
+        content, grown, passive
+    )
+    assert passive.power_at_rank(5) > passive.power_at_rank(1)
+
+
+def test_a_crossed_milestone_is_announced_by_the_point_that_crossed_it(
+    content: GameContent, hero: Character
+) -> None:
+    """Веха объявляется тем нажатием, которым её взяли (ADR 0068).
+
+    Иначе «работают ли вехи» - вопрос, на который игра не отвечает: очко ушло,
+    строка «сила повышена» та же самая, и порог перешли молча.
+    """
+    milestone = min(
+        content.character_class(hero.class_id).milestones, key=lambda one: one.threshold
+    )
+    invested = milestone_rules.invested_stats(content, hero)
+    short = milestone.threshold - invested[milestone.stat]
+    assert short > 0
+    almost = replace(
+        hero,
+        allocated=hero.allocated.with_change(milestone.stat, short - 1),
+        unspent_stat_points=2,
+    )
+    stats = step(content, almost, begin(almost), "Персонаж", "Характеристики")
+    name = creation_screens.STAT_NAMES[milestone.stat]
+    taken = step(content, almost, stats, play_screens.spend_label(name).text)
+    assert milestone.name in taken.notice
+    # И названо то, что веха даёт: черта вехи нигде больше не показана.
+    assert play_screens.milestone_gift(content, milestone) in taken.notice
 
 
 def test_a_slot_is_filled_and_emptied_from_the_panel(content: GameContent, hero: Character) -> None:

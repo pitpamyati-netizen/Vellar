@@ -323,6 +323,9 @@ def _parse_skills(
     problems: list[str],
 ) -> tuple[Skill, ...]:
     default_step = float(raw.get("meta", {}).get("default_rank_step", 0.15))
+    # Пассивке ранг платит одной силой: отката, срока и цены у неё нет вовсе,
+    # поэтому её шаг объявлен отдельно и крупнее (ADR 0073).
+    passive_step = float(raw.get("meta", {}).get("passive_rank_step", default_step))
     parsed: list[Skill] = []
     seen: set[str] = set()
 
@@ -391,7 +394,12 @@ def _parse_skills(
                 cooldown=int(entry.get("cooldown", 0)),
                 target=target,
                 scaling=scaling,
-                rank_step=float(entry.get("rank_step", default_step)),
+                rank_step=float(
+                    entry.get(
+                        "rank_step",
+                        passive_step if kind is SkillKind.PASSIVE else default_step,
+                    )
+                ),
                 weapon_types=tuple(str(value) for value in entry.get("weapons", ())),
                 requires_stealth=bool(entry.get("requires_stealth", False)),
                 dice=_skill_dice(code, entry, problems),

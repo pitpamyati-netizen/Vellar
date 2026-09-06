@@ -623,7 +623,7 @@ async def _spawn_arena(
         content,
         battle_id=battle_id,
         attackers=[(paid, True)],
-        defenders=[(other, False)],
+        defenders=[(arena_rules.as_opponent(other), False)],
         seed=seed,
         kind=BattleKind.ARENA,
         owner=paid.id,

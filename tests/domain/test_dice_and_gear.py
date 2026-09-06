@@ -210,3 +210,32 @@ def test_what_falls_is_of_the_grade_of_the_one_who_dropped_it(content: GameConte
             parsed = gear_procgen.parse_gear_id(item_id)
             assert parsed is not None
             assert parsed[1] == tier.level
+
+
+# --- голые руки ------------------------------------------------------
+
+
+def test_the_fist_never_beats_a_weapon_of_its_own_grade(content: GameContent) -> None:
+    """Кулак слабее любого оружия своей ступени на всей полосе уровней.
+
+    Кости кулака росли каждый уровень, а оружие стоит только на ступенях, и шаг
+    между ступенями доходит до одиннадцати уровней: на четвёртом уровне голые
+    руки били в среднем 10 против 7 у меча первой ступени, а на двадцать третьем
+    догоняли оружие двенадцатой. Ступень у кулака теперь та же, что у оружия.
+    """
+    from mmorpg.domain.rules import equipment as gear
+
+    weakest = min(content.weapon_types, key=lambda kind: kind.dice.average)
+    tiers = [tier.level for tier in content.gear_tiers]
+    for level in range(1, content.rules.max_character_level + 1):
+        stand = max(tier for tier in tiers if tier <= level)
+        weapon = weakest.damage_at(1.0 + gear_procgen.FACES_PER_LEVEL * (stand - 1))
+        assert gear.unarmed_dice(content, level).average < weapon.average, level
+
+
+def test_the_fist_grows_by_the_grade_and_not_by_the_level(content: GameContent) -> None:
+    """Внутри одной ступени кулак не растёт: он растёт вместе с оружием."""
+    from mmorpg.domain.rules import equipment as gear
+
+    assert gear.unarmed_dice(content, 12) == gear.unarmed_dice(content, 23)
+    assert gear.unarmed_dice(content, 23).average < gear.unarmed_dice(content, 24).average

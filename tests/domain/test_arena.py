@@ -103,3 +103,16 @@ def test_losing_forfeits_the_stake_and_nothing_else(fighter: Character) -> None:
     # Круг никогда не стоит ни уровня, ни вещи, ни задания.
     assert result.character.level == fighter.level
     assert result.character.experience == fighter.experience
+
+
+def test_the_opponent_comes_out_whole(fighter: Character) -> None:
+    """Слепок противника выходит на песок целым, а не с чужими ранами.
+
+    Раны переживают бой и живут в самом персонаже: хозяин слепка мог уйти из
+    последнего узла на трёх очках здоровья. Ставку за круг берут полную, и круг
+    против такого противника кругом не был.
+    """
+    wounded = replace(fighter, health=3)
+    assert arena.as_opponent(wounded).health_or(500) == 500
+    # Всё остальное - его: оружие, умения, уровень и счёт кругов.
+    assert arena.as_opponent(wounded) == replace(wounded, health=0)

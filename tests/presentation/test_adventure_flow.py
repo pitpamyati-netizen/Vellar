@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from collections import deque
 from dataclasses import replace
@@ -52,6 +53,7 @@ from mmorpg.presentation.telegram.handlers import combat as combat_handler
 from mmorpg.presentation.telegram.handlers import play as play_handler
 from mmorpg.presentation.telegram.screens import play as play_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
+from mmorpg.presentation.telegram.screens.format import gold as gold_words
 from mmorpg.presentation.telegram.states.screens import Play
 
 ACCOUNT = 500_001
@@ -1307,3 +1309,34 @@ async def test_finishing_the_tutorial_hands_over_the_full_kit(
     for item_id, count in tutorial_rules.COMPLETION_REWARD.items:
         assert held.get(item_id, 0) >= count
     assert "Обучение пройдено" in bought.text()
+
+
+async def test_the_card_of_a_good_charges_the_price_the_shelf_named(
+    player: Player,
+    characters: InMemoryCharacterRepository,
+    argus: Character,
+) -> None:
+    """Карточка товара берёт ту самую цену, которую назвал прилавок.
+
+    Прилавок бросается только на экране лавки, а платят на экране карточки: без
+    прилавка карточка называла цену эталона - без редкости, без нужды города и
+    без харизмы, - и её же снимала с кошелька. Список говорил одно, кошелёк
+    платил другое.
+    """
+    # Обучение позади: его награда за первую покупку добавила бы к кошельку
+    # своё золото и спрятала бы цену, ради которой этот тест и стоит.
+    rich = replace(argus, gold=50_000, tutorial=0b111111)
+    await characters.save(rich)
+
+    await player.press("Мир")
+    shop = await player.press("Лавка")
+    label = next(item.text for row in shop.rows for item in row if item.text.endswith("купить"))
+    named = int(re.search(r"— (\d+) золота", label).group(1))
+
+    card = await player.press(label)
+    assert f"Цена в лавке: {gold_words(named)}." in card.text()
+
+    await player.press("Купить")
+    paid = await characters.get_active(ACCOUNT)
+    assert paid is not None
+    assert paid.gold == rich.gold - named

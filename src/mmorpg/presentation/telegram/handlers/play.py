@@ -532,7 +532,11 @@ async def _goods(
         for entry in held
         if content.has_item(entry.item_id)
     )
-    if flow.screen is not ScreenId.SHOP:
+    # Прилавок нужен обоим экранам лавки: карточка товара называет цену и берёт
+    # её же с кошелька, и без прилавка она называла бы цену эталона - без
+    # редкости, без нужды города и без харизмы. Список говорил 511, карточка
+    # брала 222.
+    if flow.screen not in {ScreenId.SHOP, ScreenId.SHOP_ITEM}:
         return Goods(gold=character.gold, owned=owned)
 
     city_id = flow.city_id or character.city_id

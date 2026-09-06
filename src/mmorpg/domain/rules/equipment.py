@@ -38,9 +38,15 @@ from mmorpg.domain.rules import repair
 ARMOR_SOFTENER_BASE = 51.8
 ARMOR_SOFTENER_PER_LEVEL = 6.4
 
-#: Чем бьют, когда в руках ничего. Кости растут с уровнем героя так же, как у
-#: оружия со ступенью, — иначе на сотом уровне безоружный не бил бы вовсе. Но и
-#: близко не оружие: на первом уровне это в среднем 3 против 7 у меча.
+#: Чем бьют, когда в руках ничего. Кости растут **со ступенью**, на которой стоит
+#: уровень героя, — той же самой, по которой считается оружие (ADR 0052). Но и
+#: близко не оружие: на каждой ступени это в среднем 3,5 против 6 у самого
+#: слабого клинка.
+#:
+#: Ступень, а не уровень, — и это не мелочь. Оружие стоит только на ступенях, а
+#: между ступенями их шаг доходит до одиннадцати уровней: кулак, растущий каждый
+#: уровень, к концу ступени обгонял оружие этой ступени, и на четвёртом уровне
+#: голые руки били сильнее любого клинка первой ступени.
 UNARMED_DICE = Dice(count=1, faces=3, bonus=1)
 
 #: Кулак бьёт слабо, но ровнее всякого оружия: размаха у него меньше, чем у
@@ -138,14 +144,27 @@ def weapon_damage_type(content: GameContent, character: Character) -> DamageType
     return UNARMED
 
 
+def unarmed_dice(content: GameContent, level: int) -> Dice:
+    """Кости голых рук на этом уровне: по ступени, а не по уровню.
+
+    Ступень берётся та же, что у оружия этого уровня (``tier_at``), и множитель
+    считается из неё тем же выражением, что и у оружия (``procgen/items.build``).
+    Поэтому кулак стоит к оружию своей ступени в одном и том же отношении на всей
+    полосе - и никогда его не обгоняет.
+    """
+    tier = gear_procgen.tier_at(content, level)
+    counted = tier.level if tier is not None else max(1, level)
+    return UNARMED_DICE.scaled(
+        1.0 + gear_procgen.FACES_PER_LEVEL * (counted - 1), spread=UNARMED_SPREAD
+    )
+
+
 def weapon_dice(content: GameContent, character: Character) -> Dice:
     """Чем этот герой бьёт: кости оружия, а без оружия — кости кулака."""
     weapon = weapon_of(content, character)
     if weapon is not None and weapon.damage is not None:
         return weapon.damage
-    return UNARMED_DICE.scaled(
-        1.0 + gear_procgen.FACES_PER_LEVEL * (character.level - 1), spread=UNARMED_SPREAD
-    )
+    return unarmed_dice(content, character.level)
 
 
 def type_modifiers(content: GameContent, item_ids: Iterable[str]) -> dict[str, float]:

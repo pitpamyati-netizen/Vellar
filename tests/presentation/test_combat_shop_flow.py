@@ -12,7 +12,9 @@ from mmorpg.domain.entities import Character, GameContent, SkillLoadout
 from mmorpg.domain.entities.combat import ActionKind, BattleAction, Verdict
 from mmorpg.domain.entities.location import Enemy, EnemyKind
 from mmorpg.domain.entities.statuses import StatusKind
+from mmorpg.domain.procgen import items as gear_procgen
 from mmorpg.domain.rules.economy import buy_price, roll_assortment, sell_price
+from mmorpg.domain.rules.progression import MAX_LEVEL
 from mmorpg.presentation.telegram.flows import combat as flow
 from mmorpg.presentation.telegram.screens import combat as combat_screens
 from mmorpg.presentation.telegram.screens import shop as shop_screens
@@ -501,8 +503,27 @@ def test_assortment_matches_the_player_level(content: GameContent) -> None:
     )
     assert stock
     # Полка инструментов стоит вне окна: её ступень берётся по уровню покупателя
-    # (ADR 0056), а окно считает уровни вещей.
-    assert all(17 <= item.level <= 22 or item.tool_type for item in stock)
+    # (ADR 0056), а окно считает уровни вещей. Низ окна опускается до ступени
+    # покупателя: снаряжение стоит только на ступенях, и окно по одним уровням
+    # промахивалось мимо всех.
+    tier = gear_procgen.tier_at(content, 20)
+    assert tier is not None and tier.level == 12
+    assert all(tier.level <= item.level <= 22 or item.tool_type for item in stock)
+
+
+def test_the_shelf_always_holds_gear(content: GameContent) -> None:
+    """На каждом уровне полосы в лавке есть снаряжение, а не одни склянки.
+
+    Снаряжение стоит только на ступенях (ADR 0052), а между ступенями их шаг
+    доходит до одиннадцати уровней: окно «уровень минус три - уровень плюс два»
+    на девятнадцатом уровне не накрывало ни одной ступени, и лавка выкладывала
+    полку инструментов и пару склянок.
+    """
+    for level in range(1, MAX_LEVEL + 1):
+        stock = roll_assortment(
+            content, world_seed=WORLD_SEED, city_id="farhold", rotation=3, character_level=level
+        )
+        assert any(item.is_equipment and not item.tool_type for item in stock), level
 
 
 def test_reputation_widens_the_shelf(content: GameContent) -> None:

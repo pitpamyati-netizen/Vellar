@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from mmorpg.domain.entities.character import Character
 
@@ -38,6 +38,19 @@ WELCOME_ROUNDS = 1
 MIN_LEVEL = 5
 # Насколько далеко могут стоять два уровня, чтобы арена сочла это парой.
 LEVEL_WINDOW = 3
+
+
+def as_opponent(character: Character) -> Character:
+    """Чужой персонаж, каким он выходит на песок: целым.
+
+    Раны переживают бой и живут в самом персонаже (``Character.health``), а на
+    арене дерётся не он, а его слепок: хозяин слепка в это время ходит где-то
+    своей дорогой. Выпускать слепок с теми ранами, с какими хозяин ушёл из
+    последнего узла, значит платить ставку за противника на трёх очках здоровья
+    и звать это кругом. Круг арены равен для обоих: ноль здоровья читается
+    «как новенький» (``Character.health_or``).
+    """
+    return replace(character, health=0)
 
 
 def stake_for(level: int) -> int:
