@@ -1045,11 +1045,11 @@ async def test_disbanding_removes_the_whole_party(pool, three_fighters) -> None:
     assert await parties.of(second) is None
 
 
-# --- гильдия (ADR 0030) --------------------------------------------
+# --- гильдия (ADR 0030, 0076) --------------------------------------
 
 
 async def test_a_guild_survives_a_round_trip_with_ranks_and_vault(pool, three_fighters) -> None:
-    founder, officer, member = three_fighters
+    founder, elder, member = three_fighters
     guilds = PostgresGuildRepository(pool)
 
     made = await guilds.create("Ирисы", founder)
@@ -1060,7 +1060,7 @@ async def test_a_guild_survives_a_round_trip_with_ranks_and_vault(pool, three_fi
             founder_id=founder,
             members=(
                 GuildMember(founder, GuildRank.FOUNDER),
-                GuildMember(officer, GuildRank.OFFICER),
+                GuildMember(elder, GuildRank.ELDER),
                 GuildMember(member, GuildRank.MEMBER),
             ),
         )
@@ -1070,7 +1070,7 @@ async def test_a_guild_survives_a_round_trip_with_ranks_and_vault(pool, three_fi
     read = await guilds.by_id(made.id)
     assert read is not None
     assert read.vault_gold == 900
-    assert read.rank_of(officer) is GuildRank.OFFICER
+    assert read.rank_of(elder) is GuildRank.ELDER
     assert (await guilds.by_name("ИРИСЫ")) is not None
     for who in three_fighters:
         assert (await guilds.of(who)) is not None
@@ -1111,12 +1111,47 @@ async def test_the_vault_withdraw_is_atomic(pool, three_fighters) -> None:
 
 
 async def test_disbanding_removes_the_guild_and_its_members(pool, three_fighters) -> None:
-    founder, officer, _ = three_fighters
+    founder, elder, _ = three_fighters
     guilds = PostgresGuildRepository(pool)
     made = await guilds.create("Ирисы", founder)
-    await guilds.save(made.with_member(officer, GuildRank.OFFICER))
+    await guilds.save(made.with_member(elder, GuildRank.ELDER))
 
     await guilds.disband(made.id)
 
     assert await guilds.by_id(made.id) is None
-    assert await guilds.of(officer) is None
+    assert await guilds.of(elder) is None
+
+
+async def test_deeds_and_contribution_add_up_and_survive_a_rank_change(
+    pool, three_fighters
+) -> None:
+    """Деяния гильдии и вклад человека растут условным ``UPDATE`` (ADR 0076).
+
+    Запись состава их не трогает: она пишет звания, а не счёт. Иначе смена
+    звания стирала бы то, что человек принёс.
+    """
+    founder, second, _ = three_fighters
+    guilds = PostgresGuildRepository(pool)
+    made = await guilds.create("Ирисы", founder)
+    await guilds.save(made.with_member(second, GuildRank.MEMBER))
+
+    await guilds.record_deeds(made.id, founder, 5)
+    await guilds.record_deeds(made.id, founder, 3)
+    await guilds.record_deeds(made.id, second, 2)
+    await guilds.record_deeds(made.id, second, 0)
+
+    read = await guilds.by_id(made.id)
+    assert read is not None
+    assert read.deeds == 10
+    assert read.contributed_by(founder) == 8
+    assert read.contributed_by(second) == 2
+
+    # Передача гильдии - это тот же состав с новым основателем, и вклад цел.
+    await guilds.save(read.succeeded_by(second))
+    handed = await guilds.by_id(made.id)
+    assert handed is not None
+    assert handed.founder_id == second
+    assert handed.rank_of(founder) is GuildRank.ELDER
+    assert handed.deeds == 10 and handed.contributed_by(founder) == 8
+
+    await guilds.disband(made.id)

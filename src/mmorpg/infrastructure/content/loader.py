@@ -30,6 +30,7 @@ from mmorpg.domain.entities.content import (
     GearArchetype,
     GearRequirement,
     GearTier,
+    GuildTier,
     HealthCurve,
     House,
     HouseTechnique,
@@ -71,6 +72,7 @@ from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.rules.equipment import WEAPON_SLOT
+from mmorpg.domain.rules.guild import MAX_MEMBERS as GUILD_MAX_MEMBERS
 from mmorpg.domain.rules.modifiers import EFFECTIVE_KEYS
 from mmorpg.domain.rules.tools import TOOL_SLOT
 
@@ -87,6 +89,7 @@ CONTENT_FILES = (
     "quests.toml",
     "crafts.toml",
     "houses.toml",
+    "guilds.toml",
 )
 
 # Виды узлов, которые может попросить задание на поиск. Держатся строками, а не
@@ -184,6 +187,7 @@ def load_content(content_dir: Path) -> GameContent:
     craft_rules = _build_craft_rules(raw["crafts.toml"], problems)
     crafts, recipes = _parse_crafts(raw["crafts.toml"], item_ids, craft_rules, problems)
     houses = _parse_houses(raw["houses.toml"], problems)
+    guild_tiers = _parse_guild_tiers(raw["guilds.toml"], problems)
     subclasses = _parse_subclasses(raw["subclasses.toml"], modifier_keys, classes, problems)
     # Испытание ветки - это обычные задания движка (ADR 0074): те же счётчики,
     # тот же журнал, та же сдача. Города у них нет, поэтому городская доска их
@@ -198,6 +202,7 @@ def load_content(content_dir: Path) -> GameContent:
 
     _validate_races(races, problems)
     _validate_houses(houses, cities, problems)
+    _validate_guild_tiers(guild_tiers, problems)
     _validate_classes(classes, skills, rules, problems)
     _validate_traits(traits, problems)
     _validate_world(cities, rules, problems)
@@ -234,6 +239,7 @@ def load_content(content_dir: Path) -> GameContent:
         "rules": rules,
         "houses": houses,
         "subclasses": subclasses,
+        "guild_tiers": guild_tiers,
         "loot_rules": loot_rules,
         "gear_requirements": requirements,
         "class_affixes": class_affixes,
@@ -537,6 +543,69 @@ def _parse_houses(raw: Mapping[str, Any], problems: list[str]) -> tuple[House, .
             )
         )
     return tuple(parsed)
+
+
+# --- ступени гильдии (ADR 0076) -------------------------------------
+
+
+def _parse_guild_tiers(raw: Mapping[str, Any], problems: list[str]) -> tuple[GuildTier, ...]:
+    """Лестница ступеней гильдии из ``guilds.toml``. Порядок - как написано."""
+    parsed: list[GuildTier] = []
+    for entry in raw.get("tier", ()):
+        parsed.append(
+            GuildTier(
+                level=int(entry.get("level", 0)),
+                name=str(entry.get("name", "")),
+                deeds=int(entry.get("deeds", 0)),
+                seats=int(entry.get("seats", 0)),
+                exp_percent=float(entry.get("exp_percent", 0.0)),
+                gold_percent=float(entry.get("gold_percent", 0.0)),
+            )
+        )
+    return tuple(parsed)
+
+
+def _validate_guild_tiers(tiers: Sequence[GuildTier], problems: list[str]) -> None:
+    """Лестница обязана идти вверх и начинаться с нуля деяний.
+
+    Ступень, которая не даёт ничего сверх предыдущей, - это ступень, которую
+    игрок берёт и не замечает; ступень, вместившая больше ``MAX_MEMBERS``, -
+    обещание, которого правило состава не сдержит.
+    """
+    if not tiers:
+        problems.append("guilds.toml: no tiers declared: a guild would grow into nothing")
+        return
+    _check_unique((tier.name for tier in tiers), "guilds.toml (names)", problems)
+    if tiers[0].deeds != 0:
+        problems.append("guilds.toml: the first tier must stand at 0 deeds")
+    previous: GuildTier | None = None
+    for tier in tiers:
+        if not tier.name:
+            problems.append(f"guilds.toml: tier {tier.level} has no name")
+        if tier.seats > GUILD_MAX_MEMBERS:
+            problems.append(
+                f"guilds.toml: tier {tier.level} seats {tier.seats}, "
+                f"and a guild holds at most {GUILD_MAX_MEMBERS}"
+            )
+        if previous is None:
+            previous = tier
+            continue
+        if tier.level != previous.level + 1:
+            problems.append(f"guilds.toml: tier {tier.level} does not follow {previous.level}")
+        if tier.deeds <= previous.deeds:
+            problems.append(
+                f"guilds.toml: tier {tier.level} costs no more deeds than the one below"
+            )
+        if (tier.seats, tier.exp_percent, tier.gold_percent) <= (
+            previous.seats,
+            previous.exp_percent,
+            previous.gold_percent,
+        ):
+            problems.append(
+                f"guilds.toml: tier {tier.level} gives no more than {previous.level}: "
+                "a tier nobody notices is not a tier"
+            )
+        previous = tier
 
 
 def _validate_houses(houses: Sequence[House], cities: Sequence[City], problems: list[str]) -> None:

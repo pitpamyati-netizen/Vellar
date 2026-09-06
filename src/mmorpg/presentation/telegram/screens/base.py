@@ -75,6 +75,8 @@ class ScreenId(StrEnum):
     GUILD_INVITE = "guild_invite"
     GUILD_ROSTER = "guild_roster"
     GUILD_VAULT = "guild_vault"
+    GUILD_TIERS = "guild_tiers"
+    GUILD_SUCCEED = "guild_succeed"
     TRANSFER_TO = "transfer_to"
     TRANSFER_ITEM = "transfer_item"
     TRANSFER_AMOUNT = "transfer_amount"

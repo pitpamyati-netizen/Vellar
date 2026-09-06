@@ -1633,7 +1633,7 @@ def keeper_guild_screen(
         number = first + offset + 1
         step = (
             labels.keeper_rank_up_label(number)
-            if rank is GuildRank.MEMBER
+            if rank < GuildRank.ELDER
             else labels.keeper_rank_down_label(number)
         )
         rows.append((step, labels.keeper_group_kick_label(number)))

@@ -21,6 +21,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import Chat, Message, User
 
 from mmorpg.application.services.battle import BattleStore
+from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.party import PartyStore
 from mmorpg.config import Settings
 from mmorpg.domain.entities import Character, GameContent, SkillLoadout
@@ -28,6 +29,7 @@ from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.infrastructure.cache.memory import InMemoryLocationStateCache, InMemoryStateCache
 from mmorpg.infrastructure.persistence.memory import (
     InMemoryCharacterRepository,
+    InMemoryGuildRepository,
     InMemoryInventoryRepository,
     InMemoryPartyRepository,
 )
@@ -210,6 +212,7 @@ async def press(
         InMemoryLocationStateCache(),
         cache,
         PartyStore(InMemoryPartyRepository(), cache),
+        GuildStore(InMemoryGuildRepository(), cache),
     )
 
 

@@ -144,6 +144,28 @@ class House:
 
 
 @dataclass(frozen=True, slots=True)
+class GuildTier:
+    """Ступень гильдии: во что она выросла и что от этого её людям (ADR 0076).
+
+    Гильдия растёт деяниями, а не золотом и не часами: выигранный бой её
+    человека — деяние, внесённое в казну золото — столько деяний, сколько это
+    боёв его уровня. ``deeds`` — с какого числа деяний стоит ступень, ``seats`` —
+    сколько человек в неё помещается, ``exp_percent`` и ``gold_percent`` — что
+    ступень добавляет своим за выигранный бой с миром.
+
+    Прибавка тут не свёрток общего словаря: её кладут там, где платят за бой
+    (``handlers/combat._settle_world``), и читает её только гильдия.
+    """
+
+    level: int
+    name: str
+    deeds: int
+    seats: int
+    exp_percent: float = 0.0
+    gold_percent: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
 class ClassResource:
     """Ресурс класса - доблесть, ярость, мана и так далее.
 
@@ -926,6 +948,9 @@ class GameContent:
     #: Ступени специализации классов (ADR 0069). Пусто - подклассов в игре нет,
     #: и экран их не предлагает: содержимое переживает код.
     subclasses: tuple[Subclass, ...]
+    #: Ступени гильдии (ADR 0076). Пусто - гильдия стоит на первой ступени и
+    #: ничего сверх состава не даёт: содержимое переживает код.
+    guild_tiers: tuple[GuildTier, ...]
 
     _races_by_id: Mapping[str, Race]
     _classes_by_id: Mapping[str, CharacterClass]
@@ -1000,6 +1025,7 @@ class GameContent:
         class_affixes: Sequence[ClassAffix] = (),
         houses: Sequence[House] = (),
         subclasses: Sequence[Subclass] = (),
+        guild_tiers: Sequence[GuildTier] = (),
         stat_words: Mapping[str, str] | None = None,
         assemble: Callable[[GameContent, str], Item | None] | None = None,
     ) -> GameContent:
@@ -1045,6 +1071,7 @@ class GameContent:
             ),
             houses=tuple(houses),
             subclasses=tuple(subclasses),
+            guild_tiers=tuple(sorted(guild_tiers, key=lambda one: one.deeds)),
             _races_by_id=MappingProxyType({race.id: race for race in races}),
             _classes_by_id=MappingProxyType({klass.id: klass for klass in classes}),
             _traits_by_id=MappingProxyType({trait.id: trait for trait in traits}),
@@ -1283,6 +1310,21 @@ class GameContent:
     def subclass_skills(self, subclass_id: str) -> tuple[Skill, ...]:
         """Умения ветки (ADR 0074). Пусто - ветка ничему не учит."""
         return self.skills_of(f"{OwnerKind.SUBCLASS.value}:{subclass_id}")
+
+    # --- гильдия ---------------------------------------------------------
+
+    def guild_tier_at(self, deeds: int) -> GuildTier | None:
+        """Ступень, до которой гильдия доросла этими деяниями. ``None`` - ступеней нет.
+
+        Ступени лежат по возрастанию деяний (``build``), поэтому подходит
+        последняя, чей порог взят.
+        """
+        taken = [one for one in self.guild_tiers if one.deeds <= max(0, deeds)]
+        return taken[-1] if taken else None
+
+    def guild_tier_after(self, deeds: int) -> GuildTier | None:
+        """Следующая ступень или ``None`` - выше этой ничего нет."""
+        return next((one for one in self.guild_tiers if one.deeds > max(0, deeds)), None)
 
     def house_of_city(self, city_id: str) -> House | None:
         """Дом, который держит этот город, или ``None`` (Гнездно — ничей)."""

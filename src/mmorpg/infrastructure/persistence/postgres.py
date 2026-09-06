@@ -1097,11 +1097,12 @@ class PostgresPartyRepository:
 
 
 class PostgresGuildRepository:
-    """Гильдия: строка в ``guilds`` (имя, основатель, казна) и строка на каждого
-    участника в ``guild_members`` со званием (``migrations/0017``, ADR 0030).
+    """Гильдия: строка в ``guilds`` (имя, основатель, казна, деяния) и строка на
+    каждого участника в ``guild_members`` со званием и вкладом
+    (``migrations/0017``, ``0029``; ADR 0030, 0076).
 
-    Казна двигается условным ``UPDATE``: ``withdraw`` не уходит в минус, даже
-    если два офицера нажали разом.
+    Казна и деяния двигаются условным ``UPDATE``: ``withdraw`` не уходит в минус,
+    а деяния не теряются, когда два человека дерутся разом.
     """
 
     def __init__(self, pool: asyncpg.Pool) -> None:
@@ -1109,8 +1110,8 @@ class PostgresGuildRepository:
 
     async def _assemble(self, row: Any) -> Guild:
         members = await self._pool.fetch(
-            "SELECT character_id, rank FROM guild_members WHERE guild_id = $1"
-            " ORDER BY rank DESC, character_id",
+            "SELECT character_id, rank, contributed FROM guild_members WHERE guild_id = $1"
+            " ORDER BY rank DESC, contributed DESC, character_id",
             row["id"],
         )
         return Guild(
@@ -1118,25 +1119,30 @@ class PostgresGuildRepository:
             name=row["name"],
             founder_id=row["founder_id"],
             vault_gold=row["vault_gold"],
-            members=tuple(GuildMember(m["character_id"], GuildRank(m["rank"])) for m in members),
+            deeds=row["deeds"],
+            members=tuple(
+                GuildMember(m["character_id"], GuildRank(m["rank"]), m["contributed"])
+                for m in members
+            ),
         )
 
     async def by_id(self, guild_id: int) -> Guild | None:
         row = await self._pool.fetchrow(
-            "SELECT id, name, founder_id, vault_gold FROM guilds WHERE id = $1", guild_id
+            "SELECT id, name, founder_id, vault_gold, deeds FROM guilds WHERE id = $1", guild_id
         )
         return await self._assemble(row) if row is not None else None
 
     async def by_name(self, name: str) -> Guild | None:
         row = await self._pool.fetchrow(
-            "SELECT id, name, founder_id, vault_gold FROM guilds WHERE lower(name) = lower($1)",
+            "SELECT id, name, founder_id, vault_gold, deeds FROM guilds"
+            " WHERE lower(name) = lower($1)",
             name.strip(),
         )
         return await self._assemble(row) if row is not None else None
 
     async def of(self, character_id: int) -> Guild | None:
         row = await self._pool.fetchrow(
-            "SELECT g.id, g.name, g.founder_id, g.vault_gold FROM guilds g"
+            "SELECT g.id, g.name, g.founder_id, g.vault_gold, g.deeds FROM guilds g"
             " JOIN guild_members m ON m.guild_id = g.id WHERE m.character_id = $1",
             character_id,
         )
@@ -1164,8 +1170,13 @@ class PostgresGuildRepository:
 
     async def save(self, guild: Guild) -> None:
         async with self._pool.acquire() as connection, connection.transaction():
+            # Основателя пишут здесь же: гильдию передают другому, и передача -
+            # это тот же состав, только с новым ответственным (ADR 0076).
             await connection.execute(
-                "UPDATE guilds SET name = $2 WHERE id = $1", guild.id, guild.name.strip()
+                "UPDATE guilds SET name = $2, founder_id = $3 WHERE id = $1",
+                guild.id,
+                guild.name.strip(),
+                guild.founder_id,
             )
             ids = [one.character_id for one in guild.members]
             # Индекс по character_id держит «одна гильдия на человека»: выметаем
@@ -1208,3 +1219,23 @@ class PostgresGuildRepository:
             amount,
         )
         return updated is not None
+
+    async def record_deeds(self, guild_id: int, character_id: int, deeds: int) -> None:
+        """Деяния гильдии и вклад того, кто их сделал, - одним движением.
+
+        Обе прибавки условные и без чтения: гильдия, у которой дерутся пятеро
+        разом, не теряет ни деяния (``Claude.md``, правило 8).
+        """
+        if deeds <= 0:
+            return
+        async with self._pool.acquire() as connection, connection.transaction():
+            await connection.execute(
+                "UPDATE guilds SET deeds = deeds + $2 WHERE id = $1", guild_id, deeds
+            )
+            await connection.execute(
+                "UPDATE guild_members SET contributed = contributed + $3"
+                " WHERE guild_id = $1 AND character_id = $2",
+                guild_id,
+                character_id,
+                deeds,
+            )

@@ -1195,14 +1195,14 @@ def _guild_card(with_players: Panel) -> Panel:
         founder_id=7,
         members=(
             GuildMember(7, GuildRank.FOUNDER),
-            GuildMember(8, GuildRank.OFFICER),
+            GuildMember(8, GuildRank.ELDER),
             GuildMember(9, GuildRank.MEMBER),
         ),
         vault_gold=400,
     )
     card.target_guild_members = (
         (7, "Мерла", GuildRank.FOUNDER),
-        (8, "Аргус", GuildRank.OFFICER),
+        (8, "Аргус", GuildRank.ELDER),
         (9, "Довен", GuildRank.MEMBER),
     )
     return card
@@ -1252,10 +1252,10 @@ def test_a_guild_rank_is_raised_and_lowered_but_never_the_founder(with_players: 
 
     card.press(labels.keeper_rank_down_label(2).text)
     assert card.target_guild is not None
-    assert card.target_guild.rank_of(8) is GuildRank.MEMBER
+    assert card.target_guild.rank_of(8) is GuildRank.VETERAN
 
     card.press(labels.keeper_rank_up_label(2).text)
-    assert card.target_guild.rank_of(8) is GuildRank.OFFICER
+    assert card.target_guild.rank_of(8) is GuildRank.ELDER
 
     # У основателя (номер 1) кнопок звания нет.
     assert labels.keeper_rank_down_label(1).text not in card.buttons()

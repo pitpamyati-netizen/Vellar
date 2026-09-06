@@ -26,7 +26,7 @@ from mmorpg.domain.entities import (
     StatBlock,
 )
 from mmorpg.domain.entities.combat import BattleState
-from mmorpg.domain.entities.content import Item
+from mmorpg.domain.entities.content import GuildTier, Item
 from mmorpg.domain.entities.craft import CraftLog, CraftProgress
 from mmorpg.domain.entities.location import (
     Enemy,
@@ -49,6 +49,7 @@ from mmorpg.domain.ports.repositories import (
 )
 from mmorpg.domain.procgen import generate_location, location_seed
 from mmorpg.domain.rules import digest as digest_rules
+from mmorpg.domain.rules import guild as guild_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules.combat import hero_combatant, monster_combatant, open_battle
@@ -451,14 +452,14 @@ _group_view = keeper_screens.KeeperView(
         founder_id=7,
         members=(
             GuildMember(7, GuildRank.FOUNDER),
-            GuildMember(8, GuildRank.OFFICER),
+            GuildMember(8, GuildRank.ELDER),
             GuildMember(9, GuildRank.MEMBER),
         ),
         vault_gold=400,
     ),
     target_guild_members=(
         (7, "Мерла", GuildRank.FOUNDER),
-        (8, "Аргус", GuildRank.OFFICER),
+        (8, "Аргус", GuildRank.ELDER),
         (9, "Довен", GuildRank.MEMBER),
     ),
     now=NOW,
@@ -474,7 +475,7 @@ _CROWD: tuple[tuple[int, str, GuildRank], ...] = tuple(
         f"Соклановец{number:02d}Длинноимённый",
         GuildRank.FOUNDER
         if number == 1
-        else (GuildRank.OFFICER if number <= 5 else GuildRank.MEMBER),
+        else (GuildRank.ELDER if number <= 5 else GuildRank.MEMBER),
     )
     for number in range(1, 31)
 )
@@ -491,11 +492,23 @@ _crowded_view = keeper_screens.KeeperView(
     now=NOW,
 )
 
+#: Лестница ступеней и место на ней - те же, что в ``content/guilds.toml``:
+#: экран возвышения и экран гильдии обязаны читаться с настоящими числами.
+_GUILD_TIERS: tuple[GuildTier, ...] = (
+    GuildTier(level=1, name="Товарищество", deeds=0, seats=12),
+    GuildTier(level=2, name="Артель", deeds=150, seats=15, gold_percent=2),
+    GuildTier(level=3, name="Братчина", deeds=400, seats=18, exp_percent=2, gold_percent=2),
+)
+_A_STANDING = guild_rules.Standing(
+    tier=_GUILD_TIERS[1], next_tier=_GUILD_TIERS[2], deeds=210, seats=15, members=2
+)
+
 _crowded_roster = guild_screens.GuildView(
     name="Серебряный оплот",
     my_rank=GuildRank.FOUNDER,
-    members=tuple((name, rank) for _, name, rank in _CROWD),
+    members=tuple((name, rank, number * 40) for number, name, rank in _CROWD),
     vault_gold=98_765,
+    place=guild_rules.Standing(deeds=9000, seats=30, members=30),
 )
 
 
@@ -969,15 +982,18 @@ def all_screens(
         ),
         party_screens.invite_screen(party_screens.PartyView(members=("Аргус",), leader=True)),
         party_screens.invite_screen(party_screens.PartyView()),
-        guild_screens.guild_screen(guild_screens.GuildView(my_gold=900)),
+        guild_screens.guild_screen(guild_screens.GuildView(my_gold=900, tiers=_GUILD_TIERS)),
         guild_screens.guild_screen(guild_screens.GuildView(my_gold=50, caller="Медный Крест")),
         guild_screens.guild_screen(
             guild_screens.GuildView(
                 name="Стая",
                 my_rank=GuildRank.FOUNDER,
-                members=(("Аргус", GuildRank.FOUNDER), ("Мирна", GuildRank.OFFICER)),
+                members=(("Аргус", GuildRank.FOUNDER, 120), ("Мирна", GuildRank.ELDER, 90)),
                 vault_gold=1200,
                 my_gold=300,
+                place=_A_STANDING,
+                tiers=_GUILD_TIERS,
+                my_limit=None,
             ),
             notice="Гильдия основана.",
         ),
@@ -985,45 +1001,93 @@ def all_screens(
             guild_screens.GuildView(
                 name="Стая",
                 my_rank=GuildRank.MEMBER,
-                members=(("Аргус", GuildRank.FOUNDER), ("Мирна", GuildRank.MEMBER)),
+                members=(("Аргус", GuildRank.FOUNDER, 120), ("Мирна", GuildRank.MEMBER, 8)),
                 vault_gold=1200,
                 my_gold=300,
+                place=_A_STANDING,
+                tiers=_GUILD_TIERS,
+                my_limit=90,
+                my_taken=30,
             ),
         ),
         guild_screens.found_screen(guild_screens.GuildView(my_gold=900)),
         guild_screens.invite_screen(
             guild_screens.GuildView(
-                name="Стая", my_rank=GuildRank.OFFICER, members=(("Аргус", GuildRank.FOUNDER),)
+                name="Стая",
+                my_rank=GuildRank.ELDER,
+                members=(("Аргус", GuildRank.FOUNDER, 120),),
+                place=_A_STANDING,
             )
         ),
+        guild_screens.succeed_screen(
+            guild_screens.GuildView(name="Стая", my_rank=GuildRank.FOUNDER, place=_A_STANDING)
+        ),
+        guild_screens.tiers_screen(
+            guild_screens.GuildView(name="Стая", place=_A_STANDING, tiers=_GUILD_TIERS)
+        ),
+        guild_screens.tiers_screen(guild_screens.GuildView()),
         guild_screens.roster_screen(
             guild_screens.GuildView(
                 name="Стая",
                 my_rank=GuildRank.FOUNDER,
                 members=(
-                    ("Аргус", GuildRank.FOUNDER),
-                    ("Мирна", GuildRank.OFFICER),
-                    ("Тьен", GuildRank.MEMBER),
+                    ("Аргус", GuildRank.FOUNDER, 300),
+                    ("Мирна", GuildRank.ELDER, 210),
+                    ("Тьен", GuildRank.RECRUIT, 0),
                 ),
+                place=_A_STANDING,
             )
         ),
         guild_screens.roster_screen(
             guild_screens.GuildView(
                 name="Стая",
                 my_rank=GuildRank.MEMBER,
-                members=(("Аргус", GuildRank.FOUNDER), ("Мирна", GuildRank.MEMBER)),
+                members=(("Аргус", GuildRank.FOUNDER, 300), ("Мирна", GuildRank.MEMBER, 12)),
+                place=_A_STANDING,
+            )
+        ),
+        guild_screens.roster_screen(
+            guild_screens.GuildView(
+                name="Стая",
+                my_rank=GuildRank.ELDER,
+                members=(
+                    ("Аргус", GuildRank.FOUNDER, 300),
+                    ("Мирна", GuildRank.ELDER, 210),
+                    ("Тьен", GuildRank.MEMBER, 40),
+                ),
+                place=_A_STANDING,
             )
         ),
         guild_screens.roster_screen(_crowded_roster),
         guild_screens.roster_screen(_crowded_roster, PageState(page=4)),
         guild_screens.vault_screen(
             guild_screens.GuildView(
-                name="Стая", my_rank=GuildRank.OFFICER, vault_gold=800, my_gold=250
+                name="Стая",
+                my_rank=GuildRank.ELDER,
+                vault_gold=800,
+                my_gold=250,
+                place=_A_STANDING,
+                my_limit=400,
+                my_taken=150,
             )
         ),
         guild_screens.vault_screen(
             guild_screens.GuildView(
-                name="Стая", my_rank=GuildRank.MEMBER, vault_gold=800, my_gold=250
+                name="Стая",
+                my_rank=GuildRank.RECRUIT,
+                vault_gold=800,
+                my_gold=250,
+                place=_A_STANDING,
+            )
+        ),
+        guild_screens.vault_screen(
+            guild_screens.GuildView(
+                name="Стая",
+                my_rank=GuildRank.FOUNDER,
+                vault_gold=800,
+                my_gold=250,
+                place=_A_STANDING,
+                my_limit=None,
             )
         ),
         transfer_screens.recipients_screen("party", ("Мирна", "Тьен"), PageState()),

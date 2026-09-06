@@ -281,7 +281,7 @@ def test_a_guild_member_is_taken_out_and_reranked_but_never_the_founder() -> Non
         founder_id=1,
         members=(
             GuildMember(1, GuildRank.FOUNDER),
-            GuildMember(2, GuildRank.OFFICER),
+            GuildMember(2, GuildRank.ELDER),
             GuildMember(3, GuildRank.MEMBER),
         ),
         vault_gold=200,
@@ -292,10 +292,10 @@ def test_a_guild_member_is_taken_out_and_reranked_but_never_the_founder() -> Non
     assert keeper.remove_from_guild(guild, 1) is None, "основателя не выводят"
     assert keeper.remove_from_guild(guild, 9) is None
 
-    up = keeper.set_guild_rank(guild, 3, GuildRank.OFFICER)
-    assert up is not None and up.rank_of(3) is GuildRank.OFFICER
-    assert keeper.set_guild_rank(guild, 1, GuildRank.OFFICER) is None, "у основателя одно звание"
-    assert keeper.set_guild_rank(guild, 2, GuildRank.OFFICER) is None, "уже офицер"
+    up = keeper.set_guild_rank(guild, 3, GuildRank.ELDER)
+    assert up is not None and up.rank_of(3) is GuildRank.ELDER
+    assert keeper.set_guild_rank(guild, 1, GuildRank.ELDER) is None, "у основателя одно звание"
+    assert keeper.set_guild_rank(guild, 2, GuildRank.ELDER) is None, "уже старейшина"
     assert keeper.set_guild_rank(guild, 2, GuildRank.FOUNDER) is None, "второго основателя нет"
 
     assert keeper.set_vault_gold(guild, 500).vault_gold == 500

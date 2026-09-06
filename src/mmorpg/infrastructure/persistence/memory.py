@@ -467,6 +467,17 @@ class InMemoryGuildRepository:
     async def save(self, guild: Guild) -> None:
         stored = self._guilds.get(guild.id)
         vault = stored.vault_gold if stored is not None else guild.vault_gold
+        # Казна и деяния двигаются своими движениями, а не записью состава:
+        # записанная гильдия прочитана несколькими ``await`` назад (ADR 0076).
+        deeds = stored.deeds if stored is not None else guild.deeds
+        brought = {one.character_id: one.contributed for one in stored.members} if stored else {}
+        guild = replace(
+            guild,
+            members=tuple(
+                replace(one, contributed=brought.get(one.character_id, one.contributed))
+                for one in guild.members
+            ),
+        )
         # «Одна гильдия на человека»: новичков выметают из любой другой гильдии.
         joining = {one.character_id for one in guild.members}
         for other_id, other in list(self._guilds.items()):
@@ -475,7 +486,7 @@ class InMemoryGuildRepository:
             kept = tuple(m for m in other.members if m.character_id not in joining)
             if len(kept) != len(other.members):
                 self._guilds[other_id] = replace(other, members=kept)
-        self._guilds[guild.id] = replace(guild, vault_gold=vault)
+        self._guilds[guild.id] = replace(guild, vault_gold=vault, deeds=deeds)
 
     async def disband(self, guild_id: int) -> None:
         self._guilds.pop(guild_id, None)
@@ -491,6 +502,21 @@ class InMemoryGuildRepository:
             return False
         self._guilds[guild_id] = replace(guild, vault_gold=guild.vault_gold - amount)
         return True
+
+    async def record_deeds(self, guild_id: int, character_id: int, deeds: int) -> None:
+        guild = self._guilds.get(guild_id)
+        if guild is None or deeds <= 0:
+            return
+        self._guilds[guild_id] = replace(
+            guild,
+            deeds=guild.deeds + deeds,
+            members=tuple(
+                replace(one, contributed=one.contributed + deeds)
+                if one.character_id == character_id
+                else one
+                for one in guild.members
+            ),
+        )
 
 
 class InMemoryTradeRepository:

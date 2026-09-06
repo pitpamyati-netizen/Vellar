@@ -77,6 +77,8 @@ class Play(StatesGroup):
     guild_invite = State()
     guild_roster = State()
     guild_vault = State()
+    guild_tiers = State()
+    guild_succeed = State()
     transfer_to = State()
     transfer_item = State()
     transfer_amount = State()
@@ -174,6 +176,8 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.GUILD_INVITE: Play.guild_invite,
     ScreenId.GUILD_ROSTER: Play.guild_roster,
     ScreenId.GUILD_VAULT: Play.guild_vault,
+    ScreenId.GUILD_TIERS: Play.guild_tiers,
+    ScreenId.GUILD_SUCCEED: Play.guild_succeed,
     ScreenId.TRANSFER_TO: Play.transfer_to,
     ScreenId.TRANSFER_ITEM: Play.transfer_item,
     ScreenId.TRANSFER_AMOUNT: Play.transfer_amount,
@@ -273,6 +277,8 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.GUILD_INVITE: ScreenId.GUILD,
     ScreenId.GUILD_ROSTER: ScreenId.GUILD,
     ScreenId.GUILD_VAULT: ScreenId.GUILD,
+    ScreenId.GUILD_TIERS: ScreenId.GUILD,
+    ScreenId.GUILD_SUCCEED: ScreenId.GUILD,
     # Передача общая для отряда и гильдии; куда вести «Назад» на самом деле,
     # знает ``NavigationStack`` — здесь только нейтральный запасной путь.
     ScreenId.TRANSFER_TO: ScreenId.MAIN_MENU,

@@ -33,6 +33,7 @@ from mmorpg.application.services.battle import (
     begin,
     roster_for,
 )
+from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.party import PartyStore
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character
@@ -51,6 +52,7 @@ from mmorpg.domain.rules import adventure, progression
 from mmorpg.domain.rules import arena as arena_rules
 from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import dungeon as dungeon_rules
+from mmorpg.domain.rules import guild as guild_rules
 from mmorpg.domain.rules import mood as mood_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import party as party_rules
@@ -643,6 +645,7 @@ async def fight(
     locations: LocationStateCache,
     state_cache: StateCache,
     parties: PartyStore,
+    guilds: GuildStore,
 ) -> None:
     """Одно сообщение - один ход. Никогда молчание, никогда два сообщения."""
     if message.from_user is None or message.text is None:
@@ -700,6 +703,7 @@ async def fight(
             locations,
             settings,
             state_cache,
+            guilds,
         )
         return
 
@@ -733,6 +737,7 @@ async def fight(
         locations,
         settings,
         state_cache,
+        guilds,
     )
 
 
@@ -779,6 +784,7 @@ async def _store_and_show(
     locations: LocationStateCache,
     settings: Settings,
     state_cache: StateCache,
+    guilds: GuildStore,
 ) -> None:
     """Сохранить то, что ход изменил, и ответить ровно одним экраном каждому."""
     store = BattleStore(state_cache)
@@ -796,6 +802,7 @@ async def _store_and_show(
             inventory,
             locations,
             state_cache,
+            guilds,
         )
         return
 
@@ -940,6 +947,7 @@ async def _finish(
     inventory: InventoryRepository,
     locations: LocationStateCache,
     state_cache: StateCache,
+    guilds: GuildStore,
 ) -> None:
     """Заплатить по кончившемуся бою - один раз, за всех, и показать итог."""
     store = BattleStore(state_cache)
@@ -966,7 +974,11 @@ async def _finish(
         _carry_wounds(content, session, updated)
         _settle_arena(session, roster, payouts, updated)
     else:
-        await _settle_world(content, session, roster, winners, losers, payouts, updated, inventory)
+        places = await _guild_places(content, guilds, session, heroes)
+        await _settle_world(
+            content, session, roster, winners, losers, payouts, updated, inventory, places
+        )
+        await _record_deeds(guilds, places, winners)
 
     # Спуск и узел считаются по владельцу похода: остальные шли с ним.
     owner = next((one for one in heroes if one.character_id == session.owner), None)
@@ -1048,6 +1060,54 @@ def _carry_wounds(
             )
 
 
+@dataclass(frozen=True, slots=True)
+class GuildPlace:
+    """Гильдия героя на момент расчёта боя: имя и ступень (ADR 0076).
+
+    Читается один раз на бой: и надбавка за победу, и записанное деяние берутся
+    отсюда, а не двумя запросами.
+    """
+
+    guild_id: int
+    name: str
+    standing: guild_rules.Standing
+
+
+async def _guild_places(
+    content: GameContent,
+    guilds: GuildStore,
+    session: BattleSession,
+    heroes: Sequence[Combatant],
+) -> dict[int, GuildPlace]:
+    """Гильдии участников боя с миром. Поединок и арена гильдии не касаются.
+
+    Поединок - это чужое золото, а не добыча мира: платить с него гильдейскую
+    надбавку и записывать деяния значило бы растить гильдию об игроков.
+    """
+    if session.is_duel or session.is_arena:
+        return {}
+    found: dict[int, GuildPlace] = {}
+    for one in heroes:
+        guild = await guilds.of(one.character_id)
+        if guild is not None:
+            found[one.character_id] = GuildPlace(
+                guild_id=guild.id, name=guild.name, standing=guild_rules.standing(content, guild)
+            )
+    return found
+
+
+async def _record_deeds(
+    guilds: GuildStore,
+    places: Mapping[int, GuildPlace],
+    winners: Sequence[Combatant],
+) -> None:
+    """Выигранный бой - деяние гильдии и вклад того, кто его выиграл (ADR 0076)."""
+    for one in winners:
+        place = places.get(one.character_id)
+        if place is not None:
+            await guilds.record_deeds(place.guild_id, one.character_id, guild_rules.DEEDS_PER_FIGHT)
+
+
 async def _settle_world(
     content: GameContent,
     session: BattleSession,
@@ -1057,6 +1117,7 @@ async def _settle_world(
     payouts: dict[int, Payout],
     updated: dict[int, Character],
     inventory: InventoryRepository,
+    places: Mapping[int, GuildPlace],
 ) -> None:
     """Расчёт боя с миром: опыт, золото, добыча - и всё это делится на отряд.
 
@@ -1087,6 +1148,30 @@ async def _settle_world(
             )
             character = won.character
             economy_log.record(economy_log.FIGHT, won.gold, character_id=character.id)
+            # Надбавка гильдии ложится поверх посчитанной платы и отдельной
+            # строкой: гильдия - объединение, а не свёрток прибавок (ADR 0076).
+            place = places.get(one.character_id)
+            if place is not None and place.standing.pays:
+                extra_exp, extra_gold = guild_rules.fight_bonus(
+                    place.standing, experience=experience[index], gold=won.gold
+                )
+                if extra_gold:
+                    character = character.with_gold(extra_gold)
+                    economy_log.record(
+                        economy_log.FIGHT, extra_gold, character_id=character.id, detail="guild"
+                    )
+                if extra_exp:
+                    # Считается надбавка от доли боя, а прибавка к опыту - один
+                    # раз, внутри ``grant_experience``; названное игроку число и
+                    # есть то, что он получит (``progression.earned``).
+                    granted = progression.earned(content, character, extra_exp)
+                    character, _ = progression.grant_experience(content, character, extra_exp)
+                    extra_exp = granted
+                if extra_exp or extra_gold:
+                    payouts[one.character_id].extra.append(
+                        f"Гильдия «{place.name}»: сверх боя {extra_exp} опыта и "
+                        f"{extra_gold} золота."
+                    )
             for item_id in share_loot:
                 if content.has_item(item_id):
                     await inventory.add(character.id, item_id, 1)
@@ -1683,6 +1768,7 @@ async def _use_from_bag(
     locations: LocationStateCache,
     settings: Settings,
     state_cache: StateCache,
+    guilds: GuildStore,
 ) -> None:
     """Расходник стоит хода, как и всякое другое действие."""
     entries = await _consumables(content, character, inventory)
@@ -1742,4 +1828,5 @@ async def _use_from_bag(
         locations,
         settings,
         state_cache,
+        guilds,
     )

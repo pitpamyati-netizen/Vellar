@@ -25,6 +25,7 @@ from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.party import PartyStore
 from mmorpg.config import Settings
 from mmorpg.domain.entities import Character, GameContent
+from mmorpg.domain.rules import guild as guild_rules
 from mmorpg.domain.rules.guild import FOUND_COST, GuildRank
 from mmorpg.infrastructure.cache.memory import InMemoryLocationStateCache, InMemoryStateCache
 from mmorpg.infrastructure.persistence.memory import (
@@ -251,12 +252,18 @@ async def test_an_invite_is_answered_by_the_one_who_was_called_and_ranks_flow(
 
     # Основатель поднимает Мирну до офицера с экрана состава.
     roster = await argus.press(labels.GUILD_ROSTER.text)
-    assert "Мирна — участник." in roster.text()
+    assert "Мирна — новик, вклад 0." in roster.text()
+    # Звание двигают на ступень: новик - участник - ветеран - старейшина.
     promoted = await argus.press(labels.guild_promote_label("Мирна").text)
-    assert "теперь офицер" in promoted.text()
+    assert "теперь участник" in promoted.text()
+    promoted = await argus.press(labels.guild_promote_label("Мирна").text)
+    assert "теперь ветеран" in promoted.text()
 
     guild = await guilds.of(mirna_character.id)
-    assert guild is not None and guild.rank_of(mirna_character.id) is GuildRank.OFFICER
+    assert guild is not None and guild.rank_of(mirna_character.id) is GuildRank.VETERAN
+
+    lowered = await argus.press(labels.guild_demote_label("Мирна").text)
+    assert "теперь участник" in lowered.text()
 
 
 async def test_a_crowded_roster_is_read_page_by_page(
@@ -296,12 +303,12 @@ async def test_a_crowded_roster_is_read_page_by_page(
     assert first.fits_message_limit(), f"{len(first.text())} знаков в одном сообщении"
     assert "страница 1 из 2" in first.text()
     assert labels.NEXT_PAGE.text in buttons(first)
-    assert "Соклановец01 — участник." in first.text()
-    assert "Соклановец11 — участник." not in first.text()
+    assert "Соклановец01 — участник, вклад 0." in first.text()
+    assert "Соклановец11 — участник, вклад 0." not in first.text()
 
     second = await argus.press(labels.NEXT_PAGE.text)
     assert second.fits_message_limit()
-    assert "Соклановец11 — участник." in second.text()
+    assert "Соклановец11 — участник, вклад 0." in second.text()
 
     # Со второй страницы выгоняют так же, как с первой: кнопка несёт имя.
     kicked = await argus.press(labels.guild_kick_label("Соклановец11").text)
@@ -310,7 +317,7 @@ async def test_a_crowded_roster_is_read_page_by_page(
     assert left is not None and left.size == crowd.size - 1
 
 
-async def test_the_vault_takes_from_officers_and_only_deposits_from_members(
+async def test_the_vault_takes_by_rank_and_a_recruit_only_deposits(
     table: tuple[Player, Player, Character, Character],
     characters: InMemoryCharacterRepository,
     guilds: GuildStore,
@@ -422,3 +429,138 @@ async def test_a_non_guildmate_is_not_offered(
 
     screen = await argus.press(labels.GUILD.text)
     assert labels.GUILD_TRANSFER.text not in buttons(screen)
+
+
+# --- гильдия растёт (ADR 0076) ---------------------------------------
+
+
+async def test_a_deposit_is_written_to_the_guild_as_deeds(
+    table: tuple[Player, Player, Character, Character],
+    guilds: GuildStore,
+) -> None:
+    """Внесённое золото меряется боями своего уровня и растит гильдию."""
+    argus, _mirna, argus_character, _ = table
+    await _found(argus)
+
+    await argus.press(labels.GUILD_VAULT.text)
+    deposited = await argus.press(labels.guild_deposit_label(250).text)
+    expected = guild_rules.deeds_for_deposit(250, argus_character.level)
+    assert expected > 0
+    assert f"деяний: {expected}" in deposited.text()
+
+    guild = await guilds.of(argus_character.id)
+    assert guild is not None
+    assert guild.deeds == expected
+    assert guild.contributed_by(argus_character.id) == expected
+
+    # Вклад виден в составе, а ступень - на самом экране гильдии.
+    roster = await argus.press(labels.GUILD_ROSTER.text)
+    assert f"вклад {expected}." in roster.text()
+    screen = await argus.press(labels.GUILD.text)
+    assert "Ступень 1: Товарищество." in screen.text()
+    assert f"Деяний: {expected}." in screen.text()
+
+
+async def test_the_vault_holds_a_rank_to_its_share_per_rotation(
+    table: tuple[Player, Player, Character, Character],
+    characters: InMemoryCharacterRepository,
+    guilds: GuildStore,
+) -> None:
+    """Казна, из которой один человек выносит всё, - это не общая казна."""
+    argus, mirna, argus_character, mirna_character = table
+    await _found(argus)
+    await argus.press(labels.GUILD_INVITE.text)
+    await argus.press("Мирна")
+    await mirna.press("/гильдия принять")
+
+    # Новик кладёт, но ряда выемки у него нет вовсе.
+    vault = await mirna.press(labels.GUILD_VAULT.text)
+    assert labels.guild_withdraw_label(50).text not in buttons(vault)
+    assert "не берёт" in vault.text()
+    await mirna.press(labels.guild_deposit_label(1000).text)
+
+    # Участнику ряд рисуют, и предел он слышит числом.
+    guild = await guilds.of(argus_character.id)
+    assert guild is not None
+    await guilds.save(guild.with_rank(mirna_character.id, GuildRank.MEMBER))
+    limit = guild_rules.withdraw_limit(GuildRank.MEMBER, mirna_character.level)
+    assert limit is not None and 250 < limit < 1000
+
+    vault = await mirna.press(labels.GUILD_VAULT.text)
+    assert labels.guild_withdraw_label(250).text in buttons(vault)
+    assert f"Вам положено за переворот: {limit}." in vault.text()
+
+    await mirna.press(labels.guild_withdraw_label(250).text)
+    await mirna.press(labels.guild_withdraw_label(250).text)
+    refused = await mirna.press(labels.guild_withdraw_label(250).text)
+    assert "не больше" in refused.text(), "предел переворота держит третью выемку"
+
+    stored = await characters.get(mirna_character.id)
+    assert stored is not None
+    assert stored.gold == mirna_character.gold - 1000 + 500
+
+    # А основатель берёт без предела: он же за казну и отвечает.
+    taken = await argus.press(labels.GUILD_VAULT.text)
+    assert "без предела" in taken.text()
+    took = await argus.press(labels.guild_withdraw_label(50).text)
+    assert "Из казны взято 50" in took.text()
+
+
+async def test_the_rise_screen_names_every_step_and_where_the_guild_stands(
+    table: tuple[Player, Player, Character, Character],
+    content: GameContent,
+) -> None:
+    argus, _mirna, _, _ = table
+    await _found(argus)
+
+    rise = await argus.press(labels.GUILD_TIERS.text)
+    assert rise.id is ScreenId.GUILD_TIERS
+    assert rise.fits_message_limit()
+    for tier in content.guild_tiers:
+        assert tier.name in rise.text()
+    assert "взята" in rise.text()
+
+
+async def test_the_guild_is_handed_over_and_the_old_founder_may_leave(
+    table: tuple[Player, Player, Character, Character],
+    guilds: GuildStore,
+) -> None:
+    argus, mirna, argus_character, mirna_character = table
+    await _found(argus)
+    await argus.press(labels.GUILD_INVITE.text)
+    await argus.press("Мирна")
+    await mirna.press("/гильдия принять")
+
+    screen = await argus.press(labels.GUILD.text)
+    assert labels.GUILD_SUCCEED.text in buttons(screen)
+    asking = await argus.press(labels.GUILD_SUCCEED.text)
+    assert asking.id is ScreenId.GUILD_SUCCEED
+    handed = await argus.press("Мирна")
+    assert "Гильдия передана: Мирна" in handed.text()
+
+    guild = await guilds.of(argus_character.id)
+    assert guild is not None
+    assert guild.founder_id == mirna_character.id
+    assert guild.rank_of(argus_character.id) is GuildRank.ELDER
+
+    # Прежний основатель больше не заперт в своей гильдии.
+    left = await argus.press(labels.GUILD_LEAVE.text)
+    assert "Вы вышли из гильдии." in left.text()
+    assert await guilds.of(argus_character.id) is None
+
+
+async def test_only_the_founder_hands_the_guild_over(
+    table: tuple[Player, Player, Character, Character],
+) -> None:
+    argus, mirna, _, _ = table
+    await _found(argus)
+    await argus.press(labels.GUILD_INVITE.text)
+    await argus.press("Мирна")
+    await mirna.press("/гильдия принять")
+
+    screen = await mirna.press(labels.GUILD.text)
+    assert labels.GUILD_SUCCEED.text not in buttons(screen)
+    refused = await mirna.press("/гильдия наследник")
+    assert refused.id is ScreenId.GUILD_SUCCEED
+    said = await mirna.press("Аргус")
+    assert "только основатель" in said.text()

@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 
 from mmorpg.application.dto.creation import validate_name
@@ -30,7 +31,7 @@ from mmorpg.domain.rules import keeper as keeper_rules
 from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import skills as skill_rules
-from mmorpg.domain.rules.guild import GuildRank
+from mmorpg.domain.rules.guild import GuildRank, lowered, raised
 from mmorpg.domain.rules.overlay import FieldKind, FieldSpec
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.flows.state import (
@@ -1513,12 +1514,15 @@ def _step_keeper_guild(state: PlayState, command: Command, view: KeeperView) -> 
             "Наберите новое число казны сообщением."
         )
 
+    # Панель двигает звание на ступень, как и сама гильдия: пять званий, и
+    # «поднять» значит «на одно выше» (ADR 0076). Нынешнее звание берут у самой
+    # гильдии, а не у нарисованного списка: список - это прошлый экран.
     up = keeper_screens.rank_up_number(len(members), command.argument)
     if up:
-        return _guild_rank(state, view, members, up, GuildRank.OFFICER)
+        return _guild_rank(state, view, members, up, raised)
     down = keeper_screens.rank_down_number(len(members), command.argument)
     if down:
-        return _guild_rank(state, view, members, down, GuildRank.MEMBER)
+        return _guild_rank(state, view, members, down, lowered)
     kick = keeper_screens.group_kick_number(len(members), command.argument)
     if kick:
         member_id, member_name, _ = members[kick - 1]
@@ -1537,10 +1541,14 @@ def _guild_rank(
     view: KeeperView,
     members: tuple[tuple[int, str, GuildRank], ...],
     number: int,
-    rank: GuildRank,
+    step: Callable[[GuildRank], GuildRank],
 ) -> PlayState:
     assert view.target_guild is not None  # проверено вызывающим
     member_id, member_name, _ = members[number - 1]
+    current = view.target_guild.rank_of(member_id)
+    if current is None:
+        return state.with_notice("Этого человека нет в гильдии.")
+    rank = step(current)
     changed = keeper_rules.set_guild_rank(view.target_guild, member_id, rank)
     if changed is None:
         return state.with_notice("Так звание не сменить.")

@@ -311,6 +311,8 @@ GUILD_LEAVE = label("Выйти из гильдии", "🚪")
 GUILD_ROSTER = label("Состав гильдии", "📋")
 GUILD_VAULT = label("Казна гильдии", "💰")
 GUILD_TRANSFER = label("Передать соклановцу", "🎁")
+GUILD_TIERS = label("Возвышение гильдии", "🏆")
+GUILD_SUCCEED = label("Передать гильдию", "🤝")
 
 
 # --- великие дома (``domain/rules/houses.py``) ---

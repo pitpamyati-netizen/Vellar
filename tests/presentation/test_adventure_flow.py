@@ -29,6 +29,7 @@ from mmorpg.application.services.battle import BattleStore
 from mmorpg.application.services.content import ContentRegistry
 from mmorpg.config import Settings
 from mmorpg.domain.entities import Character, GameContent, QuestLog, SkillLoadout
+from mmorpg.domain.entities.content import GuildTier
 from mmorpg.domain.entities.location import NodeKind
 from mmorpg.domain.entities.stats import StatBlock
 from mmorpg.domain.procgen import location_seed
@@ -236,6 +237,7 @@ class Player:
                 self.deps["deltas"],
                 self.deps["cache"],
                 self.deps["parties"],
+                self.deps["guilds"],
             )
         else:
             await play_handler.play(
@@ -575,6 +577,51 @@ async def test_a_fight_ends_and_the_result_is_stored(
         assert stored.gold < argus.gold
     # Раны переживают бой, чем бы он ни кончился.
     assert 0 < stored.health <= derived_stats(content, stored).max_health
+
+
+async def test_a_won_fight_is_a_deed_of_the_guild_and_the_tier_pays(
+    player: Player,
+    content: GameContent,
+    argus: Character,
+    guilds: Any,
+) -> None:
+    """Выигранный бой растит гильдию, а её ступень платит бойцу сверх боя (ADR 0076).
+
+    Ступень тут своя, щедрая: на первом уровне бой платит девять опыта, и
+    честные два процента от него - ноль. Проверяется связывание, а не числа
+    ``content/guilds.toml`` (их держит ``tests/content/test_guilds.py``).
+    """
+    generous = content.rebuilt(
+        guild_tiers=(
+            GuildTier(level=1, name="Товарищество", deeds=0, seats=12),
+            GuildTier(
+                level=2, name="Артель", deeds=10, seats=15, exp_percent=100, gold_percent=100
+            ),
+        )
+    )
+    player.deps["content"] = generous
+    player.deps["registry"] = ContentRegistry(generous)
+
+    guild = await guilds.create("Стая", argus.id)
+    await guilds.record_deeds(guild.id, argus.id, 10)
+
+    await walk_to(player, generous, NodeKind.BATTLE)
+    await player.act(NodeKind.BATTLE)
+    for _ in range(40):
+        text = (await player.press("Атака")).text()
+        if text.startswith(("Победа.", "Поражение.")):
+            break
+    else:  # pragma: no cover - бой без конца ловит соседний тест
+        pytest.fail("the fight never finished in 40 turns")
+
+    grown = await guilds.of(argus.id)
+    assert grown is not None
+    if text.startswith("Поражение."):
+        assert grown.deeds == 10, "проигранный бой гильдии ничего не даёт"
+        return
+    assert grown.deeds == 11
+    assert grown.contributed_by(argus.id) == 11
+    assert "Гильдия «Стая»: сверх боя" in text
 
 
 async def test_a_won_fight_takes_one_pack_out_of_the_node(

@@ -24,6 +24,7 @@ from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, OwnerKind
 from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatCode
+from mmorpg.domain.rules import guild as guild_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.guild import Guild, GuildRank
 from mmorpg.domain.rules.party import Party
@@ -285,11 +286,12 @@ def remove_from_guild(guild: Guild, character_id: int) -> Guild | None:
 
 def set_guild_rank(guild: Guild, character_id: int, rank: GuildRank) -> Guild | None:
     """Сменить звание участнику. ``None`` - его нет в гильдии, это основатель, или
-    звание не между «участник» и «офицер»: второго основателя не бывает."""
+    звание не из раздаваемых: второго основателя не бывает, гильдию передают
+    целиком (``domain/rules/guild.py``, ADR 0076)."""
     current = guild.rank_of(character_id)
     if current is None or character_id == guild.founder_id:
         return None
-    if rank not in (GuildRank.MEMBER, GuildRank.OFFICER) or current is rank:
+    if rank not in guild_rules.GRANTABLE or current is rank:
         return None
     return guild.with_rank(character_id, rank)
 

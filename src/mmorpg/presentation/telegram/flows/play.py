@@ -547,6 +547,10 @@ def _render(
             return guild_screens.roster_screen(guild or GuildView(), state.list_page, state.notice)
         case ScreenId.GUILD_VAULT:
             return guild_screens.vault_screen(guild or GuildView(), state.notice)
+        case ScreenId.GUILD_TIERS:
+            return guild_screens.tiers_screen(guild or GuildView(), state.notice)
+        case ScreenId.GUILD_SUCCEED:
+            return guild_screens.succeed_screen(guild or GuildView(), state.notice)
         case ScreenId.TRANSFER_TO:
             return transfer_screens.recipients_screen(
                 state.transfer_scope,
@@ -915,7 +919,7 @@ def _transfer_recipients(
 ) -> tuple[str, ...]:
     """Кому игрок может передать вещь: состав объединения минус он сам."""
     if state.transfer_scope == "guild":
-        names: tuple[str, ...] = tuple(name for name, _ in guild.members) if guild else ()
+        names: tuple[str, ...] = tuple(name for name, _, _ in guild.members) if guild else ()
     else:
         names = tuple(party.members) if party else ()
     return tuple(name for name in names if name != character.name)
@@ -1149,6 +1153,8 @@ def advance(
             return _handle_guild_text(state, command, text, action="found")
         case ScreenId.GUILD_INVITE:
             return _handle_guild_text(state, command, text, action="invite")
+        case ScreenId.GUILD_SUCCEED:
+            return _handle_guild_text(state, command, text, action="succeed")
         case ScreenId.GUILD_ROSTER:
             return _handle_guild_roster(state, command)
         case ScreenId.GUILD_VAULT:
@@ -2289,6 +2295,8 @@ _GUILD_SCREENS: dict[Intent, ScreenId] = {
     Intent.GUILD_INVITE: ScreenId.GUILD_INVITE,
     Intent.GUILD_ROSTER: ScreenId.GUILD_ROSTER,
     Intent.GUILD_VAULT: ScreenId.GUILD_VAULT,
+    Intent.GUILD_TIERS: ScreenId.GUILD_TIERS,
+    Intent.GUILD_SUCCEED: ScreenId.GUILD_SUCCEED,
 }
 
 

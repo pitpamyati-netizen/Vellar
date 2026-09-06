@@ -52,6 +52,8 @@ class Intent(StrEnum):
     GUILD_ROSTER = "guild_roster"
     GUILD_VAULT = "guild_vault"
     GUILD_TRANSFER = "guild_transfer"
+    GUILD_TIERS = "guild_tiers"
+    GUILD_SUCCEED = "guild_succeed"
     PAGE = "page"
     NEXT_PAGE = "next_page"
     PREVIOUS_PAGE = "previous_page"
@@ -180,6 +182,11 @@ _GUILD_WORDS: dict[str, Intent] = {
     "vault": Intent.GUILD_VAULT,
     "передать": Intent.GUILD_TRANSFER,
     "transfer": Intent.GUILD_TRANSFER,
+    "возвышение": Intent.GUILD_TIERS,
+    "ступени": Intent.GUILD_TIERS,
+    "tiers": Intent.GUILD_TIERS,
+    "наследник": Intent.GUILD_SUCCEED,
+    "succeed": Intent.GUILD_SUCCEED,
 }
 
 
@@ -249,6 +256,8 @@ _BUTTON_INTENTS: tuple[tuple[object, Intent], ...] = (
     (labels.GUILD_ROSTER, Intent.GUILD_ROSTER),
     (labels.GUILD_VAULT, Intent.GUILD_VAULT),
     (labels.GUILD_TRANSFER, Intent.GUILD_TRANSFER),
+    (labels.GUILD_TIERS, Intent.GUILD_TIERS),
+    (labels.GUILD_SUCCEED, Intent.GUILD_SUCCEED),
     (labels.NEXT_PAGE, Intent.NEXT_PAGE),
     (labels.PREVIOUS_PAGE, Intent.PREVIOUS_PAGE),
     (labels.SEARCH, Intent.SEARCH),

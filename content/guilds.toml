@@ -1,0 +1,72 @@
+# Ступени гильдии: во что она вырастает от того, что делают её люди (ADR 0076).
+#
+# Гильдия растёт деяниями: выигранный бой её человека — деяние, внесённое в казну
+# золото — столько деяний, сколько это боёв его уровня (`domain/rules/guild.py`).
+# Набранные деяния поднимают гильдию на следующую ступень, и ступень — это всё,
+# что гильдия даёт: сколько в неё помещается людей и что она добавляет своим.
+#
+# `deeds` — с какого числа деяний стоит ступень; первая всегда с нуля.
+# `seats` — сколько человек помещается (не больше `guild.MAX_MEMBERS`).
+# `exp_percent` и `gold_percent` — надбавка своим за выигранный бой с миром;
+# считает её `handlers/combat._settle_world`, и больше её не читает никто.
+# Ключей прибавок здесь нет нарочно: гильдейская надбавка ложится там, где
+# платят за бой, а не в общий свёрток (`Claude.md`, правило 7).
+#
+# Числа — первый набросок: правятся по gold_flow и разыгранным боям, как всё в
+# игре. Проверяет tests/content/test_guilds.py.
+
+[[tier]]
+level = 1
+name = "Товарищество"
+deeds = 0
+seats = 12
+exp_percent = 0
+gold_percent = 0
+
+[[tier]]
+level = 2
+name = "Артель"
+deeds = 150
+seats = 15
+exp_percent = 0
+gold_percent = 2
+
+[[tier]]
+level = 3
+name = "Братчина"
+deeds = 400
+seats = 18
+exp_percent = 2
+gold_percent = 2
+
+[[tier]]
+level = 4
+name = "Дружина"
+deeds = 900
+seats = 21
+exp_percent = 2
+gold_percent = 4
+
+[[tier]]
+level = 5
+name = "Знамя"
+deeds = 2000
+seats = 24
+exp_percent = 4
+gold_percent = 4
+
+[[tier]]
+level = 6
+name = "Подворье"
+deeds = 4200
+seats = 27
+exp_percent = 4
+gold_percent = 6
+
+[[tier]]
+level = 7
+name = "Вольный двор"
+deeds = 8500
+seats = 30
+exp_percent = 6
+gold_percent = 6
