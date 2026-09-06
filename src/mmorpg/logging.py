@@ -45,6 +45,9 @@ KEPT_EVENTS = frozenset(
     {
         "gold_flow",
         "build",
+        # Правка смотрителя, которая перестала работать: спросят о ней не в тот
+        # день, когда она сломалась, а в тот, когда игрок не нашёл обещанного.
+        "overlay_broken",
         "connected",
         "shutdown",
         "shutdown_requested",

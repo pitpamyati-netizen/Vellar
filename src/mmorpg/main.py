@@ -119,7 +119,16 @@ async def build_application(settings: Settings) -> Application:
     registry = ContentRegistry(content)
     storage, dependencies, idempotency = await _build_adapters(settings, registry, stack)
     edits = await dependencies.registry.reload(dependencies.overlays)
-    logger.info("overlay_loaded", edits=edits, broken=len(registry.problems()))
+    broken = registry.problems()
+    logger.info("overlay_loaded", edits=edits, broken=len(broken))
+    # Счёт сломанных правок говорит, что беда есть, и молчит о том, какая: правка
+    # переживает и код, и содержимое, поэтому ступень, вещь или житель под ней
+    # могут исчезнуть через месяц после того, как её записали. Смотритель должен
+    # узнать об этом отсюда, а не от игрока, не нашедшего обещанного.
+    for record, why in broken:
+        logger.warning(
+            "overlay_broken", kind=record.kind.value, entity=record.entity_id, why="; ".join(why)
+        )
 
     # Ставка по предложению, которое никто не принял, возвращается автору здесь и
     # сейчас, а не тогда, когда группа снова заговорит: группа может и замолчать

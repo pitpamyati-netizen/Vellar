@@ -81,6 +81,20 @@ def test_the_gold_ledger_is_kept(tmp_path: Path) -> None:
     assert "gold_flow" in _written(tmp_path, IMPORTANT_FILE)
 
 
+def test_a_broken_keeper_edit_is_kept(tmp_path: Path) -> None:
+    """Правка ломается в один день, а спрашивают о ней в другой.
+
+    Ступень, вещь или житель под правкой могут исчезнуть через месяц после того,
+    как её записали, и узнать об этом надо от журнала, а не от игрока.
+    """
+    configure_logging(_settings(log_dir=str(tmp_path)))
+    get_logger("test").warning(
+        "overlay_broken", kind="quest", entity="keeper_quest_2", why="вещи больше нет"
+    )
+
+    assert "keeper_quest_2" in _written(tmp_path, IMPORTANT_FILE)
+
+
 def test_the_ledger_survives_a_quiet_log_level(tmp_path: Path) -> None:
     """Игра, которой велели молчать, всё равно считает золото."""
     configure_logging(_settings(log_dir=str(tmp_path), log_level="WARNING"))
