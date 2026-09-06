@@ -160,6 +160,10 @@ def race_details_screen(content: GameContent, race_id: str) -> Screen:
         lines=(
             f"Раса: {race.name}.",
             race.description,
+            # Лор идёт на карточке, а не в списке: список читают все, а карточку
+            # открывают те, кто выбирает всерьёз, и им есть что сказать сверх
+            # строки о прибавках.
+            race.lore,
             f"Характеристики: {describe_bonuses(race.bonuses)}.",
             f"Пассивная способность: {race.passive.name}. {race.passive.text}",
             f"Расовое умение: {active.name}. {active.text}",
@@ -226,6 +230,7 @@ def class_details_screen(content: GameContent, class_id: str) -> Screen:
         lines=(
             f"Класс: {klass.name}.",
             klass.description,
+            klass.lore,
             # Роль тут не повторяется: она стоит прямо на кнопке, которой этот
             # класс выбирают. Вместо неё - то, чего кнопка сказать не может.
             klass.power,

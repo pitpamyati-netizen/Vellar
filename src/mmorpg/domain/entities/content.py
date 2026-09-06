@@ -105,6 +105,10 @@ class Race:
     id: str
     name: str
     description: str
+    #: Несколько строк о том, кто это, - для карточки при выборе расы.
+    #: ``description`` отвечает «что она делает», ``lore`` - «кто это»: список
+    #: читают все, а карточку открывают те, кто выбирает всерьёз.
+    lore: str
     bonuses: StatBlock
     passive: RacePassive
     active_code: str

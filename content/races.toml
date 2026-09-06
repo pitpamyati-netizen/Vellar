@@ -14,11 +14,16 @@
 # У каждой расы ровно одна пассивная способность и ровно одно боевое умение. Боевое
 # живёт в skills.toml с owner = "race:<id>" и занимает отдельный расовый слот,
 # поэтому оно никогда не спорит с умениями класса.
+#
+# `description` — одна строка о том, что раса делает; `lore` — несколько строк о
+# том, кто это. Разведены нарочно: список рас читают все, а карточку открывают
+# те, кто выбирает всерьёз, и второму читателю есть что сказать сверх строки.
 
 [[race]]
 id = "human"
 name = "Человек"
 description = "Прилаживаются к любому месту и учатся быстрее прочих."
+lore = "Людей на дорогах Vellar больше всех — не потому, что их много рождается, а потому, что они трогаются с места первыми. Человек приживается везде и нигде не остаётся: там, где эльф выучит одно ремесло за век, человек перепробует четыре и ни одного не доведёт до конца."
 bonuses = { STR = 1, INT = 1, CHA = 1 }
 passive = { id = "adaptability", name = "Приспособляемость", text = "Вы получаете на 5 процентов больше опыта.", modifiers = { exp_percent = 5 } }
 active = "race_human_second_wind"
@@ -27,6 +32,7 @@ active = "race_human_second_wind"
 id = "high_elf"
 name = "Высший эльф"
 description = "Долгий век и школьная выучка: держат в голове больше прочих."
+lore = "Высшие эльфы держат счёт векам и обидам с одинаковой точностью. Их выучка — не дар, а работа в четыре сотни лет, и разговаривать с ними тяжело именно поэтому: они успели передумать всё, о чём вы только начали думать."
 bonuses = { INT = 2, WIS = 1, END = -1 }
 passive = { id = "arcane_legacy", name = "Наследие чар", text = "Запас вашего ресурса больше на 10 процентов.", modifiers = { resource_percent = 10 } }
 active = "race_high_elf_mana_surge"
@@ -35,6 +41,7 @@ active = "race_high_elf_mana_surge"
 id = "wood_elf"
 name = "Лесной эльф"
 description = "Ходят по лесу бесшумно и бьют издали."
+lore = "Лесной эльф не живёт в лесу — он живёт лесом, и разницу эту объясняет неохотно. На заставах их берут проводниками и платят вперёд: тропу они находят там, где её нет, и никогда не говорят, как."
 bonuses = { AGI = 2, WIS = 1 }
 passive = { id = "forest_paths", name = "Тропы леса", text = "Тропу вы читаете первым: инициатива выше на 8 процентов.", modifiers = { initiative_percent = 8 } }
 active = "race_wood_elf_true_shot"
@@ -43,6 +50,7 @@ active = "race_wood_elf_true_shot"
 id = "dark_elf"
 name = "Тёмный эльф"
 description = "Видят в темноте не хуже, чем при свете дня."
+lore = "Тёмных эльфов узнают не по коже, а по тому, как они входят: без стука и без спроса, но никогда не первыми. Под землёй у них осталось всё, кроме желания туда вернуться."
 bonuses = { AGI = 2, INT = 1, CHA = -1 }
 passive = { id = "darkvision", name = "Взор во тьме", text = "Темнота вам не помеха: точность выше на 5 процентов.", modifiers = { accuracy_percent = 5 } }
 active = "race_dark_elf_gloom_cloud"
@@ -51,6 +59,7 @@ active = "race_dark_elf_gloom_cloud"
 id = "half_elf"
 name = "Полуэльф"
 description = "Сходятся с кем угодно и торгуются лучше прочих."
+lore = "Полуэльф ничей дважды: у людей он слишком долго молчит, у эльфов слишком быстро решает. Из этого выходит человек, которому легче договориться с чужим, чем со своим, — и на дороге это стоит дороже родни."
 bonuses = { AGI = 1, WIS = 1, CHA = 1 }
 passive = { id = "diplomat", name = "Торговый язык", text = "Цены в лавках для вас ниже на 10 процентов.", modifiers = { shop_price_percent = -10 } }
 active = "race_half_elf_charm"
@@ -59,6 +68,7 @@ active = "race_half_elf_charm"
 id = "dwarf"
 name = "Дварф"
 description = "Тяжёлые руки, ровное дыхание, спорить не о чем."
+lore = "Дварфы считают, что вещь надо делать так, чтобы её пережил тот, кто делал. Отсюда и упрямство: переделывать он не станет не из гордости, а потому что первый раз уже был сделан правильно."
 bonuses = { END = 2, STR = 1 }
 passive = { id = "stone_skin", name = "Каменная кожа", text = "Ваша броня выше на 10 процентов.", modifiers = { armor_percent = 10 } }
 active = "race_dwarf_ancestral_stance"
@@ -67,6 +77,7 @@ active = "race_dwarf_ancestral_stance"
 id = "gnome"
 name = "Гном"
 description = "Разберут и соберут что угодно, было бы под рукой."
+lore = "Гном берётся за то, за что не берутся: за мелкое, точное и никому не нужное до той минуты, пока оно не понадобилось всем. Ему проще собрать механизм, чем объяснить, зачем."
 bonuses = { INT = 2, AGI = 1, STR = -1 }
 passive = { id = "tinkerer", name = "Мастеровые руки", text = "Качество работы выше на 15 процентов, и материалов после неё уцелевает на 15 процентов больше.", modifiers = { craft_quality_percent = 15, salvage_yield_percent = 15 } }
 active = "race_gnome_cunning_trap"
@@ -75,6 +86,7 @@ active = "race_gnome_cunning_trap"
 id = "halfling"
 name = "Полурослик"
 description = "Невысокие, тихие и везучие сверх всякой меры."
+lore = "Полурослики держат постоялые дворы на половине трактов державы и помнят, кто чем расплатился десять лет назад. Их удачу поминают часто; сами они называют это вниманием."
 bonuses = { LCK = 2, AGI = 1 }
 passive = { id = "lucky", name = "Везунчик", text = "Удача при вас: шанс крита выше на 4 процента, уклонение — на 3.", modifiers = { crit_chance_percent = 4, dodge_percent = 3 } }
 active = "race_halfling_nimbleness"
@@ -83,6 +95,7 @@ active = "race_halfling_nimbleness"
 id = "orc"
 name = "Орк"
 description = "Голос слышно за версту, отступать не приучены."
+lore = "Орка на заставе видят раньше, чем он подойдёт, и это его устраивает: спрятанная сила — потраченная. Разговор он кончает первым не из грубости, а потому что сказал уже всё."
 bonuses = { STR = 3, END = 1, INT = -1 }
 passive = { id = "fury", name = "Отчаянность", text = "Ниже трети здоровья ваш урон выше на 30 процентов.", modifiers = { low_health_damage_percent = 30 } }
 active = "race_orc_war_cry"
@@ -91,6 +104,7 @@ active = "race_orc_war_cry"
 id = "half_orc"
 name = "Полуорк"
 description = "Ломаются позже прочих и знают, почём труд."
+lore = "Полуорк всю жизнь доказывает не то, что он силён, а то, что он не только силён. Обычно доказывает — и обычно тем, кому уже поздно."
 bonuses = { STR = 2, END = 1 }
 passive = { id = "unbreakable", name = "Несгибаемость", text = "Здоровья у вас больше на 6 процентов, а получаемый урон ниже на 3.", modifiers = { health_percent = 6, damage_taken_percent = -3 } }
 active = "race_half_orc_savage_blow"
@@ -99,6 +113,7 @@ active = "race_half_orc_savage_blow"
 id = "goblin"
 name = "Гоблин"
 description = "Мелкие, ловкие и цепкие до чужого добра."
+lore = "Гоблин выживает там, где выживать нечем, и объясняет это везением. Присмотревшись, замечаешь, что везение у него готовится заранее и в трёх местах сразу."
 bonuses = { AGI = 2, LCK = 1, STR = -1 }
 passive = { id = "scavenger", name = "Цепкие руки", text = "С противников вы получаете на 20 процентов больше золота.", modifiers = { gold_percent = 20 } }
 active = "race_goblin_dirty_trick"
@@ -107,6 +122,7 @@ active = "race_goblin_dirty_trick"
 id = "troll"
 name = "Тролль"
 description = "Огромные и неспорые, раны на них затягиваются за считаные часы."
+lore = "Тролль зарастает быстрее, чем его успевают дорубить, и знает это лучше всех. Из этого выходит терпение, которое со стороны читается тупостью, а вблизи — расчётом."
 bonuses = { STR = 2, END = 2, INT = -2 }
 passive = { id = "regeneration", name = "Живучесть", text = "В конце вашего хода вы восстанавливаете 2 процента здоровья.", modifiers = { regen_per_turn_percent = 2 } }
 active = "race_troll_crushing_swing"
@@ -115,6 +131,7 @@ active = "race_troll_crushing_swing"
 id = "dragonborn"
 name = "Драконорождённый"
 description = "Чешуя, гарь в голосе и дыхание своей стихии."
+lore = "Драконорождённые помнят родство, которого никто не может проверить, и держатся так, будто проверять и не станут. Обычно и не станут: голос у них такой, что спорить дороже."
 bonuses = { STR = 2, CHA = 1 }
 passive = { id = "scales", name = "Чешуя", text = "Вы сопротивляетесь огню на 25 процентов.", modifiers = { resist_fire_percent = 25 } }
 active = "race_dragonborn_breath"
@@ -123,6 +140,7 @@ active = "race_dragonborn_breath"
 id = "tiefling"
 name = "Тифлинг"
 description = "Рога, жар в крови и язык, который работает не хуже клещей."
+lore = "Тифлингу достался долг, которого он не брал, и внешность, о которой его не спрашивали. Он привык входить в город к ночи и объясняться раньше, чем его попросят."
 bonuses = { CHA = 2, INT = 1 }
 passive = { id = "infernal_legacy", name = "Адское наследие", text = "Вы сопротивляетесь огню на 20 процентов, а ваш магический урон выше на 5.", modifiers = { resist_fire_percent = 20, magic_damage_percent = 5 } }
 active = "race_tiefling_curse_seal"
@@ -131,6 +149,7 @@ active = "race_tiefling_curse_seal"
 id = "aasimar"
 name = "Аасимар"
 description = "Светлая кожа, ровный голос, спокойные руки."
+lore = "Аасимара принимают за знамение, и это мешает ему больше всего. Свет за спиной не греет и не защищает — он только не даёт пройти мимо незамеченным."
 bonuses = { WIS = 2, CHA = 1 }
 passive = { id = "heavens_light", name = "Свет небес", text = "Получаемое вами лечение выше на 15 процентов.", modifiers = { healing_taken_percent = 15 } }
 active = "race_aasimar_healing_hand"
@@ -139,6 +158,7 @@ active = "race_aasimar_healing_hand"
 id = "lizardfolk"
 name = "Ящеролюд"
 description = "Хладнокровны, терпеливы и почти не поддаются страху."
+lore = "Ящеролюд считает холод неудобством, а спешку — ошибкой. С ним трудно торговаться: он не понимает, зачем соглашаться сегодня на то, что завтра будет стоить столько же."
 bonuses = { END = 2, LCK = 1, CHA = -1 }
 passive = { id = "cold_blood", name = "Хладнокровие", text = "Холод вам не страшен: сопротивление холоду выше на 25 процентов.", modifiers = { resist_cold_percent = 25 } }
 active = "race_lizardfolk_tail_drop"

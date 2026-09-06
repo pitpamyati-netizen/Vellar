@@ -140,3 +140,17 @@ def test_every_race_keeps_its_frozen_id(content: GameContent) -> None:
         "cleric",
         "druid",
     }
+
+
+def test_every_race_and_class_says_who_it_is(content: GameContent) -> None:
+    """У карточки есть что сказать сверх строки о прибавках.
+
+    ``description`` отвечает «что она делает», ``lore`` — «кто это». Пустой лор
+    это карточка, ради которой её не стоило открывать.
+    """
+    for race in content.races:
+        assert race.lore, race.id
+        assert race.lore != race.description, race.id
+    for klass in content.classes:
+        assert klass.lore, klass.id
+        assert klass.lore != klass.description, klass.id

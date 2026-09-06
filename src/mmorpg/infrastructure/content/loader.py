@@ -462,6 +462,7 @@ def _parse_races(
                 id=race_id,
                 name=str(entry["name"]),
                 description=str(entry.get("description", "")),
+                lore=str(entry.get("lore", "")),
                 bonuses=bonuses,
                 passive=RacePassive(
                     id=passive_id,
