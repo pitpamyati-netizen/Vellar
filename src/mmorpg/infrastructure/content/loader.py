@@ -21,12 +21,14 @@ from mmorpg.domain.entities.content import (
     ArmorType,
     CharacterClass,
     City,
+    ClassAffix,
     ClassResource,
     Dungeon,
     EnemyAffix,
     EquipSlot,
     GameContent,
     GearArchetype,
+    GearRequirement,
     GearTier,
     HealthCurve,
     House,
@@ -35,6 +37,7 @@ from mmorpg.domain.entities.content import (
     ItemEffect,
     ItemKind,
     Location,
+    LootRules,
     OwnerKind,
     ProgressionRules,
     Race,
@@ -80,6 +83,7 @@ CONTENT_FILES = (
     "traits.toml",
     "skills.toml",
     "items.toml",
+    "item_generator.toml",
     "enemies.toml",
     "quests.toml",
     "crafts.toml",
@@ -185,6 +189,9 @@ def load_content(content_dir: Path) -> GameContent:
     rebirths, rebirth_titles = _parse_rebirths(raw["turnings.toml"], problems)
     houses = _parse_houses(raw["houses.toml"], problems)
     subclasses = _parse_subclasses(raw["subclasses.toml"], modifier_keys, classes, problems)
+    loot_rules, requirements, class_affixes = _parse_loot(
+        raw["item_generator.toml"], modifier_keys, gear, classes, problems
+    )
 
     rules = _build_rules(raw, problems)
 
@@ -229,6 +236,9 @@ def load_content(content_dir: Path) -> GameContent:
         "rebirth_titles": rebirth_titles,
         "houses": houses,
         "subclasses": subclasses,
+        "loot_rules": loot_rules,
+        "gear_requirements": requirements,
+        "class_affixes": class_affixes,
     }
 
     if problems:
@@ -683,6 +693,106 @@ def _parse_milestones(
             )
         )
     return tuple(parsed)
+
+
+def _parse_loot(
+    raw: Mapping[str, Any],
+    modifier_keys: frozenset[str],
+    gear: ItemContent,
+    classes: Sequence[CharacterClass],
+    problems: list[str],
+) -> tuple[LootRules, tuple[GearRequirement, ...], tuple[ClassAffix, ...]]:
+    """Умный лут: доля своего, пороги родов и именные аффиксы (ADR 0071).
+
+    Второго каталога снаряжения здесь нет и быть не может: виды, ступени и
+    редкости живут в ``items.toml``, и два места, называющие одну вещь, однажды
+    разойдутся. Здесь только то, чего там нет, - как вещь находят и чего она
+    стоит тому, кто её надел.
+    """
+    meta = raw.get("meta", {})
+    share = float(meta.get("class_share", 0.0))
+    if not 0.0 <= share <= 1.0:
+        problems.append(f"item_generator.toml: [meta].class_share must be a share, got {share}")
+    rules = LootRules(
+        class_share=min(1.0, max(0.0, share)),
+        requirement_accuracy_penalty=float(meta.get("requirement_accuracy_penalty", 0.0)),
+        requirement_initiative_penalty=float(meta.get("requirement_initiative_penalty", 0.0)),
+        requirement_step=max(1, int(meta.get("requirement_step", 20))),
+    )
+
+    known_kinds = (
+        {one.id for one in gear.weapon_types}
+        | {one.id for one in gear.armor_types}
+        | {one.id for one in gear.tool_types}
+    )
+    requirements: list[GearRequirement] = []
+    seen: set[str] = set()
+    for entry in raw.get("requirement", ()):
+        kind = str(entry.get("kind", ""))
+        if kind not in known_kinds:
+            problems.append(f"item_generator.toml: unknown kind {kind!r} asks for a stat")
+            continue
+        if kind in seen:
+            problems.append(f"item_generator.toml: {kind} names its requirement twice")
+            continue
+        seen.add(kind)
+        try:
+            codes = tuple(StatCode(str(one)) for one in entry.get("stats", ()))
+        except ValueError as error:
+            problems.append(f"item_generator.toml: {kind}: {error}")
+            continue
+        if not codes:
+            problems.append(f"item_generator.toml: {kind} names no stat to ask for")
+            continue
+        requirements.append(
+            GearRequirement(
+                kind=kind,
+                stats=codes,
+                factor=float(entry.get("factor", 0.0)),
+                base=float(entry.get("base", 0.0)),
+            )
+        )
+
+    known_classes = {klass.id for klass in classes}
+    affixes: list[ClassAffix] = []
+    for entry in raw.get("class_affix", ()):
+        affix_id = str(entry.get("id", ""))
+        class_id = str(entry.get("class_restriction", ""))
+        key = str(entry.get("key", ""))
+        if not affix_id:
+            problems.append("item_generator.toml: a class affix has no id")
+            continue
+        if class_id not in known_classes:
+            problems.append(
+                f"item_generator.toml: {affix_id} belongs to unknown class {class_id!r}"
+            )
+        if key not in modifier_keys:
+            problems.append(f"item_generator.toml: {affix_id} promises unknown key {key!r}")
+        if not entry.get("text"):
+            problems.append(f"item_generator.toml: {affix_id} says nothing about what it does")
+        affixes.append(
+            ClassAffix(
+                id=affix_id,
+                name=str(entry.get("name", affix_id)),
+                class_id=class_id,
+                key=key,
+                value=float(entry.get("value", 0.0)),
+                min_item_level=int(entry.get("min_item_level", 1)),
+                text=str(entry.get("text", "")),
+            )
+        )
+    _check_unique((one.id for one in affixes), "item_generator.toml", problems)
+    for one in affixes:
+        if one.value == 0:
+            problems.append(f"item_generator.toml: {one.id} promises nothing")
+
+    # У каждого класса свой именной аффикс: класс без него - класс, чья
+    # легендарка ничем не отличается от чужой (``Claude.md``, правило 9).
+    for klass in classes:
+        if not any(one.class_id == klass.id for one in affixes):
+            problems.append(f"item_generator.toml: {klass.id} has no named affix of its own")
+
+    return rules, tuple(requirements), tuple(affixes)
 
 
 def _parse_subclasses(

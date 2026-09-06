@@ -8,24 +8,53 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from functools import cache
 
 import pytest
 
 from mmorpg.domain.entities import Character, GameContent
+from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.procgen import items as gear_procgen
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules.combat import blow_range
 from mmorpg.domain.rules.stats import derived_stats
+from mmorpg.infrastructure.content import load_content
+from tests.conftest import CONTENT_ROOT
 
 
 def hero(class_id: str, level: int = 20, **worn: str) -> Character:
+    """Персонаж этого уровня, раздавший свои очки как раздают их живые игроки.
+
+    Раздача здесь не украшение: у снаряжения есть порог характеристики (ADR 0071),
+    и герой без единого розданного очка не добрал бы даже до своего доспеха. Это
+    сказало бы не о снаряжении, а о том, что приспособление к игре не относится.
+    """
     character = Character(
         id=1, user_id=1, name="Проба", race_id="human", class_id=class_id, level=level
     )
     for slot, item_id in worn.items():
         character = replace(character, equipment=character.equipment.equip(slot, item_id))
-    return character
+    return replace(character, allocated=_spent(class_id, level))
+
+
+@cache
+def _catalogue() -> GameContent:
+    """Содержимое для приспособления. Читается один раз на модуль."""
+    return load_content(CONTENT_ROOT)
+
+
+def _spent(class_id: str, level: int) -> StatBlock:
+    """Очки уровня, разложенные по ключевым характеристикам класса поровну."""
+    content = _catalogue()
+    klass = content.character_class(class_id)
+    keys = klass.key_stats or (StatCode.STR,)
+    rules = content.rules
+    points = rules.free_points_at_creation + rules.stat_points_per_level * (max(1, level) - 1)
+    block = StatBlock()
+    for index in range(points):
+        block = block.with_change(keys[index % len(keys)], 1)
+    return block
 
 
 # --- броня -----------------------------------------------------------

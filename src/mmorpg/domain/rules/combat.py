@@ -2390,6 +2390,14 @@ def _spoils(
         found = [_modifiers_of(content, roster, one) for one in victors]
         drop_bonus = max((bundle.get("drop_rate_percent", 0.0) for bundle in found), default=0.0)
         rarity_bonus = max((bundle.get("rarity_percent", 0.0) for bundle in found), default=0.0)
+        # Классы победителей: под них и подбирается вид находки (ADR 0071). В
+        # отряде своим считается то, что подходит хоть кому-то из них - добычу
+        # они всё равно делят между собой.
+        winners = tuple(
+            character.class_id
+            for one in victors
+            if one.is_hero and (character := roster.get(one.id)) is not None
+        )
         loot = (
             *loot,
             *(
@@ -2404,6 +2412,7 @@ def _spoils(
                         rank=one.enemy.rank,
                         drop_bonus=drop_bonus,
                         rarity_bonus=rarity_bonus,
+                        class_ids=winners,
                     ),
                 )
                 if dropped is not None

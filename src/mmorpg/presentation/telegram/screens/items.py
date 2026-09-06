@@ -23,11 +23,12 @@ from collections.abc import Mapping, Sequence
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, Item
 from mmorpg.domain.rules import equipment as gear
+from mmorpg.domain.rules import milestones as milestone_rules
 from mmorpg.domain.rules import repair as repair_rules
 from mmorpg.domain.rules import tools as tool_rules
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
-from mmorpg.presentation.telegram.screens.format import amount, percent
+from mmorpg.presentation.telegram.screens.format import amount, number, percent
 from mmorpg.presentation.telegram.screens.format import gold as gold_words
 
 #: Как называется каждый ключ модификатора по-русски. Ключи объявлены в
@@ -222,9 +223,62 @@ def kind_lines(content: GameContent, character: Character, item: Item) -> tuple[
             for key in worn.great
         )
         lines.append(f"Великая работа: {named} — выше того, что даёт эта редкость обычно.")
+    lines.extend(requirement_lines(content, character, worn))
+    lines.extend(named_affix_lines(content, character, worn))
     if content.has_rarity(worn.rarity) and content.rarity(worn.rarity).scaling:
         lines.append("Реликтовая вещь: её числа растут вместе с вашим уровнем.")
     return tuple(lines)
+
+
+def requirement_lines(content: GameContent, character: Character, item: Item) -> tuple[str, ...]:
+    """Чего вещь просит и чего стоит недобор (ADR 0071).
+
+    Запрета нет — есть цена, и она названа ДО того, как вещь надели: игрок вправе
+    надеть что угодно и вправе знать, во что это ему станет.
+    """
+    asked = gear.requirement_of(content, item)
+    if asked is None:
+        return ()
+    codes, threshold = asked
+    named = " или ".join(STAT_NAMES.get(code.value, code.value).lower() for code in codes)
+    invested = milestone_rules.invested_stats(content, character)
+    best = max((invested[code] for code in codes), default=0)
+    if best >= threshold:
+        return (f"Просит: {named} {amount(best, threshold)}. У вас хватает.",)
+    steps = content.loot_rules.shortfall_steps(threshold - best)
+    accuracy = content.loot_rules.requirement_accuracy_penalty * steps
+    initiative = content.loot_rules.requirement_initiative_penalty * steps
+    return (
+        f"Просит: {named} {amount(best, threshold)}. Не хватает {threshold - best}.",
+        f"Надетой она стоит {number(accuracy)} процентов точности и "
+        f"{number(initiative)} процентов инициативы.",
+    )
+
+
+def named_affix_lines(content: GameContent, character: Character, item: Item) -> tuple[str, ...]:
+    """Именной аффикс класса: что он даёт и кому (ADR 0071).
+
+    Строка одна и та же для всех, кто вещь поднял. Разбойник, нашедший воинскую
+    легендарку, видит ровно то же, что увидел бы воин, — и потому сразу знает,
+    что вещь стоит перековать (ADR 0060), а не гадает, почему числа не сошлись.
+    """
+    if not item.class_affix_id:
+        return ()
+    named = content.class_affix(item.class_affix_id)
+    if named is None:
+        return ()
+    whose = (
+        content.character_class(named.class_id).name
+        if (content.has_character_class(named.class_id))
+        else named.class_id
+    )
+    if named.class_id == character.class_id:
+        return (f"Именное: {named.name}. {named.text}",)
+    return (
+        f"Именное: {named.name}. {named.text}",
+        f"Вам оно не даёт ничего: это работает у своего класса ({whose}). "
+        "Такую вещь перековывают в кузнице.",
+    )
 
 
 def _type_gives(

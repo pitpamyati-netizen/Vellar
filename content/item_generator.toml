@@ -1,0 +1,374 @@
+# Умный лут: чем находка отличается от случайной вещи (ADR 0071).
+#
+# ЧЕГО ЗДЕСЬ НЕТ. Ни одного вида снаряжения, ни одной ступени, ни одной редкости.
+# Всё это живёт в items.toml и живёт там по-прежнему: вещь по-прежнему собирается
+# из вида, ступени, редкости и оттиска (ADR 0015, 0059), и второго каталога у неё
+# быть не может — два места, называющие одну вещь, однажды разойдутся.
+#
+# Здесь лежит ровно то, чего в items.toml нет: КАК ВЕЩЬ НАХОДЯТ и ЧЕГО ОНА СТОИТ
+# ТОМУ, КТО ЕЁ НАДЕЛ.
+#
+# ============================================================================
+# [meta].class_share — УМНЫЙ ЛУТ
+# ============================================================================
+#
+# Доля находок, подобранных под класс победителя. Остальные падают как падали.
+#
+# Число взято не с потолка: восемьдесят пять на пятнадцать — та же доля, что у
+# Diablo III после Loot 2.0, и известны обе её стороны. Хорошая: без неё игрок,
+# который не торгует, месяцами не видит вещи своего рода, и находка перестаёт
+# быть событием. Плохая: когда всё падает «твоё», торговать не с кем и
+# пробовать нечего.
+#
+# Пятнадцать процентов чужого держатся здесь НАРОЧНО и не пропадают даром: чужое
+# перековывают в кузнице (ADR 0060) или отдают соратнику. Находка, которую некуда
+# деть, — это мусор; находка, которую есть куда деть, — это выбор.
+#
+# «Своё» считается по классу победителя (classes.toml, weapons/armor). В отряде
+# своим считается то, что подходит хоть кому-то из победивших: добычу они всё
+# равно делят между собой.
+#
+# ============================================================================
+# [[requirement]] — ЧЕГО ВЕЩЬ ТРЕБУЕТ
+# ============================================================================
+#
+# У рода снаряжения есть характеристики, которых он просит, и порог, растущий со
+# ступенью вещи: `stats` и «уровень × factor + base».
+#
+# Характеристик несколько, и порог берётся ЛЮБОЙ из них. Иначе порог наказывал бы
+# за своё же: булаву носят и воин, и жрец, но силу растит только первый, а
+# мудрость — только второй. Названы те характеристики, на которых стоят классы,
+# этот род носящие (`classes.toml`, key_stats[0]); чужому классу ни одна из них
+# не достаётся, и он платит — ровно в этом весь смысл.
+#
+# ЭТО НЕ ЗАПРЕТ. Ровно как чужой род (ADR 0064): двуручник поднимет и разбойник,
+# просто он им медленнее и чаще мажет. Не добрал до порога — платишь точностью и
+# инициативой, ровно как за чужое, и цена названа на карточке вещи ДО того, как
+# ты её надел (`equipment.equip_warning`).
+#
+# Почему порогом, а не запретом: запрет пришлось бы объяснять на каждом экране,
+# где вещь может оказаться, — в лавке, в сумке, в добыче, в казне гильдии, — и
+# каждый раз одинаково. Цена объясняется один раз и видна на характеристиках.
+#
+# ============================================================================
+# [[class_affix]] — ЧТО ВЕЩЬ ДАЁТ СВОЕМУ
+# ============================================================================
+#
+# Именной аффикс легендарной и реликтовой вещи, работающий только у своего
+# класса. Вещь при этом остаётся собранной из своего имени и ни от чего больше не
+# зависит (ADR 0059): аффикс лежит НА ВЕЩИ, а классом решается лишь то,
+# складывается ли он в свёрток надевшего (`modifiers.equipment_modifiers`).
+#
+# Отсюда и честность экрана: карточка говорит «Ярость строя: только воину», и
+# разбойник, поднявший её, видит ту же строку и знает, что ему она не даёт
+# ничего — и что вещь стоит перековать.
+#
+# min_item_level — с какой ступени аффикс вообще выпадает. Именной аффикс на
+# ветхом мече первой ступени обесценил бы само слово «именной».
+
+[meta]
+# Доля находок, подобранных под класс победителя.
+class_share = 0.85
+# Насколько дороже своего рода обходится недобранный порог характеристики.
+# Те же две цифры, что за чужой род (ADR 0064): точность и инициатива.
+requirement_accuracy_penalty = 4.0
+requirement_initiative_penalty = 6.0
+# Насколько глубже недобор считается: за каждые столько очков нехватки — ещё
+# одна такая цена. Без этого «не хватает одного» и «не хватает сорока» стоили бы
+# одинаково, а это разные вещи.
+requirement_step = 20
+
+# --- чего требует оружие ----------------------------------------------------
+#
+# Множитель и основа читаются как «уровень вещи × factor + base». Двуручник
+# семнадцатой ступени просит около 218 силы — столько собирает воин, вложившийся
+# в неё; разбойник той же ступени не соберёт и половины, и это ровно то, что
+# должно случиться.
+
+[[requirement]]
+kind = "greatsword"
+stats = ["STR"]
+factor = 1.5
+base = 8
+
+[[requirement]]
+kind = "warhammer"
+stats = ["STR", "WIS"]
+factor = 1.5
+base = 8
+
+[[requirement]]
+kind = "axe"
+stats = ["STR"]
+factor = 1.1
+base = 6
+
+[[requirement]]
+kind = "mace"
+stats = ["STR", "WIS"]
+factor = 1.0
+base = 6
+
+[[requirement]]
+kind = "sword"
+stats = ["STR"]
+factor = 0.9
+base = 5
+
+[[requirement]]
+kind = "spear"
+stats = ["STR", "AGI", "WIS"]
+factor = 0.8
+base = 5
+
+[[requirement]]
+kind = "scythe"
+stats = ["STR", "WIS"]
+factor = 1.0
+base = 6
+
+[[requirement]]
+kind = "bow"
+stats = ["AGI"]
+factor = 1.1
+base = 6
+
+[[requirement]]
+kind = "crossbow"
+stats = ["STR", "AGI"]
+factor = 0.9
+base = 6
+
+[[requirement]]
+kind = "dagger"
+stats = ["AGI", "INT", "WIS"]
+factor = 0.8
+base = 4
+
+[[requirement]]
+kind = "short_sword"
+stats = ["AGI"]
+factor = 0.9
+base = 5
+
+[[requirement]]
+kind = "rapier"
+stats = ["STR", "AGI"]
+factor = 1.0
+base = 5
+
+[[requirement]]
+kind = "claws"
+stats = ["STR", "AGI", "WIS"]
+factor = 1.0
+base = 5
+
+[[requirement]]
+kind = "staff"
+stats = ["INT", "WIS"]
+factor = 1.0
+base = 6
+
+[[requirement]]
+kind = "wand"
+stats = ["INT"]
+factor = 0.9
+base = 5
+
+[[requirement]]
+kind = "tome"
+stats = ["INT"]
+factor = 1.2
+base = 7
+
+[[requirement]]
+kind = "orb"
+stats = ["INT", "WIS"]
+factor = 1.1
+base = 6
+
+[[requirement]]
+kind = "symbol"
+stats = ["WIS"]
+factor = 1.0
+base = 6
+
+[[requirement]]
+kind = "totem"
+stats = ["WIS"]
+factor = 1.1
+base = 6
+
+# --- чего требует доспех ----------------------------------------------------
+
+[[requirement]]
+kind = "heavy"
+stats = ["STR"]
+factor = 1.2
+base = 8
+
+[[requirement]]
+kind = "medium"
+stats = ["STR", "AGI"]
+factor = 0.9
+base = 6
+
+[[requirement]]
+kind = "light"
+stats = ["AGI", "WIS"]
+factor = 0.7
+base = 5
+
+[[requirement]]
+kind = "cloth"
+stats = ["INT", "WIS"]
+factor = 0.6
+base = 4
+
+# ============================================================================
+# ИМЕННЫЕ АФФИКСЫ КЛАССОВ
+# ============================================================================
+
+[[class_affix]]
+id = "vanguard_fury"
+name = "Ярость строя"
+class_restriction = "warrior"
+key = "physical_damage_percent"
+value = 14
+min_item_level = 46
+text = "Только воину: физический удар сильнее на 14 процентов."
+
+[[class_affix]]
+id = "unbroken_line"
+name = "Несомкнутый строй"
+class_restriction = "warrior"
+key = "damage_taken_percent"
+value = -10
+min_item_level = 76
+text = "Только воину: удар по вам слабее на 10 процентов."
+
+[[class_affix]]
+id = "red_haze"
+name = "Красная пелена"
+class_restriction = "barbarian"
+key = "wounded_target_damage_percent"
+value = 18
+min_item_level = 46
+text = "Только варвару: по раненому вы бьёте на 18 процентов сильнее."
+
+[[class_affix]]
+id = "unspent_wrath"
+name = "Неистраченный гнев"
+class_restriction = "barbarian"
+key = "lifesteal_percent"
+value = 9
+min_item_level = 76
+text = "Только варвару: девятая доля нанесённого возвращается вам."
+
+[[class_affix]]
+id = "borrowed_light"
+name = "Занятый свет"
+class_restriction = "paladin"
+key = "healing_done_percent"
+value = 16
+min_item_level = 46
+text = "Только паладину: вы лечите на 16 процентов сильнее."
+
+[[class_affix]]
+id = "standing_vow"
+name = "Стоящий обет"
+class_restriction = "paladin"
+key = "armor_percent"
+value = 12
+min_item_level = 76
+text = "Только паладину: брони на 12 процентов больше."
+
+[[class_affix]]
+id = "long_sighting"
+name = "Долгий прицел"
+class_restriction = "ranger"
+key = "single_target_damage_percent"
+value = 15
+min_item_level = 46
+text = "Только следопыту: по одиночной цели вы бьёте на 15 процентов сильнее."
+
+[[class_affix]]
+id = "read_ground"
+name = "Прочитанный след"
+class_restriction = "ranger"
+key = "accuracy_percent"
+value = 9
+min_item_level = 76
+text = "Только следопыту: точность выше на 9 процентов."
+
+[[class_affix]]
+id = "quiet_opening"
+name = "Тихая прореха"
+class_restriction = "rogue"
+key = "crit_chance_percent"
+value = 7
+min_item_level = 46
+text = "Только разбойнику: решающий удар случается на 7 процентов чаще."
+
+[[class_affix]]
+id = "one_breath"
+name = "Один вдох"
+class_restriction = "rogue"
+key = "crit_damage_percent"
+value = 30
+min_item_level = 76
+text = "Только разбойнику: решающий удар злее на 30 процентов."
+
+[[class_affix]]
+id = "clean_reckoning"
+name = "Чистый счёт"
+class_restriction = "mage"
+key = "magic_damage_percent"
+value = 15
+min_item_level = 46
+text = "Только магу: магический удар сильнее на 15 процентов."
+
+[[class_affix]]
+id = "deep_well"
+name = "Глубокий колодец"
+class_restriction = "mage"
+key = "cost_reduction_percent"
+value = 12
+min_item_level = 76
+text = "Только магу: умения стоят на 12 процентов дешевле."
+
+[[class_affix]]
+id = "steady_hands"
+name = "Твёрдые руки"
+class_restriction = "cleric"
+key = "healing_done_percent"
+value = 18
+min_item_level = 46
+text = "Только жрецу: вы лечите на 18 процентов сильнее."
+
+[[class_affix]]
+id = "named_aloud"
+name = "Названное вслух"
+class_restriction = "cleric"
+key = "resource_regen_percent"
+value = 16
+min_item_level = 76
+text = "Только жрецу: Вера возвращается на 16 процентов быстрее."
+
+[[class_affix]]
+id = "slow_growth"
+name = "Медленный рост"
+class_restriction = "druid"
+key = "regen_per_turn_percent"
+value = 3
+min_item_level = 46
+text = "Только друиду: каждый ход вам возвращается 3 процента здоровья."
+
+[[class_affix]]
+id = "old_compact"
+name = "Старый уговор"
+class_restriction = "druid"
+key = "dot_damage_percent"
+value = 20
+min_item_level = 76
+text = "Только друиду: яд, горение и кровотечение от вас точат на 20 процентов сильнее."

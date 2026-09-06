@@ -194,7 +194,7 @@ def race_modifiers(content: GameContent, character: Character) -> Mapping[str, f
 
 
 def equipment_modifiers(
-    content: GameContent, item_ids: Iterable[str], hero_level: int = 0
+    content: GameContent, item_ids: Iterable[str], hero_level: int = 0, class_id: str = ""
 ) -> dict[str, float]:
     """Что даёт надетое: своими числами, своим родом и тем, чего стоит чужое.
 
@@ -219,6 +219,13 @@ def equipment_modifiers(
                 for code, value in item.stat_bonuses.items()
             }
         )
+        # Именной аффикс лежит на вещи и виден на карточке любому, кто её поднял,
+        # а работает только у своего класса (ADR 0071). Поэтому он складывается
+        # здесь, а не в самой вещи: вещь выводится из своего имени и ни от кого
+        # не зависит (ADR 0059), а свёрток - это уже про того, кто её надел.
+        named = content.class_affix(item.class_affix_id) if item.class_affix_id else None
+        if named is not None and named.class_id == class_id:
+            bundles.append({named.key: named.value})
     bundles.append(gear.type_modifiers(content, worn))
     return merge(*bundles)
 
@@ -261,7 +268,7 @@ def collect_modifiers(
         # Сломанное надетое не даёт ничего: ни прибавок, ни рода, ни цены за
         # чужой род - сточенная до конца вещь считается снятой, пока её не
         # починят (``domain/rules/repair.py``, ADR 0057).
-        equipment_modifiers(content, working, character.level),
+        equipment_modifiers(content, working, character.level, character.class_id),
         # Чужая вещь не запрещена — она дорога, и цена берётся здесь же, вместе
         # со всем остальным, что на персонаже сейчас висит.
         gear.proficiency_penalty(content, character, working),

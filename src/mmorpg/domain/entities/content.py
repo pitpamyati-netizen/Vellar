@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
@@ -385,6 +385,9 @@ class Item:
     #: Ноль у всего, что не носят: прочность в Vellar есть только у того, что
     #: стачивается о работу (ADR 0056, 0057).
     durability: int = 0
+    #: Именной аффикс класса, если вещь его несёт (ADR 0071). Выведен из имени
+    #: вещи, как всё остальное; классом решается лишь то, работает ли он.
+    class_affix_id: str = ""
 
     @property
     def is_equipment(self) -> bool:
@@ -492,6 +495,86 @@ class SpecialProperty:
     key: str
     value: float
     word: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class GearRequirement:
+    """Чего род снаряжения просит от того, кто его надел (ADR 0071).
+
+    Порог растёт со ступенью вещи: ``level * factor + base``. Двуручник
+    семнадцатой ступени просит около двухсот силы - столько собирает воин,
+    вложившийся в неё, и вдвое больше того, что соберёт разбойник.
+
+    ЭТО НЕ ЗАПРЕТ, а цена. Ровно как чужой род (ADR 0064): двуручник поднимет и
+    разбойник, просто он им медленнее и чаще мажет. Запрет пришлось бы объяснять
+    на каждом экране, где вещь может оказаться; цена объясняется один раз и видна
+    на характеристиках.
+
+    ``stats`` - несколько характеристик, и порог берётся ЛЮБОЙ из них. Иначе
+    порог наказывал бы за своё же: булаву носят и воин, и жрец, но силу растит
+    только первый, а мудрость - только второй. Названы те характеристики, на
+    которых стоят классы, этот род носящие; чужому классу ни одна из них не
+    достаётся, и он платит - ровно в этом весь смысл.
+    """
+
+    kind: str
+    stats: tuple[StatCode, ...]
+    factor: float
+    base: float
+
+    def at(self, level: int) -> int:
+        """Порог для вещи этой ступени."""
+        return max(0, round(self.base + self.factor * max(0, level)))
+
+    def shortfall(self, stats: StatBlock, level: int) -> int:
+        """Насколько не хватает до порога по лучшей из названных. Ноль - хватает."""
+        threshold = self.at(level)
+        best = max((stats[code] for code in self.stats), default=0)
+        return max(0, threshold - best)
+
+
+@dataclass(frozen=True, slots=True)
+class ClassAffix:
+    """Именной аффикс, работающий только у своего класса (ADR 0071).
+
+    Лежит НА ВЕЩИ и выводится из её имени, как всё остальное (ADR 0059): классом
+    решается лишь то, складывается ли он в свёрток надевшего. Поэтому карточка
+    честна с любым, кто вещь поднял: «Ярость строя: только воину» видит и воин, и
+    разбойник, и второй сразу знает, что вещь стоит перековать (ADR 0060).
+    """
+
+    id: str
+    name: str
+    class_id: str
+    key: str
+    value: float
+    min_item_level: int = 1
+    text: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class LootRules:
+    """Опорные числа находки (ADR 0071).
+
+    ``class_share`` - доля находок, подобранных под класс победителя. Остальные
+    падают как падали, и это не забытый хвост: чужое перековывают в кузнице или
+    отдают соратнику, а находка, которую некуда деть, - мусор.
+    """
+
+    class_share: float = 0.0
+    requirement_accuracy_penalty: float = 0.0
+    requirement_initiative_penalty: float = 0.0
+    requirement_step: int = 20
+
+    def shortfall_steps(self, short: int) -> float:
+        """Во сколько цен обходится недобор в ``short`` очков.
+
+        Ступенчато, а не разом: «не хватает одного» и «не хватает сорока» - разные
+        вещи, и платить за них одинаково значило бы не считать вовсе.
+        """
+        if short <= 0:
+            return 0.0
+        return 1.0 + (short - 1) // max(1, self.requirement_step)
 
 
 @dataclass(frozen=True, slots=True)
@@ -856,6 +939,10 @@ class GameContent:
     rules: ProgressionRules
     npcs: tuple[Npc, ...]
     rebirths: tuple[Rebirth, ...]
+    #: Опорные числа находки и то, чего просит род снаряжения (ADR 0071).
+    loot_rules: LootRules
+    gear_requirements: tuple[GearRequirement, ...]
+    class_affixes: tuple[ClassAffix, ...]
     #: Титулы за уходы, по порядку (``turnings.toml [meta].titles``).
     rebirth_titles: tuple[str, ...]
     houses: tuple[House, ...]
@@ -882,6 +969,9 @@ class GameContent:
     _recipes_by_id: Mapping[str, Recipe]
     _npcs_by_id: Mapping[str, Npc]
     _rebirths_by_id: Mapping[str, Rebirth]
+    _requirements_by_kind: Mapping[str, GearRequirement]
+    _class_affixes_by_id: Mapping[str, ClassAffix]
+    _class_kinds: Mapping[str, tuple[str, ...]]
     _houses_by_id: Mapping[str, House]
     _subclasses_by_id: Mapping[str, Subclass]
     _house_by_city: Mapping[str, House]
@@ -931,6 +1021,9 @@ class GameContent:
         npcs: Sequence[Npc] = (),
         rebirths: Sequence[Rebirth] = (),
         rebirth_titles: Sequence[str] = (),
+        loot_rules: LootRules | None = None,
+        gear_requirements: Sequence[GearRequirement] = (),
+        class_affixes: Sequence[ClassAffix] = (),
         houses: Sequence[House] = (),
         subclasses: Sequence[Subclass] = (),
         stat_words: Mapping[str, str] | None = None,
@@ -970,6 +1063,14 @@ class GameContent:
             npcs=tuple(npcs),
             rebirths=tuple(rebirths),
             rebirth_titles=tuple(rebirth_titles),
+            loot_rules=loot_rules or LootRules(),
+            gear_requirements=tuple(gear_requirements),
+            class_affixes=tuple(class_affixes),
+            _requirements_by_kind=MappingProxyType({one.kind: one for one in gear_requirements}),
+            _class_affixes_by_id=MappingProxyType({one.id: one for one in class_affixes}),
+            _class_kinds=MappingProxyType(
+                {klass.id: (*klass.weapon_types, *klass.armor_types) for klass in classes}
+            ),
             houses=tuple(houses),
             subclasses=tuple(subclasses),
             _races_by_id=MappingProxyType({race.id: race for race in races}),
@@ -1012,6 +1113,9 @@ class GameContent:
 
     def character_class(self, class_id: str) -> CharacterClass:
         return self._classes_by_id[class_id]
+
+    def has_character_class(self, class_id: str) -> bool:
+        return class_id in self._classes_by_id
 
     def trait(self, trait_id: str) -> Trait:
         return self._traits_by_id[trait_id]
@@ -1136,6 +1240,27 @@ class GameContent:
         )
 
     # --- новое имя --------------------------------------------------------
+
+    def requirement_for(self, kind: str) -> GearRequirement | None:
+        """Чего просит этот род снаряжения. ``None`` - ничего не просит."""
+        return self._requirements_by_kind.get(kind)
+
+    def class_affix(self, affix_id: str) -> ClassAffix | None:
+        """Именной аффикс по имени. ``None`` - такого больше нет в содержимом."""
+        return self._class_affixes_by_id.get(affix_id)
+
+    def class_affixes_for(self, kinds: Iterable[str], level: int) -> tuple[ClassAffix, ...]:
+        """Именные аффиксы, какие вещь этих родов и этой ступени может нести.
+
+        Отбор по РОДУ, а не по тому, кто вещь поднял: аффикс лежит на вещи, и
+        меч не вправе нести именной аффикс мага - тот меча не носит вовсе.
+        """
+        wanted = {kind for kind in kinds if kind}
+        return tuple(
+            one
+            for one in self.class_affixes
+            if one.min_item_level <= level and wanted & set(self._class_kinds.get(one.class_id, ()))
+        )
 
     def rebirth(self, rebirth_id: str) -> Rebirth:
         return self._rebirths_by_id[rebirth_id]

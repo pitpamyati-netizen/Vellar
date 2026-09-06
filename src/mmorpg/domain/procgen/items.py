@@ -32,7 +32,7 @@
 from __future__ import annotations
 
 import random
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from hashlib import blake2b
 
@@ -266,6 +266,17 @@ def build(
             content, source, rarity, roll=roll, counted=counted
         )
 
+    # Именной аффикс класса достаётся только особой вещи и только с той ступени,
+    # с которой он объявлен (ADR 0071). Выбирается ОТТИСКОМ, а не броском: вещь
+    # обязана выводиться из своего имени и ни от чего больше не зависеть
+    # (ADR 0059) - иначе один и тот же меч у двоих значил бы разное.
+    class_affix_id = ""
+    if not tool and rarity.special:
+        pool = content.class_affixes_for((archetype.weapon_type, archetype.armor_type), level)
+        if pool:
+            named = pool[roll % len(pool)]
+            class_affix_id = named.id
+
     return Item(
         id=item_id,
         name=name_of(content, archetype, level, rarity, word),
@@ -286,6 +297,7 @@ def build(
         armor=armor,
         stat_bonuses=stat_bonuses,
         great=great,
+        class_affix_id=class_affix_id,
         weapon_type=archetype.weapon_type,
         armor_type=archetype.armor_type,
         tool_type=archetype.tool_type,
@@ -431,6 +443,64 @@ RELIC_CHANCE: dict[EnemyRank, float] = {
 RARITY_PULL = 0.02
 
 
+#: Во сколько раз тяжелее весит вид, который победителю подходит (ADR 0071).
+#:
+#: Считается из доли своего: при ``class_share`` 0,85 своё обязано выпадать в
+#: восьмидесяти пяти случаях из ста, а сколько видов на той и другой стороне,
+#: решает содержимое. Поэтому здесь не написано «в шесть раз» - здесь написано,
+#: как это число получить из объявленной доли и числа видов.
+def _class_pull(share: float, mine: int, others: int) -> float:
+    """Вес одного своего вида против одного чужого.
+
+    ``share`` доли находок обязаны достаться своим видам. При ``mine`` своих и
+    ``others`` чужих это значит ``mine * w / (mine * w + others) == share``,
+    откуда ``w = share * others / ((1 - share) * mine)``.
+    """
+    if not mine or not others or share <= 0.0:
+        return 1.0
+    if share >= 1.0:
+        return float(mine + others) * 1000.0
+    return share * others / ((1.0 - share) * mine)
+
+
+def suits(content: GameContent, archetype: GearArchetype, class_ids: Iterable[str]) -> bool:
+    """Подходит ли вид хоть кому-то из названных классов.
+
+    В отряде своим считается то, что подходит хоть кому-то из победивших: добычу
+    они всё равно делят между собой, и подобрать её под одного значило бы решить
+    за остальных.
+    """
+    for class_id in class_ids:
+        if not content.has_character_class(class_id):
+            continue
+        klass = content.character_class(class_id)
+        if archetype.weapon_type and klass.can_wield(archetype.weapon_type):
+            return True
+        if archetype.armor_type and klass.can_wear(archetype.armor_type):
+            return True
+    return False
+
+
+def _pick_archetype(
+    content: GameContent,
+    source: random.Random,
+    droppable: Sequence[GearArchetype],
+    class_ids: Iterable[str],
+) -> GearArchetype:
+    """Вид находки, потянутый к тому, что победители носят (ADR 0071)."""
+    wanted = tuple(class_ids)
+    share = content.loot_rules.class_share
+    if not wanted or share <= 0.0:
+        return droppable[source.randrange(len(droppable))]
+    mine = [one for one in droppable if suits(content, one, wanted)]
+    others = len(droppable) - len(mine)
+    if not mine or not others:
+        return droppable[source.randrange(len(droppable))]
+    pull = _class_pull(share, len(mine), others)
+    weights = [pull if one in mine else 1.0 for one in droppable]
+    return source.choices(list(droppable), weights=weights, k=1)[0]
+
+
 def roll_drop(
     content: GameContent,
     source: random.Random,
@@ -439,6 +509,7 @@ def roll_drop(
     rank: EnemyRank,
     drop_bonus: float = 0.0,
     rarity_bonus: float = 0.0,
+    class_ids: Iterable[str] = (),
 ) -> str | None:
     """Что падает с побеждённого: имя вещи или ``None``, если ничего.
 
@@ -448,6 +519,12 @@ def roll_drop(
 
     ``drop_bonus`` и ``rarity_bonus`` - проценты со следопыта, разбойника и всего,
     что обещает добычу почаще и побогаче.
+
+    ``class_ids`` - классы победителей. Названы - и вид находки тянет к тому, что
+    они носят: ``class_share`` находок из десяти оказывается своими (ADR 0071).
+    Остальные падают как падали, и это не забытый хвост - чужое перековывают в
+    кузнице (ADR 0060) или отдают соратнику. Находка, которую некуда деть, -
+    мусор; находка, которую есть куда деть, - выбор.
     """
     if not content.gear_archetypes or not content.gear_tiers:
         return None
@@ -464,7 +541,7 @@ def roll_drop(
     droppable = [one for one in content.gear_archetypes if not one.tool_type]
     if not droppable:
         return None
-    archetype = droppable[source.randrange(len(droppable))]
+    archetype = _pick_archetype(content, source, droppable, class_ids)
     roll = source.randrange(max(1, rolls_of(content)))
 
     relics = [rarity for rarity in content.rarities if rarity.scaling]

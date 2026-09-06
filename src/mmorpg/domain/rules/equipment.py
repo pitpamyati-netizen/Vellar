@@ -27,7 +27,9 @@ from mmorpg.domain.entities.character import Character, Equipment
 from mmorpg.domain.entities.content import GameContent, Item, Skill
 from mmorpg.domain.entities.damage import UNARMED, DamageType
 from mmorpg.domain.entities.dice import Dice
+from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.procgen import items as gear_procgen
+from mmorpg.domain.rules import milestones as milestone_rules
 from mmorpg.domain.rules import repair
 
 # Броня смягчается против уровня того, кого бьют: обе величины растут с уровнем
@@ -183,6 +185,35 @@ def is_foreign(content: GameContent, character: Character, item: Item) -> bool:
     return False
 
 
+def requirement_of(content: GameContent, item: Item) -> tuple[tuple[StatCode, ...], int] | None:
+    """Чего эта вещь просит: характеристики и порог. ``None`` - ничего не просит.
+
+    Характеристик несколько, и порог берётся любой из них (ADR 0071): булаву
+    носят и воин, и жрец, но силу растит только первый, а мудрость - второй.
+
+    Порог растёт со ступенью вещи: двуручник последней ступени просит вдвое
+    против того, что просит первой.
+    """
+    kind = item.weapon_type or item.armor_type
+    if not kind:
+        return None
+    asked = content.requirement_for(kind)
+    if asked is None:
+        return None
+    return asked.stats, asked.at(item.level)
+
+
+def requirement_shortfall(content: GameContent, item: Item, invested: StatBlock) -> int:
+    """Насколько нажитого не хватает до порога этой вещи. Ноль - хватает."""
+    kind = item.weapon_type or item.armor_type
+    if not kind:
+        return 0
+    asked = content.requirement_for(kind)
+    if asked is None:
+        return 0
+    return asked.shortfall(invested, item.level)
+
+
 def proficiency_penalty(
     content: GameContent, character: Character, item_ids: Iterable[str] | None = None
 ) -> dict[str, float]:
@@ -196,10 +227,22 @@ def proficiency_penalty(
     """
     accuracy = 0.0
     initiative = 0.0
+    # Пороги считаются от НАЖИТОГО, а не от итогового: итог собирается через
+    # свёрток прибавок, куда входит и эта цена, и свёрток спрашивал бы сам себя
+    # (``domain/rules/milestones.py``, ADR 0068).
+    invested = milestone_rules.invested_stats(content, character)
+    rules = content.loot_rules
     for item_id in character.equipment.item_ids() if item_ids is None else item_ids:
         if not content.has_item(item_id):
             continue
         item = content.item(item_id)
+        short = requirement_shortfall(content, item, invested)
+        if short:
+            # Цена, как и за чужой род, - в минус: и точность, и инициатива тут
+            # отнимаются, а числа в содержимом написаны величиной, а не знаком.
+            steps = rules.shortfall_steps(short)
+            accuracy -= rules.requirement_accuracy_penalty * steps
+            initiative -= rules.requirement_initiative_penalty * steps
         if not is_foreign(content, character, item):
             continue
         if item.is_weapon:
