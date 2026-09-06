@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import random
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
-from mmorpg.domain.entities.content import EnemyAffix
+from mmorpg.domain.entities.content import EnemyAffix, EnemyScaling
 from mmorpg.domain.entities.damage import DamageType
 from mmorpg.domain.entities.location import (
     DEFAULT_DAMAGE_TYPES,
@@ -298,6 +298,29 @@ def _name_for(
         return archetype.name
     core = archetype.name if not (prefix or title) else archetype.name.lower()
     return " ".join(part for part in (prefix, title, core) if part)
+
+
+def hardened(enemy: Enemy, remorts: int, scaling: EnemyScaling) -> Enemy:
+    """Та же порода, но крепче — по числу взятых героем имён (ADR 0072).
+
+    Правится ровно то, что стоит ходов: здоровье и удар. Золото и опыт не
+    трогаются вовсе — содержимое, подстроившееся под игрока, не платит как свежий
+    вызов (ADR 0019), и подстройка, которая платит, была бы способом фармить.
+
+    Применяется НА ВХОДЕ В БОЙ, а не при поколении стаи: волна узла общая для
+    всех, кто в локации (ADR 0065), и порода, крепчающая на глазах одного игрока,
+    развела бы двоих, дерущихся с одной стаей.
+    """
+    if remorts <= 0:
+        return enemy
+    health, damage = scaling.hardening(remorts)
+    if health == 1.0 and damage == 1.0:
+        return enemy
+    return replace(
+        enemy,
+        max_health=max(1, round(enemy.max_health * health)),
+        damage=max(1, round(enemy.damage * damage)),
+    )
 
 
 def generate_group(

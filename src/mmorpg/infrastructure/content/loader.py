@@ -25,6 +25,7 @@ from mmorpg.domain.entities.content import (
     ClassResource,
     Dungeon,
     EnemyAffix,
+    EnemyScaling,
     EquipSlot,
     GameContent,
     GearArchetype,
@@ -180,6 +181,7 @@ def load_content(content_dir: Path) -> GameContent:
         gear.gear_archetypes, gear.gear_tiers, gear.rarities
     )
     enemies, elite_titles, affixes = _parse_enemies(raw["enemies.toml"], item_ids, problems)
+    enemy_scaling = _parse_enemy_scaling(raw["enemies.toml"], problems)
     _validate_enemies(enemies, cities, problems)
     quests = _parse_quests(
         raw["quests.toml"], item_ids, cities, {enemy.id for enemy in enemies}, problems
@@ -237,6 +239,7 @@ def load_content(content_dir: Path) -> GameContent:
         "houses": houses,
         "subclasses": subclasses,
         "loot_rules": loot_rules,
+        "enemy_scaling": enemy_scaling,
         "gear_requirements": requirements,
         "class_affixes": class_affixes,
     }
@@ -693,6 +696,26 @@ def _parse_milestones(
             )
         )
     return tuple(parsed)
+
+
+def _parse_enemy_scaling(raw: Mapping[str, Any], problems: list[str]) -> EnemyScaling:
+    """Насколько порода крепчает за каждое взятое имя (ADR 0072).
+
+    Ответ мира на прибавку за уход обязан быть МЕНЬШЕ самой прибавки: иначе уход
+    ничего не даёт, а игрок платит за него полутора сотнями уровней.
+    """
+    meta = raw.get("meta", {})
+    scaling = EnemyScaling(
+        health_per_rebirth=float(meta.get("hp_multiplier_per_rebirth", 0.0)),
+        damage_per_rebirth=float(meta.get("damage_multiplier_per_rebirth", 0.0)),
+    )
+    for name, value in (
+        ("hp_multiplier_per_rebirth", scaling.health_per_rebirth),
+        ("damage_multiplier_per_rebirth", scaling.damage_per_rebirth),
+    ):
+        if value < 0.0:
+            problems.append(f"enemies.toml: [meta].{name} cannot be negative")
+    return scaling
 
 
 def _parse_loot(
@@ -2017,6 +2040,9 @@ def _build_craft_rules(raw: Mapping[str, Any], problems: list[str]) -> CraftRule
         fine_chance_base=float(meta.get("fine_chance_base", 0.0)),
         fine_chance_per_rank=float(meta.get("fine_chance_per_rank", 0.0)),
         rank_tiers=tuple(int(level) for level in meta.get("rank_tiers", ())),
+        stat_base=int(meta.get("stat_base", 0)),
+        stat_per_rank=int(meta.get("stat_per_rank", 0)),
+        gather_per_stat=float(meta.get("gather_per_stat", 0.0)),
     )
     if rules.experience_per_rank < 1:
         problems.append("crafts.toml: [meta].experience_per_rank must be at least 1")

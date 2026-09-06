@@ -27,6 +27,7 @@ from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.craft import CraftRules, QualityTier, Recipe
 from mmorpg.domain.procgen import items as gear_procgen
 from mmorpg.domain.procgen.seeds import rng
+from mmorpg.domain.rules import milestones as milestone_rules
 from mmorpg.domain.rules.modifiers import collect_modifiers, percent
 
 GATHER_YIELD_KEY = "gather_yield_percent"
@@ -99,7 +100,15 @@ def gather_amount(content: GameContent, character: Character, craft_id: str) -> 
     """
     rules = content.craft_rules
     rank = character_rank(content, character, craft_id)
-    amount = rules.gather_base + rules.gather_per_rank * (rank - 1)
+    amount = float(rules.gather_base + rules.gather_per_rank * (rank - 1))
+    # Характеристика ремесла прибавляет к сбору сама: за жилой стоят руки, а не
+    # разрешение, и порогом сбор не закрыть (ADR 0072). Считается от вложенного и
+    # только сверх порога первого ранга - до него ремесло идёт как шло.
+    if rules.gather_per_stat and content.has_craft(craft_id):
+        craft = content.craft(craft_id)
+        invested = milestone_rules.invested_stats(content, character)
+        over = max(0, invested[craft.stat] - rules.asks_at(1))
+        amount *= 1.0 + rules.gather_per_stat * over / 100.0
     modifiers = collect_modifiers(content, character)
     return max(1, round(amount * percent(modifiers, GATHER_YIELD_KEY)))
 
@@ -197,6 +206,15 @@ def can_make(
     rank = character_rank(content, character, recipe.craft_id)
     if rank < recipe.rank:
         return f"Нужен ранг {recipe.rank}, у вас {rank}."
+    short = stat_shortfall(content, character, recipe.craft_id, recipe.rank)
+    if short:
+        craft = content.craft(recipe.craft_id)
+        asked = content.craft_rules.asks_at(recipe.rank)
+        have = asked - short
+        return (
+            f"Работа этого ранга просит {craft.stat.value} {asked}, у вас {have}. "
+            "Не хватает того, чем ремесло делается, а не сырья."
+        )
     missing = [
         f"{content.item(need.item_id).name}: нужно {need.count}, есть {owned.get(need.item_id, 0)}"
         for need in recipe.inputs
@@ -205,6 +223,22 @@ def can_make(
     if missing:
         return "Не хватает материалов. " + "; ".join(missing) + "."
     return ""
+
+
+def stat_shortfall(content: GameContent, character: Character, craft_id: str, rank: int) -> int:
+    """Насколько не хватает характеристики ремесла для работы этого ранга.
+
+    Считается от **вложенного** (``milestones.invested_stats``), как и всё
+    прочее, что нельзя надеть и снять (ADR 0068): кольцо не должно делать
+    кузнеца кузнецом.
+    """
+    rules = content.craft_rules
+    asked = rules.asks_at(rank)
+    if not asked or not content.has_craft(craft_id):
+        return 0
+    craft = content.craft(craft_id)
+    invested = milestone_rules.invested_stats(content, character)
+    return max(0, asked - invested[craft.stat])
 
 
 def make(

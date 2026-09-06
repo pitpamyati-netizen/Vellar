@@ -498,6 +498,32 @@ class SpecialProperty:
 
 
 @dataclass(frozen=True, slots=True)
+class EnemyScaling:
+    """Насколько порода крепчает за каждое взятое имя (ADR 0072).
+
+    Уход платит процентом ко всем характеристикам навсегда (ADR 0070), и без
+    ответа мира второй проход по полосе шёл бы по тем же противникам человеком,
+    который стал в полтора раза больше. Порода отвечает - но отвечает МЕНЬШЕ, чем
+    прибавка: перерождённый обязан остаться сильнее себя прежнего, иначе уход
+    ничего не даёт и брать его незачем.
+
+    ПЛАТА НЕ РАСТЁТ. Ни золото, ни опыт: содержимое, подстроившееся под игрока,
+    не платит как свежий вызов (ADR 0019). Крепчает только то, что стоит ходов.
+    """
+
+    health_per_rebirth: float = 0.0
+    damage_per_rebirth: float = 0.0
+
+    def hardening(self, remorts: int) -> tuple[float, float]:
+        """Во сколько раз крепче здоровье и злее удар у породы против этого героя."""
+        taken = max(0, remorts)
+        return (
+            1.0 + self.health_per_rebirth * taken,
+            1.0 + self.damage_per_rebirth * taken,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class GearRequirement:
     """Чего род снаряжения просит от того, кто его надел (ADR 0071).
 
@@ -941,6 +967,7 @@ class GameContent:
     rebirths: tuple[Rebirth, ...]
     #: Опорные числа находки и то, чего просит род снаряжения (ADR 0071).
     loot_rules: LootRules
+    enemy_scaling: EnemyScaling
     gear_requirements: tuple[GearRequirement, ...]
     class_affixes: tuple[ClassAffix, ...]
     #: Титулы за уходы, по порядку (``turnings.toml [meta].titles``).
@@ -1022,6 +1049,7 @@ class GameContent:
         rebirths: Sequence[Rebirth] = (),
         rebirth_titles: Sequence[str] = (),
         loot_rules: LootRules | None = None,
+        enemy_scaling: EnemyScaling | None = None,
         gear_requirements: Sequence[GearRequirement] = (),
         class_affixes: Sequence[ClassAffix] = (),
         houses: Sequence[House] = (),
@@ -1064,6 +1092,7 @@ class GameContent:
             rebirths=tuple(rebirths),
             rebirth_titles=tuple(rebirth_titles),
             loot_rules=loot_rules or LootRules(),
+            enemy_scaling=enemy_scaling or EnemyScaling(),
             gear_requirements=tuple(gear_requirements),
             class_affixes=tuple(class_affixes),
             _requirements_by_kind=MappingProxyType({one.kind: one for one in gear_requirements}),
