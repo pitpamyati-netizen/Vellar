@@ -551,6 +551,31 @@ def _render(
             return guild_screens.tiers_screen(guild or GuildView(), state.notice)
         case ScreenId.GUILD_SUCCEED:
             return guild_screens.succeed_screen(guild or GuildView(), state.notice)
+        case ScreenId.GUILD_STORE:
+            return guild_screens.store_screen(guild or GuildView(), state.list_page, state.notice)
+        case ScreenId.GUILD_STORE_PUT:
+            return guild_screens.stow_screen(
+                content, shelf.owned, guild or GuildView(), state.list_page, state.notice
+            )
+        case ScreenId.GUILD_STORE_AMOUNT if content.has_item(state.vault_item):
+            return guild_screens.store_amount_screen(
+                replace(guild or GuildView(), vault_action=state.vault_action),
+                content.item(state.vault_item).name,
+                _stored_count(guild, state.vault_item)
+                if state.vault_action == "take"
+                else _owned_count(shelf, state.vault_item),
+                state.notice,
+            )
+        # Вещь пропала из содержимого: игрока возвращают в хранилище, а не в
+        # падение (``Claude.md``, правило 8).
+        case ScreenId.GUILD_STORE_AMOUNT:
+            return guild_screens.store_screen(guild or GuildView(), state.list_page, state.notice)
+        case ScreenId.GUILD_CONTRACT:
+            return guild_screens.contract_screen(guild or GuildView(), state.notice)
+        case ScreenId.GUILD_WAR:
+            return guild_screens.war_screen(guild or GuildView(), state.notice)
+        case ScreenId.GUILD_WAR_DECLARE:
+            return guild_screens.war_declare_screen(guild or GuildView(), state.notice)
         case ScreenId.TRANSFER_TO:
             return transfer_screens.recipients_screen(
                 state.transfer_scope,
@@ -1052,6 +1077,7 @@ def advance(
         guild_action="",
         guild_arg="",
         transfer_amount=0,
+        vault_amount=0,
     )
     shelf = goods or Goods(gold=character.gold)
     ticking = clock or Clock()
@@ -1159,6 +1185,18 @@ def advance(
             return _handle_guild_roster(state, command)
         case ScreenId.GUILD_VAULT:
             return _handle_guild_vault(state, command)
+        case ScreenId.GUILD_STORE:
+            return _handle_guild_store(state, command, guild)
+        case ScreenId.GUILD_STORE_PUT:
+            return _handle_guild_stow(content, state, command, shelf)
+        case ScreenId.GUILD_STORE_AMOUNT:
+            return _handle_guild_store_amount(content, state, command, text, shelf, guild)
+        case ScreenId.GUILD_CONTRACT:
+            return state.with_notice("Подряд закрывается сам: делайте дела, а не жмите кнопки.")
+        case ScreenId.GUILD_WAR:
+            return state.with_notice("Нажмите кнопку войны.")
+        case ScreenId.GUILD_WAR_DECLARE:
+            return _handle_guild_text(state, command, text, action="war_declare")
         case ScreenId.TRANSFER_TO:
             return _handle_transfer_to(
                 state, command, _transfer_recipients(state, character, party, guild)
@@ -2287,6 +2325,8 @@ _GUILD_ACTIONS: dict[Intent, str] = {
     Intent.GUILD_LEAVE: "leave",
     Intent.GUILD_ACCEPT: "accept",
     Intent.GUILD_DECLINE: "decline",
+    Intent.GUILD_WAR_ACCEPT: "war_accept",
+    Intent.GUILD_WAR_DECLINE: "war_decline",
 }
 
 _GUILD_SCREENS: dict[Intent, ScreenId] = {
@@ -2297,16 +2337,27 @@ _GUILD_SCREENS: dict[Intent, ScreenId] = {
     Intent.GUILD_VAULT: ScreenId.GUILD_VAULT,
     Intent.GUILD_TIERS: ScreenId.GUILD_TIERS,
     Intent.GUILD_SUCCEED: ScreenId.GUILD_SUCCEED,
+    Intent.GUILD_STORE: ScreenId.GUILD_STORE,
+    Intent.GUILD_STOW: ScreenId.GUILD_STORE_PUT,
+    Intent.GUILD_CONTRACT: ScreenId.GUILD_CONTRACT,
+    Intent.GUILD_WAR: ScreenId.GUILD_WAR,
+    Intent.GUILD_WAR_DECLARE: ScreenId.GUILD_WAR_DECLARE,
 }
+
+#: Экраны гильдии, которые открываются с первой страницы и с чистого выбора:
+#: список, открытый на середине прошлого, - это чужая страница.
+_GUILD_LISTS = frozenset({ScreenId.GUILD_ROSTER, ScreenId.GUILD_STORE, ScreenId.GUILD_STORE_PUT})
 
 
 def _guild_intent(state: PlayState, command: Command) -> PlayState | None:
     """Шаг гильдии, откуда бы его ни сделали. ``None`` - это был не он."""
     screen = _GUILD_SCREENS.get(command.intent)
     if screen is not None:
-        # Состав открывается с первой страницы: список, открытый на середине
-        # чужого списка, - это чужая страница (``docs/accessibility.md``).
-        opened = replace(state, list_page=PageState()) if screen is ScreenId.GUILD_ROSTER else state
+        # Состав и хранилище открываются с первой страницы: список, открытый на
+        # середине чужого списка, - это чужая страница (``docs/accessibility.md``).
+        opened = replace(state, list_page=PageState()) if screen in _GUILD_LISTS else state
+        if screen is ScreenId.GUILD_STORE_PUT:
+            opened = replace(opened, vault_action="stow", vault_item="")
         return opened.at(screen)
     action = _GUILD_ACTIONS.get(command.intent)
     if action is None:
@@ -2723,3 +2774,80 @@ def search_line(content: GameContent, node_name: str, result: adventure.SearchRe
     for step in result.quest_steps:
         parts.append(f"Задание «{step.quest.name}»: {step.progress} из {step.quest.target_count}.")
     return " ".join(parts)
+
+
+# --- хранилище гильдии (ADR 0077) ------------------------------------
+#
+# Автомат выбирает вещь и количество, а двигает общее добро хендлер, читая
+# ``vault_action`` и ``vault_amount``: хранилище лежит в базе, а автомат не
+# читает и не пишет ничего (``Claude.md``, правило 5).
+
+
+def _stored_count(view: GuildView | None, item_id: str) -> int:
+    for stored_id, _, quantity in (view or GuildView()).stored:
+        if stored_id == item_id:
+            return quantity
+    return 0
+
+
+def _vault_now(state: PlayState, item_id: str, amount: int) -> PlayState:
+    """Всё выбрано: вернуться в хранилище и оставить хендлеру триггер."""
+    return replace(state, vault_item=item_id, vault_amount=amount).at(ScreenId.GUILD_STORE)
+
+
+def _handle_guild_store(state: PlayState, command: Command, guild: GuildView | None) -> PlayState:
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите вещь из хранилища.")
+    item_id = guild_screens.stored_from_button(guild or GuildView(), command.argument)
+    if not item_id:
+        return state.with_notice("Нажмите вещь из хранилища.")
+    stored = _stored_count(guild, item_id)
+    taking = replace(state, vault_action="take", vault_item=item_id)
+    if stored <= 1:
+        return _vault_now(taking, item_id, 1)
+    return taking.at(ScreenId.GUILD_STORE_AMOUNT)
+
+
+def _handle_guild_stow(
+    content: GameContent, state: PlayState, command: Command, goods: Goods
+) -> PlayState:
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите вещь из сумки.")
+    item = transfer_screens.item_from_button(content, command.argument, goods.owned)
+    if item is None:
+        return state.with_notice("Нажмите вещь из сумки.")
+    held = _owned_count(goods, item.id)
+    if held <= 0:
+        return state.with_notice("Этой вещи у вас уже нет.")
+    stowing = replace(state, vault_action="stow", vault_item=item.id)
+    if held == 1:
+        return _vault_now(stowing, item.id, 1)
+    return stowing.at(ScreenId.GUILD_STORE_AMOUNT)
+
+
+def _handle_guild_store_amount(
+    content: GameContent,
+    state: PlayState,
+    command: Command,
+    text: str,
+    goods: Goods,
+    guild: GuildView | None,
+) -> PlayState:
+    """Сколько положить или взять: число сообщением или «всё» кнопкой."""
+    if not content.has_item(state.vault_item):
+        return go_back(replace(state, vault_item="")).with_notice("Этой вещи в игре больше нет.")
+    taking = state.vault_action == "take"
+    held = (
+        _stored_count(guild, state.vault_item) if taking else _owned_count(goods, state.vault_item)
+    )
+    if held <= 0:
+        return go_back(replace(state, vault_item="")).with_notice(
+            "Этой вещи там уже нет." if taking else "Этой вещи у вас уже нет."
+        )
+    all_label = labels.GUILD_TAKE_ALL if taking else labels.GUILD_STOW_ALL
+    if command.intent is Intent.SELECT and all_label.matches(command.argument):
+        return _vault_now(state, state.vault_item, held)
+    asked = text.strip()
+    if command.intent is Intent.UNKNOWN and asked.isdigit() and int(asked) > 0:
+        return _vault_now(state, state.vault_item, min(int(asked), held))
+    return state.with_notice(f"Наберите число от 1 до {held} или нажмите «{all_label.text}».")

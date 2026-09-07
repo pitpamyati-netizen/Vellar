@@ -29,11 +29,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from enum import IntEnum
 
 from mmorpg.domain.entities.content import GameContent, GuildTier
 from mmorpg.domain.procgen.enemies import gold_at
+from mmorpg.domain.rules.progression import MAX_LEVEL
 
 #: Сколько человек помещается в гильдию на самой высокой её ступени. Ступень
 #: ниже вмещает меньше (``content/guilds.toml``), выше этого - никакая.
@@ -94,6 +96,18 @@ WITHDRAW_FIGHTS: dict[GuildRank, int] = {
     GuildRank.RECRUIT: 0,
     GuildRank.MEMBER: 25,
     GuildRank.VETERAN: 75,
+    GuildRank.ELDER: 200,
+}
+
+
+#: Сколько вещей за переворот прилавка выносит из хранилища каждое звание
+#: (ADR 0077). Считается штуками, а не видами: стопка в двести стрел - это
+#: двести вещей, и вынести её целиком не то же самое, что вынести один меч.
+#: Основателя здесь нет: он берёт без предела, как и из казны.
+STORE_TAKE: dict[GuildRank, int] = {
+    GuildRank.RECRUIT: 0,
+    GuildRank.MEMBER: 20,
+    GuildRank.VETERAN: 60,
     GuildRank.ELDER: 200,
 }
 
@@ -202,6 +216,8 @@ class Standing:
     deeds: int = 0
     seats: int = MAX_MEMBERS
     members: int = 0
+    #: Сколько разных вещей держит хранилище на этой ступени (ADR 0077).
+    store_slots: int = 0
 
     @property
     def level(self) -> int:
@@ -250,6 +266,7 @@ def standing(content: GameContent, guild: Guild) -> Standing:
         deeds=guild.deeds,
         seats=tier.seats if tier is not None else MAX_MEMBERS,
         members=guild.size,
+        store_slots=tier.store_slots if tier is not None else 0,
     )
 
 
@@ -424,6 +441,86 @@ def withdraw_refusal(
     if limit is not None and taken + amount > limit:
         return (
             f"За переворот {rank.title} берёт из казны не больше {limit} золота. "
+            f"Осталось: {max(0, limit - taken)}."
+        )
+    return ""
+
+
+def band_level(tiers: Sequence[GuildTier], place: Standing) -> int:
+    """Уровень, которым меряется всё, что гильдия платит и ставит (ADR 0077).
+
+    У гильдии нет уровня: у неё есть ступень. Но всё, что игра платит золотом,
+    меряется одним боем своего уровня (``Claude.md``, правило 3), и подряду со
+    ставкой войны тоже нужна такая мера. Она берётся из ступени: лестница
+    растянута на всю полосу, поэтому первая ступень платит как начало пути, а
+    последняя - как его конец. Уровень того, кто закрыл подряд, тут не при чём
+    нарочно: иначе гильдия со сто пятидесятым в составе получала бы за то же
+    дело в семь раз больше.
+    """
+    if not tiers:
+        return max(1, MAX_LEVEL // 2)
+    return max(1, min(MAX_LEVEL, round(MAX_LEVEL * place.level / len(tiers))))
+
+
+def store_take_limit(rank: GuildRank) -> int | None:
+    """Сколько вещей звание выносит из хранилища за переворот. ``None`` - без предела."""
+    if rank is GuildRank.FOUNDER:
+        return None
+    return STORE_TAKE.get(rank, 0)
+
+
+def can_take_from_store(guild: Guild, character_id: int) -> bool:
+    """Есть ли смысл рисовать этому человеку кнопку «Взять» (``Claude.md``, правило 9)."""
+    rank = guild.rank_of(character_id)
+    if rank is None:
+        return False
+    limit = store_take_limit(rank)
+    return limit is None or limit > 0
+
+
+def stow_refusal(
+    *, guild: Guild, actor_id: int, amount: int, held: int, place: Standing, kinds: int, known: bool
+) -> str:
+    """Пусто, когда вещь можно положить в хранилище; иначе - почему нельзя.
+
+    ``kinds`` - сколько разных вещей в хранилище уже лежит, ``known`` - лежит ли
+    там уже эта. Место считается видами: новая вещь занимает место, а прибавка
+    к лежащей стопке - нет.
+    """
+    if guild.rank_of(actor_id) is None:
+        return "Вы не в этой гильдии."
+    if amount <= 0:
+        return "Назовите количество."
+    if held < amount:
+        return f"У вас {held}: столько не положить."
+    if not known and kinds >= max(0, place.store_slots):
+        return (
+            f"В хранилище гильдии {place.store_slots} мест, и все заняты. "
+            "Следующая ступень даст ещё."
+        )
+    return ""
+
+
+def take_refusal(*, guild: Guild, actor_id: int, amount: int, stored: int, taken: int = 0) -> str:
+    """Пусто, когда столько вещей можно вынести; иначе - почему нельзя.
+
+    ``taken`` - сколько этот человек уже вынес за нынешний переворот прилавка.
+    Предел у хранилища тот же по смыслу, что у казны (ADR 0076): общее добро,
+    которое один человек выносит целиком, - это не общее добро.
+    """
+    rank = guild.rank_of(actor_id)
+    if rank is None:
+        return "Вы не в этой гильдии."
+    if amount <= 0:
+        return "Назовите количество."
+    if stored < amount:
+        return f"В хранилище только {stored}."
+    limit = store_take_limit(rank)
+    if limit is not None and limit <= 0:
+        return f"{rank.title.capitalize()} из хранилища не берёт: берут званием выше."
+    if limit is not None and taken + amount > limit:
+        return (
+            f"За переворот {rank.title} выносит из хранилища не больше {limit} вещей. "
             f"Осталось: {max(0, limit - taken)}."
         )
     return ""

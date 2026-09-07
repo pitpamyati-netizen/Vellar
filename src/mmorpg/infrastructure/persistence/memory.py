@@ -23,6 +23,7 @@ from mmorpg.domain.ports.repositories import (
 )
 from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
 from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
+from mmorpg.domain.rules.guild_war import War
 from mmorpg.domain.rules.party import Party
 
 
@@ -431,11 +432,19 @@ class InMemoryPartyRepository:
 
 
 class InMemoryGuildRepository:
-    """Гильдии в словаре: id -> гильдия. Имя ищется без учёта регистра."""
+    """Гильдии в словаре: id -> гильдия. Имя ищется без учёта регистра.
+
+    Тут же её хранилище и её войны: в ``solo`` они живут столько же, сколько сам
+    процесс, и это ровно то, что обещает режим без базы (ADR 0010).
+    """
 
     def __init__(self) -> None:
         self._guilds: dict[int, Guild] = {}
         self._next_id = 1
+        #: Хранилище гильдии: гильдия -> вещь -> сколько (ADR 0077).
+        self._stock: dict[int, dict[str, int]] = {}
+        self._wars: dict[int, War] = {}
+        self._next_war_id = 1
 
     async def by_id(self, guild_id: int) -> Guild | None:
         return self._guilds.get(guild_id)
@@ -490,6 +499,10 @@ class InMemoryGuildRepository:
 
     async def disband(self, guild_id: int) -> None:
         self._guilds.pop(guild_id, None)
+        self._stock.pop(guild_id, None)
+        for war_id, war in list(self._wars.items()):
+            if war.has(guild_id):
+                del self._wars[war_id]
 
     async def deposit(self, guild_id: int, amount: int) -> None:
         guild = self._guilds.get(guild_id)
@@ -517,6 +530,71 @@ class InMemoryGuildRepository:
                 for one in guild.members
             ),
         )
+
+    async def add_deeds(self, guild_id: int, deeds: int) -> None:
+        guild = self._guilds.get(guild_id)
+        if guild is not None and deeds > 0:
+            self._guilds[guild_id] = replace(guild, deeds=guild.deeds + deeds)
+
+    # --- хранилище гильдии (ADR 0077) --------------------------------
+
+    async def stock(self, guild_id: int) -> tuple[tuple[str, int], ...]:
+        held = self._stock.get(guild_id, {})
+        return tuple(sorted((item_id, count) for item_id, count in held.items() if count > 0))
+
+    async def stow(self, guild_id: int, item_id: str, amount: int) -> None:
+        if amount <= 0:
+            return
+        held = self._stock.setdefault(guild_id, {})
+        held[item_id] = held.get(item_id, 0) + amount
+
+    async def unstow(self, guild_id: int, item_id: str, amount: int) -> bool:
+        held = self._stock.get(guild_id, {})
+        if amount <= 0 or held.get(item_id, 0) < amount:
+            return False
+        held[item_id] -= amount
+        if held[item_id] == 0:
+            del held[item_id]
+        return True
+
+    # --- война гильдий (ADR 0077) ------------------------------------
+
+    async def war_of(self, guild_id: int) -> War | None:
+        for war in self._wars.values():
+            if not war.over and war.has(guild_id):
+                return war
+        return None
+
+    async def open_war(
+        self, *, challenger_id: int, defender_id: int, stake: int, started: int, ends: int
+    ) -> War:
+        war = War(
+            id=self._next_war_id,
+            challenger_id=challenger_id,
+            defender_id=defender_id,
+            stake=stake,
+            started=started,
+            ends=ends,
+        )
+        self._wars[war.id] = war
+        self._next_war_id += 1
+        return war
+
+    async def score_war(self, war_id: int, guild_id: int) -> None:
+        war = self._wars.get(war_id)
+        if war is None or war.over:
+            return
+        if guild_id == war.challenger_id:
+            self._wars[war_id] = replace(war, challenger_score=war.challenger_score + 1)
+        elif guild_id == war.defender_id:
+            self._wars[war_id] = replace(war, defender_score=war.defender_score + 1)
+
+    async def close_war(self, war_id: int) -> bool:
+        war = self._wars.get(war_id)
+        if war is None or war.over:
+            return False
+        self._wars[war_id] = replace(war, over=True)
+        return True
 
 
 class InMemoryTradeRepository:

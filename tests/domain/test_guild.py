@@ -7,6 +7,7 @@ from dataclasses import replace
 from mmorpg.domain.entities.content import GameContent, GuildTier
 from mmorpg.domain.rules import guild as guild_rules
 from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
+from mmorpg.domain.rules.progression import MAX_LEVEL
 
 
 def a_guild(**ranks: GuildRank) -> Guild:
@@ -310,3 +311,107 @@ def test_a_contribution_is_remembered_per_person() -> None:
     assert guild.contributed_by(404) == 0
     # Звание меняют, вклад остаётся: это память о том, кто держал гильдию.
     assert guild.with_rank(2, GuildRank.VETERAN).contributed_by(2) == 40
+
+
+# --- хранилище гильдии (ADR 0077) ------------------------------------
+
+
+def _place(slots: int = 3) -> guild_rules.Standing:
+    tier = GuildTier(level=2, name="Артель", deeds=150, seats=15, store_slots=slots)
+    return guild_rules.Standing(tier=tier, deeds=150, seats=15, members=2, store_slots=slots)
+
+
+def test_the_store_limit_climbs_with_the_rank_and_the_founder_has_none() -> None:
+    limits = [guild_rules.store_take_limit(rank) for rank in guild_rules.GRANTABLE]
+    assert limits[0] == 0, "новик из хранилища не берёт"
+    assert limits[1:] == sorted(limits[1:]) and all(one for one in limits[1:])
+    assert guild_rules.store_take_limit(GuildRank.FOUNDER) is None
+
+
+def test_only_ranks_that_may_take_get_the_button() -> None:
+    guild = a_guild(
+        argus=GuildRank.FOUNDER,
+        mira=GuildRank.MEMBER,
+        nov=GuildRank.RECRUIT,
+    )
+    assert guild_rules.can_take_from_store(guild, 1)
+    assert guild_rules.can_take_from_store(guild, 2)
+    assert not guild_rules.can_take_from_store(guild, 3), "кнопка, которая всегда откажет, - баг"
+    assert not guild_rules.can_take_from_store(guild, 404)
+
+
+def test_a_full_store_takes_more_of_what_it_already_holds() -> None:
+    """Место занимает вид, а не штука: стопка стрел - одно место."""
+    guild = a_guild(argus=GuildRank.FOUNDER, mira=GuildRank.MEMBER)
+
+    def refusal(**over: object) -> str:
+        args: dict[str, object] = {
+            "guild": guild,
+            "actor_id": 2,
+            "amount": 5,
+            "held": 10,
+            "place": _place(),
+            "kinds": 3,
+            "known": True,
+        }
+        args.update(over)
+        return guild_rules.stow_refusal(**args)  # type: ignore[arg-type]
+
+    assert refusal() == "", "лежащую стопку добирают и на полном хранилище"
+    assert "мест" in refusal(known=False)
+    assert refusal(known=False, kinds=2) == ""
+    assert "столько не положить" in refusal(held=1)
+    assert "количество" in refusal(amount=0)
+    assert "не в этой гильдии" in refusal(actor_id=404)
+
+
+def test_taking_from_the_store_knows_its_rank_and_its_rotation() -> None:
+    guild = a_guild(
+        argus=GuildRank.FOUNDER,
+        mira=GuildRank.ELDER,
+        nov=GuildRank.RECRUIT,
+    )
+    limit = guild_rules.store_take_limit(GuildRank.ELDER) or 0
+
+    def refusal(**over: object) -> str:
+        args: dict[str, object] = {
+            "guild": guild,
+            "actor_id": 2,
+            "amount": 5,
+            "stored": 40,
+            "taken": 0,
+        }
+        args.update(over)
+        return guild_rules.take_refusal(**args)  # type: ignore[arg-type]
+
+    assert refusal() == ""
+    assert "В хранилище только 2" in refusal(stored=2)
+    assert "количество" in refusal(amount=0)
+    assert "не в этой гильдии" in refusal(actor_id=404)
+    assert "не берёт" in refusal(actor_id=3), "новик из хранилища не берёт вовсе"
+    assert "не больше" in refusal(taken=limit - 4)
+    assert refusal(taken=limit - 5) == ""
+    # У основателя предела нет: он же за общее добро и отвечает.
+    assert refusal(actor_id=1, taken=10_000) == ""
+
+
+def test_the_tier_says_how_much_the_store_holds(content: GameContent) -> None:
+    """Сколько держит хранилище, решает ступень, и больше нигде это не записано."""
+    ladder = content.guild_tiers
+    guild = a_guild(argus=GuildRank.FOUNDER)
+    fresh = guild_rules.standing(content, guild)
+    grown = guild_rules.standing(content, replace(guild, deeds=ladder[1].deeds))
+    assert fresh.store_slots == ladder[0].store_slots
+    assert grown.store_slots == ladder[1].store_slots > fresh.store_slots
+    assert guild_rules.standing(content.rebuilt(guild_tiers=()), guild).store_slots == 0
+
+
+def test_what_a_guild_pays_is_measured_by_its_tier_and_never_by_its_people(
+    content: GameContent,
+) -> None:
+    """У гильдии нет уровня: мерой служит ступень, растянутая на всю полосу."""
+    tiers = content.guild_tiers
+    low = guild_rules.band_level(tiers, guild_rules.Standing(tier=tiers[0]))
+    high = guild_rules.band_level(tiers, guild_rules.Standing(tier=tiers[-1]))
+    assert 1 <= low < high <= MAX_LEVEL
+    assert guild_rules.band_level((), guild_rules.Standing()) >= 1

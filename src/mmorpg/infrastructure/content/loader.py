@@ -560,6 +560,7 @@ def _parse_guild_tiers(raw: Mapping[str, Any], problems: list[str]) -> tuple[Gui
                 seats=int(entry.get("seats", 0)),
                 exp_percent=float(entry.get("exp_percent", 0.0)),
                 gold_percent=float(entry.get("gold_percent", 0.0)),
+                store_slots=int(entry.get("store_slots", 0)),
             )
         )
     return tuple(parsed)
@@ -587,6 +588,11 @@ def _validate_guild_tiers(tiers: Sequence[GuildTier], problems: list[str]) -> No
                 f"guilds.toml: tier {tier.level} seats {tier.seats}, "
                 f"and a guild holds at most {GUILD_MAX_MEMBERS}"
             )
+        if tier.store_slots <= 0:
+            problems.append(
+                f"guilds.toml: tier {tier.level} holds nothing: "
+                "a guild store with no room is a button that always refuses"
+            )
         if previous is None:
             previous = tier
             continue
@@ -596,8 +602,9 @@ def _validate_guild_tiers(tiers: Sequence[GuildTier], problems: list[str]) -> No
             problems.append(
                 f"guilds.toml: tier {tier.level} costs no more deeds than the one below"
             )
-        if (tier.seats, tier.exp_percent, tier.gold_percent) <= (
+        if (tier.seats, tier.store_slots, tier.exp_percent, tier.gold_percent) <= (
             previous.seats,
+            previous.store_slots,
             previous.exp_percent,
             previous.gold_percent,
         ):

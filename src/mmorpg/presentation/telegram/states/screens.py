@@ -79,6 +79,12 @@ class Play(StatesGroup):
     guild_vault = State()
     guild_tiers = State()
     guild_succeed = State()
+    guild_store = State()
+    guild_store_put = State()
+    guild_store_amount = State()
+    guild_contract = State()
+    guild_war = State()
+    guild_war_declare = State()
     transfer_to = State()
     transfer_item = State()
     transfer_amount = State()
@@ -178,6 +184,12 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.GUILD_VAULT: Play.guild_vault,
     ScreenId.GUILD_TIERS: Play.guild_tiers,
     ScreenId.GUILD_SUCCEED: Play.guild_succeed,
+    ScreenId.GUILD_STORE: Play.guild_store,
+    ScreenId.GUILD_STORE_PUT: Play.guild_store_put,
+    ScreenId.GUILD_STORE_AMOUNT: Play.guild_store_amount,
+    ScreenId.GUILD_CONTRACT: Play.guild_contract,
+    ScreenId.GUILD_WAR: Play.guild_war,
+    ScreenId.GUILD_WAR_DECLARE: Play.guild_war_declare,
     ScreenId.TRANSFER_TO: Play.transfer_to,
     ScreenId.TRANSFER_ITEM: Play.transfer_item,
     ScreenId.TRANSFER_AMOUNT: Play.transfer_amount,
@@ -279,6 +291,12 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.GUILD_VAULT: ScreenId.GUILD,
     ScreenId.GUILD_TIERS: ScreenId.GUILD,
     ScreenId.GUILD_SUCCEED: ScreenId.GUILD,
+    ScreenId.GUILD_STORE: ScreenId.GUILD,
+    ScreenId.GUILD_STORE_PUT: ScreenId.GUILD_STORE,
+    ScreenId.GUILD_STORE_AMOUNT: ScreenId.GUILD_STORE,
+    ScreenId.GUILD_CONTRACT: ScreenId.GUILD,
+    ScreenId.GUILD_WAR: ScreenId.GUILD,
+    ScreenId.GUILD_WAR_DECLARE: ScreenId.GUILD_WAR,
     # Передача общая для отряда и гильдии; куда вести «Назад» на самом деле,
     # знает ``NavigationStack`` — здесь только нейтральный запасной путь.
     ScreenId.TRANSFER_TO: ScreenId.MAIN_MENU,

@@ -1,4 +1,4 @@
-"""Гильдия, прогнанная через настоящий хендлер (ADR 0030).
+"""Гильдия, прогнанная через настоящий хендлер (ADR 0030, 0077).
 
 Гильдию основывают кнопкой, зовут в неё именем, соглашаются сами; звания раздаёт
 основатель, а казна двигается по званию. Здесь проверяется вся связка: главное
@@ -26,6 +26,7 @@ from mmorpg.application.services.party import PartyStore
 from mmorpg.config import Settings
 from mmorpg.domain.entities import Character, GameContent
 from mmorpg.domain.rules import guild as guild_rules
+from mmorpg.domain.rules import guild_war as war_rules
 from mmorpg.domain.rules.guild import FOUND_COST, GuildRank
 from mmorpg.infrastructure.cache.memory import InMemoryLocationStateCache, InMemoryStateCache
 from mmorpg.infrastructure.persistence.memory import (
@@ -76,6 +77,11 @@ def characters() -> InMemoryCharacterRepository:
 @pytest.fixture
 def cache() -> InMemoryStateCache:
     return InMemoryStateCache()
+
+
+@pytest.fixture
+def inventory() -> InMemoryInventoryRepository:
+    return InMemoryInventoryRepository()
 
 
 @pytest.fixture
@@ -136,11 +142,12 @@ async def table(
     registry: ContentRegistry,
     cache: InMemoryStateCache,
     guilds: GuildStore,
+    inventory: InMemoryInventoryRepository,
     sent: Recorder,
 ) -> tuple[Player, Player, Character, Character]:
     deps: dict[str, Any] = {
         "characters": characters,
-        "inventory": InMemoryInventoryRepository(),
+        "inventory": inventory,
         "users": InMemoryUserRepository(),
         "keeper_log": InMemoryKeeperLogRepository(),
         "deltas": InMemoryLocationStateCache(),
@@ -564,3 +571,251 @@ async def test_only_the_founder_hands_the_guild_over(
     assert refused.id is ScreenId.GUILD_SUCCEED
     said = await mirna.press("Аргус")
     assert "только основатель" in said.text()
+
+
+# --- хранилище, подряд и война (ADR 0077) ----------------------------
+
+
+POTION = "small_healing_potion"
+
+
+async def test_a_thing_goes_into_the_store_and_comes_back_out(
+    table: tuple[Player, Player, Character, Character],
+    inventory: InMemoryInventoryRepository,
+    guilds: GuildStore,
+    content: GameContent,
+) -> None:
+    """Общая сумка: кладёт каждый, берут званием - и вещь и правда переезжает."""
+    argus, _, argus_character, _ = table
+    await _found(argus)
+    await inventory.add(argus_character.id, POTION, 5)
+    name = content.item(POTION).name
+
+    empty = await argus.press(labels.GUILD_STORE.text)
+    assert empty.id is ScreenId.GUILD_STORE
+    assert "пусто" in empty.text()
+
+    bag = await argus.press(labels.GUILD_STOW.text)
+    assert bag.id is ScreenId.GUILD_STORE_PUT
+    assert f"{name}, штук 5" in buttons(bag)
+
+    how_many = await argus.press(f"{name}, штук 5")
+    assert how_many.id is ScreenId.GUILD_STORE_AMOUNT
+    stored = await argus.press(labels.GUILD_STOW_ALL.text)
+    assert "В хранилище положено" in stored.text()
+    assert await inventory.count(argus_character.id, POTION) == 0
+
+    guild = await guilds.of(argus_character.id)
+    assert guild is not None
+    assert await guilds.stock(guild.id) == ((POTION, 5),)
+
+    shelf = await argus.press(labels.GUILD_STORE.text)
+    assert f"{name}, штук 5" in buttons(shelf)
+    await argus.press(f"{name}, штук 5")
+    back = await argus.press(labels.GUILD_TAKE_ALL.text)
+    assert "Из хранилища взято" in back.text()
+    assert await inventory.count(argus_character.id, POTION) == 5
+    assert await guilds.stock(guild.id) == ()
+
+
+async def test_a_recruit_may_stow_but_never_take(
+    table: tuple[Player, Player, Character, Character],
+    inventory: InMemoryInventoryRepository,
+    guilds: GuildStore,
+    content: GameContent,
+) -> None:
+    """Право на общее добро зарабатывают званием - как и право на казну."""
+    argus, mirna, argus_character, mirna_character = table
+    await _found(argus)
+    await argus.press(labels.GUILD_INVITE.text)
+    await argus.press("Мирна")
+    await mirna.press("/гильдия принять")
+
+    guild = await guilds.of(argus_character.id)
+    assert guild is not None
+    await guilds.stow(guild.id, POTION, 4)
+    await inventory.add(mirna_character.id, POTION, 2)
+    name = content.item(POTION).name
+
+    shelf = await mirna.press(labels.GUILD_STORE.text)
+    assert f"{name}, штук 4" not in buttons(shelf), "новик из хранилища не берёт"
+    assert "не берёт" in shelf.text()
+
+    await mirna.press(labels.GUILD_STOW.text)
+    await mirna.press(f"{name}, штук 2")
+    put = await mirna.press(labels.GUILD_STOW_ALL.text)
+    assert "В хранилище положено" in put.text()
+    assert dict(await guilds.stock(guild.id))[POTION] == 6
+
+
+async def test_the_contract_is_asked_of_the_guild_and_closes_itself(
+    table: tuple[Player, Player, Character, Character],
+    guilds: GuildStore,
+) -> None:
+    """Подряд говорит, чего просят и сколько сделано; кнопки «сдать» нет."""
+    argus, _, argus_character, _ = table
+    await _found(argus)
+    board = await argus.press(labels.GUILD_CONTRACT.text)
+    assert board.id is ScreenId.GUILD_CONTRACT
+    assert not board.rows, "подряд закрывается сам"
+    assert "Сделано: 0" in board.text()
+
+    guild = await guilds.of(argus_character.id)
+    assert guild is not None
+    await argus.press(labels.GUILD_VAULT.text)
+    paid = await argus.press(labels.guild_deposit_label(1000).text)
+    assert "Подряд закрыт" in paid.text(), "взнос закрывает дело о золоте"
+    grown = await guilds.by_id(guild.id)
+    assert grown is not None and grown.deeds > guild.deeds
+
+
+async def test_a_war_is_declared_accepted_and_paid_for_from_both_vaults(
+    table: tuple[Player, Player, Character, Character],
+    guilds: GuildStore,
+    content: GameContent,
+) -> None:
+    """Война - вызов, согласие и две ставки: ни одна не снимается раньше времени."""
+    argus, mirna, argus_character, mirna_character = table
+    await _found(argus, "Ирисы")
+    await _found(mirna, "Медный Крест")
+    ours = await guilds.of(argus_character.id)
+    theirs = await guilds.of(mirna_character.id)
+    assert ours is not None and theirs is not None
+    stake = war_rules.war_stake(content.guild_tiers, guild_rules.standing(content, ours))
+    await guilds.pay_vault(ours.id, stake * 2)
+    await guilds.pay_vault(theirs.id, stake * 2)
+
+    quiet = await argus.press(labels.GUILD_WAR.text)
+    assert quiet.id is ScreenId.GUILD_WAR
+    assert "ни с кем не воюет" in quiet.text()
+
+    await argus.press(labels.GUILD_WAR_DECLARE.text)
+    called = await argus.press("Медный Крест")
+    assert "Вызов послан" in called.text()
+    # Вызов ставки не трогает: замороженная казна - это не вызов, а залог.
+    still = await guilds.by_id(ours.id)
+    assert still is not None and still.vault_gold == stake * 2
+
+    invited = await mirna.press(labels.GUILD_WAR.text)
+    assert "зовёт вас на войну" in invited.text()
+    started = await mirna.press(labels.GUILD_WAR_ACCEPT.text)
+    assert "Война с гильдией «Ирисы» началась" in started.text()
+
+    war = await guilds.war_of(ours.id)
+    assert war is not None and war.stake == stake
+    for guild_id in (ours.id, theirs.id):
+        after = await guilds.by_id(guild_id)
+        assert after is not None and after.vault_gold == stake, "ставка снята с обеих казён"
+
+    seen = await argus.press(labels.GUILD_WAR.text)
+    assert "воюет с гильдией «Медный Крест»" in seen.text()
+    assert "наших очков 0" in seen.text()
+
+
+async def test_a_challenge_is_declined_and_nothing_moves(
+    table: tuple[Player, Player, Character, Character],
+    guilds: GuildStore,
+    content: GameContent,
+) -> None:
+    argus, mirna, argus_character, _ = table
+    await _found(argus, "Ирисы")
+    await _found(mirna, "Медный Крест")
+    ours = await guilds.of(argus_character.id)
+    assert ours is not None
+    stake = war_rules.war_stake(content.guild_tiers, guild_rules.standing(content, ours))
+    await guilds.pay_vault(ours.id, stake)
+
+    await argus.press(labels.GUILD_WAR_DECLARE.text)
+    await argus.press("Медный Крест")
+    refused = await mirna.press(labels.GUILD_WAR_DECLINE.text)
+    assert "отклонён" in refused.text()
+    assert await guilds.war_of(ours.id) is None
+    kept = await guilds.by_id(ours.id)
+    assert kept is not None and kept.vault_gold == stake
+
+
+async def test_a_war_without_a_stake_in_the_vault_is_not_declared(
+    table: tuple[Player, Player, Character, Character],
+) -> None:
+    argus, mirna, _, _ = table
+    await _found(argus, "Ирисы")
+    await _found(mirna, "Медный Крест")
+    await argus.press(labels.GUILD_WAR_DECLARE.text)
+    refused = await argus.press("Медный Крест")
+    assert "Ставка войны" in refused.text()
+
+
+async def test_a_war_with_a_guild_that_is_not_there_says_so(
+    table: tuple[Player, Player, Character, Character],
+) -> None:
+    argus, _, _, _ = table
+    await _found(argus, "Ирисы")
+    await argus.press(labels.GUILD_WAR_DECLARE.text)
+    refused = await argus.press("Кого нет")
+    assert "в Велларе нет" in refused.text()
+
+
+async def test_a_war_whose_time_ran_out_is_settled_by_whoever_looks(
+    table: tuple[Player, Player, Character, Character],
+    guilds: GuildStore,
+    content: GameContent,
+) -> None:
+    """Часов в игре нет: войну закрывает первый взгляд после срока (ADR 0077)."""
+    argus, mirna, argus_character, mirna_character = table
+    await _found(argus, "Ирисы")
+    await _found(mirna, "Медный Крест")
+    ours = await guilds.of(argus_character.id)
+    theirs = await guilds.of(mirna_character.id)
+    assert ours is not None and theirs is not None
+    war = await guilds.open_war(
+        challenger_id=ours.id, defender_id=theirs.id, stake=300, started=0, ends=0
+    )
+    await guilds.score_war(
+        war,
+        guild_id=ours.id,
+        winner_id=argus_character.id,
+        loser_id=mirna_character.id,
+        now=0,
+        rotation_seconds=SETTINGS.shop_rotation_seconds,
+    )
+    before = await guilds.by_id(ours.id)
+    assert before is not None
+
+    settled = await argus.press(labels.GUILD_WAR.text)
+    assert "ни с кем не воюет" in settled.text()
+    assert await guilds.war_of(ours.id) is None
+    after = await guilds.by_id(ours.id)
+    assert after is not None
+    assert after.vault_gold == before.vault_gold + 600, "победившая забирает обе ставки"
+    assert after.deeds > before.deeds, "выигранная война - деяния гильдии"
+
+
+async def test_the_challenged_guild_is_told_the_stake_it_will_actually_pay(
+    table: tuple[Player, Player, Character, Character],
+    guilds: GuildStore,
+    content: GameContent,
+) -> None:
+    """Ставку называет вызывающий, и его число — то, что снимут с обеих казён."""
+    argus, mirna, argus_character, mirna_character = table
+    await _found(argus, "Ирисы")
+    await _found(mirna, "Медный Крест")
+    ours = await guilds.of(argus_character.id)
+    theirs = await guilds.of(mirna_character.id)
+    assert ours is not None and theirs is not None
+    # Вызывающая гильдия выросла на ступень: её ставка выше, чем у вызванной.
+    await guilds.add_deeds(ours.id, content.guild_tiers[1].deeds)
+    grown = await guilds.by_id(ours.id)
+    assert grown is not None
+    stake = war_rules.war_stake(content.guild_tiers, guild_rules.standing(content, grown))
+    assert stake > war_rules.war_stake(content.guild_tiers, guild_rules.standing(content, theirs))
+    await guilds.pay_vault(ours.id, stake)
+    await guilds.pay_vault(theirs.id, stake)
+
+    await argus.press(labels.GUILD_WAR_DECLARE.text)
+    await argus.press("Медный Крест")
+    invited = await mirna.press(labels.GUILD_WAR.text)
+    assert str(stake) in invited.text(), "экран называет то число, которое и снимут"
+
+    await mirna.press(labels.GUILD_WAR_ACCEPT.text)
+    war = await guilds.war_of(theirs.id)
+    assert war is not None and war.stake == stake

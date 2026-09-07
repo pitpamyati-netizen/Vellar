@@ -34,6 +34,7 @@ from mmorpg.domain.ports.repositories import (
 )
 from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
 from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
+from mmorpg.domain.rules.guild_war import War
 from mmorpg.domain.rules.party import Party as PlayerParty
 
 if TYPE_CHECKING:  # pragma: no cover - только для типов
@@ -1239,3 +1240,115 @@ class PostgresGuildRepository:
                 character_id,
                 deeds,
             )
+
+    async def add_deeds(self, guild_id: int, deeds: int) -> None:
+        """Деяния гильдии целиком, без вклада: подряд и война (ADR 0077)."""
+        if deeds <= 0:
+            return
+        await self._pool.execute(
+            "UPDATE guilds SET deeds = deeds + $2 WHERE id = $1", guild_id, deeds
+        )
+
+    # --- хранилище гильдии (ADR 0077) --------------------------------
+
+    async def stock(self, guild_id: int) -> tuple[tuple[str, int], ...]:
+        rows = await self._pool.fetch(
+            "SELECT item_id, quantity FROM guild_items"
+            " WHERE guild_id = $1 AND quantity > 0 ORDER BY item_id",
+            guild_id,
+        )
+        return tuple((row["item_id"], row["quantity"]) for row in rows)
+
+    async def stow(self, guild_id: int, item_id: str, amount: int) -> None:
+        if amount <= 0:
+            return
+        await self._pool.execute(
+            """
+            INSERT INTO guild_items (guild_id, item_id, quantity) VALUES ($1, $2, $3)
+            ON CONFLICT (guild_id, item_id)
+            DO UPDATE SET quantity = guild_items.quantity + EXCLUDED.quantity
+            """,
+            guild_id,
+            item_id,
+            amount,
+        )
+
+    async def unstow(self, guild_id: int, item_id: str, amount: int) -> bool:
+        if amount <= 0:
+            return False
+        left = await self._pool.fetchval(
+            "UPDATE guild_items SET quantity = quantity - $3"
+            " WHERE guild_id = $1 AND item_id = $2 AND quantity >= $3 RETURNING quantity",
+            guild_id,
+            item_id,
+            amount,
+        )
+        if left is None:
+            return False
+        if left == 0:
+            # Пустая строка - это занятое место, которого никто не занимает:
+            # ступень считает виды, а не строки (``rules/guild.stow_refusal``).
+            await self._pool.execute(
+                "DELETE FROM guild_items WHERE guild_id = $1 AND item_id = $2 AND quantity = 0",
+                guild_id,
+                item_id,
+            )
+        return True
+
+    # --- война гильдий (ADR 0077) ------------------------------------
+
+    @staticmethod
+    def _war(row: Any) -> War:
+        return War(
+            id=row["id"],
+            challenger_id=row["challenger_id"],
+            defender_id=row["defender_id"],
+            stake=row["stake"],
+            started=row["started"],
+            ends=row["ends"],
+            challenger_score=row["challenger_score"],
+            defender_score=row["defender_score"],
+            over=row["over"],
+        )
+
+    async def war_of(self, guild_id: int) -> War | None:
+        row = await self._pool.fetchrow(
+            "SELECT * FROM guild_wars WHERE NOT over AND (challenger_id = $1 OR defender_id = $1)",
+            guild_id,
+        )
+        return self._war(row) if row is not None else None
+
+    async def open_war(
+        self, *, challenger_id: int, defender_id: int, stake: int, started: int, ends: int
+    ) -> War:
+        row = await self._pool.fetchrow(
+            """
+            INSERT INTO guild_wars (challenger_id, defender_id, stake, started, ends)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING *
+            """,
+            challenger_id,
+            defender_id,
+            stake,
+            started,
+            ends,
+        )
+        return self._war(row)
+
+    async def score_war(self, war_id: int, guild_id: int) -> None:
+        await self._pool.execute(
+            """
+            UPDATE guild_wars SET
+                challenger_score = challenger_score + (challenger_id = $2)::int,
+                defender_score = defender_score + (defender_id = $2)::int
+            WHERE id = $1 AND NOT over
+            """,
+            war_id,
+            guild_id,
+        )
+
+    async def close_war(self, war_id: int) -> bool:
+        closed = await self._pool.fetchval(
+            "UPDATE guild_wars SET over = TRUE WHERE id = $1 AND NOT over RETURNING id", war_id
+        )
+        return closed is not None

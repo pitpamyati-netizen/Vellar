@@ -3,10 +3,13 @@
 # Гильдия растёт деяниями: выигранный бой её человека — деяние, внесённое в казну
 # золото — столько деяний, сколько это боёв его уровня (`domain/rules/guild.py`).
 # Набранные деяния поднимают гильдию на следующую ступень, и ступень — это всё,
-# что гильдия даёт: сколько в неё помещается людей и что она добавляет своим.
+# что гильдия даёт: сколько в неё помещается людей, сколько вещей держит её
+# хранилище и что она добавляет своим.
 #
 # `deeds` — с какого числа деяний стоит ступень; первая всегда с нуля.
 # `seats` — сколько человек помещается (не больше `guild.MAX_MEMBERS`).
+# `store_slots` — сколько разных вещей держит хранилище гильдии (ADR 0077):
+# место считается видами, а не штуками, как и в сумке игрока.
 # `exp_percent` и `gold_percent` — надбавка своим за выигранный бой с миром;
 # считает её `handlers/combat._settle_world`, и больше её не читает никто.
 # Ключей прибавок здесь нет нарочно: гильдейская надбавка ложится там, где
@@ -22,6 +25,7 @@ deeds = 0
 seats = 12
 exp_percent = 0
 gold_percent = 0
+store_slots = 12
 
 [[tier]]
 level = 2
@@ -30,6 +34,7 @@ deeds = 150
 seats = 15
 exp_percent = 0
 gold_percent = 2
+store_slots = 18
 
 [[tier]]
 level = 3
@@ -38,6 +43,7 @@ deeds = 400
 seats = 18
 exp_percent = 2
 gold_percent = 2
+store_slots = 26
 
 [[tier]]
 level = 4
@@ -46,6 +52,7 @@ deeds = 900
 seats = 21
 exp_percent = 2
 gold_percent = 4
+store_slots = 36
 
 [[tier]]
 level = 5
@@ -54,6 +61,7 @@ deeds = 2000
 seats = 24
 exp_percent = 4
 gold_percent = 4
+store_slots = 48
 
 [[tier]]
 level = 6
@@ -62,6 +70,7 @@ deeds = 4200
 seats = 27
 exp_percent = 4
 gold_percent = 6
+store_slots = 62
 
 [[tier]]
 level = 7
@@ -70,3 +79,4 @@ deeds = 8500
 seats = 30
 exp_percent = 6
 gold_percent = 6
+store_slots = 80

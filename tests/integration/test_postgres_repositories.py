@@ -1155,3 +1155,53 @@ async def test_deeds_and_contribution_add_up_and_survive_a_rank_change(
     assert handed.deeds == 10 and handed.contributed_by(founder) == 8
 
     await guilds.disband(made.id)
+
+
+async def test_the_store_holds_things_and_never_goes_negative(pool, three_fighters) -> None:
+    """Хранилище гильдии двигается условным ``UPDATE``, как и казна (ADR 0077)."""
+    founder, *_ = three_fighters
+    guilds = PostgresGuildRepository(pool)
+    made = await guilds.create("Ирисы", founder)
+
+    await guilds.stow(made.id, "small_healing_potion", 5)
+    await guilds.stow(made.id, "small_healing_potion", 3)
+    await guilds.stow(made.id, "wolf_pelt", 2)
+    assert await guilds.stock(made.id) == (("small_healing_potion", 8), ("wolf_pelt", 2))
+
+    assert await guilds.unstow(made.id, "small_healing_potion", 9) is False
+    assert await guilds.unstow(made.id, "small_healing_potion", 8) is True
+    # Пустая строка - занятое место, которого никто не занимает: её убирают.
+    assert await guilds.stock(made.id) == (("wolf_pelt", 2),)
+    assert await guilds.unstow(made.id, "arrows", 1) is False
+
+    await guilds.disband(made.id)
+    assert await guilds.stock(made.id) == (), "распущенная гильдия унесла и своё добро"
+
+
+async def test_a_war_is_scored_by_side_and_closed_exactly_once(pool, three_fighters) -> None:
+    """Войну закрывает тот, кто первым заглянул после срока, - и только он."""
+    founder, other, _ = three_fighters
+    guilds = PostgresGuildRepository(pool)
+    ours = await guilds.create("Ирисы", founder)
+    theirs = await guilds.create("Полынь", other)
+
+    war = await guilds.open_war(
+        challenger_id=ours.id, defender_id=theirs.id, stake=500, started=4, ends=7
+    )
+    assert war.stake == 500 and war.ends == 7
+    assert (await guilds.war_of(ours.id)) is not None
+    assert (await guilds.war_of(theirs.id)) is not None
+
+    await guilds.score_war(war.id, ours.id)
+    await guilds.score_war(war.id, ours.id)
+    await guilds.score_war(war.id, theirs.id)
+    counted = await guilds.war_of(ours.id)
+    assert counted is not None
+    assert (counted.challenger_score, counted.defender_score) == (2, 1)
+
+    assert await guilds.close_war(war.id) is True
+    assert await guilds.close_war(war.id) is False, "заплатить за войну можно только раз"
+    assert await guilds.war_of(ours.id) is None
+
+    await guilds.disband(ours.id)
+    await guilds.disband(theirs.id)

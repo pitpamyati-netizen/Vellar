@@ -53,6 +53,8 @@ from mmorpg.domain.rules import arena as arena_rules
 from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import dungeon as dungeon_rules
 from mmorpg.domain.rules import guild as guild_rules
+from mmorpg.domain.rules import guild_contract as contract_rules
+from mmorpg.domain.rules import guild_war as war_rules
 from mmorpg.domain.rules import mood as mood_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import party as party_rules
@@ -60,6 +62,7 @@ from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import roamer as roamer_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
 from mmorpg.domain.rules.combat import act, join_battle, joinable
+from mmorpg.domain.rules.guild import Guild
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.domain.rules.tutorial import TutorialTask
 from mmorpg.logging import get_logger
@@ -953,6 +956,9 @@ async def _finish(
     store = BattleStore(state_cache)
     payouts: dict[int, Payout] = {}
     updated: dict[int, Character] = {}
+    # Гильдии участников боя с миром: их читают один раз, а спрашивают трижды -
+    # надбавка, деяния и подряд (ADR 0076, 0077).
+    places: Mapping[int, GuildPlace] = {}
 
     heroes = session.participants()
     winners = tuple(one for one in heroes if session.state.verdict_for(one.id) is Verdict.VICTORY)
@@ -968,6 +974,8 @@ async def _finish(
     if session.is_duel:
         await _settle_duel(session, roster, winners, losers, payouts, updated)
         _carry_wounds(content, session, updated)
+        # Поединок с человеком враждебной гильдии - очко войне (ADR 0077).
+        await _score_war(guilds, settings, winners, losers, payouts)
     elif session.is_arena:
         # Круг арены не стоит десятой доли кошелька: он стоит ставки, и её уже
         # взяли перед боем. Раны при этом остаются - арена лечит только гордость.
@@ -1007,6 +1015,13 @@ async def _finish(
     if owner is not None and session.state.verdict_for(owner.id) is Verdict.VICTORY:
         await _pay_digest(
             content, settings, session, flow, next_flow, locations, state_cache, payouts, updated
+        )
+
+    if places and winners:
+        # Подряд гильдии считается после того, как стало ясно, кончился ли спуск:
+        # «пройти спусков до логова» закрывает пройденное логово, а не комната.
+        await _work_contracts(
+            content, settings, guilds, places, session, next_flow, winners, payouts
         )
 
     for character_id, character in updated.items():
@@ -1830,3 +1845,101 @@ async def _use_from_bag(
         state_cache,
         guilds,
     )
+
+
+async def _work_contracts(
+    content: GameContent,
+    settings: Settings,
+    guilds: GuildStore,
+    places: Mapping[int, GuildPlace],
+    session: BattleSession,
+    next_flow: PlayState,
+    winners: Sequence[Combatant],
+    payouts: dict[int, Payout],
+) -> None:
+    """Записать выигранный бой и пройденный спуск в подряд гильдии (ADR 0077).
+
+    Подряд закрывается сам, и говорит о нём тот, чьё движение его закрыло:
+    кнопки «сдать подряд» нет нарочно (``Claude.md``, правило 9).
+    """
+    now = int(time.time())
+    delved = session.in_descent and not next_flow.descent.active
+    for one in winners:
+        place = places.get(one.character_id)
+        if place is None:
+            continue
+        kinds = [contract_rules.ContractKind.CULL]
+        if delved and one.character_id == session.owner:
+            kinds.append(contract_rules.ContractKind.DELVE)
+        for kind in kinds:
+            closed = await guilds.work_on_contract(
+                content,
+                guild_id=place.guild_id,
+                place=place.standing,
+                kind=kind,
+                amount=1,
+                world_seed=settings.world_seed,
+                now=now,
+                rotation_seconds=settings.shop_rotation_seconds,
+            )
+            if closed is None:
+                continue
+            economy_log.record(
+                economy_log.GUILD_CONTRACT,
+                closed.reward_gold,
+                character_id=one.character_id,
+                detail=kind.value,
+            )
+            payouts[one.character_id].extra.append(
+                f"Подряд гильдии «{place.name}» закрыт: {closed.line} Гильдии - {closed.pay}."
+            )
+
+
+async def _score_war(
+    guilds: GuildStore,
+    settings: Settings,
+    winners: Sequence[Combatant],
+    losers: Sequence[Combatant],
+    payouts: dict[int, Payout],
+) -> None:
+    """Записать выигранный поединок в счёт гильдейской войны (ADR 0077).
+
+    Очко берут только за человека враждебной гильдии и только раз за переворот
+    на пару «кто кого»: иначе двое сговорившихся набивают счёт друг об друга, не
+    выходя из города. Арены это не касается вовсе - там противника не выбирают.
+    """
+    now = int(time.time())
+    known: dict[int, Guild | None] = {}
+
+    async def guild_of(character_id: int) -> Guild | None:
+        if character_id not in known:
+            known[character_id] = await guilds.of(character_id)
+        return known[character_id]
+
+    for one in winners:
+        mine = await guild_of(one.character_id)
+        if mine is None:
+            continue
+        war = await guilds.war_of(mine.id)
+        if war is None:
+            continue
+        for other in losers:
+            theirs = await guild_of(other.character_id)
+            if theirs is None or not war_rules.scores(
+                winner_guild=mine.id, loser_guild=theirs.id, war=war
+            ):
+                continue
+            counted = await guilds.score_war(
+                war,
+                guild_id=mine.id,
+                winner_id=one.character_id,
+                loser_id=other.character_id,
+                now=now,
+                rotation_seconds=settings.shop_rotation_seconds,
+            )
+            payouts[one.character_id].extra.append(
+                f"Война с гильдией «{theirs.name}»: очко вашей гильдии."
+                if counted
+                else f"Война с гильдией «{theirs.name}»: за этого противника уже "
+                "платили в этот переворот."
+            )

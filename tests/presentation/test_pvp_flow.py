@@ -111,6 +111,11 @@ def cache() -> InMemoryStateCache:
 
 
 @pytest.fixture
+def guilds(cache: InMemoryStateCache) -> GuildStore:
+    return GuildStore(InMemoryGuildRepository(), cache)
+
+
+@pytest.fixture
 def parties(cache: InMemoryStateCache) -> PartyStore:
     return PartyStore(InMemoryPartyRepository(), cache)
 
@@ -200,6 +205,7 @@ async def press(
     bot: FakeBot,
     account: int,
     text: str,
+    guilds: GuildStore | None = None,
 ) -> None:
     state = context(storage, account)
     await combat_handler.fight(
@@ -212,7 +218,7 @@ async def press(
         InMemoryLocationStateCache(),
         cache,
         PartyStore(InMemoryPartyRepository(), cache),
-        GuildStore(InMemoryGuildRepository(), cache),
+        guilds or GuildStore(InMemoryGuildRepository(), cache),
     )
 
 
@@ -458,3 +464,41 @@ async def test_looking_again_costs_no_turn(
     answered = screens.answered[-1].text()
     assert "Ход:" in answered
     assert "Не узнал действие" not in answered
+
+
+async def test_a_duel_between_warring_guilds_takes_a_point(
+    content: GameContent,
+    storage: MemoryStorage,
+    cache: InMemoryStateCache,
+    characters: InMemoryCharacterRepository,
+    screens: Screens,
+    bot: FakeBot,
+    attacker: Character,
+    defender: Character,
+    guilds: GuildStore,
+) -> None:
+    """Выигранный поединок с человеком враждебной гильдии - очко войне (ADR 0077)."""
+    ours = await guilds.create("Ирисы", attacker.id)
+    theirs = await guilds.create("Медный Крест", defender.id)
+    await guilds.open_war(
+        challenger_id=ours.id, defender_id=theirs.id, stake=100, started=0, ends=10**6
+    )
+    await open_duel(content, storage, cache, characters, bot, attacker, defender)
+
+    for _ in range(200):
+        battle_id = (await context(storage, ATTACKER).get_data()).get("battle")
+        session = await BattleStore(cache).load(str(battle_id))
+        if session is None or session.state.is_over:
+            break
+        acting = await whose_turn(cache, storage)
+        await press(content, storage, cache, characters, bot, acting, "Атака", guilds=guilds)
+    else:  # pragma: no cover - поединок, который не кончается, и есть эта ошибка
+        pytest.fail("поединок не кончился за двести ходов")
+
+    war = await guilds.war_of(ours.id)
+    assert war is not None
+    assert war.challenger_score + war.defender_score == 1, "одно очко за один поединок"
+    # Деяний поединок не приносит: гильдию растит добыча мира (ADR 0076).
+    for guild_id in (ours.id, theirs.id):
+        side = await guilds.by_id(guild_id)
+        assert side is not None and side.deeds == 0

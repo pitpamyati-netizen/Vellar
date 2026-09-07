@@ -304,6 +304,13 @@ class PlayState:
     transfer_to: str = ""
     transfer_item: str = ""
     transfer_amount: int = 0
+    #: Хранилище гильдии (ADR 0077). ``vault_action`` — ``stow`` или ``take``,
+    #: ``vault_item`` — что кладут или берут: и то и другое переживает уход на
+    #: экран количества. ``vault_amount`` переходное: хендлер читает его и
+    #: обнуляет, потому что двигать общее добро умеет только он.
+    vault_action: str = ""
+    vault_item: str = ""
+    vault_amount: int = 0
 
     def at(self, screen: ScreenId) -> PlayState:
         return replace(self, screen=screen, stack=self.stack.push(screen), notice="")
@@ -347,6 +354,7 @@ class PlayState:
                 "subclass": self.subclass_id,
                 "item": self.item_id,
                 "transfer": [self.transfer_scope, self.transfer_to, self.transfer_item],
+                "vault": [self.vault_action, self.vault_item],
                 "searching": self.searching,
                 "list_filters": [
                     self.list_page.filters.category,
@@ -414,6 +422,7 @@ class PlayState:
         pf = [*data.get("keeper_pf", []), 0, 0, "", "", False, 0][:6]
         # Хвост читается с запасом: запись старого образца не называла передачу.
         transfer_scope, transfer_to, transfer_item = [*data.get("transfer", []), "", "", ""][:3]
+        vault_action, vault_item = [*data.get("vault", []), "", ""][:2]
         return cls(
             screen=ScreenId(data["screen"]),
             stack=NavigationStack.deserialise(data.get("stack", "")),
@@ -466,6 +475,8 @@ class PlayState:
             transfer_scope=str(transfer_scope),
             transfer_to=str(transfer_to),
             transfer_item=str(transfer_item),
+            vault_action=str(vault_action),
+            vault_item=str(vault_item),
         )
 
 
@@ -505,6 +516,8 @@ LIST_PAGE_FIELD: dict[ScreenId, str] = {
     ScreenId.SHOP: "list_page",
     ScreenId.SELL: "list_page",
     ScreenId.GUILD_ROSTER: "list_page",
+    ScreenId.GUILD_STORE: "list_page",
+    ScreenId.GUILD_STORE_PUT: "list_page",
     ScreenId.TRANSFER_TO: "list_page",
     ScreenId.TRANSFER_ITEM: "list_page",
     ScreenId.SKILL_PICK: "list_page",

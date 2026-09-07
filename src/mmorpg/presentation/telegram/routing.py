@@ -54,6 +54,13 @@ class Intent(StrEnum):
     GUILD_TRANSFER = "guild_transfer"
     GUILD_TIERS = "guild_tiers"
     GUILD_SUCCEED = "guild_succeed"
+    GUILD_STORE = "guild_store"
+    GUILD_STOW = "guild_stow"
+    GUILD_CONTRACT = "guild_contract"
+    GUILD_WAR = "guild_war"
+    GUILD_WAR_DECLARE = "guild_war_declare"
+    GUILD_WAR_ACCEPT = "guild_war_accept"
+    GUILD_WAR_DECLINE = "guild_war_decline"
     PAGE = "page"
     NEXT_PAGE = "next_page"
     PREVIOUS_PAGE = "previous_page"
@@ -183,6 +190,18 @@ _GUILD_WORDS: dict[str, Intent] = {
     "передать": Intent.GUILD_TRANSFER,
     "transfer": Intent.GUILD_TRANSFER,
     "возвышение": Intent.GUILD_TIERS,
+    "хранилище": Intent.GUILD_STORE,
+    "store": Intent.GUILD_STORE,
+    "положить": Intent.GUILD_STOW,
+    "stow": Intent.GUILD_STOW,
+    "подряд": Intent.GUILD_CONTRACT,
+    "contract": Intent.GUILD_CONTRACT,
+    "война": Intent.GUILD_WAR,
+    "war": Intent.GUILD_WAR,
+    "вызов": Intent.GUILD_WAR_DECLARE,
+    "challenge": Intent.GUILD_WAR_DECLARE,
+    "сразиться": Intent.GUILD_WAR_ACCEPT,
+    "отступить": Intent.GUILD_WAR_DECLINE,
     "ступени": Intent.GUILD_TIERS,
     "tiers": Intent.GUILD_TIERS,
     "наследник": Intent.GUILD_SUCCEED,
@@ -258,6 +277,13 @@ _BUTTON_INTENTS: tuple[tuple[object, Intent], ...] = (
     (labels.GUILD_TRANSFER, Intent.GUILD_TRANSFER),
     (labels.GUILD_TIERS, Intent.GUILD_TIERS),
     (labels.GUILD_SUCCEED, Intent.GUILD_SUCCEED),
+    (labels.GUILD_STORE, Intent.GUILD_STORE),
+    (labels.GUILD_STOW, Intent.GUILD_STOW),
+    (labels.GUILD_CONTRACT, Intent.GUILD_CONTRACT),
+    (labels.GUILD_WAR, Intent.GUILD_WAR),
+    (labels.GUILD_WAR_DECLARE, Intent.GUILD_WAR_DECLARE),
+    (labels.GUILD_WAR_ACCEPT, Intent.GUILD_WAR_ACCEPT),
+    (labels.GUILD_WAR_DECLINE, Intent.GUILD_WAR_DECLINE),
     (labels.NEXT_PAGE, Intent.NEXT_PAGE),
     (labels.PREVIOUS_PAGE, Intent.PREVIOUS_PAGE),
     (labels.SEARCH, Intent.SEARCH),

@@ -20,8 +20,15 @@ def test_the_ladder_starts_at_nothing_and_climbs(content: GameContent) -> None:
         assert above.level == below.level + 1
         assert above.deeds > below.deeds
         assert above.seats >= below.seats
-        assert (above.seats, above.exp_percent, above.gold_percent) > (
+        assert above.store_slots >= below.store_slots
+        assert (
+            above.seats,
+            above.store_slots,
+            above.exp_percent,
+            above.gold_percent,
+        ) > (
             below.seats,
+            below.store_slots,
             below.exp_percent,
             below.gold_percent,
         ), f"ступень {above.level} не даёт ничего сверх {below.level}"
@@ -31,6 +38,23 @@ def test_no_tier_promises_more_seats_than_a_guild_holds(content: GameContent) ->
     for tier in content.guild_tiers:
         assert tier.seats <= MAX_MEMBERS, tier.name
         assert tier.name
+
+
+def test_every_tier_holds_something_in_its_store(content: GameContent) -> None:
+    """Хранилище без мест - это кнопка, которая всегда отказывает (ADR 0077)."""
+    for tier in content.guild_tiers:
+        assert tier.store_slots > 0, tier.name
+
+
+def test_a_store_with_no_room_is_refused(tmp_path: Path) -> None:
+    root = _sandbox(tmp_path)
+    broken = (root / "guilds.toml").read_text(encoding="utf-8")
+    (root / "guilds.toml").write_text(
+        broken.replace("store_slots = 12", "store_slots = 0"), encoding="utf-8"
+    )
+    with pytest.raises(ContentError) as failure:
+        load_content(root)
+    assert "guilds.toml" in str(failure.value)
 
 
 def test_the_tier_is_found_by_deeds_and_never_falls_between(content: GameContent) -> None:
@@ -59,14 +83,16 @@ name = "Артель"
 deeds = 150
 seats = 15
 exp_percent = 0
-gold_percent = 2"""
+gold_percent = 2
+store_slots = 18"""
     assert second in broken
     flat = """level = 2
 name = "Артель"
 deeds = 150
 seats = 12
 exp_percent = 0
-gold_percent = 0"""
+gold_percent = 0
+store_slots = 12"""
     (root / "guilds.toml").write_text(broken.replace(second, flat), encoding="utf-8")
     with pytest.raises(ContentError) as failure:
         load_content(root)

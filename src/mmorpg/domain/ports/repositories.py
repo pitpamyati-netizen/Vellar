@@ -22,6 +22,7 @@ from mmorpg.domain.entities.moderation import Ban, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, TradeRecord, TradeStatus
 from mmorpg.domain.rules.guild import Guild
+from mmorpg.domain.rules.guild_war import War
 from mmorpg.domain.rules.party import Party
 
 
@@ -478,6 +479,45 @@ class GuildRepository(Protocol):
 
         Одним движением и без чтения: два игрока, дерущиеся разом, не отнимают
         друг у друга ни деяния.
+        """
+
+    async def add_deeds(self, guild_id: int, deeds: int) -> None:
+        """Деяния гильдии без вклада: их сделала гильдия целиком (ADR 0077).
+
+        Так платят закрытый подряд и выигранная война: у общего дела нет одного
+        человека, которому его записать, а приписать его нажавшему кнопку -
+        значит соврать в составе.
+        """
+
+    async def stock(self, guild_id: int) -> tuple[tuple[str, int], ...]:
+        """Что лежит в хранилище гильдии: пары «вещь - сколько» (ADR 0077)."""
+
+    async def stow(self, guild_id: int, item_id: str, amount: int) -> None:
+        """Положить вещь в хранилище. Всегда проходит: место считает вызывающий."""
+
+    async def unstow(self, guild_id: int, item_id: str, amount: int) -> bool:
+        """Взять вещь из хранилища. Ложь - её там столько не было.
+
+        Условный ``UPDATE``, как выемка из казны: два старейшины, нажавшие разом,
+        не вынесут одну стопку дважды (``Claude.md``, правило 8).
+        """
+
+    async def war_of(self, guild_id: int) -> War | None:
+        """Незакрытая война этой гильдии. ``None`` - она ни с кем не воюет."""
+
+    async def open_war(
+        self, *, challenger_id: int, defender_id: int, stake: int, started: int, ends: int
+    ) -> War:
+        """Завести войну. Ставки с казны снимает вызывающий: это движение золота."""
+
+    async def score_war(self, war_id: int, guild_id: int) -> None:
+        """Записать войне очко этой стороне. Условная прибавка, без чтения."""
+
+    async def close_war(self, war_id: int) -> bool:
+        """Закрыть войну. Ложь - её уже закрыл кто-то другой.
+
+        Расчёт войны ленивый и делается тем, кто первым заглянул после срока,
+        поэтому закрыть её пытаются двое разом - а заплатить надо один раз.
         """
 
 

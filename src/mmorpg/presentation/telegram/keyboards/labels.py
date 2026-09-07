@@ -313,6 +313,15 @@ GUILD_VAULT = label("Казна гильдии", "💰")
 GUILD_TRANSFER = label("Передать соклановцу", "🎁")
 GUILD_TIERS = label("Возвышение гильдии", "🏆")
 GUILD_SUCCEED = label("Передать гильдию", "🤝")
+GUILD_STORE = label("Хранилище гильдии", "📦")
+GUILD_STOW = label("Положить в хранилище", "📥")
+GUILD_STOW_ALL = label("Положить всё", "📥")
+GUILD_TAKE_ALL = label("Взять всё", "📤")
+GUILD_CONTRACT = label("Подряд гильдии", "📜")
+GUILD_WAR = label("Война гильдий", "⚔️")
+GUILD_WAR_DECLARE = label("Объявить войну", "⚔️")
+GUILD_WAR_ACCEPT = label("Принять вызов", "⚔️")
+GUILD_WAR_DECLINE = label("Отклонить вызов", "🙅")
 
 
 # --- великие дома (``domain/rules/houses.py``) ---

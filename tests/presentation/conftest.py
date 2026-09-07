@@ -50,6 +50,7 @@ from mmorpg.domain.ports.repositories import (
 from mmorpg.domain.procgen import generate_location, location_seed
 from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import guild as guild_rules
+from mmorpg.domain.rules import guild_contract
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import overlay as overlay_rules
 from mmorpg.domain.rules.combat import hero_combatant, monster_combatant, open_battle
@@ -495,12 +496,37 @@ _crowded_view = keeper_screens.KeeperView(
 #: Лестница ступеней и место на ней - те же, что в ``content/guilds.toml``:
 #: экран возвышения и экран гильдии обязаны читаться с настоящими числами.
 _GUILD_TIERS: tuple[GuildTier, ...] = (
-    GuildTier(level=1, name="Товарищество", deeds=0, seats=12),
-    GuildTier(level=2, name="Артель", deeds=150, seats=15, gold_percent=2),
-    GuildTier(level=3, name="Братчина", deeds=400, seats=18, exp_percent=2, gold_percent=2),
+    GuildTier(level=1, name="Товарищество", deeds=0, seats=12, store_slots=12),
+    GuildTier(level=2, name="Артель", deeds=150, seats=15, gold_percent=2, store_slots=18),
+    GuildTier(
+        level=3,
+        name="Братчина",
+        deeds=400,
+        seats=18,
+        exp_percent=2,
+        gold_percent=2,
+        store_slots=26,
+    ),
 )
 _A_STANDING = guild_rules.Standing(
-    tier=_GUILD_TIERS[1], next_tier=_GUILD_TIERS[2], deeds=210, seats=15, members=2
+    tier=_GUILD_TIERS[1],
+    next_tier=_GUILD_TIERS[2],
+    deeds=210,
+    seats=15,
+    members=2,
+    store_slots=18,
+)
+
+#: Подряд гильдии на переворот - тот же, что игра посчитает по её ступени.
+_CONTRACTS = guild_contract.contracts(
+    _GUILD_TIERS, _A_STANDING, world_seed="vellar-prime", guild_id=1, rotation=17
+)
+
+#: Что лежит в хранилище гильдии: несколько видов, как в настоящей общей сумке.
+_STORED: tuple[tuple[str, str, int], ...] = (
+    ("small_healing_potion", "Малое зелье лечения", 24),
+    ("wolf_pelt", "Волчья шкура", 8),
+    ("sword@1#common", "Меч", 1),
 )
 
 _crowded_roster = guild_screens.GuildView(
@@ -1069,6 +1095,109 @@ def all_screens(
                 place=_A_STANDING,
                 my_limit=400,
                 my_taken=150,
+            )
+        ),
+        guild_screens.store_screen(
+            guild_screens.GuildView(
+                name="Стая",
+                my_rank=GuildRank.ELDER,
+                place=_A_STANDING,
+                stored=_STORED,
+                my_items_limit=200,
+                my_items_taken=40,
+            )
+        ),
+        guild_screens.store_screen(
+            guild_screens.GuildView(
+                name="Стая",
+                my_rank=GuildRank.FOUNDER,
+                place=_A_STANDING,
+                stored=_STORED,
+                my_items_limit=None,
+            ),
+            notice="Из хранилища взято: Волчья шкура, штук 4.",
+        ),
+        guild_screens.store_screen(
+            guild_screens.GuildView(
+                name="Стая", my_rank=GuildRank.RECRUIT, place=_A_STANDING, stored=_STORED
+            )
+        ),
+        guild_screens.stow_screen(
+            content,
+            (shop.OwnedItem("small_healing_potion", 3), shop.OwnedItem("sword@1#common", 1)),
+            guild_screens.GuildView(name="Стая", place=_A_STANDING, stored=_STORED),
+            PageState(),
+        ),
+        guild_screens.stow_screen(
+            content, (), guild_screens.GuildView(name="Стая", place=_A_STANDING), PageState()
+        ),
+        guild_screens.store_amount_screen(
+            guild_screens.GuildView(name="Стая", vault_action="take"), "Волчья шкура", 8
+        ),
+        guild_screens.store_amount_screen(
+            guild_screens.GuildView(name="Стая", vault_action="stow"),
+            "Малое зелье лечения",
+            3,
+            notice="Наберите число.",
+        ),
+        guild_screens.contract_screen(
+            guild_screens.GuildView(
+                name="Стая",
+                my_rank=GuildRank.MEMBER,
+                place=_A_STANDING,
+                contracts=_CONTRACTS,
+                contract_progress=(4, 2, 100),
+            )
+        ),
+        guild_screens.contract_screen(guild_screens.GuildView(name="Стая", place=_A_STANDING)),
+        guild_screens.war_screen(
+            guild_screens.GuildView(
+                name="Стая",
+                my_rank=GuildRank.FOUNDER,
+                place=_A_STANDING,
+                vault_gold=4000,
+                war_stake=1840,
+            )
+        ),
+        guild_screens.war_screen(
+            guild_screens.GuildView(
+                name="Стая",
+                my_rank=GuildRank.MEMBER,
+                place=_A_STANDING,
+                at_war=True,
+                war_foe="Медный Крест",
+                war_mine=7,
+                war_theirs=5,
+                war_left=2,
+                war_stake=1840,
+            )
+        ),
+        guild_screens.war_screen(
+            guild_screens.GuildView(
+                name="Стая",
+                my_rank=GuildRank.FOUNDER,
+                place=_A_STANDING,
+                vault_gold=4000,
+                war_caller="Медный Крест",
+                war_stake=1840,
+            )
+        ),
+        guild_screens.war_screen(
+            guild_screens.GuildView(
+                name="Стая",
+                my_rank=GuildRank.VETERAN,
+                place=_A_STANDING,
+                war_caller="Медный Крест",
+                war_stake=1840,
+            )
+        ),
+        guild_screens.war_declare_screen(
+            guild_screens.GuildView(
+                name="Стая",
+                my_rank=GuildRank.FOUNDER,
+                place=_A_STANDING,
+                vault_gold=4000,
+                war_stake=1840,
             )
         ),
         guild_screens.vault_screen(

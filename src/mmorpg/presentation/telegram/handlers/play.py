@@ -58,6 +58,8 @@ from mmorpg.domain.rules import adventure, progression
 from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import economy as economy_rules
 from mmorpg.domain.rules import guild as guild_rules
+from mmorpg.domain.rules import guild_contract as contract_rules
+from mmorpg.domain.rules import guild_war as war_rules
 from mmorpg.domain.rules import moderation as moderation_rules
 from mmorpg.domain.rules import mood as mood_rules
 from mmorpg.domain.rules import nodes as node_rules
@@ -222,6 +224,10 @@ async def play(
     )
 
     party = await _party_view(flow, character, characters, parties)
+    # Часов в игре нет: войну с вышедшим сроком закрывает тот, кто первым на неё
+    # заглянул, и делает это до того, как экран нарисован (ADR 0077).
+    if flow.screen in _GUILD_SCREENS:
+        await _settle_guild_war(message, content, character, characters, guilds, settings, now)
     guild_view = await _guild_view(flow, character, characters, guilds, content, settings, now)
 
     updated = advance(
@@ -268,6 +274,13 @@ async def play(
             now,
         )
         updated = replace(updated, guild_action="", guild_arg="").with_notice(said)
+    if updated.vault_amount:
+        # Хранилище лежит в базе, поэтому автомат только выбрал вещь и число, а
+        # двигает общее добро хендлер (``Claude.md``, правило 5).
+        said = await _guild_store_step(
+            content, character, updated, inventory, guilds, settings, now
+        )
+        updated = replace(updated, vault_amount=0).with_notice(said)
     if updated.transfer_amount:
         said = await _transfer_step(
             message,
@@ -1642,7 +1655,19 @@ _GUILD_SCREENS = frozenset(
         ScreenId.GUILD_VAULT,
         ScreenId.GUILD_TIERS,
         ScreenId.GUILD_SUCCEED,
+        ScreenId.GUILD_STORE,
+        ScreenId.GUILD_STORE_PUT,
+        ScreenId.GUILD_STORE_AMOUNT,
+        ScreenId.GUILD_CONTRACT,
+        ScreenId.GUILD_WAR,
+        ScreenId.GUILD_WAR_DECLARE,
     }
+)
+
+#: Экраны хранилища: только на них игра читает, что в нём лежит. Общая сумка -
+#: это запрос к базе, и делать его на каждом шаге игрока незачем.
+_STORE_SCREENS = frozenset(
+    {ScreenId.GUILD_STORE, ScreenId.GUILD_STORE_PUT, ScreenId.GUILD_STORE_AMOUNT}
 )
 
 #: Экраны адресной передачи. Общие для отряда и гильдии; чей это состав, говорит
@@ -1689,6 +1714,51 @@ async def _guild_view(
     # отвечает на «кто её держит», а не на «кто раньше пришёл».
     members.sort(key=lambda one: (-int(one[1]), -one[2], one[0]))
     rank = guild.rank_of(character.id)
+    place = guild_rules.standing(content, guild)
+    rotation = rotation_index(now, settings.shop_rotation_seconds)
+
+    # Хранилище, подряд и война читаются только там, где их показывают: три
+    # лишних запроса на каждый шаг игрока - это три лишних запроса (ADR 0077).
+    stored: tuple[tuple[str, str, int], ...] = ()
+    items_taken = 0
+    if flow.screen in _STORE_SCREENS:
+        stored = tuple(
+            (item_id, content.item(item_id).name, held)
+            for item_id, held in await guilds.stock(guild.id)
+            if content.has_item(item_id)
+        )
+        items_taken = await guilds.taken_items(
+            guild.id, character.id, now=now, rotation_seconds=settings.shop_rotation_seconds
+        )
+
+    deals: tuple[contract_rules.Contract, ...] = ()
+    progress: tuple[int, ...] = ()
+    if flow.screen is ScreenId.GUILD_CONTRACT:
+        deals = contract_rules.contracts(
+            content.guild_tiers,
+            place,
+            world_seed=settings.world_seed,
+            guild_id=guild.id,
+            rotation=rotation,
+        )
+        done = await guilds.contract_progress(
+            guild.id, now=now, rotation_seconds=settings.shop_rotation_seconds
+        )
+        progress = tuple(done.get(one.kind, 0) for one in deals)
+
+    war = await guilds.war_of(guild.id)
+    war_caller = ""
+    # Ставку называет вызывающий, и по его ступени её и снимут с обеих казён:
+    # экран, показавший свою, обещал бы не то число (``Claude.md``, правило 7).
+    stake_place = place
+    if war is None:
+        called = await guilds.war_called_by(guild.id)
+        challenger = await guilds.by_id(called) if called else None
+        if challenger is not None:
+            war_caller = challenger.name
+            stake_place = guild_rules.standing(content, challenger)
+    foe = await guilds.by_id(war.foe_of(guild.id)) if war is not None else None
+
     return guild_screens.GuildView(
         name=guild.name,
         my_rank=rank,
@@ -1696,7 +1766,7 @@ async def _guild_view(
         vault_gold=guild.vault_gold,
         my_gold=character.gold,
         caller=caller,
-        place=guild_rules.standing(content, guild),
+        place=place,
         tiers=content.guild_tiers,
         my_taken=await guilds.taken(
             guild.id,
@@ -1705,6 +1775,21 @@ async def _guild_view(
             rotation_seconds=settings.shop_rotation_seconds,
         ),
         my_limit=(guild_rules.withdraw_limit(rank, character.level) if rank is not None else 0),
+        stored=stored,
+        my_items_taken=items_taken,
+        my_items_limit=(guild_rules.store_take_limit(rank) if rank is not None else 0),
+        vault_action=flow.vault_action,
+        contracts=deals,
+        contract_progress=progress,
+        at_war=war is not None,
+        war_foe=foe.name if foe is not None else "",
+        war_mine=war.score_of(guild.id) if war is not None else 0,
+        war_theirs=war.score_of(war.foe_of(guild.id)) if war is not None else 0,
+        war_left=war.rotations_left(rotation) if war is not None else 0,
+        war_stake=(
+            war.stake if war is not None else war_rules.war_stake(content.guild_tiers, stake_place)
+        ),
+        war_caller=war_caller,
     )
 
 
@@ -1854,8 +1939,14 @@ async def _guild_step(
 
         case "deposit" | "withdraw":
             return await _guild_vault_step(
-                character, action, arg, characters, guilds, guild, settings, now
+                content, character, action, arg, characters, guilds, guild, settings, now
             )
+
+        case "war_declare" | "war_accept" | "war_decline":
+            said = await _guild_war_step(
+                message, content, character, action, arg, characters, guilds, settings, now
+            )
+            return said, character
 
     return "Не понял, что сделать с гильдией.", character  # pragma: no cover
 
@@ -1898,6 +1989,7 @@ async def _guild_rank_step(
 
 
 async def _guild_vault_step(
+    content: GameContent,
     character: Character,
     action: str,
     arg: str,
@@ -1929,8 +2021,30 @@ async def _guild_vault_step(
         deeds = guild_rules.deeds_for_deposit(amount, character.level)
         if deeds:
             await guilds.record_deeds(guild.id, character.id, deeds)
-            return f"В казну внесено {amount}. Гильдии записано деяний: {deeds}.", await fresh()
-        return f"В казну внесено {amount}.", await fresh()
+        # Внесённое идёт и в подряд: «снести в казну золота» - одно из трёх дел,
+        # которые застава просит у гильдии на переворот (ADR 0077).
+        closed = await guilds.work_on_contract(
+            content,
+            guild_id=guild.id,
+            place=guild_rules.standing(content, guild),
+            kind=contract_rules.ContractKind.TITHE,
+            amount=amount,
+            world_seed=settings.world_seed,
+            now=now,
+            rotation_seconds=settings.shop_rotation_seconds,
+        )
+        said = f"В казну внесено {amount}."
+        if deeds:
+            said += f" Гильдии записано деяний: {deeds}."
+        if closed is not None:
+            economy_log.record(
+                economy_log.GUILD_CONTRACT,
+                closed.reward_gold,
+                character_id=character.id,
+                detail="tithe",
+            )
+            said += f" Подряд закрыт: гильдии {closed.pay}."
+        return said, await fresh()
 
     taken = await guilds.taken(
         guild.id, character.id, now=now, rotation_seconds=settings.shop_rotation_seconds
@@ -2044,3 +2158,227 @@ async def _transfer_step(
         f"{character.name} передал вам: {name}, штук {amount}.",
     )
     return f"{name}, штук {amount} — передано игроку {to_name}."
+
+
+# --- хранилище, подряд и война (ADR 0077) ----------------------------
+
+
+async def _guild_store_step(
+    content: GameContent,
+    character: Character,
+    flow: PlayState,
+    inventory: InventoryRepository,
+    guilds: GuildStore,
+    settings: Settings,
+    now: int,
+) -> str:
+    """Положить вещь в хранилище гильдии или взять её оттуда. Ответ - фразой.
+
+    Место в хранилище считается видами, а предел выемки - штуками за переворот
+    (``domain/rules/guild``): общее добро, которое один человек выносит целиком,
+    - это не общее добро.
+    """
+    guild = await guilds.of(character.id)
+    if guild is None:
+        return "Вы не в гильдии."
+    item_id, want = flow.vault_item, flow.vault_amount
+    if not content.has_item(item_id) or want <= 0:
+        return "Не понял, что положить или взять."
+    name = content.item(item_id).name
+    place = guild_rules.standing(content, guild)
+    stock = dict(await guilds.stock(guild.id))
+
+    if flow.vault_action == "take":
+        taken = await guilds.taken_items(
+            guild.id, character.id, now=now, rotation_seconds=settings.shop_rotation_seconds
+        )
+        refusal = guild_rules.take_refusal(
+            guild=guild,
+            actor_id=character.id,
+            amount=want,
+            stored=stock.get(item_id, 0),
+            taken=taken,
+        )
+        if refusal:
+            return refusal
+        if not await guilds.unstow(guild.id, item_id, want):
+            return "В хранилище столько не набралось."
+        await inventory.add(character.id, item_id, want)
+        await guilds.note_taken_items(
+            guild.id,
+            character.id,
+            want,
+            now=now,
+            rotation_seconds=settings.shop_rotation_seconds,
+        )
+        return f"Из хранилища взято: {name}, штук {want}."
+
+    held = await inventory.count(character.id, item_id)
+    refusal = guild_rules.stow_refusal(
+        guild=guild,
+        actor_id=character.id,
+        amount=want,
+        held=held,
+        place=place,
+        kinds=len(stock),
+        known=item_id in stock,
+    )
+    if refusal:
+        return refusal
+    if not await inventory.remove(character.id, item_id, want):
+        return "Вещь не удалось забрать из сумки. Попробуйте заново."
+    await guilds.stow(guild.id, item_id, want)
+    return f"В хранилище положено: {name}, штук {want}."
+
+
+async def _guild_war_step(
+    message: Message,
+    content: GameContent,
+    character: Character,
+    action: str,
+    arg: str,
+    characters: CharacterRepository,
+    guilds: GuildStore,
+    settings: Settings,
+    now: int,
+) -> str:
+    """Объявить войну, принять вызов или отклонить его (ADR 0077).
+
+    Ставку снимают с обеих казён в минуту согласия, а не вызова: вызов, который
+    держит золото неизвестно сколько, - это замороженная казна.
+    """
+    guild = await guilds.of(character.id)
+    rotation = rotation_index(now, settings.shop_rotation_seconds)
+    if guild is None:
+        return "У вас нет гильдии."
+    place = guild_rules.standing(content, guild)
+    mine = await guilds.war_of(guild.id)
+
+    if action == "war_decline":
+        called = await guilds.war_called_by(guild.id)
+        if not called:
+            return "Вас никто не вызывал."
+        await guilds.forget_war_call(guild.id)
+        challenger = await guilds.by_id(called)
+        return f"Вызов гильдии «{challenger.name}» отклонён." if challenger else "Вызов отклонён."
+
+    if action == "war_declare":
+        foe = await guilds.by_name(arg)
+        stake = war_rules.war_stake(content.guild_tiers, place)
+        refusal = war_rules.declare_refusal(
+            guild=guild,
+            actor_id=character.id,
+            foe=foe,
+            foe_name=arg.strip(),
+            stake=stake,
+            at_war=mine is not None,
+            foe_at_war=foe is not None and await guilds.war_of(foe.id) is not None,
+            called=foe is not None and await guilds.war_called_by(foe.id) == guild.id,
+        )
+        if refusal:
+            return refusal
+        assert foe is not None
+        await guilds.call_war(challenger_id=guild.id, defender_id=foe.id)
+        await _tell_party(
+            message,
+            characters,
+            [one.character_id for one in foe.members],
+            character.id,
+            f"Гильдия «{guild.name}» вызывает вас на войну. Ставка - {stake} золота с "
+            "каждой стороны. Ответить может основатель: «/гильдия сразиться» или "
+            "«/гильдия отступить».",
+        )
+        return f"Вызов послан гильдии «{foe.name}». Слово за ней."
+
+    called = await guilds.war_called_by(guild.id)
+    challenger = await guilds.by_id(called) if called else None
+    stake = (
+        war_rules.war_stake(content.guild_tiers, guild_rules.standing(content, challenger))
+        if challenger is not None
+        else 0
+    )
+    refusal = war_rules.accept_refusal(
+        guild=guild,
+        actor_id=character.id,
+        challenger=challenger,
+        stake=stake,
+        at_war=mine is not None,
+        challenger_at_war=challenger is not None and await guilds.war_of(challenger.id) is not None,
+    )
+    if refusal:
+        return refusal
+    assert challenger is not None
+    if not await guilds.withdraw(challenger, stake):
+        return f"В казне гильдии «{challenger.name}» ставки уже нет."
+    if not await guilds.withdraw(guild, stake):
+        # Чужая ставка уже снята: вернуть её - не любезность, а обязанность.
+        await guilds.pay_vault(challenger.id, stake)
+        return "В вашей казне ставки не набралось."
+    await guilds.forget_war_call(guild.id)
+    war = await guilds.open_war(
+        challenger_id=challenger.id,
+        defender_id=guild.id,
+        stake=stake,
+        started=rotation,
+        ends=rotation + war_rules.WAR_ROTATIONS,
+    )
+    for side, foe_name in ((challenger, guild.name), (guild, challenger.name)):
+        await _tell_party(
+            message,
+            characters,
+            [one.character_id for one in side.members],
+            character.id,
+            f"Война с гильдией «{foe_name}» началась. Очко берут за выигранный поединок "
+            f"с её человеком; идёт {war_rules.WAR_ROTATIONS} переворота прилавка.",
+        )
+    return f"Война с гильдией «{challenger.name}» началась. Ставка с каждой стороны: {war.stake}."
+
+
+async def _settle_guild_war(
+    message: Message,
+    content: GameContent,
+    character: Character,
+    characters: CharacterRepository,
+    guilds: GuildStore,
+    settings: Settings,
+    now: int,
+) -> None:
+    """Подвести войну, у которой вышел срок, - лениво и один раз (ADR 0077).
+
+    Часов в игре нет, и войну закрывает тот, кто первым на неё заглянул. Итог
+    приходит вестью обеим гильдиям: экран, на котором война просто исчезла, не
+    сказал бы, чем она кончилась.
+    """
+    guild = await guilds.of(character.id)
+    if guild is None:
+        return
+    war = await guilds.war_of(guild.id)
+    if war is None:
+        return
+    settled = await guilds.settle_war(
+        content, war, rotation_index(now, settings.shop_rotation_seconds)
+    )
+    if settled is None:
+        return
+    champion = war_rules.winner_of(settled)
+    for side_id in (settled.challenger_id, settled.defender_id):
+        side = await guilds.by_id(side_id)
+        if side is None:
+            continue
+        foe = await guilds.by_id(settled.foe_of(side_id))
+        foe_name = foe.name if foe is not None else "другой гильдией"
+        if champion == 0:
+            said = f"Война с гильдией «{foe_name}» кончилась поровну. Ставка вернулась в казну."
+        elif champion == side_id:
+            said = (
+                f"Война с гильдией «{foe_name}» выиграна: счёт "
+                f"{settled.score_of(side_id)} на {settled.score_of(settled.foe_of(side_id))}. "
+                f"Обе ставки - {settled.stake * 2} золота - в вашей казне."
+            )
+        else:
+            said = (
+                f"Война с гильдией «{foe_name}» проиграна: счёт "
+                f"{settled.score_of(side_id)} на {settled.score_of(settled.foe_of(side_id))}. "
+                "Ставка ушла победившей."
+            )
+        await _tell_party(message, characters, [one.character_id for one in side.members], 0, said)
