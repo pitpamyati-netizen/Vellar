@@ -133,7 +133,7 @@ def mastery_words(content: GameContent, character: Character, skill: Skill) -> s
     taken = skill_rules.taken_masteries(character, skill)
     if not taken:
         return ""
-    return "Выучка: " + "; ".join(f"{one.name} — {one.text}" for one in taken)
+    return "Выучка: " + "; ".join(f"{one.name} — {mastery_rules.words(one)}" for one in taken)
 
 
 def mastery_call(content: GameContent, character: Character, skill: Skill) -> str:
@@ -401,7 +401,7 @@ def mastery_screen(
         lines.append(taken + ".")
     if not choices:
         lines.append("Выбирать пока нечего.")
-    lines.extend(f"{one.name}: {one.text}" for one in choices)
+    lines.extend(f"{one.name}: {mastery_rules.words(one)}" for one in choices)
     rows = tuple((label(one.name),) for one in choices)
     return Screen(id=ScreenId.SKILL_MASTERY, lines=tuple(lines), rows=rows)
 

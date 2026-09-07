@@ -1,4 +1,4 @@
-"""Выучка от третьего ранга до взятого выбора (ADR 0079).
+"""Выучка от третьего ранга до взятого выбора (ADR 0079, 0083).
 
 Сквозной проход: игрок поднимает умение до третьего ранга, игра тут же
 спрашивает, чему оно научилось, он выбирает - и с этого хода умение делает то,
@@ -13,6 +13,7 @@ from dataclasses import replace
 import pytest
 
 from mmorpg.domain.entities import Character, GameContent
+from mmorpg.domain.rules import skill_mastery as mastery_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.presentation.telegram.flows.play import Clock, PlayState, advance, begin, render
 from mmorpg.presentation.telegram.screens import skills as skill_screens
@@ -68,7 +69,7 @@ def test_the_choice_is_named_before_it_is_made(content: GameContent, hero: Chara
     assert "Выучка" in text
     for one in skill_rules.mastery_choices(content, ready, content.skill(STRIKE)):
         assert one.name in text
-        assert one.text.split(":")[0][:20] in text
+        assert mastery_rules.words(one)[:20] in text
 
 
 def test_the_chosen_mastery_sticks(content: GameContent, hero: Character) -> None:
@@ -101,9 +102,13 @@ def test_a_waiting_skill_leads_to_the_choice_instead_of_a_rank(
 
 def test_a_taken_mastery_is_said_on_the_list(content: GameContent, hero: Character) -> None:
     """Чему умение научено, читается в списке умений, а не только в бою."""
-    ready = replace(ranked(hero, 3), loadout=ranked(hero, 3).loadout.with_mastery(STRIKE, "pierce"))
-    said = skill_screens.skill_detail(content, content.skill(STRIKE), ready)
-    assert "Пробой" in said
+    skill = content.skill(STRIKE)
+    first = skill.masteries[0]
+    ready = replace(
+        ranked(hero, 3), loadout=ranked(hero, 3).loadout.with_mastery(STRIKE, first.code)
+    )
+    said = skill_screens.skill_detail(content, skill, ready)
+    assert first.name in said
 
 
 def test_the_combo_is_named_on_the_list(content: GameContent, hero: Character) -> None:

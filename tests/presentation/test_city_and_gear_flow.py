@@ -445,7 +445,8 @@ def test_a_raised_rank_says_what_it_gave(content: GameContent, hero: Character) 
         loadout=replace(
             hero.loadout,
             ranks={skill.code: 4},
-            masteries={skill.code: ("pierce",)},
+            # Выучка третьей ступени уже выбрана: своя у этого умения (ADR 0083).
+            masteries={skill.code: (skill.masteries[0].code,)},
         ),
     )
     assert "откат короче" in skill_screens.rank_offer(content, ready, skill)

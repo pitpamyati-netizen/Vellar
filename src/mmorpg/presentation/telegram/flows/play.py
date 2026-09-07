@@ -47,6 +47,7 @@ from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules import repair as repair_rules
 from mmorpg.domain.rules import roamer as roamer_rules
 from mmorpg.domain.rules import salvage as salvage_rules
+from mmorpg.domain.rules import skill_mastery as mastery_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules import subclass as subclass_rules
 from mmorpg.domain.rules import tools as tool_rules
@@ -1943,7 +1944,7 @@ def _handle_mastery(
         return (
             state.storing(PendingWrite(character=taught))
             .at(ScreenId.SKILLS)
-            .with_notice(f"{skill.name}: {one.name}. {one.text}")
+            .with_notice(f"{skill.name}: {one.name}. {mastery_rules.words(one)}")
         )
     return state.with_notice("Нажмите выучку из списка.")
 

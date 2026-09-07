@@ -46,6 +46,28 @@ class ItemKind(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class SkillMastery:
+    """Одна выучка одного умения: чему это умение можно научить (ADR 0083).
+
+    Выучки не общие: у каждого боевого умения свои четыре - две на третьем ранге
+    и две на пятом, - и написаны они под класс, ветку и то, чем это умение в бою
+    занимается. Общего списка, из которого выбирали бы все двести умений, нет
+    вовсе: два разных умения никогда не покажут один и тот же выбор.
+
+    ``way`` называет приём - механику из ``rules/skill_mastery.WAYS``, правку
+    описания эффекта, по которому бой и считает. ``amount`` - её размер.
+    Собственного текста у выучки НЕТ: он пишется приёмом по его же числам, и
+    потому назвать выучку словами и не сделать её невозможно (ADR 0067).
+    """
+
+    code: str
+    name: str
+    tier: int
+    way: str
+    amount: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Skill:
     code: str
     name: str
@@ -78,6 +100,9 @@ class Skill:
     #: висит, бьёт заметно сильнее (``rules/combo``). Пусто - умение работает
     #: одинаково по всякой цели.
     answers: StatusKind | None = None
+    #: Чему это умение можно научить, взяв третий ранг и пятый: две выучки на
+    #: ступень, свои у каждого умения (``content/masteries.toml``, ADR 0083).
+    masteries: tuple[SkillMastery, ...] = ()
 
     @property
     def owner(self) -> str:
@@ -90,6 +115,13 @@ class Skill:
     def power_at_rank(self, rank: int) -> float:
         """Сила растёт с рангом линейно; ранг 1 - это написанное значение."""
         return self.power * (1.0 + self.rank_step * (rank - 1))
+
+    def mastery(self, code: str) -> SkillMastery | None:
+        """Выучка этого умения по её коду. ``None`` - такой у него нет."""
+        for one in self.masteries:
+            if one.code == code:
+                return one
+        return None
 
 
 @dataclass(frozen=True, slots=True)

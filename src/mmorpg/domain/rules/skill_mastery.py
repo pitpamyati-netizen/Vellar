@@ -1,30 +1,35 @@
-"""Выучка умения: чему игрок научил умение, поднимая его ранг.
+"""Выучка умения: чему игрок научил ЭТО умение, поднимая его ранг.
 
 Ранг сам по себе прибавляет силу, укорачивает откат, тянет сроки и сбивает цену
 (``rules/skills.rank_gain``). Этого мало: четыре числа - это по-прежнему четыре
 числа, и очко, вложенное в третий ранг, ничем не отличается от очка, вложенного
 во второй. **Ранг обязан дать выбор, а не прибавку** - тогда его хотят поднять.
 
-Поэтому на третьем ранге и на пятом умение спрашивает, ЧЕМУ ОНО НАУЧИЛОСЬ:
-игроку предлагаются выучки, подходящие этому умению, и он берёт одну. Две за
-жизнь умения, и обе меняют то, что умение делает, а не то, насколько сильно.
+Поэтому на третьем ранге и на пятом умение спрашивает, ЧЕМУ ОНО НАУЧИЛОСЬ, и
+спрашивает СВОИМ СПИСКОМ. Выучки не общие: у каждого боевого умения свои
+четыре - две на третьем ранге и две на пятом, - и написаны они под класс, под
+ветку и под то, чем это умение в бою занимается (ADR 0083). Общего списка, из
+которого выбирали бы все двести умений, нет вовсе: два разных умения никогда не
+покажут один и тот же выбор.
 
-ВЫУЧЕК МАЛО, И КАЖДАЯ - МЕХАНИКА. Их девятнадцать на всю игру, а не по своей у
-каждого умения: подпись, написанная у каждого из двухсот умений, - это ровно то,
-чем были грани, и отменены они были за то, что обещали словами то, чего движок
-не делал (ADR 0067). Здесь наоборот: выучка - это правка описания эффекта
-(``EffectSpec``), то самое описание, по которому бой и считает, поэтому назвать
-выучку словами и не сделать её невозможно.
+ПОЧЕМУ ЭТО НЕ ПОВТОРЕНИЕ ГРАНЕЙ. Грани были подписями: 256 строк обещали
+словами то, чего движок не делал, и потому отменены (ADR 0067). Здесь наоборот -
+СВОЕГО ТЕКСТА У ВЫУЧКИ НЕТ. Содержимое пишет ей только имя и называет приём
+(``Way``) с размером; текст складывает сам приём по своим же числам, а приём -
+это правка ``EffectSpec``, того самого описания, по которому бой и считает.
+Назвать выучку словами и не сделать её невозможно: слова берутся из механики.
 
-КОМУ ЧТО ПРЕДЛАГАЮТ. У умения есть форма - бьёт одну цель, бьёт по всем, точит,
-лечит, ставит барьер, усиливает, мешает, отнимает ход, - и выучка называет
-формы, к которым подходит. «Пробой» не предложат лечению, «Разлив» - удару.
-Форма читается из самого описания эффекта, а не пишется в содержимом: умение,
-которое бьёт по всем, движок и так знает по ``aoe``.
+ПРИЁМ ЗНАЕТ, КАКОЙ ФОРМЕ ОН ГОДИТСЯ. У умения есть форма - бьёт одну цель, бьёт
+по всем, точит, лечит, ставит барьер, усиливает, мешает, отнимает ход, - и приём
+называет формы, к которым подходит. «Пробой» не ляжет на лечение, «Разлив» - на
+удар. Форма читается из самого описания эффекта, а не пишется в содержимом.
+Загрузчик проверяет каждую написанную выучку дважды: приём подходит форме
+умения И правка что-то меняет. Выучка, ничего не меняющая, - это подпись, и
+игра с ней не заводится.
 
-СТУПЕНЕЙ ДВЕ. На третьем ранге выбирают из первой - те, что правят числа удара;
-на пятом из второй - те, что меняют саму форму: одноцелевой удар становится
-ударом по всем, лечение ложится на весь отряд, помеха расходится по стае.
+СТУПЕНЕЙ ДВЕ. Первая (третий ранг) правит числа: сколько, как часто, как долго.
+Вторая (пятый) меняет саму форму: одноцелевой удар становится ударом по всем,
+лечение ложится на весь отряд, помеха расходится по стае.
 """
 
 from __future__ import annotations
@@ -33,9 +38,12 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
+from mmorpg.domain.entities.content import Skill, SkillMastery
 from mmorpg.domain.entities.statuses import CONTROL_STATUSES, StatusKind
 from mmorpg.domain.rules.skill_effects import (
+    COUNTER,
     UNDYING,
+    UNSTUNNABLE,
     EffectCategory,
     EffectSpec,
     Inflict,
@@ -46,9 +54,13 @@ from mmorpg.domain.rules.skill_effects import (
 #: первый ранг - это само умение, а на втором и четвёртом игрок ещё копит.
 MASTERY_RANKS: tuple[int, ...] = (3, 5)
 
+#: Сколько выучек каждой ступени написано умению. Две: из одной не выбирают, а
+#: из пяти выбирают не глядя.
+MASTERIES_PER_TIER = 2
+
 
 class Shape(StrEnum):
-    """Форма умения - то, по чему видно, какая выучка ему подойдёт."""
+    """Форма умения - то, по чему видно, какой приём ему подойдёт."""
 
     #: Бьёт одну цель.
     STRIKE = "strike"
@@ -75,7 +87,7 @@ def shapes_of(spec: EffectSpec) -> frozenset[Shape]:
     """Что это умение такое. Форм у одного умения бывает несколько.
 
     Удар, оставляющий кровотечение, - и удар, и точащее; провокация - и помеха,
-    и усиление себе. Выучка предлагается, когда сходится хоть одна форма.
+    и усиление себе. Приём годится, когда сходится хоть одна форма.
     """
     found: set[Shape] = set()
     if spec.category is EffectCategory.DAMAGE:
@@ -101,7 +113,7 @@ def shapes_of(spec: EffectSpec) -> frozenset[Shape]:
 
 # --- пометки, которые читает бой --------------------------------------
 #
-# Выучка, которую нельзя выразить правкой чисел, оставляет пометку, и её читает
+# Приём, который нельзя выразить правкой чисел, оставляет пометку, и её читает
 # сам бой. Пометок нарочно мало: всё, что укладывается в числа, лежит в числах.
 
 #: Умение стоит вдвое дешевле. Читается там же, где считается цена хода.
@@ -109,47 +121,88 @@ MARK_CHEAP = "mastery_cheap"
 #: Добив цель, умение возвращается сразу: откат снимается целиком.
 MARK_RUSH = "mastery_rush"
 
-#: Во сколько раз «Лёгкая рука» сбивает цену умения.
+#: Во сколько раз «лёгкая рука» сбивает цену умения.
 CHEAP_FACTOR = 0.5
 
-#: Насколько «Пробой» пробивает броню цели.
-PIERCE_SHARE = 0.5
-#: Какая доля нанесённого возвращается здоровьем по «Вытяжке».
-DRAIN_SHARE = 0.25
-#: На сколько ходов «Долгий след» тянет всё, что умение накладывает.
-LINGER_TURNS = 2
-#: Во сколько раз «Глубокая рана» усиливает то, что точит цель каждый ход.
-DEEPEN_SCALE = 1.5
-#: Барьер и лечение довеском - проценты от максимума здоровья.
-GUARD_SHARE = 10.0
-MENDING_SHARE = 10.0
-#: Насколько «Скорая рука» поднимает инициативу и на сколько ходов.
-SWIFT_INITIATIVE = 40.0
-SWIFT_TURNS = 2
-#: Что остаётся от силы удара, разошедшегося на всю стаю, и что прибавляется
-#: удару, собранному обратно в одну цель.
-WIDE_SCALE = 0.6
-FOCUS_SCALE = 1.5
-#: Насколько «Добой» доводит удар по цели, которой почти не осталось.
-FINISH_SCALING = 0.5
-#: На сколько «Раскол» ломает броню цели и на сколько ходов.
-SHATTER_ARMOR = 25.0
-SHATTER_TURNS = 3
-#: На сколько ходов «Немота» затыкает цель.
-SILENCE_TURNS = 2
-#: Сколько ходов держится «Не пасть».
-UNDYING_TURNS = 2
-#: Барьер «Твёрдого заслона»: проценты здоровья и на сколько ходов.
-HARD_GUARD_SHARE = 25.0
-HARD_GUARD_TURNS = 4
+#: Сроки, которые приёмы держат в одном месте: менять их поштучно в полусотне
+#: строк - это менять их врозь.
+SHORT_TURNS = 2
+HELD_TURNS = 3
+LONG_TURNS = 4
 
 
-def _unchanged(spec: EffectSpec) -> EffectSpec:
-    return spec
+# --- как приём правит описание ----------------------------------------
+
+
+def _kept(spec: EffectSpec, turns: int) -> EffectSpec:
+    """Продлить общий срок умения до нужного: прибавка без срока не ложится.
+
+    ``_apply_modifier_bundles`` читает ``self_modifiers`` и ``target_modifiers``
+    только вместе с ``duration``, и приём, забывший про срок, не сделал бы
+    ничего.
+    """
+    return replace(spec, duration=max(spec.duration, turns))
+
+
+def _self_mod(spec: EffectSpec, key: str, value: float, turns: int = HELD_TURNS) -> EffectSpec:
+    """Прибавка себе. Ту, что умение и так даёт, приём не трогает.
+
+    Бой складывает прибавки В СЛОВАРЬ по ключу (``_apply_modifier_bundles``):
+    вторая прибавка с тем же ключом не сложилась бы с первой, а затёрла бы её, -
+    и выучка, обещавшая прибавить брони, отняла бы у умения его собственную.
+    Такая выучка не проходит проверку загрузчика: описание после неё не
+    изменилось.
+    """
+    if any(one.key == key for one in spec.self_modifiers):
+        return spec
+    return _kept(
+        replace(spec, self_modifiers=(*spec.self_modifiers, ModifierSpec(key, value))), turns
+    )
+
+
+def _target_mod(spec: EffectSpec, key: str, value: float, turns: int = SHORT_TURNS) -> EffectSpec:
+    """То же для штрафа цели, и по той же причине."""
+    if any(one.key == key for one in spec.target_modifiers):
+        return spec
+    return _kept(
+        replace(spec, target_modifiers=(*spec.target_modifiers, ModifierSpec(key, value))), turns
+    )
+
+
+def _inflicted(spec: EffectSpec, one: Inflict) -> EffectSpec:
+    """Повесить состояние на цель. Уже висящее не вешают дважды.
+
+    Второе «Немоты» на умении, которое и так затыкает, - это подпись: в бою
+    видно одно молчание, а не два. Такая выучка не проходит проверку загрузчика,
+    потому что описание после неё не изменилось.
+    """
+    if any(held.kind is one.kind for held in spec.inflicts):
+        return spec
+    return replace(spec, inflicts=(*spec.inflicts, one))
+
+
+def _holding(spec: EffectSpec, one: Inflict) -> EffectSpec:
+    """То же для состояния, которое умение вешает на своего."""
+    if any(held.kind is one.kind for held in spec.holds):
+        return spec
+    return replace(spec, holds=(*spec.holds, one))
 
 
 def _marked(spec: EffectSpec, mark: str) -> EffectSpec:
+    if mark in spec.marks:
+        return spec
     return replace(spec, marks=frozenset({*spec.marks, mark}))
+
+
+def _dotted(spec: EffectSpec, kind: StatusKind) -> EffectSpec:
+    """Оставить на цели то, что точит её каждый ход.
+
+    Умению, которое уже точит, этот приём не годится: второго дота на одном
+    ударе не бывает, и загрузчик такую выучку не примет.
+    """
+    if spec.dot_turns:
+        return spec
+    return replace(spec, dot_turns=HELD_TURNS, dot_status=kind)
 
 
 def _held_longer(held: tuple[Inflict, ...], turns: int) -> tuple[Inflict, ...]:
@@ -164,275 +217,579 @@ def _held_longer(held: tuple[Inflict, ...], turns: int) -> tuple[Inflict, ...]:
     )
 
 
-def _linger(spec: EffectSpec) -> EffectSpec:
+def _linger(spec: EffectSpec, turns: float) -> EffectSpec:
+    count = int(turns)
     return replace(
         spec,
-        duration=spec.duration + LINGER_TURNS if spec.duration else 0,
-        dot_turns=spec.dot_turns + LINGER_TURNS if spec.dot_turns else 0,
-        barrier_turns=spec.barrier_turns + LINGER_TURNS if spec.barrier_turns else 0,
-        inflicts=_held_longer(spec.inflicts, LINGER_TURNS),
-        holds=_held_longer(spec.holds, LINGER_TURNS),
+        duration=spec.duration + count if spec.duration else 0,
+        dot_turns=spec.dot_turns + count if spec.dot_turns else 0,
+        barrier_turns=spec.barrier_turns + count if spec.barrier_turns else 0,
+        inflicts=_held_longer(spec.inflicts, count),
+        holds=_held_longer(spec.holds, count),
     )
 
 
-def _swift(spec: EffectSpec) -> EffectSpec:
-    return replace(
-        spec,
-        self_modifiers=(
-            *spec.self_modifiers,
-            ModifierSpec(key="initiative_percent", value=SWIFT_INITIATIVE),
-        ),
-        duration=max(spec.duration, SWIFT_TURNS),
-    )
-
-
-def _wide(spec: EffectSpec) -> EffectSpec:
-    return replace(spec, aoe=True, damage_scale=spec.damage_scale * WIDE_SCALE)
-
-
-def _focus(spec: EffectSpec) -> EffectSpec:
-    return replace(spec, aoe=False, damage_scale=spec.damage_scale * FOCUS_SCALE)
-
-
-def _shatter(spec: EffectSpec) -> EffectSpec:
-    return replace(
-        spec,
-        target_modifiers=(
-            *spec.target_modifiers,
-            ModifierSpec(key="armor_percent", value=-SHATTER_ARMOR),
-        ),
-        duration=max(spec.duration, SHATTER_TURNS),
-    )
-
-
-def _silence(spec: EffectSpec) -> EffectSpec:
-    return replace(
-        spec,
-        inflicts=(*spec.inflicts, Inflict(kind=StatusKind.SILENCE, turns=SILENCE_TURNS)),
-    )
-
-
-def _undying(spec: EffectSpec) -> EffectSpec:
-    return replace(
-        spec,
-        self_modifiers=(*spec.self_modifiers, ModifierSpec(key=UNDYING, value=1.0)),
-        duration=max(spec.duration, UNDYING_TURNS),
-    )
+# --- приём ------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
-class Mastery:
-    """Одна выучка: чему умение можно научить, взяв ранг.
+class Way:
+    """Приём: одна механика, из которой собирают выучки.
 
-    ``change`` - вся её механика: правка описания эффекта, по которому бой и
-    считает. ``text`` пишется ПО НЕЙ и ровно про неё (``Claude.md``, правило 7).
+    ``change`` - вся его суть: правка описания эффекта, по которому бой и
+    считает. ``words`` пишет по ней текст, и другого текста у выучки нет.
+    ``low``/``high`` - границы размера; ``None`` у обоих значит, что размера у
+    приёма нет вовсе («удар всегда критический» не бывает на сорок процентов).
     """
 
     code: str
-    name: str
-    text: str
     tier: int
     shapes: frozenset[Shape]
-    change: Callable[[EffectSpec], EffectSpec] = _unchanged
+    words: Callable[[float], str]
+    change: Callable[[EffectSpec, float], EffectSpec]
+    low: float | None = None
+    high: float | None = None
+
+    @property
+    def sized(self) -> bool:
+        return self.low is not None
 
     def suits(self, spec: EffectSpec) -> bool:
         return bool(self.shapes & shapes_of(spec))
 
+    def fits(self, amount: float | None) -> bool:
+        """Годится ли этот размер приёму."""
+        if not self.sized:
+            return amount is None
+        if amount is None:
+            return False
+        assert self.low is not None and self.high is not None
+        return self.low <= amount <= self.high
+
 
 _STRIKING = frozenset({Shape.STRIKE, Shape.SWEEP})
+_HURTING = frozenset({Shape.STRIKE, Shape.SWEEP, Shape.BANE})
 _HOLDING = frozenset({Shape.OVER_TIME, Shape.BANE, Shape.BOON})
 _KEEPING = frozenset({Shape.MENDING, Shape.WARD, Shape.BOON, Shape.DEED})
+_ANY = frozenset(Shape)
 
 
-#: Все выучки игры. Ступень первая - правит числа удара, вторая - меняет форму.
-MASTERIES: tuple[Mastery, ...] = (
-    # --- ступень первая: третий ранг ---
-    Mastery(
+def _n(amount: float) -> str:
+    """Число словами игрока: без хвоста, если он нулевой."""
+    return f"{amount:g}"
+
+
+def _turns(amount: float) -> str:
+    count = int(amount)
+    if count == 1:
+        return "1 ход"
+    return f"{count} хода" if count < 5 else f"{count} ходов"
+
+
+#: Все приёмы игры. Ступень первая правит числа, вторая меняет форму.
+WAYS: tuple[Way, ...] = (
+    # ============ ступень первая: третий ранг ============
+    Way(
         code="pierce",
-        name="Пробой",
-        text=f"Удар не считает {round(PIERCE_SHARE * 100)} процентов брони цели.",
         tier=1,
         shapes=_STRIKING,
-        change=lambda spec: replace(spec, pierce=min(1.0, spec.pierce + PIERCE_SHARE)),
+        low=20,
+        high=60,
+        words=lambda a: f"Удар не считает {_n(a)} процентов брони цели.",
+        change=lambda spec, a: replace(spec, pierce=min(1.0, spec.pierce + a / 100.0)),
     ),
-    Mastery(
+    Way(
         code="sure",
-        name="Наверняка",
-        text="От удара нельзя уклониться: цель его принимает или отвечает.",
         tier=1,
         shapes=_STRIKING,
-        change=lambda spec: replace(spec, always_hits=True),
+        words=lambda a: "От удара нельзя уклониться: цель его принимает или отвечает.",
+        change=lambda spec, a: replace(spec, always_hits=True),
     ),
-    Mastery(
+    Way(
         code="drain",
-        name="Вытяжка",
-        text=f"{round(DRAIN_SHARE * 100)} процентов нанесённого возвращаются вам здоровьем.",
         tier=1,
         shapes=_STRIKING,
-        change=lambda spec: replace(spec, lifesteal=spec.lifesteal + DRAIN_SHARE),
+        low=10,
+        high=35,
+        words=lambda a: f"{_n(a)} процентов нанесённого возвращаются вам здоровьем.",
+        change=lambda spec, a: replace(spec, lifesteal=spec.lifesteal + a / 100.0),
     ),
-    Mastery(
+    Way(
+        code="edge",
+        tier=1,
+        shapes=_STRIKING,
+        low=8,
+        high=30,
+        words=lambda a: f"Крит этим умением случается на {_n(a)} процентов чаще.",
+        change=lambda spec, a: replace(spec, crit_bonus=spec.crit_bonus + a),
+    ),
+    Way(
+        code="heavy",
+        tier=1,
+        shapes=_STRIKING,
+        low=10,
+        high=35,
+        words=lambda a: f"Удар сильнее на {_n(a)} процентов.",
+        change=lambda spec, a: replace(spec, damage_scale=spec.damage_scale * (1.0 + a / 100.0)),
+    ),
+    Way(
+        code="splinter",
+        tier=1,
+        shapes=frozenset({Shape.STRIKE}),
+        low=15,
+        high=45,
+        words=lambda a: f"Соседу цели достаётся {_n(a)} процентов удара.",
+        change=lambda spec, a: replace(spec, splash=spec.splash + a / 100.0),
+    ),
+    Way(
         code="linger",
-        name="Долгий след",
-        text=(
-            f"Всё, что умение накладывает, держится на {LINGER_TURNS} хода дольше — "
-            "кроме того, что отнимает ход."
-        ),
         tier=1,
         shapes=_HOLDING,
+        low=1,
+        high=3,
+        words=lambda a: (
+            f"Всё, что умение накладывает, держится на {_turns(a)} дольше — "
+            "кроме того, что отнимает ход."
+        ),
         change=_linger,
     ),
-    Mastery(
+    Way(
         code="deepen",
-        name="Глубокая рана",
-        text=(f"То, что точит цель каждый ход, точит в {DEEPEN_SCALE} раза сильнее."),
         tier=1,
         shapes=frozenset({Shape.OVER_TIME}),
-        change=lambda spec: replace(spec, dot_scale=spec.dot_scale * DEEPEN_SCALE),
+        low=25,
+        high=80,
+        words=lambda a: f"То, что точит цель каждый ход, точит на {_n(a)} процентов сильнее.",
+        change=lambda spec, a: replace(spec, dot_scale=spec.dot_scale * (1.0 + a / 100.0)),
     ),
-    Mastery(
+    Way(
         code="cheap",
-        name="Лёгкая рука",
-        text=f"Умение стоит вдвое дешевле — {round(CHEAP_FACTOR * 100)} процентов цены.",
         tier=1,
-        shapes=frozenset(Shape),
-        change=lambda spec: _marked(spec, MARK_CHEAP),
+        shapes=_ANY,
+        words=lambda a: f"Умение стоит вдвое дешевле — {round(CHEAP_FACTOR * 100)} процентов цены.",
+        change=lambda spec, a: _marked(spec, MARK_CHEAP),
     ),
-    Mastery(
+    Way(
         code="guarded",
-        name="Прикрытие",
-        text=f"Вдобавок ставит вам барьер на {round(GUARD_SHARE)} процентов здоровья.",
         tier=1,
-        shapes=frozenset(Shape),
-        change=lambda spec: replace(spec, bonus_barrier=spec.bonus_barrier + GUARD_SHARE),
+        shapes=_ANY,
+        low=5,
+        high=18,
+        words=lambda a: f"Вдобавок ставит вам барьер на {_n(a)} процентов здоровья.",
+        change=lambda spec, a: replace(spec, bonus_barrier=spec.bonus_barrier + a),
     ),
-    Mastery(
-        code="swift",
-        name="Скорая рука",
-        text=(
-            f"{SWIFT_TURNS} хода ваша инициатива выше на {round(SWIFT_INITIATIVE)} процентов: "
-            "вы ходите раньше."
-        ),
-        tier=1,
-        shapes=frozenset(Shape),
-        change=_swift,
-    ),
-    Mastery(
+    Way(
         code="mending",
-        name="Отзыв",
-        text=f"Вдобавок лечит вас на {round(MENDING_SHARE)} процентов здоровья.",
         tier=1,
-        shapes=frozenset(
-            {Shape.STRIKE, Shape.SWEEP, Shape.WARD, Shape.BOON, Shape.BANE, Shape.DEED}
-        ),
-        change=lambda spec: replace(spec, bonus_heal=spec.bonus_heal + MENDING_SHARE),
+        shapes=_ANY,
+        low=5,
+        high=18,
+        words=lambda a: f"Вдобавок лечит вас на {_n(a)} процентов здоровья.",
+        change=lambda spec, a: replace(spec, bonus_heal=spec.bonus_heal + a),
     ),
-    # --- ступень вторая: пятый ранг ---
-    Mastery(
+    Way(
+        code="swift",
+        tier=1,
+        shapes=_ANY,
+        low=20,
+        high=55,
+        words=lambda a: (
+            f"{_turns(SHORT_TURNS)} ваша инициатива выше на {_n(a)} процентов: вы ходите раньше."
+        ),
+        change=lambda spec, a: _self_mod(spec, "initiative_percent", a, SHORT_TURNS),
+    ),
+    Way(
+        code="bolster",
+        tier=1,
+        shapes=_ANY,
+        low=10,
+        high=30,
+        words=lambda a: f"{_turns(HELD_TURNS)} ваш урон выше на {_n(a)} процентов.",
+        change=lambda spec, a: _self_mod(spec, "damage_percent", a),
+    ),
+    Way(
+        code="steel",
+        tier=1,
+        shapes=_ANY,
+        low=10,
+        high=35,
+        words=lambda a: f"{_turns(HELD_TURNS)} ваша броня выше на {_n(a)} процентов.",
+        change=lambda spec, a: _self_mod(spec, "armor_percent", a),
+    ),
+    Way(
+        code="sidestep",
+        tier=1,
+        shapes=_ANY,
+        low=10,
+        high=30,
+        words=lambda a: f"{_turns(HELD_TURNS)} вы уклоняетесь на {_n(a)} процентов чаще.",
+        change=lambda spec, a: _self_mod(spec, "dodge_percent", a),
+    ),
+    Way(
+        code="dull",
+        tier=1,
+        shapes=_HURTING,
+        low=15,
+        high=40,
+        words=lambda a: (
+            f"{_turns(SHORT_TURNS)} цель промахивается чаще: точность ниже на {_n(a)} процентов."
+        ),
+        change=lambda spec, a: _target_mod(spec, "accuracy_percent", -a),
+    ),
+    Way(
+        code="sap",
+        tier=1,
+        shapes=_HURTING,
+        low=15,
+        high=35,
+        words=lambda a: f"{_turns(SHORT_TURNS)} цель бьёт слабее на {_n(a)} процентов.",
+        change=lambda spec, a: _target_mod(spec, "damage_percent", -a),
+    ),
+    Way(
+        code="drag",
+        tier=1,
+        shapes=_HURTING,
+        low=15,
+        high=45,
+        words=lambda a: (
+            f"{_turns(SHORT_TURNS)} цель ходит позже: инициатива ниже на {_n(a)} процентов."
+        ),
+        change=lambda spec, a: _target_mod(spec, "initiative_percent", -a),
+    ),
+    Way(
+        code="ward_long",
+        tier=1,
+        shapes=frozenset({Shape.WARD}),
+        low=1,
+        high=3,
+        words=lambda a: f"Барьер держится на {_turns(a)} дольше.",
+        change=lambda spec, a: replace(spec, barrier_turns=spec.barrier_turns + int(a)),
+    ),
+    Way(
+        code="soothe",
+        tier=1,
+        shapes=_KEEPING,
+        low=2,
+        high=4,
+        words=lambda a: f"{_turns(a)} здоровье прибывает само.",
+        change=lambda spec, a: _holding(spec, Inflict(kind=StatusKind.HEALTH_REGEN, turns=int(a))),
+    ),
+    Way(
+        code="refresh",
+        tier=1,
+        shapes=_KEEPING,
+        low=2,
+        high=4,
+        words=lambda a: f"{_turns(a)} запас восстанавливается быстрее.",
+        change=lambda spec, a: _holding(
+            spec, Inflict(kind=StatusKind.RESOURCE_REGEN, turns=int(a))
+        ),
+    ),
+    Way(
+        code="cleansing",
+        tier=1,
+        shapes=frozenset({Shape.MENDING, Shape.WARD}),
+        low=1,
+        high=3,
+        words=lambda a: f"Вдобавок снимает с вас {_n(a)} беды.",
+        change=lambda spec, a: replace(spec, cleanse_count=spec.cleanse_count + int(a)),
+    ),
+    # ============ ступень вторая: пятый ранг ============
+    Way(
         code="wide",
-        name="Размах",
-        text=(f"Бьёт всю стаю разом, но каждого — на {round(WIDE_SCALE * 100)} процентов удара."),
         tier=2,
         shapes=frozenset({Shape.STRIKE}),
-        change=_wide,
+        low=40,
+        high=75,
+        words=lambda a: f"Бьёт всю стаю разом, но каждого — на {_n(a)} процентов удара.",
+        change=lambda spec, a: replace(spec, aoe=True, damage_scale=spec.damage_scale * a / 100.0),
     ),
-    Mastery(
+    Way(
         code="focus",
-        name="Сосредоточение",
-        text=(f"Бьёт одну цель вместо всех, зато в {FOCUS_SCALE} раза сильнее."),
         tier=2,
         shapes=frozenset({Shape.SWEEP}),
-        change=_focus,
-    ),
-    Mastery(
-        code="finish",
-        name="Добой",
-        text="Чем меньше здоровья у цели, тем сильнее удар: у почти павшей — вдвое.",
-        tier=2,
-        shapes=_STRIKING,
-        change=lambda spec: replace(spec, execute_scaling=spec.execute_scaling + FINISH_SCALING),
-    ),
-    Mastery(
-        code="spread",
-        name="Разлив",
-        text="Ложится на весь отряд, а не на вас одного.",
-        tier=2,
-        shapes=_KEEPING,
-        change=lambda spec: replace(spec, aoe=True),
-    ),
-    Mastery(
-        code="contagion",
-        name="Зараза",
-        text="Ложится на всю стаю, а не на одну цель.",
-        tier=2,
-        shapes=frozenset({Shape.OVER_TIME, Shape.BANE}),
-        change=lambda spec: replace(spec, aoe=True),
-    ),
-    Mastery(
-        code="shatter",
-        name="Раскол",
-        text=(
-            f"Вдобавок ломает цели броню на {round(SHATTER_ARMOR)} процентов, {SHATTER_TURNS} хода."
+        low=30,
+        high=70,
+        words=lambda a: f"Бьёт одну цель вместо всех, зато сильнее на {_n(a)} процентов.",
+        change=lambda spec, a: replace(
+            spec, aoe=False, damage_scale=spec.damage_scale * (1.0 + a / 100.0)
         ),
-        tier=2,
-        shapes=frozenset({Shape.STRIKE, Shape.SWEEP, Shape.BANE}),
-        change=_shatter,
     ),
-    Mastery(
-        code="quiet",
-        name="Немота",
-        text=f"Вдобавок затыкает цель на {SILENCE_TURNS} хода: умений ей не нажать.",
-        tier=2,
-        shapes=frozenset({Shape.STRIKE, Shape.SWEEP, Shape.BANE, Shape.BINDING}),
-        change=_silence,
-    ),
-    Mastery(
-        code="certain",
-        name="Верный удар",
-        text="Удар всегда критический.",
+    Way(
+        code="double",
         tier=2,
         shapes=frozenset({Shape.STRIKE}),
-        change=lambda spec: replace(spec, guaranteed_crit=True),
+        low=55,
+        high=75,
+        words=lambda a: f"Бьёт лишний раз, и каждый удар — {_n(a)} процентов прежнего.",
+        change=lambda spec, a: replace(
+            spec, hits=spec.hits + 1, damage_scale=spec.damage_scale * a / 100.0
+        ),
     ),
-    Mastery(
-        code="rush",
-        name="Второе дыхание",
-        text="Добив цель, умение возвращается сразу: отката не будет.",
+    Way(
+        code="finish",
         tier=2,
         shapes=_STRIKING,
-        change=lambda spec: _marked(spec, MARK_RUSH),
-    ),
-    Mastery(
-        code="hard_guard",
-        name="Твёрдый заслон",
-        text=(
-            f"Барьер вдобавок — {round(HARD_GUARD_SHARE)} процентов здоровья, "
-            f"и держится он {HARD_GUARD_TURNS} хода."
+        low=40,
+        high=90,
+        words=lambda a: (
+            f"Чем меньше здоровья у цели, тем сильнее удар: у почти павшей — на {_n(a)} процентов."
         ),
+        change=lambda spec, a: replace(spec, execute_scaling=spec.execute_scaling + a / 100.0),
+    ),
+    Way(
+        code="certain",
         tier=2,
-        shapes=frozenset(Shape),
-        change=lambda spec: replace(
-            spec,
-            bonus_barrier=spec.bonus_barrier + HARD_GUARD_SHARE,
-            barrier_turns=max(spec.barrier_turns, HARD_GUARD_TURNS),
-        ),
+        shapes=frozenset({Shape.STRIKE}),
+        words=lambda a: "Удар всегда критический.",
+        change=lambda spec, a: replace(spec, guaranteed_crit=True),
     ),
-    Mastery(
-        code="unfallen",
-        name="Не пасть",
-        text=f"{UNDYING_TURNS} хода вы не падаете: здоровье не опустится ниже единицы.",
+    Way(
+        code="rush",
+        tier=2,
+        shapes=_STRIKING,
+        words=lambda a: "Добив цель, умение возвращается сразу: отката не будет.",
+        change=lambda spec, a: _marked(spec, MARK_RUSH),
+    ),
+    Way(
+        code="spread",
         tier=2,
         shapes=_KEEPING,
-        change=_undying,
+        words=lambda a: "Ложится на весь отряд, а не на вас одного.",
+        change=lambda spec, a: spec if spec.aoe else replace(spec, aoe=True),
+    ),
+    Way(
+        code="contagion",
+        tier=2,
+        shapes=frozenset({Shape.OVER_TIME, Shape.BANE}),
+        words=lambda a: "Ложится на всю стаю, а не на одну цель.",
+        change=lambda spec, a: spec if spec.aoe else replace(spec, aoe=True),
+    ),
+    Way(
+        code="shatter",
+        tier=2,
+        shapes=_HURTING,
+        low=15,
+        high=45,
+        words=lambda a: f"Вдобавок ломает цели броню на {_n(a)} процентов, {_turns(HELD_TURNS)}.",
+        change=lambda spec, a: _target_mod(spec, "armor_percent", -a, HELD_TURNS),
+    ),
+    Way(
+        code="mark",
+        tier=2,
+        shapes=_HURTING,
+        low=15,
+        high=40,
+        words=lambda a: (
+            f"Вдобавок цель принимает на {_n(a)} процентов больше урона, {_turns(HELD_TURNS)} — "
+            "от вас и от ваших."
+        ),
+        change=lambda spec, a: _target_mod(spec, "damage_taken_percent", a, HELD_TURNS),
+    ),
+    Way(
+        code="stagger",
+        tier=2,
+        shapes=_STRIKING,
+        words=lambda a: "Попавший удар отнимает у цели ход.",
+        change=lambda spec, a: replace(spec, stun_turns=spec.stun_turns + 1),
+    ),
+    Way(
+        code="quiet",
+        tier=2,
+        shapes=frozenset({Shape.STRIKE, Shape.SWEEP, Shape.BANE, Shape.BINDING}),
+        words=lambda a: f"Вдобавок затыкает цель на {_turns(SHORT_TURNS)}: умений ей не нажать.",
+        change=lambda spec, a: _inflicted(
+            spec, Inflict(kind=StatusKind.SILENCE, turns=SHORT_TURNS)
+        ),
+    ),
+    Way(
+        code="seal",
+        tier=2,
+        shapes=_HURTING,
+        words=lambda a: f"Вдобавок {_turns(HELD_TURNS)} цель нельзя вылечить.",
+        change=lambda spec, a: _inflicted(
+            spec, Inflict(kind=StatusKind.HEAL_BLOCK, turns=HELD_TURNS)
+        ),
+    ),
+    Way(
+        code="hush",
+        tier=2,
+        shapes=_HURTING,
+        words=lambda a: f"Вдобавок {_turns(HELD_TURNS)} цели нечем платить за умения.",
+        change=lambda spec, a: _inflicted(
+            spec, Inflict(kind=StatusKind.RESOURCE_BLOCK, turns=HELD_TURNS)
+        ),
+    ),
+    Way(
+        code="terrify",
+        tier=2,
+        shapes=_HURTING,
+        words=lambda a: "Вдобавок цель на ход теряет голову от страха.",
+        change=lambda spec, a: _inflicted(spec, Inflict(kind=StatusKind.FEAR, turns=1)),
+    ),
+    Way(
+        code="frost",
+        tier=2,
+        shapes=_HURTING,
+        words=lambda a: "Вдобавок цель на ход схватывает морозом.",
+        change=lambda spec, a: _inflicted(spec, Inflict(kind=StatusKind.FREEZE, turns=1)),
+    ),
+    Way(
+        code="chill",
+        tier=2,
+        shapes=_HURTING,
+        low=20,
+        high=45,
+        words=lambda a: (
+            f"Вдобавок {_turns(SHORT_TURNS)} цель медлит: инициатива ниже на {_n(a)} процентов."
+        ),
+        change=lambda spec, a: _inflicted(
+            spec, Inflict(kind=StatusKind.SLOW, turns=SHORT_TURNS, value=a)
+        ),
+    ),
+    Way(
+        code="wither",
+        tier=2,
+        shapes=_HURTING,
+        low=20,
+        high=45,
+        words=lambda a: f"Вдобавок {_turns(HELD_TURNS)} цель бьёт слабее на {_n(a)} процентов.",
+        change=lambda spec, a: _inflicted(
+            spec, Inflict(kind=StatusKind.WEAKNESS, turns=HELD_TURNS, value=a)
+        ),
+    ),
+    Way(
+        code="taunting",
+        tier=2,
+        shapes=_HURTING,
+        words=lambda a: f"Вдобавок {_turns(SHORT_TURNS)} цель бьёт по вам, а не по вашим.",
+        change=lambda spec, a: _kept(
+            _inflicted(spec, Inflict(kind=StatusKind.TAUNT, turns=SHORT_TURNS)), SHORT_TURNS
+        ),
+    ),
+    Way(
+        code="bleed",
+        tier=2,
+        shapes=_STRIKING,
+        words=lambda a: f"Цель истекает кровью {_turns(HELD_TURNS)}.",
+        change=lambda spec, a: _dotted(spec, StatusKind.BLEEDING),
+    ),
+    Way(
+        code="sear",
+        tier=2,
+        shapes=_STRIKING,
+        words=lambda a: f"Цель горит {_turns(HELD_TURNS)}.",
+        change=lambda spec, a: _dotted(spec, StatusKind.BURNING),
+    ),
+    Way(
+        code="taint",
+        tier=2,
+        shapes=_STRIKING,
+        words=lambda a: f"Цель травится {_turns(HELD_TURNS)}.",
+        change=lambda spec, a: _dotted(spec, StatusKind.POISON),
+    ),
+    Way(
+        code="hard_guard",
+        tier=2,
+        shapes=_ANY,
+        low=18,
+        high=40,
+        words=lambda a: (
+            f"Барьер вдобавок — {_n(a)} процентов здоровья, и держится он {_turns(LONG_TURNS)}."
+        ),
+        change=lambda spec, a: replace(
+            spec,
+            bonus_barrier=spec.bonus_barrier + a,
+            barrier_turns=max(spec.barrier_turns, LONG_TURNS),
+        ),
+    ),
+    Way(
+        code="counter",
+        tier=2,
+        shapes=_ANY,
+        low=20,
+        high=50,
+        words=lambda a: (
+            f"{_turns(HELD_TURNS)} вы отвечаете ударившему на {_n(a)} процентов своего удара."
+        ),
+        change=lambda spec, a: _self_mod(spec, COUNTER, a),
+    ),
+    Way(
+        code="reflect",
+        tier=2,
+        shapes=_ANY,
+        low=15,
+        high=40,
+        words=lambda a: (
+            f"{_turns(HELD_TURNS)} {_n(a)} процентов полученного возвращается ударившему."
+        ),
+        change=lambda spec, a: _self_mod(spec, "reflect_percent", a),
+    ),
+    Way(
+        code="unfallen",
+        tier=2,
+        shapes=_KEEPING,
+        words=lambda a: f"{_turns(SHORT_TURNS)} вы не падаете: здоровье не опустится ниже единицы.",
+        change=lambda spec, a: _self_mod(spec, UNDYING, 1.0, SHORT_TURNS),
+    ),
+    Way(
+        code="steadfast",
+        tier=2,
+        shapes=_KEEPING,
+        words=lambda a: f"{_turns(HELD_TURNS)} ход у вас не отнять ничем.",
+        change=lambda spec, a: _self_mod(spec, UNSTUNNABLE, 1.0),
+    ),
+    Way(
+        code="haste",
+        tier=2,
+        shapes=_KEEPING,
+        words=lambda a: f"Вдобавок {_turns(HELD_TURNS)} вы разогнаны: ходите чаще.",
+        change=lambda spec, a: _holding(spec, Inflict(kind=StatusKind.HASTE, turns=HELD_TURNS)),
+    ),
+    Way(
+        code="empower",
+        tier=2,
+        shapes=_KEEPING,
+        words=lambda a: f"Вдобавок {_turns(HELD_TURNS)} ваши удары усилены.",
+        change=lambda spec, a: _holding(spec, Inflict(kind=StatusKind.EMPOWER, turns=HELD_TURNS)),
+    ),
+    Way(
+        code="vanish",
+        tier=2,
+        shapes=frozenset({Shape.BOON, Shape.DEED}),
+        words=lambda a: (
+            f"Вдобавок вы уходите из виду на {_turns(SHORT_TURNS)}: "
+            "целью вас не выбрать, пока вы сами не ударите."
+        ),
+        change=lambda spec, a: _holding(spec, Inflict(kind=StatusKind.UNSEEN, turns=SHORT_TURNS)),
     ),
 )
 
-_BY_CODE: dict[str, Mastery] = {one.code: one for one in MASTERIES}
+_BY_WAY: dict[str, Way] = {one.code: one for one in WAYS}
 
 
-def known(codes: Iterable[str]) -> tuple[Mastery, ...]:
-    """Выучки, которые в игре есть. Выбор переживает содержимое (правило 8)."""
-    return tuple(_BY_CODE[code] for code in codes if code in _BY_CODE)
+def way_of(code: str) -> Way | None:
+    """Приём по коду. ``None`` - такого в игре нет."""
+    return _BY_WAY.get(code)
+
+
+def words(mastery: SkillMastery) -> str:
+    """Что эта выучка делает, словами игрока. Пишет их сам приём по своим числам."""
+    way = way_of(mastery.way)
+    if way is None:  # pragma: no cover - загрузчик такого не пропускает
+        return ""
+    return way.words(mastery.amount if mastery.amount is not None else 0.0)
+
+
+def changed(mastery: SkillMastery, spec: EffectSpec) -> EffectSpec:
+    """Описание эффекта так, как его переделала эта выучка."""
+    way = way_of(mastery.way)
+    if way is None:  # pragma: no cover - загрузчик такого не пропускает
+        return spec
+    return way.change(spec, mastery.amount if mastery.amount is not None else 0.0)
+
+
+# --- выучки одного умения ---------------------------------------------
 
 
 def rank_of_tier(tier: int) -> int:
@@ -440,44 +797,48 @@ def rank_of_tier(tier: int) -> int:
     return MASTERY_RANKS[tier - 1]
 
 
-def offered(spec: EffectSpec, tier: int) -> tuple[Mastery, ...]:
-    """Выучки этой ступени, подходящие умению с таким эффектом."""
-    return tuple(one for one in MASTERIES if one.tier == tier and one.suits(spec))
+def offered(skill: Skill, tier: int) -> tuple[SkillMastery, ...]:
+    """Выучки этой ступени, написанные ЭТОМУ умению."""
+    return tuple(one for one in skill.masteries if one.tier == tier)
 
 
-def chosen_tiers(codes: Iterable[str]) -> frozenset[int]:
+def known(skill: Skill, codes: Iterable[str]) -> tuple[SkillMastery, ...]:
+    """Выучки, которые у этого умения есть. Выбор переживает содержимое (правило 8).
+
+    Порядок - тот, в котором выучки написаны умению, а не тот, в котором их
+    брали: иначе одно и то же умение считалось бы по-разному у двух игроков,
+    взявших одно и то же.
+    """
+    taken = set(codes)
+    return tuple(one for one in skill.masteries if one.code in taken)
+
+
+def chosen_tiers(skill: Skill, codes: Iterable[str]) -> frozenset[int]:
     """Ступени, на которых уже выбрано."""
-    return frozenset(one.tier for one in known(codes))
+    return frozenset(one.tier for one in known(skill, codes))
 
 
-def pending_tier(spec: EffectSpec, rank: int, codes: Iterable[str]) -> int | None:
+def pending_tier(skill: Skill, rank: int, codes: Iterable[str]) -> int | None:
     """Ступень, которую игроку пора выбрать этому умению. ``None`` - нечего.
 
     Ступень «пора», когда ранг до неё дорос, выбор ещё не сделан и умению
-    вообще есть что предложить: умение, которому ни одна выучка этой ступени не
-    подходит, не должен ждать выбора, которого нет.
+    вообще есть что предложить: умение, которому этой ступени не написали, не
+    должно ждать выбора, которого нет.
     """
-    taken = chosen_tiers(codes)
+    taken = chosen_tiers(skill, codes)
     for tier in range(1, len(MASTERY_RANKS) + 1):
         if tier in taken or rank < rank_of_tier(tier):
             continue
-        if offered(spec, tier):
+        if offered(skill, tier):
             return tier
     return None
 
 
-def applied(spec: EffectSpec, codes: Iterable[str]) -> EffectSpec:
-    """Описание эффекта так, как его переделали выбранные выучки.
-
-    Порядок - тот, в котором выучки объявлены, а не тот, в котором их брали:
-    иначе одно и то же умение считалось бы по-разному у двух игроков, взявших
-    одно и то же.
-    """
-    picked = {one.code for one in known(codes)}
+def applied(skill: Skill, spec: EffectSpec, codes: Iterable[str]) -> EffectSpec:
+    """Описание эффекта так, как его переделали выбранные выучки."""
     working = spec
-    for one in MASTERIES:
-        if one.code in picked:
-            working = one.change(working)
+    for one in known(skill, codes):
+        working = changed(one, working)
     return working
 
 

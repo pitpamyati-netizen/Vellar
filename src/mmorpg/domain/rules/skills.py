@@ -17,9 +17,10 @@
 - на десятую долю удешевляет умение, до половины на пятом ранге.
 
 **А третий ранг и пятый вдобавок спрашивают, чему умение научилось**
-(``rules/skill_mastery``): игрок берёт выучку из подходящих этому умению, и она
-меняет не размер, а само действие - удар начинает бить по всем, лечение ложится
-на отряд, помеха расходится по стае. Ровно за этим ранг и поднимают.
+(``rules/skill_mastery``): игрок берёт одну из ЧЕТЫРЁХ, написанных этому умению
+и никакому другому, и она меняет не размер, а само действие: удар начинает бить
+по всем, лечение ложится на отряд, помеха расходится по стае. Ровно за этим ранг
+и поднимают.
 
 Всё чисто: каждая функция возвращает нового персонажа или ``None``, когда так
 делать нельзя, а объясняет отказ словами вызывающий.
@@ -30,7 +31,13 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import GameContent, OwnerKind, Skill, SkillKind
+from mmorpg.domain.entities.content import (
+    GameContent,
+    OwnerKind,
+    Skill,
+    SkillKind,
+    SkillMastery,
+)
 from mmorpg.domain.entities.statuses import CONTROL_STATUSES
 from mmorpg.domain.rules import skill_mastery as mastery_rules
 from mmorpg.domain.rules import subclass as subclass_rules
@@ -366,9 +373,9 @@ def masteries_of(character: Character, skill: Skill) -> tuple[str, ...]:
     return character.loadout.masteries_of(skill.code)
 
 
-def taken_masteries(character: Character, skill: Skill) -> tuple[mastery_rules.Mastery, ...]:
+def taken_masteries(character: Character, skill: Skill) -> tuple[SkillMastery, ...]:
     """Выучки этого умения так, как их знает игра сейчас."""
-    return mastery_rules.known(masteries_of(character, skill))
+    return mastery_rules.known(skill, masteries_of(character, skill))
 
 
 def mastery_tier_due(content: GameContent, character: Character, skill: Skill) -> int | None:
@@ -380,17 +387,21 @@ def mastery_tier_due(content: GameContent, character: Character, skill: Skill) -
     if not skill.is_active or not is_known(character, skill.code):
         return None
     rank = character.loadout.rank_of(skill.code)
-    return mastery_rules.pending_tier(spec_of(skill), rank, masteries_of(character, skill))
+    return mastery_rules.pending_tier(skill, rank, masteries_of(character, skill))
 
 
 def mastery_choices(
     content: GameContent, character: Character, skill: Skill
-) -> tuple[mastery_rules.Mastery, ...]:
-    """Из чего этому умению сейчас выбирают. Пусто - выбирать нечего или не пора."""
+) -> tuple[SkillMastery, ...]:
+    """Из чего этому умению сейчас выбирают. Пусто - выбирать нечего или не пора.
+
+    Список свой у каждого умения: общего, из которого выбирали бы все, нет
+    (ADR 0083).
+    """
     tier = mastery_tier_due(content, character, skill)
     if tier is None:
         return ()
-    return mastery_rules.offered(spec_of(skill), tier)
+    return mastery_rules.offered(skill, tier)
 
 
 def choose_mastery(

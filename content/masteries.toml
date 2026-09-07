@@ -1,0 +1,3653 @@
+# Выучки: чему научилось КАЖДОЕ умение, взяв третий ранг и пятый (ADR 0083).
+#
+# Общего списка выучек в игре нет. У каждого боевого умения свои четыре - две на
+# третьем ранге и две на пятом, - и написаны они под класс, под ветку и под то,
+# чем это умение в бою занимается. Два разных умения никогда не покажут один и
+# тот же выбор, и потому «поднять ранг» - это вопрос, а не прибавка.
+#
+# ============================================================================
+# КАК ЭТО ЧИТАЕТСЯ
+# ============================================================================
+#
+#   [[skill]] code   - умение, которому это написано (skills.toml).
+#   third            - две выучки, из которых выбирают на ТРЕТЬЕМ ранге.
+#   fifth            - две выучки, из которых выбирают на ПЯТОМ.
+#
+# У каждой две вещи:
+#   name   - как выучка зовётся. Имя своё у каждой на всю игру: две выучки под
+#            одним именем - это тот самый общий список, от которого игра ушла.
+#   way    - ПРИЁМ: механика из domain/rules/skill_mastery.WAYS. Это правка
+#            EffectSpec - того самого описания, по которому бой и считает.
+#   amount - размер приёма. У приёма, которому размер не нужен («удар всегда
+#            критический»), его не пишут вовсе.
+#
+# ТЕКСТА У ВЫУЧКИ НЕТ. Его складывает сам приём по своим же числам, и другого
+# текста игроку не показывают. Это единственное, чем выучки отличаются от
+# отменённых граней: грань была подписью, обещавшей словами то, чего движок не
+# делал (ADR 0067), а здесь слова берутся ИЗ механики и разойтись с ней не могут.
+#
+# ЧТО ПРОВЕРЯЕТСЯ НА СТАРТЕ (infrastructure/content/loader._with_masteries):
+#   - у каждого боевого умения ровно две выучки на ступень, у пассивного - ни
+#     одной: у пассивки нет ни хода, ни цели (ADR 0073);
+#   - приём существует и стоит на своей ступени;
+#   - приём подходит ФОРМЕ умения: «Пробой» не ляжет на лечение, «Разлив» - на
+#     удар;
+#   - размер в границах приёма;
+#   - правка ЧТО-ТО МЕНЯЕТ в описании эффекта. Вторая «Немота» на умении,
+#     которое и так затыкает, - это подпись, и игра с ней не заведётся;
+#   - имя выучки не занято другим умением.
+#
+# СТУПЕНЬ ПЕРВАЯ ПРАВИТ ЧИСЛА, ВТОРАЯ - ФОРМУ. На третьем ранге умение бьёт
+# глубже, держит дольше, стоит дешевле; на пятом одноцелевой удар становится
+# ударом по всем, лечение ложится на отряд, помеха расходится по стае.
+#
+# Идентификаторы умений заморожены: на них показывают персонажи в базе. Коды
+# самих выучек не пишут - их даёт загрузчик по ранту и месту в списке (3a, 3b,
+# 5a, 5b), и переставлять написанное местами нельзя: у игроков в базе лежит
+# выбор.
+
+# ==========================================================================
+# ВОИН. Напор - размен ударами и добивание; заслон - строй, латы и то, что
+# позволяет стоять; финт - раны, которые не заживают.
+# ==========================================================================
+
+[[skill]]
+code = "warrior_sekushchiy_roscherk"
+third = [
+    { name = "Косой заход", way = "pierce", amount = 30 },
+    { name = "Кровь на кромке", way = "drain", amount = 15 },
+]
+fifth = [
+    { name = "Росчерк во весь двор", way = "wide", amount = 60 },
+    { name = "Полоса, что не сходится", way = "bleed" },
+]
+
+[[skill]]
+code = "warrior_rassechenie"
+third = [
+    { name = "Развал раны", way = "deepen", amount = 60 },
+    { name = "Долгая течь", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Кровь по стае", way = "contagion" },
+    { name = "Рана, что не закрыть", way = "seal" },
+]
+
+[[skill]]
+code = "warrior_tarannyy_udar"
+third = [
+    { name = "Всем весом", way = "heavy", amount = 25 },
+    { name = "Плечом вперёд", way = "steel", amount = 25 },
+]
+fifth = [
+    { name = "С ног долой", way = "stagger" },
+    { name = "Вмятый нагрудник", way = "shatter", amount = 35 },
+]
+
+[[skill]]
+code = "warrior_stoyka_shchita"
+third = [
+    { name = "Стойка на весь бой", way = "linger", amount = 2 },
+    { name = "Щит наготове", way = "guarded", amount = 12 },
+]
+fifth = [
+    { name = "Сомкнуть по всей линии", way = "spread" },
+    { name = "Щит отвечает", way = "counter", amount = 35 },
+]
+
+[[skill]]
+code = "warrior_provokatsiya"
+third = [
+    { name = "Ор на весь двор", way = "linger", amount = 2 },
+    { name = "Задеть за живое", way = "sap", amount = 25 },
+]
+fifth = [
+    { name = "Вызов всей стае", way = "contagion" },
+    { name = "Стоять до конца", way = "unfallen" },
+]
+
+[[skill]]
+code = "warrior_podrez"
+third = [
+    { name = "По сухожилию", way = "drag", amount = 30 },
+    { name = "Подрез поглубже", way = "pierce", amount = 35 },
+]
+fifth = [
+    { name = "Нога не понесёт", way = "chill", amount = 35 },
+    { name = "Подрез обеим", way = "wide", amount = 60 },
+]
+
+[[skill]]
+code = "warrior_klich_splocheniya"
+third = [
+    { name = "Клич подольше", way = "linger", amount = 2 },
+    { name = "Плечо к плечу", way = "steel", amount = 22 },
+]
+fifth = [
+    { name = "Клич на весь отряд", way = "spread" },
+    { name = "Сомкнутый шаг", way = "haste" },
+]
+
+[[skill]]
+code = "warrior_vikhr_klinkov"
+third = [
+    { name = "Шире круг", way = "heavy", amount = 20 },
+    { name = "Вихрь без промаха", way = "sure" },
+]
+fifth = [
+    { name = "Вихрь в одну точку", way = "focus", amount = 55 },
+    { name = "Кромки нарасхват", way = "bleed" },
+]
+
+[[skill]]
+code = "warrior_proboy_stroya"
+third = [
+    { name = "Клин в щель", way = "pierce", amount = 45 },
+    { name = "Пробой навылет", way = "splinter", amount = 30 },
+]
+fifth = [
+    { name = "Строй рассыпан", way = "wide", amount = 55 },
+    { name = "Брешь в железе", way = "shatter", amount = 40 },
+]
+
+[[skill]]
+code = "warrior_udar_shchitom"
+third = [
+    { name = "Умбоном в лицо", way = "heavy", amount = 25 },
+    { name = "Щит на замахе", way = "guarded", amount = 12 },
+]
+fifth = [
+    { name = "Оглушить и не пустить", way = "quiet" },
+    { name = "Шаг и снова щитом", way = "double", amount = 65 },
+]
+
+[[skill]]
+code = "warrior_oprokidyvanie"
+third = [
+    { name = "Под самые ноги", way = "drag", amount = 35 },
+    { name = "Опрокинуть надолго", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Кувырком всю стаю", way = "contagion" },
+    { name = "Лежачему не встать", way = "mark", amount = 30 },
+]
+
+[[skill]]
+code = "warrior_zheleznaya_volya"
+third = [
+    { name = "Воля подольше", way = "linger", amount = 2 },
+    { name = "Железо на плечах", way = "steel", amount = 25 },
+]
+fifth = [
+    { name = "Воля на всех", way = "spread" },
+    { name = "Ноги не подкосятся", way = "steadfast" },
+]
+
+[[skill]]
+code = "warrior_vskrytaya_rana"
+third = [
+    { name = "Рана шире", way = "deepen", amount = 70 },
+    { name = "Кровь не унять", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Вскрыто у всей стаи", way = "contagion" },
+    { name = "Знахарю не помочь", way = "seal" },
+]
+
+[[skill]]
+code = "warrior_krik_uzhasa"
+third = [
+    { name = "Крик сорванным горлом", way = "heavy", amount = 20 },
+    { name = "Крик и рывок", way = "swift", amount = 40 },
+]
+fifth = [
+    { name = "Ужас по всей стае", way = "wide", amount = 55 },
+    { name = "Крик, что вяжет язык", way = "quiet" },
+]
+
+[[skill]]
+code = "warrior_dobivanie"
+third = [
+    { name = "По самому горлу", way = "pierce", amount = 45 },
+    { name = "Чужой кровью", way = "drain", amount = 25 },
+]
+fifth = [
+    { name = "Дожать", way = "finish", amount = 70 },
+    { name = "Добил — и снова готов", way = "rush" },
+]
+
+[[skill]]
+code = "warrior_otvetnyy_vypad"
+third = [
+    { name = "Ответ подольше", way = "linger", amount = 2 },
+    { name = "Наготове", way = "sidestep", amount = 20 },
+]
+fifth = [
+    { name = "Отвечает весь отряд", way = "spread" },
+    { name = "Ответ железом", way = "reflect", amount = 30 },
+]
+
+[[skill]]
+code = "warrior_razbityy_stroy"
+third = [
+    { name = "По всем разом крепче", way = "heavy", amount = 20 },
+    { name = "Строй под ногами", way = "drag", amount = 30 },
+]
+fifth = [
+    { name = "Один за весь строй", way = "focus", amount = 50 },
+    { name = "Разбитым не собраться", way = "mark", amount = 30 },
+]
+
+[[skill]]
+code = "warrior_klinkovyy_shkval"
+third = [
+    { name = "Шквал без пропуска", way = "sure" },
+    { name = "Каждый удар глубже", way = "pierce", amount = 30 },
+]
+fifth = [
+    { name = "Лишний взмах", way = "double", amount = 70 },
+    { name = "Шквал по всем", way = "wide", amount = 55 },
+]
+
+[[skill]]
+code = "warrior_bezoglyadnyy_razmen"
+third = [
+    { name = "Размен с прибытком", way = "drain", amount = 30 },
+    { name = "Открыться и ударить", way = "bolster", amount = 25 },
+]
+fifth = [
+    { name = "Размен до последнего", way = "finish", amount = 80 },
+    { name = "Кто первым не сдаст", way = "counter", amount = 40 },
+]
+
+[[skill]]
+code = "warrior_krepost"
+third = [
+    { name = "Кладка потолще", way = "ward_long", amount = 2 },
+    { name = "Раны за стеной", way = "cleansing", amount = 2 },
+]
+fifth = [
+    { name = "Крепость на весь отряд", way = "spread" },
+    { name = "Стена в два ряда", way = "hard_guard", amount = 25 },
+]
+
+[[skill]]
+code = "warrior_smertnyy_prigovor"
+third = [
+    { name = "Приговор подольше", way = "linger", amount = 2 },
+    { name = "Руки опустятся", way = "sap", amount = 25 },
+]
+fifth = [
+    { name = "Приговор всей стае", way = "contagion" },
+    { name = "Обжалованию не подлежит", way = "seal" },
+]
+
+[[skill]]
+code = "warrior_yarost_veterana"
+third = [
+    { name = "Ярость подольше", way = "linger", amount = 2 },
+    { name = "Старая злость", way = "bolster", amount = 25 },
+]
+fifth = [
+    { name = "Ярость на всех", way = "spread" },
+    { name = "Ветеран не падает", way = "unfallen" },
+]
+
+[[skill]]
+code = "warrior_posledniy_rubezh"
+third = [
+    { name = "Рубеж подольше", way = "ward_long", amount = 2 },
+    { name = "Второе дыхание рубежа", way = "soothe", amount = 3 },
+]
+fifth = [
+    { name = "Рубеж для всех", way = "spread" },
+    { name = "Через рубеж не переступят", way = "steadfast" },
+]
+
+[[skill]]
+code = "warrior_znamya_ne_padaet"
+third = [
+    { name = "Древко повыше", way = "mending", amount = 12 },
+    { name = "Знамя снимает беды", way = "cleansing", amount = 2 },
+]
+fifth = [
+    { name = "Под знаменем не падают", way = "unfallen" },
+    { name = "Знамя ведёт", way = "haste" },
+]
+
+# ==========================================================================
+# ВАРВАР. Всё, что он умеет, он умеет одним способом: бить, пока стоит, и
+# стоять, пока бьёт. Ярость за броню, кровь за раны, добивание без оглядки.
+# ==========================================================================
+
+[[skill]]
+code = "barbarian_dikiy_zamakh"
+third = [
+    { name = "От плеча", way = "heavy", amount = 30 },
+    { name = "Замах вслепую", way = "sure" },
+]
+fifth = [
+    { name = "Замах на всех", way = "wide", amount = 60 },
+    { name = "Мясо клочьями", way = "bleed" },
+]
+
+[[skill]]
+code = "barbarian_razryvayushchiy_udar"
+third = [
+    { name = "Рвать глубже", way = "deepen", amount = 70 },
+    { name = "Течёт и течёт", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Разорвать всех", way = "wide", amount = 60 },
+    { name = "Мясо на кости", way = "seal" },
+]
+
+[[skill]]
+code = "barbarian_raskol_cherepa"
+third = [
+    { name = "Топором надвое", way = "pierce", amount = 45 },
+    { name = "Раскол наверняка", way = "edge", amount = 25 },
+]
+fifth = [
+    { name = "Череп пополам", way = "certain" },
+    { name = "Оглушённый черепом", way = "stagger" },
+]
+
+[[skill]]
+code = "barbarian_tolstaya_shkura"
+third = [
+    { name = "Шкура держит удар", way = "guarded", amount = 15 },
+    { name = "Шкура надольше", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Об шкуру и разобьётся", way = "reflect", amount = 30 },
+    { name = "Шкуру не пробить", way = "hard_guard", amount = 30 },
+]
+
+[[skill]]
+code = "barbarian_rev"
+third = [
+    { name = "Рёв в самое ухо", way = "sap", amount = 30 },
+    { name = "Рёв не смолкает", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Рёв на всю стаю", way = "contagion" },
+    { name = "Рёв, что оглушает", way = "quiet" },
+]
+
+[[skill]]
+code = "barbarian_podsech"
+third = [
+    { name = "Под колено", way = "drag", amount = 35 },
+    { name = "Подсечь и добрать", way = "drain", amount = 20 },
+]
+fifth = [
+    { name = "Обеих под корень", way = "wide", amount = 55 },
+    { name = "Подсечённый не бежит", way = "chill", amount = 40 },
+]
+
+[[skill]]
+code = "barbarian_zhazhda_krovi"
+third = [
+    { name = "Жажда не унимается", way = "linger", amount = 2 },
+    { name = "Жажда торопит", way = "swift", amount = 45 },
+]
+fifth = [
+    { name = "Жажда на весь отряд", way = "spread" },
+    { name = "Кровь в глазах", way = "empower" },
+]
+
+[[skill]]
+code = "barbarian_krugovoy_zamakh"
+third = [
+    { name = "Круг пошире", way = "heavy", amount = 25 },
+    { name = "Круг без пропуска", way = "sure" },
+]
+fifth = [
+    { name = "Круг в одного", way = "focus", amount = 60 },
+    { name = "Круг из ран", way = "bleed" },
+]
+
+[[skill]]
+code = "barbarian_sokrushit"
+third = [
+    { name = "Сокрушить наверняка", way = "sure" },
+    { name = "Сокрушить дотла", way = "heavy", amount = 30 },
+]
+fifth = [
+    { name = "Сокрушить и не пустить", way = "stagger" },
+    { name = "Панцирь всмятку", way = "shatter", amount = 45 },
+]
+
+[[skill]]
+code = "barbarian_ne_chuvstvuet_boli"
+third = [
+    { name = "Боли всё меньше", way = "linger", amount = 2 },
+    { name = "Раны затягиваются", way = "soothe", amount = 3 },
+]
+fifth = [
+    { name = "Боли не чувствует никто", way = "spread" },
+    { name = "С ног не свалить", way = "steadfast" },
+]
+
+[[skill]]
+code = "barbarian_vzglyad_zverya"
+third = [
+    { name = "Взгляд подольше", way = "linger", amount = 2 },
+    { name = "Руки трясутся", way = "dull", amount = 30 },
+]
+fifth = [
+    { name = "Взгляд на всю стаю", way = "contagion" },
+    { name = "Зверь смотрит на меня", way = "taunting" },
+]
+
+[[skill]]
+code = "barbarian_krov_za_rany"
+third = [
+    { name = "Кровь дольше в ходу", way = "linger", amount = 2 },
+    { name = "Раны в силу", way = "bolster", amount = 25 },
+]
+fifth = [
+    { name = "Кровь за раны каждому", way = "spread" },
+    { name = "Пока течёт — не упадёт", way = "unfallen" },
+]
+
+[[skill]]
+code = "barbarian_rvanaya_rana"
+third = [
+    { name = "Рвать до кости", way = "deepen", amount = 75 },
+    { name = "Рваное не сходится", way = "linger", amount = 3 },
+]
+fifth = [
+    { name = "Рвань по всей стае", way = "contagion" },
+    { name = "Зашить нечем", way = "seal" },
+]
+
+[[skill]]
+code = "barbarian_ustrashayushchiy_voy"
+third = [
+    { name = "Вой на всю округу", way = "heavy", amount = 25 },
+    { name = "Вой и бросок", way = "swift", amount = 45 },
+]
+fifth = [
+    { name = "Вой в одну глотку", way = "focus", amount = 55 },
+    { name = "Вой вяжет язык", way = "quiet" },
+]
+
+[[skill]]
+code = "barbarian_dobit"
+third = [
+    { name = "Добить с оттяжкой", way = "heavy", amount = 30 },
+    { name = "Добить и напиться", way = "drain", amount = 30 },
+]
+fifth = [
+    { name = "Кто уже не встанет", way = "finish", amount = 85 },
+    { name = "Добил — бей следующего", way = "rush" },
+]
+
+[[skill]]
+code = "barbarian_zverinoe_uporstvo"
+third = [
+    { name = "Упорство надольше", way = "linger", amount = 3 },
+    { name = "Второе дыхание зверя", way = "refresh", amount = 3 },
+]
+fifth = [
+    { name = "Упорство на весь отряд", way = "spread" },
+    { name = "Зверя не свалить", way = "steadfast" },
+]
+
+[[skill]]
+code = "barbarian_smesti_vsekh"
+third = [
+    { name = "Смести подчистую", way = "heavy", amount = 25 },
+    { name = "Смести, не глядя", way = "sure" },
+]
+fifth = [
+    { name = "Смести одного", way = "focus", amount = 60 },
+    { name = "Кто послабее — первым", way = "finish", amount = 70 },
+]
+
+[[skill]]
+code = "barbarian_grad_udarov"
+third = [
+    { name = "Град без просвета", way = "sure" },
+    { name = "Град потяжелее", way = "heavy", amount = 25 },
+]
+fifth = [
+    { name = "Лишняя градина", way = "double", amount = 70 },
+    { name = "Град на всех", way = "wide", amount = 50 },
+]
+
+[[skill]]
+code = "barbarian_bez_oglyadki"
+third = [
+    { name = "Совсем без оглядки", way = "heavy", amount = 30 },
+    { name = "Чужой кровью в свою", way = "drain", amount = 30 },
+]
+fifth = [
+    { name = "Кто первым устанет", way = "counter", amount = 45 },
+    { name = "До конца, чей бы он ни был", way = "finish", amount = 80 },
+]
+
+[[skill]]
+code = "barbarian_shkura_zverya"
+third = [
+    { name = "Шкура толще", way = "ward_long", amount = 2 },
+    { name = "Под шкурой заживает", way = "soothe", amount = 3 },
+]
+fifth = [
+    { name = "Шкура на весь отряд", way = "spread" },
+    { name = "Шкура в два слоя", way = "hard_guard", amount = 30 },
+]
+
+[[skill]]
+code = "barbarian_gnilaya_rana"
+third = [
+    { name = "Гниль глубже", way = "pierce", amount = 35 },
+    { name = "Гниль надольше", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Гниль по всей стае", way = "contagion" },
+    { name = "Гниль в кровь", way = "taint" },
+]
+
+[[skill]]
+code = "barbarian_bagrovaya_yarost"
+third = [
+    { name = "Багровое подольше", way = "linger", amount = 2 },
+    { name = "Красная пелена", way = "bolster", amount = 28 },
+]
+fifth = [
+    { name = "Багровое на всех", way = "spread" },
+    { name = "В ярости не падают", way = "unfallen" },
+]
+
+[[skill]]
+code = "barbarian_ne_upast"
+third = [
+    { name = "Не упасть подольше", way = "ward_long", amount = 2 },
+    { name = "Держится на ногах", way = "steel", amount = 30 },
+]
+fifth = [
+    { name = "Не упасть никому", way = "spread" },
+    { name = "Не свалить и не сдвинуть", way = "steadfast" },
+]
+
+[[skill]]
+code = "barbarian_vtoroe_serdtse"
+third = [
+    { name = "Сердце бьётся дольше", way = "linger", amount = 3 },
+    { name = "Кровь разгоняется", way = "swift", amount = 45 },
+]
+fifth = [
+    { name = "Второе сердце каждому", way = "spread" },
+    { name = "Два сердца не остановить", way = "unfallen" },
+]
+
+# ==========================================================================
+# ПАЛАДИН. Он встаёт между стаей и своими: вызов, щит, печать. Бьёт светом,
+# судит павшего и поднимает того, кто рядом.
+# ==========================================================================
+
+[[skill]]
+code = "paladin_udar_very"
+third = [
+    { name = "Вера тверда", way = "heavy", amount = 25 },
+    { name = "Вера не промахивается", way = "sure" },
+]
+fifth = [
+    { name = "Вера светит всем", way = "wide", amount = 60 },
+    { name = "Свет прожигает", way = "sear" },
+]
+
+[[skill]]
+code = "paladin_izoblichenie"
+third = [
+    { name = "Насквозь и без утайки", way = "pierce", amount = 45 },
+    { name = "Изобличить и соседа", way = "splinter", amount = 30 },
+]
+fifth = [
+    { name = "Изобличены все", way = "wide", amount = 55 },
+    { name = "Вина на виду", way = "mark", amount = 30 },
+]
+
+[[skill]]
+code = "paladin_molot_pravdy"
+third = [
+    { name = "Молот тяжелее", way = "heavy", amount = 28 },
+    { name = "Правда наверняка", way = "edge", amount = 22 },
+]
+fifth = [
+    { name = "Правда сбивает с ног", way = "stagger" },
+    { name = "Ложь не вымолвить", way = "quiet" },
+]
+
+[[skill]]
+code = "paladin_shchit_very"
+third = [
+    { name = "Щит держится дольше", way = "ward_long", amount = 2 },
+    { name = "Щит очищает", way = "cleansing", amount = 2 },
+]
+fifth = [
+    { name = "Щит над отрядом", way = "spread" },
+    { name = "Щит в полный рост", way = "hard_guard", amount = 30 },
+]
+
+[[skill]]
+code = "paladin_vyzov"
+third = [
+    { name = "Вызов слышен дальше", way = "linger", amount = 2 },
+    { name = "Вызов сбивает прицел", way = "dull", amount = 30 },
+]
+fifth = [
+    { name = "Отвечать придётся", way = "mark", amount = 25 },
+    { name = "Вызов затыкает", way = "quiet" },
+]
+
+[[skill]]
+code = "paladin_kara"
+third = [
+    { name = "Кара тяжелее", way = "heavy", amount = 25 },
+    { name = "Кара сквозь латы", way = "pierce", amount = 40 },
+]
+fifth = [
+    { name = "Кара всем виновным", way = "wide", amount = 55 },
+    { name = "Кара, что жжёт", way = "sear" },
+]
+
+[[skill]]
+code = "paladin_blagoslovenie_oruzhiya"
+third = [
+    { name = "Благословение надольше", way = "linger", amount = 2 },
+    { name = "Освящённая сталь", way = "bolster", amount = 22 },
+]
+fifth = [
+    { name = "Благословить весь отряд", way = "spread" },
+    { name = "Оружие в свету", way = "haste" },
+]
+
+[[skill]]
+code = "paladin_stolp_sveta"
+third = [
+    { name = "Столп ярче", way = "heavy", amount = 25 },
+    { name = "Свет находит всех", way = "sure" },
+]
+fifth = [
+    { name = "Столп в одного", way = "focus", amount = 55 },
+    { name = "Свет выжигает", way = "sear" },
+]
+
+[[skill]]
+code = "paladin_vozmezdie"
+third = [
+    { name = "Возмездие тяжелее", way = "heavy", amount = 30 },
+    { name = "Возмездие за раны", way = "drain", amount = 20 },
+]
+fifth = [
+    { name = "Долг платежом", way = "counter", amount = 40 },
+    { name = "Возмездие настигает", way = "finish", amount = 70 },
+]
+
+[[skill]]
+code = "paladin_dlan_pomoshchi"
+third = [
+    { name = "Длань щедрее", way = "mending", amount = 12 },
+    { name = "Длань снимает беды", way = "cleansing", amount = 2 },
+]
+fifth = [
+    { name = "Длань над всеми", way = "spread" },
+    { name = "Длань не отпустит", way = "unfallen" },
+]
+
+[[skill]]
+code = "paladin_okovy_very"
+third = [
+    { name = "Оковы крепче", way = "linger", amount = 2 },
+    { name = "Оковы на руках", way = "sap", amount = 28 },
+]
+fifth = [
+    { name = "Оковы на всю стаю", way = "contagion" },
+    { name = "Оковы на языке", way = "quiet" },
+]
+
+[[skill]]
+code = "paladin_krepost_dukha"
+third = [
+    { name = "Дух крепче", way = "linger", amount = 2 },
+    { name = "Дух и латы", way = "steel", amount = 28 },
+]
+fifth = [
+    { name = "Дух на весь отряд", way = "spread" },
+    { name = "Духа не сломить", way = "steadfast" },
+]
+
+[[skill]]
+code = "paladin_pechat_molchaniya"
+third = [
+    { name = "Печать надольше", way = "linger", amount = 3 },
+    { name = "Печать сбивает прицел", way = "dull", amount = 25 },
+]
+fifth = [
+    { name = "Печать на всю стаю", way = "contagion" },
+    { name = "Печать на запасе", way = "hush" },
+]
+
+[[skill]]
+code = "paladin_trepet"
+third = [
+    { name = "Трепет надольше", way = "linger", amount = 2 },
+    { name = "Руки опускаются", way = "sap", amount = 25 },
+]
+fifth = [
+    { name = "Трепет ломает строй", way = "shatter", amount = 30 },
+    { name = "От трепета немеют", way = "quiet" },
+]
+
+[[skill]]
+code = "paladin_sud"
+third = [
+    { name = "Суд без пощады", way = "pierce", amount = 45 },
+    { name = "Суд наверняка", way = "sure" },
+]
+fifth = [
+    { name = "Приговор окончателен", way = "finish", amount = 85 },
+    { name = "Осуждён — и следующий", way = "rush" },
+]
+
+[[skill]]
+code = "paladin_vozdayanie"
+third = [
+    { name = "Воздаяние дольше", way = "linger", amount = 2 },
+    { name = "Воздаяние и щит", way = "guarded", amount = 14 },
+]
+fifth = [
+    { name = "Воздаяние всем своим", way = "spread" },
+    { name = "Отвечает и рука", way = "counter", amount = 40 },
+]
+
+[[skill]]
+code = "paladin_slovo_ukora"
+third = [
+    { name = "Укор надольше", way = "linger", amount = 2 },
+    { name = "Укор сбивает прицел", way = "dull", amount = 28 },
+]
+fifth = [
+    { name = "Укор ломает броню", way = "shatter", amount = 30 },
+    { name = "Ответить нечем", way = "hush" },
+]
+
+[[skill]]
+code = "paladin_molot_i_svet"
+third = [
+    { name = "Молот не мимо", way = "sure" },
+    { name = "Каждый молот глубже", way = "pierce", amount = 30 },
+]
+fifth = [
+    { name = "И ещё раз светом", way = "double", amount = 70 },
+    { name = "Молот и свет на всех", way = "wide", amount = 50 },
+]
+
+[[skill]]
+code = "paladin_tyazhest_kary"
+third = [
+    { name = "Тяжесть непомерная", way = "heavy", amount = 30 },
+    { name = "Тяжесть сквозь щит", way = "pierce", amount = 45 },
+]
+fifth = [
+    { name = "Тяжесть придавит всех", way = "wide", amount = 55 },
+    { name = "Под тяжестью не встать", way = "stagger" },
+]
+
+[[skill]]
+code = "paladin_milost"
+third = [
+    { name = "Милость щедрее", way = "mending", amount = 14 },
+    { name = "Милость очищает", way = "cleansing", amount = 3 },
+]
+fifth = [
+    { name = "Милость держит на ногах", way = "unfallen" },
+    { name = "Милость поднимает", way = "haste" },
+]
+
+[[skill]]
+code = "paladin_pechat_viny"
+third = [
+    { name = "Вина надольше", way = "linger", amount = 2 },
+    { name = "Вина гнёт к земле", way = "drag", amount = 30 },
+]
+fifth = [
+    { name = "Виновны все", way = "contagion" },
+    { name = "Вина не отмолится", way = "seal" },
+]
+
+[[skill]]
+code = "paladin_gnev_nebes"
+third = [
+    { name = "Гнев ярче", way = "heavy", amount = 28 },
+    { name = "От неба не укрыться", way = "sure" },
+]
+fifth = [
+    { name = "Гнев в одну голову", way = "focus", amount = 60 },
+    { name = "Небо выжигает", way = "sear" },
+]
+
+[[skill]]
+code = "paladin_nezyblemost"
+third = [
+    { name = "Незыблемость дольше", way = "ward_long", amount = 2 },
+    { name = "Незыблемость и латы", way = "steel", amount = 30 },
+]
+fifth = [
+    { name = "Незыблемы все", way = "spread" },
+    { name = "С места не сдвинуть", way = "steadfast" },
+]
+
+[[skill]]
+code = "paladin_svet_vo_tme"
+third = [
+    { name = "Свет держится дольше", way = "ward_long", amount = 2 },
+    { name = "Свет и заживление", way = "soothe", amount = 3 },
+]
+fifth = [
+    { name = "Свет на весь отряд", way = "spread" },
+    { name = "Свет во тьме не гаснет", way = "unfallen" },
+]
+
+# ==========================================================================
+# СЛЕДОПЫТ. Стреляет издали, метит цель и уходит в заросли. Спутник дерётся
+# рядом, яд работает вместо второго выстрела.
+# ==========================================================================
+
+[[skill]]
+code = "ranger_tochnyy_vystrel"
+third = [
+    { name = "Между пластин", way = "pierce", amount = 40 },
+    { name = "Взял поправку", way = "edge", amount = 22 },
+]
+fifth = [
+    { name = "Стрела навылет", way = "wide", amount = 55 },
+    { name = "Наконечник в кости", way = "bleed" },
+]
+
+[[skill]]
+code = "ranger_otravlennaya_strela"
+third = [
+    { name = "Яд покрепче", way = "deepen", amount = 65 },
+    { name = "Яд не выйдет", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Отравлена вся стая", way = "contagion" },
+    { name = "Отраву не выгнать", way = "seal" },
+]
+
+[[skill]]
+code = "ranger_probivayushchiy_vystrel"
+third = [
+    { name = "Бронебойный наконечник", way = "pierce", amount = 45 },
+    { name = "Прошило и соседа", way = "splinter", amount = 35 },
+]
+fifth = [
+    { name = "Прошило весь ряд", way = "wide", amount = 60 },
+    { name = "Пластины наружу", way = "shatter", amount = 40 },
+]
+
+[[skill]]
+code = "ranger_otkhod"
+third = [
+    { name = "Отход подальше", way = "linger", amount = 2 },
+    { name = "Отход с оглядкой", way = "steel", amount = 20 },
+]
+fifth = [
+    { name = "Отходят все", way = "spread" },
+    { name = "Отход в заросли", way = "vanish" },
+]
+
+[[skill]]
+code = "ranger_lovushka"
+third = [
+    { name = "Зубья глубже", way = "linger", amount = 2 },
+    { name = "Из ловушки не размахнуться", way = "sap", amount = 30 },
+]
+fifth = [
+    { name = "Ловушки по всей тропе", way = "contagion" },
+    { name = "Нога в капкане", way = "chill", amount = 40 },
+]
+
+[[skill]]
+code = "ranger_metka_okhotnika"
+third = [
+    { name = "Метка не сходит", way = "linger", amount = 3 },
+    { name = "Метка гнёт к земле", way = "drag", amount = 30 },
+]
+fifth = [
+    { name = "Мечены все", way = "contagion" },
+    { name = "Метка на стыке пластин", way = "shatter", amount = 35 },
+]
+
+[[skill]]
+code = "ranger_sosredotochenie"
+third = [
+    { name = "Дыхание ровнее", way = "linger", amount = 2 },
+    { name = "Рука не дрогнет", way = "sidestep", amount = 20 },
+]
+fifth = [
+    { name = "Сосредоточены все", way = "spread" },
+    { name = "Тетива быстрее", way = "haste" },
+]
+
+[[skill]]
+code = "ranger_zalp"
+third = [
+    { name = "Залп плотнее", way = "heavy", amount = 25 },
+    { name = "Залп кладут все", way = "sure" },
+]
+fifth = [
+    { name = "Залп в одну грудь", way = "focus", amount = 60 },
+    { name = "Оперение в ранах", way = "bleed" },
+]
+
+[[skill]]
+code = "ranger_pronzayushchaya_strela"
+third = [
+    { name = "Пронзить насквозь", way = "pierce", amount = 45 },
+    { name = "Каждая стрела вернее", way = "sure" },
+]
+fifth = [
+    { name = "Третья стрела", way = "double", amount = 70 },
+    { name = "Пронзающий крик", way = "quiet" },
+]
+
+[[skill]]
+code = "ranger_uyti_v_zarosli"
+third = [
+    { name = "Заросли гуще", way = "guarded", amount = 14 },
+    { name = "Ушёл — и залечил", way = "soothe", amount = 3 },
+]
+fifth = [
+    { name = "В заросли уходят все", way = "spread" },
+    { name = "Из зарослей не видно", way = "vanish" },
+]
+
+[[skill]]
+code = "ranger_strela_v_koleno"
+third = [
+    { name = "Стрела в самый сустав", way = "drag", amount = 35 },
+    { name = "Древко в ране", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "По колену каждому", way = "wide", amount = 55 },
+    { name = "Хромому не догнать", way = "chill", amount = 40 },
+]
+
+[[skill]]
+code = "ranger_zverinyy_sputnik"
+third = [
+    { name = "Спутник вцепился крепче", way = "deepen", amount = 65 },
+    { name = "Спутник не отпускает", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Спутник берёт за горло", way = "quiet" },
+    { name = "Спутник валит с ног", way = "stagger" },
+]
+
+[[skill]]
+code = "ranger_gadyuchiy_yad"
+third = [
+    { name = "Гадюка позлее", way = "deepen", amount = 75 },
+    { name = "Яд гуляет дольше", way = "linger", amount = 3 },
+]
+fifth = [
+    { name = "Гадюка кусает всех", way = "contagion" },
+    { name = "Противоядия нет", way = "seal" },
+]
+
+[[skill]]
+code = "ranger_strela_v_glaz"
+third = [
+    { name = "Прицел в прорезь", way = "edge", amount = 28 },
+    { name = "Стрела не отклонится", way = "sure" },
+]
+fifth = [
+    { name = "В глаз наверняка", way = "certain" },
+    { name = "Ослеплённый мажет", way = "shatter", amount = 30 },
+]
+
+[[skill]]
+code = "ranger_vystrel_na_dobivanie"
+third = [
+    { name = "Выстрел в упор", way = "heavy", amount = 30 },
+    { name = "Выстрел без промаха", way = "sure" },
+]
+fifth = [
+    { name = "Раненого — первым", way = "finish", amount = 80 },
+    { name = "Стрела уже на тетиве", way = "rush" },
+]
+
+[[skill]]
+code = "ranger_dykhanie_lesa"
+third = [
+    { name = "Дыхание глубже", way = "mending", amount = 12 },
+    { name = "Лес забирает беды", way = "cleansing", amount = 2 },
+]
+fifth = [
+    { name = "Лес дышит на всех", way = "spread" },
+    { name = "Лес не отдаёт своих", way = "unfallen" },
+]
+
+[[skill]]
+code = "ranger_dozhd_strel"
+third = [
+    { name = "Дождь гуще", way = "deepen", amount = 60 },
+    { name = "Дождь не кончается", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Дождь в одну точку", way = "focus", amount = 55 },
+    { name = "Под дождём не встать", way = "stagger" },
+]
+
+[[skill]]
+code = "ranger_troynoy_vystrel"
+third = [
+    { name = "Три стрелы кучно", way = "sure" },
+    { name = "Три наконечника поглубже", way = "pierce", amount = 30 },
+]
+fifth = [
+    { name = "Четвёртая стрела", way = "double", amount = 70 },
+    { name = "Три стрелы по трём", way = "wide", amount = 50 },
+]
+
+[[skill]]
+code = "ranger_razryvnoy_nakonechnik"
+third = [
+    { name = "Наконечник рвёт глубже", way = "deepen", amount = 70 },
+    { name = "Рваное не сходится долго", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Рвёт всю стаю", way = "contagion" },
+    { name = "Древко не вынуть", way = "seal" },
+]
+
+[[skill]]
+code = "ranger_skrytsya_iz_vidu"
+third = [
+    { name = "Скрылся подольше", way = "linger", amount = 2 },
+    { name = "Скрылся и отдышался", way = "soothe", amount = 3 },
+]
+fifth = [
+    { name = "Скрылись все", way = "spread" },
+    { name = "Из виду и с глаз", way = "vanish" },
+]
+
+[[skill]]
+code = "ranger_smertelnaya_metka"
+third = [
+    { name = "Смерть не отпускает", way = "linger", amount = 3 },
+    { name = "Меченый слабеет", way = "sap", amount = 28 },
+]
+fifth = [
+    { name = "Смерть метит стаю", way = "contagion" },
+    { name = "Меченого не вылечить", way = "seal" },
+]
+
+[[skill]]
+code = "ranger_sokolinyy_glaz"
+third = [
+    { name = "Глаз не смыкается", way = "linger", amount = 2 },
+    { name = "Соколиная хватка", way = "bolster", amount = 22 },
+]
+fifth = [
+    { name = "Соколиный глаз у всех", way = "spread" },
+    { name = "Сокол бьёт первым", way = "haste" },
+]
+
+[[skill]]
+code = "ranger_vernyy_sputnik"
+third = [
+    { name = "Спутник рядом дольше", way = "linger", amount = 3 },
+    { name = "Спутник сторожит", way = "steel", amount = 25 },
+]
+fifth = [
+    { name = "Спутник у каждого", way = "spread" },
+    { name = "Спутник не даст пасть", way = "unfallen" },
+]
+
+[[skill]]
+code = "ranger_ten_chashchi"
+third = [
+    { name = "Тень гуще", way = "linger", amount = 2 },
+    { name = "Тень залечивает", way = "soothe", amount = 3 },
+]
+fifth = [
+    { name = "Тень на весь отряд", way = "spread" },
+    { name = "Чаща укрывает", way = "vanish" },
+]
+
+# ==========================================================================
+# РАЗБОЙНИК. Незаметность, яд и добивание: он не выигрывает размен, он его
+# не допускает. Финт, удавка, второе дно.
+# ==========================================================================
+
+[[skill]]
+code = "rogue_obmannyy_fint"
+third = [
+    { name = "Обман поубедительнее", way = "heavy", amount = 20 },
+    { name = "Обманутый мажет дольше", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Обмануты все", way = "wide", amount = 55 },
+    { name = "Обманутый открыт", way = "mark", amount = 30 },
+]
+
+[[skill]]
+code = "rogue_skrytnost"
+third = [
+    { name = "Скрытность подольше", way = "linger", amount = 2 },
+    { name = "Скрылся и отдышался ровно", way = "refresh", amount = 3 },
+]
+fifth = [
+    { name = "Скрытность на весь отряд", way = "spread" },
+    { name = "Из тени бьют первыми", way = "haste" },
+]
+
+[[skill]]
+code = "rogue_udar_v_spinu"
+third = [
+    { name = "Между лопаток", way = "pierce", amount = 50 },
+    { name = "Нож с оттяжкой", way = "edge", amount = 28 },
+]
+fifth = [
+    { name = "Нож под ребро", way = "certain" },
+    { name = "Со спины и не вскрикнуть", way = "quiet" },
+]
+
+[[skill]]
+code = "rogue_ukhod_v_ten"
+third = [
+    { name = "Тень подольше", way = "linger", amount = 2 },
+    { name = "Тень прикрывает", way = "guarded", amount = 12 },
+]
+fifth = [
+    { name = "В тень уходят все", way = "spread" },
+    { name = "Тень скрывает целиком", way = "vanish" },
+]
+
+[[skill]]
+code = "rogue_dymovaya_shashka"
+third = [
+    { name = "Дым гуще", way = "linger", amount = 2 },
+    { name = "В дыму не размахнуться", way = "sap", amount = 32 },
+]
+fifth = [
+    { name = "В дыму не разобрать", way = "quiet" },
+    { name = "Дым и тишина", way = "hush" },
+]
+
+[[skill]]
+code = "rogue_otravlennyy_klinok"
+third = [
+    { name = "Отрава крепче", way = "deepen", amount = 70 },
+    { name = "Отрава держится", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Клинок травит стаю", way = "contagion" },
+    { name = "Отраву не унять", way = "seal" },
+]
+
+[[skill]]
+code = "rogue_raschetlivost"
+third = [
+    { name = "Расчёт надольше", way = "linger", amount = 2 },
+    { name = "Расчёт и рука", way = "bolster", amount = 20 },
+]
+fifth = [
+    { name = "Расчёт на весь отряд", way = "spread" },
+    { name = "Расчёт на опережение", way = "haste" },
+]
+
+[[skill]]
+code = "rogue_veer_klinkov"
+third = [
+    { name = "Веер шире", way = "heavy", amount = 22 },
+    { name = "Веер не мажет", way = "sure" },
+]
+fifth = [
+    { name = "Веер в одного", way = "focus", amount = 55 },
+    { name = "Веер из порезов", way = "bleed" },
+]
+
+[[skill]]
+code = "rogue_podrez"
+third = [
+    { name = "Подрез до жилы", way = "deepen", amount = 65 },
+    { name = "Жила не срастётся", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Жилы у всей стаи", way = "contagion" },
+    { name = "Жилу не зашить", way = "seal" },
+]
+
+[[skill]]
+code = "rogue_ischeznovenie"
+third = [
+    { name = "Исчез и ударил глубже", way = "pierce", amount = 50 },
+    { name = "Исчез и напился", way = "drain", amount = 30 },
+]
+fifth = [
+    { name = "Исчез, ударил, исчез", way = "rush" },
+    { name = "Из ниоткуда — и наповал", way = "finish", amount = 85 },
+]
+
+[[skill]]
+code = "rogue_fint"
+third = [
+    { name = "Финт почище", way = "heavy", amount = 22 },
+    { name = "Финт сбивает надолго", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Финт и подсечка", way = "stagger" },
+    { name = "Финт вскрывает бок", way = "shatter", amount = 30 },
+]
+
+[[skill]]
+code = "rogue_skolzhenie"
+third = [
+    { name = "Скольжение дольше", way = "linger", amount = 2 },
+    { name = "Скользнул и ушёл", way = "swift", amount = 45 },
+]
+fifth = [
+    { name = "Скользят все", way = "spread" },
+    { name = "Скользнул из виду", way = "vanish" },
+]
+
+[[skill]]
+code = "rogue_udavka"
+third = [
+    { name = "Удавка туже", way = "linger", amount = 3 },
+    { name = "Удавка отбирает силу", way = "sap", amount = 30 },
+]
+fifth = [
+    { name = "Удавка на всю стаю", way = "contagion" },
+    { name = "Ни вздоха, ни слова", way = "hush" },
+]
+
+[[skill]]
+code = "rogue_roscherk_po_zhilam"
+third = [
+    { name = "Росчерк ровнее", way = "pierce", amount = 40 },
+    { name = "Росчерк держится дольше", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Росчерк на всю руку", way = "wide", amount = 55 },
+    { name = "Кровь по рукаву", way = "bleed" },
+]
+
+[[skill]]
+code = "rogue_dobivayushchiy_ukol"
+third = [
+    { name = "Укол под самое сердце", way = "pierce", amount = 50 },
+    { name = "Укол за кровь", way = "drain", amount = 30 },
+]
+fifth = [
+    { name = "Укол в последнюю жилу", way = "finish", amount = 85 },
+    { name = "Укол — и к следующему", way = "rush" },
+]
+
+[[skill]]
+code = "rogue_uskolzanie"
+third = [
+    { name = "Ускользнул подальше", way = "linger", amount = 2 },
+    { name = "Ускользнул и отдышался", way = "soothe", amount = 3 },
+]
+fifth = [
+    { name = "Ускользают все", way = "spread" },
+    { name = "Ускользнул с глаз", way = "vanish" },
+]
+
+[[skill]]
+code = "rogue_smertelnaya_metka"
+third = [
+    { name = "Метка держится дольше", way = "linger", amount = 3 },
+    { name = "Меченому не размахнуться", way = "sap", amount = 30 },
+]
+fifth = [
+    { name = "Метка расходится", way = "contagion" },
+    { name = "Метка на горле", way = "seal" },
+]
+
+[[skill]]
+code = "rogue_kaskad_udarov"
+third = [
+    { name = "Каскад без пропуска", way = "sure" },
+    { name = "Каждый укол глубже", way = "pierce", amount = 30 },
+]
+fifth = [
+    { name = "Лишний укол", way = "double", amount = 70 },
+    { name = "Каскад по всем", way = "wide", amount = 50 },
+]
+
+[[skill]]
+code = "rogue_karmannaya_krazha"
+third = [
+    { name = "Рука полегче", way = "cheap" },
+    { name = "Срезал и кошель, и кожу", way = "pierce", amount = 35 },
+]
+fifth = [
+    { name = "Обчистил и ушёл", way = "vanish" },
+    { name = "Обворованный хватится не сразу", way = "quiet" },
+]
+
+[[skill]]
+code = "rogue_pryt"
+third = [
+    { name = "Прыть надольше", way = "linger", amount = 2 },
+    { name = "Прыть и уклон", way = "sidestep", amount = 22 },
+]
+fifth = [
+    { name = "Прыть на весь отряд", way = "spread" },
+    { name = "Прыти не перебить", way = "steadfast" },
+]
+
+[[skill]]
+code = "rogue_yad_na_lezvii"
+third = [
+    { name = "Яд на лезвии гуще", way = "deepen", amount = 75 },
+    { name = "Яд с лезвия не сходит", way = "linger", amount = 3 },
+]
+fifth = [
+    { name = "Лезвие травит стаю", way = "contagion" },
+    { name = "Яд ест броню", way = "shatter", amount = 35 },
+]
+
+[[skill]]
+code = "rogue_seriya"
+third = [
+    { name = "Серия ровнее", way = "sure" },
+    { name = "Серия поглубже", way = "pierce", amount = 35 },
+]
+fifth = [
+    { name = "Третий в серии", way = "double", amount = 70 },
+    { name = "Серия на двоих", way = "wide", amount = 55 },
+]
+
+[[skill]]
+code = "rogue_ne_naydut"
+third = [
+    { name = "Не найдут подольше", way = "linger", amount = 2 },
+    { name = "Не найдут и не заденут", way = "sidestep", amount = 25 },
+]
+fifth = [
+    { name = "Не найдут никого", way = "spread" },
+    { name = "И следа не остаётся", way = "vanish" },
+]
+
+[[skill]]
+code = "rogue_vtoroe_dno"
+third = [
+    { name = "Второе дно поглубже", way = "linger", amount = 3 },
+    { name = "Второе дно и передышка", way = "guarded", amount = 14 },
+]
+fifth = [
+    { name = "Второе дно у каждого", way = "spread" },
+    { name = "До дна не достанут", way = "unfallen" },
+]
+
+# ==========================================================================
+# МАГ. Стихия называется вслух: огонь жжёт, стужа держит, чары рвут запас.
+# Плата за силу — ткань на плечах, поэтому половина выучек про то, как не
+# подпустить к себе.
+# ==========================================================================
+
+[[skill]]
+code = "mage_ognennaya_strela"
+third = [
+    { name = "Стрела жарче", way = "heavy", amount = 25 },
+    { name = "Стрела не гаснет", way = "edge", amount = 20 },
+]
+fifth = [
+    { name = "Стрела разлетается", way = "wide", amount = 60 },
+    { name = "Одежда занялась", way = "sear" },
+]
+
+[[skill]]
+code = "mage_ledyanoe_kopye"
+third = [
+    { name = "Копьё острее", way = "pierce", amount = 45 },
+    { name = "Осколки в соседа", way = "splinter", amount = 30 },
+]
+fifth = [
+    { name = "Копьё колет всех", way = "wide", amount = 55 },
+    { name = "Примёрз к месту", way = "chill", amount = 40 },
+]
+
+[[skill]]
+code = "mage_charodeyskiy_razryad"
+third = [
+    { name = "Разряд плотнее", way = "heavy", amount = 28 },
+    { name = "Разряд не обойти", way = "sure" },
+]
+fifth = [
+    { name = "Разряд по дуге", way = "wide", amount = 60 },
+    { name = "Разряд рвёт слова", way = "quiet" },
+]
+
+[[skill]]
+code = "mage_kamennaya_kozha"
+third = [
+    { name = "Камень толще", way = "ward_long", amount = 2 },
+    { name = "Камень и порядок", way = "cleansing", amount = 2 },
+]
+fifth = [
+    { name = "Камень на весь отряд", way = "spread" },
+    { name = "Камень в две ладони", way = "hard_guard", amount = 30 },
+]
+
+[[skill]]
+code = "mage_stuzha"
+third = [
+    { name = "Стужа злее", way = "heavy", amount = 25 },
+    { name = "Стужа не отпускает", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Стужа в одного", way = "focus", amount = 55 },
+    { name = "Иней по суставам", way = "frost" },
+]
+
+[[skill]]
+code = "mage_razryv_char"
+third = [
+    { name = "Разрыв глубже", way = "pierce", amount = 40 },
+    { name = "Разрыв не срастается", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Чары рвутся у всех", way = "contagion" },
+    { name = "Ни слова, ни чар", way = "quiet" },
+]
+
+[[skill]]
+code = "mage_volna_plameni"
+third = [
+    { name = "Волна жарче", way = "deepen", amount = 65 },
+    { name = "Пламя не унять", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Волна в одного", way = "focus", amount = 60 },
+    { name = "Ожог не залечить", way = "seal" },
+]
+
+[[skill]]
+code = "mage_tsepnaya_molniya"
+third = [
+    { name = "Цепь плотнее", way = "heavy", amount = 25 },
+    { name = "Цепь находит каждого", way = "sure" },
+]
+fifth = [
+    { name = "Цепь в одну грудь", way = "focus", amount = 60 },
+    { name = "Молния сводит мышцы", way = "stagger" },
+]
+
+[[skill]]
+code = "mage_ispepelenie"
+third = [
+    { name = "Пепел горячее", way = "deepen", amount = 75 },
+    { name = "Тлеет дольше", way = "linger", amount = 3 },
+]
+fifth = [
+    { name = "Пепел разносит ветром", way = "contagion" },
+    { name = "Обугленная кожа", way = "shatter", amount = 40 },
+]
+
+[[skill]]
+code = "mage_otsrochka"
+third = [
+    { name = "Отсрочка подешевле", way = "cheap" },
+    { name = "Отсрочка и передышка", way = "refresh", amount = 3 },
+]
+fifth = [
+    { name = "Отсрочка всему отряду", way = "spread" },
+    { name = "Отсрочка и разгон", way = "haste" },
+]
+
+[[skill]]
+code = "mage_nevidimost"
+third = [
+    { name = "Невидимость подольше", way = "linger", amount = 2 },
+    { name = "Невидим и невредим", way = "guarded", amount = 14 },
+]
+fifth = [
+    { name = "Невидимы все", way = "spread" },
+    { name = "Невидимость и сила", way = "empower" },
+]
+
+[[skill]]
+code = "mage_ledyanoy_dospekh"
+third = [
+    { name = "Доспех толще", way = "linger", amount = 2 },
+    { name = "Лёд наращивается", way = "guarded", amount = 15 },
+]
+fifth = [
+    { name = "Доспех на весь отряд", way = "spread" },
+    { name = "Об лёд обжигаются", way = "reflect", amount = 30 },
+]
+
+[[skill]]
+code = "mage_morok"
+third = [
+    { name = "Морок гуще", way = "linger", amount = 2 },
+    { name = "В мороке не прицелиться", way = "dull", amount = 35 },
+]
+fifth = [
+    { name = "Морок на всю стаю", way = "contagion" },
+    { name = "В мороке нет слов", way = "quiet" },
+]
+
+[[skill]]
+code = "mage_ledyanaya_tyurma"
+third = [
+    { name = "Стены толще", way = "linger", amount = 2 },
+    { name = "Изо льда не размахнуться", way = "sap", amount = 30 },
+]
+fifth = [
+    { name = "Тюрьма на всю стаю", way = "contagion" },
+    { name = "Лёд ломает броню", way = "shatter", amount = 35 },
+]
+
+[[skill]]
+code = "mage_meteor"
+third = [
+    { name = "Метеор тяжелее", way = "heavy", amount = 30 },
+    { name = "От неба не уйти", way = "sure" },
+]
+fifth = [
+    { name = "Метеор в одного", way = "focus", amount = 65 },
+    { name = "Земля под ногами горит", way = "sear" },
+]
+
+[[skill]]
+code = "mage_otrazhayushchiy_pokrov"
+third = [
+    { name = "Покров держится дольше", way = "linger", amount = 2 },
+    { name = "Покров и щит", way = "guarded", amount = 14 },
+]
+fifth = [
+    { name = "Покров над отрядом", way = "spread" },
+    { name = "Покров бьёт в ответ", way = "counter", amount = 40 },
+]
+
+[[skill]]
+code = "mage_pomrachenie"
+third = [
+    { name = "Помрачение глубже", way = "heavy", amount = 22 },
+    { name = "Помрачение надольше", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Помрачение на всех", way = "wide", amount = 55 },
+    { name = "Помрачённый молчит", way = "quiet" },
+]
+
+[[skill]]
+code = "mage_charodeyskiy_shkval"
+third = [
+    { name = "Шквал ровнее", way = "sure" },
+    { name = "Шквал плотнее", way = "heavy", amount = 25 },
+]
+fifth = [
+    { name = "Лишний разряд", way = "double", amount = 70 },
+    { name = "Шквал во все стороны", way = "wide", amount = 50 },
+]
+
+[[skill]]
+code = "mage_pronzayushchiy_razryad"
+third = [
+    { name = "Разряд насквозь", way = "pierce", amount = 45 },
+    { name = "Разряд задевает соседа", way = "splinter", amount = 35 },
+]
+fifth = [
+    { name = "Разряд через строй", way = "wide", amount = 55 },
+    { name = "Пробитая защита", way = "shatter", amount = 40 },
+]
+
+[[skill]]
+code = "mage_po_pamyati"
+third = [
+    { name = "По памяти подешевле", way = "cheap" },
+    { name = "По памяти и с запасом", way = "refresh", amount = 4 },
+]
+fifth = [
+    { name = "По памяти за весь отряд", way = "spread" },
+    { name = "Память не сбить", way = "steadfast" },
+]
+
+[[skill]]
+code = "mage_slovo_sily"
+third = [
+    { name = "Слово громче", way = "heavy", amount = 28 },
+    { name = "Слово доходит до всех", way = "sure" },
+]
+fifth = [
+    { name = "Слово одному", way = "focus", amount = 60 },
+    { name = "После слова не отвечают", way = "quiet" },
+]
+
+[[skill]]
+code = "mage_pozharishche"
+third = [
+    { name = "Пожарище жарче", way = "deepen", amount = 80 },
+    { name = "Пожарище дольше", way = "linger", amount = 3 },
+]
+fifth = [
+    { name = "Пожарище ест броню", way = "shatter", amount = 35 },
+    { name = "Из огня не вытащить", way = "seal" },
+]
+
+[[skill]]
+code = "mage_zerkalnyy_shchit"
+third = [
+    { name = "Зеркало держится дольше", way = "ward_long", amount = 2 },
+    { name = "Зеркало и покой", way = "soothe", amount = 3 },
+]
+fifth = [
+    { name = "Зеркало над отрядом", way = "spread" },
+    { name = "Зеркало возвращает", way = "reflect", amount = 40 },
+]
+
+[[skill]]
+code = "mage_vne_vremeni"
+third = [
+    { name = "Вне времени подольше", way = "linger", amount = 2 },
+    { name = "Вне времени и в запасе", way = "refresh", amount = 3 },
+]
+fifth = [
+    { name = "Вне времени все", way = "spread" },
+    { name = "Времени не отнять", way = "steadfast" },
+]
+
+# ==========================================================================
+# ЖРЕЦ. Он держит отряд на ногах и затыкает тех, кто говорит слишком много.
+# Свет у него не оружие, а довод; лечение — работа, а не подспорье.
+# ==========================================================================
+
+[[skill]]
+code = "cleric_svet"
+third = [
+    { name = "Светлее", way = "heavy", amount = 25 },
+    { name = "Светом и себе", way = "mending", amount = 10 },
+]
+fifth = [
+    { name = "Светло всем", way = "wide", amount = 60 },
+    { name = "Свет, что печёт", way = "sear" },
+]
+
+[[skill]]
+code = "cleric_otpoved"
+third = [
+    { name = "Отповедь строже", way = "heavy", amount = 25 },
+    { name = "Отповедь надольше", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Отповедь всей стае", way = "contagion" },
+    { name = "Отповедь и без запаса", way = "hush" },
+]
+
+[[skill]]
+code = "cleric_dlan_karayushchaya"
+third = [
+    { name = "Длань тяжелее", way = "heavy", amount = 28 },
+    { name = "Длань сквозь железо", way = "pierce", amount = 40 },
+]
+fifth = [
+    { name = "Длань опрокидывает", way = "stagger" },
+    { name = "Длань ломает наручи", way = "shatter", amount = 35 },
+]
+
+[[skill]]
+code = "cleric_slovo_istseleniya"
+third = [
+    { name = "Слово щедрее", way = "mending", amount = 14 },
+    { name = "Слово снимает наговор", way = "cleansing", amount = 2 },
+]
+fifth = [
+    { name = "Слово каждому", way = "spread" },
+    { name = "Слово держит на ногах", way = "unfallen" },
+]
+
+[[skill]]
+code = "cleric_pokrov"
+third = [
+    { name = "Покров плотнее", way = "ward_long", amount = 2 },
+    { name = "Под покровом заживает", way = "soothe", amount = 3 },
+]
+fifth = [
+    { name = "Покров на всех", way = "spread" },
+    { name = "Покров в два слоя", way = "hard_guard", amount = 28 },
+]
+
+[[skill]]
+code = "cleric_zapret"
+third = [
+    { name = "Запрет надольше", way = "linger", amount = 3 },
+    { name = "Запрет отнимает силу", way = "sap", amount = 28 },
+]
+fifth = [
+    { name = "Запрет на всю стаю", way = "contagion" },
+    { name = "Запрет и на чары", way = "hush" },
+]
+
+[[skill]]
+code = "cleric_luchezarnyy_udar"
+third = [
+    { name = "Луч ярче", way = "heavy", amount = 25 },
+    { name = "Луч прошивает", way = "pierce", amount = 40 },
+]
+fifth = [
+    { name = "Луч по всем", way = "wide", amount = 55 },
+    { name = "Ослепший не отвечает", way = "quiet" },
+]
+
+[[skill]]
+code = "cleric_kara_nebes"
+third = [
+    { name = "Небо строже", way = "heavy", amount = 28 },
+    { name = "От кары не увернуться", way = "sure" },
+]
+fifth = [
+    { name = "Кара одному", way = "focus", amount = 60 },
+    { name = "Кара выжигает", way = "sear" },
+]
+
+[[skill]]
+code = "cleric_izgnanie_nezhiti"
+third = [
+    { name = "Изгнание вернее", way = "sure" },
+    { name = "Изгнание глубже", way = "pierce", amount = 45 },
+]
+fifth = [
+    { name = "Изгнать и дожать", way = "finish", amount = 80 },
+    { name = "Изгнанный не поднимется", way = "seal" },
+]
+
+[[skill]]
+code = "cleric_ochishchenie"
+third = [
+    { name = "Очищение подешевле", way = "cheap" },
+    { name = "Очищение и покой", way = "soothe", amount = 3 },
+]
+fifth = [
+    { name = "Очищение для всех", way = "spread" },
+    { name = "Очищенного не свалить", way = "steadfast" },
+]
+
+[[skill]]
+code = "cleric_umirotvorenie"
+third = [
+    { name = "Умиротворение глубже", way = "heavy", amount = 22 },
+    { name = "Умиротворение надольше", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Умиротворены все", way = "wide", amount = 55 },
+    { name = "Умиротворённый молчит", way = "quiet" },
+]
+
+[[skill]]
+code = "cleric_dlan_zhizni"
+third = [
+    { name = "Жизнь прибывает быстрее", way = "mending", amount = 12 },
+    { name = "Жизнь смывает беды", way = "cleansing", amount = 2 },
+]
+fifth = [
+    { name = "Жизнь на весь отряд", way = "spread" },
+    { name = "Жизнь не отпустит", way = "unfallen" },
+]
+
+[[skill]]
+code = "cleric_nemota"
+third = [
+    { name = "Немота надольше", way = "linger", amount = 3 },
+    { name = "Немому не прицелиться", way = "dull", amount = 30 },
+]
+fifth = [
+    { name = "Немы все", way = "contagion" },
+    { name = "Немота и пустой запас", way = "hush" },
+]
+
+[[skill]]
+code = "cleric_glas_ukorizny"
+third = [
+    { name = "Глас громче", way = "heavy", amount = 25 },
+    { name = "Глас держится дольше", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Глас одному", way = "focus", amount = 55 },
+    { name = "Глас гнёт колени", way = "stagger" },
+]
+
+[[skill]]
+code = "cleric_sud_sveta"
+third = [
+    { name = "Суд светлее", way = "heavy", amount = 28 },
+    { name = "Суд не ошибается", way = "sure" },
+]
+fifth = [
+    { name = "Кто уже осуждён", way = "finish", amount = 80 },
+    { name = "Суд идёт дальше", way = "rush" },
+]
+
+[[skill]]
+code = "cleric_vozlozhenie_ruk"
+third = [
+    { name = "Руки щедрее", way = "mending", amount = 16 },
+    { name = "Руки снимают порчу", way = "cleansing", amount = 3 },
+]
+fifth = [
+    { name = "Руки над всеми", way = "spread" },
+    { name = "Из рук не выпустит", way = "unfallen" },
+]
+
+[[skill]]
+code = "cleric_okovy"
+third = [
+    { name = "Оковы не разомкнуть", way = "linger", amount = 2 },
+    { name = "Оковы по рукам", way = "sap", amount = 30 },
+]
+fifth = [
+    { name = "Оковы всей стае", way = "contagion" },
+    { name = "В оковах не помолиться", way = "quiet" },
+]
+
+[[skill]]
+code = "cleric_grad_sveta"
+third = [
+    { name = "Град светлее", way = "heavy", amount = 25 },
+    { name = "Град кладут все", way = "sure" },
+]
+fifth = [
+    { name = "Ещё одна вспышка", way = "double", amount = 70 },
+    { name = "Град по всем разом", way = "wide", amount = 50 },
+]
+
+[[skill]]
+code = "cleric_oslepitelnyy_svet"
+third = [
+    { name = "Вспышка ярче", way = "heavy", amount = 28 },
+    { name = "Вспышка достаёт всех", way = "sure" },
+]
+fifth = [
+    { name = "Вспышка в одного", way = "focus", amount = 60 },
+    { name = "Ослеплённые молчат", way = "quiet" },
+]
+
+[[skill]]
+code = "cleric_blagodat"
+third = [
+    { name = "Благодать щедрее", way = "mending", amount = 14 },
+    { name = "Благодать очищает", way = "cleansing", amount = 3 },
+]
+fifth = [
+    { name = "Благодать держит", way = "unfallen" },
+    { name = "Благодать торопит", way = "haste" },
+]
+
+[[skill]]
+code = "cleric_pechat_nemoshchi"
+third = [
+    { name = "Немощь надольше", way = "linger", amount = 3 },
+    { name = "Немощь в руках", way = "sap", amount = 30 },
+]
+fifth = [
+    { name = "Немощь на всю стаю", way = "contagion" },
+    { name = "Немощь не вылечить", way = "seal" },
+]
+
+[[skill]]
+code = "cleric_slovo_gneva"
+third = [
+    { name = "Гнев громче", way = "heavy", amount = 28 },
+    { name = "Гнев не минует никого", way = "sure" },
+]
+fifth = [
+    { name = "Гнев на одну голову", way = "focus", amount = 60 },
+    { name = "Гнев выжигает дотла", way = "sear" },
+]
+
+[[skill]]
+code = "cleric_chudo"
+third = [
+    { name = "Чудо весомее", way = "heavy", amount = 25 },
+    { name = "Чудо и передышка", way = "refresh", amount = 3 },
+]
+fifth = [
+    { name = "Чудо одному", way = "focus", amount = 55 },
+    { name = "Чудом не падают", way = "unfallen" },
+]
+
+[[skill]]
+code = "cleric_blagoslovenie"
+third = [
+    { name = "Благословение не сходит", way = "linger", amount = 3 },
+    { name = "Благословение и покой", way = "soothe", amount = 3 },
+]
+fifth = [
+    { name = "Благословить каждого", way = "spread" },
+    { name = "Благословение торопит", way = "haste" },
+]
+
+# ==========================================================================
+# ДРУИД. Он меняет облик и место боя: корни держат, роща лечит, стая рвёт.
+# Половина его умений — про то, что делается само, пока он занят другим.
+# ==========================================================================
+
+[[skill]]
+code = "druid_udar_kognya"
+third = [
+    { name = "Коготь длиннее", way = "pierce", amount = 40 },
+    { name = "Коготь и сытость", way = "drain", amount = 20 },
+]
+fifth = [
+    { name = "Когти в обе стороны", way = "wide", amount = 60 },
+    { name = "Борозда не закрывается", way = "bleed" },
+]
+
+[[skill]]
+code = "druid_shipy"
+third = [
+    { name = "Шипы длиннее", way = "deepen", amount = 65 },
+    { name = "Шипы не вынуть", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Шипы по всей стае", way = "contagion" },
+    { name = "Шипы не дают встать", way = "stagger" },
+]
+
+[[skill]]
+code = "druid_oblik_volka"
+third = [
+    { name = "Волчья шерсть", way = "steel", amount = 25 },
+    { name = "Волком подольше", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Волками все", way = "spread" },
+    { name = "Волчий шаг", way = "haste" },
+]
+
+[[skill]]
+code = "druid_kora"
+third = [
+    { name = "Кора в наплыв", way = "guarded", amount = 15 },
+    { name = "Кора нарастает дольше", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Кора на всех", way = "spread" },
+    { name = "Об кору занозятся", way = "reflect", amount = 30 },
+]
+
+[[skill]]
+code = "druid_rodnik"
+third = [
+    { name = "Родник дольше", way = "linger", amount = 3 },
+    { name = "Родник и здоровье", way = "soothe", amount = 3 },
+]
+fifth = [
+    { name = "Родник для всех", way = "spread" },
+    { name = "Родник не иссякает", way = "steadfast" },
+]
+
+[[skill]]
+code = "druid_puty_korney"
+third = [
+    { name = "Корни крепче", way = "linger", amount = 2 },
+    { name = "Корни тянут вниз", way = "sap", amount = 30 },
+]
+fifth = [
+    { name = "Корни по всей стае", way = "contagion" },
+    { name = "Корни держат намертво", way = "chill", amount = 40 },
+]
+
+[[skill]]
+code = "druid_oblik_medvedya"
+third = [
+    { name = "Медвежья лапа", way = "bolster", amount = 25 },
+    { name = "Медведем подольше", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Медведями все", way = "spread" },
+    { name = "Медведя не свалить", way = "steadfast" },
+]
+
+[[skill]]
+code = "druid_roy"
+third = [
+    { name = "Рой гуще", way = "heavy", amount = 25 },
+    { name = "Рой находит каждого", way = "sure" },
+]
+fifth = [
+    { name = "Рой на одного", way = "focus", amount = 55 },
+    { name = "Жала оставляют яд", way = "taint" },
+]
+
+[[skill]]
+code = "druid_klyki"
+third = [
+    { name = "Клыки глубже", way = "deepen", amount = 70 },
+    { name = "Клыки не разжать", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Клыки у всей стаи", way = "contagion" },
+    { name = "Прокушенное не заживает", way = "seal" },
+]
+
+[[skill]]
+code = "druid_dykhanie_roshchi"
+third = [
+    { name = "Роща дышит глубже", way = "mending", amount = 12 },
+    { name = "Роща забирает хворь", way = "cleansing", amount = 2 },
+]
+fifth = [
+    { name = "Роща дышит на всех", way = "spread" },
+    { name = "Роща не отпускает своих", way = "unfallen" },
+]
+
+[[skill]]
+code = "druid_otsepenenie"
+third = [
+    { name = "Оцепенение надольше", way = "linger", amount = 3 },
+    { name = "Оцепеневший мажет", way = "dull", amount = 30 },
+]
+fifth = [
+    { name = "Оцепенели все", way = "contagion" },
+    { name = "Оцепенение сковывает льдом", way = "frost" },
+]
+
+[[skill]]
+code = "druid_edinenie_s_zemley"
+third = [
+    { name = "Земля держит дольше", way = "linger", amount = 2 },
+    { name = "Земля под ногами твёрже", way = "steel", amount = 28 },
+]
+fifth = [
+    { name = "Земля держит всех", way = "spread" },
+    { name = "От земли не оторвать", way = "steadfast" },
+]
+
+[[skill]]
+code = "druid_yadovitaya_pyltsa"
+third = [
+    { name = "Пыльца гуще", way = "deepen", amount = 75 },
+    { name = "Пыльца оседает надолго", way = "linger", amount = 3 },
+]
+fifth = [
+    { name = "Пыльца на всю стаю", way = "contagion" },
+    { name = "Пыльцу не отхаркать", way = "seal" },
+]
+
+[[skill]]
+code = "druid_okovy_stuzhi"
+third = [
+    { name = "Стужа крепче", way = "linger", amount = 2 },
+    { name = "Застывшие мажут", way = "dull", amount = 30 },
+]
+fifth = [
+    { name = "Стужа схватывает намертво", way = "frost" },
+    { name = "Стужа ломает панцирь", way = "shatter", amount = 35 },
+]
+
+[[skill]]
+code = "druid_rasterzat"
+third = [
+    { name = "Растерзать поглубже", way = "pierce", amount = 45 },
+    { name = "Растерзать досыта", way = "drain", amount = 30 },
+]
+fifth = [
+    { name = "Растерзать и обглодать", way = "finish", amount = 80 },
+    { name = "Растерзанное течёт", way = "bleed" },
+]
+
+[[skill]]
+code = "druid_shkura_i_kora"
+third = [
+    { name = "Шкура и кора толще", way = "ward_long", amount = 2 },
+    { name = "Под корой затягивается", way = "soothe", amount = 3 },
+]
+fifth = [
+    { name = "Шкура и кора на всех", way = "spread" },
+    { name = "Кора в три слоя", way = "hard_guard", amount = 30 },
+]
+
+[[skill]]
+code = "druid_zov_zverya"
+third = [
+    { name = "Зов слышнее", way = "linger", amount = 2 },
+    { name = "Зов путает прицел", way = "dull", amount = 30 },
+]
+fifth = [
+    { name = "Зов на всю стаю", way = "contagion" },
+    { name = "Зов уводит на меня", way = "taunting" },
+]
+
+[[skill]]
+code = "druid_yarost_stai"
+third = [
+    { name = "Стая бьёт кучно", way = "sure" },
+    { name = "Стая рвёт глубже", way = "pierce", amount = 35 },
+]
+fifth = [
+    { name = "Лишний в стае", way = "double", amount = 70 },
+    { name = "Стая на всех разом", way = "wide", amount = 50 },
+]
+
+[[skill]]
+code = "druid_gnev_chashchi"
+third = [
+    { name = "Чаща злее", way = "deepen", amount = 65 },
+    { name = "Чаща не отпускает", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Чаща на одного", way = "focus", amount = 60 },
+    { name = "Из чащи не выйти", way = "seal" },
+]
+
+[[skill]]
+code = "druid_zhivaya_voda"
+third = [
+    { name = "Воды больше", way = "mending", amount = 14 },
+    { name = "Вода смывает хворь", way = "cleansing", amount = 3 },
+]
+fifth = [
+    { name = "Живой водой не падают", way = "unfallen" },
+    { name = "Живая вода торопит", way = "haste" },
+]
+
+[[skill]]
+code = "druid_okovy_korney"
+third = [
+    { name = "Корни держат дольше", way = "linger", amount = 2 },
+    { name = "Скованный слабеет", way = "sap", amount = 28 },
+]
+fifth = [
+    { name = "Скованы все", way = "contagion" },
+    { name = "Из корней не докричаться", way = "quiet" },
+]
+
+[[skill]]
+code = "druid_avatar"
+third = [
+    { name = "Аватар подольше", way = "linger", amount = 2 },
+    { name = "Аватар и кора", way = "steel", amount = 30 },
+]
+fifth = [
+    { name = "Аватарами все", way = "spread" },
+    { name = "Аватар не падает", way = "unfallen" },
+]
+
+[[skill]]
+code = "druid_krug_zhizni"
+third = [
+    { name = "Круг шире", way = "linger", amount = 3 },
+    { name = "Круг и запас", way = "refresh", amount = 3 },
+]
+fifth = [
+    { name = "Круг на весь отряд", way = "spread" },
+    { name = "Круг не разорвать", way = "steadfast" },
+]
+
+[[skill]]
+code = "druid_nepreklonnost"
+third = [
+    { name = "Непреклонность дольше", way = "ward_long", amount = 2 },
+    { name = "Непреклонность и кора", way = "steel", amount = 30 },
+]
+fifth = [
+    { name = "Непреклонны все", way = "spread" },
+    { name = "Непреклонного не сбить", way = "steadfast" },
+]
+
+# ==========================================================================
+# РАСЫ. Одно боевое умение на расу, свой слот. Выучка у него тоже расовая:
+# гном ставит ловушки, тролль машет, дракониды дышат огнём.
+# ==========================================================================
+
+[[skill]]
+code = "race_human_second_wind"
+third = [
+    { name = "Дыхание глубже прежнего", way = "mending", amount = 14 },
+    { name = "Отдышался начисто", way = "cleansing", amount = 2 },
+]
+fifth = [
+    { name = "Дыхание на весь отряд", way = "spread" },
+    { name = "На втором дыхании не падают", way = "unfallen" },
+]
+
+[[skill]]
+code = "race_high_elf_mana_surge"
+third = [
+    { name = "Прилив подешевле", way = "cheap" },
+    { name = "Прилив и запас", way = "refresh", amount = 4 },
+]
+fifth = [
+    { name = "Прилив на весь отряд", way = "spread" },
+    { name = "Прилива не оборвать", way = "steadfast" },
+]
+
+[[skill]]
+code = "race_wood_elf_true_shot"
+third = [
+    { name = "Верный выстрел глубже", way = "pierce", amount = 45 },
+    { name = "Стрела уходит с оттяжкой", way = "heavy", amount = 30 },
+]
+fifth = [
+    { name = "Верный выстрел на всех", way = "wide", amount = 60 },
+    { name = "Верный — и следующий", way = "rush" },
+]
+
+[[skill]]
+code = "race_dark_elf_gloom_cloud"
+third = [
+    { name = "Мгла давит на руку", way = "sap", amount = 32 },
+    { name = "Мгла не рассеивается", way = "linger", amount = 3 },
+]
+fifth = [
+    { name = "Мгла ест доспех", way = "shatter", amount = 30 },
+    { name = "Во мгле не слышно слов", way = "quiet" },
+]
+
+[[skill]]
+code = "race_half_elf_charm"
+third = [
+    { name = "Уговор подешевле", way = "cheap" },
+    { name = "Уговор с оглядкой", way = "guarded", amount = 14 },
+]
+fifth = [
+    { name = "Уговор за весь отряд", way = "spread" },
+    { name = "Не сговорились — так ушли", way = "vanish" },
+]
+
+[[skill]]
+code = "race_dwarf_ancestral_stance"
+third = [
+    { name = "Стойка предков дольше", way = "linger", amount = 2 },
+    { name = "Стойка и камень", way = "steel", amount = 30 },
+]
+fifth = [
+    { name = "Стойка на весь отряд", way = "spread" },
+    { name = "Предков с места не сдвинуть", way = "steadfast" },
+]
+
+[[skill]]
+code = "race_gnome_cunning_trap"
+third = [
+    { name = "Ловушка хитрее", way = "heavy", amount = 25 },
+    { name = "Ловушка не отпускает", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Ловушки по всей стае", way = "contagion" },
+    { name = "В ловушке не размахнуться", way = "wither", amount = 35 },
+]
+
+[[skill]]
+code = "race_halfling_nimbleness"
+third = [
+    { name = "Проворство подешевле", way = "cheap" },
+    { name = "Проворство и укрытие", way = "guarded", amount = 14 },
+]
+fifth = [
+    { name = "Проворны все", way = "spread" },
+    { name = "Проворный ушёл из виду", way = "vanish" },
+]
+
+[[skill]]
+code = "race_orc_war_cry"
+third = [
+    { name = "Клич дольше в ушах", way = "linger", amount = 2 },
+    { name = "Клич выпрямляет спину", way = "steel", amount = 25 },
+]
+fifth = [
+    { name = "Орочий клич на всех", way = "spread" },
+    { name = "После клича бьют первыми", way = "haste" },
+]
+
+[[skill]]
+code = "race_half_orc_savage_blow"
+third = [
+    { name = "Дикий удар вернее", way = "sure" },
+    { name = "Дикий удар тяжелее", way = "heavy", amount = 30 },
+]
+fifth = [
+    { name = "Дикий удар по всем", way = "wide", amount = 60 },
+    { name = "После дикого не встают", way = "stagger" },
+]
+
+[[skill]]
+code = "race_goblin_dirty_trick"
+third = [
+    { name = "Подлость подешевле", way = "cheap" },
+    { name = "Подлость поглубже", way = "pierce", amount = 40 },
+]
+fifth = [
+    { name = "Подлость вскрывает бок", way = "shatter", amount = 35 },
+    { name = "Обчистил и в кусты", way = "vanish" },
+]
+
+[[skill]]
+code = "race_troll_crushing_swing"
+third = [
+    { name = "Замах тролля тяжелее", way = "heavy", amount = 30 },
+    { name = "Замах и сытость", way = "drain", amount = 25 },
+]
+fifth = [
+    { name = "Замах в одну голову", way = "focus", amount = 60 },
+    { name = "После замаха не поднимаются", way = "stagger" },
+]
+
+[[skill]]
+code = "race_dragonborn_breath"
+third = [
+    { name = "Дыхание жарче", way = "heavy", amount = 28 },
+    { name = "Дыхание достаёт всех", way = "sure" },
+]
+fifth = [
+    { name = "Дыхание в одного", way = "focus", amount = 60 },
+    { name = "После дыхания тлеют", way = "sear" },
+]
+
+[[skill]]
+code = "race_tiefling_curse_seal"
+third = [
+    { name = "Печать держится дольше", way = "linger", amount = 3 },
+    { name = "Проклятый слабеет", way = "sap", amount = 30 },
+]
+fifth = [
+    { name = "Проклята вся стая", way = "contagion" },
+    { name = "Проклятого не вылечить", way = "seal" },
+]
+
+[[skill]]
+code = "race_aasimar_healing_hand"
+third = [
+    { name = "Рука щедрее", way = "mending", amount = 14 },
+    { name = "Рука снимает морок", way = "cleansing", amount = 2 },
+]
+fifth = [
+    { name = "Рука над всеми", way = "spread" },
+    { name = "Под этой рукой не падают", way = "unfallen" },
+]
+
+[[skill]]
+code = "race_lizardfolk_tail_drop"
+third = [
+    { name = "Хвост отрастает быстрее", way = "soothe", amount = 3 },
+    { name = "Оторвался и прикрылся", way = "guarded", amount = 14 },
+]
+fifth = [
+    { name = "Хвост сбрасывают все", way = "spread" },
+    { name = "Без хвоста и не найдут", way = "vanish" },
+]
+
+# ==========================================================================
+# ВЕТКИ ВОИНА. Умение ветки берут поздно и надолго: выучка у него называет
+# то, ради чего ветку и брали, — арену, клятву, обет, знамя.
+# ==========================================================================
+
+[[skill]]
+code = "warrior_gladiator_vihr_areny"
+third = [
+    { name = "Работа на публику", way = "edge", amount = 25 },
+    { name = "Арена любит кровь", way = "drain", amount = 25 },
+]
+fifth = [
+    { name = "Третий круг арены", way = "double", amount = 70 },
+    { name = "Арена рукоплещет", way = "rush" },
+]
+
+[[skill]]
+code = "warrior_knight_klyatva_schita"
+third = [
+    { name = "Клятва держится дольше", way = "linger", amount = 2 },
+    { name = "Клятва и наручи", way = "guarded", amount = 16 },
+]
+fifth = [
+    { name = "Клятва за весь отряд", way = "spread" },
+    { name = "Клятва отвечает", way = "counter", amount = 40 },
+]
+
+[[skill]]
+code = "warrior_blackknight_chernyy_obet"
+third = [
+    { name = "Обет берёт больше", way = "drain", amount = 30 },
+    { name = "Обет режет глубже", way = "pierce", amount = 45 },
+]
+fifth = [
+    { name = "Обет не отпустит павшего", way = "finish", amount = 80 },
+    { name = "Чёрное не лечится", way = "seal" },
+]
+
+[[skill]]
+code = "warrior_duelist_razryv_distantsii"
+third = [
+    { name = "Разрыв шире", way = "heavy", amount = 25 },
+    { name = "Разрыв и шаг назад", way = "sidestep", amount = 25 },
+]
+fifth = [
+    { name = "Разрыв и укол", way = "double", amount = 70 },
+    { name = "Разорванная защита", way = "shatter", amount = 35 },
+]
+
+[[skill]]
+code = "warrior_sentinel_ne_proydut"
+third = [
+    { name = "Не пройдут дольше", way = "linger", amount = 2 },
+    { name = "Не пройдут и не прицелятся", way = "dull", amount = 32 },
+]
+fifth = [
+    { name = "Не пройдут через сталь", way = "counter", amount = 45 },
+    { name = "Не пройдут и не окликнут", way = "quiet" },
+]
+
+[[skill]]
+code = "warrior_warlord_prikaz_rubit"
+third = [
+    { name = "Приказ громче", way = "heavy", amount = 28 },
+    { name = "Приказ исполняют все", way = "sure" },
+]
+fifth = [
+    { name = "Приказ одному", way = "focus", amount = 60 },
+    { name = "Рубить до крови", way = "bleed" },
+]
+
+[[skill]]
+code = "warrior_bannerman_znamya_ne_padaet"
+third = [
+    { name = "Древко держат дольше", way = "linger", amount = 3 },
+    { name = "Знамя прикрывает", way = "guarded", amount = 16 },
+]
+fifth = [
+    { name = "Знамя над всеми", way = "spread" },
+    { name = "Под знаменем не сбить с ног", way = "steadfast" },
+]
+
+[[skill]]
+code = "warrior_blademaster_roscherk_na_volos"
+third = [
+    { name = "На волос точнее", way = "pierce", amount = 50 },
+    { name = "На волос дальше", way = "splinter", amount = 35 },
+]
+fifth = [
+    { name = "Росчерк вдоль строя", way = "wide", amount = 60 },
+    { name = "Росчерк по горлу", way = "quiet" },
+]
+
+[[skill]]
+code = "warrior_bulwark_stena_v_odin_rost"
+third = [
+    { name = "Стена стоит дольше", way = "ward_long", amount = 3 },
+    { name = "Стена без трещин", way = "cleansing", amount = 2 },
+]
+fifth = [
+    { name = "Стена перед отрядом", way = "spread" },
+    { name = "Стена в полный рост", way = "hard_guard", amount = 35 },
+]
+
+[[skill]]
+code = "warrior_deathknight_mogilnyy_klinok"
+third = [
+    { name = "Могила глубже", way = "pierce", amount = 45 },
+    { name = "Могила берёт своё", way = "drain", amount = 30 },
+]
+fifth = [
+    { name = "Могильный холод", way = "frost" },
+    { name = "С могилы не поднимают", way = "seal" },
+]
+
+[[skill]]
+code = "warrior_dreadnought_hod_drednouta"
+third = [
+    { name = "Ход тяжелее", way = "heavy", amount = 30 },
+    { name = "Ход не сбить", way = "steel", amount = 30 },
+]
+fifth = [
+    { name = "Ход в одного", way = "focus", amount = 60 },
+    { name = "Под ход не встают дважды", way = "stagger" },
+]
+
+[[skill]]
+code = "warrior_headsman_posledniy_schet"
+third = [
+    { name = "Счёт короче", way = "pierce", amount = 50 },
+    { name = "Счёт наверняка", way = "sure" },
+]
+fifth = [
+    { name = "Счёт закрыт", way = "finish", amount = 90 },
+    { name = "Следующий по счёту", way = "rush" },
+]
+
+[[skill]]
+code = "warrior_oathbreaker_klinok_beret_svoe"
+third = [
+    { name = "Клинок берёт больше", way = "drain", amount = 32 },
+    { name = "Клинок бьёт тяжелее", way = "heavy", amount = 32 },
+]
+fifth = [
+    { name = "Клинок не ждёт", way = "rush" },
+    { name = "Клинок оставляет метку", way = "mark", amount = 35 },
+]
+
+[[skill]]
+code = "warrior_shieldbearer_otboy_v_schit"
+third = [
+    { name = "Отбой держится дольше", way = "linger", amount = 3 },
+    { name = "Отбой и наплечник", way = "steel", amount = 30 },
+]
+fifth = [
+    { name = "Отбой за весь отряд", way = "spread" },
+    { name = "Отбой в оба конца", way = "reflect", amount = 35 },
+]
+
+# ==========================================================================
+# ВЕТКИ ВАРВАРА. Кровь, гром и предки. Выучка ветки договаривает то, чем
+# варвар и так занят: держаться на ногах и не давать держаться другим.
+# ==========================================================================
+
+[[skill]]
+code = "barbarian_berserk_pervaya_krov"
+third = [
+    { name = "Первая кровь дольше в глазах", way = "linger", amount = 3 },
+    { name = "Первая кровь в руку", way = "bolster", amount = 28 },
+]
+fifth = [
+    { name = "Первая кровь всем", way = "spread" },
+    { name = "После первой крови не падают", way = "unfallen" },
+]
+
+[[skill]]
+code = "barbarian_totemic_golos_predka"
+third = [
+    { name = "Предок говорит дольше", way = "linger", amount = 3 },
+    { name = "Предок ведёт руку", way = "bolster", amount = 25 },
+]
+fifth = [
+    { name = "Предок говорит всем", way = "spread" },
+    { name = "Предка не перебить", way = "steadfast" },
+]
+
+[[skill]]
+code = "barbarian_bloodrager_glotok"
+third = [
+    { name = "Глоток побольше", way = "drain", amount = 32 },
+    { name = "Глоток поглубже", way = "pierce", amount = 45 },
+]
+fifth = [
+    { name = "Глоток на всю стаю", way = "wide", amount = 60 },
+    { name = "Глоток из последней жилы", way = "finish", amount = 85 },
+]
+
+[[skill]]
+code = "barbarian_reaver_razval"
+third = [
+    { name = "Развал шире", way = "heavy", amount = 30 },
+    { name = "Развал никого не минует", way = "sure" },
+]
+fifth = [
+    { name = "Развал в одного", way = "focus", amount = 60 },
+    { name = "Развал до костей", way = "bleed" },
+]
+
+[[skill]]
+code = "barbarian_spiritseer_dym_i_golosa"
+third = [
+    { name = "Дым гуще, голоса громче", way = "heavy", amount = 25 },
+    { name = "Голоса сбивают руку", way = "dull", amount = 32 },
+]
+fifth = [
+    { name = "Голоса в одну голову", way = "focus", amount = 55 },
+    { name = "От голосов немеют", way = "quiet" },
+]
+
+[[skill]]
+code = "barbarian_thundershaman_raskat"
+third = [
+    { name = "Раскат громче", way = "heavy", amount = 28 },
+    { name = "Раскат достаёт всех", way = "sure" },
+]
+fifth = [
+    { name = "Раскат в одного", way = "focus", amount = 60 },
+    { name = "После раската не слышат", way = "quiet" },
+]
+
+[[skill]]
+code = "barbarian_ancestorcaller_ne_otpustyat"
+third = [
+    { name = "Предки держат дольше", way = "ward_long", amount = 3 },
+    { name = "Предки залечивают", way = "soothe", amount = 4 },
+]
+fifth = [
+    { name = "Предки держат всех", way = "spread" },
+    { name = "Предков не перекричать", way = "steadfast" },
+]
+
+[[skill]]
+code = "barbarian_bloodchief_krov_za_krov"
+third = [
+    { name = "Кровь за кровь дольше", way = "linger", amount = 3 },
+    { name = "Кровь за кровь и вдогон", way = "swift", amount = 50 },
+]
+fifth = [
+    { name = "Кровь за кровь всем", way = "spread" },
+    { name = "Кровь за кровь до конца", way = "unfallen" },
+]
+
+[[skill]]
+code = "barbarian_butcher_razdelka"
+third = [
+    { name = "Разделка глубже", way = "deepen", amount = 80 },
+    { name = "Разделка не спеша", way = "linger", amount = 3 },
+]
+fifth = [
+    { name = "Разделка на всю стаю", way = "contagion" },
+    { name = "Разделанное не зашить", way = "seal" },
+]
+
+[[skill]]
+code = "barbarian_destroyer_obval"
+third = [
+    { name = "Обвал тяжелее", way = "heavy", amount = 32 },
+    { name = "Обвал накрывает всех", way = "sure" },
+]
+fifth = [
+    { name = "Обвал на одного", way = "focus", amount = 65 },
+    { name = "Под обвалом не встают", way = "stagger" },
+]
+
+[[skill]]
+code = "barbarian_devourer_nenasytnost"
+third = [
+    { name = "Ненасытность дольше", way = "linger", amount = 3 },
+    { name = "Ненасытность и злость", way = "bolster", amount = 28 },
+]
+fifth = [
+    { name = "Ненасытны все", way = "spread" },
+    { name = "Сытого не свалить", way = "unfallen" },
+]
+
+[[skill]]
+code = "barbarian_spiritlord_svita"
+third = [
+    { name = "Свита многочисленнее", way = "heavy", amount = 28 },
+    { name = "Свита достаёт каждого", way = "sure" },
+]
+fifth = [
+    { name = "Свита за одним", way = "focus", amount = 60 },
+    { name = "Свита путает голову", way = "terrify" },
+]
+
+[[skill]]
+code = "barbarian_stormward_grom_v_ruke"
+third = [
+    { name = "Гром тяжелее", way = "heavy", amount = 30 },
+    { name = "Гром бьёт сквозь", way = "pierce", amount = 45 },
+]
+fifth = [
+    { name = "Гром по всем", way = "wide", amount = 60 },
+    { name = "От грома сводит руки", way = "stagger" },
+]
+
+[[skill]]
+code = "barbarian_thunderer_molot_nebes"
+third = [
+    { name = "Молот тяжелее небес", way = "heavy", amount = 32 },
+    { name = "Молот не минует", way = "sure" },
+]
+fifth = [
+    { name = "Молот в одну голову", way = "focus", amount = 65 },
+    { name = "После молота не отвечают", way = "quiet" },
+]
+
+# ==========================================================================
+# ВЕТКИ ПАЛАДИНА. Крестоносец, храмовник, инквизитор, мученик: каждый по-
+# своему решает, кому достанется удар и кому — прикрытие.
+# ==========================================================================
+
+[[skill]]
+code = "paladin_crusader_pravyy_udar"
+third = [
+    { name = "Правый удар тяжелее", way = "heavy", amount = 30 },
+    { name = "Правый удар не минует", way = "sure" },
+]
+fifth = [
+    { name = "Правый удар по всем", way = "wide", amount = 60 },
+    { name = "Правый удар выжигает", way = "sear" },
+]
+
+[[skill]]
+code = "paladin_templar_zaslon"
+third = [
+    { name = "Заслон держится дольше", way = "linger", amount = 2 },
+    { name = "Заслон сбивает прицел", way = "dull", amount = 32 },
+]
+fifth = [
+    { name = "Заслон перед всеми", way = "spread" },
+    { name = "Заслон отвечает", way = "counter", amount = 45 },
+]
+
+[[skill]]
+code = "paladin_champion_vyzov_na_sebya"
+third = [
+    { name = "Вызов на себя дольше", way = "linger", amount = 2 },
+    { name = "Вызов и наплечники", way = "steel", amount = 30 },
+]
+fifth = [
+    { name = "Вызвал — и открыл", way = "mark", amount = 35 },
+    { name = "Вызов ломает наручи", way = "shatter", amount = 35 },
+]
+
+[[skill]]
+code = "paladin_defender_pokrov"
+third = [
+    { name = "Покров защитника дольше", way = "ward_long", amount = 3 },
+    { name = "Покров смывает порчу", way = "cleansing", amount = 3 },
+]
+fifth = [
+    { name = "Покров над всеми", way = "spread" },
+    { name = "Покров в три ладони", way = "hard_guard", amount = 35 },
+]
+
+[[skill]]
+code = "paladin_inquisitor_doznanie"
+third = [
+    { name = "Дознание глубже", way = "pierce", amount = 45 },
+    { name = "Дознание длиннее", way = "linger", amount = 3 },
+]
+fifth = [
+    { name = "Дознание для всех", way = "contagion" },
+    { name = "На дознании молчат", way = "quiet" },
+]
+
+[[skill]]
+code = "paladin_lightbearer_stolp_sveta"
+third = [
+    { name = "Столп несущего ярче", way = "heavy", amount = 28 },
+    { name = "Столп находит каждого", way = "sure" },
+]
+fifth = [
+    { name = "Столп на одного", way = "focus", amount = 60 },
+    { name = "Столп прожигает насквозь", way = "sear" },
+]
+
+[[skill]]
+code = "paladin_bastionfaith_svod"
+third = [
+    { name = "Свод держится дольше", way = "ward_long", amount = 3 },
+    { name = "Под сводом заживает", way = "soothe", amount = 4 },
+]
+fifth = [
+    { name = "Свод над отрядом", way = "spread" },
+    { name = "Свод не проломить", way = "hard_guard", amount = 35 },
+]
+
+[[skill]]
+code = "paladin_exorcist_izgnanie"
+third = [
+    { name = "Изгнание жёстче", way = "heavy", amount = 30 },
+    { name = "Изгнание не минует", way = "sure" },
+]
+fifth = [
+    { name = "Изгнание одному", way = "focus", amount = 60 },
+    { name = "Изгнанный не отвечает", way = "quiet" },
+]
+
+[[skill]]
+code = "paladin_judge_prigovor"
+third = [
+    { name = "Приговор надольше", way = "linger", amount = 3 },
+    { name = "Приговор гнёт к земле", way = "drag", amount = 35 },
+]
+fifth = [
+    { name = "Приговор оглашён всем", way = "contagion" },
+    { name = "Приговорённого не лечат", way = "seal" },
+]
+
+[[skill]]
+code = "paladin_martyr_chuzhaya_rana"
+third = [
+    { name = "Чужая рана берётся глубже", way = "mending", amount = 16 },
+    { name = "Чужая рана и чужая порча", way = "cleansing", amount = 3 },
+]
+fifth = [
+    { name = "Взявший чужую не падает", way = "unfallen" },
+    { name = "Взявший чужую торопится", way = "haste" },
+]
+
+[[skill]]
+code = "paladin_oathkeeper_obet_derzhit"
+third = [
+    { name = "Обет держит дешевле", way = "cheap" },
+    { name = "Обет держит и раны", way = "soothe", amount = 4 },
+]
+fifth = [
+    { name = "Обет держит всех", way = "spread" },
+    { name = "Обет не сбить", way = "steadfast" },
+]
+
+[[skill]]
+code = "paladin_paragon_ne_past"
+third = [
+    { name = "Не пасть подольше", way = "ward_long", amount = 3 },
+    { name = "Не пасть и не занеметь", way = "cleansing", amount = 3 },
+]
+fifth = [
+    { name = "Не пасть никому", way = "spread" },
+    { name = "Не пасть и не встать на колено", way = "steadfast" },
+]
+
+[[skill]]
+code = "paladin_sunknight_polden"
+third = [
+    { name = "Полдень жарче", way = "heavy", amount = 30 },
+    { name = "От полудня не укрыться", way = "sure" },
+]
+fifth = [
+    { name = "Полдень над одним", way = "focus", amount = 60 },
+    { name = "Полдень выжигает поле", way = "sear" },
+]
+
+[[skill]]
+code = "paladin_zealot_slovo_i_mech"
+third = [
+    { name = "Слово громче, меч тяжелее", way = "heavy", amount = 32 },
+    { name = "Слово и меч не мимо", way = "sure" },
+]
+fifth = [
+    { name = "Слово и меч одному", way = "focus", amount = 65 },
+    { name = "После слова не спорят", way = "quiet" },
+]
+
+# ==========================================================================
+# ВЕТКИ СЛЕДОПЫТА. Лучник, зверолов, ловчий, вожак стаи: одни бьют дальше,
+# другие приводят с собой того, кто бьёт вместо них.
+# ==========================================================================
+
+[[skill]]
+code = "ranger_archer_dalniy_vystrel"
+third = [
+    { name = "Дальний бьёт глубже", way = "pierce", amount = 45 },
+    { name = "Дальний берёт поправку", way = "edge", amount = 25 },
+]
+fifth = [
+    { name = "Дальний вдоль ряда", way = "wide", amount = 60 },
+    { name = "Дальний в упор", way = "certain" },
+]
+
+[[skill]]
+code = "ranger_beastmaster_svistnut_svoih"
+third = [
+    { name = "Свои рвут глубже", way = "deepen", amount = 70 },
+    { name = "Свои не отпускают", way = "linger", amount = 3 },
+]
+fifth = [
+    { name = "Свои берут всю стаю", way = "contagion" },
+    { name = "Свои валят с ног", way = "stagger" },
+]
+
+[[skill]]
+code = "ranger_beastlord_staya"
+third = [
+    { name = "Стая многочисленнее", way = "heavy", amount = 28 },
+    { name = "Стая никого не упустит", way = "sure" },
+]
+fifth = [
+    { name = "Стая на одного", way = "focus", amount = 60 },
+    { name = "Стая рвёт до крови", way = "bleed" },
+]
+
+[[skill]]
+code = "ranger_huntsman_iz_zasady"
+third = [
+    { name = "Из засады глубже", way = "pierce", amount = 50 },
+    { name = "Из засады с оттяжкой", way = "edge", amount = 28 },
+]
+fifth = [
+    { name = "Из засады наверняка", way = "certain" },
+    { name = "Из засады и не вскрикнут", way = "quiet" },
+]
+
+[[skill]]
+code = "ranger_sniper_vystrel_v_shov"
+third = [
+    { name = "В шов точнее", way = "pierce", amount = 50 },
+    { name = "В шов вернее", way = "sure" },
+]
+fifth = [
+    { name = "Шов разошёлся", way = "shatter", amount = 40 },
+    { name = "В шов наверняка", way = "certain" },
+]
+
+[[skill]]
+code = "ranger_thicketward_tropa_uvodit"
+third = [
+    { name = "Тропа уводит дальше", way = "linger", amount = 3 },
+    { name = "Тропа и передышка", way = "soothe", amount = 3 },
+]
+fifth = [
+    { name = "Тропа уводит всех", way = "spread" },
+    { name = "Тропа заметает след", way = "vanish" },
+]
+
+[[skill]]
+code = "ranger_falconer_sokol"
+third = [
+    { name = "Сокол бьёт с высоты", way = "heavy", amount = 30 },
+    { name = "Сокол не промахивается", way = "sure" },
+]
+fifth = [
+    { name = "Сокол берёт обоих", way = "wide", amount = 60 },
+    { name = "Сокол выклевал глаза", way = "bleed" },
+]
+
+[[skill]]
+code = "ranger_hawkeye_odin_vzglyad"
+third = [
+    { name = "Один взгляд глубже", way = "pierce", amount = 50 },
+    { name = "Один взгляд и оттяжка", way = "heavy", amount = 32 },
+]
+fifth = [
+    { name = "Один взгляд на всех", way = "wide", amount = 60 },
+    { name = "Один взгляд — и дальше", way = "rush" },
+]
+
+[[skill]]
+code = "ranger_monsterhunter_slaboe_mesto"
+third = [
+    { name = "Слабое место глубже", way = "pierce", amount = 50 },
+    { name = "Слабое место у соседа тоже", way = "splinter", amount = 35 },
+]
+fifth = [
+    { name = "Слабое место вскрыто", way = "shatter", amount = 40 },
+    { name = "Слабое место у всех", way = "wide", amount = 60 },
+]
+
+[[skill]]
+code = "ranger_shadowshot_uyti_i_udarit"
+third = [
+    { name = "Уйти подальше", way = "linger", amount = 2 },
+    { name = "Уйти и прикрыться", way = "guarded", amount = 16 },
+]
+fifth = [
+    { name = "Уйти всем отрядом", way = "spread" },
+    { name = "Уйти и ударить первым", way = "haste" },
+]
+
+[[skill]]
+code = "ranger_trapper_silok"
+third = [
+    { name = "Силок держится дольше", way = "linger", amount = 3 },
+    { name = "В силке не размахнуться", way = "sap", amount = 32 },
+]
+fifth = [
+    { name = "Силки по всей стае", way = "contagion" },
+    { name = "В силке стынут ноги", way = "chill", amount = 40 },
+]
+
+[[skill]]
+code = "ranger_wayfarer_vtoroe_dyhanie_dorogi"
+third = [
+    { name = "Дорога длиннее", way = "linger", amount = 3 },
+    { name = "Дорога и прикрытие", way = "guarded", amount = 16 },
+]
+fifth = [
+    { name = "Дорога у всего отряда", way = "spread" },
+    { name = "С дороги не сбить", way = "steadfast" },
+]
+
+[[skill]]
+code = "ranger_wolfchief_zagon"
+third = [
+    { name = "Загон плотнее", way = "deepen", amount = 70 },
+    { name = "Из загона не выйти", way = "linger", amount = 3 },
+]
+fifth = [
+    { name = "Загон в одну глотку", way = "focus", amount = 60 },
+    { name = "В загоне не встают", way = "stagger" },
+]
+
+[[skill]]
+code = "ranger_woodward_chascha_smykaetsya"
+third = [
+    { name = "Чаща смыкается плотнее", way = "linger", amount = 3 },
+    { name = "В чаще не размахнуться", way = "sap", amount = 32 },
+]
+fifth = [
+    { name = "Чаща схватывает морозом", way = "frost" },
+    { name = "Из чащи не докричаться", way = "quiet" },
+]
+
+# ==========================================================================
+# ВЕТКИ РАЗБОЙНИКА. Убийца, шут, отравитель, скальд: у одних выучка про то,
+# как не быть увиденным, у других — про то, что остаётся после.
+# ==========================================================================
+
+[[skill]]
+code = "rogue_assassin_path_tihaya_rabota"
+third = [
+    { name = "Тихая работа глубже", way = "pierce", amount = 50 },
+    { name = "Тихая работа досыта", way = "drain", amount = 30 },
+]
+fifth = [
+    { name = "Тихая работа до конца", way = "finish", amount = 90 },
+    { name = "Тихо — и к следующему", way = "rush" },
+]
+
+[[skill]]
+code = "rogue_trickster_podnozhka"
+third = [
+    { name = "Подножка чище", way = "heavy", amount = 25 },
+    { name = "Подножка держится дольше", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Упавший не встаёт", way = "stagger" },
+    { name = "Упавший открыт", way = "mark", amount = 35 },
+]
+
+[[skill]]
+code = "rogue_bard_pohodnaya_pesn"
+third = [
+    { name = "Песня длиннее", way = "linger", amount = 3 },
+    { name = "Песня ведёт руку", way = "bolster", amount = 25 },
+]
+fifth = [
+    { name = "Песню слышит весь отряд", way = "spread" },
+    { name = "Под песню идут быстрее", way = "haste" },
+]
+
+[[skill]]
+code = "rogue_poisoner_smazat_klinok"
+third = [
+    { name = "Смазано погуще", way = "deepen", amount = 80 },
+    { name = "Смазано надолго", way = "linger", amount = 3 },
+]
+fifth = [
+    { name = "Смазано на всю стаю", way = "contagion" },
+    { name = "Смазанное не отмыть", way = "seal" },
+]
+
+[[skill]]
+code = "rogue_scout_ne_zametili"
+third = [
+    { name = "Не заметили глубже", way = "pierce", amount = 45 },
+    { name = "Не заметили дольше", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Не заметили никого", way = "wide", amount = 60 },
+    { name = "Не заметили и не окликнули", way = "quiet" },
+]
+
+[[skill]]
+code = "rogue_shadow_ischeznut"
+third = [
+    { name = "Исчезнуть подольше", way = "linger", amount = 2 },
+    { name = "Исчезнуть и отдышаться", way = "soothe", amount = 3 },
+]
+fifth = [
+    { name = "Исчезают все", way = "spread" },
+    { name = "Исчез — и бьёт первым", way = "haste" },
+]
+
+[[skill]]
+code = "rogue_assassin_tochka"
+third = [
+    { name = "Точка ставится глубже", way = "pierce", amount = 50 },
+    { name = "Точка без промаха", way = "sure" },
+]
+fifth = [
+    { name = "Точка в конце", way = "finish", amount = 90 },
+    { name = "Точка — и новая строка", way = "rush" },
+]
+
+[[skill]]
+code = "rogue_bountyhunter_po_gramote"
+third = [
+    { name = "Грамота действует дольше", way = "linger", amount = 3 },
+    { name = "По грамоте не убежать", way = "drag", amount = 40 },
+]
+fifth = [
+    { name = "Грамота на всю стаю", way = "contagion" },
+    { name = "По грамоте не лечат", way = "seal" },
+]
+
+[[skill]]
+code = "rogue_burglar_vzyat_svoe"
+third = [
+    { name = "Взять своё дешевле", way = "cheap" },
+    { name = "Взять своё поглубже", way = "pierce", amount = 40 },
+]
+fifth = [
+    { name = "Взял своё — и в тень", way = "vanish" },
+    { name = "Взял своё и чужое", way = "wide", amount = 55 },
+]
+
+[[skill]]
+code = "rogue_minstrel_dolgaya_pesnya"
+third = [
+    { name = "Песня тянется дольше", way = "mending", amount = 14 },
+    { name = "Песня снимает морок", way = "cleansing", amount = 2 },
+]
+fifth = [
+    { name = "Долгую песню слышат все", way = "spread" },
+    { name = "Под долгую песню не падают", way = "unfallen" },
+]
+
+[[skill]]
+code = "rogue_nightblade_iz_temnoty"
+third = [
+    { name = "Из темноты глубже", way = "pierce", amount = 50 },
+    { name = "Из темноты с оттяжкой", way = "heavy", amount = 32 },
+]
+fifth = [
+    { name = "Из темноты по всем", way = "wide", amount = 60 },
+    { name = "Из темноты и в темноту", way = "rush" },
+]
+
+[[skill]]
+code = "rogue_phantom_ni_sleda"
+third = [
+    { name = "Ни следа дешевле", way = "cheap" },
+    { name = "Ни следа и без ран", way = "soothe", amount = 4 },
+]
+fifth = [
+    { name = "Ни следа от всего отряда", way = "spread" },
+    { name = "Ни следа, ни тени", way = "vanish" },
+]
+
+[[skill]]
+code = "rogue_plagueblade_povetrie"
+third = [
+    { name = "Поветрие гуще", way = "deepen", amount = 80 },
+    { name = "Поветрие не выветривается", way = "linger", amount = 3 },
+]
+fifth = [
+    { name = "Поветрие на одного", way = "focus", amount = 60 },
+    { name = "От поветрия не выхаживают", way = "seal" },
+]
+
+[[skill]]
+code = "rogue_skald_boevaya_visa"
+third = [
+    { name = "Виса длиннее", way = "linger", amount = 3 },
+    { name = "Виса поднимает руку", way = "bolster", amount = 28 },
+]
+fifth = [
+    { name = "Вису слышит весь отряд", way = "spread" },
+    { name = "Под вису бьют первыми", way = "haste" },
+]
+
+# ==========================================================================
+# ВЕТКИ МАГА. Каждая ветка выбирает стихию и держится её: стужа, пламя,
+# кость, чужая мысль. Выучка договаривает, что эта стихия делает с целью.
+# ==========================================================================
+
+[[skill]]
+code = "mage_elementalist_razlad_stihiy"
+third = [
+    { name = "Разлад сильнее", way = "heavy", amount = 30 },
+    { name = "Разлад достаёт каждого", way = "sure" },
+]
+fifth = [
+    { name = "Разлад на одного", way = "focus", amount = 60 },
+    { name = "Разлад рвёт защиту", way = "shatter", amount = 40 },
+]
+
+[[skill]]
+code = "mage_occultist_tihiy_sglaz"
+third = [
+    { name = "Сглаз глубже", way = "pierce", amount = 45 },
+    { name = "Сглаз отнимает силу", way = "sap", amount = 32 },
+]
+fifth = [
+    { name = "Сглаз на всех", way = "wide", amount = 55 },
+    { name = "Сглаженного не вылечить", way = "seal" },
+]
+
+[[skill]]
+code = "mage_cryomancer_okovy_stuzhi"
+third = [
+    { name = "Оковы стужи крепче", way = "heavy", amount = 28 },
+    { name = "Оковы стужи никого не минуют", way = "sure" },
+]
+fifth = [
+    { name = "Оковы стужи на одного", way = "focus", amount = 60 },
+    { name = "Скованные стужей медлят", way = "chill", amount = 40 },
+]
+
+[[skill]]
+code = "mage_necromancer_podnyat_pavshego"
+third = [
+    { name = "Павший рвёт глубже", way = "deepen", amount = 75 },
+    { name = "Павший не уходит", way = "linger", amount = 3 },
+]
+fifth = [
+    { name = "Павшие берут стаю", way = "contagion" },
+    { name = "Павший держит за руки", way = "stagger" },
+]
+
+[[skill]]
+code = "mage_psion_chuzhaya_mysl"
+third = [
+    { name = "Чужая мысль глубже", way = "heavy", amount = 25 },
+    { name = "Чужая мысль держится дольше", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Чужая мысль у всех", way = "contagion" },
+    { name = "Чужой мыслью не заговорить", way = "quiet" },
+]
+
+[[skill]]
+code = "mage_pyromancer_polymya"
+third = [
+    { name = "Полымя жарче", way = "deepen", amount = 80 },
+    { name = "Полымя не гаснет", way = "linger", amount = 3 },
+]
+fifth = [
+    { name = "Полымя на одного", way = "focus", amount = 60 },
+    { name = "Обожжённого не выходить", way = "seal" },
+]
+
+[[skill]]
+code = "mage_bonelord_kostyanoy_stroy"
+third = [
+    { name = "Строй плотнее", way = "heavy", amount = 30 },
+    { name = "Строй достаёт всех", way = "sure" },
+]
+fifth = [
+    { name = "Строй на одного", way = "focus", amount = 60 },
+    { name = "Кости ломают кости", way = "shatter", amount = 40 },
+]
+
+[[skill]]
+code = "mage_frostlord_vse_zamret"
+third = [
+    { name = "Замрёт крепче", way = "heavy", amount = 30 },
+    { name = "Замрут все до одного", way = "sure" },
+]
+fifth = [
+    { name = "Замрёт один", way = "focus", amount = 65 },
+    { name = "Замёрзшие не говорят", way = "quiet" },
+]
+
+[[skill]]
+code = "mage_illusionist_morok"
+third = [
+    { name = "Морок ветки гуще", way = "heavy", amount = 28 },
+    { name = "В мороке ветки не целятся", way = "dull", amount = 35 },
+]
+fifth = [
+    { name = "Морок на одного", way = "focus", amount = 60 },
+    { name = "В мороке теряют голову", way = "terrify" },
+]
+
+[[skill]]
+code = "mage_incinerator_pepel"
+third = [
+    { name = "Пепла больше", way = "heavy", amount = 30 },
+    { name = "Пепел оседает на всех", way = "sure" },
+]
+fifth = [
+    { name = "Пепел на одного", way = "focus", amount = 65 },
+    { name = "Пепел ещё тлеет", way = "sear" },
+]
+
+[[skill]]
+code = "mage_infernal_pech"
+third = [
+    { name = "Печь жарче", way = "heavy", amount = 32 },
+    { name = "Печь берёт своё", way = "drain", amount = 25 },
+]
+fifth = [
+    { name = "Печь на весь двор", way = "wide", amount = 60 },
+    { name = "В печи догорают", way = "sear" },
+]
+
+[[skill]]
+code = "mage_mindlord_chuzhaya_volya"
+third = [
+    { name = "Чужая воля крепче", way = "heavy", amount = 28 },
+    { name = "Чужая воля держится дольше", way = "linger", amount = 2 },
+]
+fifth = [
+    { name = "Чужая воля на всех", way = "wide", amount = 55 },
+    { name = "Своей воли не осталось", way = "wither", amount = 40 },
+]
+
+[[skill]]
+code = "mage_plaguecaster_mor"
+third = [
+    { name = "Мор гуще", way = "heavy", amount = 30 },
+    { name = "Мор не минует никого", way = "sure" },
+]
+fifth = [
+    { name = "Мор на одного", way = "focus", amount = 60 },
+    { name = "Мор остаётся в крови", way = "taint" },
+]
+
+[[skill]]
+code = "mage_stormcaller_nenaste"
+third = [
+    { name = "Ненастье злее", way = "heavy", amount = 30 },
+    { name = "Ненастье накрывает всех", way = "sure" },
+]
+fifth = [
+    { name = "Ненастье над одним", way = "focus", amount = 60 },
+    { name = "В ненастье сводит руки", way = "stagger" },
+]
+
+# ==========================================================================
+# ВЕТКИ ЖРЕЦА. Целитель, монах, отшельник, провидец: одни держат отряд на
+# ногах, другие бьют пустой рукой.
+# ==========================================================================
+
+[[skill]]
+code = "cleric_healer_skoraya_ruka"
+third = [
+    { name = "Скорая рука щедрее", way = "mending", amount = 16 },
+    { name = "Скорая рука снимает хворь", way = "cleansing", amount = 3 },
+]
+fifth = [
+    { name = "Скорая рука для всех", way = "spread" },
+    { name = "Из скорой руки не выпускают", way = "unfallen" },
+]
+
+[[skill]]
+code = "cleric_monk_udar_ladonyu"
+third = [
+    { name = "Ладонь тяжелее", way = "heavy", amount = 30 },
+    { name = "Ладонь не мимо", way = "sure" },
+]
+fifth = [
+    { name = "Ладонью по обоим", way = "wide", amount = 60 },
+    { name = "От ладони перехватывает дух", way = "stagger" },
+]
+
+[[skill]]
+code = "cleric_ascetic_post"
+third = [
+    { name = "Пост дольше", way = "linger", amount = 3 },
+    { name = "Пост и покой", way = "soothe", amount = 4 },
+]
+fifth = [
+    { name = "Пост держат все", way = "spread" },
+    { name = "Постящегося не сбить", way = "steadfast" },
+]
+
+[[skill]]
+code = "cleric_herbalist_otvar"
+third = [
+    { name = "Отвар крепче", way = "mending", amount = 16 },
+    { name = "Отвар гонит хворь", way = "cleansing", amount = 3 },
+]
+fifth = [
+    { name = "Отвара хватит всем", way = "spread" },
+    { name = "На отваре не падают", way = "unfallen" },
+]
+
+[[skill]]
+code = "cleric_oracle_znamenie"
+third = [
+    { name = "Знамение яснее", way = "linger", amount = 3 },
+    { name = "Знамение ведёт руку", way = "bolster", amount = 25 },
+]
+fifth = [
+    { name = "Знамение видят все", way = "spread" },
+    { name = "Знамения не сбить", way = "steadfast" },
+]
+
+[[skill]]
+code = "cleric_punisher_kara"
+third = [
+    { name = "Кара карателя тяжелее", way = "heavy", amount = 30 },
+    { name = "Кара карателя не минует", way = "sure" },
+]
+fifth = [
+    { name = "Кара по всем", way = "wide", amount = 60 },
+    { name = "Кара оставляет ожог", way = "sear" },
+]
+
+[[skill]]
+code = "cleric_banisher_proch"
+third = [
+    { name = "Прочь дальше", way = "heavy", amount = 30 },
+    { name = "Прочь без исключений", way = "sure" },
+]
+fifth = [
+    { name = "Прочь одному", way = "focus", amount = 60 },
+    { name = "Изгнанные молчат", way = "quiet" },
+]
+
+[[skill]]
+code = "cleric_enlightened_pustaya_ruka"
+third = [
+    { name = "Пустая рука вернее", way = "sure" },
+    { name = "Пустая рука глубже", way = "pierce", amount = 40 },
+]
+fifth = [
+    { name = "Лишний удар пустой рукой", way = "double", amount = 70 },
+    { name = "Пустая рука по всем", way = "wide", amount = 50 },
+]
+
+[[skill]]
+code = "cleric_hermit_tishina"
+third = [
+    { name = "Тишина держится дольше", way = "ward_long", amount = 3 },
+    { name = "В тишине заживает", way = "soothe", amount = 4 },
+]
+fifth = [
+    { name = "Тишина на весь отряд", way = "spread" },
+    { name = "Тишину не проломить", way = "hard_guard", amount = 35 },
+]
+
+[[skill]]
+code = "cleric_lifewarden_krug_zhizni"
+third = [
+    { name = "Круг жизни щедрее", way = "mending", amount = 16 },
+    { name = "Круг жизни гонит порчу", way = "cleansing", amount = 3 },
+]
+fifth = [
+    { name = "В круге жизни не падают", way = "unfallen" },
+    { name = "Круг жизни торопит", way = "haste" },
+]
+
+[[skill]]
+code = "cleric_miracleworker_vtoroe_rozhdenie"
+third = [
+    { name = "Рождение полнее", way = "mending", amount = 18 },
+    { name = "Рождение начисто", way = "cleansing", amount = 3 },
+]
+fifth = [
+    { name = "Второе рождение всем", way = "spread" },
+    { name = "Рождённого заново не свалить", way = "steadfast" },
+]
+
+[[skill]]
+code = "cleric_prophet_prorochestvo"
+third = [
+    { name = "Пророчество яснее", way = "heavy", amount = 30 },
+    { name = "Пророчество сбывается у всех", way = "sure" },
+]
+fifth = [
+    { name = "Пророчество одному", way = "focus", amount = 60 },
+    { name = "Пророчество выжигает", way = "sear" },
+]
+
+[[skill]]
+code = "cleric_seer_na_hod_vpered"
+third = [
+    { name = "На ход вперёд дешевле", way = "cheap" },
+    { name = "На ход вперёд с запасом", way = "refresh", amount = 4 },
+]
+fifth = [
+    { name = "На ход вперёд за всех", way = "spread" },
+    { name = "На ход вперёд не сбить", way = "steadfast" },
+]
+
+[[skill]]
+code = "cleric_vengeance_vozmezdie"
+third = [
+    { name = "Возмездие жреца тяжелее", way = "heavy", amount = 32 },
+    { name = "Возмездие жреца не мимо", way = "sure" },
+]
+fifth = [
+    { name = "Возмездие по всем", way = "wide", amount = 60 },
+    { name = "Возмездие возвращается", way = "counter", amount = 45 },
+]
+
+# ==========================================================================
+# ВЕТКИ ДРУИДА. Оборотень, страж деревьев, вожак стаи, ткач терний: облик,
+# корни и яд — три способа не давать чужому хода.
+# ==========================================================================
+
+[[skill]]
+code = "druid_shapeshifter_obernutsya"
+third = [
+    { name = "Обернуться надольше", way = "linger", amount = 3 },
+    { name = "Обернуться в шкуру потолще", way = "steel", amount = 30 },
+]
+fifth = [
+    { name = "Оборачиваются все", way = "spread" },
+    { name = "Обернувшегося не сбить", way = "steadfast" },
+]
+
+[[skill]]
+code = "druid_treewarden_korni_derzhat"
+third = [
+    { name = "Корни стража держат дольше", way = "linger", amount = 3 },
+    { name = "В корнях не размахнуться", way = "sap", amount = 32 },
+]
+fifth = [
+    { name = "Корни стража по всей стае", way = "contagion" },
+    { name = "Корни выстуживают ноги", way = "chill", amount = 40 },
+]
+
+[[skill]]
+code = "druid_bearspirit_medvezhya_shkura"
+third = [
+    { name = "Шкура медведя дольше", way = "linger", amount = 3 },
+    { name = "Шкура медведя и наплыв", way = "guarded", amount = 16 },
+]
+fifth = [
+    { name = "Шкура медведя на всех", way = "spread" },
+    { name = "Медвежью шкуру не пробить", way = "hard_guard", amount = 35 },
+]
+
+[[skill]]
+code = "druid_thornweaver_ternovnik"
+third = [
+    { name = "Терновник гуще", way = "heavy", amount = 28 },
+    { name = "Терновник цепляет каждого", way = "sure" },
+]
+fifth = [
+    { name = "Терновник на одного", way = "focus", amount = 60 },
+    { name = "Тернии остаются в ранах", way = "bleed" },
+]
+
+[[skill]]
+code = "druid_weatherward_hmar"
+third = [
+    { name = "Хмарь гуще", way = "heavy", amount = 28 },
+    { name = "Из хмари не прицелиться", way = "dull", amount = 35 },
+]
+fifth = [
+    { name = "Хмарь над одним", way = "focus", amount = 60 },
+    { name = "В хмари не докричаться", way = "quiet" },
+]
+
+[[skill]]
+code = "druid_wolfskin_volchya_hvatka"
+third = [
+    { name = "Хватка глубже", way = "deepen", amount = 80 },
+    { name = "Хватку не разжать", way = "linger", amount = 3 },
+]
+fifth = [
+    { name = "Хватка на всю стаю", way = "contagion" },
+    { name = "Из хватки не вырваться", way = "stagger" },
+]
+
+[[skill]]
+code = "druid_firstbeast_zverinaya_stat"
+third = [
+    { name = "Стать зверя дольше", way = "linger", amount = 3 },
+    { name = "Стать зверя и шкура", way = "steel", amount = 32 },
+]
+fifth = [
+    { name = "Стать зверя у всех", way = "spread" },
+    { name = "Зверь не падает", way = "unfallen" },
+]
+
+[[skill]]
+code = "druid_mistward_pelena"
+third = [
+    { name = "Пелена гуще", way = "linger", amount = 3 },
+    { name = "В пелене не размахнуться", way = "sap", amount = 32 },
+]
+fifth = [
+    { name = "Пелена ест доспех", way = "shatter", amount = 35 },
+    { name = "В пелене не слышно голоса", way = "quiet" },
+]
+
+[[skill]]
+code = "druid_moonhunter_lunnyy_brosok"
+third = [
+    { name = "Лунный бросок глубже", way = "pierce", amount = 50 },
+    { name = "Лунный бросок сытнее", way = "drain", amount = 30 },
+]
+fifth = [
+    { name = "Лунный бросок наверняка", way = "certain" },
+    { name = "После броска остаются борозды", way = "bleed" },
+]
+
+[[skill]]
+code = "druid_packleader_staya_beret"
+third = [
+    { name = "Стая берёт глубже", way = "deepen", amount = 75 },
+    { name = "Стая не отпускает", way = "linger", amount = 3 },
+]
+fifth = [
+    { name = "Стая берёт одного", way = "focus", amount = 60 },
+    { name = "Взятого стаей не выхаживают", way = "seal" },
+]
+
+[[skill]]
+code = "druid_stonehide_kamen_derzhit"
+third = [
+    { name = "Камень держит дольше", way = "ward_long", amount = 3 },
+    { name = "Под камнем затягивается", way = "soothe", amount = 4 },
+]
+fifth = [
+    { name = "Камень держит всех", way = "spread" },
+    { name = "Камень в полный рост", way = "hard_guard", amount = 35 },
+]
+
+[[skill]]
+code = "druid_stormlord_groza"
+third = [
+    { name = "Гроза злее", way = "heavy", amount = 30 },
+    { name = "Гроза достаёт каждого", way = "sure" },
+]
+fifth = [
+    { name = "Гроза над одним", way = "focus", amount = 60 },
+    { name = "В грозу сводит руки", way = "stagger" },
+]
+
+[[skill]]
+code = "druid_thornlord_ternovaya_stena"
+third = [
+    { name = "Стена терний выше", way = "heavy", amount = 30 },
+    { name = "Стена терний цепляет всех", way = "sure" },
+]
+fifth = [
+    { name = "Стена терний на одного", way = "focus", amount = 65 },
+    { name = "Сквозь тернии не пройти", way = "stagger" },
+]
+
+[[skill]]
+code = "druid_venomweaver_dolgiy_yad"
+third = [
+    { name = "Долгий яд гуще", way = "heavy", amount = 30 },
+    { name = "Долгий яд достаёт каждого", way = "sure" },
+]
+fifth = [
+    { name = "Долгий яд на одного", way = "focus", amount = 60 },
+    { name = "Долгий яд оседает в крови", way = "taint" },
+]

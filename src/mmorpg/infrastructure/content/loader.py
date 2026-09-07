@@ -46,6 +46,7 @@ from mmorpg.domain.entities.content import (
     Rarity,
     Skill,
     SkillKind,
+    SkillMastery,
     SpecialProperty,
     StatMilestone,
     StatScaling,
@@ -72,10 +73,12 @@ from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.rules import passives as passive_rules
+from mmorpg.domain.rules import skill_mastery as mastery_rules
 from mmorpg.domain.rules import subclass_powers as way_rules
 from mmorpg.domain.rules.equipment import WEAPON_SLOT
 from mmorpg.domain.rules.guild import MAX_MEMBERS as GUILD_MAX_MEMBERS
 from mmorpg.domain.rules.modifiers import EFFECTIVE_KEYS
+from mmorpg.domain.rules.skill_effects import spec_for
 from mmorpg.domain.rules.tools import TOOL_SLOT
 
 CONTENT_FILES = (
@@ -85,6 +88,7 @@ CONTENT_FILES = (
     "subclasses.toml",
     "traits.toml",
     "skills.toml",
+    "masteries.toml",
     "items.toml",
     "item_generator.toml",
     "enemies.toml",
@@ -166,6 +170,9 @@ def load_content(content_dir: Path) -> GameContent:
     targets = frozenset(skill_meta.get("targets", ()))
 
     skills = _parse_skills(raw["skills.toml"], active_effects, targets, modifier_keys, problems)
+    # Выучки лежат отдельным файлом: их вчетверо больше самих умений, и в
+    # skills.toml они утопили бы то, ради чего его открывают (ADR 0083).
+    skills = _with_masteries(skills, raw["masteries.toml"], problems)
     skills_by_code = {skill.code: skill for skill in skills}
 
     gear = _parse_items(raw["items.toml"], modifier_keys, skills_by_code, problems)
@@ -432,6 +439,118 @@ def _parse_skills(
                 dice=_skill_dice(code, entry, problems),
             )
         )
+    return tuple(parsed)
+
+
+def _with_masteries(
+    skills: Sequence[Skill], raw: Mapping[str, Any], problems: list[str]
+) -> tuple[Skill, ...]:
+    """Приписать каждому боевому умению его собственные выучки (ADR 0083).
+
+    Проверяется всё, чем выучка может оказаться подписью: приём существует,
+    подходит форме умения, размер в его границах, а сама правка что-то меняет в
+    описании эффекта. Не сошлось - игра не заводится.
+    """
+    written = {str(entry.get("code", "")): entry for entry in raw.get("skill", ())}
+    stray = set(written) - {skill.code for skill in skills}
+    if stray:
+        problems.append(f"masteries.toml: unknown skills {sorted(stray)}")
+
+    parsed: list[Skill] = []
+    for skill in skills:
+        entry = written.get(skill.code)
+        if not skill.is_active:
+            if entry is not None:
+                problems.append(f"masteries.toml: {skill.code} is passive and learns nothing")
+            parsed.append(skill)
+            continue
+        if entry is None:
+            problems.append(f"masteries.toml: {skill.code} has no masteries written")
+            parsed.append(skill)
+            continue
+        parsed.append(replace(skill, masteries=_skill_masteries(skill, entry, problems)))
+
+    # Имя выучки - одно на всю игру. Две выучки под одним именем - это тот самый
+    # общий список, от которого игра и уходила (ADR 0083): игрок, услышавший
+    # «Пробой» дважды, вправе ждать, что это одно и то же.
+    said: dict[str, str] = {}
+    for skill in parsed:
+        for one in skill.masteries:
+            if (owner := said.get(one.name)) is not None:
+                problems.append(
+                    f"masteries.toml: {skill.code} and {owner} both call a mastery {one.name!r}"
+                )
+            said[one.name] = skill.code
+    return tuple(parsed)
+
+
+#: Как ступени зовутся в содержимом: рангом, на котором их выбирают.
+_MASTERY_KEYS = {"third": 1, "fifth": 2}
+#: Буквы, которыми выучки одной ступени отличаются друг от друга в коде.
+_MASTERY_LETTERS = "abcdefgh"
+
+
+def _skill_masteries(
+    skill: Skill, entry: Mapping[str, Any], problems: list[str]
+) -> tuple[SkillMastery, ...]:
+    spec = spec_for(skill.effect)
+    parsed: list[SkillMastery] = []
+    seen: set[str] = set()
+    for key, tier in _MASTERY_KEYS.items():
+        written = entry.get(key, ())
+        if len(written) != mastery_rules.MASTERIES_PER_TIER:
+            problems.append(
+                f"masteries.toml: {skill.code} [{key}] must list "
+                f"{mastery_rules.MASTERIES_PER_TIER} masteries, not {len(written)}"
+            )
+        for index, one in enumerate(written):
+            code = f"{mastery_rules.rank_of_tier(tier)}{_MASTERY_LETTERS[index]}"
+            name = str(one.get("name", ""))
+            way_code = str(one.get("way", ""))
+            amount = one.get("amount")
+            if not name:
+                problems.append(f"masteries.toml: {skill.code} {code} has no name")
+            if name in seen:
+                problems.append(f"masteries.toml: {skill.code} says {name!r} twice")
+            seen.add(name)
+            way = mastery_rules.way_of(way_code)
+            if way is None:
+                problems.append(
+                    f"masteries.toml: {skill.code} {code} uses unknown way {way_code!r}"
+                )
+                continue
+            if way.tier != tier:
+                problems.append(
+                    f"masteries.toml: {skill.code} {code} takes {way_code!r}, "
+                    f"which is a tier {way.tier} way"
+                )
+                continue
+            if not way.suits(spec):
+                problems.append(
+                    f"masteries.toml: {skill.code} {code} takes {way_code!r}, "
+                    f"which does not suit a {skill.effect} skill"
+                )
+                continue
+            if not way.fits(None if amount is None else float(amount)):
+                problems.append(
+                    f"masteries.toml: {skill.code} {code} takes {way_code!r} "
+                    f"with a size of {amount!r}, outside [{way.low}, {way.high}]"
+                )
+                continue
+            mastery = SkillMastery(
+                code=code,
+                name=name,
+                tier=tier,
+                way=way_code,
+                amount=None if amount is None else float(amount),
+            )
+            if mastery_rules.changed(mastery, spec) == spec:
+                problems.append(
+                    f"masteries.toml: {skill.code} {code} ({name!r}) changes nothing "
+                    f"in a {skill.effect} skill: that is a caption, not a mastery"
+                )
+                continue
+            parsed.append(mastery)
     return tuple(parsed)
 
 

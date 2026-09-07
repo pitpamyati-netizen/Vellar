@@ -1086,7 +1086,9 @@ def _skill_spec(character: Character, skill: Skill, actor: Combatant) -> EffectS
     «Лёгкая рука» не может подешеветь на экране и остаться дорогой в бою.
     """
     rank = character.loadout.rank_of(skill.code)
-    spec = mastery_rules.applied(spec_for(skill.effect), character.loadout.masteries_of(skill.code))
+    spec = mastery_rules.applied(
+        skill, spec_for(skill.effect), character.loadout.masteries_of(skill.code)
+    )
     return _weathered(skill_rules.at_rank(spec, rank), actor)
 
 

@@ -1,10 +1,14 @@
-"""Выучка умения: ранг спрашивает, чему умение научилось (ADR 0079).
+"""Выучка умения: ранг спрашивает, чему умение научилось (ADR 0079, 0083).
 
 Ранг и прежде что-то давал - силу, откат, сроки, цену, - но всё это были числа,
 и очко, вложенное в третий ранг, ничем не отличалось от очка, вложенного во
 второй. Теперь третий ранг и пятый спрашивают, ЧЕМУ УМЕНИЕ НАУЧИЛОСЬ, и выбор
 меняет само действие: удар начинает бить по всем, лечение ложится на отряд,
 помеха расходится по стае.
+
+И спрашивают СВОИМ СПИСКОМ. Общего набора выучек в игре нет: у каждого боевого
+умения свои четыре, написанные под класс, ветку и то, чем это умение занято
+(ADR 0083). Два разных умения никогда не покажут один и тот же выбор.
 """
 
 from __future__ import annotations
@@ -18,8 +22,9 @@ from mmorpg.domain.rules import skill_mastery as mastery_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.skill_effects import EffectCategory, spec_for
 
-#: Обычный одноцелевой удар и лечение отряда - два края, на которых видно, что
-#: выучки предлагаются по форме умения, а не всем подряд.
+#: Обычный одноцелевой удар и удар, оставляющий кровотечение, - два края, на
+#: которых видно, что выучка написана под своё умение, а не взята из общего
+#: списка.
 STRIKE = "warrior_sekushchiy_roscherk"
 BLEED = "warrior_rassechenie"
 
@@ -67,6 +72,7 @@ def test_an_unknown_skill_is_not_asked(content: GameContent, hero: Character) ->
 def test_a_passive_is_never_asked(content: GameContent, hero: Character) -> None:
     """У пассивки нет ни хода, ни цели: менять в её действии нечего (ADR 0073)."""
     passive = next(one for one in content.skills if not one.is_active)
+    assert passive.masteries == ()
     ready = ranked(hero, passive.code, 5)
     assert skill_rules.mastery_tier_due(content, ready, passive) is None
 
@@ -74,114 +80,172 @@ def test_a_passive_is_never_asked(content: GameContent, hero: Character) -> None
 # --- что предлагают ---------------------------------------------------
 
 
-def test_every_active_skill_has_something_to_learn(content: GameContent) -> None:
-    """Всякому боевому умению есть что предложить на обеих ступенях.
+def test_every_active_skill_has_its_own_four(content: GameContent) -> None:
+    """Всякому боевому умению написаны свои четыре: две на ступень.
 
     Ранг, который спрашивает и не предлагает ничего, - это очко, потраченное в
-    пустоту: выучка обязана найтись у каждого умения.
+    пустоту; из одной выучки не выбирают вовсе.
     """
-    empty = []
-    for skill in content.skills:
-        if not skill.is_active:
-            continue
-        spec = spec_for(skill.effect)
-        for tier in (1, 2):
-            if not mastery_rules.offered(spec, tier):
-                empty.append((skill.code, tier))
-    assert not empty, empty
-
-
-def test_a_choice_is_a_choice(content: GameContent) -> None:
-    """Из одной выучки не выбирают: на каждой ступени их хотя бы две."""
     thin = []
     for skill in content.skills:
         if not skill.is_active:
             continue
-        spec = spec_for(skill.effect)
         for tier in (1, 2):
-            if len(mastery_rules.offered(spec, tier)) < 2:
+            if len(mastery_rules.offered(skill, tier)) != mastery_rules.MASTERIES_PER_TIER:
                 thin.append((skill.code, tier))
     assert not thin, thin
 
 
+def test_no_two_skills_show_the_same_choice(content: GameContent) -> None:
+    """Общего списка нет: два умения не показывают один и тот же выбор.
+
+    Ровно это и отличает выучки от прежнего набора на всю игру: имя выучки
+    занято одним умением, и услышав его дважды, игрок вправе ждать, что это одно
+    и то же.
+    """
+    said: dict[str, str] = {}
+    for skill in content.skills:
+        for one in skill.masteries:
+            assert one.name not in said, (one.name, skill.code, said.get(one.name))
+            said[one.name] = skill.code
+    assert len(said) == 4 * sum(1 for one in content.skills if one.is_active)
+
+
 def test_healing_is_not_offered_a_blow(content: GameContent) -> None:
-    """«Пробой» не предлагают лечению, «Разлив» - удару: выучка знает форму."""
+    """Приём знает форму: «Пробой» не ляжет на лечение, «Разлив» - на удар."""
     heal = next(
         one
         for one in content.skills
         if one.is_active and spec_for(one.effect).category is EffectCategory.HEAL
     )
-    codes = {
-        one.code for tier in (1, 2) for one in mastery_rules.offered(spec_for(heal.effect), tier)
-    }
-    assert "pierce" not in codes
-    assert "spread" in codes
+    ways = {one.way for one in heal.masteries}
+    assert "pierce" not in ways
 
-    blow = spec_for(content.skill(STRIKE).effect)
-    assert "spread" not in {one.code for one in mastery_rules.offered(blow, 2)}
-    assert "pierce" in {one.code for one in mastery_rules.offered(blow, 1)}
+    blow = content.skill(STRIKE)
+    assert "spread" not in {one.way for one in blow.masteries}
+
+
+def test_a_way_that_does_not_suit_is_refused(content: GameContent) -> None:
+    """Приём не той формы не годится умению, чем бы его ни назвали."""
+    heal = spec_for("heal")
+    pierce = next(one for one in mastery_rules.WAYS if one.code == "pierce")
+    assert not pierce.suits(heal)
+    spread = next(one for one in mastery_rules.WAYS if one.code == "spread")
+    assert spread.suits(heal)
 
 
 # --- что выучка делает ------------------------------------------------
 
 
-def test_a_mastery_changes_the_spec(content: GameContent) -> None:
+def test_every_written_mastery_changes_something(content: GameContent) -> None:
+    """Выучка, ничего не меняющая в описании, - это подпись, а не механика.
+
+    Так же думает и загрузчик: он не заводит игру с такой выучкой. Здесь то же
+    самое сказано ещё раз, потому что это и есть весь смысл ADR 0083.
+    """
+    idle = []
+    for skill in content.skills:
+        spec = spec_for(skill.effect) if skill.is_active else None
+        if spec is None:
+            continue
+        for one in skill.masteries:
+            if mastery_rules.changed(one, spec) == spec:
+                idle.append((skill.code, one.code, one.name))
+    assert not idle, idle
+
+
+def test_every_mastery_says_what_it_does(content: GameContent) -> None:
+    """Текст пишет сам приём: своего текста у выучки нет вовсе (ADR 0067)."""
+    for skill in content.skills:
+        for one in skill.masteries:
+            said = mastery_rules.words(one)
+            assert said and said.endswith("."), (skill.code, one.code)
+
+
+def test_a_mastery_changes_the_spec(content: GameContent, hero: Character) -> None:
     """Выучка правит то самое описание, по которому бой и считает."""
-    spec = spec_for(content.skill(STRIKE).effect)
+    skill = content.skill(STRIKE)
+    spec = spec_for(skill.effect)
     assert not spec.aoe
 
-    wide = mastery_rules.applied(spec, ("wide",))
-    assert wide.aoe
-    assert wide.damage_scale < spec.damage_scale
+    wide = next(one for one in skill.masteries if one.way == "wide")
+    assert mastery_rules.changed(wide, spec).aoe
 
-    deep = mastery_rules.applied(spec, ("pierce",))
-    assert deep.pierce == pytest.approx(mastery_rules.PIERCE_SHARE)
+    pierce = next(one for one in skill.masteries if one.way == "pierce")
+    assert mastery_rules.changed(pierce, spec).pierce > spec.pierce
 
 
 def test_masteries_stack_in_a_fixed_order(content: GameContent) -> None:
     """Две выучки складываются, и порядок их взятия ничего не решает."""
-    spec = spec_for(content.skill(STRIKE).effect)
-    one = mastery_rules.applied(spec, ("pierce", "wide"))
-    other = mastery_rules.applied(spec, ("wide", "pierce"))
+    skill = content.skill(STRIKE)
+    spec = spec_for(skill.effect)
+    codes = (skill.masteries[0].code, skill.masteries[2].code)
+    one = mastery_rules.applied(skill, spec, codes)
+    other = mastery_rules.applied(skill, spec, tuple(reversed(codes)))
     assert one == other
-    assert one.aoe and one.pierce
+    assert one != spec
 
 
 def test_a_forgotten_mastery_does_not_crash(content: GameContent) -> None:
-    """Выучка, которой в игре не осталось, просто не работает (правило 8)."""
-    spec = spec_for(content.skill(STRIKE).effect)
-    assert mastery_rules.applied(spec, ("нет такой",)) == spec
+    """Выучка, которой у умения не осталось, просто не работает (правило 8)."""
+    skill = content.skill(STRIKE)
+    spec = spec_for(skill.effect)
+    assert mastery_rules.applied(skill, spec, ("нет такой",)) == spec
 
 
 def test_the_cheap_hand_halves_the_cost(content: GameContent) -> None:
-    """«Лёгкая рука» - пометка, и цену по ней считает бой."""
-    spec = mastery_rules.applied(spec_for(content.skill(STRIKE).effect), ("cheap",))
+    """«Подешевле» - пометка, и цену по ней считает бой."""
+    skill = next(one for one in content.skills if any(two.way == "cheap" for two in one.masteries))
+    cheap = next(one for one in skill.masteries if one.way == "cheap")
+    spec = mastery_rules.applied(skill, spec_for(skill.effect), (cheap.code,))
     assert mastery_rules.MARK_CHEAP in spec.marks
     assert mastery_rules.cost_factor(spec) == pytest.approx(mastery_rules.CHEAP_FACTOR)
-    assert mastery_rules.cost_factor(spec_for(content.skill(STRIKE).effect)) == 1.0
+    assert mastery_rules.cost_factor(spec_for(skill.effect)) == 1.0
 
 
-def test_the_long_trail_does_not_stretch_control(content: GameContent) -> None:
+def test_a_long_trail_does_not_stretch_control(content: GameContent) -> None:
     """«Долгий след» тянет всё, кроме того, что отнимает ход.
 
     Лишний ход оглушения бой не разменивает, а кончает, - то же правило, что у
     ранга (``rules/skills``).
     """
+    linger = next(one for one in mastery_rules.WAYS if one.code == "linger")
     stunning = spec_for("debuff_stun")
-    stretched = mastery_rules.applied(stunning, ("linger",))
-    assert stretched.inflicts[0].turns == stunning.inflicts[0].turns
+    assert linger.change(stunning, 2).inflicts[0].turns == stunning.inflicts[0].turns
 
     burning = spec_for("damage_burn")
-    longer = mastery_rules.applied(burning, ("linger",))
-    assert longer.dot_turns == burning.dot_turns + mastery_rules.LINGER_TURNS
+    assert linger.change(burning, 2).dot_turns == burning.dot_turns + 2
 
 
 def test_a_deep_wound_ticks_harder(content: GameContent) -> None:
     """«Глубокая рана» усиливает то, что точит цель, а не сам удар."""
+    deepen = next(one for one in mastery_rules.WAYS if one.code == "deepen")
     spec = spec_for("damage_bleed")
-    deeper = mastery_rules.applied(spec, ("deepen",))
-    assert deeper.dot_scale == pytest.approx(spec.dot_scale * mastery_rules.DEEPEN_SCALE)
+    deeper = deepen.change(spec, 60)
+    assert deeper.dot_scale > spec.dot_scale
     assert deeper.damage_scale == spec.damage_scale
+
+
+def test_a_second_bundle_never_overwrites_the_first(content: GameContent) -> None:
+    """Прибавку, которую умение и так даёт, приём не трогает.
+
+    Бой складывает прибавки в словарь по ключу: вторая с тем же ключом затёрла
+    бы первую, и выучка, обещавшая брони, отняла бы у умения его собственную.
+    """
+    steel = next(one for one in mastery_rules.WAYS if one.code == "steel")
+    armored = spec_for("buff_armor")
+    assert steel.change(armored, 30) == armored
+
+    counter = next(one for one in mastery_rules.WAYS if one.code == "counter")
+    answering = spec_for("buff_counter")
+    assert counter.change(answering, 40) == answering
+
+
+def test_a_status_is_never_hung_twice(content: GameContent) -> None:
+    """Второе молчание на молчащем умении - подпись: в бою слышно одно."""
+    quiet = next(one for one in mastery_rules.WAYS if one.code == "quiet")
+    silencing = spec_for("debuff_silence")
+    assert quiet.change(silencing, 0) == silencing
 
 
 # --- как её берут -----------------------------------------------------
@@ -201,11 +265,12 @@ def test_a_mastery_is_taken_once_and_kept(content: GameContent, hero: Character)
     assert skill_rules.choose_mastery(content, taught, skill, first.code) is None
 
 
-def test_a_mastery_outside_the_offer_is_refused(content: GameContent, hero: Character) -> None:
-    """Берут только из предложенного: «Разлив» удару не достаётся."""
+def test_a_mastery_of_another_skill_is_refused(content: GameContent, hero: Character) -> None:
+    """Берут только своё: выучка пятой ступени на третьем ранге не достаётся."""
     skill = content.skill(STRIKE)
     ready = ranked(hero, STRIKE, 3)
-    assert skill_rules.choose_mastery(content, ready, skill, "spread") is None
+    second = mastery_rules.offered(skill, 2)[0]
+    assert skill_rules.choose_mastery(content, ready, skill, second.code) is None
 
 
 def test_forgetting_a_skill_forgets_its_mastery(content: GameContent, hero: Character) -> None:
@@ -226,16 +291,3 @@ def test_waiting_skills_are_named(content: GameContent, hero: Character) -> None
     ready = ranked(hero, BLEED, 3)
     waiting = skill_rules.waiting_for_mastery(content, ready)
     assert [one.code for one in waiting] == [BLEED]
-
-
-def test_every_mastery_actually_changes_something(content: GameContent) -> None:
-    """Выучка, ничего не меняющая в описании, — это подпись, а не механика.
-
-    Каждая проверяется на том умении, которому она подходит: правка либо видна в
-    числах описания, либо оставляет пометку, которую читает бой.
-    """
-    specs = {skill.effect: spec_for(skill.effect) for skill in content.skills if skill.is_active}
-    for one in mastery_rules.MASTERIES:
-        suited = [spec for spec in specs.values() if one.suits(spec)]
-        assert suited, one.code
-        assert any(one.change(spec) != spec for spec in suited), one.code
