@@ -144,38 +144,61 @@ def mastery_call(content: GameContent, character: Character, skill: Skill) -> st
     return "Пора выбрать выучку: нажмите умение."
 
 
-def skill_state(content: GameContent, character: Character, skill: Skill) -> str:
-    """Одна фраза, говорящая всё, что игроку нужно знать о положении умения.
+def skill_standing(content: GameContent, character: Character, skill: Skill) -> str:
+    """Положение умения одной короткой фразой - ровно то, что стоит на кнопке.
 
-    Ранг стоит одно очко (ADR 0067), и цена называется вслух, а не
-    подразумевается. Что ранг уже дал - тоже: очко, о котором молчат, потрачено
-    впустую.
+    Короткой нарочно: надпись длиннее ``BUTTON_LIMIT`` Telegram отдаёт игре
+    обрезанной, а маршрут идёт по точному тексту, и такая кнопка не работает
+    вовсе. Всё, что ранг дал и что даст следующий, говорит ``rank_offer`` - в
+    теле сообщения, где место есть.
     """
-    rules = content.rules
     if not skill_rules.is_known(character, skill.code):
         taken = skill_rules.fork_taken(content, character, skill)
         if taken is not None:
             return f"закрыто развилкой: взято {taken.name}"
-        price = points_word(skill_rules.cost_to_learn(content, character, skill))
-        if not skill.is_active:
-            return f"не изучено, {price} даст {passive_power_words(content, skill, 1)}"
-        return f"не изучено, {price}"
-    rank = character.loadout.rank_of(skill.code)
-    said = f"ранг {rank} из {rules.max_rank}"
-    # Ранг, купленный и не потраченный на выбор, - это очко, лежащее без дела.
+        return f"не изучено, {points_word(skill_rules.cost_to_learn(content, character, skill))}"
+    said = f"ранг {character.loadout.rank_of(skill.code)} из {content.rules.max_rank}"
     if skill_rules.mastery_tier_due(content, character, skill) is not None:
-        return f"{said}, ждёт выучки: нажмите и выберите"
+        return f"{said}, ждёт выучки"
+    return said
+
+
+def rank_offer(content: GameContent, character: Character, skill: Skill) -> str:
+    """Что ранг умению уже дал и что даст следующее очко. Пусто - сказать нечего.
+
+    Говорится телом сообщения, а не кнопкой: ранг стоит одно очко (ADR 0067), и
+    цена вместе с прибавкой обязаны быть слышны до нажатия, - но в надписи им
+    места нет, она отдаётся Telegram обрезанной.
+    """
+    rules = content.rules
+    if not skill_rules.is_known(character, skill.code):
+        if skill_rules.fork_taken(content, character, skill) is not None:
+            return ""
+        # Пассивка объявляет свою прибавку числом: без него «одно очко» покупает
+        # строку, а не силу.
+        if not skill.is_active:
+            return f"Одно очко даст {passive_power_words(content, skill, 1)}."
+        return ""
+    rank = character.loadout.rank_of(skill.code)
+    # Ранг, купленный и не потраченный на выбор, - это очко, лежащее без дела, и
+    # зовёт потратить его ``mastery_call``: два зова подряд сказали бы одно и то же.
+    if skill_rules.mastery_tier_due(content, character, skill) is not None:
+        return ""
+    said = []
     if gained := rank_gain_words(rank, skill, content):
-        said = f"{said}: {gained}"
+        said.append(f"Ранг {rank} даёт: {gained}.")
     if rank >= rules.max_rank:
-        return f"{said}, выше некуда"
-    cost = skill_rules.cost_to_learn(content, character, skill)
-    # Пассивка объявляет, во что превратится её прибавка: очко, купившее «плюс
-    # шесть» вместо «плюс пяти», обязано быть названо до нажатия, а не после.
-    if not skill.is_active:
-        next_rank = passive_power_words(content, skill, rank + 1)
-        return f"{said}, следующий за {points_word(cost)} даст {next_rank}"
-    return f"{said}, следующий за {points_word(cost)}"
+        said.append("Выше некуда.")
+    else:
+        cost = points_word(skill_rules.cost_to_learn(content, character, skill))
+        # Пассивка объявляет, во что превратится её прибавка: очко, купившее «плюс
+        # шесть» вместо «плюс пяти», обязано быть названо до нажатия, а не после.
+        if not skill.is_active:
+            grown = passive_power_words(content, skill, rank + 1)
+            said.append(f"Следующий за {cost} даст {grown}.")
+        else:
+            said.append(f"Следующий за {cost}.")
+    return " ".join(said)
 
 
 def refusal(content: GameContent, character: Character, skill: Skill) -> str:
@@ -243,8 +266,14 @@ def skill_detail(content: GameContent, skill: Skill, character: Character | None
 
 
 def skill_entry_text(content: GameContent, character: Character, skill: Skill) -> str:
+    """Надпись кнопки: имя, вид и положение - и ничего сверх.
+
+    Всё остальное стоит строкой в теле (``rank_offer``, ``skill_detail``):
+    надпись длиннее ``BUTTON_LIMIT`` доезжает до игры обрезанной, и нажатие на
+    неё не находит своего умения.
+    """
     kind = "боевое" if skill.is_active else "пассивное"
-    return f"{skill.name} — {kind}, {skill_state(content, character, skill)}"
+    return f"{skill.name} — {kind}, {skill_standing(content, character, skill)}"
 
 
 def spent_line(content: GameContent, character: Character) -> str:
@@ -269,7 +298,16 @@ def skills_screen(
         ListEntry(
             key=skill.code,
             text=skill_entry_text(content, character, skill),
-            detail=skill_detail(content, skill, character),
+            # Что купит очко, стоит в теле, а не на кнопке: на кнопке для этого
+            # нет места, и обрезанная надпись перестаёт быть нажимаемой.
+            detail=" ".join(
+                part
+                for part in (
+                    rank_offer(content, character, skill),
+                    skill_detail(content, skill, character),
+                )
+                if part
+            ),
         )
         for skill in pool
     ]

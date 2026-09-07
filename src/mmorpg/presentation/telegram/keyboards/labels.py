@@ -13,6 +13,29 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+#: Предел надписи в знаках, и он не наш: Telegram отправляет нажатую кнопку
+#: обрезанной на 128 знаках, а маршрут идёт по точному тексту, поэтому надпись
+#: длиннее этого - кнопка, которая не сработает никогда. Экран умений так и
+#: терял целые ряды: «Обманный финт - боевое, ранг 3 из 5: откат короче...»
+#: доезжал до игры без последних пяти знаков, и в ответ приходило «Нажмите
+#: умение из списка».
+BUTTON_LIMIT = 128
+
+
+def shortened(text: str, limit: int = BUTTON_LIMIT) -> str:
+    """Надпись, укладывающаяся в предел. Режется по границе слова.
+
+    Это последний рубеж, а не способ писать надписи: то, что не влезло, обязано
+    стоять в теле сообщения. Но содержимое правится без кода, и длинное имя не
+    должно превращать кнопку в нерабочую.
+    """
+    if len(text) <= limit:
+        return text
+    cut = text[: max(1, limit - 1)].rstrip()
+    if " " in cut:
+        cut = cut[: cut.rindex(" ")].rstrip()
+    return f"{cut}…"
+
 
 @dataclass(frozen=True, slots=True)
 class Label:
@@ -38,7 +61,9 @@ class Label:
 
 
 def label(text: str, emoji: str = "") -> Label:
-    return Label(text=text, emoji=emoji)
+    """Надпись. Длинная укорачивается здесь: за пределом её отдаёт не игра, а Telegram."""
+    room = BUTTON_LIMIT - (len(emoji) + 1 if emoji else 0)
+    return Label(text=shortened(text, room), emoji=emoji)
 
 
 # --- служебный ряд, одинаковый на каждом экране (правило доступности 8) ---

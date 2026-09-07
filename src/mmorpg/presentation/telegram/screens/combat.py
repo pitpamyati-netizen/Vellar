@@ -52,7 +52,7 @@ from mmorpg.domain.rules.skill_effects import (
     spec_for,
 )
 from mmorpg.presentation.telegram.keyboards import labels
-from mmorpg.presentation.telegram.keyboards.labels import Label, label
+from mmorpg.presentation.telegram.keyboards.labels import BUTTON_LIMIT, Label, label, shortened
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import amount, head, percent, turns
 
@@ -334,9 +334,22 @@ def skill_label(content: GameContent, character: Character, viewer: Combatant, s
         or _stealth_status(skill, viewer)
         or _slot_status(skill, character, viewer)
     )
-    return label(
-        f"{slot + 1}. {skill.name} — {skill_effect(content, character, viewer, skill)}, {status}"
+    return _panel_label(
+        head=f"{slot + 1}. {skill.name} — ",
+        effect=skill_effect(content, character, viewer, skill),
+        status=status,
     )
+
+
+def _panel_label(*, head: str, effect: str, status: str) -> Label:
+    """Кнопка панели, уложенная в предел надписи.
+
+    За пределом Telegram отдаёт нажатие обрезанным, и кнопка перестаёт работать,
+    поэтому длинному умению ужимается описание действия: готовность, цена и
+    откат - то, ради чего на кнопку и смотрят в свой ход, - остаются целыми.
+    """
+    tail = f", {status}"
+    return label(f"{head}{shortened(effect, BUTTON_LIMIT - len(head) - len(tail))}{tail}")
 
 
 def racial_skill(content: GameContent, character: Character) -> Skill | None:
@@ -350,9 +363,10 @@ def racial_label(content: GameContent, character: Character, viewer: Combatant) 
     skill = racial_skill(content, character)
     if skill is None:
         return label(f"Расовое умение — {EMPTY_SLOT.lower()}")
-    return label(
-        f"{skill.name} — расовое, {skill_effect(content, character, viewer, skill)}, "
-        f"{_slot_status(skill, character, viewer)}"
+    return _panel_label(
+        head=f"{skill.name} — расовое, ",
+        effect=skill_effect(content, character, viewer, skill),
+        status=_slot_status(skill, character, viewer),
     )
 
 

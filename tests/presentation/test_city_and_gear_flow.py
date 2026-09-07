@@ -433,8 +433,10 @@ def test_a_point_you_do_not_have_is_refused_in_words(content: GameContent, hero:
 def test_a_raised_rank_says_what_it_gave(content: GameContent, hero: Character) -> None:
     """Очко, о котором молчат, потрачено впустую (ADR 0067).
 
-    Кнопка обязана обещать то, что нажатие сделает, а отчёт - называть, что ранг
-    прибавил: откат, сроки и цену, а не только невидимую долю силы.
+    Список обязан обещать то, что нажатие сделает, а отчёт - называть, что ранг
+    прибавил: откат, сроки и цену, а не только невидимую долю силы. Обещание
+    стоит в теле, а не на кнопке: надпись длиннее предела Telegram отдаёт
+    обрезанной, и нажать её нельзя.
     """
     skill = content.skill("warrior_rassechenie")
     ready = replace(
@@ -446,7 +448,8 @@ def test_a_raised_rank_says_what_it_gave(content: GameContent, hero: Character) 
             masteries={skill.code: ("pierce",)},
         ),
     )
-    assert "откат короче" in skill_screens.skill_entry_text(content, ready, skill)
+    assert "откат короче" in skill_screens.rank_offer(content, ready, skill)
+    assert "ранг 4 из 5" in skill_screens.skill_entry_text(content, ready, skill)
 
     skills = step(content, ready, begin(ready), "Умения")
     raised = step(content, ready, skills, skill_screens.skill_entry_text(content, ready, skill))
@@ -460,9 +463,9 @@ def test_the_first_rank_promises_nothing_extra(content: GameContent, hero: Chara
     """На первом ранге прибавлять нечему, и экран об этом молчит."""
     skill = content.skill("warrior_rassechenie")
     fresh = replace(hero, loadout=replace(hero.loadout, ranks={skill.code: 1}))
-    said = skill_screens.skill_entry_text(content, fresh, skill)
+    said = skill_screens.rank_offer(content, fresh, skill)
     assert "откат короче" not in said
-    assert "следующий за" in said
+    assert "Следующий за" in said
 
 
 def test_a_passive_names_its_own_number_and_promises_nothing_else(
@@ -481,7 +484,7 @@ def test_a_passive_names_its_own_number_and_promises_nothing_else(
         if not skill.is_active and skill.owner_kind is OwnerKind.CLASS
     )
     fresh = replace(hero, loadout=replace(hero.loadout, ranks={passive.code: 1}))
-    said = skill_screens.skill_state(content, fresh, passive)
+    said = skill_screens.rank_offer(content, fresh, passive)
     for promise in ("откат", "сроки", "цена ниже"):
         assert promise not in said
     assert skill_screens.passive_power_words(content, passive, 1) in said
@@ -490,7 +493,7 @@ def test_a_passive_names_its_own_number_and_promises_nothing_else(
 
     # Ранг слышно числом: пятый крупнее первого, и оба сказаны вслух.
     grown = replace(hero, loadout=replace(hero.loadout, ranks={passive.code: 5}))
-    assert skill_screens.passive_power_words(content, passive, 5) in skill_screens.skill_state(
+    assert skill_screens.passive_power_words(content, passive, 5) in skill_screens.rank_offer(
         content, grown, passive
     )
     assert passive.power_at_rank(5) > passive.power_at_rank(1)

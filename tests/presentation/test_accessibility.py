@@ -7,13 +7,24 @@
 from __future__ import annotations
 
 import ast
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from mmorpg.domain.entities import GameContent
-from mmorpg.presentation.telegram.keyboards.labels import BACK, LOOK, MAIN_MENU, SERVICE_ROW
+from mmorpg.domain.entities import Character, GameContent
+from mmorpg.domain.rules.combat import hero_combatant
+from mmorpg.presentation.telegram.keyboards.labels import (
+    BACK,
+    BUTTON_LIMIT,
+    LOOK,
+    MAIN_MENU,
+    SERVICE_ROW,
+    label,
+)
+from mmorpg.presentation.telegram.screens import combat as combat_screens
 from mmorpg.presentation.telegram.screens import items as item_screens
+from mmorpg.presentation.telegram.screens import skills as skill_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import MESSAGE_LIMIT
 from tests.conftest import SOURCE_ROOT, iter_source_files
@@ -192,3 +203,54 @@ def test_every_thing_a_card_can_show_has_a_russian_name(content: GameContent) ->
         shown |= set(armor.modifiers)
     missing = sorted(key for key in shown if key not in item_screens.MODIFIER_NAMES)
     assert not missing, f"нет русского имени на карточке вещи: {missing}"
+
+
+# --- правило 9: надпись укладывается в то, что Telegram отдаёт обратно ---
+
+
+def test_no_screen_draws_a_button_longer_than_telegram_sends(all_screens: list[Screen]) -> None:
+    """Кнопка длиннее предела приходит обрезанной, и экран её не узнаёт.
+
+    Так пропадал целый экран умений: «Обманный финт — боевое, ранг 3 из 5: откат
+    короче...» доезжал без последних знаков, маршрут по точному тексту не
+    находил умения, и в ответ приходило «Нажмите умение из списка».
+    """
+    for screen in all_screens:
+        for row in screen.button_texts(emoji=True):
+            for text in row:
+                assert len(text) <= BUTTON_LIMIT, f"{screen.id}: {len(text)} знаков, {text!r}"
+
+
+def test_a_long_label_is_cut_at_a_word_and_stays_within_the_limit() -> None:
+    long = label("Слово " * 40)
+    assert len(long.text) <= BUTTON_LIMIT
+    assert long.text.endswith("…")
+    assert long.matches(long.text)
+
+
+def test_every_skill_in_the_game_fits_its_button(content: GameContent) -> None:
+    """Ни одно умение не собирает надписи, которую пришлось бы резать.
+
+    Проверяется всё содержимое, а не тот десяток умений, что попал на экраны:
+    ``skills.toml`` правится без кода, и длинное описание не должно превращать
+    кнопку в нерабочую ни в списке умений, ни в боевой панели.
+    """
+    for skill in content.skills:
+        owner = skill.owner.split(":", 1)
+        class_id = owner[1] if owner[0] == "class" else "warrior"
+        if not any(one.id == class_id for one in content.classes):
+            class_id = "warrior"
+        hero = Character(
+            id=1, user_id=1, name="Тест", race_id="human", class_id=class_id, level=150
+        )
+        for rank in (1, content.rules.max_rank):
+            known = replace(hero, loadout=hero.loadout.with_rank(skill.code, rank))
+            for who in (hero, known):
+                said = skill_screens.skill_entry_text(content, who, skill)
+                assert len(said) <= BUTTON_LIMIT, f"{skill.code}: {len(said)} знаков, {said!r}"
+            if not skill.is_active:
+                continue
+            panel = replace(known, loadout=known.loadout.with_active(0, skill.code))
+            viewer = hero_combatant(content, panel, combatant_id=1, side=0, live=True)
+            in_panel = combat_screens.skill_label(content, panel, viewer, 0).text
+            assert len(in_panel) <= BUTTON_LIMIT, f"{skill.code}: {in_panel!r}"
