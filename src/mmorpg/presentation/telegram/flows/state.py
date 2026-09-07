@@ -249,8 +249,11 @@ class PlayState:
     skill_page: PageState = field(default_factory=PageState)
     mentor_page: PageState = field(default_factory=PageState)
     board_page: PageState = field(default_factory=PageState)
-    # Что игрок сейчас выбирает: слот, грань, задание, подземелье.
+    # Что игрок сейчас выбирает: слот, выучку, задание, подземелье.
     pick_slot: int = 0
+    #: Умение, которому игрок сейчас выбирает выучку (``rules/skill_mastery``).
+    #: Это выбор, а не переходное: с экрана выучки уходят и возвращаются.
+    mastery_code: str = ""
     quest_id: str = ""
     craft_id: str = ""
     dungeon_pick: str = ""
@@ -351,6 +354,7 @@ class PlayState:
                 "dungeon_pick": self.dungeon_pick,
                 "quest": self.quest_id,
                 "npc": self.npc_id,
+                "mastery": self.mastery_code,
                 "subclass": self.subclass_id,
                 "item": self.item_id,
                 "transfer": [self.transfer_scope, self.transfer_to, self.transfer_item],
@@ -453,6 +457,7 @@ class PlayState:
             dungeon_pick=str(data.get("dungeon_pick", "")),
             quest_id=data.get("quest", ""),
             npc_id=data.get("npc", ""),
+            mastery_code=str(data.get("mastery", "")),
             subclass_id=str(data.get("subclass", "")),
             item_id=data.get("item", ""),
             searching=bool(data.get("searching", False)),

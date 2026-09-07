@@ -16,6 +16,11 @@
   отнимает ход: лишний ход оглушения бой не разменивает, а кончает;
 - на десятую долю удешевляет умение, до половины на пятом ранге.
 
+**А третий ранг и пятый вдобавок спрашивают, чему умение научилось**
+(``rules/skill_mastery``): игрок берёт выучку из подходящих этому умению, и она
+меняет не размер, а само действие - удар начинает бить по всем, лечение ложится
+на отряд, помеха расходится по стае. Ровно за этим ранг и поднимают.
+
 Всё чисто: каждая функция возвращает нового персонажа или ``None``, когда так
 делать нельзя, а объясняет отказ словами вызывающий.
 """
@@ -27,8 +32,9 @@ from dataclasses import dataclass, replace
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, OwnerKind, Skill, SkillKind
 from mmorpg.domain.entities.statuses import CONTROL_STATUSES
+from mmorpg.domain.rules import skill_mastery as mastery_rules
 from mmorpg.domain.rules import subclass as subclass_rules
-from mmorpg.domain.rules.skill_effects import EffectSpec, Inflict
+from mmorpg.domain.rules.skill_effects import EffectSpec, Inflict, spec_for
 
 #: Через сколько рангов откат укорачивается на ход и наложенное держится на ход
 #: дольше. Два: на пяти рангах это два хода к пятому - разница, которую слышно.
@@ -167,9 +173,12 @@ def forget(content: GameContent, character: Character, skill: Skill) -> Characte
     refund = spent_on(content, character, skill.code)
     ranks = {key: value for key, value in character.loadout.ranks.items() if key != skill.code}
     actives = tuple(None if code == skill.code else code for code in character.loadout.actives)
+    # Выучка уходит вместе с умением: чему было научено то, чего никто не знает,
+    # не значит ничего, а выученное заново начинается с чистого листа.
+    loadout = character.loadout.without_masteries(skill.code)
     return replace(
         character,
-        loadout=replace(character.loadout, ranks=ranks, actives=actives),
+        loadout=replace(loadout, ranks=ranks, actives=actives),
         unspent_skill_points=character.unspent_skill_points + refund,
     )
 
@@ -209,6 +218,7 @@ def reclaim_lost(content: GameContent, character: Character) -> Character | None
     points = sum(spent_on(content, character, code) for code in lost)
     ranks = {key: value for key, value in loadout.ranks.items() if key not in gone}
     actives = tuple(None if code in gone else code for code in loadout.actives)
+    masteries = {key: value for key, value in loadout.masteries.items() if key not in gone}
     # Расовое умение не выбирают, поэтому его не забывают, а заменяют на то,
     # которое у этой расы есть сейчас.
     racial = loadout.racial
@@ -217,7 +227,7 @@ def reclaim_lost(content: GameContent, character: Character) -> Character | None
         racial = fresh if content.has_skill(fresh) else None
     return replace(
         character,
-        loadout=replace(loadout, ranks=ranks, actives=actives, racial=racial),
+        loadout=replace(loadout, ranks=ranks, actives=actives, racial=racial, masteries=masteries),
         unspent_skill_points=character.unspent_skill_points + points,
     )
 
@@ -340,4 +350,71 @@ def at_rank(spec: EffectSpec, rank: int) -> EffectSpec:
         barrier_turns=spec.barrier_turns + bonus if spec.barrier_turns else 0,
         inflicts=_stretched(spec.inflicts, bonus),
         holds=_stretched(spec.holds, bonus),
+    )
+
+
+# --- чему умение научено ----------------------------------------------
+
+
+def spec_of(skill: Skill) -> EffectSpec:
+    """Описание эффекта умения без поправок - то, из чего считается всё прочее."""
+    return spec_for(skill.effect)
+
+
+def masteries_of(character: Character, skill: Skill) -> tuple[str, ...]:
+    """Коды выучек, взятых этому умению."""
+    return character.loadout.masteries_of(skill.code)
+
+
+def taken_masteries(character: Character, skill: Skill) -> tuple[mastery_rules.Mastery, ...]:
+    """Выучки этого умения так, как их знает игра сейчас."""
+    return mastery_rules.known(masteries_of(character, skill))
+
+
+def mastery_tier_due(content: GameContent, character: Character, skill: Skill) -> int | None:
+    """Ступень выучки, которую этому умению пора выбрать. ``None`` - нечего.
+
+    Пассивному умению выучек не предлагают вовсе: у пассивки нет ни хода, ни
+    цели, и менять в её действии нечего - ранг платит ей размером (ADR 0073).
+    """
+    if not skill.is_active or not is_known(character, skill.code):
+        return None
+    rank = character.loadout.rank_of(skill.code)
+    return mastery_rules.pending_tier(spec_of(skill), rank, masteries_of(character, skill))
+
+
+def mastery_choices(
+    content: GameContent, character: Character, skill: Skill
+) -> tuple[mastery_rules.Mastery, ...]:
+    """Из чего этому умению сейчас выбирают. Пусто - выбирать нечего или не пора."""
+    tier = mastery_tier_due(content, character, skill)
+    if tier is None:
+        return ()
+    return mastery_rules.offered(spec_of(skill), tier)
+
+
+def choose_mastery(
+    content: GameContent, character: Character, skill: Skill, code: str
+) -> Character | None:
+    """Научить умение выучке. ``None`` - так делать нельзя.
+
+    Выбор необратим, как выбор ветки: обратимый выбор - это настройка. Вернуть
+    его можно только вместе с самим умением, разобрав его у наставника.
+    """
+    if code not in {one.code for one in mastery_choices(content, character, skill)}:
+        return None
+    return replace(character, loadout=character.loadout.with_mastery(skill.code, code))
+
+
+def waiting_for_mastery(content: GameContent, character: Character) -> tuple[Skill, ...]:
+    """Умения, которым игрок ещё не сказал, чему они научились.
+
+    Читается экраном умений и главным меню: ранг, купленный и не потраченный на
+    выбор, - это очко, лежащее без дела, и молчать о нём нельзя.
+    """
+    return tuple(
+        content.skill(code)
+        for code in sorted(known_codes(character))
+        if content.has_skill(code)
+        and mastery_tier_due(content, character, content.skill(code)) is not None
     )

@@ -106,6 +106,9 @@ class EffectSpec:
     #: Каким состоянием умение точит цель, когда у него есть ``dot_turns``.
     #: По умолчанию кровотечение; огненное умение жжёт, ядовитое травит.
     dot_status: StatusKind = StatusKind.BLEEDING
+    #: Во сколько раз сильнее точит то, что умение оставило. Единица - как
+    #: обычно; больше её делает выучка «Глубокая рана» (``rules/skill_mastery``).
+    dot_scale: float = 1.0
     #: Сколько ходов держится барьер. Ноль - берётся общий срок.
     barrier_turns: int = 0
     stun_turns: int = 0
@@ -120,6 +123,10 @@ class EffectSpec:
     cleanse_count: int = 0
     special: str = ""
     tags: tuple[str, ...] = field(default_factory=tuple)
+    #: Пометки выучки, которые читает сам бой: то, чего не выразить числами
+    #: (``rules/skill_mastery``). Пусто у всякого умения, которое ничему не
+    #: научили.
+    marks: frozenset[str] = frozenset()
 
     @property
     def damage_type(self) -> DamageType | None:

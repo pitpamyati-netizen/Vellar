@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from mmorpg.domain.entities import GameContent, SkillKind
+from mmorpg.domain.rules import passives as passive_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.modifiers import EFFECTIVE_KEYS
 from mmorpg.domain.rules.progression import MAX_LEVEL
@@ -19,6 +20,9 @@ from mmorpg.infrastructure.content.loader import (
 )
 
 RACE_STAT_BUDGET = 3
+
+#: Сколько пассивок класса обязаны быть укладами, а не прибавками (ADR 0080).
+MIN_PASSIVE_WAYS = 8
 
 
 def test_sixteen_races(content: GameContent) -> None:
@@ -191,13 +195,37 @@ def test_every_passive_points_at_a_modifier_the_engine_reads(content: GameConten
     выше», «часть полученного урона возвращается обидчику». Игрок вкладывал в них
     очко и получал строку на экране. Словарь ``traits.toml`` шире того, что
     движок читает, и потому сверяться нужно с ``EFFECTIVE_KEYS``, а не с ним.
+
+    Пассивка называет одно из двух: ключ прибавки, который движок складывает,
+    или уклад - правило, которое движок исполняет (``rules/passives``, ADR 0080).
+    Третьего не бывает.
     """
     promised = [
         (skill.code, skill.effect)
         for skill in content.skills
-        if skill.kind is SkillKind.PASSIVE and skill.effect not in EFFECTIVE_KEYS
+        if skill.kind is SkillKind.PASSIVE
+        and skill.effect not in EFFECTIVE_KEYS
+        and skill.effect not in passive_rules.POWER_KEYS
     ]
     assert not promised, promised
+
+
+def test_every_class_has_passives_that_change_the_rules(content: GameContent) -> None:
+    """У каждого класса есть пассивки, которые не просто прибавляют.
+
+    Сто шестьдесят пассивок обещали одно и то же - «поднимает броню», «поднимает
+    урон», - и очко в них не меняло в бою ничего (ADR 0080). Половина каждого
+    класса теперь уклады: они срабатывают, и их слышно.
+    """
+    for klass in content.classes:
+        ways = [
+            skill.effect
+            for skill in content.skills
+            if skill.kind is SkillKind.PASSIVE
+            and skill.owner_id == klass.id
+            and skill.effect in passive_rules.POWER_KEYS
+        ]
+        assert len(ways) >= MIN_PASSIVE_WAYS, (klass.id, ways)
 
 
 def test_every_racial_passive_does_something(content: GameContent) -> None:

@@ -440,15 +440,19 @@ def test_a_raised_rank_says_what_it_gave(content: GameContent, hero: Character) 
     ready = replace(
         hero,
         unspent_skill_points=5,
-        loadout=replace(hero.loadout, ranks={skill.code: 3}),
+        loadout=replace(
+            hero.loadout,
+            ranks={skill.code: 4},
+            masteries={skill.code: ("pierce",)},
+        ),
     )
     assert "откат короче" in skill_screens.skill_entry_text(content, ready, skill)
 
     skills = step(content, ready, begin(ready), "Умения")
     raised = step(content, ready, skills, skill_screens.skill_entry_text(content, ready, skill))
     assert raised.pending.character is not None
-    assert raised.pending.character.loadout.rank_of(skill.code) == 4
-    assert "ранг 4" in raised.notice
+    assert raised.pending.character.loadout.rank_of(skill.code) == 5
+    assert "ранг 5" in raised.notice
     assert "Теперь" in raised.notice
 
 

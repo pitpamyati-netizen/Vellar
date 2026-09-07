@@ -54,16 +54,25 @@ from mmorpg.domain.entities.content import GameContent, Skill
 from mmorpg.domain.entities.damage import UNARMED, DamageType
 from mmorpg.domain.entities.dice import Dice
 from mmorpg.domain.entities.effects import ActiveEffect, EffectStack, status_effect
-from mmorpg.domain.entities.location import Enemy, EnemyRank, EnemyRole
+from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank, EnemyRole
 from mmorpg.domain.entities.stats import StatCode
-from mmorpg.domain.entities.statuses import DOT_STATUSES, StatusKind, status_spec
+from mmorpg.domain.entities.statuses import (
+    CONTROL_STATUSES,
+    DOT_STATUSES,
+    StatusKind,
+    status_spec,
+)
 from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.procgen.enemies import RANK_FACTORS, group_scale
 from mmorpg.domain.procgen.seeds import derive, rng, to_int
+from mmorpg.domain.rules import combo as combo_rules
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import modifiers as mods
+from mmorpg.domain.rules import passives as passive_rules
+from mmorpg.domain.rules import skill_mastery as mastery_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules import subclass as subclass_rules
+from mmorpg.domain.rules import subclass_powers as way_rules
 from mmorpg.domain.rules.progression import experience_reward
 from mmorpg.domain.rules.skill_effects import (
     COUNTER,
@@ -189,6 +198,25 @@ BRUTE_FURY_SCALE = 1.5
 #: Треть здоровья у цели - и разбойник бьёт наверняка.
 ROGUE_FINISH_RATIO = 1.0 / 3.0
 
+# --- уклады: пассивные умения и ветки ---------------------------------
+#
+# Уклад - это правило, а не прибавка: пассивка отвечает на удар, ветка поднимает
+# павшего, кладёт усиление на весь отряд, вызывает противника на себя
+# (``rules/passives``, ``rules/subclass_powers``). Собираются они один раз, при
+# сборке бойца, и весь бой лежат в нём: пассивку не снимают посреди боя, ветку
+# не выбирают заново.
+
+#: Ниже какой доли здоровья считается, что бойцу осталось немного, - для
+#: «Крайности» и «Палача».
+LOW_STAND_RATIO = 1.0 / 3.0
+#: Сколько ходов держится ответ закрывшегося («Ответный щит»).
+GUARD_ANSWER_TURNS = 2
+#: Рода урона, которые «Вытягивание» обращает в здоровье: тьма, рассудок и
+#: кислота - то, чем бьёт всякий, кто тянет чужую жизнь.
+SIPHON_TYPES = frozenset({DamageType.NEGATIVE, DamageType.MENTAL, DamageType.ACID})
+#: Рода урона, которыми «Ревнитель» лечит своих.
+ZEALOT_TYPES = frozenset({DamageType.HOLY, DamageType.LIGHT})
+
 # --- защита ------------------------------------------------------------
 #
 # Закрыться умеет всякий, и умения на это не нужно: ход уходит целиком на
@@ -244,6 +272,10 @@ def hero_combatant(
         character_id=character.id,
         user_id=character.user_id if live else 0,
         effects=effects,
+        # Уклады считаются один раз, здесь: пассивку не снимают посреди боя, а
+        # ветку не выбирают заново (``rules/passives``, ``rules/subclass_powers``).
+        powers=passive_rules.collect(content, character),
+        ways=way_rules.of(content, character),
     )
 
 
@@ -263,6 +295,101 @@ def monster_combatant(enemy: Enemy, *, combatant_id: int, side: int = DEFENDERS)
     )
 
 
+def has_way(one: Combatant, code: str) -> bool:
+    """Держит ли этот боец такой уклад ветки."""
+    return code in one.ways
+
+
+def power_of(one: Combatant, code: str) -> float:
+    """Величина уклада пассивки у этого бойца. Ноль - уклада у него нет."""
+    return passive_rules.amount(one.powers, code)
+
+
+def _once_done(one: Combatant, code: str) -> bool:
+    """Сработал ли уже в этом бою уклад, которому положено сработать однажды.
+
+    Память берётся там же, где её берут умения, - в откатах бойца: они и так
+    живут ровно один бой и ровно у одного бойца.
+    """
+    return one.cooldown_of(f"once:{code}") > 0
+
+
+def _mark_once(one: Combatant, code: str) -> Combatant:
+    """Запомнить, что уклад в этом бою уже сработал."""
+    return one.with_cooldown(f"once:{code}", MAX_AUTOPLAY_TURNS)
+
+
+def _servant(
+    master: Combatant, enemy: Enemy, *, combatant_id: int, share: float, name: str
+) -> Combatant:
+    """Боец, приведённый героем на свою сторону: поднятый павший или спутник.
+
+    За ним ходит движок, как за всякой породой, и дерётся он тем же кодом. Плату
+    он не приносит: золото и добыча у него сняты, а сам павший остался лежать на
+    своей стороне и заплатит за себя сам (``_spoils``).
+    """
+    brought = replace(
+        enemy,
+        name=name,
+        max_health=max(1, round(enemy.max_health * share)),
+        damage=max(1, round(enemy.damage * share)),
+        gold=0,
+        loot=(),
+        affixes=(),
+        rank=EnemyRank.NORMAL,
+        stakes=1.0,
+    )
+    return replace(
+        monster_combatant(brought, combatant_id=combatant_id, side=master.side),
+        master_id=master.id,
+    )
+
+
+def _companion_enemy(one: Combatant) -> Enemy:
+    """Спутник «Зверя рядом»: зверь по уровню хозяина и по его же силам."""
+    return Enemy(
+        archetype_id="companion",
+        name="Спутник",
+        kind=EnemyKind.BEAST,
+        level=one.level,
+        max_health=max(1, round(one.max_health * way_rules.COMPANION_SHARE)),
+        damage=max(1, round(one.max_health * way_rules.COMPANION_SHARE / 8)),
+        armor=0,
+        initiative=one.initiative,
+        loot=(),
+        gold=0,
+        role=EnemyRole.BRUTE,
+        element=DamageType.RENDING,
+    )
+
+
+def with_companions(combatants: Sequence[Combatant]) -> tuple[Combatant, ...]:
+    """Довести состав сторон спутниками тех, кто их приводит (``beastmaster``).
+
+    Одно место на всю игру: бои собираются в разных службах, а спутник входит в
+    каждый - и в узле, и в спуске, и на арене. Место в строю общее: там, где
+    пятеро уже стоят, спутнику войти некуда (``MAX_SIDE``).
+    """
+    fighters = list(combatants)
+    next_id = max((one.id for one in fighters), default=0) + 1
+    for one in tuple(fighters):
+        if not has_way(one, "beastmaster"):
+            continue
+        if sum(1 for other in fighters if other.side == one.side) >= MAX_SIDE:
+            continue
+        fighters.append(
+            _servant(
+                one,
+                _companion_enemy(one),
+                combatant_id=next_id,
+                share=1.0,
+                name="Спутник",
+            )
+        )
+        next_id += 1
+    return tuple(fighters)
+
+
 def open_battle(
     content: GameContent,
     roster: Mapping[int, Character],
@@ -274,7 +401,7 @@ def open_battle(
     Никто не ходит первым по праву: очередь решает инициатива, и если волк
     быстрее, первый удар его.
     """
-    fighters = tuple(combatants)
+    fighters = with_companions(combatants)
     state = BattleState(combatants=fighters, order=_order_for(fighters, seed, 1))
     state = _drive(content, roster, state, seed)
     return state
@@ -312,7 +439,7 @@ def join_battle(
         side=side,
         live=True,
     )
-    joined = replace(state, combatants=(*state.combatants, combatant))
+    joined = replace(state, combatants=with_companions((*state.combatants, combatant)))
     joined = joined.with_events(
         BattleEvent(kind=EventKind.JOINED, actor_id=combatant.id, actor=combatant.name)
     )
@@ -330,7 +457,11 @@ def _order_for(combatants: Sequence[Combatant], seed: bytes, round_number: int) 
     """
 
     def key(one: Combatant) -> tuple[float, int]:
-        boost = 1.0 + one.effects.modifiers().get("initiative_percent", 0.0) / 100.0
+        percent = one.effects.modifiers().get("initiative_percent", 0.0)
+        # «Первый шаг»: в первом круге боец ходит раньше (``rules/passives``).
+        if round_number <= 1:
+            percent += power_of(one, "swift_start")
+        boost = 1.0 + percent / 100.0
         lot = to_int(derive(seed, "order", one.id)) % 1000
         return (-one.initiative * boost, lot)
 
@@ -386,6 +517,14 @@ def role_action(state: BattleState, actor: Combatant, target_id: int) -> BattleA
         # не нужно: «Защититься» есть у всякого (ADR 0025).
         return BattleAction(kind=ActionKind.DEFEND)
     if not role_move_due(state, actor):
+        return None
+    # Приёму можно помешать, и это и есть ответ панели на объявленную повадку:
+    # заклинателя затыкают молчанием, знахарю запирают лечение. Повадка стаи
+    # называется до боя (``screens/play``), поэтому такой ответ - решение, а не
+    # везение.
+    if role is EnemyRole.CASTER and actor.effects.has(StatusKind.SILENCE):
+        return None
+    if role is EnemyRole.HEALER and actor.effects.has(StatusKind.HEAL_BLOCK):
         return None
     if role is EnemyRole.CASTER and state.visible_foes_of(actor.id):
         return BattleAction(kind=ActionKind.ROLE, target=target_id)
@@ -551,8 +690,19 @@ def _take_turn(
 
     updated = working.by_id(actor_id)
     if updated is not None:
+        # «Ловкач»: первый удар из незаметности за бой хозяина не выдаёт
+        # (``rules/subclass_powers``).
+        slipped = (
+            was_unseen
+            and has_way(updated, "trickster")
+            and not _once_done(updated, "trickster")
+            and action.kind is not ActionKind.DEFEND
+        )
+        if slipped:
+            updated = _mark_once(updated, "trickster")
         if (
             was_unseen
+            and not slipped
             and action.kind is not ActionKind.DEFEND
             and updated.effects.has(StatusKind.UNSEEN)
         ):
@@ -840,9 +990,13 @@ def defend_dodge() -> float:
 
 
 def _defend(state: BattleState, actor: Combatant) -> BattleState:
-    """Закрыться: броня от уровня и уклонение до своего следующего хода."""
+    """Закрыться: броня от уровня и уклонение до своего следующего хода.
+
+    «Ответный щит» делает из этого ход, а не пропуск: закрывшийся отвечает тому,
+    кто по нему попал (``rules/passives``).
+    """
     armor = float(defend_armor(actor.level))
-    return _inflicted(
+    working = _inflicted(
         state,
         actor.id,
         Inflict(kind=StatusKind.GUARD, turns=DEFEND_TURNS),
@@ -851,6 +1005,19 @@ def _defend(state: BattleState, actor: Combatant) -> BattleState:
         source_code="defend",
         magnitude=armor,
     )
+    answer = power_of(actor, "guard_answer")
+    guarded = working.by_id(actor.id)
+    if not answer or guarded is None:
+        return working
+    watching = ActiveEffect(
+        id="guard_answer",
+        name="Ответный щит",
+        modifiers={COUNTER: answer},
+        turns_left=GUARD_ANSWER_TURNS,
+        source="defend",
+        beneficial=True,
+    )
+    return working.replace_combatant(replace(guarded, effects=guarded.effects.apply(watching)))
 
 
 # --- умения -----------------------------------------------------------
@@ -875,6 +1042,52 @@ def _resolve_skill(
         return None
     slotted = actives[action.slot]
     return content.skill(slotted) if slotted and content.has_skill(slotted) else None
+
+
+def _weathered(spec: EffectSpec, actor: Combatant) -> EffectSpec:
+    """Описание эффекта так, как его переделали уклады бойца.
+
+    Одно место, где ветка и пассивка правят само умение: «Порча» тянет всё, что
+    умение вешает, «Буревестник» разводит удар по стае, «Замах» отдаёт соседу
+    долю одноцелевого. Дальше бой считает обычное описание и о том, откуда в нём
+    эти числа, не знает.
+    """
+    working = spec
+    if has_way(actor, "plague"):
+        turns = way_rules.PLAGUE_TURNS
+        working = replace(
+            working,
+            duration=working.duration + turns if working.duration else 0,
+            dot_turns=working.dot_turns + turns if working.dot_turns else 0,
+            dot_scale=working.dot_scale * way_rules.PLAGUE_SCALE,
+            inflicts=tuple(
+                one if one.kind in CONTROL_STATUSES else replace(one, turns=one.turns + turns)
+                for one in working.inflicts
+            ),
+        )
+    if has_way(actor, "stormcaller") and working.category is EffectCategory.DAMAGE:
+        if working.aoe:
+            working = replace(
+                working, damage_scale=working.damage_scale * (1.0 + way_rules.STORM_BONUS / 100.0)
+            )
+        else:
+            working = replace(working, splash=working.splash + way_rules.STORM_SPLASH)
+    # «Замах»: одноцелевой удар задевает соседа (``rules/passives``).
+    cleave = power_of(actor, "cleave")
+    if cleave and working.category is EffectCategory.DAMAGE and not working.aoe:
+        working = replace(working, splash=working.splash + cleave / 100.0)
+    return working
+
+
+def _skill_spec(character: Character, skill: Skill, actor: Combatant) -> EffectSpec:
+    """Что это умение делает у ЭТОГО бойца: с его выучками, рангом и укладами.
+
+    Одно место на всю игру: и цена хода, и сам ход считаются отсюда, поэтому
+    «Лёгкая рука» не может подешеветь на экране и остаться дорогой в бою.
+    """
+    rank = character.loadout.rank_of(skill.code)
+    spec = mastery_rules.applied(spec_for(skill.effect), character.loadout.masteries_of(skill.code))
+    return _weathered(skill_rules.at_rank(spec, rank), actor)
 
 
 def _attempt_skill(
@@ -911,6 +1124,7 @@ def _attempt_skill(
     cost = round(
         _skill_cost(skill, modifiers, free=actor.free_cast, max_resource=actor.max_resource)
         * skill_rules.cost_factor(character.loadout.rank_of(skill.code))
+        * mastery_rules.cost_factor(_skill_spec(character, skill, actor))
     )
     if cost > actor.resource:
         return BattleEvent(kind=EventKind.NOT_ENOUGH_RESOURCE, skill_name=skill.name, amount=cost)
@@ -935,7 +1149,7 @@ def _use_skill(
     # Ранг меняет умение вчетвером сразу: сила, откат, срок наложенного и цена
     # (``rules/skills.rank_gain``, ADR 0067). Цена уже посчитана в ``_attempt_skill``.
     power = skill.power_at_rank(rank)
-    spec = skill_rules.at_rank(spec_for(skill.effect), rank)
+    spec = _skill_spec(character, skill, actor)
     cooldown = skill_rules.cooldown_at_rank(skill, rank)
     reduction = mods.collect_modifiers(content, character, actor.effects).get(
         "cooldown_reduction_percent", 0.0
@@ -949,9 +1163,92 @@ def _use_skill(
         # недоступным ровно ``cooldown`` дальнейших ходов.
         spent = spent.with_cooldown(skill.code, cooldown + 1)
     working = state.replace_combatant(spent)
-    return _apply_spec(
+    standing = {one.id for one in working.living() if one.side != spent.side}
+    seen = len(working.events)
+    done = _apply_spec(
         content, roster, working, spent.id, skill, spec, power, action.target, source
     )
+    fallen = standing - {one.id for one in done.living() if one.side != spent.side}
+    struck_hard = any(
+        event.kind is EventKind.CRIT and event.actor_id == spent.id for event in done.events[seen:]
+    )
+    return _after_skill(
+        content,
+        roster,
+        done,
+        actor_id=spent.id,
+        skill=skill,
+        spec=spec,
+        killed=bool(fallen),
+        crit=struck_hard,
+    )
+
+
+def _after_skill(
+    content: GameContent,
+    roster: Mapping[int, Character],
+    state: BattleState,
+    *,
+    actor_id: int,
+    skill: Skill,
+    spec: EffectSpec,
+    killed: bool,
+    crit: bool,
+) -> BattleState:
+    """Что случается с самим умением после того, как оно сработало.
+
+    Всё это - про откат, и всё это купленное: выучка «Второе дыхание» возвращает
+    умение, добившее цель, а «Средоточие» возвращает его за критический удар.
+    То, что достаётся за добитого противника чем угодно, лежит в ``_after_kill``.
+    Ход при этом уже состоялся - возвращается только ожидание.
+    """
+    actor = state.by_id(actor_id)
+    if actor is None or not actor.alive:
+        return state
+    updated = actor
+    if killed and mastery_rules.MARK_RUSH in spec.marks:
+        updated = updated.with_cooldown(skill.code, 0)
+    if crit and has_way(updated, "arcanist"):
+        updated = updated.with_cooldown(skill.code, 0)
+    if updated is actor:
+        return state
+    return state.replace_combatant(updated)
+
+
+def _after_kill(state: BattleState, actor_id: int) -> BattleState:
+    """Что достаётся добившему - чем бы он ни добил.
+
+    «Разгон» снимает ход со всех откатов и возвращает запас, «Палач» снимает
+    откаты целиком (``rules/passives``, ``rules/subclass_powers``). Пометки
+    укладов, срабатывающих раз за бой, откатами не считаются и остаются.
+    """
+    actor = state.by_id(actor_id)
+    if actor is None or not actor.alive:
+        return state
+    updated = actor
+    if has_way(updated, "executioner"):
+        updated = replace(
+            updated,
+            cooldowns={
+                key: value for key, value in updated.cooldowns.items() if key.startswith("once:")
+            },
+        )
+    if refund := power_of(updated, "kill_refresh"):
+        updated = replace(
+            updated,
+            cooldowns={
+                key: (value if key.startswith("once:") else value - 1)
+                for key, value in updated.cooldowns.items()
+                if key.startswith("once:") or value > 1
+            },
+            resource=min(
+                updated.max_resource,
+                updated.resource + round(updated.max_resource * refund / 100.0),
+            ),
+        )
+    if updated is actor:
+        return state
+    return state.replace_combatant(updated)
 
 
 def skill_cost(skill: Skill, max_resource: int) -> int:
@@ -1027,18 +1324,41 @@ def _apply_spec(
                 # Каждый удар - свой бросок: два удара подряд одним и тем же
                 # оружием не обязаны совпасть.
                 blow = blow_roll(content, character, source, striker.effects, skill.scaling)
+                # Связка: умение, отвечающее на состояние цели, бьёт заметно
+                # сильнее, а «Чутьё связки» доводит эту прибавку (``rules/combo``).
+                answering = combo_rules.answered(skill, current)
+                joined = combo_rules.damage_factor(skill, current)
+                if answering:
+                    joined += power_of(striker, "combo_master") / 100.0
                 working, hit = _strike(
                     content,
                     roster,
                     working,
                     actor=striker,
                     target=current,
-                    power=blow * power / 100.0 * spec.damage_scale * falloff
-                    + (own_dice.roll(source) * rank_scale if own_dice is not None else 0.0),
+                    power=(
+                        blow * power / 100.0 * spec.damage_scale * falloff
+                        + (own_dice.roll(source) * rank_scale if own_dice is not None else 0.0)
+                    )
+                    * joined,
                     spec=spec,
                     skill_name=skill.name,
                     source=source,
                 )
+                if hit and answering:
+                    working = working.with_events(
+                        BattleEvent(
+                            kind=EventKind.COMBO,
+                            actor_id=striker.id,
+                            actor=striker.name,
+                            target_id=current.id,
+                            target=current.name,
+                            skill_name=skill.name,
+                            effect_name=combo_rules.answer_word(skill.answers)
+                            if skill.answers
+                            else "",
+                        )
+                    )
                 if hit and target.id not in landed:
                     landed.append(target.id)
             falloff *= 1.0 - spec.chain_falloff
@@ -1093,6 +1413,16 @@ def _apply_spec(
                     beneficiary,
                     amount,
                     _modifiers_of(content, roster, one),
+                    skill_name=skill.name,
+                )
+            # «Заступничество»: вылеченное держится ещё и барьером, поэтому
+            # лечение впрок перестаёт быть выброшенным ходом
+            # (``rules/subclass_powers``).
+            if has_way(actor, "sanctuary"):
+                working = _warded(
+                    working,
+                    beneficiary,
+                    amount=round(amount * way_rules.SANCTUARY_SHARE),
                     skill_name=skill.name,
                 )
 
@@ -1210,19 +1540,29 @@ def _apply_statuses(
     if actor is None:  # pragma: no cover
         return working
 
+    # «Припев» кладёт на весь отряд и состояния, которыми боец усиливает себя:
+    # припев поют вместе, а не про себя.
+    keepers = (
+        tuple(one.id for one in working.allies_of(actor_id))
+        if (has_way(actor, "refrain") or spec.aoe) and spec.category is not EffectCategory.DAMAGE
+        else (actor_id,)
+    )
     for hold in spec.holds:
-        working = _inflicted(
-            working,
-            actor_id,
-            hold,
-            power=power,
-            skill_name=skill.name,
-            source_code=skill.code,
-        )
+        for keeper in keepers:
+            working = _inflicted(
+                working,
+                keeper,
+                hold,
+                power=power,
+                skill_name=skill.name,
+                source_code=skill.code,
+            )
 
     if not spec.inflicts:
         return working
-    if landed is None:
+    # «Морок»: помеха ложится, даже когда удар прошёл мимо. Всем прочим она
+    # по-прежнему идёт следом за попаданием (ADR 0016).
+    if landed is None or has_way(actor, "lullaby"):
         targets = tuple(one.id for one in _foes(working, actor, requested, aoe=spec.aoe))
     else:
         targets = landed
@@ -1278,16 +1618,43 @@ def _heal(
         return state
     healed = round(amount * mods.percent(modifiers, "healing_taken_percent"))
     updated, restored = one.healed(max(0, healed))
-    if not restored:
-        return state
-    return state.replace_combatant(updated).with_events(
-        BattleEvent(
-            kind=EventKind.HEAL,
-            actor_id=updated.id,
-            actor=updated.name,
-            amount=restored,
+    # «Избыток»: лечение, которому некуда лечь, становится барьером - и потому
+    # лечение полного здоровья перестаёт быть выброшенным ходом
+    # (``rules/passives``).
+    spare = max(0, healed - restored)
+    working = state
+    if restored:
+        working = working.replace_combatant(updated).with_events(
+            BattleEvent(
+                kind=EventKind.HEAL,
+                actor_id=updated.id,
+                actor=updated.name,
+                amount=restored,
+                skill_name=skill_name,
+            )
+        )
+    if spare and (overheal := power_of(one, "overheal")):
+        working = _warded(
+            working,
+            combatant_id,
+            amount=round(spare * overheal / 100.0),
             skill_name=skill_name,
         )
+    return working
+
+
+def _warded(state: BattleState, combatant_id: int, *, amount: int, skill_name: str) -> BattleState:
+    """Барьер, поставленный укладом, а не умением: имя у него - имя причины."""
+    if amount <= 0:
+        return state
+    return _inflicted(
+        state,
+        combatant_id,
+        Inflict(kind=StatusKind.BARRIER, turns=DEFAULT_BARRIER_TURNS),
+        power=float(amount),
+        skill_name=skill_name,
+        source_code="",
+        magnitude=float(amount),
     )
 
 
@@ -1315,7 +1682,12 @@ def _inflicted(
         # Обещание «вас нельзя оглушить» держится с той стороны, с какой дано.
         return state
     amount = inflict.magnitude(power) if magnitude is None else magnitude
-    effect = status_effect(kind, turns=inflict.turns, magnitude=amount, source=source_code)
+    turns = inflict.turns
+    # «Хладнокровие»: беда держится на бойце меньше, чем на всяком другом, - но
+    # хотя бы ход, иначе уклад отменял бы состояния вовсе (``rules/passives``).
+    if not spec.beneficial and (ward := power_of(one, "status_ward")):
+        turns = max(1, round(turns * max(0.0, 1.0 - ward / 100.0)))
+    effect = status_effect(kind, turns=turns, magnitude=amount, source=source_code)
     updated = replace(one, effects=one.effects.apply(effect))
     if kind is StatusKind.BARRIER:
         updated = replace(updated, barrier=updated.barrier + max(0, round(amount)))
@@ -1329,7 +1701,7 @@ def _inflicted(
             amount=max(0, round(amount)) if kind is StatusKind.BARRIER else 0,
             skill_name=skill_name,
             effect_name=spec.name,
-            turns=inflict.turns,
+            turns=turns,
         )
     )
 
@@ -1394,7 +1766,12 @@ def _dotted(
         return state
     per_turn = max(
         1.0,
-        blow * power / 100.0 * DOT_SHARE * mods.percent(modifiers, "dot_damage_percent"),
+        blow
+        * power
+        / 100.0
+        * DOT_SHARE
+        * spec.dot_scale
+        * mods.percent(modifiers, "dot_damage_percent"),
     )
     working = state
     for combatant_id in struck:
@@ -1473,17 +1850,26 @@ def _apply_modifier_bundles(
             source=skill.code,
             beneficial=True,
         )
-        working = working.replace_combatant(replace(actor, effects=actor.effects.apply(effect)))
-        working = _repooled(content, roster, working, actor_id)
-        working = working.with_events(
-            BattleEvent(
-                kind=EventKind.EFFECT_APPLIED,
-                actor_id=actor_id,
-                actor=actor.name,
-                effect_name=skill.name,
-                turns=spec.duration,
+        # «Припев»: то, чем ветка усиливает себя, ложится на весь отряд
+        # (``rules/subclass_powers``). Выучка «Разлив» делает то же самое
+        # по-своему - через ``aoe``, - и оба пути сходятся здесь.
+        chorus = has_way(actor, "refrain") or spec.aoe
+        blessed = tuple(one.id for one in working.allies_of(actor_id)) if chorus else (actor_id,)
+        for beneficiary in blessed:
+            one = working.by_id(beneficiary)
+            if one is None:
+                continue
+            working = working.replace_combatant(replace(one, effects=one.effects.apply(effect)))
+            working = _repooled(content, roster, working, beneficiary)
+            working = working.with_events(
+                BattleEvent(
+                    kind=EventKind.EFFECT_APPLIED,
+                    actor_id=beneficiary,
+                    actor=one.name,
+                    effect_name=skill.name,
+                    turns=spec.duration,
+                )
             )
-        )
 
     if spec.target_modifiers and spec.duration:
         if landed is None:
@@ -1603,9 +1989,16 @@ def _dodge_of(content: GameContent, roster: Mapping[int, Character], one: Combat
 
 def _armor_of(content: GameContent, roster: Mapping[int, Character], one: Combatant) -> float:
     if one.is_hero and (character := roster.get(one.id)) is not None:
-        return float(derived_stats(content, character, one.effects).armor)
-    base = float(one.enemy.armor if one.enemy is not None else 0)
-    return base * mods.percent(one.effects.modifiers(), "armor_percent")
+        armor = float(derived_stats(content, character, one.effects).armor)
+    else:
+        base = float(one.enemy.armor if one.enemy is not None else 0)
+        armor = base * mods.percent(one.effects.modifiers(), "armor_percent")
+    # «Упорство»: чем меньше здоровья, тем крепче броня, и на полном здоровье
+    # уклад не даёт ничего (``rules/passives``).
+    if resolve := power_of(one, "resolve"):
+        missing = 1.0 - one.health / max(1, one.max_health)
+        armor *= 1.0 + missing * resolve / 100.0
+    return armor
 
 
 def _modifiers_of(
@@ -1727,6 +2120,35 @@ def _shed_on_hit(one: Combatant) -> tuple[Combatant, tuple[str, ...]]:
     return replace(one, effects=effects), tuple(status_spec(kind).name for kind in shed)
 
 
+def _way_damage(state: BattleState, actor: Combatant, target: Combatant) -> float:
+    """Множитель, который дают укладам обстоятельства этого удара.
+
+    Всё, что смотрит по сторонам, читается здесь и только здесь - тем же
+    правилом, каким читаются прибавки (``situational_damage``): проценты
+    складываются, множитель получается один.
+    """
+    total = 0.0
+    ratio = target.health / max(1, target.max_health)
+    own = actor.health / max(1, actor.max_health)
+    if has_way(actor, "executioner") and ratio <= way_rules.EXECUTIONER_THRESHOLD:
+        total += way_rules.EXECUTIONER_BONUS
+    if has_way(actor, "lullaby") and target.controlled is not None:
+        total += way_rules.LULLABY_BONUS
+    if has_way(actor, "duelist") and len(state.foes_of(actor.id)) <= 1:
+        total += way_rules.DUELIST_DAMAGE
+    if has_way(actor, "berserker"):
+        total += way_rules.BERSERKER_BONUS * (1.0 - own)
+    if any(has_way(one, "warlord") for one in state.allies_of(actor.id)):
+        total += way_rules.WARLORD_BONUS
+    if target.controlled is not None:
+        # «Расплата»: по тому, кому нечем ходить, бьют больнее.
+        total += power_of(actor, "punish")
+    if state.round <= 1:
+        # «Почин»: первый круг - ваш.
+        total += power_of(actor, "opener")
+    return 1.0 + total / 100.0
+
+
 def _strike(
     content: GameContent,
     roster: Mapping[int, Character],
@@ -1794,8 +2216,17 @@ def _strike(
             - accuracy_penalty,
         ),
     )
+    # «Поединщик» уворачивается, пока против него стоит один
+    # (``rules/subclass_powers``).
+    if has_way(target, "duelist") and len(working.foes_of(target.id)) <= 1:
+        hit_chance = max(MIN_HIT_CHANCE, hit_chance - way_rules.DUELIST_DODGE)
     # От удара из незаметности не уклоняются: цель его не видит (ADR 0043).
-    dodgeable = not (spec is not None and spec.always_hits)
+    # «Почин» и «Ловкач» дают то же самое: первый - в первом круге, второй - пока
+    # бьющего не видно (``rules/passives``, ``rules/subclass_powers``).
+    sure_hand = (working.round <= 1 and power_of(actor, "opener") > 0) or (
+        has_way(actor, "trickster") and actor.effects.has(StatusKind.UNSEEN)
+    )
+    dodgeable = not (spec is not None and spec.always_hits) and not sure_hand
     if dodgeable and source.uniform(0, 100) > hit_chance:
         # По герою - «уклонился», по породе - «промах». Одно и то же число, но
         # игрок слышит в нём своё уклонение, а не чужую неловкость: за первым
@@ -1826,6 +2257,7 @@ def _strike(
         attacker_health_ratio=actor.health / max(1, actor.max_health),
         round_number=state.round,
     )
+    raw *= _way_damage(working, actor, target)
     if spec is not None and spec.execute_scaling:
         missing = 1.0 - target.health / max(1, target.max_health)
         raw *= 1.0 + missing * spec.execute_scaling
@@ -1862,6 +2294,13 @@ def _strike(
     # Пока держится «Последний рубеж», боец не падает.
     if not hurt.alive and target.effects.modifiers().get(UNDYING, 0.0) > 0:
         hurt = replace(hurt, health=1)
+    # «Не пасть»: раз за бой смертельный удар оставляет бойцу немного здоровья
+    # (``rules/passives``). Раз - и не больше: иначе бой не кончается вовсе.
+    stand = power_of(hurt, "last_stand")
+    if not hurt.alive and stand and not _once_done(hurt, "last_stand"):
+        hurt = _mark_once(
+            replace(hurt, health=max(1, round(hurt.max_health * stand / 100.0))), "last_stand"
+        )
     working = working.replace_combatant(hurt)
     working = working.with_events(
         BattleEvent(
@@ -1896,16 +2335,63 @@ def _strike(
 
     lifesteal = spec.lifesteal if spec is not None else 0.0
     lifesteal += attacker_mods.get("lifesteal_percent", 0.0) / 100.0
+    # «Вытягивание»: тьма, рассудок и кислота возвращают бьющему часть удара
+    # (``rules/subclass_powers``).
+    if has_way(actor, "siphon") and struck_with in SIPHON_TYPES:
+        lifesteal += way_rules.SIPHON_SHARE
+    # «Кровопийца»: удар по цели, которую уже точат, кормит бьющего
+    # (``rules/passives``).
+    if any(hurt.effects.has(kind) for kind in DOT_STATUSES):
+        lifesteal += power_of(actor, "bleed_feed") / 100.0
     if lifesteal:
         working = _heal(working, actor.id, round(amount * lifesteal), attacker_mods)
 
-    if not hurt.alive:
-        return (
-            working.with_events(
-                BattleEvent(kind=EventKind.DEFEATED, target_id=hurt.id, target=hurt.name)
-            ),
-            True,
+    # «Отдача»: критический удар возвращает бьющему запас (``rules/passives``).
+    if is_crit and (refund := power_of(actor, "crit_refund")):
+        striker = working.by_id(actor.id)
+        if striker is not None and striker.max_resource:
+            working = working.replace_combatant(
+                replace(
+                    striker,
+                    resource=min(
+                        striker.max_resource,
+                        striker.resource + round(striker.max_resource * refund / 100.0),
+                    ),
+                )
+            )
+
+    # «Ревнитель»: свет и святость лечат самого раненого в отряде
+    # (``rules/subclass_powers``).
+    if has_way(actor, "zealot") and struck_with in ZEALOT_TYPES:
+        hurting = [one for one in working.allies_of(actor.id) if one.health < one.max_health]
+        if hurting:
+            mended = min(hurting, key=lambda one: one.health / max(1, one.max_health))
+            working = _heal(
+                working,
+                mended.id,
+                round(amount * way_rules.ZEALOT_SHARE),
+                _modifiers_of(content, roster, mended),
+            )
+
+    # «Заслон»: ударенный смотрит на того, кто его ударил, а не на его товарищей
+    # (``rules/subclass_powers``, ADR 0027).
+    if has_way(actor, "bulwark") and hurt.alive:
+        working = _inflicted(
+            working,
+            hurt.id,
+            Inflict(kind=StatusKind.TAUNT, turns=way_rules.BULWARK_TURNS),
+            power=0.0,
+            skill_name=skill_name,
+            source_code="bulwark",
+            magnitude=float(actor.id),
         )
+
+    if not hurt.alive:
+        working = working.with_events(
+            BattleEvent(kind=EventKind.DEFEATED, target_id=hurt.id, target=hurt.name)
+        )
+        working = _after_kill(working, actor.id)
+        return _raised(working, actor_id=actor.id, fallen=hurt), True
 
     if not answering and actor.enemy is not None and actor.enemy.affixes:
         working = _affix_on_hit(
@@ -1923,6 +2409,42 @@ def _strike(
             source=source,
         )
     return working, True
+
+
+def _raised(state: BattleState, *, actor_id: int, fallen: Combatant) -> BattleState:
+    """Поднять павшего на свою сторону, если тот, кто его свалил, это умеет.
+
+    Слуга один: второй поднятый - это уже не ветка, а вторая сторона боя
+    (``rules/subclass_powers``). Сам павший остаётся лежать там, где лежал, и
+    платит за себя как всякий побеждённый (``_spoils``).
+    """
+    master = state.by_id(actor_id)
+    if (
+        master is None
+        or not master.alive
+        or fallen.enemy is None
+        or not has_way(master, "raise_dead")
+        or _once_done(master, "raise_dead")
+        or len(state.living(master.side)) >= MAX_SIDE
+    ):
+        return state
+    servant = _servant(
+        master,
+        fallen.enemy,
+        combatant_id=max(one.id for one in state.combatants) + 1,
+        share=way_rules.RAISE_SHARE,
+        name=f"{fallen.name} (поднятый)",
+    )
+    working = state.replace_combatant(_mark_once(master, "raise_dead"))
+    return replace(working, combatants=(*working.combatants, servant)).with_events(
+        BattleEvent(
+            kind=EventKind.SUMMONED,
+            actor_id=master.id,
+            actor=master.name,
+            target_id=servant.id,
+            target=servant.name,
+        )
+    )
 
 
 def _affix_on_hit(
@@ -2248,6 +2770,53 @@ def _upkeep(
                 actor=updated.name,
                 effect_name=effect.name,
             )
+        )
+    working = _panicked(working, combatant_id, modifiers)
+    return _dismissed(working)
+
+
+def _panicked(state: BattleState, combatant_id: int, modifiers: Mapping[str, float]) -> BattleState:
+    """«Крайность»: впервые упав низко, боец лечится сам (``rules/passives``).
+
+    Считается в конце его хода, а не в миг удара, - иначе уклад срабатывал бы
+    посреди чужой серии и читался бы как случайность.
+    """
+    one = state.by_id(combatant_id)
+    if one is None or not one.alive:
+        return state
+    share = power_of(one, "panic_heal")
+    if not share or _once_done(one, "panic_heal"):
+        return state
+    if one.health > one.max_health * LOW_STAND_RATIO:
+        return state
+    working = state.replace_combatant(_mark_once(one, "panic_heal"))
+    return _heal(
+        working,
+        combatant_id,
+        round(one.max_health * share / 100.0),
+        modifiers,
+        skill_name="Крайность",
+    )
+
+
+def _dismissed(state: BattleState) -> BattleState:
+    """Слуга и спутник уходят с поля вместе с тем, кто их привёл.
+
+    Иначе бой шёл бы дальше над павшим хозяином: сторона не пуста, а драться на
+    ней некому - решать такой бой некому и нечем.
+    """
+    orphaned = tuple(
+        one
+        for one in state.combatants
+        if one.alive
+        and one.master_id
+        and (master := state.by_id(one.master_id)) is not None
+        and not master.alive
+    )
+    working = state
+    for one in orphaned:
+        working = working.replace_combatant(replace(one, left=True)).with_events(
+            BattleEvent(kind=EventKind.FLED, actor_id=one.id, actor=one.name)
         )
     return working
 

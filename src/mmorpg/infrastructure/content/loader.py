@@ -71,6 +71,8 @@ from mmorpg.domain.entities.quest import ObjectiveKind, Quest
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.procgen import items as item_procgen
+from mmorpg.domain.rules import passives as passive_rules
+from mmorpg.domain.rules import subclass_powers as way_rules
 from mmorpg.domain.rules.equipment import WEAPON_SLOT
 from mmorpg.domain.rules.guild import MAX_MEMBERS as GUILD_MAX_MEMBERS
 from mmorpg.domain.rules.modifiers import EFFECTIVE_KEYS
@@ -361,15 +363,38 @@ def _parse_skills(
                 f"skills.toml: {code} uses effect {effect!r}, "
                 "which is not listed in [meta].active_effects"
             )
-        if kind is SkillKind.PASSIVE and effect not in modifier_keys:
+        # Пассивка называет либо ключ прибавки, либо уклад - правило, которое
+        # движок исполняет (``rules/passives``, ADR 0080). Третьего не бывает:
+        # умение, обещающее то, чего никто не считает, в игру не попадает.
+        if (
+            kind is SkillKind.PASSIVE
+            and effect not in modifier_keys
+            and effect not in passive_rules.POWER_KEYS
+        ):
             problems.append(
                 f"skills.toml: passive {code} uses modifier {effect!r}, "
-                "which is not listed in traits.toml [meta].modifier_keys"
+                "which is neither a key from traits.toml [meta].modifier_keys "
+                "nor a way from domain/rules/passives.py"
             )
 
         target = str(entry.get("target", "self"))
         if kind is SkillKind.ACTIVE and target not in targets:
             problems.append(f"skills.toml: {code} has unknown target {target!r}")
+
+        # Связка: состояние, на которое умение отвечает (``rules/combo``).
+        # Названо оно должно быть тем же словом, каким состояние объявлено в
+        # движке, - иначе связка обещана и не сходится никогда.
+        answers_raw = entry.get("answers")
+        answers: StatusKind | None = None
+        if answers_raw is not None:
+            if str(answers_raw) in {one.value for one in StatusKind}:
+                answers = StatusKind(str(answers_raw))
+            else:
+                problems.append(f"skills.toml: {code} answers unknown status {answers_raw!r}")
+            if kind is not SkillKind.ACTIVE:
+                problems.append(
+                    f"skills.toml: passive {code} cannot answer a status: a combo needs a blow"
+                )
 
         scaling_raw = entry.get("scaling")
         scaling: StatCode | None = None
@@ -403,6 +428,7 @@ def _parse_skills(
                 ),
                 weapon_types=tuple(str(value) for value in entry.get("weapons", ())),
                 requires_stealth=bool(entry.get("requires_stealth", False)),
+                answers=answers,
                 dice=_skill_dice(code, entry, problems),
             )
         )
@@ -918,6 +944,16 @@ def _parse_subclasses(
         except (KeyError, ValueError) as error:
             problems.append(f"subclasses.toml: {subclass_id}: {error}")
             continue
+        # Уклад ветки - правило, которым она меняет бой (``rules/subclass_powers``,
+        # ADR 0082). Ветка без уклада отличалась бы от соседней одними
+        # процентами, и «кем ты стал» не значило бы ничего.
+        way = str(entry.get("power", ""))
+        if way and way not in way_rules.POWER_KEYS:
+            problems.append(
+                f"subclasses.toml: {subclass_id} claims way {way!r}, "
+                "which domain/rules/subclass_powers.py does not implement"
+            )
+            way = ""
         parsed.append(
             Subclass(
                 id=subclass_id,
@@ -930,6 +966,7 @@ def _parse_subclasses(
                 parent=str(entry.get("parent", "")),
                 level=int(entry.get("level", 1)),
                 skill_code=str(entry.get("skill", "")),
+                power=way,
                 trial=trial,
                 modifiers=modifiers,
                 scaling=scaling,

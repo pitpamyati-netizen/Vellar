@@ -16,6 +16,7 @@ from mmorpg.domain.entities import (
     StatBlock,
     StatCode,
 )
+from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules.stats import (
     derived_stats,
     primary_stats,
@@ -100,14 +101,16 @@ def test_known_passives_apply_at_their_rank(content: GameContent, warrior: Chara
     plain = derived_stats(content, veteran)
     with_passive = replace(
         veteran,
-        loadout=SkillLoadout(ranks={"warrior_privychka_k_latam": 1}),
+        loadout=SkillLoadout(ranks={"warrior_zakalka": 1}),
     )
     ranked = replace(
         veteran,
-        loadout=SkillLoadout(ranks={"warrior_privychka_k_latam": 5}),
+        loadout=SkillLoadout(ranks={"warrior_zakalka": 5}),
     )
-    assert derived_stats(content, with_passive).armor > plain.armor
-    assert derived_stats(content, ranked).armor > derived_stats(content, with_passive).armor
+    assert derived_stats(content, with_passive).max_health > plain.max_health
+    assert (
+        derived_stats(content, ranked).max_health > derived_stats(content, with_passive).max_health
+    )
 
 
 def test_every_known_passive_counts(content: GameContent, warrior: Character) -> None:
@@ -123,10 +126,12 @@ def test_every_known_passive_counts(content: GameContent, warrior: Character) ->
     one = replace(veteran, loadout=SkillLoadout(ranks={"warrior_zakalka": 5}))
     every = replace(
         veteran,
-        loadout=SkillLoadout(ranks={"warrior_zakalka": 5, "warrior_privychka_k_latam": 5}),
+        loadout=SkillLoadout(ranks={"warrior_zakalka": 5, "warrior_khvatka_na_drevke": 5}),
     )
     assert derived_stats(content, one).max_health > plain.max_health
-    assert derived_stats(content, every).armor > derived_stats(content, one).armor
+    assert mods.collect_modifiers(content, every)["damage_percent"] > mods.collect_modifiers(
+        content, one
+    ).get("damage_percent", 0.0)
 
 
 def test_level_raises_health_and_resource(content: GameContent, warrior: Character) -> None:

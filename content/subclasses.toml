@@ -69,6 +69,7 @@ role = "Два клинка и открытая стойка"
 text = "Урон выше на 9 процентов, крит случается на 4 процента чаще, брони на 6 процентов меньше."
 lore = "Гладиатора учат драться там, где на тебя смотрят, — и он до конца жизни бьёт так, будто трибуна ещё на месте."
 skill = "warrior_gladiator_vihr_areny"
+power = "berserker"
 modifiers = { damage_percent = 9, crit_chance_percent = 4, armor_percent = -6 }
 trial = [
     { name = "Гладиатор: счёт по людям", objective = "kill", target_kind = "humanoid", count = 12, text = "«Гладиатор» начинается со счёта, а не со слова: 12 побеждённых из людского рода. Наставник ждёт в городе." },
@@ -89,6 +90,7 @@ role = "Щит впереди щита"
 text = "Удар по вам слабее на 8 процентов, брони на 10 процентов больше, урон ниже на 4 процента."
 lore = "Рыцарь начинается не с меча, а с обещания стоять там, куда его поставили; меч прикладывается сам."
 skill = "warrior_knight_klyatva_schita"
+power = "bulwark"
 modifiers = { damage_taken_percent = -8, armor_percent = 10, damage_percent = -4 }
 trial = [
     { name = "Рыцарь: счёт", objective = "kill", count = 15, text = "Наставник не спорит о призвании. Он просит 15 побеждённых противников — и после этого говорит дальше." },
@@ -110,6 +112,7 @@ role = "Броня, за которую платят кровью"
 text = "Вам возвращается 10 процентов нанесённого, урон выше на 8 процентов, вас лечат на 15 процентов слабее."
 lore = "Чёрный рыцарь берёт у боя силу тем же движением, каким отдаёт удар, и не считает это сделкой."
 skill = "warrior_blackknight_chernyy_obet"
+power = "siphon"
 modifiers = { lifesteal_percent = 10, damage_percent = 8, healing_taken_percent = -15 }
 trial = [
     { name = "Чёрный рыцарь: счёт мертвецам", objective = "kill", target_kind = "undead", count = 20, text = "Ветка «Чёрный рыцарь» стоит работы: 20 упокоенных мертвецов. Работа простая, счёт честный." },
@@ -132,6 +135,7 @@ role = "Один на один, и до конца"
 text = "Удар по одному сильнее на 12 процентов, уклоняетесь на 5 процентов чаще, удар по всем слабее на 10 процентов."
 lore = "Дуэлянт не признаёт свалки: он ищет в бою одного человека и делает вид, что остальных нет."
 skill = "warrior_duelist_razryv_distantsii"
+power = "duelist"
 modifiers = { single_target_damage_percent = 12, dodge_percent = 5, aoe_damage_percent = -10 }
 trial = [
     { name = "Дуэлянт: счёт по людям", objective = "kill", target_kind = "humanoid", count = 22, text = "Ветка «Дуэлянт» стоит работы: 22 побеждённых из людского рода. Работа простая, счёт честный." },
@@ -153,6 +157,7 @@ role = "Держит проход и не сходит"
 text = "Брони на 12 процентов больше, здоровья на 8 процентов больше, ходите на 6 процентов позже."
 lore = "Стража узнают по тому, что за его спиной никогда ничего не случилось."
 skill = "warrior_sentinel_ne_proydut"
+power = "warlord"
 modifiers = { armor_percent = 12, health_percent = 8, initiative_percent = -6 }
 trial = [
     { name = "Страж: счёт", objective = "kill", count = 25, text = "Ветка «Страж» стоит работы: 25 побеждённых противников. Работа простая, счёт честный." },
@@ -174,6 +179,7 @@ role = "Бьёт по строю, а не по бойцу"
 text = "Удар по всем сильнее на 14 процентов, удар по вам слабее на 4 процента, удар по одному слабее на 6 процентов."
 lore = "Полководец считает не убитых, а сломанный строй, и в этом счёте один удар иногда стоит десяти."
 skill = "warrior_warlord_prikaz_rubit"
+power = "warlord"
 modifiers = { aoe_damage_percent = 14, damage_taken_percent = -4, single_target_damage_percent = -6 }
 trial = [
     { name = "Полководец: счёт", objective = "kill", count = 30, text = "«Полководец» начинается со счёта, а не со слова: 30 побеждённых противников. Наставник ждёт в городе." },
@@ -196,6 +202,7 @@ role = "Пока знамя стоит, стоят все"
 text = "Удар по всем сильнее на 18 процентов, вас лечат на 12 процентов сильнее, крит случается на 4 процента реже."
 lore = "Знаменосец держит древко обеими руками и потому дерётся хуже всех вокруг — и всё-таки решает бой."
 skill = "warrior_bannerman_znamya_ne_padaet"
+power = "refrain"
 modifiers = { aoe_damage_percent = 18, healing_taken_percent = 12, crit_chance_percent = -4 }
 trial = [
     { name = "Знаменосец: счёт", objective = "kill", count = 42, text = "Ветка «Знаменосец» стоит работы: 42 побеждённых противника. Работа простая, счёт честный." },
@@ -218,6 +225,7 @@ role = "Точность вместо силы"
 text = "Крит случается на 8 процентов чаще, крит бьёт на 25 процентов сильнее, брони на 6 процентов меньше."
 lore = "Мастер клинка не быстрее прочих; он просто раньше знает, куда пойдёт чужая рука."
 skill = "warrior_blademaster_roscherk_na_volos"
+power = "stormcaller"
 modifiers = { crit_chance_percent = 8, crit_damage_percent = 25, armor_percent = -6 }
 trial = [
     { name = "Мастер клинка: счёт по людям", objective = "kill", target_kind = "humanoid", count = 34, text = "Прежде чем зваться «Мастер клинка», наберите счёт: 34 побеждённых из людского рода. Считает наставник, не вы." },
@@ -240,6 +248,7 @@ role = "Стена, которую строят из себя"
 text = "Брони на 18 процентов больше, удар по вам слабее на 8 процентов, урон ниже на 6 процентов."
 lore = "Бастион перестаёт считать удары примерно на третьем десятке и после этого становится по-настоящему опасен."
 skill = "warrior_bulwark_stena_v_odin_rost"
+power = "sanctuary"
 modifiers = { armor_percent = 18, damage_taken_percent = -8, damage_percent = -6 }
 trial = [
     { name = "Бастион: счёт", objective = "kill", count = 40, text = "Прежде чем зваться «Бастион», наберите счёт: 40 побеждённых противников. Считает наставник, не вы." },
@@ -261,6 +270,7 @@ role = "Живёт чужой смертью"
 text = "Вам возвращается 16 процентов нанесённого, мертвецам достаётся на 15 процентов больше, вас лечат на 20 процентов слабее."
 lore = "Рыцарю смерти не служат и не поклоняются: с ним договариваются, и договор всегда короче, чем кажется."
 skill = "warrior_deathknight_mogilnyy_klinok"
+power = "raise_dead"
 modifiers = { lifesteal_percent = 16, undead_damage_percent = 15, healing_taken_percent = -20 }
 trial = [
     { name = "Рыцарь смерти: счёт мертвецам", objective = "kill", target_kind = "undead", count = 40, text = "«Рыцарь смерти» начинается со счёта, а не со слова: 40 упокоенных мертвецов. Наставник ждёт в городе." },
@@ -283,6 +293,7 @@ role = "Тот, кого обходят"
 text = "Удар по вам слабее на 10 процентов, физический удар сильнее на 12 процентов, здоровья на 10 процентов больше, ходите на 8 процентов позже."
 lore = "Про дредноута не рассказывают, как он бился: рассказывают, где он стоял и что дорога с тех пор идёт в обход."
 skill = "warrior_dreadnought_hod_drednouta"
+power = "bulwark"
 modifiers = { damage_taken_percent = -10, physical_damage_percent = 12, health_percent = 10, initiative_percent = -8 }
 trial = [
     { name = "Дредноут: счёт", objective = "kill", count = 45, text = "Наставник не спорит о призвании. Он просит 45 побеждённых противников — и после этого говорит дальше." },
@@ -305,6 +316,7 @@ role = "Добить — тоже работа"
 text = "По раненому бьёте на 18 процентов сильнее, на исходе сил бьёте на 10 процентов сильнее, уклоняетесь на 4 процента реже."
 lore = "Палач не любит боя и не спорит о нём: он приходит к концу и делает то, чего другие тянуть не хотят."
 skill = "warrior_headsman_posledniy_schet"
+power = "executioner"
 modifiers = { wounded_target_damage_percent = 18, low_health_damage_percent = 10, dodge_percent = -4 }
 trial = [
     { name = "Палач: счёт", objective = "kill", count = 40, text = "Наставник не спорит о призвании. Он просит 40 побеждённых противников — и после этого говорит дальше." },
@@ -326,6 +338,7 @@ role = "Меч берёт своё с обеих сторон"
 text = "Урон выше на 16 процентов, удар по вам сильнее на 8 процентов, крит бьёт на 20 процентов сильнее."
 lore = "Клятвопреступник нарушил одну клятву и с тех пор не даёт никаких — так надёжнее всем."
 skill = "warrior_oathbreaker_klinok_beret_svoe"
+power = "executioner"
 modifiers = { damage_percent = 16, damage_taken_percent = 8, crit_damage_percent = 20 }
 trial = [
     { name = "Клятвопреступник: счёт", objective = "kill", count = 45, text = "Прежде чем зваться «Клятвопреступник», наберите счёт: 45 побеждённых противников. Считает наставник, не вы." },
@@ -347,6 +360,7 @@ role = "Щит бьёт не хуже меча"
 text = "Отражаете 12 процентов полученного, брони на 10 процентов больше, ходите на 6 процентов позже."
 lore = "Щитоносец возвращает удары так буднично, что противник обычно успевает удивиться только раз."
 skill = "warrior_shieldbearer_otboy_v_schit"
+power = "bulwark"
 modifiers = { reflect_percent = 12, armor_percent = 10, initiative_percent = -6 }
 trial = [
     { name = "Щитоносец: счёт", objective = "kill", count = 38, text = "Ветка «Щитоносец» стоит работы: 38 побеждённых противников. Работа простая, счёт честный." },
@@ -372,6 +386,7 @@ role = "Ярость вместо брони"
 text = "Урон выше на 12 процентов, брони на 10 процентов меньше, крит случается на 4 процента чаще."
 lore = "Берсерк не выбирает ярость — он выбирает не мешать ей, и это оказывается тем же самым."
 skill = "barbarian_berserk_pervaya_krov"
+power = "berserker"
 modifiers = { damage_percent = 12, armor_percent = -10, crit_chance_percent = 4 }
 trial = [
     { name = "Берсерк: счёт зверю", objective = "kill", target_kind = "beast", count = 12, text = "Ветка «Берсерк» стоит работы: 12 побеждённых зверей. Работа простая, счёт честный." },
@@ -392,6 +407,7 @@ role = "Дерётся не один"
 text = "Здоровья на 8 процентов больше, сопротивление магии выше на 8 процентов, урон ниже на 3 процента."
 lore = "Тотемный воин носит на себе чужие имена и в трудную минуту зовёт их вслух — обычно они отвечают."
 skill = "barbarian_totemic_golos_predka"
+power = "refrain"
 modifiers = { health_percent = 8, resist_magic_percent = 8, damage_percent = -3 }
 trial = [
     { name = "Тотемный воин: счёт", objective = "kill", count = 15, text = "Наставник не спорит о призвании. Он просит 15 побеждённых противников — и после этого говорит дальше." },
@@ -414,6 +430,7 @@ role = "Рана кормит"
 text = "Вам возвращается 14 процентов нанесённого, на исходе сил бьёте на 12 процентов сильнее, вас лечат на 15 процентов слабее."
 lore = "Кровопийца дерётся ровно так же, как и прочие, — только с каждым ударом ему становится лучше, а не хуже."
 skill = "barbarian_bloodrager_glotok"
+power = "siphon"
 modifiers = { lifesteal_percent = 14, low_health_damage_percent = 12, healing_taken_percent = -15 }
 trial = [
     { name = "Кровопийца: счёт зверю", objective = "kill", target_kind = "beast", count = 24, text = "Наставник не спорит о призвании. Он просит 24 побеждённых зверя — и после этого говорит дальше." },
@@ -435,6 +452,7 @@ role = "Ломает то, что попалось"
 text = "Урон выше на 14 процентов, удар по всем сильнее на 10 процентов, удар по вам сильнее на 6 процентов."
 lore = "Разоритель никогда не помнит, зачем начал: он помнит только, что не закончил."
 skill = "barbarian_reaver_razval"
+power = "executioner"
 modifiers = { damage_percent = 14, aoe_damage_percent = 10, damage_taken_percent = 6 }
 trial = [
     { name = "Разоритель: счёт", objective = "kill", count = 28, text = "Наставник не спорит о призвании. Он просит 28 побеждённых противников — и после этого говорит дальше." },
@@ -456,6 +474,7 @@ role = "Видит то, чего нет"
 text = "Сопротивление магии выше на 12 процентов, здоровья на 10 процентов больше, вас лечат на 10 процентов сильнее."
 lore = "Духовидец говорит с пустым местом так спокойно, что через час начинаешь здороваться с ним и сам."
 skill = "barbarian_spiritseer_dym_i_golosa"
+power = "beastmaster"
 modifiers = { resist_magic_percent = 12, health_percent = 10, healing_taken_percent = 10 }
 trial = [
     { name = "Духовидец: счёт нелюди", objective = "kill", target_kind = "aberration", count = 16, text = "Ветка «Духовидец» стоит работы: 16 убитых тварей. Работа простая, счёт честный." },
@@ -478,6 +497,7 @@ role = "Небо на стороне рода"
 text = "Магический удар сильнее на 14 процентов, удар по всем сильнее на 10 процентов, физический удар слабее на 5 процентов."
 lore = "Громовой шаман не обещает грозы: он просто говорит, что будет, и обычно оказывается прав."
 skill = "barbarian_thundershaman_raskat"
+power = "stormcaller"
 modifiers = { magic_damage_percent = 14, aoe_damage_percent = 10, physical_damage_percent = -5 }
 trial = [
     { name = "Громовой шаман: счёт стихии", objective = "kill", target_kind = "elemental", count = 18, text = "Ветка «Громовой шаман» стоит работы: 18 развеянных духов стихии. Работа простая, счёт честный." },
@@ -500,6 +520,7 @@ role = "Мёртвые держат живого"
 text = "Здоровья на 16 процентов больше, вас лечат на 18 процентов сильнее, урон ниже на 5 процентов."
 lore = "Заклинатель предков носит с собой весь свой род и потому падает последним из всех."
 skill = "barbarian_ancestorcaller_ne_otpustyat"
+power = "raise_dead"
 modifiers = { health_percent = 16, healing_taken_percent = 18, damage_percent = -5 }
 trial = [
     { name = "Заклинатель предков: счёт мертвецам", objective = "kill", target_kind = "undead", count = 30, text = "Ветка «Заклинатель предков» стоит работы: 30 упокоенных мертвецов. Работа простая, счёт честный." },
@@ -522,6 +543,7 @@ role = "Ведёт, пока цел"
 text = "Урон выше на 15 процентов, вам возвращается 12 процентов нанесённого, крит бьёт на 20 процентов сильнее, уклоняетесь на 5 процентов реже."
 lore = "Багрового вождя выбирают не словами: за ним просто идут, а если перестают — значит, вождь кончился."
 skill = "barbarian_bloodchief_krov_za_krov"
+power = "warlord"
 modifiers = { damage_percent = 15, lifesteal_percent = 12, crit_damage_percent = 20, dodge_percent = -5 }
 trial = [
     { name = "Багровый вождь: счёт по людям", objective = "kill", target_kind = "humanoid", count = 38, text = "«Багровый вождь» начинается со счёта, а не со слова: 38 побеждённых из людского рода. Наставник ждёт в городе." },
@@ -544,6 +566,7 @@ role = "Работа простая и грязная"
 text = "Урон выше на 18 процентов, по раненому бьёте на 15 процентов сильнее, брони на 8 процентов меньше."
 lore = "Мясник не считает себя воином и обижается, когда его так называют: у него ремесло."
 skill = "barbarian_butcher_razdelka"
+power = "berserker"
 modifiers = { damage_percent = 18, wounded_target_damage_percent = 15, armor_percent = -8 }
 trial = [
     { name = "Мясник: счёт зверю", objective = "kill", target_kind = "beast", count = 40, text = "Наставник не спорит о призвании. Он просит 40 побеждённых зверей — и после этого говорит дальше." },
@@ -565,6 +588,7 @@ role = "Бьёт по всему сразу"
 text = "Удар по всем сильнее на 20 процентов, удар по вам сильнее на 8 процентов, ходите на 5 процентов позже."
 lore = "Разрушителя нанимают не воевать, а заканчивать: после него спорить обычно уже не с кем и не о чем."
 skill = "barbarian_destroyer_obval"
+power = "stormcaller"
 modifiers = { aoe_damage_percent = 20, damage_taken_percent = 8, initiative_percent = -5 }
 trial = [
     { name = "Разрушитель: счёт", objective = "kill", count = 48, text = "Наставник не спорит о призвании. Он просит 48 побеждённых противников — и после этого говорит дальше." },
@@ -586,6 +610,7 @@ role = "Чем дольше бой, тем он целее"
 text = "Вам возвращается 22 процента нанесённого, здоровья на 10 процентов больше, вас лечат на 25 процентов слабее."
 lore = "Пожирателя нельзя переждать: время в бою работает на него, а не на терпеливого."
 skill = "barbarian_devourer_nenasytnost"
+power = "executioner"
 modifiers = { lifesteal_percent = 22, health_percent = 10, healing_taken_percent = -25 }
 trial = [
     { name = "Пожиратель: счёт зверю", objective = "kill", target_kind = "beast", count = 42, text = "Прежде чем зваться «Пожиратель», наберите счёт: 42 побеждённых зверя. Считает наставник, не вы." },
@@ -607,6 +632,7 @@ role = "Ими и дерётся"
 text = "Сопротивление магии выше на 18 процентов, магический удар сильнее на 14 процентов, здоровья на 8 процентов больше."
 lore = "Владыка духов давно перестал различать, где кончается он и начинается свита, и никого это не смущает."
 skill = "barbarian_spiritlord_svita"
+power = "warlord"
 modifiers = { resist_magic_percent = 18, magic_damage_percent = 14, health_percent = 8 }
 trial = [
     { name = "Владыка духов: счёт нелюди", objective = "kill", target_kind = "aberration", count = 32, text = "Прежде чем зваться «Владыка духов», наберите счёт: 32 убитых твари. Считает наставник, не вы." },
@@ -629,6 +655,7 @@ role = "Гром за спиной, топор в руках"
 text = "Физический удар сильнее на 12 процентов, магический удар сильнее на 12 процентов, сопротивление ветру выше на 15 процентов."
 lore = "Ратник бури не разбирает, чем именно он сейчас бьёт, и в этом его главная сила."
 skill = "barbarian_stormward_grom_v_ruke"
+power = "sanctuary"
 modifiers = { physical_damage_percent = 12, magic_damage_percent = 12, resist_air_percent = 15 }
 trial = [
     { name = "Ратник бури: счёт стихии", objective = "kill", target_kind = "elemental", count = 30, text = "«Ратник бури» начинается со счёта, а не со слова: 30 развеянных духов стихии. Наставник ждёт в городе." },
@@ -651,6 +678,7 @@ role = "Гроза приходит первой"
 text = "Магический удар сильнее на 18 процентов, ходите на 10 процентов раньше, физический удар слабее на 6 процентов."
 lore = "Громовержец бьёт до того, как противник решит, стоит ли драться, — и решение остаётся ненужным."
 skill = "barbarian_thunderer_molot_nebes"
+power = "lullaby"
 modifiers = { magic_damage_percent = 18, initiative_percent = 10, physical_damage_percent = -6 }
 trial = [
     { name = "Громовержец: счёт стихии", objective = "kill", target_kind = "elemental", count = 34, text = "Наставник не спорит о призвании. Он просит 34 развеянных духа стихии — и после этого говорит дальше." },
@@ -677,6 +705,7 @@ role = "Вера, идущая вперёд"
 text = "Урон выше на 10 процентов, сильным противникам достаётся на 8 процентов больше, брони на 5 процентов меньше."
 lore = "Крестоносец не ждёт, пока зло придёт к воротам: ему проще выйти навстречу и не портить ворота."
 skill = "paladin_crusader_pravyy_udar"
+power = "warlord"
 modifiers = { damage_percent = 10, elite_damage_percent = 8, armor_percent = -5 }
 trial = [
     { name = "Крестоносец: счёт мертвецам", objective = "kill", target_kind = "undead", count = 12, text = "Прежде чем зваться «Крестоносец», наберите счёт: 12 упокоенных мертвецов. Считает наставник, не вы." },
@@ -697,6 +726,7 @@ role = "Вера, стоящая на месте"
 text = "Удар по вам слабее на 9 процентов, лечите на 10 процентов сильнее, урон ниже на 4 процента."
 lore = "Храмовник знает наизусть длину своего поста и не сходит с него даже тогда, когда пост давно никому не нужен."
 skill = "paladin_templar_zaslon"
+power = "bulwark"
 modifiers = { damage_taken_percent = -9, healing_done_percent = 10, damage_percent = -4 }
 trial = [
     { name = "Храмовник: счёт", objective = "kill", count = 15, text = "Прежде чем зваться «Храмовник», наберите счёт: 15 побеждённых противников. Считает наставник, не вы." },
@@ -719,6 +749,7 @@ role = "Дерётся за других вслух"
 text = "Урон выше на 12 процентов, вас лечат на 12 процентов сильнее, уклоняетесь на 4 процента реже."
 lore = "Поборник выходит вперёд не из храбрости, а потому что кто-то должен, и он привык, что это он."
 skill = "paladin_champion_vyzov_na_sebya"
+power = "duelist"
 modifiers = { damage_percent = 12, healing_taken_percent = 12, dodge_percent = -4 }
 trial = [
     { name = "Поборник: счёт по людям", objective = "kill", target_kind = "humanoid", count = 22, text = "Ветка «Поборник» стоит работы: 22 побеждённых из людского рода. Работа простая, счёт честный." },
@@ -741,6 +772,7 @@ role = "Между стаей и своими"
 text = "Брони на 14 процентов больше, лечите на 14 процентов сильнее, урон ниже на 6 процентов."
 lore = "Защитник веры считает бой удавшимся, если после него все на ногах, — а как выглядел он сам, дело десятое."
 skill = "paladin_defender_pokrov"
+power = "sanctuary"
 modifiers = { armor_percent = 14, healing_done_percent = 14, damage_percent = -6 }
 trial = [
     { name = "Защитник веры: счёт", objective = "kill", count = 25, text = "Прежде чем зваться «Защитник веры», наберите счёт: 25 побеждённых противников. Считает наставник, не вы." },
@@ -763,6 +795,7 @@ role = "Спрашивает первым"
 text = "Мертвецам достаётся на 18 процентов больше, крит случается на 6 процентов чаще, лечите на 10 процентов слабее."
 lore = "Инквизитор говорит тихо и не повторяет вопроса; повторяет обычно тот, кого спрашивают."
 skill = "paladin_inquisitor_doznanie"
+power = "lullaby"
 modifiers = { undead_damage_percent = 18, crit_chance_percent = 6, healing_done_percent = -10 }
 trial = [
     { name = "Инквизитор: счёт мертвецам", objective = "kill", target_kind = "undead", count = 24, text = "Ветка «Инквизитор» стоит работы: 24 упокоенных мертвеца. Работа простая, счёт честный." },
@@ -785,6 +818,7 @@ role = "Свет, которым бьют"
 text = "Магический удар сильнее на 14 процентов, лечите на 10 процентов сильнее, физический удар слабее на 6 процентов."
 lore = "Светоносец не объясняет, откуда берётся свет; он давно понял, что объяснение никому не помогает."
 skill = "paladin_lightbearer_stolp_sveta"
+power = "zealot"
 modifiers = { magic_damage_percent = 14, healing_done_percent = 10, physical_damage_percent = -6 }
 trial = [
     { name = "Светоносец: счёт мертвецам", objective = "kill", target_kind = "undead", count = 20, text = "Прежде чем зваться «Светоносец», наберите счёт: 20 упокоенных мертвецов. Считает наставник, не вы." },
@@ -807,6 +841,7 @@ role = "Стоит за всех"
 text = "Брони на 20 процентов больше, удар по вам слабее на 10 процентов, лечите на 16 процентов сильнее, урон ниже на 8 процентов."
 lore = "Оплот веры — это не человек, а место, где противник заканчивается; человека там уже почти нет."
 skill = "paladin_bastionfaith_svod"
+power = "bulwark"
 modifiers = { armor_percent = 20, damage_taken_percent = -10, healing_done_percent = 16, damage_percent = -8 }
 trial = [
     { name = "Оплот веры: счёт", objective = "kill", count = 40, text = "«Оплот веры» начинается со счёта, а не со слова: 40 побеждённых противников. Наставник ждёт в городе." },
@@ -829,6 +864,7 @@ role = "Выгоняет то, что вселилось"
 text = "Мертвецам достаётся на 25 процентов больше, магический удар сильнее на 12 процентов, сопротивление скверне выше на 15 процентов."
 lore = "Экзорцист работает медленно и вслух, потому что тишина в этом деле означает, что он уже проиграл."
 skill = "paladin_exorcist_izgnanie"
+power = "zealot"
 modifiers = { undead_damage_percent = 25, magic_damage_percent = 12, resist_negative_percent = 15 }
 trial = [
     { name = "Экзорцист: счёт мертвецам", objective = "kill", target_kind = "undead", count = 42, text = "Прежде чем зваться «Экзорцист», наберите счёт: 42 упокоенных мертвеца. Считает наставник, не вы." },
@@ -851,6 +887,7 @@ role = "Приговор без обжалования"
 text = "Крит бьёт на 28 процентов сильнее, по раненому бьёте на 15 процентов сильнее, лечите на 12 процентов слабее."
 lore = "Судия выносит одно решение за бой и после этого просто ждёт, пока оно исполнится."
 skill = "paladin_judge_prigovor"
+power = "executioner"
 modifiers = { crit_damage_percent = 28, wounded_target_damage_percent = 15, healing_done_percent = -12 }
 trial = [
     { name = "Судия: счёт по людям", objective = "kill", target_kind = "humanoid", count = 40, text = "Ветка «Судия» стоит работы: 40 побеждённых из людского рода. Работа простая, счёт честный." },
@@ -873,6 +910,7 @@ role = "Платит собой"
 text = "Отражаете 16 процентов полученного, лечите на 20 процентов сильнее, удар по вам сильнее на 8 процентов."
 lore = "Мученик знает цену наперёд и всё-таки каждый раз идёт платить, потому что иначе заплатит кто-то другой."
 skill = "paladin_martyr_chuzhaya_rana"
+power = "zealot"
 modifiers = { reflect_percent = 16, healing_done_percent = 20, damage_taken_percent = 8 }
 trial = [
     { name = "Мученик: счёт мертвецам", objective = "kill", target_kind = "undead", count = 32, text = "Ветка «Мученик» стоит работы: 32 упокоенных мертвеца. Работа простая, счёт честный." },
@@ -895,6 +933,7 @@ role = "Слово держат до конца"
 text = "Лечите на 18 процентов сильнее, сопротивление священному урону выше на 15 процентов, сопротивление скверне выше на 15 процентов, урон ниже на 5 процентов."
 lore = "Хранитель обета помнит все обещания, которые дал, и половину тех, которых не давал."
 skill = "paladin_oathkeeper_obet_derzhit"
+power = "warlord"
 modifiers = { healing_done_percent = 18, resist_holy_percent = 15, resist_negative_percent = 15, damage_percent = -5 }
 trial = [
     { name = "Хранитель обета: счёт", objective = "kill", count = 38, text = "«Хранитель обета» начинается со счёта, а не со слова: 38 побеждённых противников. Наставник ждёт в городе." },
@@ -917,6 +956,7 @@ role = "Первый и последний"
 text = "Урон выше на 16 процентов, здоровья на 10 процентов больше, вас лечат на 15 процентов сильнее."
 lore = "Чемпион всегда выходит первым и уходит последним, и никто не помнит, чтобы это когда-нибудь обсуждалось."
 skill = "paladin_paragon_ne_past"
+power = "refrain"
 modifiers = { damage_percent = 16, health_percent = 10, healing_taken_percent = 15 }
 trial = [
     { name = "Чемпион: счёт по людям", objective = "kill", target_kind = "humanoid", count = 42, text = "«Чемпион» начинается со счёта, а не со слова: 42 побеждённых из людского рода. Наставник ждёт в городе." },
@@ -939,6 +979,7 @@ role = "Свет в полный рост"
 text = "Магический удар сильнее на 20 процентов, удар по всем сильнее на 14 процентов, физический удар слабее на 8 процентов."
 lore = "Солнечного рыцаря видно с другого конца поля, и это ровно то, чего он добивается."
 skill = "paladin_sunknight_polden"
+power = "stormcaller"
 modifiers = { magic_damage_percent = 20, aoe_damage_percent = 14, physical_damage_percent = -8 }
 trial = [
     { name = "Солнечный рыцарь: счёт мертвецам", objective = "kill", target_kind = "undead", count = 40, text = "Ветка «Солнечный рыцарь» стоит работы: 40 упокоенных мертвецов. Работа простая, счёт честный." },
@@ -961,6 +1002,7 @@ role = "Верит громче, чем бьёт"
 text = "Удар по всем сильнее на 18 процентов, удар по вам сильнее на 6 процентов, крит случается на 8 процентов чаще."
 lore = "Ревнителя слышно раньше, чем видно, и к тому времени спорить с ним уже поздно."
 skill = "paladin_zealot_slovo_i_mech"
+power = "zealot"
 modifiers = { aoe_damage_percent = 18, damage_taken_percent = 6, crit_chance_percent = 8 }
 trial = [
     { name = "Ревнитель: счёт", objective = "kill", count = 45, text = "Ветка «Ревнитель» стоит работы: 45 побеждённых противников. Работа простая, счёт честный." },
@@ -987,6 +1029,7 @@ role = "Всё решает расстояние"
 text = "Крит случается на 6 процентов чаще, точность выше на 8 процентов, брони на 5 процентов меньше."
 lore = "Лучник считает удачным тот бой, в котором до него никто так и не дошёл."
 skill = "ranger_archer_dalniy_vystrel"
+power = "duelist"
 modifiers = { crit_chance_percent = 6, accuracy_percent = 8, armor_percent = -5 }
 trial = [
     { name = "Лучник: счёт зверю", objective = "kill", target_kind = "beast", count = 12, text = "Ветка «Лучник» стоит работы: 12 побеждённых зверей. Работа простая, счёт честный." },
@@ -1007,6 +1050,7 @@ role = "Зверь слушает"
 text = "Зверью достаётся на 15 процентов больше, здоровья на 6 процентов больше, крит случается на 3 процента реже."
 lore = "Звероуст разговаривает со зверьём тем же тоном, что и с людьми, и зверьё почему-то отвечает чаще."
 skill = "ranger_beastmaster_svistnut_svoih"
+power = "beastmaster"
 modifiers = { beast_damage_percent = 15, health_percent = 6, crit_chance_percent = -3 }
 trial = [
     { name = "Звероуст: счёт зверю", objective = "kill", target_kind = "beast", count = 15, text = "Прежде чем зваться «Звероуст», наберите счёт: 15 побеждённых зверей. Считает наставник, не вы." },
@@ -1028,6 +1072,7 @@ role = "Стая за спиной"
 text = "Зверью достаётся на 22 процента больше, удар по всем сильнее на 10 процентов, уклоняетесь на 4 процента реже."
 lore = "Повелителя зверей редко видят одного; когда видят, обычно оказывается, что остальные уже зашли сбоку."
 skill = "ranger_beastlord_staya"
+power = "warlord"
 modifiers = { beast_damage_percent = 22, aoe_damage_percent = 10, dodge_percent = -4 }
 trial = [
     { name = "Повелитель зверей: счёт зверю", objective = "kill", target_kind = "beast", count = 26, text = "Наставник не спорит о призвании. Он просит 26 побеждённых зверей — и после этого говорит дальше." },
@@ -1050,6 +1095,7 @@ role = "Знает, где встать"
 text = "Первый удар сильнее на 15 процентов, ходите на 8 процентов раньше, удар по вам сильнее на 4 процента."
 lore = "Егерь приходит на место за час до боя и уходит через час после — и потому побеждает в промежутке."
 skill = "ranger_huntsman_iz_zasady"
+power = "executioner"
 modifiers = { first_turn_damage_percent = 15, initiative_percent = 8, damage_taken_percent = 4 }
 trial = [
     { name = "Егерь: счёт зверю", objective = "kill", target_kind = "beast", count = 24, text = "«Егерь» начинается со счёта, а не со слова: 24 побеждённых зверя. Наставник ждёт в городе." },
@@ -1072,6 +1118,7 @@ role = "Один выстрел стоит десяти"
 text = "Крит бьёт на 25 процентов сильнее, удар по одному сильнее на 12 процентов, удар по всем слабее на 12 процентов."
 lore = "Снайпер тратит на прицел больше времени, чем весь остальной бой, и всё равно успевает раньше."
 skill = "ranger_sniper_vystrel_v_shov"
+power = "trickster"
 modifiers = { crit_damage_percent = 25, single_target_damage_percent = 12, aoe_damage_percent = -12 }
 trial = [
     { name = "Снайпер: счёт по людям", objective = "kill", target_kind = "humanoid", count = 22, text = "Ветка «Снайпер» стоит работы: 22 побеждённых из людского рода. Работа простая, счёт честный." },
@@ -1094,6 +1141,7 @@ role = "Лес помогает своим"
 text = "Уклоняетесь на 10 процентов чаще, сопротивление природному урону выше на 12 процентов, урон ниже на 4 процента."
 lore = "Хранителя чащи в лесу не найти даже тому, кто точно знает, где он стоит."
 skill = "ranger_thicketward_tropa_uvodit"
+power = "plague"
 modifiers = { dodge_percent = 10, resist_nature_percent = 12, damage_percent = -4 }
 trial = [
     { name = "Хранитель чащи: обход угодий", objective = "search", target_kind = "gather", count = 12, text = "Дорога учит не хуже боя: 12 обойдённых угодий, и всё без единой драки." },
@@ -1116,6 +1164,7 @@ role = "Бьёт сверху"
 text = "Точность выше на 16 процентов, ходите на 12 процентов раньше, крит случается на 10 процентов чаще, брони на 6 процентов меньше."
 lore = "Соколятник смотрит в небо чаще, чем под ноги, и оттого спотыкается — но всегда знает, что за холмом."
 skill = "ranger_falconer_sokol"
+power = "beastmaster"
 modifiers = { accuracy_percent = 16, initiative_percent = 12, crit_chance_percent = 10, armor_percent = -6 }
 trial = [
     { name = "Соколятник: счёт зверю", objective = "kill", target_kind = "beast", count = 40, text = "«Соколятник» начинается со счёта, а не со слова: 40 побеждённых зверей. Наставник ждёт в городе." },
@@ -1138,6 +1187,7 @@ role = "Промаха не бывает"
 text = "Точность выше на 20 процентов, крит случается на 12 процентов чаще, крит бьёт на 25 процентов сильнее."
 lore = "Ястребиный глаз давно не целится: он смотрит, а стрела делает вывод сама."
 skill = "ranger_hawkeye_odin_vzglyad"
+power = "duelist"
 modifiers = { accuracy_percent = 20, crit_chance_percent = 12, crit_damage_percent = 25 }
 trial = [
     { name = "Ястребиный глаз: счёт по людям", objective = "kill", target_kind = "humanoid", count = 38, text = "«Ястребиный глаз» начинается со счёта, а не со слова: 38 побеждённых из людского рода. Наставник ждёт в городе." },
@@ -1160,6 +1210,7 @@ role = "Берёт то, от чего бегут"
 text = "Сильным противникам достаётся на 25 процентов больше, сопротивление яду выше на 15 процентов, уклоняетесь на 4 процента реже."
 lore = "Охотник на чудовищ берёт заказы, которые в управе читают дважды и всё равно надеются на ошибку писаря."
 skill = "ranger_monsterhunter_slaboe_mesto"
+power = "duelist"
 modifiers = { elite_damage_percent = 25, resist_poison_percent = 15, dodge_percent = -4 }
 trial = [
     { name = "Охотник на чудовищ: счёт нелюди", objective = "kill", target_kind = "aberration", count = 30, text = "«Охотник на чудовищ» начинается со счёта, а не со слова: 30 убитых тварей. Наставник ждёт в городе." },
@@ -1182,6 +1233,7 @@ role = "Стреляет из ниоткуда"
 text = "Первый удар сильнее на 22 процента, уклоняетесь на 10 процентов чаще, здоровья на 6 процентов меньше."
 lore = "Тенестрела не выслеживают: выслеживают место, где он был, и это всегда разные места."
 skill = "ranger_shadowshot_uyti_i_udarit"
+power = "executioner"
 modifiers = { first_turn_damage_percent = 22, dodge_percent = 10, health_percent = -6 }
 trial = [
     { name = "Тенестрел: счёт", objective = "kill", count = 42, text = "Наставник не спорит о призвании. Он просит 42 побеждённых противника — и после этого говорит дальше." },
@@ -1203,6 +1255,7 @@ role = "Бой начинается до боя"
 text = "Первый удар сильнее на 20 процентов, ходите на 12 процентов раньше, по раненому бьёте на 12 процентов сильнее."
 lore = "Ловчий редко бьёт первым: обычно первым бьёт то, что он поставил накануне."
 skill = "ranger_trapper_silok"
+power = "lullaby"
 modifiers = { first_turn_damage_percent = 20, initiative_percent = 12, wounded_target_damage_percent = 12 }
 trial = [
     { name = "Ловчий: счёт зверю", objective = "kill", target_kind = "beast", count = 40, text = "«Ловчий» начинается со счёта, а не со слова: 40 побеждённых зверей. Наставник ждёт в городе." },
@@ -1225,6 +1278,7 @@ role = "Дорога и есть дом"
 text = "Уклоняетесь на 14 процентов чаще, опыта на 10 процентов больше, со сбора выносите на 20 процентов больше, брони на 5 процентов меньше."
 lore = "Скиталец нигде не задерживается дольше, чем нужно, чтобы узнать, куда идти дальше."
 skill = "ranger_wayfarer_vtoroe_dyhanie_dorogi"
+power = "sanctuary"
 modifiers = { dodge_percent = 14, exp_percent = 10, gather_yield_percent = 20, armor_percent = -5 }
 trial = [
     { name = "Скиталец: обход тайников", objective = "search", target_kind = "cache", count = 18, text = "Прежде чем брать «Скиталец», сходите и посмотрите: 18 вскрытых тайников, и ни одного боя." },
@@ -1247,6 +1301,7 @@ role = "Стая слушает без слов"
 text = "Зверью достаётся на 30 процентов больше, удар по всем сильнее на 16 процентов, удар по одному слабее на 8 процентов."
 lore = "Волчьего вождя приняли в стаю раньше, чем он решил, что он в ней главный; стая на этот счёт другого мнения."
 skill = "ranger_wolfchief_zagon"
+power = "refrain"
 modifiers = { beast_damage_percent = 30, aoe_damage_percent = 16, single_target_damage_percent = -8 }
 trial = [
     { name = "Волчий вождь: счёт зверю", objective = "kill", target_kind = "beast", count = 45, text = "Прежде чем зваться «Волчий вождь», наберите счёт: 45 побеждённых зверей. Считает наставник, не вы." },
@@ -1269,6 +1324,7 @@ role = "Лес не пускает чужих"
 text = "Уклоняетесь на 16 процентов чаще, сопротивление природному урону выше на 20 процентов, вас лечат на 12 процентов сильнее, урон ниже на 6 процентов."
 lore = "Лесной страж не выгоняет никого: он просто перестаёт показывать дорогу, и этого хватает."
 skill = "ranger_woodward_chascha_smykaetsya"
+power = "lullaby"
 modifiers = { dodge_percent = 16, resist_nature_percent = 20, healing_taken_percent = 12, damage_percent = -6 }
 trial = [
     { name = "Лесной страж: обход угодий", objective = "search", target_kind = "gather", count = 20, text = "«Лесной страж» — это ещё и терпение: 20 обойдённых угодий, и ни одной драки сверх нужды." },
@@ -1295,6 +1351,7 @@ role = "Один удар, и разговор кончен"
 text = "Крит бьёт на 20 процентов сильнее, первый удар сильнее на 12 процентов, здоровья на 6 процентов меньше."
 lore = "Убийце платят не за бой, а за то, что боя не было: работа, которую видно, считается сделанной плохо."
 skill = "rogue_assassin_path_tihaya_rabota"
+power = "executioner"
 modifiers = { crit_damage_percent = 20, first_turn_damage_percent = 12, health_percent = -6 }
 trial = [
     { name = "Убийца: счёт по людям", objective = "kill", target_kind = "humanoid", count = 12, text = "Наставник не спорит о призвании. Он просит 12 побеждённых из людского рода — и после этого говорит дальше." },
@@ -1315,6 +1372,7 @@ role = "Побеждает не силой"
 text = "Уклоняетесь на 10 процентов чаще, золота на 12 процентов больше, урон ниже на 5 процентов."
 lore = "Плут никогда не признаётся, что выиграл заранее, — иначе в следующий раз не дадут выиграть снова."
 skill = "rogue_trickster_podnozhka"
+power = "lullaby"
 modifiers = { dodge_percent = 10, gold_percent = 12, damage_percent = -5 }
 trial = [
     { name = "Плут: счёт", objective = "kill", count = 15, text = "«Плут» начинается со счёта, а не со слова: 15 побеждённых противников. Наставник ждёт в городе." },
@@ -1336,6 +1394,7 @@ role = "Играет всей стороне"
 text = "Вас лечат на 15 процентов сильнее, сопротивление дурману выше на 15 процентов, урон ниже на 6 процентов."
 lore = "Барда пускают в отряд не за меч: с ним дорога короче, а привалы — тише."
 skill = "rogue_bard_pohodnaya_pesn"
+power = "refrain"
 modifiers = { healing_taken_percent = 15, resist_mental_percent = 15, damage_percent = -6 }
 trial = [
     { name = "Бард: обход святилищ", objective = "search", target_kind = "shrine", count = 8, text = "Наставник шлёт вас смотреть, а не драться: 8 отработанных святилищ, все без боя." },
@@ -1358,6 +1417,7 @@ role = "Работает медленно и наверняка"
 text = "То, что точит цель, бьёт на 25 процентов сильнее, урон выше на 6 процентов, удар по одному сильнее на 8 процентов."
 lore = "Отравитель не спорит с тем, что это нечестно: честность он оставляет тем, кто может себе её позволить."
 skill = "rogue_poisoner_smazat_klinok"
+power = "plague"
 modifiers = { dot_damage_percent = 25, damage_percent = 6, single_target_damage_percent = 8 }
 trial = [
     { name = "Отравитель: счёт зверю", objective = "kill", target_kind = "beast", count = 22, text = "«Отравитель» начинается со счёта, а не со слова: 22 побеждённых зверя. Наставник ждёт в городе." },
@@ -1380,6 +1440,7 @@ role = "Заходит туда, где не ждут"
 text = "Ходите на 12 процентов раньше, находки выпадают на 15 процентов чаще, золота на 12 процентов больше, урон ниже на 4 процента."
 lore = "Лазутчик знает планировку чужого дома лучше хозяина и никогда об этом не рассказывает."
 skill = "rogue_scout_ne_zametili"
+power = "duelist"
 modifiers = { initiative_percent = 12, drop_rate_percent = 15, gold_percent = 12, damage_percent = -4 }
 trial = [
     { name = "Лазутчик: обход тайников", objective = "search", target_kind = "cache", count = 12, text = "Прежде чем брать «Лазутчик», сходите и посмотрите: 12 вскрытых тайников, и ни одного боя." },
@@ -1402,6 +1463,7 @@ role = "Его нет, пока он не ударил"
 text = "Уклоняетесь на 12 процентов чаще, первый удар сильнее на 18 процентов, брони на 8 процентов меньше."
 lore = "Тень входит в комнату вместе со всеми и выходит на минуту позже — этой минуты обычно и хватает."
 skill = "rogue_shadow_ischeznut"
+power = "trickster"
 modifiers = { dodge_percent = 12, first_turn_damage_percent = 18, armor_percent = -8 }
 trial = [
     { name = "Тень: счёт по людям", objective = "kill", target_kind = "humanoid", count = 24, text = "Ветка «Тень» стоит работы: 24 побеждённых из людского рода. Работа простая, счёт честный." },
@@ -1423,6 +1485,7 @@ role = "Имя вместо боя"
 text = "Крит бьёт на 30 процентов сильнее, по раненому бьёте на 18 процентов сильнее, здоровья на 8 процентов меньше."
 lore = "Ассасин берёт одно имя за раз и не начинает второго, пока первое не закрыто."
 skill = "rogue_assassin_tochka"
+power = "executioner"
 modifiers = { crit_damage_percent = 30, wounded_target_damage_percent = 18, health_percent = -8 }
 trial = [
     { name = "Ассасин: счёт по людям", objective = "kill", target_kind = "humanoid", count = 42, text = "Наставник не спорит о призвании. Он просит 42 побеждённых из людского рода — и после этого говорит дальше." },
@@ -1445,6 +1508,7 @@ role = "Работа с именем и ценой"
 text = "Сильным противникам достаётся на 25 процентов больше, золота на 18 процентов больше, ходите на 10 процентов раньше, уклоняетесь на 5 процентов реже."
 lore = "Охотник за головами не выбирает сторон: он выбирает грамоту, на которой сумма покрупнее."
 skill = "rogue_bountyhunter_po_gramote"
+power = "executioner"
 modifiers = { elite_damage_percent = 25, gold_percent = 18, initiative_percent = 10, dodge_percent = -5 }
 trial = [
     { name = "Охотник за головами: сильный противник", objective = "elite", count = 18, text = "Слабых бьют все. Возьмите 18 побед над сильными противниками: за такими ходят нарочно." },
@@ -1467,6 +1531,7 @@ role = "Замок — это только замок"
 text = "Находки выпадают на 25 процентов чаще, золота на 25 процентов больше, находки на 12 процентов чаще выходят редкими, урон ниже на 6 процентов."
 lore = "Взломщик считает запертую дверь советом, а не запретом, и советам он не следует."
 skill = "rogue_burglar_vzyat_svoe"
+power = "trickster"
 modifiers = { drop_rate_percent = 25, gold_percent = 25, rarity_percent = 12, damage_percent = -6 }
 trial = [
     { name = "Взломщик: обход тайников", objective = "search", target_kind = "cache", count = 22, text = "Дорога учит не хуже боя: 22 вскрытых тайника, и всё без единой драки." },
@@ -1489,6 +1554,7 @@ role = "Песня держит на ногах"
 text = "Вас лечат на 25 процентов сильнее, сопротивление дурману выше на 20 процентов, лечите на 12 процентов сильнее, урон ниже на 8 процентов."
 lore = "Менестрель поёт не для того, чтобы слушали: он поёт, пока идут, и потому идут дольше."
 skill = "rogue_minstrel_dolgaya_pesnya"
+power = "lullaby"
 modifiers = { healing_taken_percent = 25, resist_mental_percent = 20, healing_done_percent = 12, damage_percent = -8 }
 trial = [
     { name = "Менестрель: обход святилищ", objective = "search", target_kind = "shrine", count = 18, text = "Прежде чем брать «Менестрель», сходите и посмотрите: 18 отработанных святилищ, и ни одного боя." },
@@ -1511,6 +1577,7 @@ role = "Темнота — оружие"
 text = "Крит случается на 14 процентов чаще, удар по одному сильнее на 18 процентов, вас лечат на 12 процентов слабее."
 lore = "Ночной клинок не любит темноты: он к ней привык, а это совсем другое дело."
 skill = "rogue_nightblade_iz_temnoty"
+power = "siphon"
 modifiers = { crit_chance_percent = 14, single_target_damage_percent = 18, healing_taken_percent = -12 }
 trial = [
     { name = "Ночной клинок: счёт", objective = "kill", count = 45, text = "Ветка «Ночной клинок» стоит работы: 45 побеждённых противников. Работа простая, счёт честный." },
@@ -1533,6 +1600,7 @@ role = "Его не было здесь вовсе"
 text = "Уклоняетесь на 20 процентов чаще, первый удар сильнее на 25 процентов, брони на 10 процентов меньше."
 lore = "Призрака описывают одинаково и всегда по-разному: рост, голос и лицо каждый вспоминает свои."
 skill = "rogue_phantom_ni_sleda"
+power = "lullaby"
 modifiers = { dodge_percent = 20, first_turn_damage_percent = 25, armor_percent = -10 }
 trial = [
     { name = "Призрак: счёт по людям", objective = "kill", target_kind = "humanoid", count = 40, text = "«Призрак» начинается со счёта, а не со слова: 40 побеждённых из людского рода. Наставник ждёт в городе." },
@@ -1554,6 +1622,7 @@ role = "Один порез на всех"
 text = "То, что точит цель, бьёт на 35 процентов сильнее, удар по всем сильнее на 14 процентов, крит случается на 5 процентов реже."
 lore = "Чумной клинок оставляет после себя не трупы, а больных, и это оказывается страшнее."
 skill = "rogue_plagueblade_povetrie"
+power = "siphon"
 modifiers = { dot_damage_percent = 35, aoe_damage_percent = 14, crit_chance_percent = -5 }
 trial = [
     { name = "Чумной клинок: счёт зверю", objective = "kill", target_kind = "beast", count = 40, text = "Ветка «Чумной клинок» стоит работы: 40 побеждённых зверей. Работа простая, счёт честный." },
@@ -1576,6 +1645,7 @@ role = "Слово, от которого дерутся злее"
 text = "Урон выше на 14 процентов, крит случается на 10 процентов чаще, сопротивление дурману выше на 15 процентов, брони на 6 процентов меньше."
 lore = "Скальд складывает песню на месте и всегда о том, что случилось минуту назад; хвалит он редко и точно."
 skill = "rogue_skald_boevaya_visa"
+power = "warlord"
 modifiers = { damage_percent = 14, crit_chance_percent = 10, resist_mental_percent = 15, armor_percent = -6 }
 trial = [
     { name = "Скальд: счёт по людям", objective = "kill", target_kind = "humanoid", count = 38, text = "«Скальд» начинается со счёта, а не со слова: 38 побеждённых из людского рода. Наставник ждёт в городе." },
@@ -1602,6 +1672,7 @@ role = "Четыре стихии на выбор"
 text = "Магический удар сильнее на 10 процентов, удар по всем сильнее на 10 процентов, здоровья на 5 процентов меньше."
 lore = "Элементалист говорит, что стихии просты; на деле он просто перестал их бояться."
 skill = "mage_elementalist_razlad_stihiy"
+power = "stormcaller"
 modifiers = { magic_damage_percent = 10, aoe_damage_percent = 10, health_percent = -5 }
 trial = [
     { name = "Элементалист: счёт стихии", objective = "kill", target_kind = "elemental", count = 12, text = "«Элементалист» начинается со счёта, а не со слова: 12 развеянных духов стихии. Наставник ждёт в городе." },
@@ -1622,6 +1693,7 @@ role = "Читает то, что закрыто"
 text = "Магический удар сильнее на 8 процентов, то, что точит цель, бьёт на 15 процентов сильнее, сопротивление скверне выше на 10 процентов, здоровья на 4 процента меньше."
 lore = "Оккультист держит дома книги, которые управа велела сжечь, и три из них она сама ему и отдала."
 skill = "mage_occultist_tihiy_sglaz"
+power = "siphon"
 modifiers = { magic_damage_percent = 8, dot_damage_percent = 15, resist_negative_percent = 10, health_percent = -4 }
 trial = [
     { name = "Оккультист: счёт мертвецам", objective = "kill", target_kind = "undead", count = 12, text = "Ветка «Оккультист» стоит работы: 12 упокоенных мертвецов. Работа простая, счёт честный." },
@@ -1643,6 +1715,7 @@ role = "Останавливает, потом бьёт"
 text = "Магический удар сильнее на 12 процентов, удар по вам слабее на 6 процентов, сопротивление стуже выше на 15 процентов."
 lore = "Криомант никуда не спешит и не даёт спешить другим — на этом и держится всё его искусство."
 skill = "mage_cryomancer_okovy_stuzhi"
+power = "lullaby"
 modifiers = { magic_damage_percent = 12, damage_taken_percent = -6, resist_cold_percent = 15 }
 trial = [
     { name = "Криомант: счёт стихии", objective = "kill", target_kind = "elemental", count = 20, text = "«Криомант» начинается со счёта, а не со слова: 20 развеянных духов стихии. Наставник ждёт в городе." },
@@ -1665,6 +1738,7 @@ role = "Мёртвые работают дольше"
 text = "Мертвецам достаётся на 10 процентов меньше, то, что точит цель, бьёт на 25 процентов сильнее, вам возвращается 10 процентов нанесённого."
 lore = "Некромант считает смерть перерывом в работе и никогда не спрашивает, согласен ли работник."
 skill = "mage_necromancer_podnyat_pavshego"
+power = "raise_dead"
 modifiers = { undead_damage_percent = -10, dot_damage_percent = 25, lifesteal_percent = 10 }
 trial = [
     { name = "Некромант: счёт мертвецам", objective = "kill", target_kind = "undead", count = 24, text = "Наставник не спорит о призвании. Он просит 24 упокоенных мертвеца — и после этого говорит дальше." },
@@ -1687,6 +1761,7 @@ role = "Бьёт по разуму"
 text = "Магический удар сильнее на 14 процентов, сопротивление дурману выше на 20 процентов, физический удар слабее на 8 процентов."
 lore = "Псионик не повышает голоса вообще: то, что ему нужно сказать, он говорит не вслух."
 skill = "mage_psion_chuzhaya_mysl"
+power = "lullaby"
 modifiers = { magic_damage_percent = 14, resist_mental_percent = 20, physical_damage_percent = -8 }
 trial = [
     { name = "Псионик: счёт нелюди", objective = "kill", target_kind = "aberration", count = 18, text = "Наставник не спорит о призвании. Он просит 18 убитых тварей — и после этого говорит дальше." },
@@ -1709,6 +1784,7 @@ role = "Огонь не переспрашивает"
 text = "Удар по всем сильнее на 18 процентов, то, что точит цель, бьёт на 15 процентов сильнее, сопротивление огню выше на 15 процентов, здоровья на 6 процентов меньше."
 lore = "Пиромант жжёт не потому, что зол: просто огонь — единственный ответ, который он выучил до конца."
 skill = "mage_pyromancer_polymya"
+power = "plague"
 modifiers = { aoe_damage_percent = 18, dot_damage_percent = 15, resist_fire_percent = 15, health_percent = -6 }
 trial = [
     { name = "Пиромант: счёт стихии", objective = "kill", target_kind = "elemental", count = 22, text = "Прежде чем зваться «Пиромант», наберите счёт: 22 развеянных духа стихии. Считает наставник, не вы." },
@@ -1730,6 +1806,7 @@ role = "Свита не устаёт"
 text = "То, что точит цель, бьёт на 35 процентов сильнее, вам возвращается 18 процентов нанесённого, сопротивление скверне выше на 20 процентов."
 lore = "Костяной владыка помнит имя каждого, кого поднял, и это единственное, что ему в них важно."
 skill = "mage_bonelord_kostyanoy_stroy"
+power = "lullaby"
 modifiers = { dot_damage_percent = 35, lifesteal_percent = 18, resist_negative_percent = 20 }
 trial = [
     { name = "Костяной владыка: счёт мертвецам", objective = "kill", target_kind = "undead", count = 45, text = "Наставник не спорит о призвании. Он просит 45 упокоенных мертвецов — и после этого говорит дальше." },
@@ -1752,6 +1829,7 @@ role = "Всё стоит, кроме него"
 text = "Магический удар сильнее на 20 процентов, удар по вам слабее на 10 процентов, сопротивление стуже выше на 25 процентов, ходите на 6 процентов позже."
 lore = "Ледяной владыка говорит медленно и один раз; договаривает он обычно уже в тишине."
 skill = "mage_frostlord_vse_zamret"
+power = "sanctuary"
 modifiers = { magic_damage_percent = 20, damage_taken_percent = -10, resist_cold_percent = 25, initiative_percent = -6 }
 trial = [
     { name = "Ледяной владыка: счёт стихии", objective = "kill", target_kind = "elemental", count = 38, text = "«Ледяной владыка» начинается со счёта, а не со слова: 38 развеянных духов стихии. Наставник ждёт в городе." },
@@ -1774,6 +1852,7 @@ role = "Бьёт по тому, чего нет"
 text = "Уклоняетесь на 18 процентов чаще, удар по всем сильнее на 18 процентов, здоровья на 8 процентов меньше."
 lore = "Иллюзионист однажды показал управе город, которого не существует, и половина писарей до сих пор туда ездит."
 skill = "mage_illusionist_morok"
+power = "trickster"
 modifiers = { dodge_percent = 18, aoe_damage_percent = 18, health_percent = -8 }
 trial = [
     { name = "Иллюзионист: счёт нелюди", objective = "kill", target_kind = "aberration", count = 34, text = "«Иллюзионист» начинается со счёта, а не со слова: 34 убитых твари. Наставник ждёт в городе." },
@@ -1796,6 +1875,7 @@ role = "После него не остаётся ничего"
 text = "Удар по всем сильнее на 25 процентов, то, что точит цель, бьёт на 25 процентов сильнее, сопротивление огню выше на 20 процентов, здоровья на 10 процентов меньше."
 lore = "Испепелитель однажды сжёг собственные записи и с тех пор помнит всё наизусть."
 skill = "mage_incinerator_pepel"
+power = "stormcaller"
 modifiers = { aoe_damage_percent = 25, dot_damage_percent = 25, resist_fire_percent = 20, health_percent = -10 }
 trial = [
     { name = "Испепелитель: счёт стихии", objective = "kill", target_kind = "elemental", count = 40, text = "Ветка «Испепелитель» стоит работы: 40 развеянных духов стихии. Работа простая, счёт честный." },
@@ -1817,6 +1897,7 @@ role = "Огонь берёт и со своего"
 text = "Магический удар сильнее на 22 процента, удар по вам сильнее на 10 процентов, вам возвращается 12 процентов нанесённого."
 lore = "Инфернал давно перестал считать ожоги: у него их ровно столько, сколько заклинаний он знает."
 skill = "mage_infernal_pech"
+power = "siphon"
 modifiers = { magic_damage_percent = 22, damage_taken_percent = 10, lifesteal_percent = 12 }
 trial = [
     { name = "Инфернал: счёт стихии", objective = "kill", target_kind = "elemental", count = 36, text = "«Инфернал» начинается со счёта, а не со слова: 36 развеянных духов стихии. Наставник ждёт в городе." },
@@ -1838,6 +1919,7 @@ role = "Чужая воля — тоже оружие"
 text = "Магический удар сильнее на 22 процента, сопротивление дурману выше на 30 процентов, физический удар слабее на 10 процентов."
 lore = "Повелителю разума не нужно, чтобы его слушались: ему достаточно, чтобы не мешали."
 skill = "mage_mindlord_chuzhaya_volya"
+power = "siphon"
 modifiers = { magic_damage_percent = 22, resist_mental_percent = 30, physical_damage_percent = -10 }
 trial = [
     { name = "Повелитель разума: счёт нелюди", objective = "kill", target_kind = "aberration", count = 36, text = "Наставник не спорит о призвании. Он просит 36 убитых тварей — и после этого говорит дальше." },
@@ -1860,6 +1942,7 @@ role = "Одно слово на всю стаю"
 text = "То, что точит цель, бьёт на 40 процентов сильнее, удар по всем сильнее на 16 процентов, лечите на 15 процентов слабее."
 lore = "Чумной колдун никогда не торопит болезнь: она и без него знает, что делать."
 skill = "mage_plaguecaster_mor"
+power = "plague"
 modifiers = { dot_damage_percent = 40, aoe_damage_percent = 16, healing_done_percent = -15 }
 trial = [
     { name = "Чумной колдун: счёт нелюди", objective = "kill", target_kind = "aberration", count = 32, text = "Прежде чем зваться «Чумной колдун», наберите счёт: 32 убитых твари. Считает наставник, не вы." },
@@ -1881,6 +1964,7 @@ role = "Небо идёт следом"
 text = "Удар по всем сильнее на 22 процента, ходите на 12 процентов раньше, сопротивление ветру выше на 20 процентов."
 lore = "Буревестника зовут не за чары, а за то, что он всегда знает, когда лучше не выходить, — и всё равно выходит."
 skill = "mage_stormcaller_nenaste"
+power = "stormcaller"
 modifiers = { aoe_damage_percent = 22, initiative_percent = 12, resist_air_percent = 20 }
 trial = [
     { name = "Буревестник: счёт стихии", objective = "kill", target_kind = "elemental", count = 40, text = "Прежде чем зваться «Буревестник», наберите счёт: 40 развеянных духов стихии. Считает наставник, не вы." },
@@ -1907,6 +1991,7 @@ role = "Лечит быстрее, чем ломают"
 text = "Лечите на 15 процентов сильнее, вас лечат на 10 процентов сильнее, урон ниже на 6 процентов."
 lore = "Целителя зовут последним и просят сделать всё сразу — он давно привык и не спорит."
 skill = "cleric_healer_skoraya_ruka"
+power = "sanctuary"
 modifiers = { healing_done_percent = 15, healing_taken_percent = 10, damage_percent = -6 }
 trial = [
     { name = "Целитель: обход святилищ", objective = "search", target_kind = "shrine", count = 5, text = "Наставник шлёт вас смотреть, а не драться: 5 отработанных святилищ, все без боя." },
@@ -1927,6 +2012,7 @@ role = "Вера в руках, а не в словах"
 text = "Физический удар сильнее на 12 процентов, уклоняетесь на 8 процентов чаще, лечите на 8 процентов слабее."
 lore = "Монах молчит весь день не из строгости: он просто давно сказал всё, что собирался."
 skill = "cleric_monk_udar_ladonyu"
+power = "duelist"
 modifiers = { physical_damage_percent = 12, dodge_percent = 8, healing_done_percent = -8 }
 trial = [
     { name = "Монах: счёт", objective = "kill", count = 15, text = "Наставник не спорит о призвании. Он просит 15 побеждённых противников — и после этого говорит дальше." },
@@ -1949,6 +2035,7 @@ role = "Отнимает у себя, чтобы устоять"
 text = "Удар по вам слабее на 10 процентов, сопротивление магии выше на 15 процентов, запас восстанавливается на 15 процентов быстрее, урон ниже на 5 процентов."
 lore = "Аскет отказался от стольких вещей, что теперь его почти нечем взять."
 skill = "cleric_ascetic_post"
+power = "zealot"
 modifiers = { damage_taken_percent = -10, resist_magic_percent = 15, resource_regen_percent = 15, damage_percent = -5 }
 trial = [
     { name = "Аскет: обход святилищ", objective = "search", target_kind = "shrine", count = 14, text = "«Аскет» — это ещё и терпение: 14 отработанных святилищ, и ни одной драки сверх нужды." },
@@ -1971,6 +2058,7 @@ role = "Лечит тем, что растёт"
 text = "Лечите на 20 процентов сильнее, сопротивление яду выше на 20 процентов, со сбора выносите на 15 процентов больше, урон ниже на 8 процентов."
 lore = "Знахарь верит в травы больше, чем в молитву, и молитву читает на всякий случай."
 skill = "cleric_herbalist_otvar"
+power = "refrain"
 modifiers = { healing_done_percent = 20, resist_poison_percent = 20, gather_yield_percent = 15, damage_percent = -8 }
 trial = [
     { name = "Знахарь: обход угодий", objective = "search", target_kind = "gather", count = 12, text = "Прежде чем брать «Знахарь», сходите и посмотрите: 12 обойдённых угодий, и ни одного боя." },
@@ -1992,6 +2080,7 @@ role = "Знает на ход вперёд"
 text = "Ходите на 12 процентов раньше, уклоняетесь на 10 процентов чаще, сопротивление дурману выше на 15 процентов."
 lore = "Оракул говорит осторожно и всегда о том, что уже почти случилось: за это его и слушают."
 skill = "cleric_oracle_znamenie"
+power = "refrain"
 modifiers = { initiative_percent = 12, dodge_percent = 10, resist_mental_percent = 15 }
 trial = [
     { name = "Оракул: обход святилищ", objective = "search", target_kind = "shrine", count = 12, text = "Прежде чем брать «Оракул», сходите и посмотрите: 12 отработанных святилищ, и ни одного боя." },
@@ -2014,6 +2103,7 @@ role = "Слово кончилось"
 text = "Физический удар сильнее на 16 процентов, мертвецам достаётся на 15 процентов больше, лечите на 12 процентов слабее."
 lore = "Каратель начинает с разговора и заканчивает им же — просто последняя реплика бывает короткой."
 skill = "cleric_punisher_kara"
+power = "zealot"
 modifiers = { physical_damage_percent = 16, undead_damage_percent = 15, healing_done_percent = -12 }
 trial = [
     { name = "Каратель: счёт мертвецам", objective = "kill", target_kind = "undead", count = 22, text = "Ветка «Каратель» стоит работы: 22 упокоенных мертвеца. Работа простая, счёт честный." },
@@ -2036,6 +2126,7 @@ role = "Гонит нечисть с порога"
 text = "Мертвецам достаётся на 28 процентов больше, магический удар сильнее на 15 процентов, сопротивление скверне выше на 20 процентов."
 lore = "Изгоняющий работает в чужих домах и всегда просит хозяев выйти — не из тайны, а из вежливости."
 skill = "cleric_banisher_proch"
+power = "lullaby"
 modifiers = { undead_damage_percent = 28, magic_damage_percent = 15, resist_negative_percent = 20 }
 trial = [
     { name = "Изгоняющий: счёт мертвецам", objective = "kill", target_kind = "undead", count = 42, text = "Прежде чем зваться «Изгоняющий», наберите счёт: 42 упокоенных мертвеца. Считает наставник, не вы." },
@@ -2058,6 +2149,7 @@ role = "Пустые руки бьют вернее"
 text = "Физический удар сильнее на 18 процентов, уклоняетесь на 18 процентов чаще, запас восстанавливается на 25 процентов быстрее, брони на 8 процентов меньше."
 lore = "Просветлённый не помнит, когда в последний раз держал оружие, и это заметно не в его пользу — до первого удара."
 skill = "cleric_enlightened_pustaya_ruka"
+power = "arcanist"
 modifiers = { physical_damage_percent = 18, dodge_percent = 18, resource_regen_percent = 25, armor_percent = -8 }
 trial = [
     { name = "Просветлённый: счёт", objective = "kill", count = 40, text = "«Просветлённый» начинается со счёта, а не со слова: 40 побеждённых противников. Наставник ждёт в городе." },
@@ -2080,6 +2172,7 @@ role = "Его нечем взять"
 text = "Удар по вам слабее на 16 процентов, сопротивление магии выше на 25 процентов, сопротивление физическому урону выше на 15 процентов, урон ниже на 10 процентов."
 lore = "Отшельник ушёл так далеко, что до него не доходят ни новости, ни удары."
 skill = "cleric_hermit_tishina"
+power = "sanctuary"
 modifiers = { damage_taken_percent = -16, resist_magic_percent = 25, resist_physical_percent = 15, damage_percent = -10 }
 trial = [
     { name = "Отшельник: обход святилищ", objective = "search", target_kind = "shrine", count = 22, text = "Наставник шлёт вас смотреть, а не драться: 22 отработанных святилища, все без боя." },
@@ -2102,6 +2195,7 @@ role = "Не даёт умереть никому"
 text = "Лечите на 22 процента сильнее, здоровья на 14 процентов больше, сопротивление скверне выше на 20 процентов, урон ниже на 10 процентов."
 lore = "Хранителя жизни не зовут на войну: он приходит сам и потом долго объясняет, что не воевал."
 skill = "cleric_lifewarden_krug_zhizni"
+power = "sanctuary"
 modifiers = { healing_done_percent = 22, health_percent = 14, resist_negative_percent = 20, damage_percent = -10 }
 trial = [
     { name = "Хранитель жизни: обход угодий", objective = "search", target_kind = "gather", count = 20, text = "Наставник шлёт вас смотреть, а не драться: 20 обойдённых угодий, все без боя." },
@@ -2124,6 +2218,7 @@ role = "Поднимает почти безнадёжных"
 text = "Лечите на 30 процентов сильнее, вас лечат на 20 процентов сильнее, урон ниже на 12 процентов."
 lore = "Чудотворец не любит слова «чудо»: он говорит, что просто не бросил вовремя."
 skill = "cleric_miracleworker_vtoroe_rozhdenie"
+power = "zealot"
 modifiers = { healing_done_percent = 30, healing_taken_percent = 20, damage_percent = -12 }
 trial = [
     { name = "Чудотворец: обход святилищ", objective = "search", target_kind = "shrine", count = 20, text = "Дорога учит не хуже боя: 20 отработанных святилищ, и всё без единой драки." },
@@ -2145,6 +2240,7 @@ role = "Говорит, и это сбывается"
 text = "Магический удар сильнее на 20 процентов, сопротивление дурману выше на 25 процентов, лечите на 12 процентов сильнее, брони на 6 процентов меньше."
 lore = "Пророка слушают неохотно и всегда до конца — на середине его речи ещё никто не уходил."
 skill = "cleric_prophet_prorochestvo"
+power = "warlord"
 modifiers = { magic_damage_percent = 20, resist_mental_percent = 25, healing_done_percent = 12, armor_percent = -6 }
 trial = [
     { name = "Пророк: обход святилищ", objective = "search", target_kind = "shrine", count = 18, text = "Прежде чем брать «Пророк», сходите и посмотрите: 18 отработанных святилищ, и ни одного боя." },
@@ -2167,6 +2263,7 @@ role = "Видит ход прежде хода"
 text = "Ходите на 20 процентов раньше, уклоняетесь на 16 процентов чаще, точность выше на 12 процентов, урон ниже на 6 процентов."
 lore = "Провидец редко объясняет, откуда знает; чаще он объясняет, почему всё равно не помогло."
 skill = "cleric_seer_na_hod_vpered"
+power = "lullaby"
 modifiers = { initiative_percent = 20, dodge_percent = 16, accuracy_percent = 12, damage_percent = -6 }
 trial = [
     { name = "Провидец: обход святилищ", objective = "search", target_kind = "shrine", count = 20, text = "Дорога учит не хуже боя: 20 отработанных святилищ, и всё без единой драки." },
@@ -2189,6 +2286,7 @@ role = "Отвечает за всех разом"
 text = "Физический удар сильнее на 22 процента, крит бьёт на 22 процента сильнее, лечите на 18 процентов слабее."
 lore = "Длань возмездия не помнит обид: она помнит счета, а счета в отличие от обид закрывают."
 skill = "cleric_vengeance_vozmezdie"
+power = "executioner"
 modifiers = { physical_damage_percent = 22, crit_damage_percent = 22, healing_done_percent = -18 }
 trial = [
     { name = "Длань возмездия: счёт по людям", objective = "kill", target_kind = "humanoid", count = 40, text = "Прежде чем зваться «Длань возмездия», наберите счёт: 40 побеждённых из людского рода. Считает наставник, не вы." },
@@ -2215,6 +2313,7 @@ role = "Меняет шкуру, а не сторону"
 text = "Физический удар сильнее на 12 процентов, здоровья на 8 процентов больше, магический удар слабее на 8 процентов."
 lore = "Оборотень говорит, что зверь в нём отдельный; зверь, судя по всему, думает то же самое про него."
 skill = "druid_shapeshifter_obernutsya"
+power = "beastmaster"
 modifiers = { physical_damage_percent = 12, health_percent = 8, magic_damage_percent = -8 }
 trial = [
     { name = "Оборотень: счёт зверю", objective = "kill", target_kind = "beast", count = 12, text = "Прежде чем зваться «Оборотень», наберите счёт: 12 побеждённых зверей. Считает наставник, не вы." },
@@ -2236,6 +2335,7 @@ role = "Роща отвечает"
 text = "Лечите на 15 процентов сильнее, сопротивление природному урону выше на 15 процентов, урон ниже на 5 процентов."
 lore = "Древохранитель здоровается с деревьями по именам и обижается, когда их путают."
 skill = "druid_treewarden_korni_derzhat"
+power = "sanctuary"
 modifiers = { healing_done_percent = 15, resist_nature_percent = 15, damage_percent = -5 }
 trial = [
     { name = "Древохранитель: обход угодий", objective = "search", target_kind = "gather", count = 8, text = "Дорога учит не хуже боя: 8 обойдённых угодий, и всё без единой драки." },
@@ -2257,6 +2357,7 @@ role = "Тяжело и надолго"
 text = "Здоровья на 15 процентов больше, брони на 12 процентов больше, ходите на 8 процентов позже."
 lore = "Медвежий дух не бросается первым и не отступает вовсе — второе замечают чаще."
 skill = "druid_bearspirit_medvezhya_shkura"
+power = "bulwark"
 modifiers = { health_percent = 15, armor_percent = 12, initiative_percent = -8 }
 trial = [
     { name = "Медвежий дух: счёт зверю", objective = "kill", target_kind = "beast", count = 22, text = "«Медвежий дух» начинается со счёта, а не со слова: 22 побеждённых зверя. Наставник ждёт в городе." },
@@ -2279,6 +2380,7 @@ role = "Растёт там, где не звали"
 text = "То, что точит цель, бьёт на 25 процентов сильнее, удар по всем сильнее на 12 процентов, физический удар слабее на 6 процентов."
 lore = "Заклинатель терний никогда не расчищает дорогу — он расчищает её после того, как по ней прошли."
 skill = "druid_thornweaver_ternovnik"
+power = "plague"
 modifiers = { dot_damage_percent = 25, aoe_damage_percent = 12, physical_damage_percent = -6 }
 trial = [
     { name = "Заклинатель терний: обход угодий", objective = "search", target_kind = "gather", count = 12, text = "Дорога учит не хуже боя: 12 обойдённых угодий, и всё без единой драки." },
@@ -2300,6 +2402,7 @@ role = "Договаривается с небом"
 text = "Магический удар сильнее на 15 процентов, сопротивление ветру выше на 15 процентов, сопротивление стуже выше на 15 процентов, физический удар слабее на 8 процентов."
 lore = "Погодник обещает вёдро осторожно, а ненастье — уверенно, и потому ему верят."
 skill = "druid_weatherward_hmar"
+power = "refrain"
 modifiers = { magic_damage_percent = 15, resist_air_percent = 15, resist_cold_percent = 15, physical_damage_percent = -8 }
 trial = [
     { name = "Погодник: счёт стихии", objective = "kill", target_kind = "elemental", count = 18, text = "Прежде чем зваться «Погодник», наберите счёт: 18 развеянных духов стихии. Считает наставник, не вы." },
@@ -2321,6 +2424,7 @@ role = "Быстрее и злее"
 text = "Физический удар сильнее на 16 процентов, ходите на 12 процентов раньше, брони на 8 процентов меньше."
 lore = "Волколак сам не помнит, когда обернулся в последний раз, — и это самый честный ответ, какой он может дать."
 skill = "druid_wolfskin_volchya_hvatka"
+power = "berserker"
 modifiers = { physical_damage_percent = 16, initiative_percent = 12, armor_percent = -8 }
 trial = [
     { name = "Волколак: счёт зверю", objective = "kill", target_kind = "beast", count = 24, text = "«Волколак» начинается со счёта, а не со слова: 24 побеждённых зверя. Наставник ждёт в городе." },
@@ -2343,6 +2447,7 @@ role = "Больше человека и тяжелее"
 text = "Здоровья на 25 процентов больше, физический удар сильнее на 14 процентов, ходите на 12 процентов позже."
 lore = "Первозверем его зовут не за возраст: просто человеком его звать уже неловко."
 skill = "druid_firstbeast_zverinaya_stat"
+power = "berserker"
 modifiers = { health_percent = 25, physical_damage_percent = 14, initiative_percent = -12 }
 trial = [
     { name = "Первозверь: счёт зверю", objective = "kill", target_kind = "beast", count = 42, text = "Наставник не спорит о призвании. Он просит 42 побеждённых зверя — и после этого говорит дальше." },
@@ -2365,6 +2470,7 @@ role = "В тумане не видно никого"
 text = "Уклоняетесь на 20 процентов чаще, сопротивление стуже выше на 20 процентов, лечите на 14 процентов сильнее, урон ниже на 6 процентов."
 lore = "Туманник приводит туман с собой и всегда уходит первым, пока остальные ищут дорогу."
 skill = "druid_mistward_pelena"
+power = "lullaby"
 modifiers = { dodge_percent = 20, resist_cold_percent = 20, healing_done_percent = 14, damage_percent = -6 }
 trial = [
     { name = "Туманник: обход святилищ", objective = "search", target_kind = "shrine", count = 16, text = "Наставник шлёт вас смотреть, а не драться: 16 отработанных святилищ, все без боя." },
@@ -2387,6 +2493,7 @@ role = "Луна считает за него"
 text = "Крит случается на 14 процентов чаще, ходите на 18 процентов раньше, первый удар сильнее на 15 процентов, здоровья на 6 процентов меньше."
 lore = "Лунный охотник знает наизусть все фазы и уверяет, что дело не в них; выходит он всё-таки в полнолуние."
 skill = "druid_moonhunter_lunnyy_brosok"
+power = "executioner"
 modifiers = { crit_chance_percent = 14, initiative_percent = 18, first_turn_damage_percent = 15, health_percent = -6 }
 trial = [
     { name = "Лунный охотник: счёт зверю", objective = "kill", target_kind = "beast", count = 40, text = "Наставник не спорит о призвании. Он просит 40 побеждённых зверей — и после этого говорит дальше." },
@@ -2409,6 +2516,7 @@ role = "За ним идут четвероногие"
 text = "Зверью достаётся на 25 процентов больше, физический удар сильнее на 18 процентов, удар по всем сильнее на 14 процентов, брони на 8 процентов меньше."
 lore = "Вожак стаи ест последним и уходит последним; про первое он рассказывает, про второе — нет."
 skill = "druid_packleader_staya_beret"
+power = "beastmaster"
 modifiers = { beast_damage_percent = 25, physical_damage_percent = 18, aoe_damage_percent = 14, armor_percent = -8 }
 trial = [
     { name = "Вожак стаи: счёт зверю", objective = "kill", target_kind = "beast", count = 45, text = "Ветка «Вожак стаи» стоит работы: 45 побеждённых зверей. Работа простая, счёт честный." },
@@ -2431,6 +2539,7 @@ role = "Шкура вместо доспеха"
 text = "Брони на 20 процентов больше, удар по вам слабее на 12 процентов, сопротивление физическому урону выше на 15 процентов, урон ниже на 8 процентов."
 lore = "Каменношкурый не носит брони не из гордости: она на нём просто не держится."
 skill = "druid_stonehide_kamen_derzhit"
+power = "sanctuary"
 modifiers = { armor_percent = 20, damage_taken_percent = -12, resist_physical_percent = 15, damage_percent = -8 }
 trial = [
     { name = "Каменношкурый: счёт", objective = "kill", count = 40, text = "Наставник не спорит о призвании. Он просит 40 побеждённых противников — и после этого говорит дальше." },
@@ -2453,6 +2562,7 @@ role = "Небо приходит по слову"
 text = "Магический удар сильнее на 22 процента, удар по всем сильнее на 20 процентов, сопротивление ветру выше на 25 процентов, физический удар слабее на 10 процентов."
 lore = "Владыка гроз обещал не звать грозу без нужды и с тех пор ни разу не признал, что нужды не было."
 skill = "druid_stormlord_groza"
+power = "stormcaller"
 modifiers = { magic_damage_percent = 22, aoe_damage_percent = 20, resist_air_percent = 25, physical_damage_percent = -10 }
 trial = [
     { name = "Владыка гроз: счёт стихии", objective = "kill", target_kind = "elemental", count = 38, text = "Прежде чем зваться «Владыка гроз», наберите счёт: 38 развеянных духов стихии. Считает наставник, не вы." },
@@ -2474,6 +2584,7 @@ role = "Всё поле в шипах"
 text = "То, что точит цель, бьёт на 35 процентов сильнее, удар по всем сильнее на 20 процентов, отражаете 12 процентов полученного, физический удар слабее на 8 процентов."
 lore = "Терновый владыка не строит стен: он сажает и уходит, а стена вырастает сама."
 skill = "druid_thornlord_ternovaya_stena"
+power = "stormcaller"
 modifiers = { dot_damage_percent = 35, aoe_damage_percent = 20, reflect_percent = 12, physical_damage_percent = -8 }
 trial = [
     { name = "Терновый владыка: обход угодий", objective = "search", target_kind = "gather", count = 20, text = "Прежде чем брать «Терновый владыка», сходите и посмотрите: 20 обойдённых угодий, и ни одного боя." },
@@ -2495,6 +2606,7 @@ role = "Готовит долго, действует дольше"
 text = "То, что точит цель, бьёт на 40 процентов сильнее, сопротивление яду выше на 25 процентов, работа выходит ладной на 12 процентов чаще, урон ниже на 6 процентов."
 lore = "Ядоплёт варит своё дело неделями и всегда пробует первым — говорит, иначе не поймёшь, вышло ли."
 skill = "druid_venomweaver_dolgiy_yad"
+power = "siphon"
 modifiers = { dot_damage_percent = 40, resist_poison_percent = 25, craft_quality_percent = 12, damage_percent = -6 }
 trial = [
     { name = "Ядоплёт: обход угодий", objective = "search", target_kind = "gather", count = 22, text = "Наставник шлёт вас смотреть, а не драться: 22 обойдённых угодья, все без боя." },

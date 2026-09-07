@@ -356,23 +356,28 @@ def node_foes(
     if left is None or left.empty or not node.kind.is_combat:
         return ()
     busy = {one.slot: one.name for one in fights if one.node == index and one.wave == left.wave}
+    packs = {
+        place: node_pack(
+            content,
+            world_seed=world_seed,
+            session=session,
+            location=location,
+            index=index,
+            wave=left.wave,
+            place=place,
+            state=state,
+        )
+        for place in left.free
+    }
     return tuple(
         screens.NodeFoe(
             place=place,
-            line=screens.pack_line(
-                node_pack(
-                    content,
-                    world_seed=world_seed,
-                    session=session,
-                    location=location,
-                    index=index,
-                    wave=left.wave,
-                    place=place,
-                    state=state,
-                )
-            ),
+            line=screens.pack_line(packs[place]),
             level=max(1, node.level),
             fighter=busy.get(place, ""),
+            # Как эта стая дерётся, говорится до боя: панель собирают до него
+            # (ADR 0081).
+            habits=screens.pack_habits(packs[place]),
         )
         for place in left.free
     )
@@ -746,6 +751,14 @@ def _render(
                 state.list_page,
                 state.notice,
             )
+        case ScreenId.SKILL_MASTERY if content.has_skill(state.mastery_code):
+            return skill_screens.mastery_screen(
+                content, character, content.skill(state.mastery_code), state.notice
+            )
+        case ScreenId.SKILL_MASTERY:
+            # Умение, которого больше нет, экрана не открывает: содержимое
+            # переживает состояние (``Claude.md``, правило 8).
+            return skill_screens.skills_screen(content, character, state.skill_page, state.notice)
         case ScreenId.CRAFT if content.has_craft(state.craft_id):
             here = known_city(content, state.city_id, character.city_id)
             return craft_screens.craft_screen(
@@ -1139,6 +1152,8 @@ def advance(
             return _handle_slots(content, character, state, command)
         case ScreenId.SKILL_PICK:
             return _handle_pick(content, character, state, command)
+        case ScreenId.SKILL_MASTERY:
+            return _handle_mastery(content, character, state, command)
         case ScreenId.TAVERN:
             return _handle_tavern(content, character, state, command)
         case ScreenId.SUMMARY:
@@ -1882,6 +1897,10 @@ def _handle_skills(
     for skill in pool:
         if not command.argument.startswith(f"{skill.name} —"):
             continue
+        # Ранг, уже купленный, но не потраченный на выучку, тратится первым:
+        # иначе игрок платил бы очко за то, чего ещё не выбрал (ADR 0079).
+        if skill_rules.mastery_tier_due(content, character, skill) is not None:
+            return replace(state, mastery_code=skill.code).at(ScreenId.SKILL_MASTERY)
         learned = skill_rules.learn(content, character, skill)
         if learned is None:
             return state.with_notice(skill_screens.refusal(content, character, skill))
@@ -1893,8 +1912,40 @@ def _handle_skills(
             said = f"{said} Теперь {gained}."
         if skill.is_active and skill.code not in learned.loadout.equipped_actives():
             said += " Положите его в слот, иначе в бою его не будет."
-        return state.storing(PendingWrite(character=learned)).with_notice(said)
+        stored = state.storing(PendingWrite(character=learned))
+        # Ранг, который спрашивает «чему научилось», спрашивает сразу: выбор,
+        # отложенный до следующего захода, читается как несработавшая кнопка.
+        if skill_rules.mastery_tier_due(content, learned, skill) is not None:
+            return (
+                replace(stored, mastery_code=skill.code)
+                .at(ScreenId.SKILL_MASTERY)
+                .with_notice(f"{said} Выберите, чему умение научилось.")
+            )
+        return stored.with_notice(said)
     return state.with_notice("Нажмите умение из списка.")
+
+
+def _handle_mastery(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    """Выбор выучки: чему умение научилось, взяв ранг (``rules/skill_mastery``)."""
+    if not content.has_skill(state.mastery_code):
+        return state.at(ScreenId.SKILLS).with_notice("Этого умения больше нет.")
+    skill = content.skill(state.mastery_code)
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите выучку из списка.")
+    for one in skill_rules.mastery_choices(content, character, skill):
+        if not labels.label(one.name).matches(command.argument):
+            continue
+        taught = skill_rules.choose_mastery(content, character, skill, one.code)
+        if taught is None:  # pragma: no cover - выбор берётся из того же списка
+            return state.with_notice("Эту выучку взять нельзя.")
+        return (
+            state.storing(PendingWrite(character=taught))
+            .at(ScreenId.SKILLS)
+            .with_notice(f"{skill.name}: {one.name}. {one.text}")
+        )
+    return state.with_notice("Нажмите выучку из списка.")
 
 
 def _handle_slots(

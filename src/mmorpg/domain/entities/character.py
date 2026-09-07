@@ -35,6 +35,10 @@ class SkillLoadout:
     actives: tuple[str | None, ...] = (None,) * ACTIVE_SLOTS
     racial: str | None = None
     ranks: Mapping[str, int] = field(default_factory=dict)
+    #: Чему игрок научил каждое умение, поднимая его ранг: коды выучек по коду
+    #: умения (``domain/rules/skill_mastery``). Две за жизнь умения - на третьем
+    #: ранге и на пятом, - и обе меняют то, что умение делает.
+    masteries: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if len(self.actives) != ACTIVE_SLOTS:
@@ -70,6 +74,26 @@ class SkillLoadout:
         ranks = dict(self.ranks)
         ranks[skill_code] = rank
         return replace(self, ranks=MappingProxyType(ranks))
+
+    def masteries_of(self, skill_code: str) -> tuple[str, ...]:
+        """Чему научено это умение. Пусто - ничему пока."""
+        return tuple(self.masteries.get(skill_code, ()))
+
+    def with_mastery(self, skill_code: str, mastery_code: str) -> SkillLoadout:
+        """Добавить умению выучку. Взятое не заменяется: выбор один раз на ступень."""
+        taken = self.masteries_of(skill_code)
+        if mastery_code in taken:
+            return self
+        masteries = dict(self.masteries)
+        masteries[skill_code] = (*taken, mastery_code)
+        return replace(self, masteries=MappingProxyType(masteries))
+
+    def without_masteries(self, skill_code: str) -> SkillLoadout:
+        """Забыть, чему умение было научено: разобранное умение забывается целиком."""
+        if skill_code not in self.masteries:
+            return self
+        masteries = {key: value for key, value in self.masteries.items() if key != skill_code}
+        return replace(self, masteries=MappingProxyType(masteries))
 
 
 @dataclass(frozen=True, slots=True)

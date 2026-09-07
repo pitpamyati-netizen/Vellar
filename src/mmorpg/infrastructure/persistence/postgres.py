@@ -82,6 +82,14 @@ def _character_from_row(row: Any) -> Character:
             actives=tuple(loadout_raw.get("actives", [None] * 6)),
             racial=loadout_raw.get("racial"),
             ranks=MappingProxyType(dict(loadout_raw.get("ranks", {}))),
+            # Чему научено каждое умение (``rules/skill_mastery``). Персонажи,
+            # сохранённые до выучек, читаются пустым набором: ничему.
+            masteries=MappingProxyType(
+                {
+                    str(code): tuple(str(one) for one in taken)
+                    for code, taken in dict(loadout_raw.get("masteries", {})).items()
+                }
+            ),
         ),
         equipment=Equipment(MappingProxyType(dict(equipment_raw))),
         city_id=row["city_id"],
@@ -151,6 +159,7 @@ def _loadout_to_json(loadout: SkillLoadout) -> str:
             "actives": list(loadout.actives),
             "racial": loadout.racial,
             "ranks": dict(loadout.ranks),
+            "masteries": {code: list(taken) for code, taken in loadout.masteries.items()},
         },
         ensure_ascii=False,
     )

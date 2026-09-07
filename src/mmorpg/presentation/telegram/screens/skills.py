@@ -17,6 +17,9 @@ from __future__ import annotations
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, Skill
+from mmorpg.domain.rules import combo as combo_rules
+from mmorpg.domain.rules import passives as passive_rules
+from mmorpg.domain.rules import skill_mastery as mastery_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
@@ -113,10 +116,32 @@ def passive_power_words(content: GameContent, skill: Skill, rank: int) -> str:
     Обе величины числами: текст умения в ``skills.toml`` называет силу первого
     ранга и с рангом не меняется, поэтому без этой строки пассивка на пятом
     ранге выглядела бы ровно так же, как на первом.
+
+    Уклад называется своей фразой (``rules/passives``): «крит возвращает восемь
+    процентов запаса» - это не прибавка, и строкой прибавки её не сказать.
     """
     from mmorpg.presentation.telegram.screens.items import modifier_line
 
-    return modifier_line(content, skill.effect, skill.power_at_rank(max(1, rank)))
+    amount = skill.power_at_rank(max(1, rank))
+    if passive_rules.has_power(skill.effect):
+        return passive_rules.power(skill.effect).words(amount)
+    return modifier_line(content, skill.effect, amount)
+
+
+def mastery_words(content: GameContent, character: Character, skill: Skill) -> str:
+    """Чему умение научено. Пусто - ничему пока (``rules/skill_mastery``)."""
+    taken = skill_rules.taken_masteries(character, skill)
+    if not taken:
+        return ""
+    return "Выучка: " + "; ".join(f"{one.name} — {one.text}" for one in taken)
+
+
+def mastery_call(content: GameContent, character: Character, skill: Skill) -> str:
+    """Зов выбрать выучку. Пусто - выбирать нечего или не пора."""
+    tier = skill_rules.mastery_tier_due(content, character, skill)
+    if tier is None:
+        return ""
+    return "Пора выбрать выучку: нажмите умение."
 
 
 def skill_state(content: GameContent, character: Character, skill: Skill) -> str:
@@ -137,6 +162,9 @@ def skill_state(content: GameContent, character: Character, skill: Skill) -> str
         return f"не изучено, {price}"
     rank = character.loadout.rank_of(skill.code)
     said = f"ранг {rank} из {rules.max_rank}"
+    # Ранг, купленный и не потраченный на выбор, - это очко, лежащее без дела.
+    if skill_rules.mastery_tier_due(content, character, skill) is not None:
+        return f"{said}, ждёт выучки: нажмите и выберите"
     if gained := rank_gain_words(rank, skill, content):
         said = f"{said}: {gained}"
     if rank >= rules.max_rank:
@@ -194,9 +222,23 @@ def fork_note(content: GameContent, skill: Skill) -> str:
     return f"Развилка: или это, или {names}."
 
 
-def skill_detail(content: GameContent, skill: Skill) -> str:
-    """Строка под названием умения: что оно делает и чем его для этого держат."""
-    parts = [skill.text, weapon_demand(content, skill), fork_note(content, skill)]
+def skill_detail(content: GameContent, skill: Skill, character: Character | None = None) -> str:
+    """Строка под названием умения: что оно делает и чем его для этого держат.
+
+    Связка называется здесь же (``rules/combo``): по чему это умение бьёт
+    сильнее, игрок обязан узнать до того, как положит его в слот, - иначе панель
+    собирается на глаз.
+    """
+    parts = [
+        skill.text,
+        combo_rules.demand_line(skill),
+        weapon_demand(content, skill),
+        fork_note(content, skill),
+    ]
+    if character is not None:
+        parts.extend(
+            [mastery_words(content, character, skill), mastery_call(content, character, skill)]
+        )
     return " ".join(part for part in parts if part)
 
 
@@ -227,7 +269,7 @@ def skills_screen(
         ListEntry(
             key=skill.code,
             text=skill_entry_text(content, character, skill),
-            detail=skill_detail(content, skill),
+            detail=skill_detail(content, skill, character),
         )
         for skill in pool
     ]
@@ -294,6 +336,38 @@ def slots_screen(content: GameContent, character: Character, notice: str = "") -
     return Screen(id=ScreenId.SKILL_SLOTS, lines=tuple(lines), rows=tuple(rows))
 
 
+def mastery_screen(
+    content: GameContent,
+    character: Character,
+    skill: Skill,
+    notice: str = "",
+) -> Screen:
+    """Чему умение научилось, взяв ранг (``rules/skill_mastery``).
+
+    Список короткий и без страниц: выучек, подходящих одному умению, всегда
+    несколько, а не десятки. Каждая названа тем, что она делает, - и делает
+    ровно это.
+    """
+    choices = skill_rules.mastery_choices(content, character, skill)
+    tier = skill_rules.mastery_tier_due(content, character, skill)
+    lines = [
+        *head(f"Выучка: {skill.name}.", notice),
+        skill.text,
+        "Выбранное не меняют: вернуть выучку можно только вместе с умением, у наставника.",
+    ]
+    if tier is not None:
+        lines.append(
+            f"Это выбор {tier} ступени, он приходит с рангом {mastery_rules.rank_of_tier(tier)}."
+        )
+    if taken := mastery_words(content, character, skill):
+        lines.append(taken + ".")
+    if not choices:
+        lines.append("Выбирать пока нечего.")
+    lines.extend(f"{one.name}: {one.text}" for one in choices)
+    rows = tuple((label(one.name),) for one in choices)
+    return Screen(id=ScreenId.SKILL_MASTERY, lines=tuple(lines), rows=rows)
+
+
 def pick_screen(
     content: GameContent,
     character: Character,
@@ -307,7 +381,7 @@ def pick_screen(
         ListEntry(
             key=skill.code,
             text=f"{skill.name} — ранг {character.loadout.rank_of(skill.code)}",
-            detail=skill_detail(content, skill),
+            detail=skill_detail(content, skill, character),
         )
         for skill in available
     ]

@@ -50,6 +50,7 @@ class Play(StatesGroup):
     skills = State()
     skill_slots = State()
     skill_pick = State()
+    skill_mastery = State()
     crafts = State()
     craft = State()
     quests = State()
@@ -155,6 +156,7 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.SKILLS: Play.skills,
     ScreenId.SKILL_SLOTS: Play.skill_slots,
     ScreenId.SKILL_PICK: Play.skill_pick,
+    ScreenId.SKILL_MASTERY: Play.skill_mastery,
     ScreenId.CRAFTS: Play.crafts,
     ScreenId.CRAFT: Play.craft,
     ScreenId.QUESTS: Play.quests,
@@ -260,6 +262,7 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.SKILLS: ScreenId.MAIN_MENU,
     ScreenId.SKILL_SLOTS: ScreenId.SKILLS,
     ScreenId.SKILL_PICK: ScreenId.SKILL_SLOTS,
+    ScreenId.SKILL_MASTERY: ScreenId.SKILLS,
     ScreenId.CRAFTS: ScreenId.MAIN_MENU,
     ScreenId.CRAFT: ScreenId.CRAFTS,
     ScreenId.QUESTS: ScreenId.MAIN_MENU,

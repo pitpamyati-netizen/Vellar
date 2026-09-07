@@ -48,6 +48,8 @@ class ScreenId(StrEnum):
     SKILLS = "skills"
     SKILL_SLOTS = "skill_slots"
     SKILL_PICK = "skill_pick"
+    #: Чему умение научилось, взяв ранг (``rules/skill_mastery``).
+    SKILL_MASTERY = "skill_mastery"
     CRAFTS = "crafts"
     CRAFT = "craft"
     QUESTS = "quests"

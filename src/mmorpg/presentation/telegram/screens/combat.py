@@ -535,6 +535,19 @@ def describe_event(event: BattleEvent, viewer_id: int = 0) -> str:
             return "Вы вмешались в бой. Ваш ход придёт со следующего круга."
         case EventKind.JOINED:
             return f"{event.actor} вмешивается в бой и встаёт в очередь со следующего круга."
+        case EventKind.COMBO if you_hit:
+            # Связка сошлась: удар пришёлся по тому, на чём уже держится нужное
+            # (``rules/combo``). Игрок обязан услышать, что она сработала, -
+            # иначе панель собирается вслепую.
+            held = event.effect_name.lower()
+            return f"Связка: {event.target} — {held}, и {event.skill_name} бьёт сильнее."
+        case EventKind.COMBO:
+            held = event.effect_name.lower()
+            return f"Связка у {event.actor}: {held} на цели, и удар сильнее."
+        case EventKind.SUMMONED if you_hit:
+            return f"На вашей стороне встаёт {event.target}."
+        case EventKind.SUMMONED:
+            return f"{event.actor} поднимает своего: {event.target}."
         case _:
             return ""
 

@@ -14,6 +14,7 @@ from types import MappingProxyType
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import City, GameContent, Location, StatMilestone
+from mmorpg.domain.entities.damage import DAMAGE_TYPE_NAMES
 from mmorpg.domain.entities.location import (
     Enemy,
     GeneratedLocation,
@@ -378,6 +379,9 @@ class NodeFoe:
     line: str
     level: int
     fighter: str = ""
+    #: Как эта стая дерётся: повадки и рода урона, словами (``pack_habits``).
+    #: Называется до боя, потому что панель собирают до него.
+    habits: str = ""
 
     @property
     def busy(self) -> bool:
@@ -400,11 +404,34 @@ def join_label(foe: NodeFoe, single: bool = False) -> Label:
 
 
 def foe_line(foe: NodeFoe, single: bool = False) -> str:
-    """Строка стаи в узле: кто, какого уровня и свободна ли она."""
+    """Строка стаи в узле: кто, какого уровня, как дерётся и свободна ли она.
+
+    Повадка и род урона называются ДО боя нарочно: ответ на заклинателя -
+    молчание, на знахаря - запрет лечения, на ледяных - огонь, и всё это лежит в
+    панели, которую собирают перед выходом. Стая, о которой узнают только в бою,
+    сделала бы панель делом привычки, а не выбора (ADR 0081).
+    """
     number = "" if single else f"{foe.place + 1}. "
+    habits = f" ({foe.habits})" if foe.habits else ""
     if foe.busy:
-        return f"{number}{foe.line}, уровень {foe.level}: сражается {foe.fighter}."
-    return f"{number}{foe.line}, уровень {foe.level}."
+        return f"{number}{foe.line}{habits}, уровень {foe.level}: сражается {foe.fighter}."
+    return f"{number}{foe.line}{habits}, уровень {foe.level}."
+
+
+def pack_habits(pack: Sequence[Enemy]) -> str:
+    """Как эта стая дерётся: повадки и рода урона, без повторов.
+
+    Слова те же, какими бой называет то же самое (``screens/combat.ROLE_NAMES``,
+    ``DAMAGE_TYPE_NAMES``): два разных слова об одном игрок услышал бы как два
+    разных противника.
+    """
+    from mmorpg.presentation.telegram.screens.combat import ROLE_NAMES
+
+    roles = list(dict.fromkeys(ROLE_NAMES[one.role] for one in pack))
+    elements = list(dict.fromkeys(DAMAGE_TYPE_NAMES[one.element] for one in pack))
+    if not roles:
+        return ""
+    return f"{', '.join(roles)}; бьют: {', '.join(elements)}"
 
 
 def invite_label(name: str) -> Label:

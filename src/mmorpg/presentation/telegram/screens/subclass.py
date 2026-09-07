@@ -20,6 +20,7 @@ from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, Subclass
 from mmorpg.domain.entities.quest import Quest
 from mmorpg.domain.rules import subclass as subclass_rules
+from mmorpg.domain.rules import subclass_powers as way_rules
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
@@ -53,6 +54,18 @@ def path_line(content: GameContent, character: Character) -> str:
     return f"Ваша дорога: {klass.name} — {road}."
 
 
+def working_lines(content: GameContent, character: Character) -> tuple[str, ...]:
+    """Уклады, которые работают у этого персонажа прямо сейчас.
+
+    Ветку берут раз в жизни, а её правило действует каждый бой, - и потому
+    названо оно должно быть там, где о ветках и говорят.
+    """
+    taken = [one for one in subclass_rules.taken(content, character) if way_line(one)]
+    if not taken:
+        return ()
+    return ("Работает сейчас:", *(f"{one.name}. {way_line(one)}" for one in taken))
+
+
 def skill_line(content: GameContent, one: Subclass) -> str:
     """Чему ветка учит. Пусто — ничему, и это ошибка содержимого, а не экрана."""
     if not one.skill_code or not content.has_skill(one.skill_code):
@@ -61,11 +74,25 @@ def skill_line(content: GameContent, one: Subclass) -> str:
     return f"Умение ветки: «{skill.name}». {skill.text}"
 
 
+def way_line(one: Subclass) -> str:
+    """Уклад ветки: чем она меняет сам бой (``rules/subclass_powers``).
+
+    Главная строка карточки: прибавки говорят «насколько», а уклад - «как за неё
+    играют». Пусто - ветка правил не меняет, и это ошибка содержимого.
+    """
+    if not one.power or not way_rules.has_power(one.power):
+        return ""
+    way = way_rules.power(one.power)
+    return f"Уклад ветки — {way.name}: {way.text}"
+
+
 def _offer_lines(content: GameContent, character: Character, one: Subclass) -> tuple[str, ...]:
     """Одна ветка на развилке: что даёт, чему учит, чего стоит."""
     lines = [f"{one.name} — {one.role}. {one.text}"]
     if one.lore:
         lines.append(one.lore)
+    if way := way_line(one):
+        lines.append(way)
     taught = skill_line(content, one)
     if taught:
         lines.append(taught)
@@ -88,7 +115,11 @@ def subclass_screen(
     """Развилка: взятое, открытая ступень и две ветки, между которыми выбирают."""
     tier = subclass_rules.open_tier(content, character)
 
-    lines = [*head("Ступень.", notice), path_line(content, character)]
+    lines = [
+        *head("Ступень.", notice),
+        path_line(content, character),
+        *working_lines(content, character),
+    ]
     if tier is None:
         lines.append("Дерево пройдено до конца. Дальше растёт только то, что вы вложили.")
         return Screen(id=ScreenId.SUBCLASS, lines=tuple(lines))
@@ -165,4 +196,5 @@ def chosen_line(content: GameContent, one: Subclass) -> str:
     taught = ""
     if one.skill_code and content.has_skill(one.skill_code):
         taught = f" Открыто умение «{content.skill(one.skill_code).name}» — учат у наставника."
-    return f"Вы стали: {one.name}. {one.text}{taught}"
+    way = f" {way_line(one)}." if way_line(one) else ""
+    return f"Вы стали: {one.name}. {one.text}{way}{taught}"

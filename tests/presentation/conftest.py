@@ -1300,6 +1300,17 @@ def all_screens(
         skill_screens.slots_screen(content, fighter),
         skill_screens.pick_screen(content, fighter, 2, PageState()),
         skill_screens.pick_screen(content, hero, 0, PageState()),
+        # Выучка: чему умение научилось, взяв ранг (ADR 0079). Оба края -
+        # умение, которому есть из чего выбирать, и умение, которому нечего.
+        skill_screens.mastery_screen(
+            content,
+            replace(
+                fighter,
+                loadout=replace(fighter.loadout, ranks={"warrior_rassechenie": 3}),
+            ),
+            content.skill("warrior_rassechenie"),
+        ),
+        skill_screens.mastery_screen(content, hero, content.skill("warrior_rassechenie")),
         craft_screens.crafts_screen(content, hero),
         craft_screens.crafts_screen(content, craftsman),
         craft_screens.craft_screen(content, craftsman, content.craft("mining"), {}),
