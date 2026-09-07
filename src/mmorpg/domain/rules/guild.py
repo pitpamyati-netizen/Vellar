@@ -35,6 +35,7 @@ from enum import IntEnum
 
 from mmorpg.domain.entities.content import GameContent, GuildTier
 from mmorpg.domain.procgen.enemies import gold_at
+from mmorpg.domain.rules import names
 from mmorpg.domain.rules.progression import MAX_LEVEL
 
 #: Сколько человек помещается в гильдию на самой высокой её ступени. Ступень
@@ -331,6 +332,14 @@ def name_refusal(name: str) -> str:
         return f"Имя гильдии - от {NAME_MIN} до {NAME_MAX} знаков."
     if not any(ch.isalpha() for ch in trimmed):
         return "В имени гильдии должны быть буквы."
+    # Имя гильдии стоит рядом с именем каждого её человека, поэтому те же две
+    # проверки, что и у имени персонажа (``rules/names``): брань и бессмыслица.
+    # Настоящее имя гильдии не запрещено: «Товарищество Петрова» - это вывеска,
+    # а не паспорт.
+    if names.is_profane(trimmed):
+        return "Такое имя гильдии игра не примет. Придумайте другое."
+    if names.is_gibberish(trimmed):
+        return "Имя гильдии должно читаться вслух. Наберите то, что можно произнести."
     return ""
 
 

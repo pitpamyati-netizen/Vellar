@@ -7,17 +7,16 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field, replace
 
 from mmorpg.domain.entities.character import Character, Equipment
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.stats import StatBlock, StatCode
+from mmorpg.domain.rules import names
 from mmorpg.domain.rules.equipment import fill_gear
 
-NAME_MIN_LENGTH = 2
-NAME_MAX_LENGTH = 20
-_NAME_PATTERN = re.compile(r"^[А-Яа-яЁёA-Za-z][А-Яа-яЁёA-Za-z0-9 \-']*$")
+NAME_MIN_LENGTH = names.MIN_LENGTH
+NAME_MAX_LENGTH = names.MAX_LENGTH
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,19 +26,9 @@ class NameCheck:
 
 
 def validate_name(name: str) -> NameCheck:
-    """Имена произносят вслух, поэтому они короткие и без украшений."""
-    stripped = name.strip()
-    if len(stripped) < NAME_MIN_LENGTH:
-        return NameCheck(False, f"Имя должно быть не короче {NAME_MIN_LENGTH} символов.")
-    if len(stripped) > NAME_MAX_LENGTH:
-        return NameCheck(False, f"Имя должно быть не длиннее {NAME_MAX_LENGTH} символов.")
-    if not _NAME_PATTERN.match(stripped):
-        return NameCheck(
-            False,
-            "Имя может содержать буквы, цифры, пробел, дефис и апостроф, "
-            "и должно начинаться с буквы.",
-        )
-    return NameCheck(True)
+    """Имена произносят вслух, поэтому решает о них домен (``rules/names``)."""
+    problem = names.refusal(name)
+    return NameCheck(not problem, problem)
 
 
 @dataclass(frozen=True, slots=True)
