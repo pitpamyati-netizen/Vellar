@@ -48,6 +48,11 @@ class Operation:
     commit_attempted: bool = False
     sql_committed: bool = False
     participants: tuple[object, ...] = ()
+    command: bool = False
+    reply_chat_id: int | None = None
+    replies: list[dict[str, Any]] = field(default_factory=list)
+    legacy_id: str | None = None
+    sent_messages: dict[int, int] = field(default_factory=dict)
 
 
 def json_fallback(value: Any) -> Any:

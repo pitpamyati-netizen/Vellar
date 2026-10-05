@@ -73,11 +73,14 @@ async def _deliver(operation: Operation) -> None:
         economy_log.logger.info(
             "gold_flow", flow=flow, amount=amount, character_id=character_id, detail=detail
         )
+    failure: Exception | None = None
     for action in operation.after_commit:
         try:
             await action()
         except Exception as error:
-            raise OperationCommittedError(operation.id) from error
+            failure = failure or error
+    if failure is not None:
+        raise OperationCommittedError(operation.id) from failure
 
 
 class PostgresOperations:
@@ -191,6 +194,15 @@ class PostgresOperations:
                         operation.replayed = True
                         operation.sql_committed = True
                         return codec.validate_json(existing["result"])
+                    if operation.legacy_id is not None and await connection.fetchval(
+                        "SELECT completed FROM economic_operations WHERE id = $1",
+                        operation.legacy_id,
+                    ):
+                        operation.replayed = True
+                        operation.sql_committed = True
+                        return codec.validate_python(
+                            {"status": "previously_completed", "replies": []}
+                        )
                     await connection.execute(
                         "INSERT INTO economic_operations (id, kind, fingerprint)"
                         " VALUES ($1, $2, $3)",

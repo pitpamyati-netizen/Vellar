@@ -96,7 +96,9 @@
   война, ADR 0076, 0077),
   `transfer` (ADR 0031),
   `group`), `keyboards/` (`labels`, `reply`), `middlewares/` (`dependencies`,
-  `errors`, `idempotency`, `audit` — строка на действие, `metrics`, `moderation` —
+  `commands` — постоянный результат до чтения экрана, `operations` — перенос
+  сохранённого состояния и отправка после записи, `errors`, `idempotency` —
+  быстрый отсев завершённых обновлений, `audit` — строка на действие, `metrics`, `moderation` —
   дверь для заблокированного, замолчавшего и обслуживания (ADR 0045), `retry` и
   `sending` — на сессии бота, а не на апдейтах), `states/screens.py`,
   `routing.py`, `messaging.py`, `digest_claim.py` (ADR 0053), `broadcast.py`,

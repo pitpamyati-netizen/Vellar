@@ -71,6 +71,7 @@ from mmorpg.presentation.telegram.broadcast import ChannelBroadcaster
 from mmorpg.presentation.telegram.cleanup import MessageReaper
 from mmorpg.presentation.telegram.handlers import combat, creation, group, play
 from mmorpg.presentation.telegram.middlewares.audit import AuditMiddleware
+from mmorpg.presentation.telegram.middlewares.commands import CommandMiddleware
 from mmorpg.presentation.telegram.middlewares.dependencies import (
     Dependencies,
     DependencyMiddleware,
@@ -162,24 +163,27 @@ async def build_application(settings: Settings) -> Application:
     # несколько секунд».
     bot.session.middleware(SendRateMiddleware(SendWindow(limit=settings.telegram_sends_per_second)))
     dispatcher = Dispatcher(storage=storage)
+    metrics = Metrics()
+    reaper = MessageReaper()
+    stack.push_async_callback(reaper.aclose)
     # FSM читает состояние до выбора роутера. Незаконченный перенос экрана
     # должен завершиться раньше этого чтения, а не уже внутри старого роутера.
     dispatcher.update.outer_middleware.unregister(dispatcher.fsm)
     boundary = getattr(dependencies.characters, "operations", None)
-    dispatcher.update.outer_middleware(
-        EconomicRecoveryMiddleware(getattr(boundary, "recover", None))
-    )
-    dispatcher.update.outer_middleware(dispatcher.fsm)
-
-    # Порядок важен: сначала замерить всё, потом открыть запись, куда весь путь ниже
-    # проставит свой исход, потом отбросить повторы, потом подставить зависимости,
-    # потом ловить отказы уже вокруг хендлера.
-    metrics = Metrics()
     dispatcher.update.outer_middleware(MetricsMiddleware(metrics))
     dispatcher.update.outer_middleware(AuditMiddleware())
-    dispatcher.update.outer_middleware(IdempotencyMiddleware(idempotency))
+    # Отказ ловится снаружи транзакции: ошибка должна сначала отменить все записи.
+    dispatcher.update.outer_middleware(ErrorMiddleware(metrics))
+    dispatcher.update.outer_middleware(IdempotencyMiddleware(idempotency, completed_only=True))
+    dispatcher.update.outer_middleware(
+        EconomicRecoveryMiddleware(getattr(boundary, "recover", None), propagate_errors=True)
+    )
+    dispatcher.update.outer_middleware(CommandMiddleware(dependencies, reaper))
+    dispatcher.update.outer_middleware(dispatcher.fsm)
+
+    # Постоянный результат проверен до чтения FSM. Зависимости и действующий
+    # контент подставляются только для новой команды, внутри общей операции.
     dispatcher.update.outer_middleware(DependencyMiddleware(dependencies))
-    dispatcher.message.middleware(ErrorMiddleware(metrics))
     # Внешняя, а не внутренняя: заблокированный не должен дойти ни до одного
     # роутера, а внутренние обёртки диспетчера до вложенных роутеров не доходят.
     dispatcher.message.outer_middleware(BanMiddleware())
@@ -193,8 +197,6 @@ async def build_application(settings: Settings) -> Application:
     # Роутер группы владеет часами удаления того, что он там пишет. Его задачи
     # отменяются вместе со всем стеком, так что остановка не виснет на пяти минутах
     # отложенных удалений.
-    reaper = MessageReaper()
-    stack.push_async_callback(reaper.aclose)
     dispatcher.include_router(group.build_router(reaper))
 
     dependencies.broadcasts.sink = bot

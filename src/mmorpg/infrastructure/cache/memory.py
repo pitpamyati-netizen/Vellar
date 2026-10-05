@@ -255,6 +255,15 @@ class InMemoryIdempotencyStore:
     def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
         self._clock = clock
         self._seen: dict[int, float] = {}
+        self._completed: dict[str, float] = {}
+
+    async def completed(self, key: str) -> bool:
+        now = self._clock()
+        self._completed = {one: expiry for one, expiry in self._completed.items() if expiry > now}
+        return key in self._completed
+
+    async def remember(self, key: str, ttl: int = 300) -> None:
+        self._completed[key] = self._clock() + ttl
 
     async def seen(self, update_id: int, ttl: int = 300) -> bool:
         """True, когда это обновление уже обработано.

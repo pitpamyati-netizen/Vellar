@@ -11,10 +11,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import Message, ReplyKeyboardMarkup, ReplyKeyboardRemove, ReplyParameters
 
+from mmorpg.application.operations import after_commit, current_operation
 from mmorpg.presentation.telegram.keyboards.reply import (
     dismiss_keyboard,
     keyboard_for,
@@ -75,6 +78,7 @@ async def send_group_reply(
     reply: GroupReply,
     answering: int,
     dismiss: bool = False,
+    on_sent: Callable[[int], None] | None = None,
 ) -> int:
     """Написать один ответ в группу ответом на сообщение и вернуть идентификатор отправленного.
 
@@ -99,4 +103,17 @@ async def send_group_reply(
         reply_markup=markup,
         parse_mode=None,
     )
+    if on_sent is not None:
+        operation = current_operation()
+
+        async def notify() -> None:
+            number = (
+                operation.sent_messages.get(sent.message_id, 0)
+                if operation is not None and sent.message_id < 0
+                else sent.message_id
+            )
+            if number > 0:
+                on_sent(number)
+
+        await after_commit(notify)
     return sent.message_id

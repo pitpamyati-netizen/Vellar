@@ -2,6 +2,9 @@
 
 Статус: принято, реализовано 05.10.2026 (M01).
 
+Общая запись команд, ответов и политика хранения уточнены
+[ADR 0085](0085-durable-command-result.md), реализованным в M02.1.
+
 Уточняет [0009](0009-repeating-a-lost-query.md),
 [0012](0012-a-rolled-back-trade-returns-what-is-there.md) и
 [0044](0044-gold-flow-in-the-database.md). Сохраняет правила пошлины и частичного

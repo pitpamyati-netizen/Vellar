@@ -251,8 +251,8 @@ async def _say(
         reply=reply,
         answering=anchor,
         dismiss=dismiss,
+        on_sent=lambda sent_id: reaper.schedule(_deleter(bot), message.chat.id, sent_id),
     )
-    reaper.schedule(_deleter(bot), message.chat.id, sent)
     return sent
 
 

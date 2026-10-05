@@ -12,6 +12,9 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+from mmorpg.application.operations import current_operation
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.overlay import OverlayRecord
 from mmorpg.domain.ports.repositories import ContentOverlayRepository
@@ -36,11 +39,15 @@ class ContentRegistry:
     @property
     def current(self) -> GameContent:
         """Мир, каким его видит игрок прямо сейчас."""
-        return self._current
+        operation = current_operation()
+        staged = operation.memory_changes.get(self) if operation is not None else None
+        return staged._current if staged is not None else self._current
 
     @property
     def records(self) -> tuple[OverlayRecord, ...]:
-        return self._records
+        operation = current_operation()
+        staged = operation.memory_changes.get(self) if operation is not None else None
+        return staged._records if staged is not None else self._records
 
     def problems(self) -> tuple[tuple[OverlayRecord, tuple[str, ...]], ...]:
         """Правки, которые не работают, и почему.
@@ -48,13 +55,18 @@ class ContentRegistry:
         Смотритель должен узнать об этом от панели, а не от игрока, который зашёл
         в город и не нашёл там обещанного жителя.
         """
-        found = (
-            (record, overlay_rules.problems(self._current, record)) for record in self._records
-        )
+        found = ((record, overlay_rules.problems(self.current, record)) for record in self.records)
         return tuple((record, why) for record, why in found if why)
 
     async def reload(self, overlays: ContentOverlayRepository) -> int:
         """Перечитать правки и пересобрать мир. Возвращает, сколько правок легло."""
-        self._records = await overlays.all()
-        self._current = overlay_rules.apply(self._base, self._records)
-        return len(self._records)
+        records = await overlays.all()
+        if records == self.records:
+            return len(records)
+        content = overlay_rules.apply(self._base, records)
+        operation = current_operation()
+        if operation is None:
+            self._records, self._current = records, content
+        else:
+            operation.memory_changes[self] = SimpleNamespace(_records=records, _current=content)
+        return len(records)

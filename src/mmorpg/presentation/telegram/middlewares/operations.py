@@ -5,12 +5,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 from aiogram import BaseMiddleware, Bot
+from aiogram.client.default import Default
 from aiogram.client.session.middlewares.base import BaseRequestMiddleware
 from aiogram.exceptions import TelegramAPIError
 from aiogram.methods import SendMessage, TelegramMethod
 from aiogram.types import Chat, Message, TelegramObject, Update
 
-from mmorpg.application.operations import current_operation
+from mmorpg.application.operations import current_operation, json_fallback
 from mmorpg.logging import get_logger
 
 logger = get_logger(__name__)
@@ -19,8 +20,11 @@ logger = get_logger(__name__)
 class EconomicRecoveryMiddleware(BaseMiddleware):
     """Сначала довести сохранённый экран, затем выбрать обработчик команды."""
 
-    def __init__(self, recover: Callable[[], Awaitable[None]] | None) -> None:
+    def __init__(
+        self, recover: Callable[[], Awaitable[None]] | None, *, propagate_errors: bool = False
+    ) -> None:
         self.recover = recover
+        self.propagate_errors = propagate_errors
 
     async def __call__(
         self,
@@ -32,6 +36,8 @@ class EconomicRecoveryMiddleware(BaseMiddleware):
             try:
                 await self.recover()
             except Exception:
+                if self.propagate_errors:
+                    raise
                 logger.exception("economic_recovery_failed")
                 message = event.message if isinstance(event, Update) else event
                 if isinstance(message, Message):
@@ -55,20 +61,45 @@ class EconomicSendMiddleware(BaseRequestMiddleware):
         if operation is None or not isinstance(method, SendMessage):
             return await make_request(bot, method)
 
+        primary = operation.command and method.chat_id == operation.reply_chat_id
+        if primary:
+            operation.replies.append(
+                method.model_dump(
+                    mode="json",
+                    include={
+                        "chat_id",
+                        "text",
+                        "reply_markup",
+                        "reply_parameters",
+                        "message_thread_id",
+                    },
+                    exclude_none=True,
+                    fallback=lambda value: (
+                        None if isinstance(value, Default) else json_fallback(value)
+                    ),
+                )
+            )
+
+        response = Message(
+            message_id=-(len(operation.after_commit) + 1),
+            date=datetime.fromtimestamp(0, UTC),
+            chat=Chat(id=method.chat_id if isinstance(method.chat_id, int) else 0, type="private"),
+            text=method.text,
+        )
+
         async def deliver() -> None:
             try:
-                await make_request(bot, method)
+                sent = await make_request(bot, method)
+                if isinstance(sent, Message):
+                    operation.sent_messages[response.message_id] = sent.message_id
             except TelegramAPIError:
+                if primary:
+                    raise
                 # Недоступный второй участник не отменяет уже сохранённую сделку
                 # и не прерывает ответы остальным. Постоянная очередь — M02.
                 logger.warning("operation_message_undelivered", operation_id=operation.id)
 
         operation.after_commit.append(deliver)
-        # Личные ответы не используют номер отправленного сообщения. Групповой
-        # обработчик отправляет ответ вне операции сервиса и получает настоящий id.
-        return Message(
-            message_id=0,
-            date=datetime.fromtimestamp(0, UTC),
-            chat=Chat(id=method.chat_id if isinstance(method.chat_id, int) else 0, type="private"),
-            text=method.text,
-        )
+        # До сохранения номер временный. После отправки on_sent получает настоящий
+        # номер через sent_messages, поэтому уборщик группы не удаляет заглушку.
+        return response

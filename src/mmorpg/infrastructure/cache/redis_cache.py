@@ -331,3 +331,9 @@ class RedisIdempotencyStore:
     async def seen(self, update_id: int, ttl: int = 300) -> bool:
         stored = await self._client.set(f"upd:{update_id}", "1", ex=ttl, nx=True)
         return not bool(stored)
+
+    async def completed(self, key: str) -> bool:
+        return bool(await self._client.exists(f"done-upd:{key}"))
+
+    async def remember(self, key: str, ttl: int = 300) -> None:
+        await self._client.set(f"done-upd:{key}", "1", ex=ttl)
