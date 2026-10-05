@@ -93,7 +93,7 @@ class OperationBoundary(Protocol):
 def _repositories(values: list[Any]) -> tuple[object, ...]:
     found: list[object] = []
     for value in values:
-        for candidate in (value, getattr(value, "_roster", None)):
+        for candidate in (value, getattr(value, "_roster", None), getattr(value, "_cache", None)):
             if (
                 candidate is not None
                 and hasattr(candidate, "operations")

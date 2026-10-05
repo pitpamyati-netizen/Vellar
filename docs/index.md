@@ -33,6 +33,7 @@
 | [docs/development-rules.md](development-rules.md) | Нумерованные правила; сохранены ссылки 1–12 |
 | [docs/project-map.md](project-map.md) | Карта кода, каталогов, тестов и решений |
 | [docs/architecture.md](architecture.md) | Текущее устройство и ограничения сохранности |
+| [ADR 0086](adr/0086-durable-effects-and-delivery.md) | Постоянные награды, лимиты и очередь сообщений M02 |
 | [docs/verification.md](verification.md) | Изоляция тестов и уровни доказательства |
 | [docs/deployment.md](deployment.md) | Запуск, резервные копии, наблюдение, ограничения нагрузки |
 | [docs/release-checklist.md](release-checklist.md) | Проверки перед выпуском |

@@ -195,3 +195,26 @@ async def test_a_dead_channel_never_breaks_the_caller() -> None:
     broadcaster = bc.ChannelBroadcaster(sink=RecordingSink(fail=True), chat_id="@vellar_game")
 
     assert await broadcaster.announce(bc.service("Проверка.")) is False
+
+
+async def test_storage_failure_inside_command_does_not_save_broadcast_success():
+    from pydantic import TypeAdapter
+
+    from mmorpg.application.operations import Operation
+    from mmorpg.infrastructure.persistence.operations import MemoryOperations
+
+    boundary = MemoryOperations()
+    broadcaster = bc.ChannelBroadcaster(sink=RecordingSink(fail=True), chat_id="@vellar_game")
+
+    async def action():
+        return await broadcaster.announce(bc.service("Проверка."))
+
+    with pytest.raises(RuntimeError):
+        await boundary.run(
+            action,
+            operation=Operation(id="announcement", kind="test"),
+            fingerprint="test",
+            codec=TypeAdapter(bool),
+            participants=(),
+        )
+    assert "announcement" not in boundary.completed

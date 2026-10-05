@@ -280,6 +280,14 @@ ADR 0069), `0028_no_more_names` (`remorts` и `legacy_ids` убраны, ADR 007
 `0030_guild_wars_and_store` (хранилище и войны гильдий, ADR 0077).
 **`backups/`** — дампы от `stop.bat`, **`logs/`** — журнал живой игры
 (`logging.py`); это локальные данные, не предназначенные для публикации.
+
+M01–M02: `application/operations.py`, `persistence/operations.py` и
+`middlewares/commands.py` сохраняют действие и исход команды (`0031`).
+`persistence/effects.py` направляет разовые отметки и счёт в SQL (`0032`);
+`application/delivery.py`, `persistence/delivery.py`, `memory_delivery.py` и
+`telegram/delivery.py` отвечают за постоянную очередь, приоритеты, аренду и
+общий бюджет отправки (`0033`). `scripts/broadcast.py` использует ту же очередь.
+Связь решений — [ADR 0086](adr/0086-durable-effects-and-delivery.md).
 **`.githooks/pre-commit`** — гейт на коммите.
 **Настройки помощника.** `AGENTS.md` — рабочие инструкции Codex. Старый хук
 Claude отключён; история прежнего руководства хранится в `docs/history/`.

@@ -15,7 +15,7 @@
 
 Текст обновления живёт в ``content/changelog.toml`` и читается
 ``scripts/broadcast.py``; этот модуль только превращает его в пост.
-Несостоявшаяся отправка пишется в журнал и отбрасывается.
+При подключённой сохраняемой очереди объявление остаётся в ней после временного отказа.
 """
 
 from __future__ import annotations
@@ -25,7 +25,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
+from mmorpg.application.delivery import DeliveryPriority
+from mmorpg.application.operations import current_operation
 from mmorpg.logging import get_logger
+from mmorpg.presentation.telegram.delivery import delivery_priority
 
 logger = get_logger(__name__)
 
@@ -160,19 +163,22 @@ class ChannelBroadcaster:
         return self.sink is not None and bool(self.chat_id.strip())
 
     async def announce(self, event: BroadcastEvent) -> bool:
-        """Опубликовать одно событие. Возвращает, дошло ли оно до Telegram."""
+        """Передать событие отправителю. В игре это принятие сохраняемой очередью."""
         text = render_broadcast(event, emoji=self.emoji)
         if not self.enabled or self.sink is None:
             logger.debug("broadcast_skipped", kind=event.kind.value, reason="no_channel")
             return False
         try:
-            await self.sink.send_message(chat_id_of(self.chat_id), text)
-        # Широко нарочно: мёртвый канал, отобранное право администратора или сбой сети
-        # не должны ронять тот ход, который породил событие.
+            with delivery_priority(DeliveryPriority.ANNOUNCEMENT):
+                await self.sink.send_message(chat_id_of(self.chat_id), text)
+        # В операции сеть ещё не вызывается: ошибка постановки должна отменить
+        # команду, чтобы не сохранить успех без постоянного объявления.
         except Exception as error:
-            logger.warning("broadcast_failed", kind=event.kind.value, error=str(error))
+            if current_operation() is not None:
+                raise
+            logger.warning("broadcast_failed", kind=event.kind.value, error=type(error).__name__)
             return False
-        logger.info("broadcast_sent", kind=event.kind.value)
+        logger.info("broadcast_accepted", kind=event.kind.value)
         return True
 
 

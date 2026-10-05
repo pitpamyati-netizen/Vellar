@@ -107,6 +107,9 @@ try {
     Record "M00 check: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')"
     & $uvCommand run python -m scripts.test_stand | Out-Null
     Require-Success "storage address check"
+    $schemaHead = & $uvCommand run python -c "from alembic.config import Config; from alembic.script import ScriptDirectory; print(ScriptDirectory.from_config(Config('alembic.ini')).get_current_head())"
+    Require-Success "migration head check"
+    $schemaHead = $schemaHead.Trim()
     $pg = [uri]$env:VELLAR_TEST_POSTGRES_DSN
     if ($pg.AbsolutePath -ne "/vellar_test") {
         throw "M00 script requires the vellar_test database on the isolated server"
@@ -119,10 +122,11 @@ try {
 
     Reset-TestDatabase $fresh
     Upgrade-TestDatabase $fresh "head"
-    Assert-Revision $fresh "0031"
+    Assert-Revision $fresh $schemaHead
     Seed-TestCharacter $fresh "-99990001"
     $entryCount = Query-TestDatabase $fresh "SELECT count(*) FROM economic_entries"
     if ($entryCount -ne "4") { throw "Control economic journal is incomplete" }
+    Query-TestDatabase $fresh "INSERT INTO durable_effects(key, value) VALUES('digest:control:5', '1'); INSERT INTO message_delivery(key, bot_id, chat_id, payload, priority) VALUES('control-reply', 1, '1', jsonb_build_object('chat_id', 1, 'text', 'control'), 0); SELECT 1" | Out-Null
     $freshDump = Join-Path $root "backups/m00-fresh.dump"
     & $pgDump -d (Test-Dsn $fresh) -Fc -f $freshDump
     Require-Success "backup fresh database"
@@ -130,10 +134,16 @@ try {
     Reset-TestDatabase $restored
     & $pgRestore -d (Test-Dsn $restored) --no-owner --exit-on-error $freshDump | Out-Null
     Require-Success "restore fresh backup"
-    Assert-Revision $restored "0031"
+    Assert-Revision $restored $schemaHead
     Assert-Character $restored "-99990001"
     if ((Query-TestDatabase $restored "SELECT count(*) FROM economic_entries") -ne $entryCount) {
         throw "Economic journal did not survive backup restore"
+    }
+    if ((Query-TestDatabase $restored "SELECT value FROM durable_effects WHERE key='digest:control:5'") -ne "1") {
+        throw "Reward mark did not survive backup restore"
+    }
+    if ((Query-TestDatabase $restored "SELECT status FROM message_delivery WHERE key='control-reply'") -ne "queued") {
+        throw "Pending reply did not survive backup restore"
     }
     Record "M00.2: full migration and backup restore passed"
 
@@ -149,9 +159,9 @@ try {
     & $pgRestore -d (Test-Dsn $oldCopy) --no-owner --exit-on-error $oldDump | Out-Null
     Require-Success "restore old schema copy"
     Upgrade-TestDatabase $oldCopy "head"
-    Assert-Revision $oldCopy "0031"
+    Assert-Revision $oldCopy $schemaHead
     Assert-Character $oldCopy "-99990002"
-    Record "M00.2/M01: schema 0030 copy upgraded to 0031; hero, wallet, bank, equipment and bag preserved"
+    Record "M00.2/M02: schema 0030 copy upgraded to $schemaHead; hero, wallet, bank, equipment and bag preserved"
 
     Record "M00.3: controlled failure and concurrency tests passed in project checks"
     $previousEncoding = [Environment]::GetEnvironmentVariable("PYTHONIOENCODING", "Process")

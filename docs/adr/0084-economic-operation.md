@@ -4,6 +4,8 @@
 
 Общая запись команд, ответов и политика хранения уточнены
 [ADR 0085](0085-durable-command-result.md), реализованным в M02.1.
+Постоянные отметки и сохраняемая очередь добавлены последующим
+[ADR 0086](0086-durable-effects-and-delivery.md).
 
 Уточняет [0009](0009-repeating-a-lost-query.md),
 [0012](0012-a-rolled-back-trade-returns-what-is-there.md) и

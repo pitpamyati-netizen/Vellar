@@ -14,6 +14,7 @@ from aiogram.methods import SendMessage
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, TelegramObject, Update
 from pydantic import TypeAdapter
 
+from mmorpg.application.delivery import DeliveryQueue
 from mmorpg.application.operations import (
     Operation,
     OperationBoundary,
@@ -43,13 +44,22 @@ def command_fingerprint(event: Update) -> str:
 
 
 class CommandMiddleware(BaseMiddleware):
-    def __init__(self, dependencies: Dependencies, reaper: MessageReaper) -> None:
+    def __init__(
+        self,
+        dependencies: Dependencies,
+        reaper: MessageReaper,
+        *,
+        delivery: DeliveryQueue | None = None,
+        wake_delivery: Callable[[], None] | None = None,
+    ) -> None:
         self._participants = _repositories(list(dependencies.as_data().values()))
         self._boundary = cast(OperationBoundary, cast(Any, dependencies.characters).operations)
         self._codec = TypeAdapter(CommandResult)
         self._reaper = reaper
         self._registry = getattr(dependencies, "registry", None)
         self._overlays = getattr(dependencies, "overlays", None)
+        self._delivery = delivery
+        self._wake_delivery = wake_delivery
 
     async def __call__(
         self,
@@ -97,6 +107,12 @@ class CommandMiddleware(BaseMiddleware):
             note = note_of(data)
             if note is not None:
                 note.done(DUPLICATE)
+            if self._delivery is not None and await self._delivery.pending_for_operation(
+                operation.id, bot.id, message.chat.id
+            ):
+                if self._wake_delivery is not None:
+                    self._wake_delivery()
+                return UNHANDLED if saved.status == "ignored" else None
             for payload in saved.replies:
                 # Повтор видит прежний результат, но не откатывает нынешний экран.
                 reply = SendMessage.model_validate(payload)

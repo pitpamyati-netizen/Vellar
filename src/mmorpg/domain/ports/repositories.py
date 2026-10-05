@@ -642,7 +642,7 @@ class LocationStateCache(Protocol):
 
 @runtime_checkable
 class StateCache(Protocol):
-    """Короткоживущие JSON-записи: начатый бой, текущий экран, прилавок лавки."""
+    """Состояние: кэш с TTL; экономические отметки по периоду сохраняет M02.2."""
 
     async def get(self, key: str) -> str | None: ...
 

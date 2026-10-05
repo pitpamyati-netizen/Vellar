@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import io
 import sys
 from pathlib import Path
@@ -35,6 +36,7 @@ from pathlib import Path
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 
+from mmorpg.application.delivery import DeliveryFailedError, DeliveryPriority
 from mmorpg.config import Settings, load_settings
 from mmorpg.infrastructure.content import ContentError
 from mmorpg.infrastructure.content.changelog import (
@@ -43,13 +45,16 @@ from mmorpg.infrastructure.content.changelog import (
     select_release,
     unannounced_changes,
 )
+from mmorpg.infrastructure.persistence.delivery import PostgresDeliveryQueue
+from mmorpg.infrastructure.persistence.pool import create_postgres_pool
 from mmorpg.presentation.telegram.broadcast import (
     BroadcastEvent,
     BroadcastKind,
-    ChannelBroadcaster,
     changelog,
+    chat_id_of,
     render_broadcast,
 )
+from mmorpg.presentation.telegram.delivery import DeliveryWorker
 
 
 def use_utf8_console() -> None:
@@ -73,6 +78,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--no-emoji", action="store_true", help="Render without the leading emoji.")
     parser.add_argument("--dry-run", action="store_true", help="Render and validate, send nothing.")
+    parser.add_argument(
+        "--delivery-id",
+        help="Stable delivery id; change it only to deliberately publish the same text again.",
+    )
     args = parser.parse_args(argv)
 
     if bool(args.headline) == bool(args.changelog):
@@ -141,21 +150,55 @@ async def _send(args: argparse.Namespace) -> int:
     if not settings.bot_token.get_secret_value():
         print("BOT_TOKEN is not set in .env.", file=sys.stderr)
         return 1
+    if not settings.uses_postgres:
+        print("Публикация требует общего PostgreSQL в режиме solo, dev или prod.", file=sys.stderr)
+        return 1
 
     bot = Bot(
         token=settings.bot_token.get_secret_value(),
         default=DefaultBotProperties(parse_mode=None),
     )
-    broadcaster = ChannelBroadcaster(sink=bot, chat_id=settings.channel_id, emoji=not args.no_emoji)
+    pool = None
+    worker = None
     try:
-        sent = await broadcaster.announce(event)
-    finally:
-        await bot.session.close()
-
-    if not sent:
-        print("Telegram refused the post - see the log line above.", file=sys.stderr)
+        pool = await create_postgres_pool(settings)
+        queue = PostgresDeliveryQueue(pool)
+        worker = DeliveryWorker(queue, bot, sends_per_second=settings.telegram_sends_per_second)
+        chat_id = chat_id_of(settings.channel_id)
+        identity = args.delivery_id or hashlib.sha256(text.encode()).hexdigest()
+        key = f"broadcast:{bot.id}:{chat_id}:{identity}"
+        await queue.enqueue(
+            key=key,
+            bot_id=bot.id,
+            chat_id=chat_id,
+            payload={"chat_id": chat_id, "text": text, "parse_mode": None},
+            priority=DeliveryPriority.ANNOUNCEMENT,
+        )
+        try:
+            sent = await worker.deliver(key)
+        except TimeoutError:
+            sent = None
+        if sent is None:
+            print(
+                f"Объявление сохранено в очереди: {key}. "
+                "Бот отправит его после восстановления связи или окончания ожидания.",
+                file=sys.stderr,
+            )
+        else:
+            print(f"--- sent to {settings.channel_id} ---", file=sys.stderr)
+    except DeliveryFailedError:
+        print("Telegram отверг объявление. Запись отказа сохранена в очереди.", file=sys.stderr)
         return 1
-    print(f"--- sent to {settings.channel_id} ---", file=sys.stderr)
+    except Exception as error:
+        # Не печатать строки подключения или текст ошибки с возможным токеном.
+        print(f"Не удалось проверить отправку: {type(error).__name__}.", file=sys.stderr)
+        return 1
+    finally:
+        if worker is not None:
+            await worker.aclose()
+        if pool is not None:
+            await pool.close()
+        await bot.session.close()
     return 0
 
 

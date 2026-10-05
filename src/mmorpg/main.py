@@ -26,7 +26,7 @@ import signal
 import time
 from contextlib import AsyncExitStack, suppress
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -64,6 +64,7 @@ from mmorpg.infrastructure.persistence import (
     InMemoryTradeRepository,
     InMemoryUserRepository,
 )
+from mmorpg.infrastructure.persistence.effects import MemoryEffectState, PostgresEffectState
 from mmorpg.logging import configure_logging, get_logger
 from mmorpg.metrics import Metrics, reporting
 from mmorpg.monitoring import install_slow_callback_detector
@@ -151,12 +152,27 @@ async def build_application(settings: Settings) -> Application:
     )
     # Экран, умерший на оборванном сокете, отправляется заново, а не превращается в
     # тишину: отличить одно от другого игроку больше нечем.
-    from mmorpg.presentation.telegram.middlewares.operations import (
-        EconomicRecoveryMiddleware,
-        EconomicSendMiddleware,
-    )
+    from mmorpg.infrastructure.persistence.delivery import PostgresDeliveryQueue
+    from mmorpg.infrastructure.persistence.memory_delivery import MemoryDeliveryQueue
+    from mmorpg.presentation.telegram.delivery import DeliveryWorker, DurableSendMiddleware
+    from mmorpg.presentation.telegram.middlewares.operations import EconomicRecoveryMiddleware
 
-    bot.session.middleware(EconomicSendMiddleware())
+    reaper = MessageReaper()
+    stack.push_async_callback(reaper.aclose)
+    delivery_queue = (
+        PostgresDeliveryQueue(cast(Any, dependencies.characters)._pool)
+        if settings.uses_postgres
+        else MemoryDeliveryQueue()
+    )
+    boundary = getattr(dependencies.characters, "operations", None)
+    worker = DeliveryWorker(
+        delivery_queue,
+        bot,
+        sends_per_second=settings.telegram_sends_per_second,
+        reaper=reaper,
+        recover=getattr(boundary, "recover", None),
+    )
+    bot.session.middleware(DurableSendMiddleware(delivery_queue, worker))
     bot.session.middleware(RetryRequestMiddleware(RetryPolicy.from_settings(settings)))
     # Ниже неё, а значит ближе к сокету, - очередь, которая держит бота внутри счёта
     # отправок в секунду. Подождать несколько миллисекунд дешевле, чем услышать «подожди
@@ -164,12 +180,9 @@ async def build_application(settings: Settings) -> Application:
     bot.session.middleware(SendRateMiddleware(SendWindow(limit=settings.telegram_sends_per_second)))
     dispatcher = Dispatcher(storage=storage)
     metrics = Metrics()
-    reaper = MessageReaper()
-    stack.push_async_callback(reaper.aclose)
     # FSM читает состояние до выбора роутера. Незаконченный перенос экрана
     # должен завершиться раньше этого чтения, а не уже внутри старого роутера.
     dispatcher.update.outer_middleware.unregister(dispatcher.fsm)
-    boundary = getattr(dependencies.characters, "operations", None)
     dispatcher.update.outer_middleware(MetricsMiddleware(metrics))
     dispatcher.update.outer_middleware(AuditMiddleware())
     # Отказ ловится снаружи транзакции: ошибка должна сначала отменить все записи.
@@ -178,7 +191,9 @@ async def build_application(settings: Settings) -> Application:
     dispatcher.update.outer_middleware(
         EconomicRecoveryMiddleware(getattr(boundary, "recover", None), propagate_errors=True)
     )
-    dispatcher.update.outer_middleware(CommandMiddleware(dependencies, reaper))
+    dispatcher.update.outer_middleware(
+        CommandMiddleware(dependencies, reaper, delivery=delivery_queue, wake_delivery=worker.wake)
+    )
     dispatcher.update.outer_middleware(dispatcher.fsm)
 
     # Постоянный результат проверен до чтения FSM. Зависимости и действующий
@@ -200,6 +215,8 @@ async def build_application(settings: Settings) -> Application:
     dispatcher.include_router(group.build_router(reaper))
 
     dependencies.broadcasts.sink = bot
+    worker.start()
+    stack.push_async_callback(worker.aclose)
     logger.info(
         "broadcasts",
         channel=settings.channel_id or "not configured",
@@ -230,7 +247,7 @@ async def _build_adapters(
             "using_in_memory_adapters",
             detail="APP_ENV=local: state is lost on restart, never deploy this way",
         )
-        memory_cache = InMemoryStateCache()
+        memory_cache = MemoryEffectState(InMemoryStateCache())
         dependencies = Dependencies(
             settings=settings,
             registry=registry,
@@ -277,6 +294,11 @@ async def _build_adapters(
     from mmorpg.infrastructure.persistence.operations import OperationPool, PostgresOperations
 
     await PostgresOperations(OperationPool(pool)).recover()
+    effect_state = PostgresEffectState(pool, state_cache)
+    imported = await effect_state.import_legacy()
+    state_cache = effect_state
+    if imported:
+        logger.info("economic_marks_imported", records=imported)
 
     logger.info(
         "pools_ready",

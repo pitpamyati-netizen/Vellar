@@ -971,7 +971,11 @@ async def _live_op(
     if action == "announce":
         posted = await broadcast.announce_service(broadcasts, arg)
         await logged(f"объявление в канал: {arg.strip()}")
-        return "Объявление отправлено в канал." if posted else "Канал не настроен — не ушло."
+        return (
+            "Объявление сохранено для отправки в канал."
+            if posted
+            else "Канал не настроен — не ушло."
+        )
     if action in {"free_battle", "reset_player"}:
         target = await characters.find_by_name(arg)
         if target is None:
@@ -2006,8 +2010,8 @@ async def _guild_vault_step(
 ) -> tuple[str, Character]:
     """Вклад и выемка. Вклад платит гильдии деяниями, выемка знает свой предел.
 
-    Предел - за переворот прилавка и по званию (ADR 0076): взятое помнит кэш, а
-    не строка гильдии, и на перевороте забывается само.
+    Предел — за переворот прилавка и по званию (ADR 0076, M02.2).
+    Постоянный счёт включает номер переворота и сохраняется вместе с выемкой.
     """
     if guild is None:
         return "У вас нет гильдии.", character
