@@ -74,7 +74,7 @@
 - `content/classes.toml` — новые рода оружия в списках `weapons`.
 - `domain/procgen/items.py` — `RELIC_CHANCE[BOSS] = 0.05`.
 - `domain/entities/content.py` — docstring `GearArchetype`.
-- `docs` — этот ADR, `content-guide.md`, `procgen.md`, `Claude.md`, `Roadmap.md`,
+- `docs` — этот ADR, `content-guide.md`, `procgen.md`, `docs/development-rules.md`, `Roadmap.md`,
   `README.md`, `content/changelog.toml`.
 - Тесты — `tests/domain/test_equipment.py` (`LIVE_KEYS`),
   `tests/domain/test_combat_balance.py` (`armed`, `ORDINARY_TURNS`),

@@ -81,7 +81,7 @@
   неизменность `HAUL`/`DELVE`), `tests/domain/test_dungeon.py` (прибавка к шансу
   прозвища), `tests/presentation/test_combat_shop_flow.py` (цена и ширина
   прилавка), экран с непустым `mood` в `conftest.all_screens`.
-- Docs — этот ADR, `Claude.md`, `Roadmap.md`, `content/changelog.toml` (на
+- Docs — этот ADR, `docs/development-rules.md`, `Roadmap.md`, `content/changelog.toml` (на
   каждом заходе, где игрок что-то заметит).
 
 ## Что рассматривали ещё
@@ -93,5 +93,5 @@
   их на слух одной фразой, а механике хватает «свежо / хожено / выбито / тут
   что-то не так».
 - **`mood` как поле `LocationState`.** Отвергнуто: это производное, а производное
-  не хранят (`Claude.md`, правило 8). Считается на месте отрисовки и на месте
+  не хранят (`docs/development-rules.md`, правило 8). Считается на месте отрисовки и на месте
   сборки сводки.

@@ -1,0 +1,35 @@
+# Отдельный стенд без контейнеров, портов и томов работающей игры.
+name: vellar-test
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: vellar_test
+      POSTGRES_PASSWORD: vellar_test
+      POSTGRES_DB: vellar_test
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - test-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vellar_test -d vellar_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:56379:6379"
+    volumes:
+      - test-redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  test-pgdata:
+  test-redisdata:

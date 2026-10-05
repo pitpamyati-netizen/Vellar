@@ -1,15 +1,14 @@
 """Сто игроков сразу — и что при этом происходит с задержкой.
 
-Обещание игры — сто миллисекунд на нажатие (``docs/architecture.md``). Проверено
-оно было на одном игроке, и это не проверка: узкое место у такой игры не в
-правилах, а в том, сколько одновременных запросов держит пул PostgreSQL. Здесь
-это и меряется — тем же кодом, которым играют.
+Цель обработки — сто миллисекунд на нажатие (``docs/architecture.md``).
+Замер проверяет правила и хранилища при одновременных запросах тем же кодом,
+которым играют; результат не доказывает задержку полного ответа игроку.
 
-    uv run python scripts/loadtest.py                     сто игроков, по двадцать действий
-    uv run python scripts/loadtest.py --players 20        поменьше
-    uv run python scripts/loadtest.py --actions 50        подольше
-    uv run python scripts/loadtest.py --pause 3           так, как жмут живые
-    uv run python scripts/loadtest.py --keep              не убирать за собой
+    uv run python scripts/loadtest.py --test-stand                  сто игроков
+    uv run python scripts/loadtest.py --test-stand --players 20     поменьше
+    uv run python scripts/loadtest.py --test-stand --actions 50     подольше
+    uv run python scripts/loadtest.py --test-stand --pause 3        с паузами
+    uv run python scripts/loadtest.py --test-stand --keep           сохранить персонажей
 
 Что меряется: хранилища и правила — чтение персонажа, счёт характеристик,
 кошелёк условным ``UPDATE``, сумка, бой в домене. Что **не** меряется, и это надо
@@ -17,10 +16,11 @@
 отправки (``middlewares/sending.py``). Столько стоит игра сама по себе; путь до
 игрока добавляет к этому свою дорогу.
 
-Пишет в ту базу, которая названа в ``POSTGRES_DSN``. Персонажей заводит своих —
-имя начинается с ``нагрузка-`` — и убирает их за собой; ``--keep`` оставляет их,
-если надо посмотреть глазами. Всё равно: на живом мире это запускают до того, как
-в нём появились живые, или на копии.
+Для PostgreSQL требуется ``--test-stand``: он проверяет отдельные адреса стенда.
+В памяти можно запускать без этого флага. Персонажи с именем ``нагрузка-``
+после обычного прогона удаляются.
+Коды завершения: 0 — успешно, 2 — сорвавшиеся действия, 3 — превышен бюджет
+задержки. Необработанная ошибка завершается кодом 1 и не считается замером.
 """
 
 from __future__ import annotations
@@ -156,7 +156,7 @@ async def run(options: argparse.Namespace, settings: Settings) -> int:
         )
         print(
             f"Игроков: {options.players}, действий каждому: {options.actions}, {pacing}. "
-            f"База: {'память' if settings.app_env is AppEnv.LOCAL else settings.postgres_dsn}"
+            f"Хранилище: {'память' if settings.app_env is AppEnv.LOCAL else 'тестовый PostgreSQL'}"
         )
         started = time.perf_counter()
         try:
@@ -191,10 +191,13 @@ async def run(options: argparse.Namespace, settings: Settings) -> int:
             f"девяносто пять из ста — в {snapshot['p95']} с, "
             f"самое долгое — {snapshot['slowest']} с."
         )
-        # Обещание игры названо здесь же: иначе число надо помнить наизусть.
+        if sum(failures):
+            print("** Проверка не пройдена: часть действий завершилась ошибкой.")
+            return 2
+        # Бюджет обработки берётся из настроек, как и в приложении.
         budget = settings.slow_callback_seconds
         if float(snapshot["p95"]) > budget:
-            print(f"** Хуже обещанного: девяносто пятая доля должна укладываться в {budget} с.")
+            print(f"** Превышен бюджет: девяносто пять из ста должны укладываться в {budget} с.")
             if not options.pause:
                 print(
                     "   Замер без пауз - это сто человек, нажавших в одну секунду. "
@@ -203,7 +206,7 @@ async def run(options: argparse.Namespace, settings: Settings) -> int:
             print(
                 f"   Пул PostgreSQL: {settings.postgres_pool_max} соединений (POSTGRES_POOL_MAX)."
             )
-            return 1
+            return 3
     return 0
 
 
@@ -242,9 +245,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--seed", default="loadtest", help="сид: тот же сид - те же бои")
     parser.add_argument("--keep", action="store_true", help="не убирать персонажей нагрузки")
+    parser.add_argument(
+        "--test-stand", action="store_true", help="обязательные отдельные PostgreSQL и Redis"
+    )
     options = parser.parse_args(argv)
+    if options.players < 1 or options.actions < 1 or not 0 <= options.pause < float("inf"):
+        parser.error("players and actions must be positive; pause must be finite and non-negative")
 
-    settings = load_settings()
+    if options.test_stand:
+        from test_stand import load_test_settings
+
+        settings = load_test_settings()
+    else:
+        settings = load_settings()
+        if settings.uses_postgres:
+            parser.error("PostgreSQL load test requires --test-stand")
     return asyncio.run(run(options, settings))
 
 

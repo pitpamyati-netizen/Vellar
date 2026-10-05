@@ -1,12 +1,12 @@
-"""Настоящие PostgreSQL и Redis - или ничего.
+"""Настоящие PostgreSQL и Redis на отдельном стенде - или ошибка.
 
 Эти тесты выполняют тот самый SQL и те самые команды Redis, которые шлёт бот.
 Остальной набор работает на адаптерах в памяти, а значит, ошибка в самом SQL -
 опечатка, колонка, которую PostgreSQL не примет - невидима больше нигде. Этот
 пакет существует, чтобы закрыть ту брешь.
 
-Пропускаются, но не падают, когда службы не подняты: ``docker compose up -d
-postgres redis`` - и они работают.
+Адреса задаются только через VELLAR_TEST_POSTGRES_DSN и VELLAR_TEST_REDIS_DSN.
+Отсутствие адреса, службы или схемы делает проверку неуспешной.
 
 Соединения открываются **один раз на весь прогон**, а не на каждый тест.
 Открытие стоит здесь секунды две на каждое - разрешение имени, а не база, - и
@@ -22,6 +22,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 import pytest_asyncio
+from scripts.test_stand import load_test_settings
 
 from mmorpg.config import Settings
 
@@ -31,12 +32,12 @@ pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")
 
 
 def _settings() -> Settings:
-    return Settings(app_env="dev", bot_token="0:test")  # type: ignore[call-arg]
+    return load_test_settings()
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def pool() -> AsyncIterator[object]:
-    """Пул asyncpg против накатанной базы - или пропуск.
+    """Пул asyncpg против накатанной отдельной базы.
 
     Обёрнут ровно так, как его оборачивает работающая игра (``ReconnectingPool``),
     поэтому здешний SQL идёт через тот же посредник, что и запросы игроков.
@@ -49,15 +50,15 @@ async def pool() -> AsyncIterator[object]:
     settings = _settings()
     try:
         created = await asyncpg.create_pool(dsn=settings.postgres_dsn, min_size=1, max_size=4)
-    except (OSError, asyncpg.PostgresError) as unreachable:
-        pytest.skip(f"PostgreSQL is not reachable: {unreachable}")
+    except OSError, asyncpg.PostgresError:
+        pytest.fail("Test PostgreSQL is not reachable", pytrace=False)
 
     assert created is not None
     try:
         # Адаптеры ждут схему из migrations/, а не пустую базу.
         exists = await created.fetchval("SELECT to_regclass('public.users')")
         if exists is None:
-            pytest.skip("the database has no schema: run 'alembic upgrade head' first")
+            pytest.fail("Test PostgreSQL has no schema: run test migrations first", pytrace=False)
         yield ReconnectingPool(created, RetryPolicy.from_settings(settings))
     finally:
         await created.close()
@@ -75,9 +76,9 @@ async def redis() -> AsyncIterator[object]:
     try:
         await client.ping()
     # redis-py бросает несколько несвязанных типов на «сервера там нет».
-    except Exception as unreachable:
+    except Exception:
         await client.aclose()
-        pytest.skip(f"Redis is not reachable: {unreachable}")
+        pytest.fail("Test Redis is not reachable", pytrace=False)
 
     try:
         yield client

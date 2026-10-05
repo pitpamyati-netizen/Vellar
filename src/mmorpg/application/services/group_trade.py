@@ -33,6 +33,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
@@ -267,6 +268,13 @@ class GroupTrade:
     # Предложения нумеруются внутри группы, поэтому две группы никогда не дерутся за
     # «принять 7».
     scope: str = "group"
+    # Испытания могут остановить действие на названной границе записи. В игре
+    # обработчик не передаётся, поэтому поведение и задержка не меняются.
+    fault_hook: Callable[[str], Awaitable[None]] | None = None
+
+    async def _point(self, name: str) -> None:
+        if self.fault_hook is not None:
+            await self.fault_hook(name)
 
     # --- точки входа --------------------------------------------------
 
@@ -430,7 +438,9 @@ class GroupTrade:
             return _refused(
                 Refusal.AUTHOR_LACKS_GOLD, author_name=author.name, target_name=target.name
             )
+        await self._point("gift.after_debit")
         await self.characters.grant_gold(target.character_id, command.amount)
+        await self._point("gift.after_credit")
         return GroupOutcome(
             result=GroupResult.GOLD_GIVEN,
             gold=command.amount,
@@ -512,6 +522,7 @@ class GroupTrade:
             return _refused(
                 Refusal.TOO_MANY_OFFERS, author_name=author.name, target_name=target.name
             )
+        await self._point("offer.after_open")
 
         # Строка появляется раньше, чем двинется ставка, поэтому двинувшаяся ставка
         # всегда где-то записана. Если двинуть её нельзя, строка тут же закрывается
@@ -528,6 +539,7 @@ class GroupTrade:
             return _refused(
                 lacking, item_name=found.name, author_name=author.name, target_name=target.name
             )
+        await self._point("offer.after_stake")
 
         return GroupOutcome(
             result=GroupResult.OFFER_MADE,
@@ -592,6 +604,8 @@ class GroupTrade:
         if stakes_gold(offer) and not took_item:
             await self._close(offer.number, TradeStatus.DECLINED, now=now)
             return _refused(Refusal.TARGET_LACKS_ITEM, offer=offer)
+        if took_item:
+            await self._point("settle.after_item_debit")
 
         # Сторона того, кому предложили, забирается до закрытия строки и забирается
         # неделимо: покупатель, отвечающий на продажу, платит из кошелька, который
@@ -605,6 +619,8 @@ class GroupTrade:
             if took_item:  # pragma: no cover - продажа никогда не забирает вещь первой
                 await self.inventory.add(offer.target.character_id, offer.item_id, offer.quantity)
             return _refused(Refusal.TARGET_LACKS_GOLD, offer=offer)
+        if paid:
+            await self._point("settle.after_gold_debit")
 
         closed = await self._close(offer.number, TradeStatus.ACCEPTED, now=now, tax=tax)
         if closed is None:
@@ -614,15 +630,18 @@ class GroupTrade:
             if paid:
                 await self.characters.grant_gold(offer.payer.character_id, offer.price)
             return _refused(Refusal.UNKNOWN_OFFER)
+        await self._point("settle.after_close")
 
         # Вещь уходит тому, кто за неё заплатил, как бы предложение ни было сказано: из
         # эскроу при продаже и прямо от второй стороны при покупке.
         await self.inventory.add(offer.payer.character_id, offer.item_id, offer.quantity)
+        await self._point("settle.after_item_credit")
 
         # Продавцу платят из эскроу или из кошелька покупателя; пошлина просто не
         # зачисляется никому. Записываются обе половины - «пять процентов, верное ли
         # число» решается по живой торговле (``mmorpg.economy_log``).
         await self.characters.grant_gold(offer.giver.character_id, payout(offer.price))
+        await self._point("settle.after_gold_credit")
         economy_log.record(
             economy_log.TRADE_PRICE,
             offer.price,

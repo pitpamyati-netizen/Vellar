@@ -67,7 +67,7 @@ ADR 0047 назвал семь домов и решил, что у каждог�
 - `presentation` — `ScreenId.HOUSE`, `screens/house.py`, `_handle_house`,
   `labels.HOUSE`/`HOUSE_JOIN`/`HOUSE_LEAVE`, `SERVICES`/`CITY_SERVICES`,
   `states/screens.py`; `world.toml` — `house` в четырнадцати городах.
-- `docs/houses.md` (новый), `Claude.md`, `Roadmap.md`, `content/changelog.toml`.
+- `docs/houses.md` (новый), `docs/development-rules.md`, `Roadmap.md`, `content/changelog.toml`.
 - Тесты: `tests/domain/test_houses.py`, `tests/content` (проверки загрузчика),
   `tests/presentation/conftest.py::all_screens`.
 

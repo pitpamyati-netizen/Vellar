@@ -88,7 +88,7 @@ dungeon=False)` — того же пула, из которого локация
 - Тесты — `tests/domain/test_digest.py`, `tests/domain/test_procgen.py`,
   `tests/presentation/test_digest_claim.py`,
   `tests/presentation/test_summary_flow.py`.
-- Docs — этот ADR, `docs/digest.md`, `Claude.md`, `Roadmap.md`,
+- Docs — этот ADR, `docs/digest.md`, `docs/development-rules.md`, `Roadmap.md`,
   `content/changelog.toml`.
 - Схем не трогаем: дела — из сида, разовость — в кэше. Миграции нет.
 

@@ -140,6 +140,26 @@ async def test_a_user_survives_a_round_trip(pool, clean_user) -> None:
     assert stored.username == "tester"
 
 
+async def test_two_simultaneous_debits_cannot_spend_the_same_gold(pool, clean_user) -> None:
+    """Обе записи стартуют вместе против настоящего PostgreSQL."""
+    await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user, username="tester"))
+    characters = PostgresCharacterRepository(pool)
+    created = await characters.create(replace(a_character(clean_user, "M00 race"), gold=100))
+    start = asyncio.Event()
+
+    async def debit() -> bool:
+        await start.wait()
+        return await characters.spend_gold(created.id, 80)
+
+    first = asyncio.create_task(debit())
+    second = asyncio.create_task(debit())
+    start.set()
+    results = await asyncio.gather(first, second)
+    assert results.count(True) == 1
+    stored = await characters.get(created.id)
+    assert stored is not None and stored.gold == 20
+
+
 async def test_accessibility_settings_are_saved_and_read_back(pool, clean_user) -> None:
     """Колонку за ``verbose`` нельзя так назвать; это доказывает, что читается она верно."""
     users = PostgresUserRepository(pool)

@@ -7,6 +7,9 @@
 
 from __future__ import annotations
 
+import asyncio
+from dataclasses import replace
+
 import pytest
 
 from mmorpg.application.services.group_trade import (
@@ -116,6 +119,64 @@ async def purse(characters: InMemoryCharacterRepository, character: Character) -
     read = await characters.get(character.id)
     assert read is not None
     return read.gold
+
+
+async def test_planned_failure_stops_after_gift_debit(
+    trade: GroupTrade,
+    characters: InMemoryCharacterRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    reached: list[str] = []
+
+    async def interrupt(point: str) -> None:
+        reached.append(point)
+        if point == "gift.after_debit":
+            raise RuntimeError("planned interruption")
+
+    with pytest.raises(RuntimeError, match="planned interruption"):
+        await run(
+            replace(trade, fault_hook=interrupt),
+            "передать 100 золота",
+            author=ARGUS_ACCOUNT,
+            target=MERLA_ACCOUNT,
+        )
+    assert reached == ["gift.after_debit"]
+    # Стенд останавливает действие именно между записями: это исходная ошибка,
+    # которую должна исправить единая операция в M01, а не успешная передача.
+    assert await purse(characters, argus) == 400
+    assert await purse(characters, merla) == 300
+
+
+async def test_two_gifts_can_be_interleaved_at_a_named_point(
+    trade: GroupTrade,
+    characters: InMemoryCharacterRepository,
+    argus: Character,
+    merla: Character,
+) -> None:
+    reached = asyncio.Event()
+    release = asyncio.Event()
+
+    async def hold_first(point: str) -> None:
+        if point == "gift.after_debit" and not reached.is_set():
+            reached.set()
+            await release.wait()
+
+    controlled = replace(trade, fault_hook=hold_first)
+    first = asyncio.create_task(
+        run(controlled, "передать 100 золота", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT)
+    )
+    await asyncio.wait_for(reached.wait(), timeout=2)
+    second = await run(
+        controlled, "передать 100 золота", author=ARGUS_ACCOUNT, target=MERLA_ACCOUNT
+    )
+    release.set()
+    first_outcome = await asyncio.wait_for(first, timeout=2)
+
+    assert first_outcome.result is GroupResult.GOLD_GIVEN
+    assert second.result is GroupResult.GOLD_GIVEN
+    assert await purse(characters, argus) == 300
+    assert await purse(characters, merla) == 500
 
 
 # --- карточка ---------------------------------------------------------

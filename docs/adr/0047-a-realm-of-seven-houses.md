@@ -82,7 +82,7 @@
 6. **`economy`** — `TRADE_TAX_PERCENT` под «сбор с сделки»: число не трогаем,
    только текст.
 7. **`races.toml`/`classes.toml`, `docs/skills.md`, `docs/keeper.md`,
-   `docs/dungeons.md`, `CLAUDE.md`** — вычистить Договор/Палату/подорожную/Печать
+   `docs/dungeons.md`, `docs/development-rules.md`** — вычистить Договор/Палату/подорожную/Печать
    из текста по мере того, как меняются их подсистемы.
 
 `content/changelog.toml` в этом коммите не трогается: игрок пока видит прежний
