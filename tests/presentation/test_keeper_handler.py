@@ -16,6 +16,7 @@ from __future__ import annotations
 import time
 from dataclasses import replace
 from datetime import UTC, datetime
+from itertools import count
 from typing import Any, cast
 
 import pytest
@@ -57,6 +58,8 @@ from mmorpg.presentation.telegram.handlers import play as play_handler
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.states.screens import Play
+
+_MESSAGE_IDS = count(1000)
 
 KEEPER_ACCOUNT = 700_001
 SETTINGS = Settings(_env_file=None, admin_ids=str(KEEPER_ACCOUNT))  # type: ignore[call-arg]
@@ -118,7 +121,7 @@ class Keeper:
     async def press(self, *messages: str) -> Screen:
         for text in messages:
             message = Message(
-                message_id=1,
+                message_id=next(_MESSAGE_IDS),
                 date=datetime.now(UTC),
                 chat=Chat(id=self.account, type="private"),
                 from_user=User(id=self.account, is_bot=False, first_name="Смотритель"),
@@ -811,7 +814,7 @@ async def test_a_player_who_is_not_a_keeper_gets_nothing_from_the_panel(
     )
     await state.set_state(Play.main_menu)
     message = Message(
-        message_id=1,
+        message_id=next(_MESSAGE_IDS),
         date=datetime.now(UTC),
         chat=Chat(id=account, type="private"),
         from_user=User(id=account, is_bot=False, first_name="Чужой"),

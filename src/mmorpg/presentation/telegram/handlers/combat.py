@@ -25,6 +25,7 @@ from aiogram.fsm.storage.base import BaseStorage, StorageKey
 from aiogram.types import Message
 
 from mmorpg import economy_log
+from mmorpg.application.operations import atomic_action
 from mmorpg.application.services.battle import (
     BATTLE_TTL,
     BattleKind,
@@ -138,6 +139,7 @@ ENGAGED_TTL = BATTLE_TTL
 # --- начало боя -------------------------------------------------------
 
 
+@atomic_action
 async def open_fight(
     message: Message,
     state: FSMContext,
@@ -620,7 +622,7 @@ async def _spawn_arena(
         return None, {}
 
     paid, stake = arena_rules.place_stake(character)
-    await characters.save(paid)
+    paid = await characters.save(paid)
     seed = derive("arena", paid.id, other.id, paid.arena_wins + paid.arena_losses)
     logger.info("arena_round_started", character_id=paid.id, opponent_id=other.id, stake=stake)
     economy_log.record(economy_log.ARENA_STAKE, -stake, character_id=paid.id)
@@ -638,6 +640,7 @@ async def _spawn_arena(
 # --- один ход ---------------------------------------------------------
 
 
+@atomic_action
 async def fight(
     message: Message,
     state: FSMContext,
@@ -937,6 +940,7 @@ async def _show(
 # --- что бой сделал с персонажами -------------------------------------
 
 
+@atomic_action
 async def _finish(
     message: Message,
     state: FSMContext,

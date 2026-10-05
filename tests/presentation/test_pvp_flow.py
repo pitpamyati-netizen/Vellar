@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import UTC, datetime
+from itertools import count
 from typing import Any, cast
 
 import pytest
@@ -37,6 +38,8 @@ from mmorpg.presentation.telegram.flows.state import LocationSession, PlayState
 from mmorpg.presentation.telegram.handlers import combat as combat_handler
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.states.screens import Play
+
+_MESSAGE_IDS = count(1000)
 
 ATTACKER = 700_001
 DEFENDER = 700_002
@@ -154,7 +157,7 @@ def context(storage: MemoryStorage, account: int) -> FSMContext:
 
 def a_message(account: int, text: str, bot: FakeBot) -> Message:
     return Message(
-        message_id=1,
+        message_id=next(_MESSAGE_IDS),
         date=datetime.now(UTC),
         chat=Chat(id=account, type="private"),
         from_user=User(id=account, is_bot=False, first_name="Игрок"),

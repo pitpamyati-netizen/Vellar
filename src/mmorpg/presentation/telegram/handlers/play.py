@@ -25,6 +25,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from mmorpg import economy_log
+from mmorpg.application.operations import MissingResourceError, atomic_action
 from mmorpg.application.services import group_trade, keeper_panel, moderation
 from mmorpg.application.services.battle import BattleStore
 from mmorpg.application.services.content import ContentRegistry
@@ -134,6 +135,7 @@ def build_router() -> Router:
     return router
 
 
+@atomic_action
 async def play(
     message: Message,
     state: FSMContext,
@@ -180,7 +182,7 @@ async def play(
     reclaimed = skill_rules.reclaim_lost(content, character)
     if reclaimed is not None:
         character = reclaimed
-        await characters.save(character)
+        character = await characters.save(character)
         logger.info("skills_reclaimed", character_id=character.id)
     emoji = user.settings.emoji if user is not None else False
     accessibility = user.settings if user is not None else None
@@ -828,6 +830,7 @@ async def _keeper_view(
     )
 
 
+@atomic_action
 async def _serve(
     write: PendingWrite,
     *,
@@ -871,8 +874,8 @@ async def _serve(
         for item_id, delta in write.bag_changes:
             if delta > 0:
                 await inventory.add(write.other.id, item_id, delta)
-            elif delta < 0:
-                await inventory.remove(write.other.id, item_id, -delta)
+            elif delta < 0 and not await inventory.remove(write.other.id, item_id, -delta):
+                raise MissingResourceError(item_id)
     if write.remove_character:
         await characters.delete(write.remove_character)
     if write.party_save is not None:
@@ -918,8 +921,8 @@ async def _serve(
         character_id, item_id, delta = write.grant_item
         if delta > 0:
             await inventory.add(character_id, item_id, delta)
-        elif delta < 0:
-            await inventory.remove(character_id, item_id, -delta)
+        elif delta < 0 and not await inventory.remove(character_id, item_id, -delta):
+            raise MissingResourceError(item_id)
     if write.service:
         swept = await _sweep(write.service, characters, users, bot, now)
         said.append(swept)
@@ -1145,6 +1148,7 @@ async def _reachable(bot: Bot | None, telegram_id: int) -> bool:
     return True
 
 
+@atomic_action
 async def _apply(
     write: PendingWrite,
     character: Character,
@@ -1160,8 +1164,8 @@ async def _apply(
     for item_id, delta in write.items:
         if delta > 0:
             await inventory.add(character.id, item_id, delta)
-        elif delta < 0:
-            await inventory.remove(character.id, item_id, -delta)
+        elif delta < 0 and not await inventory.remove(character.id, item_id, -delta):
+            raise MissingResourceError(item_id)
 
     if write.settings is not None:
         await users.save_settings(telegram_id, write.settings)
@@ -1174,8 +1178,7 @@ async def _apply(
                 character.gold + character.bank_gold
             )
             economy_log.record(write.gold_flow, moved, character_id=character.id)
-        await characters.save(write.character)
-        return write.character
+        return await characters.save(write.character)
     return character
 
 
@@ -1198,7 +1201,7 @@ async def _pay_tutorial(
         return character, updated
 
     payout = adventure.apply_tutorial_rewards(content, character, newly)
-    await characters.save(payout.character)
+    payout = replace(payout, character=await characters.save(payout.character))
     for item_id, count in payout.items:
         if content.has_item(item_id):
             await inventory.add(payout.character.id, item_id, count)
@@ -1247,7 +1250,7 @@ async def _pay_digest_haul(
     )
     if claimed is None:
         return character, updated
-    await characters.save(claimed.character)
+    claimed = replace(claimed, character=await characters.save(claimed.character))
     return claimed.character, updated.with_notice(f"{updated.notice} {claimed.line}".strip())
 
 
@@ -1298,7 +1301,7 @@ async def _pay_digest_search(
     )
     if claimed is None:
         return character, updated
-    await characters.save(claimed.character)
+    claimed = replace(claimed, character=await characters.save(claimed.character))
     return claimed.character, updated.with_notice(f"{updated.notice} {claimed.line}".strip())
 
 
@@ -1793,6 +1796,7 @@ async def _guild_view(
     )
 
 
+@atomic_action
 async def _guild_step(
     message: Message,
     content: GameContent,
@@ -1988,6 +1992,7 @@ async def _guild_rank_step(
     return f"{target.name} теперь {to.title}.", character
 
 
+@atomic_action
 async def _guild_vault_step(
     content: GameContent,
     character: Character,
@@ -2094,6 +2099,7 @@ async def _fellow_ids(
     return list(party.members), "отряде"
 
 
+@atomic_action
 async def _transfer_step(
     message: Message,
     content: GameContent,
@@ -2163,6 +2169,7 @@ async def _transfer_step(
 # --- хранилище, подряд и война (ADR 0077) ----------------------------
 
 
+@atomic_action
 async def _guild_store_step(
     content: GameContent,
     character: Character,
@@ -2231,6 +2238,7 @@ async def _guild_store_step(
     return f"В хранилище положено: {name}, штук {want}."
 
 
+@atomic_action
 async def _guild_war_step(
     message: Message,
     content: GameContent,

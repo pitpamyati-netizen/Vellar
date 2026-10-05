@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from mmorpg.application.operations import atomic_action
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.ports.repositories import GuildRepository, StateCache
 from mmorpg.domain.procgen.seeds import rotation_index, seconds_left_in_rotation
@@ -117,6 +118,7 @@ class GuildStore:
     async def forget_call(self, invitee_id: int) -> None:
         await self._cache.delete(self._call_key(invitee_id))
 
+    @atomic_action
     async def accept(self, invitee_id: int, content: GameContent) -> Guild | None:
         """Согласиться вступить. ``None`` — звать уже некому или гильдии нет.
 
@@ -137,6 +139,7 @@ class GuildStore:
         await self._roster.save(joined)
         return joined
 
+    @atomic_action
     async def leave(self, character_id: int) -> Guild | None:
         """Уйти из гильдии. Основатель так уйти не может — он её распускает."""
         guild = await self._roster.of(character_id)
@@ -258,6 +261,7 @@ class GuildStore:
         """Положить в казну гильдии, которую читать незачем: подряд и война."""
         await self._roster.deposit(guild_id, amount)
 
+    @atomic_action
     async def work_on_contract(
         self,
         content: GameContent,
@@ -316,6 +320,7 @@ class GuildStore:
     async def forget_war_call(self, defender_id: int) -> None:
         await self._cache.delete(self._war_call_key(defender_id))
 
+    @atomic_action
     async def open_war(
         self, *, challenger_id: int, defender_id: int, stake: int, started: int, ends: int
     ) -> War:
@@ -350,6 +355,7 @@ class GuildStore:
         await self._roster.score_war(war.id, guild_id)
         return True
 
+    @atomic_action
     async def settle_war(self, content: GameContent, war: War, rotation: int) -> War | None:
         """Подвести войну, если её срок вышел. ``None`` - подводить нечего.
 

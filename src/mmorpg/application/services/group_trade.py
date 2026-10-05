@@ -38,6 +38,7 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from mmorpg import economy_log
+from mmorpg.application.operations import MissingResourceError, atomic_action
 from mmorpg.application.services.party import PartyStore
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent
@@ -90,6 +91,7 @@ async def return_stake(
     await characters.grant_gold(offer.author.character_id, offer.price)
 
 
+@atomic_action
 async def release_expired_offers(
     *,
     trades: TradeRepository,
@@ -136,12 +138,14 @@ class Rollback:
         return self.done and self.item_returned and not self.gold_missing
 
 
+@atomic_action
 async def roll_back(
     trade_id: int,
     *,
     trades: TradeRepository,
     characters: CharacterRepository,
     inventory: InventoryRepository,
+    operation_id: str | None = None,
 ) -> Rollback:
     """Отменить расчёт, который уже прошёл. Работа смотрителя (``docs/keeper.md``).
 
@@ -278,6 +282,7 @@ class GroupTrade:
 
     # --- точки входа --------------------------------------------------
 
+    @atomic_action
     async def run(
         self,
         command: GroupCommand,
@@ -285,6 +290,7 @@ class GroupTrade:
         author_id: int,
         target_id: int | None,
         now: int,
+        operation_id: str | None = None,
     ) -> GroupOutcome:
         """Выполнить одну разобранную команду. ``target_id`` - тот, кому автор ответил."""
         await self._sweep(now)
@@ -720,8 +726,11 @@ class GroupTrade:
 
     async def _move_item(self, item_id: str, quantity: int, giver: Party, taker: Party) -> None:
         """Сначала забрать, потом отдать: несостоявшееся изъятие не должно выдумывать вещь."""
-        if await self.inventory.remove(giver.character_id, item_id, quantity):
-            await self.inventory.add(taker.character_id, item_id, quantity)
+        if not await self.inventory.remove(giver.character_id, item_id, quantity):
+            raise MissingResourceError(item_id)
+        await self._point("gift_item.after_debit")
+        await self.inventory.add(taker.character_id, item_id, quantity)
+        await self._point("gift_item.after_credit")
 
     async def _character(self, party: Party) -> Character:
         character = await self.characters.get(party.character_id)

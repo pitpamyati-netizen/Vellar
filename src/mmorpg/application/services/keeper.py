@@ -14,11 +14,13 @@
 
 from __future__ import annotations
 
+from mmorpg.application.operations import atomic_action
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.ports.repositories import CharacterRepository, UserRepository
 
 
+@atomic_action
 async def sync_keeper(
     character: Character,
     telegram_id: int,
@@ -38,8 +40,7 @@ async def sync_keeper(
     if character.is_admin == wanted:
         return character
     updated = character.as_admin(wanted)
-    await characters.save(updated)
-    return updated
+    return await characters.save(updated)
 
 
 async def is_keeper(users: UserRepository, telegram_id: int, settings: Settings) -> bool:
@@ -50,6 +51,7 @@ async def is_keeper(users: UserRepository, telegram_id: int, settings: Settings)
     return user is not None and user.keeper
 
 
+@atomic_action
 async def set_keeper(
     users: UserRepository,
     characters: CharacterRepository,

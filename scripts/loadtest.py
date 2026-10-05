@@ -32,6 +32,7 @@ import time
 from collections.abc import Sequence
 from contextlib import AsyncExitStack
 
+from mmorpg.application.operations import atomic_action
 from mmorpg.config import AppEnv, Settings, load_settings
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import ActionKind, BattleAction
@@ -52,6 +53,24 @@ ACCOUNT_BASE = 9_000_000_000
 #: Дальше этого хода бой не считают: нагрузке нужен бой обычной длины, а не
 #: редкий длинный, растянувший замер.
 TURN_CEILING = 12
+
+
+@atomic_action
+async def _economic_step(
+    characters: CharacterRepository, content: GameContent, account: int, step: int
+) -> Character:
+    """Включить общую границу M01 и ожидание её замка в замер."""
+    read = await characters.get_active(account)
+    if read is None:
+        raise RuntimeError("персонаж исчез посреди нагрузки")
+    stats = derived_stats(content, read)
+    if step % 3 == 0:
+        await characters.grant_gold(read.id, 10)
+    elif step % 3 == 1:
+        await characters.spend_gold(read.id, 5)
+    else:
+        read = await characters.save(read.with_health(stats.max_health, stats.max_health))
+    return read
 
 
 async def one_player(
@@ -87,18 +106,7 @@ async def one_player(
             await asyncio.sleep(pause * (0.5 + dice.random()))
         watch = Stopwatch()
         try:
-            read = await characters.get_active(account)
-            if read is None:
-                raise RuntimeError("персонаж исчез посреди нагрузки")
-            stats = derived_stats(content, read)
-
-            # Кошелёк — тем же условным шагом, каким его двигает игра.
-            if step % 3 == 0:
-                await characters.grant_gold(read.id, 10)
-            elif step % 3 == 1:
-                await characters.spend_gold(read.id, 5)
-            else:
-                await characters.save(read.with_health(stats.max_health, stats.max_health))
+            read = await _economic_step(characters, content, account, step)
 
             # И один бой: правила должны попадать в тот же замер, что и база.
             spot = derive(seed, index, step, dice.randrange(1_000))

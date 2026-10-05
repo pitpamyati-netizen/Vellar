@@ -12,6 +12,7 @@ from dataclasses import replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
+from mmorpg.application.operations import StaleCharacterError
 from mmorpg.domain.entities.character import (
     Character,
     Equipment,
@@ -36,6 +37,7 @@ from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
 from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
 from mmorpg.domain.rules.guild_war import War
 from mmorpg.domain.rules.party import Party as PlayerParty
+from mmorpg.infrastructure.persistence.operations import OperationPool, PostgresOperations
 
 if TYPE_CHECKING:  # pragma: no cover - только для типов
     import asyncpg
@@ -45,7 +47,7 @@ CHARACTER_COLUMNS = """
     stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
     trait_ids, loadout, equipment, city_id, unspent_stat_points, unspent_skill_points,
     health, bank_gold, quests, crafts, wear, tutorial, arena_wins, arena_losses,
-    arena_credit, house_id, subclass_ids, is_admin
+    arena_credit, house_id, subclass_ids, is_admin, revision
 """
 
 TRADE_COLUMNS = """
@@ -107,6 +109,7 @@ def _character_from_row(row: Any) -> Character:
         house_id=row["house_id"],
         subclass_ids=tuple(row["subclass_ids"] or ()),
         is_admin=bool(row["is_admin"]),
+        revision=row["revision"],
     )
 
 
@@ -167,7 +170,8 @@ def _loadout_to_json(loadout: SkillLoadout) -> str:
 
 class PostgresUserRepository:
     def __init__(self, pool: asyncpg.Pool) -> None:
-        self._pool = pool
+        self._pool = OperationPool(pool)
+        self.operations = PostgresOperations(self._pool)
 
     async def get(self, telegram_id: int) -> User | None:
         row = await self._pool.fetchrow(
@@ -331,7 +335,8 @@ class PostgresKeeperLogRepository:
     """Журнал смотрителя: дописывается и читается с конца, больше ничего."""
 
     def __init__(self, pool: asyncpg.Pool) -> None:
-        self._pool = pool
+        self._pool = OperationPool(pool)
+        self.operations = PostgresOperations(self._pool)
 
     async def record(self, entry: KeeperEntry) -> None:
         await self._pool.execute(
@@ -392,7 +397,8 @@ class PostgresGoldFlowRepository:
     """Денежный журнал в базе: строка на движение, срез по одному игроку (ADR 0044)."""
 
     def __init__(self, pool: asyncpg.Pool) -> None:
-        self._pool = pool
+        self._pool = OperationPool(pool)
+        self.operations = PostgresOperations(self._pool)
 
     async def record(
         self, *, at: int, flow: str, amount: int, character_id: int, detail: str = ""
@@ -433,7 +439,8 @@ class PostgresPrivacyRepository:
     """
 
     def __init__(self, pool: asyncpg.Pool) -> None:
-        self._pool = pool
+        self._pool = OperationPool(pool)
+        self.operations = PostgresOperations(self._pool)
 
     async def profile_visible(self, telegram_id: int) -> bool:
         row = await self._pool.fetchrow(
@@ -486,7 +493,8 @@ class PostgresPrivacyRepository:
 
 class PostgresCharacterRepository:
     def __init__(self, pool: asyncpg.Pool) -> None:
-        self._pool = pool
+        self._pool = OperationPool(pool)
+        self.operations = PostgresOperations(self._pool)
 
     async def get(self, character_id: int) -> Character | None:
         row = await self._pool.fetchrow(
@@ -561,8 +569,8 @@ class PostgresCharacterRepository:
         )
         return replace(character, id=row["id"])
 
-    async def save(self, character: Character) -> None:
-        await self._pool.execute(
+    async def save(self, character: Character) -> Character:
+        revision = await self._pool.fetchval(
             """
             UPDATE characters SET
                 level = $2, experience = $3, gold = $4,
@@ -574,7 +582,7 @@ class PostgresCharacterRepository:
                 crafts = $21::jsonb, wear = $22::jsonb, tutorial = $23,
                 arena_wins = $24, arena_losses = $25, arena_credit = $26,
                 is_admin = $27, house_id = $28, subclass_ids = $29, updated_at = now()
-            WHERE id = $1
+            WHERE id = $1 AND revision = $30 RETURNING revision
             """,
             character.id,
             character.level,
@@ -605,7 +613,11 @@ class PostgresCharacterRepository:
             character.is_admin,
             character.house_id,
             list(character.subclass_ids),
+            character.revision,
         )
+        if revision is None:
+            raise StaleCharacterError(str(character.id))
+        return replace(character, revision=revision)
 
     async def spend_gold(self, character_id: int, amount: int) -> bool:
         """Один UPDATE решает и то, есть ли золото, и то, что его больше нет.
@@ -784,7 +796,8 @@ class PostgresContentOverlayRepository:
     """
 
     def __init__(self, pool: asyncpg.Pool) -> None:
-        self._pool = pool
+        self._pool = OperationPool(pool)
+        self.operations = PostgresOperations(self._pool)
 
     async def all(self) -> tuple[OverlayRecord, ...]:
         rows = await self._pool.fetch(
@@ -880,7 +893,8 @@ class PostgresTradeRepository:
     ATTEMPTS = 3
 
     def __init__(self, pool: asyncpg.Pool) -> None:
-        self._pool = pool
+        self._pool = OperationPool(pool)
+        self.operations = PostgresOperations(self._pool)
 
     async def open(self, offer: Offer, *, scope: str) -> TradeRecord | None:
         for _ in range(self.ATTEMPTS):
@@ -998,7 +1012,8 @@ class PostgresTradeRepository:
 
 class PostgresInventoryRepository:
     def __init__(self, pool: asyncpg.Pool) -> None:
-        self._pool = pool
+        self._pool = OperationPool(pool)
+        self.operations = PostgresOperations(self._pool)
 
     async def list_items(self, character_id: int) -> tuple[InventoryEntry, ...]:
         rows = await self._pool.fetch(
@@ -1054,7 +1069,8 @@ class PostgresPartyRepository:
     """
 
     def __init__(self, pool: asyncpg.Pool) -> None:
-        self._pool = pool
+        self._pool = OperationPool(pool)
+        self.operations = PostgresOperations(self._pool)
 
     async def by_leader(self, leader_id: int) -> PlayerParty | None:
         rows = await self._pool.fetch(
@@ -1116,7 +1132,8 @@ class PostgresGuildRepository:
     """
 
     def __init__(self, pool: asyncpg.Pool) -> None:
-        self._pool = pool
+        self._pool = OperationPool(pool)
+        self.operations = PostgresOperations(self._pool)
 
     async def _assemble(self, row: Any) -> Guild:
         members = await self._pool.fetch(

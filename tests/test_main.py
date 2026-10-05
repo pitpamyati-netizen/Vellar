@@ -116,6 +116,11 @@ async def test_middlewares_are_installed_in_order(app) -> None:
     outer = app.dispatcher.update.outer_middleware
     installed = [type(middleware) for middleware in outer]
     assert installed.index(IdempotencyMiddleware) < installed.index(DependencyMiddleware)
+    from aiogram.fsm.middleware import FSMContextMiddleware
+
+    from mmorpg.presentation.telegram.middlewares.operations import EconomicRecoveryMiddleware
+
+    assert installed.index(EconomicRecoveryMiddleware) < installed.index(FSMContextMiddleware)
 
 
 async def test_markdown_is_never_the_default_parse_mode(app) -> None:

@@ -26,11 +26,11 @@ import signal
 import time
 from contextlib import AsyncExitStack, suppress
 from dataclasses import dataclass
+from typing import Any
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.base import BaseStorage
-from aiogram.fsm.storage.memory import MemoryStorage
 
 from mmorpg import economy_log
 from mmorpg.application.services.content import ContentRegistry
@@ -50,6 +50,7 @@ from mmorpg.infrastructure.cache import (
     InMemoryLocationStateCache,
     InMemoryStateCache,
 )
+from mmorpg.infrastructure.cache.memory_operations import AtomicMemoryStorage
 from mmorpg.infrastructure.content import load_content
 from mmorpg.infrastructure.persistence import (
     InMemoryCharacterRepository,
@@ -149,12 +150,26 @@ async def build_application(settings: Settings) -> Application:
     )
     # Экран, умерший на оборванном сокете, отправляется заново, а не превращается в
     # тишину: отличить одно от другого игроку больше нечем.
+    from mmorpg.presentation.telegram.middlewares.operations import (
+        EconomicRecoveryMiddleware,
+        EconomicSendMiddleware,
+    )
+
+    bot.session.middleware(EconomicSendMiddleware())
     bot.session.middleware(RetryRequestMiddleware(RetryPolicy.from_settings(settings)))
     # Ниже неё, а значит ближе к сокету, - очередь, которая держит бота внутри счёта
     # отправок в секунду. Подождать несколько миллисекунд дешевле, чем услышать «подожди
     # несколько секунд».
     bot.session.middleware(SendRateMiddleware(SendWindow(limit=settings.telegram_sends_per_second)))
     dispatcher = Dispatcher(storage=storage)
+    # FSM читает состояние до выбора роутера. Незаконченный перенос экрана
+    # должен завершиться раньше этого чтения, а не уже внутри старого роутера.
+    dispatcher.update.outer_middleware.unregister(dispatcher.fsm)
+    boundary = getattr(dependencies.characters, "operations", None)
+    dispatcher.update.outer_middleware(
+        EconomicRecoveryMiddleware(getattr(boundary, "recover", None))
+    )
+    dispatcher.update.outer_middleware(dispatcher.fsm)
 
     # Порядок важен: сначала замерить всё, потом открыть запись, куда весь путь ниже
     # проставит свой исход, потом отбросить повторы, потом подставить зависимости,
@@ -235,7 +250,7 @@ async def _build_adapters(
             # когда CHANNEL_ID пуст, - объявление ничего не делает.
             broadcasts=ChannelBroadcaster(sink=None, chat_id=settings.channel_id),
         )
-        return MemoryStorage(), dependencies, InMemoryIdempotencyStore()
+        return AtomicMemoryStorage(), dependencies, InMemoryIdempotencyStore()
 
     from mmorpg.infrastructure.persistence.pool import create_postgres_pool
     from mmorpg.infrastructure.persistence.postgres import (
@@ -256,6 +271,10 @@ async def _build_adapters(
     pool = await create_postgres_pool(settings)
     stack.push_async_callback(pool.close)
     storage, state_cache, locations, idempotency = await _build_session_state(settings, stack)
+    pool.economic_cache = getattr(getattr(state_cache, "_client", None), "raw", None)
+    from mmorpg.infrastructure.persistence.operations import OperationPool, PostgresOperations
+
+    await PostgresOperations(OperationPool(pool)).recover()
 
     logger.info(
         "pools_ready",
@@ -314,7 +333,7 @@ async def _build_session_state(
             detail="APP_ENV=solo: the world is on disk, screens and fights are not",
         )
         return (
-            MemoryStorage(),
+            AtomicMemoryStorage(),
             InMemoryStateCache(),
             InMemoryLocationStateCache(),
             InMemoryIdempotencyStore(),
@@ -322,6 +341,7 @@ async def _build_session_state(
 
     from aiogram.fsm.storage.redis import RedisStorage
 
+    from mmorpg.infrastructure.cache.operations import TransactionalRedis
     from mmorpg.infrastructure.cache.redis_cache import (
         RedisIdempotencyStore,
         RedisLocationStateCache,
@@ -329,7 +349,7 @@ async def _build_session_state(
     )
     from mmorpg.infrastructure.persistence.pool import create_redis_client, wait_for_redis
 
-    redis = create_redis_client(settings)
+    redis: Any = TransactionalRedis(create_redis_client(settings))
     stack.push_async_callback(redis.aclose)
     await wait_for_redis(redis, settings)
     return (

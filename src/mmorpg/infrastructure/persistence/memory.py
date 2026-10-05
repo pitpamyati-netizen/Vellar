@@ -10,6 +10,7 @@ from __future__ import annotations
 import time
 from dataclasses import replace
 
+from mmorpg.application.operations import StaleCharacterError
 from mmorpg.domain.entities.character import Character, InventoryEntry
 from mmorpg.domain.entities.moderation import Ban, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
@@ -25,10 +26,12 @@ from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
 from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
 from mmorpg.domain.rules.guild_war import War
 from mmorpg.domain.rules.party import Party
+from mmorpg.infrastructure.persistence.operations import MemoryOperations
 
 
 class InMemoryUserRepository:
     def __init__(self) -> None:
+        self.operations = MemoryOperations()
         self._users: dict[int, User] = {}
         # Когда аккаунт последний раз проверяли и когда он заблокировал бота.
         # Ноль в обоих означает «не проверяли» и «не блокировал».
@@ -107,6 +110,7 @@ class InMemoryKeeperLogRepository:
     """Журнал смотрителя в списке. Свежие записи в конце, читаются с конца."""
 
     def __init__(self) -> None:
+        self.operations = MemoryOperations()
         self._entries: list[KeeperEntry] = []
 
     async def record(self, entry: KeeperEntry) -> None:
@@ -133,6 +137,7 @@ class InMemoryGoldFlowRepository:
     """Денежный журнал в списке. Срез — сумма по видам для одного игрока (ADR 0044)."""
 
     def __init__(self) -> None:
+        self.operations = MemoryOperations()
         self._rows: list[tuple[int, str, int, int, str]] = []
 
     async def record(
@@ -159,6 +164,7 @@ class InMemoryPrivacyRepository:
     """
 
     def __init__(self) -> None:
+        self.operations = MemoryOperations()
         self._hidden: set[int] = set()
         self._blocks: dict[int, set[int]] = {}
 
@@ -191,6 +197,7 @@ class InMemoryPrivacyRepository:
 
 class InMemoryCharacterRepository:
     def __init__(self) -> None:
+        self.operations = MemoryOperations()
         self._characters: dict[int, Character] = {}
         # Когда строку последний раз трогали - то же, что ``updated_at`` в SQL.
         # Без него «давно брошенный» ничем не отличается от «только что создан».
@@ -218,9 +225,14 @@ class InMemoryCharacterRepository:
         self._next_id += 1
         return stored
 
-    async def save(self, character: Character) -> None:
-        self._characters[character.id] = character
+    async def save(self, character: Character) -> Character:
+        current = self._characters.get(character.id)
+        if current is None or current.revision != character.revision:
+            raise StaleCharacterError(str(character.id))
+        stored = replace(character, revision=character.revision + 1)
+        self._characters[character.id] = stored
         self._touched[character.id] = int(time.time())
+        return stored
 
     async def spend_gold(self, character_id: int, amount: int) -> bool:
         """Списать золото одним шагом. Здесь это и так один шаг: цикл событий
@@ -342,6 +354,7 @@ class InMemoryCharacterRepository:
 
 class InMemoryInventoryRepository:
     def __init__(self) -> None:
+        self.operations = MemoryOperations()
         self._items: dict[int, dict[str, int]] = {}
 
     async def list_items(self, character_id: int) -> tuple[InventoryEntry, ...]:
@@ -377,6 +390,7 @@ class InMemoryContentOverlayRepository:
     """
 
     def __init__(self) -> None:
+        self.operations = MemoryOperations()
         self._records: dict[tuple[str, str], OverlayRecord] = {}
 
     async def all(self) -> tuple[OverlayRecord, ...]:
@@ -400,6 +414,7 @@ class InMemoryPartyRepository:
     """
 
     def __init__(self) -> None:
+        self.operations = MemoryOperations()
         self._members: dict[int, tuple[int, ...]] = {}
 
     async def by_leader(self, leader_id: int) -> Party | None:
@@ -439,6 +454,7 @@ class InMemoryGuildRepository:
     """
 
     def __init__(self) -> None:
+        self.operations = MemoryOperations()
         self._guilds: dict[int, Guild] = {}
         self._next_id = 1
         #: Хранилище гильдии: гильдия -> вещь -> сколько (ADR 0077).
@@ -605,6 +621,7 @@ class InMemoryTradeRepository:
     """
 
     def __init__(self) -> None:
+        self.operations = MemoryOperations()
         self._records: list[TradeRecord] = []
 
     async def open(self, offer: Offer, *, scope: str) -> TradeRecord | None:

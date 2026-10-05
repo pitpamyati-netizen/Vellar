@@ -83,6 +83,26 @@ function Assert-User([string]$database, [string]$account) {
     if ($count -ne "1") { throw "Test user did not survive backup or migration" }
 }
 
+function Seed-TestCharacter([string]$database, [string]$account) {
+    $seed = @"
+INSERT INTO users (telegram_id, username) VALUES ($account, 'migration_control');
+INSERT INTO characters (user_id, name, race_id, class_id, level, gold, bank_gold, equipment, experience, stat_str)
+VALUES ($account, 'Control', 'human', 'warrior', 12, 731, 219, '{"weapon":"sword@1#common"}', 345, 8);
+INSERT INTO inventory (character_id, item_id, quantity)
+SELECT id, 'sword@1#common', 3 FROM characters WHERE user_id = $account;
+"@
+    & $psql (Test-Dsn $database) -v ON_ERROR_STOP=1 -c $seed | Out-Null
+    Require-Success "seed control character"
+}
+
+function Assert-Character([string]$database, [string]$account) {
+    Assert-User $database $account
+    $saved = Query-TestDatabase $database "SELECT level || ':' || gold || ':' || bank_gold || ':' || experience || ':' || stat_str || ':' || revision || ':' || (equipment->>'weapon') FROM characters WHERE user_id = $account"
+    if ($saved -ne "12:731:219:345:8:0:sword@1#common") { throw "Control character changed during backup or migration" }
+    $items = Query-TestDatabase $database "SELECT quantity FROM inventory JOIN characters ON characters.id = inventory.character_id WHERE user_id = $account AND item_id = 'sword@1#common'"
+    if ($items -ne "3") { throw "Control inventory changed during backup or migration" }
+}
+
 try {
     Record "M00 check: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')"
     & $uvCommand run python -m scripts.test_stand | Out-Null
@@ -99,10 +119,10 @@ try {
 
     Reset-TestDatabase $fresh
     Upgrade-TestDatabase $fresh "head"
-    Assert-Revision $fresh "0030"
-    & $psql (Test-Dsn $fresh) -v ON_ERROR_STOP=1 `
-        -c "INSERT INTO users (telegram_id, username) VALUES (-99990001, 'm00_fresh')" | Out-Null
-    Require-Success "seed fresh database"
+    Assert-Revision $fresh "0031"
+    Seed-TestCharacter $fresh "-99990001"
+    $entryCount = Query-TestDatabase $fresh "SELECT count(*) FROM economic_entries"
+    if ($entryCount -ne "4") { throw "Control economic journal is incomplete" }
     $freshDump = Join-Path $root "backups/m00-fresh.dump"
     & $pgDump -d (Test-Dsn $fresh) -Fc -f $freshDump
     Require-Success "backup fresh database"
@@ -110,16 +130,17 @@ try {
     Reset-TestDatabase $restored
     & $pgRestore -d (Test-Dsn $restored) --no-owner --exit-on-error $freshDump | Out-Null
     Require-Success "restore fresh backup"
-    Assert-Revision $restored "0030"
-    Assert-User $restored "-99990001"
+    Assert-Revision $restored "0031"
+    Assert-Character $restored "-99990001"
+    if ((Query-TestDatabase $restored "SELECT count(*) FROM economic_entries") -ne $entryCount) {
+        throw "Economic journal did not survive backup restore"
+    }
     Record "M00.2: full migration and backup restore passed"
 
     Reset-TestDatabase $old
-    Upgrade-TestDatabase $old "0029"
-    Assert-Revision $old "0029"
-    & $psql (Test-Dsn $old) -v ON_ERROR_STOP=1 `
-        -c "INSERT INTO users (telegram_id, username) VALUES (-99990002, 'm00_old')" | Out-Null
-    Require-Success "seed old schema"
+    Upgrade-TestDatabase $old "0030"
+    Assert-Revision $old "0030"
+    Seed-TestCharacter $old "-99990002"
     $oldDump = Join-Path $root "backups/m00-old.dump"
     & $pgDump -d (Test-Dsn $old) -Fc -f $oldDump
     Require-Success "backup old schema"
@@ -128,9 +149,9 @@ try {
     & $pgRestore -d (Test-Dsn $oldCopy) --no-owner --exit-on-error $oldDump | Out-Null
     Require-Success "restore old schema copy"
     Upgrade-TestDatabase $oldCopy "head"
-    Assert-Revision $oldCopy "0030"
-    Assert-User $oldCopy "-99990002"
-    Record "M00.2: old schema copy upgraded and test user preserved"
+    Assert-Revision $oldCopy "0031"
+    Assert-Character $oldCopy "-99990002"
+    Record "M00.2/M01: schema 0030 copy upgraded to 0031; hero, wallet, bank, equipment and bag preserved"
 
     Record "M00.3: controlled failure and concurrency tests passed in project checks"
     $previousEncoding = [Environment]::GetEnvironmentVariable("PYTHONIOENCODING", "Process")

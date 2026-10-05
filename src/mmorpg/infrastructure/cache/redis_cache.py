@@ -21,6 +21,7 @@ from mmorpg.domain.entities.location import (
     Roamer,
 )
 from mmorpg.domain.rules.nodes import refreshed, taken_one
+from mmorpg.infrastructure.cache.operations import TransactionalRedis
 
 if TYPE_CHECKING:  # pragma: no cover - только для типов
     from redis.asyncio import Redis
@@ -73,7 +74,7 @@ def _engagement(field: str, value: str, now: int, ttl: int) -> Engagement | None
 
 class RedisStateCache:
     def __init__(self, client: Redis) -> None:
-        self._client = client
+        self._client = TransactionalRedis(client)
 
     async def get(self, key: str) -> str | None:
         value = await self._client.get(key)
@@ -98,7 +99,7 @@ class RedisLocationStateCache:
     """
 
     def __init__(self, client: Redis) -> None:
-        self._client = client
+        self._client = TransactionalRedis(client)
 
     @staticmethod
     def _state_key(city_id: str, slot: int) -> str:
@@ -325,7 +326,7 @@ class RedisIdempotencyStore:
     """SET NX - и вся реализация: первый записавший выигрывает, остальные повторы."""
 
     def __init__(self, client: Redis) -> None:
-        self._client = client
+        self._client = TransactionalRedis(client)
 
     async def seen(self, update_id: int, ttl: int = 300) -> bool:
         stored = await self._client.set(f"upd:{update_id}", "1", ex=ttl, nx=True)

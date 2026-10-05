@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from itertools import count
 from types import SimpleNamespace
 
 import pytest
@@ -39,6 +40,8 @@ from mmorpg.presentation.telegram.screens import group as group_screens
 from mmorpg.presentation.telegram.screens.format import MESSAGE_LIMIT
 from mmorpg.presentation.telegram.throttle import RateLimiter
 
+_MESSAGE_IDS = count(1000)
+
 GROUP_ID = -1001234567890
 OTHER_CHAT = -1009999999999
 ARGUS_ACCOUNT = 11
@@ -56,6 +59,8 @@ MERLA = Party(user_id=MERLA_ACCOUNT, character_id=2, name="Мерла")
 
 class FakeBot:
     """Записывает то, что было бы отправлено и удалено."""
+
+    id = 1
 
     def __init__(self) -> None:
         self.sent: list[dict] = []
@@ -80,11 +85,11 @@ def message(
     *,
     sender: User,
     reply_to: Message | None = None,
-    message_id: int = 100,
+    message_id: int | None = None,
     chat_id: int = GROUP_ID,
 ) -> Message:
     return Message(
-        message_id=message_id,
+        message_id=message_id if message_id is not None else next(_MESSAGE_IDS),
         date=datetime.now(UTC),
         chat=Chat(id=chat_id, type="supergroup"),
         from_user=sender,

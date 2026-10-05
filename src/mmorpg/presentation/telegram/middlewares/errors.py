@@ -17,6 +17,11 @@ from typing import Any
 from aiogram import BaseMiddleware
 from aiogram.types import Message, TelegramObject, Update
 
+from mmorpg.application.operations import (
+    OperationCommittedError,
+    OperationOutcomeUnknownError,
+    StaleCharacterError,
+)
 from mmorpg.logging import get_logger
 from mmorpg.metrics import Metrics
 from mmorpg.presentation.telegram.middlewares.audit import FAILED, note_of
@@ -38,7 +43,7 @@ class ErrorMiddleware(BaseMiddleware):
     ) -> Any:
         try:
             return await handler(event, data)
-        except Exception:
+        except Exception as error:
             logger.exception("handler_failed", event_type=type(event).__name__)
             if self._metrics is not None:
                 self._metrics.failed()
@@ -47,7 +52,23 @@ class ErrorMiddleware(BaseMiddleware):
                 note.done(FAILED)
             message = _message_of(event)
             if message is not None:
-                await message.answer(APOLOGY, parse_mode=None)
+                said = APOLOGY
+                if isinstance(error, OperationCommittedError):
+                    said = (
+                        "Действие сохранено, но ответ не завершён. "
+                        "Нажмите «Главное меню», чтобы продолжить."
+                    )
+                elif isinstance(error, StaleCharacterError):
+                    said = (
+                        "Герой уже изменился другим действием. Эта запись отменена. "
+                        "Нажмите «Главное меню» и повторите нужное действие."
+                    )
+                elif isinstance(error, OperationOutcomeUnknownError):
+                    said = (
+                        "Связь прервалась, результат действия пока не подтверждён. "
+                        "Проверьте кошелёк и сумку через «Главное меню» перед повтором."
+                    )
+                await message.answer(said, parse_mode=None)
             return None
 
 

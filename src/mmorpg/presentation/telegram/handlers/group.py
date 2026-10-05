@@ -194,6 +194,7 @@ async def handle_group_message(
         author_id=author.id,
         target_id=target_user.id if target_user is not None else None,
         now=now if now is not None else int(time.time()),
+        operation_id=f"telegram:{bot.id}:{message.chat.id}:{message.message_id}",
     )
     reply = render(content, outcome)
     # Зов, о котором сказали только в группе, ждёт человека там, где он его

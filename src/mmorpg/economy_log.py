@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 
+from mmorpg.application.operations import current_operation
 from mmorpg.logging import get_logger
 
 logger = get_logger(__name__)
@@ -67,6 +68,10 @@ KEEPER = "keeper"  # выдано смотрителем, а потому вов
 def record(flow: str, amount: int, *, character_id: int, detail: str = "") -> None:
     """Записать одно движение золота. Ноль движением не считается."""
     if not amount:
+        return
+    operation = current_operation()
+    if operation is not None:
+        operation.gold_events.append((flow, amount, character_id, detail))
         return
     logger.info(
         "gold_flow",

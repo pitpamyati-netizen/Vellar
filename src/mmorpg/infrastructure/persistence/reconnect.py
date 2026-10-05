@@ -75,10 +75,11 @@ def _head(query: str) -> str:
 class ReconnectingPool:
     """Пул asyncpg с одной добавленной привычкой: он делает пропавший вызов заново."""
 
-    __slots__ = ("_policy", "_pool")
+    __slots__ = ("_policy", "_pool", "economic_cache")
 
     def __init__(self, pool: asyncpg.Pool, policy: RetryPolicy) -> None:
         self._pool = pool
+        self.economic_cache: Any = None
         self._policy = policy
 
     async def fetch(self, query: str, *args: Any, **kwargs: Any) -> Any:

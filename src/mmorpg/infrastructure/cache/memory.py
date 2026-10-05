@@ -20,6 +20,7 @@ from mmorpg.domain.entities.location import (
     Roamer,
 )
 from mmorpg.domain.rules.nodes import refreshed, taken_one
+from mmorpg.infrastructure.cache.memory_operations import memory_cache_action
 
 
 class InMemoryStateCache:
@@ -27,6 +28,7 @@ class InMemoryStateCache:
         self._clock = clock
         self._values: dict[str, tuple[str, float]] = {}
 
+    @memory_cache_action
     async def get(self, key: str) -> str | None:
         entry = self._values.get(key)
         if entry is None:
@@ -37,9 +39,11 @@ class InMemoryStateCache:
             return None
         return value
 
+    @memory_cache_action
     async def set(self, key: str, value: str, ttl: int) -> None:
         self._values[key] = (value, self._clock() + ttl)
 
+    @memory_cache_action
     async def delete(self, key: str) -> None:
         self._values.pop(key, None)
 
@@ -72,12 +76,14 @@ class InMemoryLocationStateCache:
         # хранить.
         return nodes if expires_at > self._clock() else {}
 
+    @memory_cache_action
     async def state(self, city_id: str, slot: int, *, now: int) -> LocationState:
         nodes = {
             index: refreshed(node, now) for index, node in self._live_nodes(city_id, slot).items()
         }
         return LocationState(nodes=MappingProxyType(nodes))
 
+    @memory_cache_action
     async def take(
         self,
         city_id: str,
@@ -98,17 +104,20 @@ class InMemoryLocationStateCache:
         self._states[self._key(city_id, slot)] = (nodes, self._clock() + ttl)
         return LocationState(nodes=MappingProxyType(dict(nodes)))
 
+    @memory_cache_action
     async def arrive(
         self, city_id: str, slot: int, presence: Presence, *, now: int, ttl: int
     ) -> None:
         people = self._people.setdefault(self._key(city_id, slot), {})
         people[presence.character_id] = (presence, now)
 
+    @memory_cache_action
     async def leave(self, city_id: str, slot: int, character_id: int) -> None:
         people = self._people.get(self._key(city_id, slot))
         if people is not None:
             people.pop(character_id, None)
 
+    @memory_cache_action
     async def others_at(
         self, city_id: str, slot: int, node: int, *, exclude: int, now: int, ttl: int
     ) -> tuple[Presence, ...]:
@@ -123,6 +132,7 @@ class InMemoryLocationStateCache:
 
     # --- чужой бой в узле (ADR 0065) ---
 
+    @memory_cache_action
     async def engage(
         self,
         city_id: str,
@@ -154,6 +164,7 @@ class InMemoryLocationStateCache:
         )
         return None
 
+    @memory_cache_action
     async def engaged_at(
         self, city_id: str, slot: int, node: int, *, wave: int, now: int, ttl: int
     ) -> tuple[Engagement, ...]:
@@ -168,6 +179,7 @@ class InMemoryLocationStateCache:
             )
         )
 
+    @memory_cache_action
     async def disengage(self, city_id: str, slot: int, node: int, *, wave: int, place: int) -> None:
         held = self._fights.get(self._key(city_id, slot))
         if held is not None:
@@ -185,6 +197,7 @@ class InMemoryLocationStateCache:
             return 0
         return character_id
 
+    @memory_cache_action
     async def roamer(self, city_id: str, slot: int, *, now: int) -> Roamer | None:
         key = self._key(city_id, slot)
         entry = self._roamers.get(key)
@@ -196,6 +209,7 @@ class InMemoryLocationStateCache:
             return None
         return replace(roamer, holder=self._held_by(key))
 
+    @memory_cache_action
     async def spawn_roamer(self, city_id: str, slot: int, roamer: Roamer, *, ttl: int) -> Roamer:
         existing = await self.roamer(city_id, slot, now=0)
         if existing is not None:
@@ -204,6 +218,7 @@ class InMemoryLocationStateCache:
         self._roamers[key] = (replace(roamer, holder=0), self._clock() + ttl)
         return replace(roamer, holder=0)
 
+    @memory_cache_action
     async def claim_roamer(self, city_id: str, slot: int, character_id: int, *, ttl: int) -> bool:
         key = self._key(city_id, slot)
         held = self._held_by(key)
@@ -212,19 +227,23 @@ class InMemoryLocationStateCache:
         self._holds[key] = (character_id, self._clock() + ttl)
         return True
 
+    @memory_cache_action
     async def hold_roamer(self, city_id: str, slot: int, character_id: int, *, ttl: int) -> None:
         key = self._key(city_id, slot)
         if self._held_by(key) in (0, character_id):
             self._holds[key] = (character_id, self._clock() + ttl)
 
+    @memory_cache_action
     async def release_roamer(self, city_id: str, slot: int) -> None:
         self._holds.pop(self._key(city_id, slot), None)
 
+    @memory_cache_action
     async def clear_roamer(self, city_id: str, slot: int) -> None:
         key = self._key(city_id, slot)
         self._roamers.pop(key, None)
         self._holds.pop(key, None)
 
+    @memory_cache_action
     async def reset(self, city_id: str, slot: int) -> None:
         key = self._key(city_id, slot)
         self._states.pop(key, None)

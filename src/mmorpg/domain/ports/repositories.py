@@ -276,7 +276,8 @@ class CharacterRepository(Protocol):
 
     async def create(self, character: Character) -> Character: ...
 
-    async def save(self, character: Character) -> None: ...
+    async def save(self, character: Character) -> Character:
+        """Сохранить ожидаемую версию или отказать; вернуть новую версию."""
 
     async def spend_gold(self, character_id: int, amount: int) -> bool:
         """Снять золото с персонажа одним шагом или не снять ничего вовсе.

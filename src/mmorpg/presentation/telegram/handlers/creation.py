@@ -13,6 +13,7 @@ from aiogram.filters import CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
+from mmorpg.application.operations import atomic_action
 from mmorpg.application.services.keeper import sync_keeper
 from mmorpg.config import Settings
 from mmorpg.domain.entities.content import GameContent
@@ -84,6 +85,7 @@ def created_screen(name: str, city_name: str) -> Screen:
     )
 
 
+@atomic_action
 async def start(
     message: Message,
     state: FSMContext,
@@ -119,6 +121,7 @@ async def start(
     await send_screen(message, render(content, flow))
 
 
+@atomic_action
 async def resume(
     message: Message,
     state: FSMContext,
@@ -169,6 +172,7 @@ async def resume(
     )
 
 
+@atomic_action
 async def step(
     message: Message,
     state: FSMContext,
