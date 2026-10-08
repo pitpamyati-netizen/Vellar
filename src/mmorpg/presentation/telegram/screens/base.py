@@ -73,6 +73,7 @@ class ScreenId(StrEnum):
     PARTY = "party"
     PARTY_INVITE = "party_invite"
     GUILD = "guild"
+    GUILD_DISBAND = "guild_disband"
     GUILD_FOUND = "guild_found"
     GUILD_INVITE = "guild_invite"
     GUILD_ROSTER = "guild_roster"

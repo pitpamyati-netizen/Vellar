@@ -1164,6 +1164,8 @@ async def _settle_world(
                 experience=experience[index],
                 gold=gold[index],
                 loot=share_loot,
+                city_id=session.city_id,
+                location_slot=session.slot if not session.in_descent else 0,
             )
             character = won.character
             economy_log.record(economy_log.FIGHT, won.gold, character_id=character.id)
@@ -1884,7 +1886,7 @@ async def _work_contracts(
                 amount=1,
                 world_seed=settings.world_seed,
                 now=now,
-                rotation_seconds=settings.shop_rotation_seconds,
+                rotation_seconds=settings.guild_contract_seconds,
             )
             if closed is None:
                 continue
@@ -1924,7 +1926,12 @@ async def _score_war(
         mine = await guild_of(one.character_id)
         if mine is None:
             continue
-        war = await guilds.war_of(mine.id)
+        war = await guilds.timed_war(
+            mine.id,
+            now=now,
+            legacy_seconds=settings.shop_rotation_seconds,
+            duration=settings.guild_war_seconds,
+        )
         if war is None:
             continue
         for other in losers:
@@ -1939,7 +1946,7 @@ async def _score_war(
                 winner_id=one.character_id,
                 loser_id=other.character_id,
                 now=now,
-                rotation_seconds=settings.shop_rotation_seconds,
+                rotation_seconds=settings.guild_limit_seconds,
             )
             payouts[one.character_id].extra.append(
                 f"Война с гильдией «{theirs.name}»: очко вашей гильдии."

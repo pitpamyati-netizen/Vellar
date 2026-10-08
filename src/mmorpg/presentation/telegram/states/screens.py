@@ -80,6 +80,7 @@ class Play(StatesGroup):
     guild_vault = State()
     guild_tiers = State()
     guild_succeed = State()
+    guild_disband = State()
     guild_store = State()
     guild_store_put = State()
     guild_store_amount = State()
@@ -186,6 +187,7 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.GUILD_VAULT: Play.guild_vault,
     ScreenId.GUILD_TIERS: Play.guild_tiers,
     ScreenId.GUILD_SUCCEED: Play.guild_succeed,
+    ScreenId.GUILD_DISBAND: Play.guild_disband,
     ScreenId.GUILD_STORE: Play.guild_store,
     ScreenId.GUILD_STORE_PUT: Play.guild_store_put,
     ScreenId.GUILD_STORE_AMOUNT: Play.guild_store_amount,
@@ -294,6 +296,7 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.GUILD_VAULT: ScreenId.GUILD,
     ScreenId.GUILD_TIERS: ScreenId.GUILD,
     ScreenId.GUILD_SUCCEED: ScreenId.GUILD,
+    ScreenId.GUILD_DISBAND: ScreenId.GUILD,
     ScreenId.GUILD_STORE: ScreenId.GUILD,
     ScreenId.GUILD_STORE_PUT: ScreenId.GUILD_STORE,
     ScreenId.GUILD_STORE_AMOUNT: ScreenId.GUILD_STORE,

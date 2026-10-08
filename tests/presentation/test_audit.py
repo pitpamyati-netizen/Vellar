@@ -17,7 +17,6 @@ from mmorpg.logging import ACTIVITY_FILE, IMPORTANT_FILE, configure_logging
 from mmorpg.presentation.telegram.middlewares.audit import (
     FAILED,
     KEY,
-    MAX_TEXT,
     AuditMiddleware,
     Note,
     note_of,
@@ -77,18 +76,18 @@ async def test_a_pressed_button_is_written_down(journal: Path) -> None:
 
     (line,) = _lines(journal, ACTIVITY_FILE)
     assert "who=42" in line
-    assert "did=Атака" in line
+    assert "did=attack" in line
     assert "result=ok" in line
     assert "ms=" in line
 
 
-async def test_a_long_message_is_cut_short(journal: Path) -> None:
-    """Журнал — не переписка: в него попадает столько, чтобы понять действие."""
+async def test_a_long_message_is_not_copied(journal: Path) -> None:
+    """Журнал называет ввод, но не содержит ни одной его части."""
     await _run(_update("я" * 200), None)
 
     (line,) = _lines(journal, ACTIVITY_FILE)
-    assert "я" * MAX_TEXT in line
-    assert "я" * (MAX_TEXT + 1) not in line
+    assert "did=text_input" in line
+    assert "яя" not in line
 
 
 async def test_a_crash_is_recorded_and_still_raised(journal: Path) -> None:

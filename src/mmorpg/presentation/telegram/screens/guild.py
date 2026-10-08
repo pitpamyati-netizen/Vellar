@@ -7,7 +7,7 @@
 берёт; звания раздаёт основатель.
 
 Сверх этого - три экрана из ADR 0077: **хранилище** (общая сумка со своим
-пределом выемки), **подряд** (три дела на переворот, за которые платят гильдии)
+пределом выемки), **подряд** (три дела на период, за которые платят гильдии)
 и **война** (счёт поединков с враждебной гильдией). Все они рисуются по тому же
 правилу: экран ничего не читает, всё приносит ``handlers/play._guild_view``.
 """
@@ -71,7 +71,7 @@ class GuildView:
     my_items_limit: int | None = 0
     #: Что делают с вещью на экране количества: ``stow`` или ``take``.
     vault_action: str = ""
-    #: Подряд на этот переворот и счёт по каждому делу - строка в строку.
+    #: Подряд на этот период и счёт по каждому делу - строка в строку.
     contracts: tuple[Contract, ...] = ()
     contract_progress: tuple[int, ...] = ()
     #: Война: с кем, с каким счётом, сколько ей осталось и во что она станет.
@@ -83,6 +83,11 @@ class GuildView:
     war_stake: int = 0
     #: Гильдия, которая зовёт эту на войну. Пусто - никто не зовёт.
     war_caller: str = ""
+    disband_token: str = ""
+    contract_left: int = 0
+    limit_left: int = 0
+    war_duration: int = 259200
+    war_call_duration: int = 259200
 
     @property
     def joined(self) -> bool:
@@ -113,6 +118,43 @@ class GuildView:
     @property
     def war_rotations(self) -> int:
         return WAR_ROTATIONS
+
+
+def duration(seconds: int) -> str:
+    minutes = max(1, (max(0, seconds) + 59) // 60)
+    days, minutes = divmod(minutes, 1440)
+    hours, minutes = divmod(minutes, 60)
+    return ", ".join(
+        part
+        for part in (
+            f"дней: {days}" if days else "",
+            f"часов: {hours}" if hours else "",
+            f"минут: {minutes}" if minutes else "",
+        )
+        if part
+    )
+
+
+def disband_screen(view: GuildView, notice: str = "") -> Screen:
+    lines = [*head(f"Роспуск гильдии «{view.name}».", notice)]
+    rows: tuple[tuple[Label, ...], ...] = ()
+    if not view.founder:
+        lines.append("Роспуск подтверждает нынешний основатель.")
+    elif view.at_war:
+        lines.append("До расчёта войны роспуск запрещён. Ставки обеих сторон сохраняются.")
+    else:
+        lines.extend(
+            (
+                f"Вам вернётся казна: {view.vault_gold} золота.",
+                f"Вам перейдут все вещи склада: {sum(one[2] for one in view.stored)} штук.",
+                f"Участники выйдут из гильдии: {len(view.members)}. История закрытых войн "
+                f"и вкладов сохранится.",
+                "Незавершённый подряд не оплачивается. Приглашения и вызовы теряют силу.",
+                "Действие нельзя отменить. Для согласия нажмите «Подтвердить роспуск».",
+            )
+        )
+        rows = ((labels.GUILD_DISBAND_CONFIRM,),)
+    return Screen(id=ScreenId.GUILD_DISBAND, lines=tuple(lines), rows=rows)
 
 
 def tier_gain(tier: GuildTier) -> str:
@@ -322,18 +364,21 @@ def vault_screen(view: GuildView, notice: str = "") -> Screen:
         *head(f"Казна гильдии «{view.name}».", notice),
         f"В казне: {gold(view.vault_gold)}. У вас на руках: {gold(view.my_gold)}.",
         "Класть может каждый в гильдии, и внесённое идёт гильдии в деяния.",
+        "Возврат золота, вынесенного любым участником, не даёт нового вклада. Счёт "
+        "возврата общий для гильдии и сохраняется при смене основателя.",
     ]
     if view.my_limit is None:
         lines.append("Вы основатель: берёте из казны без предела.")
     elif view.my_limit > 0:
         left = max(0, view.my_limit - view.my_taken)
         lines.append(
-            f"Вам положено за переворот: {view.my_limit}. "
+            f"Вам положено за период: {view.my_limit}. "
             f"Уже взято: {view.my_taken}. Осталось: {left}."
         )
     else:
         title = view.my_rank.title if view.my_rank is not None else "новик"
         lines.append(f"{title.capitalize()} из казны не берёт: берут званием выше.")
+    lines.append(f"До обновления расходного предела: {duration(view.limit_left)}.")
     rows: list[tuple[Label, ...]] = [
         tuple(labels.guild_deposit_label(step) for step in VAULT_STEPS)
     ]
@@ -379,12 +424,13 @@ def store_screen(view: GuildView, page: PageState | None = None, notice: str = "
     elif view.my_items_limit > 0:
         left = max(0, view.my_items_limit - view.my_items_taken)
         lead.append(
-            f"Вам положено за переворот: {view.my_items_limit} вещей. "
+            f"Вам положено за период: {view.my_items_limit} вещей. "
             f"Уже взято: {view.my_items_taken}. Осталось: {left}."
         )
     else:
         title = view.my_rank.title if view.my_rank is not None else "новик"
         lead.append(f"{title.capitalize()} из хранилища не берёт: берут званием выше.")
+    lead.append(f"До обновления расходного предела: {duration(view.limit_left)}.")
     rows: list[tuple[Label, ...]] = [(labels.GUILD_STOW,)]
     return paginated_screen(
         screen_id=ScreenId.GUILD_STORE,
@@ -455,15 +501,20 @@ def store_amount_screen(view: GuildView, item_name: str, held: int, notice: str 
 
 
 def contract_screen(view: GuildView, notice: str = "") -> Screen:
-    """Подряд: три дела на переворот, счёт по каждому и что за них гильдии.
+    """Подряд: три дела на период, счёт по каждому и что за них гильдии.
 
     Кнопок тут нет нарочно: подряд закрывается сам, как только счёт дошёл до
     нужного (``Claude.md``, правило 9).
     """
     lines = [*head(f"Подряд гильдии «{view.name}».", notice)]
     lines.append(
-        "Застава просит у гильдии три дела на переворот прилавка. Считается всё, "
-        "что за переворот сделали её люди, и платят за них гильдии - в казну и деяниями."
+        "Застава просит у гильдии три дела на срок подряда. Считается вклад её людей, "
+        "плата поступает гильдии в казну и деяниями."
+    )
+    lines.append(f"До конца нынешнего подряда: {duration(view.contract_left)}.")
+    lines.append(
+        "Золото, ранее вынесенное из казны любым участником, при возврате не считается "
+        "новым вкладом."
     )
     for contract, done in zip(view.contracts, view.contract_progress, strict=False):
         mark = "закрыто" if contract.done(done) else amount(done, contract.target)
@@ -484,7 +535,7 @@ def war_screen(view: GuildView, notice: str = "") -> Screen:
         lines.append(f"«{view.name}» воюет с гильдией «{view.war_foe}».")
         lines.append(f"Счёт: наших очков {view.war_mine}, у них {view.war_theirs}.")
         lines.append(
-            f"Осталось переворотов прилавка: {view.war_left}."
+            f"До конца войны: {duration(view.war_left)}."
             if view.war_left
             else "Срок вышел: война подводится при первом же взгляде на неё."
         )
@@ -494,13 +545,14 @@ def war_screen(view: GuildView, notice: str = "") -> Screen:
         )
         lines.append(
             "Очко берут за выигранный поединок с человеком враждебной гильдии, и за "
-            "одного и того же побеждённого - раз за переворот."
+            "одного и того же побеждённого — раз за период расходных лимитов."
         )
     elif view.war_caller:
         lines.append(f"Гильдия «{view.war_caller}» зовёт вас на войну.")
         lines.append(
             f"Ставка - {gold(view.war_stake)} из казны с каждой стороны. "
-            f"Война идёт {view.war_rotations} переворота прилавка."
+            f"Срок войны: {duration(view.war_duration)}. Срок ответа на вызов: "
+            f"{duration(view.war_call_duration)}."
         )
         if view.founder:
             rows.append((labels.GUILD_WAR_ACCEPT, labels.GUILD_WAR_DECLINE))
@@ -509,7 +561,7 @@ def war_screen(view: GuildView, notice: str = "") -> Screen:
     else:
         lines.append(f"«{view.name}» сейчас ни с кем не воюет.")
         lines.append(
-            "Война - это счёт: несколько переворотов всякий выигранный поединок с "
+            "Война — это счёт: до её срока всякий выигранный поединок с "
             "человеком враждебной гильдии идёт очком своей стороне."
         )
         lines.append(
@@ -530,6 +582,7 @@ def war_declare_screen(view: GuildView, notice: str = "") -> Screen:
         "Напишите имя гильдии, которую вызываете, одним сообщением.",
         f"Ставка - {gold(view.war_stake)} из казны с каждой стороны, и снимут её, "
         "когда та согласится. В казне сейчас " + f"{gold(view.vault_gold)}.",
-        f"Война идёт {view.war_rotations} переворота прилавка, а потом сама подводит итог.",
+        f"Война длится {duration(view.war_duration)}, затем при следующем обращении "
+        "к гильдии подводится итог.",
     ]
     return Screen(id=ScreenId.GUILD_WAR_DECLARE, lines=tuple(lines), rows=())

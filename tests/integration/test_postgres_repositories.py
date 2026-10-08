@@ -1194,8 +1194,12 @@ async def test_the_store_holds_things_and_never_goes_negative(pool, three_fighte
     assert await guilds.stock(made.id) == (("wolf_pelt", 2),)
     assert await guilds.unstow(made.id, "arrows", 1) is False
 
-    await guilds.disband(made.id)
-    assert await guilds.stock(made.id) == (), "распущенная гильдия унесла и своё добро"
+    assert await guilds.disband(made.id) is False
+    assert await guilds.stock(made.id) == (("wolf_pelt", 2),)
+    assert await guilds.by_id(made.id) is not None
+    assert await guilds.unstow(made.id, "wolf_pelt", 2) is True
+    assert await guilds.disband(made.id) is True
+    assert await guilds.stock(made.id) == ()
 
 
 async def test_a_war_is_scored_by_side_and_closed_exactly_once(pool, three_fighters) -> None:

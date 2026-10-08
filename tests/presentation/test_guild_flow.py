@@ -365,7 +365,10 @@ async def test_disbanding_returns_the_vault_and_frees_everyone(
     await mirna.press(labels.GUILD_VAULT.text)
     await mirna.press(labels.guild_deposit_label(1000).text)
 
-    gone = await argus.press(labels.GUILD_DISBAND.text)
+    preview = await argus.press(labels.GUILD_DISBAND.text)
+    assert preview.id is ScreenId.GUILD_DISBAND
+    assert await guilds.of(argus_character.id) is not None
+    gone = await argus.press(labels.GUILD_DISBAND_CONFIRM.text)
     assert "распущена" in gone.text()
     assert await guilds.of(argus_character.id) is None
     assert await guilds.of(mirna_character.id) is None
@@ -495,7 +498,7 @@ async def test_the_vault_holds_a_rank_to_its_share_per_rotation(
 
     vault = await mirna.press(labels.GUILD_VAULT.text)
     assert labels.guild_withdraw_label(250).text in buttons(vault)
-    assert f"Вам положено за переворот: {limit}." in vault.text()
+    assert f"Вам положено за период: {limit}." in vault.text()
 
     await mirna.press(labels.guild_withdraw_label(250).text)
     await mirna.press(labels.guild_withdraw_label(250).text)
@@ -768,7 +771,12 @@ async def test_a_war_whose_time_ran_out_is_settled_by_whoever_looks(
     theirs = await guilds.of(mirna_character.id)
     assert ours is not None and theirs is not None
     war = await guilds.open_war(
-        challenger_id=ours.id, defender_id=theirs.id, stake=300, started=0, ends=0
+        challenger_id=ours.id,
+        defender_id=theirs.id,
+        stake=300,
+        started=0,
+        ends=1,
+        clock_seconds=True,
     )
     await guilds.score_war(
         war,

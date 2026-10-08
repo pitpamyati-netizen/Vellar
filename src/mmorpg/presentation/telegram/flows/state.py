@@ -281,6 +281,8 @@ class PlayState:
     searching: bool = False
     #: Вещь, карточку которой открыли из сумки или с прилавка.
     item_id: str = ""
+    shop_price: int | None = None
+    guild_confirmation: str = ""
     # Скоропортящееся: очищается в начале каждого шага, читается хендлером.
     pending: PendingWrite = field(default_factory=PendingWrite)
     fight: str = ""
@@ -357,6 +359,8 @@ class PlayState:
                 "mastery": self.mastery_code,
                 "subclass": self.subclass_id,
                 "item": self.item_id,
+                "shop_price": self.shop_price,
+                "guild_confirmation": self.guild_confirmation,
                 "transfer": [self.transfer_scope, self.transfer_to, self.transfer_item],
                 "vault": [self.vault_action, self.vault_item],
                 "searching": self.searching,
@@ -460,6 +464,8 @@ class PlayState:
             mastery_code=str(data.get("mastery", "")),
             subclass_id=str(data.get("subclass", "")),
             item_id=data.get("item", ""),
+            shop_price=data.get("shop_price"),
+            guild_confirmation=str(data.get("guild_confirmation", "")),
             searching=bool(data.get("searching", False)),
             craft_id=str(craft_id),
             keeper_kind=str(keeper[0]),

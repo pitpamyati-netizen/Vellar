@@ -5,7 +5,7 @@
 и приходит. Поэтому здесь пишется одна короткая строка на каждое обновление,
 которое игра действительно обслужила::
 
-    action who=4242 chat=private did=Атака result=ok ms=14
+    action who=4242 chat=private did=attack result=ok ms=14
 
 ``result`` - исход, каким его видит игра: ``ok``, ``failed`` (упало и игрок
 получил извинение), ``duplicate`` (Telegram прислал то же дважды), ``banned``
@@ -16,8 +16,8 @@
 обновления, и каждый, кто обрывает путь до хендлера, отмечается в ней сам.
 
 В личке пишется каждое обновление, в группе - только падение и закрытая дверь:
-молчание бота там норма, а разговор игроков игру не касается. Текст обрезается
-до :data:`MAX_TEXT` символов.
+молчание бота там норма, а разговор игроков игру не касается. Записывается
+только заранее известное имя действия. Личный текст и аргументы не копируются.
 """
 
 from __future__ import annotations
@@ -33,14 +33,19 @@ from aiogram.types import Message, TelegramObject, Update
 
 from mmorpg.logging import KEPT_RESULTS, get_logger
 from mmorpg.metrics import Stopwatch
+from mmorpg.presentation.telegram.keyboards import labels
+from mmorpg.presentation.telegram.routing import Intent, parse_command
 
 logger = get_logger(__name__)
 
 #: Под каким именем блокнот лежит в данных обновления.
 KEY = "audit"
 
-#: Сколько символов нажатия попадает в журнал.
-MAX_TEXT = 40
+_SAFE_BUTTONS = tuple(
+    (name.lower(), value)
+    for name, value in vars(labels).items()
+    if name.isupper() and isinstance(value, labels.Label)
+)
 
 OK = "ok"
 FAILED = "failed"
@@ -106,7 +111,7 @@ class AuditMiddleware(BaseMiddleware):
             # Разговор игроков между собой игру не касается, а неотвеченное в
             # группе — это норма, а не находка: бот там молчит на всё, что к нему
             # не обращено (``Claude.md``, правило 9). Пишется только то, что и так
-            # хранится вечно: падение и закрытая дверь.
+            # хранится в важном журнале: падение и закрытая дверь.
             return
         logger.info(
             "action",
@@ -137,4 +142,10 @@ def _did(message: Message) -> str:
     text = (message.text or "").strip()
     if not text:
         return message.content_type
-    return text[:MAX_TEXT]
+    command = parse_command(text)
+    if command is not None and command.intent is not Intent.UNKNOWN:
+        return command.intent.value
+    for name, button in _SAFE_BUTTONS:
+        if button.matches(text):
+            return name
+    return "text_input"

@@ -99,8 +99,22 @@ def _counts_search(quest: Quest, node: NodeKind) -> bool:
     return not quest.target_kind or node.value == quest.target_kind
 
 
+def _at_place(quest: Quest, city_id: str, location_slot: int) -> bool:
+    """Испытания свободны; городская работа сверяет место самого события."""
+    if quest.is_trial:
+        return True
+    return quest.city_id == city_id and (
+        not quest.location_slot or quest.location_slot == location_slot
+    )
+
+
 def record_kills(
-    content: GameContent, character: Character, enemies: tuple[Enemy, ...]
+    content: GameContent,
+    character: Character,
+    enemies: tuple[Enemy, ...],
+    *,
+    city_id: str = "",
+    location_slot: int = 0,
 ) -> tuple[QuestLog, tuple[QuestStep, ...]]:
     """Засчитать побеждённых противников во все задания, которые их просили."""
     log = character.quests
@@ -109,6 +123,8 @@ def record_kills(
         if not content.has_quest(quest_id):
             continue
         quest = content.quest(quest_id)
+        if not _at_place(quest, city_id, location_slot):
+            continue
         counted = sum(1 for enemy in enemies if _counts_kill(quest, enemy))
         if not counted:
             continue
@@ -141,7 +157,7 @@ def _counts_craft(quest: Quest, item_id: str) -> bool:
 
 
 def record_craft(
-    content: GameContent, character: Character, item_id: str, count: int = 1
+    content: GameContent, character: Character, item_id: str, count: int = 1, *, city_id: str = ""
 ) -> tuple[QuestLog, tuple[QuestStep, ...]]:
     """Засчитать вышедшую из ремесла партию в задания, которые её просили.
 
@@ -156,7 +172,7 @@ def record_craft(
         if not content.has_quest(quest_id):
             continue
         quest = content.quest(quest_id)
-        if not _counts_craft(quest, item_id):
+        if not _at_place(quest, city_id, 0) or not _counts_craft(quest, item_id):
             continue
         room = max(0, quest.target_count - log.progress(quest_id))
         gained = min(max(0, count), room)
@@ -170,7 +186,12 @@ def record_craft(
 
 
 def record_search(
-    content: GameContent, character: Character, node: NodeKind
+    content: GameContent,
+    character: Character,
+    node: NodeKind,
+    *,
+    city_id: str = "",
+    location_slot: int = 0,
 ) -> tuple[QuestLog, tuple[QuestStep, ...]]:
     """Засчитать один узел, отработанный без боя."""
     log = character.quests
@@ -179,7 +200,7 @@ def record_search(
         if not content.has_quest(quest_id):
             continue
         quest = content.quest(quest_id)
-        if not _counts_search(quest, node):
+        if not _at_place(quest, city_id, location_slot) or not _counts_search(quest, node):
             continue
         if log.progress(quest_id) >= quest.target_count:
             continue

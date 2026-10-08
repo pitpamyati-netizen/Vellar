@@ -581,7 +581,11 @@ def test_a_named_opponent_is_counted_and_its_neighbours_are_not(content: GameCon
     )
 
     log, moved = quest_rules.record_kills(
-        world, hunter, (_slain(world, "wild_boar"), _slain(world, "grey_wolf"))
+        world,
+        hunter,
+        (_slain(world, "wild_boar"), _slain(world, "grey_wolf")),
+        city_id="farhold",
+        location_slot=1,
     )
 
     # Волк - тоже зверьё, но заказывали кабана.

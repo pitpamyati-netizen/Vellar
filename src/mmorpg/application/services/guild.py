@@ -11,7 +11,7 @@
   0077): гильдию и её добро нельзя терять между заходами;
 - **зовы** (в гильдию и на войну) - в кэше со сроком, как и зов в отряд: зов,
   который нельзя ни принять, ни отменить, хуже, чем никакого;
-- **счёт переворота** - выемка, подряд и зачтённые очки войны сохраняются
+- **счёт периода** - выемка, подряд и зачтённые очки войны сохраняются
   в PostgreSQL вместе с ценностями (M02.2). Период входит в ключ; прежний
   счёт не удаляется при потере кэша и не переносится в следующий период.
 """
@@ -23,7 +23,7 @@ from dataclasses import replace
 from mmorpg.application.operations import atomic_action
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.ports.repositories import GuildRepository, StateCache
-from mmorpg.domain.procgen.seeds import rotation_index, seconds_left_in_rotation
+from mmorpg.domain.procgen.seeds import seconds_left_in_rotation
 from mmorpg.domain.rules import guild as guild_rules
 from mmorpg.domain.rules import guild_war as war_rules
 from mmorpg.domain.rules.guild import Guild, GuildRank
@@ -64,8 +64,16 @@ class GuildStore:
     async def create(self, name: str, founder_id: int) -> Guild:
         return await self._roster.create(name, founder_id)
 
-    async def disband(self, guild: Guild) -> None:
-        await self._roster.disband(guild.id)
+    @atomic_action
+    async def disband(self, guild: Guild) -> bool:
+        return await self._roster.disband(guild.id)
+
+    @atomic_action
+    async def credit_deposit(self, guild: Guild, amount: int) -> int:
+        return await self._roster.credit_deposit(guild.id, amount)
+
+    async def recycle_withdrawal(self, guild: Guild, amount: int) -> None:
+        await self._roster.recycle_withdrawal(guild.id, amount)
 
     async def save(self, guild: Guild) -> None:
         await self._roster.save(guild)
@@ -80,29 +88,87 @@ class GuildStore:
         """Записать деяния гильдии и вклад того, кто их сделал (ADR 0076)."""
         await self._roster.record_deeds(guild_id, character_id, deeds)
 
+    @atomic_action
+    async def period(
+        self, guild_id: int, purpose: str, *, now: int, seconds: int
+    ) -> tuple[int, int]:
+        """Сохранённая граница; новая настройка действует после прежнего срока."""
+        if seconds <= 0:
+            raise ValueError("Period duration must be positive")
+        prefix = f"guild-period:{guild_id}:{purpose}"
+        end = await self._count(f"{prefix}:end")
+        index = await self._count(f"{prefix}:index")
+        if end and now < end:
+            return index, end
+        if end:
+            skipped = max(0, (now - end) // seconds)
+            index += skipped + 1
+            end += (skipped + 1) * seconds
+        else:
+            end = now + seconds
+        await self._cache.set(f"{prefix}:end", str(end), max(1, end - now))
+        await self._cache.set(f"{prefix}:index", str(index), max(1, end - now))
+        return index, end
+
+    @atomic_action
+    async def current_contracts(
+        self,
+        content: GameContent,
+        place: guild_rules.Standing,
+        *,
+        guild_id: int,
+        world_seed: str,
+        now: int,
+        seconds: int,
+    ) -> tuple[Contract, ...]:
+        index, end = await self.period(guild_id, "contract", now=now, seconds=seconds)
+        seed = await self._count(f"guild-period:{guild_id}:contract:seed") if index == 0 else index
+        deals = contracts(
+            content.guild_tiers, place, world_seed=world_seed, guild_id=guild_id, rotation=seed
+        )
+        saved: list[Contract] = []
+        for deal in deals:
+            prefix = f"guild-contract-snapshot:{guild_id}:{index}:{deal.kind.value}"
+            values: dict[str, int] = {}
+            for name in ("target", "level", "reward_gold", "reward_deeds"):
+                raw = await self._cache.get(f"{prefix}:{name}")
+                if raw is None:
+                    raw = str(getattr(deal, name))
+                    await self._cache.set(f"{prefix}:{name}", raw, max(1, end - now))
+                values[name] = int(raw)
+            saved.append(
+                replace(
+                    deal,
+                    line=deal.line.replace(str(deal.target), str(values["target"])),
+                    target=values["target"],
+                    level=values["level"],
+                    reward_gold=values["reward_gold"],
+                    reward_deeds=values["reward_deeds"],
+                )
+            )
+        return tuple(saved)
+
     async def taken(
         self, guild_id: int, character_id: int, *, now: int, rotation_seconds: int
     ) -> int:
-        """Сколько этот человек уже вынес из казны за нынешний переворот прилавка.
+        """Сколько этот человек уже вынес из казны за нынешний период.
 
-        Счёт постоянный, ключ включает переворот. Потеря кэша его не обнуляет.
+        Счёт постоянный, ключ включает период. Потеря кэша его не обнуляет.
         """
-        rotation = rotation_index(now, rotation_seconds)
-        stored = await self._cache.get(self._taken_key(guild_id, character_id, rotation))
+        rotation, _ = await self.period(guild_id, "limits", now=now, seconds=rotation_seconds)
+        stored = await self._cache.get(f"guild-taken-v2:{guild_id}:{character_id}:{rotation}")
         return int(stored) if stored and stored.isdigit() else 0
 
     async def note_taken(
         self, guild_id: int, character_id: int, amount: int, *, now: int, rotation_seconds: int
     ) -> None:
-        """Прибавить взятое к счёту переворота."""
-        rotation = rotation_index(now, rotation_seconds)
-        key = self._taken_key(guild_id, character_id, rotation)
+        """Прибавить взятое к счёту периода."""
+        rotation, end = await self.period(guild_id, "limits", now=now, seconds=rotation_seconds)
+        key = f"guild-taken-v2:{guild_id}:{character_id}:{rotation}"
         already = await self.taken(
             guild_id, character_id, now=now, rotation_seconds=rotation_seconds
         )
-        await self._cache.set(
-            key, str(already + max(0, amount)), seconds_left_in_rotation(now, rotation_seconds)
-        )
+        await self._cache.set(key, str(already + max(0, amount)), max(1, end - now))
 
     async def call(self, *, guild_id: int, invitee_id: int) -> None:
         await self._cache.set(self._call_key(invitee_id), str(guild_id), self._call_ttl)
@@ -144,7 +210,7 @@ class GuildStore:
         await self._roster.save(guild.without(character_id))
         return guild
 
-    # --- постоянный счёт по переворотам ------------------------------
+    # --- постоянный счёт по периодам ------------------------------
 
     async def _count(self, key: str) -> int:
         stored = await self._cache.get(key)
@@ -190,16 +256,16 @@ class GuildStore:
     async def taken_items(
         self, guild_id: int, character_id: int, *, now: int, rotation_seconds: int
     ) -> int:
-        """Сколько вещей этот человек уже вынес из хранилища за переворот."""
-        rotation = rotation_index(now, rotation_seconds)
-        return await self._count(self._items_key(guild_id, character_id, rotation))
+        """Сколько вещей этот человек уже вынес из хранилища за период."""
+        rotation, _ = await self.period(guild_id, "limits", now=now, seconds=rotation_seconds)
+        return await self._count(f"guild-items-v2:{guild_id}:{character_id}:{rotation}")
 
     async def note_taken_items(
         self, guild_id: int, character_id: int, amount: int, *, now: int, rotation_seconds: int
     ) -> None:
-        rotation = rotation_index(now, rotation_seconds)
+        rotation, _ = await self.period(guild_id, "limits", now=now, seconds=rotation_seconds)
         await self._add(
-            self._items_key(guild_id, character_id, rotation),
+            f"guild-items-v2:{guild_id}:{character_id}:{rotation}",
             amount,
             now=now,
             rotation_seconds=rotation_seconds,
@@ -210,10 +276,10 @@ class GuildStore:
     async def contract_progress(
         self, guild_id: int, *, now: int, rotation_seconds: int
     ) -> dict[ContractKind, int]:
-        """Сколько сделано по каждому делу подряда за нынешний переворот."""
-        rotation = rotation_index(now, rotation_seconds)
+        """Сколько сделано по каждому делу подряда за нынешний период."""
+        rotation, _ = await self.period(guild_id, "contract", now=now, seconds=rotation_seconds)
         return {
-            kind: await self._count(self._contract_key(guild_id, rotation, kind))
+            kind: await self._count(f"guild-contract-v2:{guild_id}:{rotation}:{kind.value}")
             for kind in ContractKind
         }
 
@@ -221,9 +287,9 @@ class GuildStore:
         self, guild_id: int, kind: ContractKind, amount: int, *, now: int, rotation_seconds: int
     ) -> int:
         """Записать сделанное по одному делу подряда. Ответ - сколько стало всего."""
-        rotation = rotation_index(now, rotation_seconds)
+        rotation, _ = await self.period(guild_id, "contract", now=now, seconds=rotation_seconds)
         return await self._add(
-            self._contract_key(guild_id, rotation, kind),
+            f"guild-contract-v2:{guild_id}:{rotation}:{kind.value}",
             amount,
             now=now,
             rotation_seconds=rotation_seconds,
@@ -232,15 +298,15 @@ class GuildStore:
     async def claim_contract(
         self, guild_id: int, kind: ContractKind, *, now: int, rotation_seconds: int
     ) -> bool:
-        """Пометить дело закрытым. Ложь - за него уже заплатили в этот переворот.
+        """Пометить дело закрытым. Ложь - за него уже заплатили в этот период.
 
         Отметка сохраняется в одной операции с выплатой (M02.2).
         """
-        rotation = rotation_index(now, rotation_seconds)
-        key = self._paid_key(guild_id, rotation, kind)
+        rotation, end = await self.period(guild_id, "contract", now=now, seconds=rotation_seconds)
+        key = f"guild-contract-paid-v2:{guild_id}:{rotation}:{kind.value}"
         if await self._cache.get(key):
             return False
-        await self._cache.set(key, "1", seconds_left_in_rotation(now, rotation_seconds))
+        await self._cache.set(key, "1", max(1, end - now))
         return True
 
     async def add_deeds(self, guild_id: int, deeds: int) -> None:
@@ -273,13 +339,13 @@ class GuildStore:
         progress = await self.advance_contract(
             guild_id, kind, amount, now=now, rotation_seconds=rotation_seconds
         )
-        rotation = rotation_index(now, rotation_seconds)
-        deals = contracts(
-            content.guild_tiers,
+        deals = await self.current_contracts(
+            content,
             place,
             world_seed=world_seed,
             guild_id=guild_id,
-            rotation=rotation,
+            now=now,
+            seconds=rotation_seconds,
         )
         deal = next((one for one in deals if one.kind is kind), None)
         if deal is None or not deal.done(progress):
@@ -297,11 +363,23 @@ class GuildStore:
     async def war_of(self, guild_id: int) -> War | None:
         return await self._roster.war_of(guild_id)
 
-    async def call_war(self, *, challenger_id: int, defender_id: int) -> None:
+    @atomic_action
+    async def timed_war(
+        self, guild_id: int, *, now: int, legacy_seconds: int, duration: int
+    ) -> War | None:
+        war = await self.war_of(guild_id)
+        if war is not None and not war.clock_seconds:
+            started = war.started * legacy_seconds
+            end = max(war.ends * legacy_seconds, now + duration)
+            await self._roster.set_war_clock(war.id, started, end)
+            war = replace(war, started=started, ends=end, clock_seconds=True)
+        return war
+
+    async def call_war(
+        self, *, challenger_id: int, defender_id: int, seconds: int = war_rules.CALL_TTL
+    ) -> None:
         """Послать вызов. Висит час и гаснет сам: ставку снимают при согласии."""
-        await self._cache.set(
-            self._war_call_key(defender_id), str(challenger_id), war_rules.CALL_TTL
-        )
+        await self._cache.set(self._war_call_key(defender_id), str(challenger_id), seconds)
 
     async def war_called_by(self, defender_id: int) -> int:
         called = await self._cache.get(self._war_call_key(defender_id))
@@ -312,15 +390,26 @@ class GuildStore:
 
     @atomic_action
     async def open_war(
-        self, *, challenger_id: int, defender_id: int, stake: int, started: int, ends: int
+        self,
+        *,
+        challenger_id: int,
+        defender_id: int,
+        stake: int,
+        started: int,
+        ends: int,
+        clock_seconds: bool = False,
     ) -> War:
-        return await self._roster.open_war(
+        war = await self._roster.open_war(
             challenger_id=challenger_id,
             defender_id=defender_id,
             stake=stake,
             started=started,
             ends=ends,
         )
+        if clock_seconds:
+            await self._roster.set_war_clock(war.id, started, ends)
+            war = replace(war, clock_seconds=True)
+        return war
 
     @atomic_action
     async def score_war(
@@ -335,14 +424,19 @@ class GuildStore:
     ) -> bool:
         """Записать войне очко. Ложь - за этого побеждённого уже платили сегодня.
 
-        Раз за переворот на пару «кто кого»: иначе двое сговорившихся набивают
+        Раз за период на пару «кто кого»: иначе двое сговорившихся набивают
         счёт друг об друга, не выходя из города (``rules/guild_war``).
         """
-        rotation = rotation_index(now, rotation_seconds)
-        key = self._war_hit_key(war.id, winner_id, loser_id, rotation)
+        if war.clock_seconds and now >= war.ends:
+            return False
+        current = await self._roster.war_of(guild_id)
+        if current is None or current.id != war.id:
+            return False
+        rotation, end = await self.period(guild_id, "limits", now=now, seconds=rotation_seconds)
+        key = f"guild-war-hit-v2:{war.id}:{winner_id}:{loser_id}:{rotation}"
         if await self._cache.get(key):
             return False
-        await self._cache.set(key, "1", seconds_left_in_rotation(now, rotation_seconds))
+        await self._cache.set(key, "1", max(1, end - now))
         await self._roster.score_war(war.id, guild_id)
         return True
 
@@ -354,6 +448,10 @@ class GuildStore:
         заглянул на неё после срока. Закрывается она условным движением, поэтому
         двое, заглянувшие разом, не заплатят дважды.
         """
+        current = await self._roster.war_of(war.challenger_id)
+        if current is None or current.id != war.id:
+            return None
+        war = current
         if not war.due(rotation):
             return None
         if not await self._roster.close_war(war.id):

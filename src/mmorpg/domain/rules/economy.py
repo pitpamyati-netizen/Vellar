@@ -177,7 +177,9 @@ def sell_price(
     rarity = content.rarity(item.rarity)
     price = item.price * rarity.price_factor * SELL_FRACTION
     bonus = 1.0 + (modifiers.get("sell_price_percent", 0.0) if modifiers else 0.0) / 100.0
-    return max(1, round(price * bonus))
+    # Даже совмещённые надбавки не позволяют выкупить вещь дешевле выплаты.
+    lowest_purchase = max(1, round(item.price * rarity.price_factor * 0.4))
+    return min(max(1, round(price * bonus)), max(1, lowest_purchase - 1))
 
 
 def trade_tax(price: int, *, percent: int = TRADE_TAX_PERCENT) -> int:

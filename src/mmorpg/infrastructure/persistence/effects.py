@@ -11,6 +11,7 @@ from typing import Any
 from mmorpg.application.operations import atomic_action, current_operation
 from mmorpg.domain.ports.repositories import StateCache
 from mmorpg.infrastructure.cache.memory_operations import memory_cache_action
+from mmorpg.infrastructure.persistence.legacy_effects import bridge_legacy_periods
 from mmorpg.infrastructure.persistence.operations import (
     ECONOMY_LOCK,
     MemoryOperations,
@@ -26,6 +27,13 @@ EFFECT_SCOPES = frozenset(
         "guild-contract",
         "guild-contract-paid",
         "guild-war-hit",
+        "guild-period",
+        "guild-contract-snapshot",
+        "guild-taken-v2",
+        "guild-items-v2",
+        "guild-contract-v2",
+        "guild-contract-paid-v2",
+        "guild-war-hit-v2",
     }
 )
 
@@ -130,6 +138,7 @@ class PostgresEffectState:
                                 value,
                             )
                             imported += int(result == "INSERT 0 1")
+                    await bridge_legacy_periods(connection)
             finally:
                 if not connection.is_closed():
                     await connection.execute("SELECT pg_advisory_unlock($1)", ECONOMY_LOCK)

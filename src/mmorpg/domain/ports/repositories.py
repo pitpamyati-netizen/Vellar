@@ -467,7 +467,15 @@ class GuildRepository(Protocol):
         записью гильдии, прочитанной несколькими ``await`` назад.
         """
 
-    async def disband(self, guild_id: int) -> None: ...
+    async def disband(self, guild_id: int) -> bool: ...
+
+    async def credit_deposit(self, guild_id: int, amount: int) -> int:
+        """Часть взноса, которая не возвращает ранее вынесенное золото."""
+        ...
+
+    async def recycle_withdrawal(self, guild_id: int, amount: int) -> None: ...
+
+    async def set_war_clock(self, war_id: int, started: int, ends: int) -> None: ...
 
     async def deposit(self, guild_id: int, amount: int) -> None:
         """Положить в казну. Всегда проходит."""

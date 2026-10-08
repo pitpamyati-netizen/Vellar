@@ -101,4 +101,4 @@ async def _guarded(write: Awaitable[None]) -> None:
     try:
         await write
     except Exception as err:
-        logger.warning("gold_flow_sink_failed", error=str(err))
+        logger.warning("gold_flow_sink_failed", error_type=type(err).__name__)

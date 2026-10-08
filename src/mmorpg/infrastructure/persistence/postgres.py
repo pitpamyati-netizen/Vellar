@@ -1155,14 +1155,16 @@ class PostgresGuildRepository:
 
     async def by_id(self, guild_id: int) -> Guild | None:
         row = await self._pool.fetchrow(
-            "SELECT id, name, founder_id, vault_gold, deeds FROM guilds WHERE id = $1", guild_id
+            "SELECT id, name, founder_id, vault_gold, deeds FROM guilds WHERE id = $1 AND "
+            "NOT disbanded",
+            guild_id,
         )
         return await self._assemble(row) if row is not None else None
 
     async def by_name(self, name: str) -> Guild | None:
         row = await self._pool.fetchrow(
             "SELECT id, name, founder_id, vault_gold, deeds FROM guilds"
-            " WHERE lower(name) = lower($1)",
+            " WHERE lower(name) = lower($1) AND NOT disbanded",
             name.strip(),
         )
         return await self._assemble(row) if row is not None else None
@@ -1170,7 +1172,8 @@ class PostgresGuildRepository:
     async def of(self, character_id: int) -> Guild | None:
         row = await self._pool.fetchrow(
             "SELECT g.id, g.name, g.founder_id, g.vault_gold, g.deeds FROM guilds g"
-            " JOIN guild_members m ON m.guild_id = g.id WHERE m.character_id = $1",
+            " JOIN guild_members m ON m.guild_id = g.id WHERE m.character_id = $1 AND NOT "
+            "g.disbanded",
             character_id,
         )
         return await self._assemble(row) if row is not None else None
@@ -1199,12 +1202,15 @@ class PostgresGuildRepository:
         async with self._pool.acquire() as connection, connection.transaction():
             # Основателя пишут здесь же: гильдию передают другому, и передача -
             # это тот же состав, только с новым ответственным (ADR 0076).
-            await connection.execute(
-                "UPDATE guilds SET name = $2, founder_id = $3 WHERE id = $1",
+            saved = await connection.fetchval(
+                "UPDATE guilds SET name = $2, founder_id = $3 WHERE id = $1 AND NOT "
+                "disbanded RETURNING id",
                 guild.id,
                 guild.name.strip(),
                 guild.founder_id,
             )
+            if saved is None:
+                raise ValueError("Guild is no longer active")
             ids = [one.character_id for one in guild.members]
             # Индекс по character_id держит «одна гильдия на человека»: выметаем
             # новичков из любой другой гильдии, прежде чем записать эту.
@@ -1229,19 +1235,65 @@ class PostgresGuildRepository:
                 [(guild.id, one.character_id, int(one.rank)) for one in guild.members],
             )
 
-    async def disband(self, guild_id: int) -> None:
-        await self._pool.execute("DELETE FROM guilds WHERE id = $1", guild_id)
+    async def disband(self, guild_id: int) -> bool:
+        async with self._pool.acquire() as connection, connection.transaction():
+            closed = await connection.fetchval(
+                "UPDATE guilds SET disbanded = TRUE, archived_members = "
+                "COALESCE((SELECT jsonb_agg(to_jsonb(m)) FROM guild_members m WHERE "
+                "m.guild_id = $1), '[]') "
+                "WHERE id = $1 AND NOT disbanded AND vault_gold = 0 "
+                "AND NOT EXISTS (SELECT 1 FROM guild_items WHERE guild_id = $1 AND quantity > 0) "
+                "AND NOT EXISTS (SELECT 1 FROM guild_wars WHERE NOT over AND "
+                "(challenger_id = $1 OR defender_id = $1)) RETURNING id",
+                guild_id,
+            )
+            if closed is None:
+                return False
+            await connection.execute("DELETE FROM guild_members WHERE guild_id = $1", guild_id)
+            return True
+
+    async def credit_deposit(self, guild_id: int, amount: int) -> int:
+        row = await self._pool.fetchrow(
+            "SELECT recycled_gold FROM guilds WHERE id = $1 AND NOT disbanded FOR UPDATE", guild_id
+        )
+        if row is None or amount <= 0:
+            return 0
+        recycled = min(amount, row["recycled_gold"])
+        await self._pool.execute(
+            "UPDATE guilds SET recycled_gold = recycled_gold - $2 WHERE id = $1", guild_id, recycled
+        )
+        return int(amount - recycled)
+
+    async def recycle_withdrawal(self, guild_id: int, amount: int) -> None:
+        if amount > 0:
+            await self._pool.execute(
+                "UPDATE guilds SET recycled_gold = recycled_gold + $2 WHERE id = $1 AND "
+                "NOT disbanded",
+                guild_id,
+                amount,
+            )
+
+    async def set_war_clock(self, war_id: int, started: int, ends: int) -> None:
+        await self._pool.execute(
+            "UPDATE guild_wars SET started = $2, ends = $3, clock_seconds = TRUE WHERE id "
+            "= $1 AND NOT clock_seconds",
+            war_id,
+            started,
+            ends,
+        )
 
     async def deposit(self, guild_id: int, amount: int) -> None:
         if amount > 0:
             await self._pool.execute(
-                "UPDATE guilds SET vault_gold = vault_gold + $2 WHERE id = $1", guild_id, amount
+                "UPDATE guilds SET vault_gold = vault_gold + $2 WHERE id = $1 AND NOT disbanded",
+                guild_id,
+                amount,
             )
 
     async def withdraw(self, guild_id: int, amount: int) -> bool:
         updated = await self._pool.fetchval(
             "UPDATE guilds SET vault_gold = vault_gold - $2"
-            " WHERE id = $1 AND vault_gold >= $2 RETURNING vault_gold",
+            " WHERE id = $1 AND NOT disbanded AND $2 > 0 AND vault_gold >= $2 RETURNING vault_gold",
             guild_id,
             amount,
         )
@@ -1335,6 +1387,7 @@ class PostgresGuildRepository:
             challenger_score=row["challenger_score"],
             defender_score=row["defender_score"],
             over=row["over"],
+            clock_seconds=row["clock_seconds"],
         )
 
     async def war_of(self, guild_id: int) -> War | None:

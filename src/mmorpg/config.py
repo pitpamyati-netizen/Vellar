@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     log_retention_days: int = Field(default=7, ge=1)
     # И сколько держится важная половина - отказы, предупреждения, каждое движение
     # золота, каждый закрытый аккаунт. ``0`` значит «не удалять никогда».
-    log_important_retention_days: int = Field(default=0, ge=0)
+    log_important_retention_days: int = Field(default=90, ge=0)
 
     bot_token: SecretStr = SecretStr("")
 
@@ -106,6 +106,10 @@ class Settings(BaseSettings):
     # вычистят, а сбор сырья держится прочности инструмента (ADR 0056). Со сроком
     # осталась одна вещь - прилавок в лавке.
     shop_rotation_seconds: int = Field(default=1_800, gt=0)
+    guild_war_seconds: int = Field(default=259_200, gt=0)
+    guild_contract_seconds: int = Field(default=604_800, gt=0)
+    guild_limit_seconds: int = Field(default=86_400, gt=0)
+    guild_war_call_seconds: int = Field(default=259_200, gt=0)
 
     postgres_dsn: str = "postgresql://vellar:vellar@localhost:5432/vellar"
     postgres_pool_min: int = Field(default=5, ge=1)

@@ -63,7 +63,8 @@ def test_a_failure_is_written_down_twice(tmp_path: Path) -> None:
     for name in (ACTIVITY_FILE, IMPORTANT_FILE):
         written = _written(tmp_path, name)
         assert "handler_failed" in written
-        assert "RuntimeError: boom" in written
+        assert "RuntimeError" in written
+        assert "boom" not in written
 
 
 def test_an_action_that_failed_is_kept(tmp_path: Path) -> None:

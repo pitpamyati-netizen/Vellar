@@ -13,7 +13,7 @@
 - ``important.log`` - половина, которая обязана эту уборку пережить:
   предупреждения, отказы и трассировки, каждое движение золота, каждый закрытый
   аккаунт, каждый старт и каждая остановка. Держится
-  ``LOG_IMPORTANT_RETENTION_DAYS`` дней, а ``0`` (значение по умолчанию) -
+  ``LOG_IMPORTANT_RETENTION_DAYS`` дней, а явный ``0`` -
   вовсе не удаляется.
 
 В этом делении весь смысл автоочистки: важность решается один раз, здесь, а
@@ -28,9 +28,11 @@ import sys
 import time
 from collections.abc import Mapping
 from pathlib import Path
+from traceback import extract_tb
 from types import MappingProxyType
 
 import structlog
+from structlog.typing import EventDict
 
 from mmorpg.config import AppEnv, Settings
 
@@ -70,6 +72,20 @@ SECONDS_IN_DAY = 86_400
 QUIET_LOGGERS: Mapping[str, int] = MappingProxyType({"aiogram.event": logging.WARNING})
 
 
+def private_safe_exceptions(logger: object, method: str, event: EventDict) -> EventDict:
+    """Текст исключения и его аргументы могут содержать частный ввод."""
+    info = event.pop("exc_info", None)
+    if info is True:
+        info = sys.exc_info()
+    if isinstance(info, tuple) and len(info) == 3 and isinstance(info[1], BaseException):
+        error = info[1]
+        event["error_type"] = type(error).__name__
+        event["frames"] = [
+            f"{frame.name}:{frame.lineno}" for frame in extract_tb(error.__traceback__)
+        ]
+    return event
+
+
 def configure_logging(settings: Settings) -> None:
     """Настроить structlog, мост к стандартному журналу и файлы."""
     level = getattr(logging, settings.log_level)
@@ -77,6 +93,7 @@ def configure_logging(settings: Settings) -> None:
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
+        private_safe_exceptions,
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
     ]
@@ -219,7 +236,9 @@ def _prepare(directory: Path | None) -> Path | None:
     try:
         directory.mkdir(parents=True, exist_ok=True)
     except OSError as error:
-        get_logger(__name__).warning("log_files_unavailable", path=str(directory), error=str(error))
+        get_logger(__name__).warning(
+            "log_files_unavailable", path=str(directory), error_type=type(error).__name__
+        )
         return None
     return directory
 

@@ -449,7 +449,7 @@ def withdraw_refusal(
     limit = withdraw_limit(rank, level)
     if limit is not None and taken + amount > limit:
         return (
-            f"За переворот {rank.title} берёт из казны не больше {limit} золота. "
+            f"За расходный период {rank.title} берёт из казны не больше {limit} золота. "
             f"Осталось: {max(0, limit - taken)}."
         )
     return ""
@@ -529,7 +529,7 @@ def take_refusal(*, guild: Guild, actor_id: int, amount: int, stored: int, taken
         return f"{rank.title.capitalize()} из хранилища не берёт: берут званием выше."
     if limit is not None and taken + amount > limit:
         return (
-            f"За переворот {rank.title} выносит из хранилища не больше {limit} вещей. "
+            f"За расходный период {rank.title} выносит из хранилища не больше {limit} вещей. "
             f"Осталось: {max(0, limit - taken)}."
         )
     return ""

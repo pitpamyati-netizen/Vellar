@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from traceback import extract_tb
 from typing import Any
 
 from aiogram import BaseMiddleware
@@ -44,7 +45,14 @@ class ErrorMiddleware(BaseMiddleware):
         try:
             return await handler(event, data)
         except Exception as error:
-            logger.exception("handler_failed", event_type=type(event).__name__)
+            logger.error(
+                "handler_failed",
+                event_type=type(event).__name__,
+                error_type=type(error).__name__,
+                frames=[
+                    f"{frame.name}:{frame.lineno}" for frame in extract_tb(error.__traceback__)
+                ],
+            )
             if self._metrics is not None:
                 self._metrics.failed()
             note = note_of(data)

@@ -16,7 +16,7 @@ from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import guild as guild_rules
 from mmorpg.domain.rules import quests as quest_rules
 from mmorpg.domain.rules.guild import GuildRank
-from mmorpg.domain.rules.guild_contract import ContractKind, contracts
+from mmorpg.domain.rules.guild_contract import ContractKind
 from mmorpg.infrastructure.cache.redis_cache import RedisStateCache
 from mmorpg.infrastructure.persistence.effects import EFFECT_SCOPES, PostgresEffectState
 from mmorpg.infrastructure.persistence.postgres import PostgresGuildRepository
@@ -104,12 +104,13 @@ async def test_contract_count_and_payment_survive_restart_and_concurrent_complet
     place = guild_rules.standing(content, e.guild)
     deal = next(
         one
-        for one in contracts(
-            content.guild_tiers,
+        for one in await e.guilds.current_contracts(
+            content,
             place,
             world_seed="test",
             guild_id=e.guild.id,
-            rotation=NOW // ROTATION,
+            now=NOW,
+            seconds=ROTATION,
         )
         if one.kind is ContractKind.CULL
     )
@@ -257,8 +258,10 @@ async def test_contract_payout_failure_rolls_back_count_and_paid_mark(
 ):
     e = effects
     place = guild_rules.standing(content, e.guild)
-    deal = contracts(
-        content.guild_tiers, place, world_seed="test", guild_id=e.guild.id, rotation=NOW // ROTATION
+    deal = (
+        await e.guilds.current_contracts(
+            content, place, world_seed="test", guild_id=e.guild.id, now=NOW, seconds=ROTATION
+        )
     )[0]
     original = e.guilds._roster.add_deeds
 
@@ -283,7 +286,7 @@ async def test_contract_payout_failure_rolls_back_count_and_paid_mark(
     assert (await e.guilds.contract_progress(e.guild.id, now=NOW, rotation_seconds=ROTATION))[
         deal.kind
     ] == 0
-    assert await e.cache.get(e.guilds._paid_key(e.guild.id, NOW // ROTATION, deal.kind)) is None
+    assert await e.cache.get(f"guild-contract-paid-v2:{e.guild.id}:0:{deal.kind.value}") is None
     monkeypatch.setattr(e.guilds._roster, "add_deeds", original)
     assert await e.guilds.work_on_contract(content, **options) is not None
 

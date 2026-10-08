@@ -461,6 +461,8 @@ class InMemoryGuildRepository:
         self._stock: dict[int, dict[str, int]] = {}
         self._wars: dict[int, War] = {}
         self._next_war_id = 1
+        self._archives: dict[int, Guild] = {}
+        self._recycled: dict[int, int] = {}
 
     async def by_id(self, guild_id: int) -> Guild | None:
         return self._guilds.get(guild_id)
@@ -490,6 +492,8 @@ class InMemoryGuildRepository:
         return guild
 
     async def save(self, guild: Guild) -> None:
+        if guild.id in self._archives:
+            raise ValueError("Guild is no longer active")
         stored = self._guilds.get(guild.id)
         vault = stored.vault_gold if stored is not None else guild.vault_gold
         # Казна и деяния двигаются своими движениями, а не записью состава:
@@ -513,12 +517,31 @@ class InMemoryGuildRepository:
                 self._guilds[other_id] = replace(other, members=kept)
         self._guilds[guild.id] = replace(guild, vault_gold=vault, deeds=deeds)
 
-    async def disband(self, guild_id: int) -> None:
-        self._guilds.pop(guild_id, None)
-        self._stock.pop(guild_id, None)
-        for war_id, war in list(self._wars.items()):
-            if war.has(guild_id):
-                del self._wars[war_id]
+    async def disband(self, guild_id: int) -> bool:
+        guild = self._guilds.get(guild_id)
+        if (
+            guild is None
+            or guild.vault_gold
+            or await self.stock(guild_id)
+            or await self.war_of(guild_id)
+        ):
+            return False
+        self._archives[guild_id] = guild
+        del self._guilds[guild_id]
+        return True
+
+    async def credit_deposit(self, guild_id: int, amount: int) -> int:
+        recycled = min(max(0, amount), self._recycled.get(guild_id, 0))
+        self._recycled[guild_id] = self._recycled.get(guild_id, 0) - recycled
+        return max(0, amount) - recycled
+
+    async def recycle_withdrawal(self, guild_id: int, amount: int) -> None:
+        self._recycled[guild_id] = self._recycled.get(guild_id, 0) + max(0, amount)
+
+    async def set_war_clock(self, war_id: int, started: int, ends: int) -> None:
+        war = self._wars[war_id]
+        if not war.clock_seconds:
+            self._wars[war_id] = replace(war, started=started, ends=ends, clock_seconds=True)
 
     async def deposit(self, guild_id: int, amount: int) -> None:
         guild = self._guilds.get(guild_id)

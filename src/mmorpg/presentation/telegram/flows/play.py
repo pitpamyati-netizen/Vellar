@@ -545,6 +545,8 @@ def _render(
             return party_screens.invite_screen(party or PartyView(), state.notice)
         case ScreenId.GUILD:
             return guild_screens.guild_screen(guild or GuildView(), state.notice)
+        case ScreenId.GUILD_DISBAND:
+            return guild_screens.disband_screen(guild or GuildView(), state.notice)
         case ScreenId.GUILD_FOUND:
             return guild_screens.found_screen(guild or GuildView(), state.notice)
         case ScreenId.GUILD_INVITE:
@@ -626,7 +628,11 @@ def _render(
                 character,
                 content.item(state.item_id),
                 quantity=_owned_count(shelf, state.item_id),
-                sale=economy.sell_price(content, content.item(state.item_id)),
+                sale=economy.sell_price(
+                    content,
+                    content.item(state.item_id),
+                    modifiers=mods.collect_modifiers(content, character),
+                ),
                 notice=state.notice,
             )
         # Вещи с таким ключом больше нет: правка смотрителя или новая выкатка.
@@ -635,13 +641,17 @@ def _render(
             return shop_screens.inventory_screen(
                 content, shelf.owned, state.list_page, gold=shelf.gold, notice=state.notice
             )
-        case ScreenId.SHOP_ITEM if content.has_item(state.item_id):
+        case ScreenId.SHOP_ITEM if (
+            content.has_item(state.item_id)
+            and any(one.id == state.item_id for one in shelf.stock)
+            and state.item_id in shelf.prices
+        ):
             item = content.item(state.item_id)
             return item_screens.shop_item_screen(
                 content,
                 character,
                 item,
-                price=shelf.prices.get(item.id, item.price),
+                price=shelf.prices[item.id],
                 gold=shelf.gold,
                 notice=state.notice,
             )
@@ -659,7 +669,7 @@ def _render(
             return shop_screens.sell_screen(
                 content,
                 shelf.owned,
-                _sale_prices(content, shelf.owned),
+                _sale_prices(content, shelf.owned, character),
                 state.list_page,
                 gold=shelf.gold,
                 city_name=city.name,
@@ -964,8 +974,14 @@ def _transfer_recipients(
     return tuple(name for name in names if name != character.name)
 
 
-def _sale_prices(content: GameContent, owned: tuple[OwnedItem, ...]) -> dict[str, int]:
-    return {held.item_id: economy.sell_price(content, content.item(held.item_id)) for held in owned}
+def _sale_prices(
+    content: GameContent, owned: tuple[OwnedItem, ...], character: Character
+) -> dict[str, int]:
+    bundle = mods.collect_modifiers(content, character)
+    return {
+        held.item_id: economy.sell_price(content, content.item(held.item_id), modifiers=bundle)
+        for held in owned
+    }
 
 
 # --- шаги -------------------------------------------------------------
@@ -1103,7 +1119,7 @@ def advance(
     if not on_panel and (with_party := _party_intent(state, command)) is not None:
         return with_party
 
-    if not on_panel and (with_guild := _guild_intent(state, command)) is not None:
+    if not on_panel and (with_guild := _guild_intent(state, command, guild)) is not None:
         return with_guild
 
     if (with_transfer := _transfer_intent(state, command)) is not None:
@@ -1113,6 +1129,17 @@ def advance(
         return keeper_flow.advance(content, character, state, command, view)
 
     match state.screen:
+        case ScreenId.GUILD_DISBAND:
+            if command.intent is Intent.SELECT and labels.GUILD_DISBAND_CONFIRM.matches(
+                command.argument
+            ):
+                return replace(
+                    go_back(state),
+                    guild_action="disband",
+                    guild_arg=state.guild_confirmation,
+                    guild_confirmation="",
+                )
+            return state.with_notice("Нажмите «Подтвердить роспуск» или «Назад».")
         case ScreenId.LIST_FILTERS:
             return _handle_list_filters(content, character, state, command)
         case ScreenId.SETTINGS:
@@ -1548,7 +1575,9 @@ def _handle_craft(
             return state.with_notice(line)
         # Кто-то в городе может ждать ровно этого: задание на сделанные вещи
         # засчитывается здесь, там, где случается работа.
-        log, steps = quest_rules.record_craft(content, worked, made.item_id, made.count)
+        log, steps = quest_rules.record_craft(
+            content, worked, made.item_id, made.count, city_id=state.city_id or character.city_id
+        )
         worked = replace(worked, quests=log)
         for step in steps:
             line += f" Задание «{step.quest.name}»: {step.progress} из {step.quest.target_count}."
@@ -1715,7 +1744,9 @@ def _handle_shop(
         return state.with_notice("Нажмите товар из списка.")
     # Нажатие открывает карточку, а не кошелёк: сначала игрок узнаёт, что вещь
     # даёт и чем она лучше надетого, и только потом платит (``screens/items.py``).
-    return replace(state, item_id=item.id).at(ScreenId.SHOP_ITEM)
+    return replace(state, item_id=item.id, shop_price=goods.prices.get(item.id)).at(
+        ScreenId.SHOP_ITEM
+    )
 
 
 def _visible_stock(content: GameContent, state: PlayState, goods: Goods) -> tuple[Item, ...]:
@@ -1733,13 +1764,23 @@ def _handle_shop_item(
     goods: Goods,
 ) -> PlayState:
     """Карточка товара: одна кнопка, и она стоит денег."""
-    if not content.has_item(state.item_id):
+    if (
+        not content.has_item(state.item_id)
+        or not any(one.id == state.item_id for one in goods.stock)
+        or state.item_id not in goods.prices
+    ):
         return go_back(state).with_notice("Этого товара больше нет на прилавке.")
     item = content.item(state.item_id)
     if command.intent is not Intent.SELECT or not item_screens.BUY.matches(command.argument):
         return state.with_notice("Нажмите «Купить» или «Назад».")
 
-    price = goods.prices.get(item.id, item.price)
+    price = goods.prices[item.id]
+    if price <= 0:
+        return go_back(state).with_notice("Этот товар сейчас не продаётся.")
+    if state.shop_price != price:
+        return replace(state, shop_price=price).with_notice(
+            f"Нынешняя цена: {price} золота. Проверьте её и нажмите «Купить» ещё раз для согласия."
+        )
     if price > goods.gold:
         return state.with_notice(
             f"{item.name} стоит {price} золота, у вас {goods.gold}. Не хватает."
@@ -1772,7 +1813,7 @@ def _handle_sell(
     item = shop_screens.sold_from_button(content, command.argument, shown)
     if item is None:
         return state.with_notice("Нажмите вещь из списка.")
-    price = economy.sell_price(content, item)
+    price = economy.sell_price(content, item, modifiers=mods.collect_modifiers(content, character))
     write = PendingWrite(character=character.with_gold(price), items=((item.id, -1),)).because(
         economy_log.SHOP
     )
@@ -2401,8 +2442,14 @@ _GUILD_SCREENS: dict[Intent, ScreenId] = {
 _GUILD_LISTS = frozenset({ScreenId.GUILD_ROSTER, ScreenId.GUILD_STORE, ScreenId.GUILD_STORE_PUT})
 
 
-def _guild_intent(state: PlayState, command: Command) -> PlayState | None:
+def _guild_intent(
+    state: PlayState, command: Command, guild: GuildView | None = None
+) -> PlayState | None:
     """Шаг гильдии, откуда бы его ни сделали. ``None`` - это был не он."""
+    if command.intent is Intent.GUILD_DISBAND:
+        return replace(state, guild_confirmation=(guild or GuildView()).disband_token).at(
+            ScreenId.GUILD_DISBAND
+        )
     screen = _GUILD_SCREENS.get(command.intent)
     if screen is not None:
         # Состав и хранилище открываются с первой страницы: список, открытый на
@@ -2782,6 +2829,8 @@ def _resolve_node_action(
         seed,
         tool=tool_rules.tool_of(content, character),
         biomes=biomes,
+        city_id=state.session.city_id,
+        location_slot=state.session.slot,
     )
     write = PendingWrite(character=result.character, node_take=index, node_kind=node.kind.value)
     if result.item_id:

@@ -164,6 +164,8 @@ def resolve_victory(
     experience: int | None = None,
     gold: int | None = None,
     loot: tuple[str, ...] | None = None,
+    city_id: str = "",
+    location_slot: int = 0,
 ) -> Aftermath:
     """Заплатить за выигранный бой: опыт, золото, добыча и счёт по заданиям.
 
@@ -172,7 +174,9 @@ def resolve_victory(
     один и забирает всё.
     """
     fallen = tuple(one.enemy for one in state.combatants if one.enemy is not None and not one.alive)
-    log, steps = quest_rules.record_kills(content, character, fallen)
+    log, steps = quest_rules.record_kills(
+        content, character, fallen, city_id=city_id, location_slot=location_slot
+    )
 
     share_gold = state.gold if gold is None else gold
     share_experience = state.experience if experience is None else experience
@@ -270,6 +274,8 @@ def resolve_search(
     *,
     tool: Item | None = None,
     biomes: frozenset[str] = frozenset(),
+    city_id: str = "",
+    location_slot: int = 0,
 ) -> SearchResult:
     """Отработать узел, в котором нет боя. Определяется сидом.
 
@@ -279,7 +285,9 @@ def resolve_search(
     """
     source = rng(seed)
     stats = derived_stats(content, character)
-    log, steps = quest_rules.record_search(content, character, node.kind)
+    log, steps = quest_rules.record_search(
+        content, character, node.kind, city_id=city_id, location_slot=location_slot
+    )
     working = replace(character, quests=log)
 
     gold = 0

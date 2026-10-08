@@ -58,7 +58,9 @@ class MessageReaper:
             raise
         # Широко нарочно: неудаляемое сообщение - это неопрятно, но не смертельно.
         except Exception as error:
-            logger.debug("group_message_not_deleted", message_id=message_id, error=str(error))
+            logger.debug(
+                "group_message_not_deleted", message_id=message_id, error_type=type(error).__name__
+            )
 
     async def aclose(self) -> None:
         """Отменить всё, что ещё ждёт. Зовётся из стека остановки."""

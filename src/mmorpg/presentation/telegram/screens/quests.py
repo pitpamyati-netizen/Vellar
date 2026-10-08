@@ -43,7 +43,8 @@ OBJECTIVES: dict[ObjectiveKind, str] = {
 #: Как это засчитывается - одна фраза про то, что именно нажимать.
 HOW: dict[ObjectiveKind, str] = {
     ObjectiveKind.KILL: (
-        "Считается каждая выигранная схватка в узле локации: «Вступить в бой» и до победы."
+        "Считается каждый побеждённый противник в указанном месте. В отряде личный зачёт "
+        "получает каждый победитель."
     ),
     ObjectiveKind.ELITE: (
         "Считается победа над эпическим противником. Узел с ним карта локации "
@@ -74,8 +75,10 @@ TARGET_KINDS: dict[str, str] = {
 
 def where_line(content: GameContent, quest: Quest) -> str:
     """Куда идти. Пусто, если задание не привязано к месту."""
+    if quest.is_trial:
+        return "Свободное личное испытание: подходящие действия считаются в любом городе."
     if quest.objective is ObjectiveKind.CRAFT:
-        return "Где: за верстаком, в разделе «Ремёсла». Идти никуда не нужно."
+        return f"Где: за верстаком города {content.city(quest.city_id).name}, в разделе «Ремёсла»."
     if not content.has_city(quest.city_id):
         return ""
     city = content.city(quest.city_id)

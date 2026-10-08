@@ -108,7 +108,9 @@ def a_node(kind: NodeKind, level: int = 5) -> LocationNode:
 
 
 def test_a_won_fight_pays_and_can_raise_a_level(content: GameContent, hero: Character) -> None:
-    result = adventure.resolve_victory(content, hero, a_won_fight(content, hero), 1)
+    result = adventure.resolve_victory(
+        content, hero, a_won_fight(content, hero), 1, city_id="farhold", location_slot=1
+    )
     assert result.gold == 25
     assert result.character.gold == hero.gold + 25
     # Названо то, что записано: у человека расовая прибавка к опыту, и отчёт о
@@ -129,19 +131,25 @@ def test_a_won_fight_reports_the_experience_it_actually_gave(
     экране и 420 в базе - это та же ложь, что и прибавка, которой никто не
     считает (``Claude.md``, правило 7)."""
     plain = replace(hero, race_id="dwarf")
-    result = adventure.resolve_victory(content, plain, a_won_fight(content, plain), 1)
+    result = adventure.resolve_victory(
+        content, plain, a_won_fight(content, plain), 1, city_id="farhold", location_slot=1
+    )
     assert result.experience == 400
     assert result.character.experience == plain.experience + 400
 
 
 def test_wounds_are_carried_out_of_the_fight(content: GameContent, hero: Character) -> None:
-    result = adventure.resolve_victory(content, hero, a_won_fight(content, hero, health=17), 1)
+    result = adventure.resolve_victory(
+        content, hero, a_won_fight(content, hero, health=17), 1, city_id="farhold", location_slot=1
+    )
     assert result.character.health == 17
 
 
 def test_a_won_fight_moves_the_contract_counter(content: GameContent, hero: Character) -> None:
     hunting = replace(hero, quests=QuestLog(taken={"farhold_meadow_teeth": 0}))
-    result = adventure.resolve_victory(content, hunting, a_won_fight(content, hunting), 1)
+    result = adventure.resolve_victory(
+        content, hunting, a_won_fight(content, hunting), 1, city_id="farhold", location_slot=1
+    )
     assert result.character.quests.progress("farhold_meadow_teeth") == 1
     assert result.quest_steps and result.quest_steps[0].progress == 1
 
@@ -171,34 +179,48 @@ def test_losing_with_nothing_on_you_is_still_survivable(
 
 
 def test_a_cache_pays_gold_and_is_deterministic(content: GameContent, hero: Character) -> None:
-    first = adventure.resolve_search(content, hero, a_node(NodeKind.CACHE), b"seed")
-    second = adventure.resolve_search(content, hero, a_node(NodeKind.CACHE), b"seed")
+    first = adventure.resolve_search(
+        content, hero, a_node(NodeKind.CACHE), b"seed", city_id="farhold", location_slot=1
+    )
+    second = adventure.resolve_search(
+        content, hero, a_node(NodeKind.CACHE), b"seed", city_id="farhold", location_slot=1
+    )
     assert first.gold > 0
     assert (first.gold, first.item_id) == (second.gold, second.item_id)
     assert first.character.gold == hero.gold + first.gold
 
 
 def test_a_different_node_gives_a_different_find(content: GameContent, hero: Character) -> None:
-    here = adventure.resolve_search(content, hero, a_node(NodeKind.CACHE), b"one")
-    there = adventure.resolve_search(content, hero, a_node(NodeKind.CACHE), b"two")
+    here = adventure.resolve_search(
+        content, hero, a_node(NodeKind.CACHE), b"one", city_id="farhold", location_slot=1
+    )
+    there = adventure.resolve_search(
+        content, hero, a_node(NodeKind.CACHE), b"two", city_id="farhold", location_slot=1
+    )
     assert (here.gold, here.item_id) != (there.gold, there.item_id)
 
 
 def test_a_shrine_heals_instead_of_paying(content: GameContent, hero: Character) -> None:
     hurt = replace(hero, health=5)
-    result = adventure.resolve_search(content, hurt, a_node(NodeKind.SHRINE), b"shrine")
+    result = adventure.resolve_search(
+        content, hurt, a_node(NodeKind.SHRINE), b"shrine", city_id="farhold", location_slot=1
+    )
     assert result.healed > 0
     assert result.character.health > 5
     assert result.gold == 0
 
 
 def test_a_shrine_at_full_health_heals_nothing(content: GameContent, hero: Character) -> None:
-    result = adventure.resolve_search(content, hero, a_node(NodeKind.SHRINE), b"shrine")
+    result = adventure.resolve_search(
+        content, hero, a_node(NodeKind.SHRINE), b"shrine", city_id="farhold", location_slot=1
+    )
     assert result.healed == 0
 
 
 def test_gathering_brings_materials_and_never_gold(content: GameContent, hero: Character) -> None:
-    result = adventure.resolve_search(content, hero, a_node(NodeKind.GATHER), b"herbs")
+    result = adventure.resolve_search(
+        content, hero, a_node(NodeKind.GATHER), b"herbs", city_id="farhold", location_slot=1
+    )
     assert result.gold == 0
     if result.item_id:
         assert content.item(result.item_id).kind.value == "material"
@@ -206,14 +228,18 @@ def test_gathering_brings_materials_and_never_gold(content: GameContent, hero: C
 
 def test_every_quiet_node_pays_experience(content: GameContent, hero: Character) -> None:
     for kind in (NodeKind.CACHE, NodeKind.GATHER, NodeKind.SHRINE, NodeKind.EVENT):
-        result = adventure.resolve_search(content, hero, a_node(kind), b"node")
+        result = adventure.resolve_search(
+            content, hero, a_node(kind), b"node", city_id="farhold", location_slot=1
+        )
         assert result.experience > 0
         assert result.character.experience > hero.experience
 
 
 def test_searching_moves_a_search_contract(content: GameContent, hero: Character) -> None:
     counting = replace(hero, quests=QuestLog(taken={"farhold_tallies": 0}))
-    result = adventure.resolve_search(content, counting, a_node(NodeKind.CACHE), b"seed")
+    result = adventure.resolve_search(
+        content, counting, a_node(NodeKind.CACHE), b"seed", city_id="farhold", location_slot=1
+    )
     assert result.character.quests.progress("farhold_tallies") == 1
 
 

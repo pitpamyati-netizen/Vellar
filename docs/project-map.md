@@ -15,7 +15,7 @@
 **`src/mmorpg/`** — код.
 - Корень пакета: `main.py` (композиция, polling/webhook), `config.py` (Settings,
   единственный доступ к env), `logging.py` (stdout и два файла: `vellar.log` со
-  сроком и `important.log`, который автоочистка не трогает — что важно, решает
+  сроком и `important.log` со сроком 90 дней по умолчанию — что важно, решает
   `KEPT_EVENTS`), `economy_log.py` (`gold_flow`; та же строка через `use_sink`
   ложится и в таблицу, ADR 0044), `metrics.py` (строка в минуту: обновления,
   отказы, задержки), `monitoring.py` (детектор медленных колбэков), `health.py`
@@ -291,3 +291,10 @@ M01–M02: `application/operations.py`, `persistence/operations.py` и
 **`.githooks/pre-commit`** — гейт на коммите.
 **Настройки помощника.** `AGENTS.md` — рабочие инструкции Codex. Старый хук
 Claude отключён; история прежнего руководства хранится в `docs/history/`.
+
+M02.4–M02.10: `application/services/guild_safety.py` возвращает имущество при
+подтверждённом роспуске; `guild.py` сохраняет границы и условия подряда.
+`persistence/legacy_effects.py` переносит старые ограничения после импорта Redis;
+миграция `0034_guild_safety` добавляет архив, остаток возвращённого золота и сроки войны.
+Проверки — `test_m02_guild_safety.py`, `test_m02_safety.py`, `test_quest_places.py`;
+решение — [ADR 0087](adr/0087-guild-safety-and-current-actions.md).

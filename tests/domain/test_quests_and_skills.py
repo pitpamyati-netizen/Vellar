@@ -94,12 +94,16 @@ def test_kills_only_count_for_the_kind_the_contract_asked_for(
     hunting = replace(
         veteran, quests=QuestLog(taken={"farhold_meadow_teeth": 0}, done=("farhold_tallies",))
     )
-    log, steps = quest_rules.record_kills(content, hunting, (a_beast(), a_beast()))
+    log, steps = quest_rules.record_kills(
+        content, hunting, (a_beast(), a_beast()), city_id="farhold", location_slot=1
+    )
     assert log.progress("farhold_meadow_teeth") == 2
     assert len(steps) == 1
 
     humans = replace(a_beast(), kind=EnemyKind.HUMANOID)
-    log, steps = quest_rules.record_kills(content, hunting, (humans,))
+    log, steps = quest_rules.record_kills(
+        content, hunting, (humans,), city_id="farhold", location_slot=1
+    )
     assert log.progress("farhold_meadow_teeth") == 0
     assert steps == ()
 
@@ -108,16 +112,22 @@ def test_only_elites_count_towards_an_elite_contract(
     content: GameContent, veteran: Character
 ) -> None:
     hunting = replace(veteran, quests=QuestLog(taken={"farhold_ravine_leader": 0}))
-    log, _ = quest_rules.record_kills(content, hunting, (a_beast(),))
+    log, _ = quest_rules.record_kills(
+        content, hunting, (a_beast(),), city_id="farhold", location_slot=3
+    )
     assert log.progress("farhold_ravine_leader") == 0
-    log, _ = quest_rules.record_kills(content, hunting, (a_beast(elite=True),))
+    log, _ = quest_rules.record_kills(
+        content, hunting, (a_beast(elite=True),), city_id="farhold", location_slot=3
+    )
     assert log.progress("farhold_ravine_leader") == 1
 
 
 def test_a_counter_never_runs_past_what_was_asked(content: GameContent, veteran: Character) -> None:
     quest = content.quest("farhold_meadow_teeth")
     nearly = replace(veteran, quests=QuestLog(taken={quest.id: quest.target_count - 1}))
-    log, _ = quest_rules.record_kills(content, nearly, tuple(a_beast() for _ in range(5)))
+    log, _ = quest_rules.record_kills(
+        content, nearly, tuple(a_beast() for _ in range(5)), city_id="farhold", location_slot=1
+    )
     assert log.progress(quest.id) == quest.target_count
 
 
@@ -125,11 +135,15 @@ def test_searching_counts_only_for_search_contracts(
     content: GameContent, newcomer: Character
 ) -> None:
     took = quest_rules.take(content, newcomer, content.quest("farhold_tallies"))
-    log, steps = quest_rules.record_search(content, took, NodeKind.CACHE)
+    log, steps = quest_rules.record_search(
+        content, took, NodeKind.CACHE, city_id="farhold", location_slot=1
+    )
     assert log.progress("farhold_tallies") == 1
     assert steps and steps[0].progress == 1
 
-    log, _ = quest_rules.record_kills(content, took, (a_beast(),))
+    log, _ = quest_rules.record_kills(
+        content, took, (a_beast(),), city_id="farhold", location_slot=1
+    )
     assert log.progress("farhold_tallies") == 0
 
 
@@ -139,12 +153,12 @@ def test_a_made_thing_counts_for_the_contract_that_asked_for_it(
     """Задания и ремёсла когда-то были двумя играми в одном боте."""
     ready = replace(veteran, quests=QuestLog(done=("farhold_tallies",)))
     took = quest_rules.take(content, ready, content.quest("farhold_whetstones"))
-    log, steps = quest_rules.record_craft(content, took, "whetstone", 2)
+    log, steps = quest_rules.record_craft(content, took, "whetstone", 2, city_id="farhold")
     assert log.progress("farhold_whetstones") == 2
     assert steps and steps[0].progress == 2
 
     # Другая вещь из той же мастерской - всё равно другая вещь.
-    other, _ = quest_rules.record_craft(content, took, "medium_head@5#common")
+    other, _ = quest_rules.record_craft(content, took, "medium_head@5#common", city_id="farhold")
     assert other.progress("farhold_whetstones") == 0
 
 
@@ -154,14 +168,18 @@ def test_a_craft_contract_never_counts_past_what_was_asked(
     quest = content.quest("farhold_whetstones")
     ready = replace(veteran, quests=QuestLog(done=("farhold_tallies",)))
     took = quest_rules.take(content, ready, quest)
-    log, _ = quest_rules.record_craft(content, took, "whetstone", quest.target_count + 5)
+    log, _ = quest_rules.record_craft(
+        content, took, "whetstone", quest.target_count + 5, city_id="farhold"
+    )
     assert log.progress(quest.id) == quest.target_count
 
 
 def test_nothing_counts_for_a_contract_that_was_never_taken(
     content: GameContent, newcomer: Character
 ) -> None:
-    log, steps = quest_rules.record_search(content, newcomer, NodeKind.CACHE)
+    log, steps = quest_rules.record_search(
+        content, newcomer, NodeKind.CACHE, city_id="farhold", location_slot=1
+    )
     assert log == newcomer.quests
     assert steps == ()
 
