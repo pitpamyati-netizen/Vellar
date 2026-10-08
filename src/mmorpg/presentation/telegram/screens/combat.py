@@ -498,6 +498,8 @@ def describe_event(event: BattleEvent, viewer_id: int = 0) -> str:
             return f"{event.actor} молчит: умение не сработало."
         case EventKind.CLEANSED:
             return f"Снято отрицательных эффектов: {event.amount}."
+        case EventKind.ITEM_REFUSED:
+            return event.effect_name
         case EventKind.STUNNED if hit_you:
             return f"Вы пропускаете {turns(event.turns)}."
         case EventKind.STUNNED:
@@ -658,9 +660,13 @@ def battle_screen(
         # списке нет - его не выбрать, пока он сам не проявится (ADR 0043).
         rows.extend((target_label(one),) for one in foes)
     rows.append((labels.BATTLE_BREAKDOWN,))
+    rows.append((labels.BATTLE_YIELD,))
     rows.append((labels.BAG, labels.FLEE))
-    if _has_live_foes(state, viewer):
-        rows.append((labels.BATTLE_YIELD,))
+    lines.insert(
+        -1,
+        "Можно отложить бой командой /пауза и вернуться командой /продолжить. "
+        "«Сдаться» завершает участие.",
+    )
 
     return Screen(id=ScreenId.COMBAT, lines=tuple(lines), rows=tuple(rows))
 
@@ -684,6 +690,7 @@ def waiting_screen(
     lines.extend(turn_lines(state, viewer_id))
     lines.append("Ждём его хода. Таймера нет: сколько нужно, столько и ждём.")
     lines.append("«Что там в бою» — перечитать, «Сдаться» — отдать бой и выйти.")
+    lines.append("Для паузы: /пауза. Для возвращения: /продолжить.")
     rows: tuple[tuple[Label, ...], ...] = (
         (labels.BATTLE_REFRESH,),
         (labels.BATTLE_BREAKDOWN,),

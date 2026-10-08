@@ -2631,6 +2631,13 @@ def _handle_location(
     location = build_location(
         content, world_seed, state.session, epoch=node_rules.location_epoch(location_state)
     )
+    epoch = node_rules.location_epoch(location_state)
+    if state.session.epoch >= 0 and state.session.epoch != epoch:
+        return replace(state, session=replace(state.session, node=0, epoch=epoch)).with_notice(
+            "Округа изменилась за время отсутствия. Вы вернулись ко входу; "
+            "прежнее действие не выполнено."
+        )
+    state = replace(state, session=replace(state.session, epoch=epoch))
     node = location.node(state.session.node)
 
     if command.intent is not Intent.SELECT:

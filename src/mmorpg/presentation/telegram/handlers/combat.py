@@ -12,9 +12,12 @@
 
 from __future__ import annotations
 
+import json
+import re
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from uuid import uuid4
 
 from aiogram import Bot, F, Router
 from aiogram.enums import ChatType
@@ -25,6 +28,7 @@ from aiogram.fsm.storage.base import BaseStorage, StorageKey
 from aiogram.types import Message
 
 from mmorpg import economy_log
+from mmorpg.application.battle_snapshots import decode, encode
 from mmorpg.application.operations import atomic_action
 from mmorpg.application.services.battle import (
     BATTLE_TTL,
@@ -105,6 +109,7 @@ REFUSALS = frozenset(
         EventKind.NOT_ENOUGH_RESOURCE,
         EventKind.WRONG_WEAPON,
         EventKind.NO_TARGET,
+        EventKind.ITEM_REFUSED,
     }
 )
 
@@ -206,10 +211,21 @@ async def open_fight(
     if session is None:
         return
 
-    await store.save(session)
+    session = replace(
+        session,
+        play_snapshot=flow.serialise(),
+        roster_snapshot=json.dumps(encode(roster), ensure_ascii=False),
+        epoch=node_rules.location_epoch(location_state or LocationState()),
+        encounter=flow.descent.encounter(character.id) if flow.descent.roamer else "",
+        roamer_stamp=flow.descent.stamp,
+    )
+    session = await store.pin(session, content)
+    session = await store.save(session)
     landing = replace(flow, screen=ScreenId.COMBAT, fight="")
     await state.set_state(Play.combat)
-    await state.update_data({PLAY_KEY: landing.serialise(), STATE_KEY: session.id})
+    await state.update_data(
+        {PLAY_KEY: landing.serialise(), STATE_KEY: session.id, "battle_version": session.version}
+    )
     await _broadcast(
         message,
         content=content,
@@ -315,6 +331,7 @@ async def _join_fight(
                 wave=left.wave,
                 now=now,
                 ttl=ENGAGED_TTL,
+                epoch=node_rules.location_epoch(location_state),
             )
             if one.slot == place
         ),
@@ -329,6 +346,8 @@ async def _join_fight(
                 flow.session.node,
                 wave=left.wave,
                 place=place,
+                epoch=node_rules.location_epoch(location_state),
+                battle_id=held.battle_id,
             )
         await message.answer("Тот бой уже кончился. Эта стая стоит свободно, нападайте сами.")
         return
@@ -336,17 +355,29 @@ async def _join_fight(
         await message.answer("В том бою уже впятером: больше в строй никого не поставить.")
         return
 
+    content = await store.content(session, content)
     joined, _ = join_battle(content, session.state, character)
     session = replace(session, state=joined)
-    await store.save(session)
+    snapshot = (
+        decode(json.loads(session.roster_snapshot))
+        if session.roster_snapshot
+        else await _roster(session, characters)
+    )
+    newcomer = session.combatant_of(character.id)
+    assert newcomer is not None
+    snapshot[newcomer.id] = character
+    session = replace(session, roster_snapshot=json.dumps(encode(snapshot), ensure_ascii=False))
+    session = await store.save(session)
     landing = replace(flow, screen=ScreenId.COMBAT, fight="")
     await state.set_state(Play.combat)
-    await state.update_data({PLAY_KEY: landing.serialise(), STATE_KEY: session.id})
+    await state.update_data(
+        {PLAY_KEY: landing.serialise(), STATE_KEY: session.id, "battle_version": session.version}
+    )
     await _broadcast(
         message,
         content=content,
         session=session,
-        roster=await _roster(session, characters),
+        roster=snapshot,
         actor_id=character.id,
         storage=storage,
         emoji=emoji,
@@ -369,7 +400,7 @@ async def _spawn(
     now: int,
 ) -> tuple[BattleSession | None, dict[int, Character]]:
     """Кто с кем дерётся. Один сборщик на все виды боя."""
-    battle_id = f"{character.id}-{now or int(time.time())}"
+    battle_id = f"{character.id}-{uuid4().hex}"
     side = [(character, True), *((one, True) for one in allies)]
 
     if flow.fight.startswith("pvp:"):
@@ -473,7 +504,11 @@ async def _spawn(
     # Волна и место в ней - обе в семени: вторая стая в узле не первая заново
     # (``domain/rules/nodes.py``).
     seed = node_pack_seed(
-        settings.world_seed, flow.session, index=node.index, wave=left.wave, place=place
+        settings.world_seed,
+        flow.session,
+        index=node.index,
+        wave=left.wave,
+        place=place,
     )
     if locations is not None:
         # Стая занимается до боя и одним движением: двое, нажавших на одного и
@@ -489,6 +524,7 @@ async def _spawn(
             character_id=character.id,
             now=now or int(time.time()),
             ttl=ENGAGED_TTL,
+            epoch=node_rules.location_epoch(location_state),
         )
         if held is not None:
             if await store.load(held.battle_id) is not None:
@@ -499,7 +535,13 @@ async def _spawn(
                 return None, {}
             # Бой, державший стаю, истлел: отметка отпускается, и стая наша.
             await locations.disengage(
-                flow.session.city_id, flow.session.slot, node.index, wave=left.wave, place=place
+                flow.session.city_id,
+                flow.session.slot,
+                node.index,
+                wave=left.wave,
+                place=place,
+                epoch=node_rules.location_epoch(location_state),
+                battle_id=held.battle_id,
             )
             await locations.engage(
                 flow.session.city_id,
@@ -512,6 +554,7 @@ async def _spawn(
                 character_id=character.id,
                 now=now or int(time.time()),
                 ttl=ENGAGED_TTL,
+                epoch=node_rules.location_epoch(location_state),
             )
     # Прозвище-модификатор бывает только у сильного одиночки и хозяина логова, и
     # никогда у обычной стаи (ADR 0042); эпиков в локации мало (ADR 0034). В
@@ -677,8 +720,89 @@ async def fight(
     if viewer is None:  # pragma: no cover - в чужой бой не попадают
         await _leave_to_play(message, state, content, settings, flow, character, locations)
         return
+    if viewer.character_id in session.departed:
+        await _leave_to_play(message, state, content, settings, flow, character, locations)
+        return
 
+    if not session.content_version and not session.settled:
+        session = await store.pin(session, content)
+        owner = await characters.get(session.owner)
+        owner_data = (
+            await (await _remote_state(message.bot, state.storage, owner.user_id)).get_data()
+            if owner is not None and message.bot is not None
+            else data
+        )
+        session = replace(
+            session,
+            roster_snapshot=json.dumps(encode(await _roster(session, characters))),
+            play_snapshot=str(owner_data.get(PLAY_KEY) or flow.serialise()),
+        )
+        if session.roamer:
+            descent = PlayState.deserialise(session.play_snapshot).descent
+            session = replace(
+                session, encounter=descent.encounter(session.owner), roamer_stamp=descent.stamp
+            )
+        session = await store.save(session)
+    content = await store.content(session, content)
+    expected = data.get("battle_version")
+    if match := re.search(r" — ход (\d+)$", message.text):
+        expected = int(match[1])
+        message = message.model_copy(update={"text": message.text[: match.start()]})
+    assert message.text is not None
+    refresh = labels.BATTLE_REFRESH.matches(message.text) or message.text.strip().casefold() in {
+        "/обновить",
+        "/refresh",
+        "/продолжить",
+        "/resume",
+    }
+    if (
+        not session.state.is_over
+        and expected is not None
+        and int(expected) != session.version
+        and not refresh
+    ):
+        await _show(
+            message,
+            state,
+            content,
+            character,
+            session,
+            notice="Бой уже изменился. Показано текущее состояние; прежнее действие не выполнено.",
+        )
+        return
+    if message.text.strip().casefold() in {"/пауза", "/pause", "пауза"}:
+        await _show(
+            message,
+            state,
+            content,
+            character,
+            session,
+            notice="Бой сохранён. Можно вернуться позже командой /продолжить. "
+            "Остальные участники могут сдаться без ожидания вашего хода.",
+        )
+        return
+
+    if session.state.is_over and not session.settled:
+        await _finish(
+            message,
+            state,
+            content,
+            settings,
+            session,
+            await _roster(session, characters),
+            character,
+            flow,
+            characters,
+            inventory,
+            locations,
+            state_cache,
+            guilds,
+        )
+        return
     if session.state.is_over:
+        if refresh:
+            await _show(message, state, content, character, session)
+            return
         await _after_the_fight(
             message,
             state,
@@ -693,7 +817,16 @@ async def fight(
         )
         return
 
-    roster = await _roster(session, characters)
+    roster = (
+        decode(json.loads(session.roster_snapshot))
+        if session.roster_snapshot
+        else await _roster(session, characters)
+    )
+    character = roster.get(viewer.id, character)
+
+    if refresh:
+        await _show(message, state, content, character, session)
+        return
 
     if await state.get_state() == Play.combat_bag.state:
         await _use_from_bag(
@@ -714,7 +847,7 @@ async def fight(
         return
 
     if labels.BAG.matches(message.text) or message.text.strip().casefold() in {"/сумка", "/bag"}:
-        await _open_bag(message, state, content, character, inventory)
+        await _open_bag(message, state, content, character, inventory, session)
         return
 
     if fight_flow.wants_breakdown(content, character, session, viewer.id, message.text):
@@ -812,15 +945,25 @@ async def _store_and_show(
         )
         return
 
-    await store.save(session)
-    await state.set_state(Play.combat)
-    await state.update_data({STATE_KEY: session.id})
     if not _moved(before, session):
-        # Ничего не произошло: отвечаем только тому, кто нажал.
-        await send_screen(
-            message, fight_flow.render(content, character, session, viewer.id, notice)
-        )
+        await _show(message, state, content, character, session, notice=notice)
         return
+    departed = tuple(
+        one
+        for one in session.participants()
+        if one.left and one.character_id not in session.departed and one.live
+    )
+    for one in departed:
+        current = await characters.get(one.character_id)
+        if current is not None:
+            await characters.save(adventure.carry_wounds(content, current, session.state, one.id))
+    if departed:
+        session = replace(
+            session, departed=(*session.departed, *(one.character_id for one in departed))
+        )
+    session = await store.save(session)
+    await state.set_state(Play.combat)
+    await state.update_data({STATE_KEY: session.id, "battle_version": session.version})
     await _broadcast(
         message,
         content=content,
@@ -830,6 +973,8 @@ async def _store_and_show(
         notice=notice,
         storage=_storage_of(state),
     )
+    if any(one.character_id == character.id for one in departed):
+        await send_screen(message, fight_flow.render(content, character, session, viewer.id))
 
 
 # --- рассылка ---------------------------------------------------------
@@ -885,13 +1030,17 @@ async def _broadcast(
             gold=payout.gold,
             loot=payout.loot,
         )
+        screen = _versioned(screen, session)
         if one.character_id == actor_id:
+            if storage is not None and bot is not None:
+                own = await _remote_state(bot, storage, one.user_id)
+                await own.update_data({"battle_version": session.version})
             await send_screen(message, screen, emoji=emoji)
         elif bot is not None:
             if storage is not None:
                 remote = await _remote_state(bot, storage, one.user_id)
                 await remote.set_state(Play.combat)
-                await remote.update_data({STATE_KEY: session.id})
+                await remote.update_data({STATE_KEY: session.id, "battle_version": session.version})
             delivered = await push_screen(bot, one.user_id, screen)
             if not delivered:
                 logger.info("battle_screen_undelivered", telegram_id=one.user_id)
@@ -928,12 +1077,34 @@ async def _show(
     one = session.combatant_of(character.id)
     if one is None:  # pragma: no cover
         return
+    if session.roster_snapshot and not session.state.is_over:
+        character = decode(json.loads(session.roster_snapshot)).get(one.id, character)
     await state.set_state(Play.combat)
-    await state.update_data({STATE_KEY: session.id})
-    await send_screen(
-        message,
-        fight_flow.render(content, character, session, one.id, notice),
-        emoji=emoji,
+    restored = {STATE_KEY: session.id, "battle_version": session.version}
+    if session.play_snapshot and not (await state.get_data()).get(PLAY_KEY):
+        restored[PLAY_KEY] = session.play_snapshot
+    await state.update_data(restored)
+    screen = fight_flow.render(content, character, session, one.id, notice)
+    if session.settled and session.results:
+        result = json.loads(session.results).get(str(one.character_id))
+        if result:
+            screen = Screen(
+                id=ScreenId.COMBAT,
+                lines=tuple(result["lines"]),
+                rows=tuple(tuple(label(text) for text in row) for row in result["rows"]),
+            )
+    await send_screen(message, _versioned(screen, session), emoji=emoji)
+
+
+def _versioned(screen: Screen, session: BattleSession) -> Screen:
+    if session.state.is_over:
+        return screen
+    return replace(
+        screen,
+        rows=tuple(
+            tuple(label(f"{one.text} — ход {session.version}") for one in row)
+            for row in screen.rows
+        ),
     )
 
 
@@ -955,16 +1126,35 @@ async def _finish(
     locations: LocationStateCache,
     state_cache: StateCache,
     guilds: GuildStore,
+    *,
+    fault_hook: Callable[[str], Awaitable[None]] | None = None,
 ) -> None:
     """Заплатить по кончившемуся бою - один раз, за всех, и показать итог."""
     store = BattleStore(state_cache)
+
+    async def checkpoint(name: str) -> None:
+        if fault_hook is not None:
+            await fault_hook(name)
+
     payouts: dict[int, Payout] = {}
+    saved = await store.load(session.id)
+    if saved is not None and saved.settled:
+        await _show(message, state, content, actor, saved)
+        return
+    if saved is not None and saved.version != session.version:
+        raise ValueError("Battle changed before settlement")
+    # Текущий кошелёк нужен для выплаты, а сохранённые боевые умения — для хода.
+    roster = await _roster(session, characters)
+    if session.play_snapshot:
+        flow = PlayState.deserialise(session.play_snapshot)
     updated: dict[int, Character] = {}
     # Гильдии участников боя с миром: их читают один раз, а спрашивают трижды -
     # надбавка, деяния и подряд (ADR 0076, 0077).
     places: Mapping[int, GuildPlace] = {}
 
-    heroes = session.participants()
+    heroes = tuple(
+        one for one in session.participants() if one.character_id not in session.departed
+    )
     winners = tuple(one for one in heroes if session.state.verdict_for(one.id) is Verdict.VICTORY)
     losers = tuple(one for one in heroes if session.state.verdict_for(one.id) is Verdict.DEFEAT)
 
@@ -1035,6 +1225,7 @@ async def _finish(
             continue
         before = roster.get(fighter.id)
         await characters.save(character)
+        await checkpoint("after_character")
         if before is not None:
             grown = progression.growth(content, before.level, character.level)
             if grown is not None:
@@ -1046,12 +1237,44 @@ async def _finish(
         # Бой кончился - стая отпущена: победа её забрала, поражение оставило
         # стоять, и в обоих случаях держать её незачем (ADR 0065).
         await locations.disengage(
-            session.city_id, session.slot, session.node, wave=session.wave, place=session.place
+            session.city_id,
+            session.slot,
+            session.node,
+            wave=session.wave,
+            place=session.place,
+            battle_id=session.id,
+            epoch=session.epoch,
         )
+    await checkpoint("after_world")
 
-    finished = replace(session, settled=True)
-    await store.release(finished)
+    result_screens = {}
+    for one in heroes:
+        if one.id not in roster:
+            continue
+        payout = payouts.get(one.character_id, Payout())
+        screen = fight_flow.render(
+            content,
+            updated.get(one.character_id, roster[one.id]),
+            session,
+            one.id,
+            extra=payout.extra,
+            rows=payout.rows,
+            gold_lost=payout.gold_lost,
+            experience=payout.experience,
+            gold=payout.gold,
+            loot=payout.loot,
+        )
+        result_screens[str(one.character_id)] = {
+            "lines": screen.lines,
+            "rows": [[one.text for one in row] for row in screen.rows],
+        }
+    finished = replace(
+        session, settled=True, results=json.dumps(result_screens, ensure_ascii=False)
+    )
+    finished = await store.release(finished)
+    await checkpoint("after_result")
     await _land_everyone(message, state, content, finished, updated, flow, next_flow)
+    await checkpoint("after_screens")
     await _broadcast(
         message,
         content=content,
@@ -1065,6 +1288,7 @@ async def _finish(
         storage=_storage_of(state),
         payouts=payouts,
     )
+    await checkpoint("after_replies")
 
 
 def _carry_wounds(
@@ -1253,7 +1477,7 @@ async def _settle_world(
 
     for one in session.participants():
         verdict = state.verdict_for(one.id)
-        if verdict in {Verdict.FLED, Verdict.AVOIDED}:
+        if verdict in {Verdict.FLED, Verdict.AVOIDED} and one.character_id in updated:
             updated[one.character_id] = adventure.carry_wounds(
                 content, updated[one.character_id], state, one.id
             )
@@ -1437,16 +1661,21 @@ async def _settle_roamer(
     won = owner is not None and session.state.verdict_for(owner.id) is Verdict.VICTORY
     completed = won and session.in_descent and not next_flow.descent.active
     if completed:
-        await locations.clear_roamer(session.city_id, session.slot)
+        await locations.clear_roamer(session.city_id, session.slot, encounter=session.encounter)
         payouts.setdefault(session.owner, Payout()).extra.append(
             "Ход за спиной осыпался: блуждающего подземелья больше нет."
         )
     elif won:
         await locations.hold_roamer(
-            session.city_id, session.slot, session.owner, ttl=roamer_rules.ROAMER_HOLD_TTL
+            session.city_id,
+            session.slot,
+            session.owner,
+            ttl=roamer_rules.ROAMER_HOLD_TTL,
+            encounter=session.encounter,
+            stamp=session.roamer_stamp,
         )
     else:
-        await locations.release_roamer(session.city_id, session.slot)
+        await locations.release_roamer(session.city_id, session.slot, encounter=session.encounter)
 
 
 async def _after_dungeon_room(
@@ -1543,6 +1772,9 @@ async def _take_node(
     if not location_known(content, visit):
         return ""
     now = int(time.time())
+    current = await locations.state(session.city_id, session.slot, now=now)
+    if node_rules.location_epoch(current) != session.epoch:
+        return "Округа уже изменилась. Победа сохранена; новый узел не затронут."
     node_state = await take_from_node(
         content,
         visit,
@@ -1593,7 +1825,9 @@ async def _land_everyone(
                 else replace(flow, fight="", descent=Descent())
             )
         if message.from_user is not None and one.user_id == message.from_user.id:
-            await state.update_data({PLAY_KEY: landing.serialise()})
+            await state.update_data(
+                {PLAY_KEY: landing.serialise(), "battle_version": session.version}
+            )
             continue
         if bot is None:  # pragma: no cover
             continue
@@ -1601,7 +1835,13 @@ async def _land_everyone(
         await remote.set_state(Play.combat)
         # Номер боя остаётся: экран итога читается по нему, а занятость с
         # персонажа уже снята (``BattleStore.release``).
-        await remote.update_data({PLAY_KEY: landing.serialise(), STATE_KEY: session.id})
+        await remote.update_data(
+            {
+                PLAY_KEY: landing.serialise(),
+                STATE_KEY: session.id,
+                "battle_version": session.version,
+            }
+        )
 
 
 def _back_to_city(flow: PlayState, character: Character) -> PlayState:
@@ -1647,7 +1887,11 @@ async def _after_the_fight(
     text = message.text or ""
     if labels.MAIN_MENU.matches(text) or text.strip().casefold() in {"/меню", "/menu"}:
         if flow.descent.roamer:
-            await locations.release_roamer(flow.descent.city_id, flow.descent.slot)
+            await locations.release_roamer(
+                flow.descent.city_id,
+                flow.descent.slot,
+                encounter=flow.descent.encounter(character.id),
+            )
         home = replace(
             flow,
             screen=ScreenId.MAIN_MENU,
@@ -1731,7 +1975,9 @@ async def _leave_to_play(
     # Брошенный заход отпускает замок: само блуждающее подземелье остаётся для
     # других (ADR 0037).
     if flow.descent.roamer and locations is not None:
-        await locations.release_roamer(flow.descent.city_id, flow.descent.slot)
+        await locations.release_roamer(
+            flow.descent.city_id, flow.descent.slot, encounter=flow.descent.encounter(character.id)
+        )
     # Уйти из боя - это и кончить заход: продолжают его только дверью развилки на
     # экране итога, и другого пути внутрь нет. Незакрытый заход, оставшийся в
     # состоянии, следующий бой - хоть в узле, хоть на арене - собирал бы как
@@ -1758,10 +2004,12 @@ async def _open_bag(
     content: GameContent,
     character: Character,
     inventory: InventoryRepository,
+    session: BattleSession | None = None,
 ) -> None:
     entries = await _consumables(content, character, inventory)
     await state.set_state(Play.combat_bag)
-    await send_screen(message, combat_screens.bag_screen(content, entries))
+    screen = combat_screens.bag_screen(content, entries)
+    await send_screen(message, _versioned(screen, session) if session else screen)
 
 
 async def _consumables(
@@ -1819,10 +2067,6 @@ async def _use_from_bag(
         )
         return
 
-    if not await inventory.remove(character.id, chosen, 1):  # pragma: no cover - только гонка
-        await send_screen(message, combat_screens.bag_screen(content, entries, "Этого уже нет."))
-        return
-
     resolved = act(
         content,
         roster,
@@ -1830,6 +2074,14 @@ async def _use_from_bag(
         BattleAction(kind=ActionKind.ITEM, item_id=chosen),
         session.seed,
     )
+    if any(event.kind is EventKind.ITEM_REFUSED for event in resolved.events):
+        await send_screen(
+            message, combat_screens.bag_screen(content, entries, resolved.events[-1].effect_name)
+        )
+        return
+    if not await inventory.remove(character.id, chosen, 1):
+        await send_screen(message, combat_screens.bag_screen(content, entries, "Этого уже нет."))
+        return
     data = await state.get_data()
     flow = PlayState.deserialise(data[PLAY_KEY]) if data.get(PLAY_KEY) else PlayState()
     await state.set_state(Play.combat)

@@ -193,6 +193,7 @@ class LocationSession:
     city_id: str = ""
     slot: int = 0
     node: int = 0
+    epoch: int = -1
 
     @property
     def active(self) -> bool:
@@ -219,6 +220,11 @@ class Descent:
     level: int = 0
     layer: int = 0
     started_at: int = 0
+    encounter_id: str = ""
+
+    def encounter(self, owner: int) -> str:
+        return f"{owner}:{self.encounter_id or f'{self.started_at}:{self.stamp}'}"
+
     dungeon_id: str = ""
     difficulty: str = "recon"
     room: str = "skirmish"
@@ -338,6 +344,7 @@ class PlayState:
                     self.session.city_id,
                     self.session.slot,
                     self.session.node,
+                    self.session.epoch,
                 ],
                 "descent": [
                     self.descent.city_id,
@@ -351,6 +358,7 @@ class PlayState:
                     self.descent.slot,
                     self.descent.stamp,
                     self.descent.group,
+                    self.descent.encounter_id,
                 ],
                 "pick": self.pick_slot,
                 "dungeon_pick": self.dungeon_pick,
@@ -398,6 +406,7 @@ class PlayState:
         # старого образца называла ещё поколение и маску пройденного.
         session_parts = [*data.get("session", []), "", 0, 0][:3]
         city_id, slot, node = session_parts
+        session_epoch = data.get("session", [])[3] if len(data.get("session", [])) > 3 else -1
         # Хвост читается с запасом: запись старого образца не называла ни
         # подземелье, ни сложность, ни вид комнаты. На месте ``dungeon_id`` там
         # лежал числовой ``tier`` (1/2): ``str(1)`` не совпадёт ни с одним id,
@@ -414,6 +423,7 @@ class PlayState:
         descent_slot = raw_descent[8] if len(raw_descent) > 8 else 0
         descent_stamp = raw_descent[9] if len(raw_descent) > 9 else 0
         descent_group = raw_descent[10] if len(raw_descent) > 10 else False
+        descent_encounter = raw_descent[11] if len(raw_descent) > 11 else ""
         # Раньше здесь лежала пара [вид, слот]: пассивные умения тоже клали в
         # слоты. Сохранённая пара читается как её второй член - номер слота.
         pick_raw = data.get("pick", 0)
@@ -437,7 +447,9 @@ class PlayState:
             world_page=PageState(page=int(data.get("world_page", 1))),
             location_page=PageState(page=int(data.get("location_page", 1))),
             city_id=data.get("city", ""),
-            session=LocationSession(city_id=str(city_id), slot=int(slot), node=int(node)),
+            session=LocationSession(
+                city_id=str(city_id), slot=int(slot), node=int(node), epoch=int(session_epoch)
+            ),
             descent=Descent(
                 city_id=descent_city,
                 level=int(descent_level),
@@ -450,6 +462,7 @@ class PlayState:
                 slot=int(descent_slot),
                 stamp=int(descent_stamp),
                 group=bool(descent_group),
+                encounter_id=str(descent_encounter),
             ),
             list_page=PageState(
                 page=int(list_page),

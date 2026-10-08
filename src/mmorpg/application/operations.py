@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import inspect
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from functools import wraps
@@ -112,10 +112,20 @@ def _repositories(values: list[Any]) -> tuple[object, ...]:
         instances = getattr(repository, "instances", None)
         if instances is not None and all(instances is not previous for previous in found):
             found.append(instances)
+    for repository in found:
+        temporary = getattr(repository, "_temporary", None)
+        if (
+            temporary is not None
+            and hasattr(temporary, "operations")
+            and all(temporary is not previous for previous in found)
+        ):
+            found.append(temporary)
     return tuple(sorted(found, key=lambda one: "CharacterRepository" not in type(one).__name__))
 
 
-def atomic_action[**P, R](function: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+def atomic_action[**P, R](
+    function: Callable[P, Coroutine[Any, Any, R]],
+) -> Callable[P, Coroutine[Any, Any, R]]:
     """Сервис или обработчик исполняется целиком в операции его хранилищ."""
     signature = inspect.signature(function)
     codec: TypeAdapter[R] | None = None

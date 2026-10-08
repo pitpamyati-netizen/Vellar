@@ -61,7 +61,7 @@ class InMemoryLocationStateCache:
         self._holds: dict[str, tuple[int, float]] = {}
         #: Стаи, за которые уже дерутся: место в волне узла - и чей это бой
         #: (ADR 0065).
-        self._fights: dict[str, dict[tuple[int, int, int], tuple[Engagement, int]]] = {}
+        self._fights: dict[str, dict[tuple[int, int, int, int], tuple[Engagement, int]]] = {}
 
     @staticmethod
     def _key(city_id: str, slot: int) -> str:
@@ -146,12 +146,13 @@ class InMemoryLocationStateCache:
         character_id: int,
         now: int,
         ttl: int,
+        epoch: int = 0,
     ) -> Engagement | None:
         held = self._fights.setdefault(self._key(city_id, slot), {})
-        standing = held.get((node, wave, place))
+        standing = held.get((epoch, node, wave, place))
         if standing is not None and standing[1] + ttl > now:
             return standing[0]
-        held[(node, wave, place)] = (
+        held[(epoch, node, wave, place)] = (
             Engagement(
                 node=node,
                 wave=wave,
@@ -159,6 +160,7 @@ class InMemoryLocationStateCache:
                 battle_id=battle_id,
                 name=name,
                 character_id=character_id,
+                epoch=epoch,
             ),
             now,
         )
@@ -166,7 +168,7 @@ class InMemoryLocationStateCache:
 
     @memory_cache_action
     async def engaged_at(
-        self, city_id: str, slot: int, node: int, *, wave: int, now: int, ttl: int
+        self, city_id: str, slot: int, node: int, *, wave: int, now: int, ttl: int, epoch: int = 0
     ) -> tuple[Engagement, ...]:
         held = self._fights.get(self._key(city_id, slot), {})
         for key, (_, seen) in list(held.items()):
@@ -174,16 +176,32 @@ class InMemoryLocationStateCache:
                 del held[key]
         return tuple(
             sorted(
-                (one for one, _ in held.values() if one.node == node and one.wave == wave),
+                (
+                    one
+                    for one, _ in held.values()
+                    if one.node == node and one.wave == wave and one.epoch == epoch
+                ),
                 key=lambda one: one.slot,
             )
         )
 
     @memory_cache_action
-    async def disengage(self, city_id: str, slot: int, node: int, *, wave: int, place: int) -> None:
+    async def disengage(
+        self,
+        city_id: str,
+        slot: int,
+        node: int,
+        *,
+        wave: int,
+        place: int,
+        battle_id: str = "",
+        epoch: int = 0,
+    ) -> None:
         held = self._fights.get(self._key(city_id, slot))
         if held is not None:
-            held.pop((node, wave, place), None)
+            standing = held.get((epoch, node, wave, place))
+            if standing and (not battle_id or standing[0].battle_id == battle_id):
+                held.pop((epoch, node, wave, place), None)
 
     # --- блуждающее подземелье (ADR 0037) ---
 
@@ -219,7 +237,16 @@ class InMemoryLocationStateCache:
         return replace(roamer, holder=0)
 
     @memory_cache_action
-    async def claim_roamer(self, city_id: str, slot: int, character_id: int, *, ttl: int) -> bool:
+    async def claim_roamer(
+        self,
+        city_id: str,
+        slot: int,
+        character_id: int,
+        *,
+        ttl: int,
+        encounter: str = "",
+        stamp: int = 0,
+    ) -> bool:
         key = self._key(city_id, slot)
         held = self._held_by(key)
         if held not in (0, character_id):
@@ -228,17 +255,26 @@ class InMemoryLocationStateCache:
         return True
 
     @memory_cache_action
-    async def hold_roamer(self, city_id: str, slot: int, character_id: int, *, ttl: int) -> None:
+    async def hold_roamer(
+        self,
+        city_id: str,
+        slot: int,
+        character_id: int,
+        *,
+        ttl: int,
+        encounter: str = "",
+        stamp: int = 0,
+    ) -> None:
         key = self._key(city_id, slot)
         if self._held_by(key) in (0, character_id):
             self._holds[key] = (character_id, self._clock() + ttl)
 
     @memory_cache_action
-    async def release_roamer(self, city_id: str, slot: int) -> None:
+    async def release_roamer(self, city_id: str, slot: int, *, encounter: str = "") -> None:
         self._holds.pop(self._key(city_id, slot), None)
 
     @memory_cache_action
-    async def clear_roamer(self, city_id: str, slot: int) -> None:
+    async def clear_roamer(self, city_id: str, slot: int, *, encounter: str = "") -> None:
         key = self._key(city_id, slot)
         self._roamers.pop(key, None)
         self._holds.pop(key, None)

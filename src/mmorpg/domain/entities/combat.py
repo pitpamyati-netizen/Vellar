@@ -125,6 +125,7 @@ class EventKind(StrEnum):
     NEEDS_STEALTH = "needs_stealth"
     EMPTY_SLOT = "empty_slot"
     NO_TARGET = "no_target"
+    ITEM_REFUSED = "item_refused"
     TURN_SKIPPED = "turn_skipped"
     #: Порода взялась за свой приём: заклинатель ударил по всем, знахарь поднял
     #: своего, воин закрылся (``rules/combat``, ADR 0066).

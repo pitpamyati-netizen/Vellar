@@ -224,7 +224,7 @@ async def build_application(settings: Settings) -> Application:
         if not worker.healthy(settings.heartbeat_stale_after):
             raise RuntimeError("Delivery worker stopped progressing")
         pool = cast(Any, dependencies.characters)._pool if settings.uses_postgres else None
-        client = cast(Any, dependencies.locations)._client if settings.uses_redis else None
+        client = pool.raw.economic_cache if pool is not None and settings.uses_redis else None
         await probe_services(pool, client, str(bot.id))
 
     logger.info(
@@ -311,6 +311,14 @@ async def _build_adapters(
     effect_state = PostgresEffectState(pool, state_cache)
     imported = await effect_state.import_legacy()
     state_cache = effect_state
+    from mmorpg.infrastructure.persistence.gameplay import PostgresGameplayState, PostgresStorage
+    from mmorpg.infrastructure.persistence.world import PostgresLocationState
+
+    gameplay = PostgresGameplayState(pool, state_cache)
+    await gameplay.import_legacy(pool.economic_cache)
+    state_cache = gameplay
+    storage = PostgresStorage(pool, storage)
+    locations = PostgresLocationState(pool)
     if imported:
         logger.info("economic_marks_imported", records=imported)
 
@@ -358,17 +366,15 @@ async def _build_adapters(
 async def _build_session_state(
     settings: Settings, stack: AsyncExitStack
 ) -> tuple[BaseStorage, StateCache, LocationStateCache, IdempotencyStore]:
-    """Где лежат экран, бой и карта локации.
+    """Временные адаптеры и перенос старых записей.
 
-    В Redis, когда он есть. Без него (``APP_ENV=solo``) те же четыре вещи живут в
-    процессе: все короткоживущие по замыслу и все написаны так, чтобы теряться
-    безопасно. Но у перезапуска есть цена, и здесь она сказана вслух: начатый бой
-    кончается, и все стоят в главном меню.
+    Сборщик PostgreSQL заменяет экран, бой и карту постоянными адаптерами M03.
+    Только APP_ENV=local оставляет игровые данные в памяти.
     """
     if not settings.uses_redis:
         logger.info(
-            "session_state_in_memory",
-            detail="APP_ENV=solo: the world is on disk, screens and fights are not",
+            "temporary_cache_in_memory",
+            detail="PostgreSQL gameplay and screens are installed by the outer builder",
         )
         return (
             AtomicMemoryStorage(),

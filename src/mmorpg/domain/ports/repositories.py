@@ -599,6 +599,7 @@ class LocationStateCache(Protocol):
         character_id: int,
         now: int,
         ttl: int,
+        epoch: int = 0,
     ) -> Engagement | None:
         """Занять стаю под свой бой. ``None`` - заняли; иначе тот, кто уже дерётся.
 
@@ -607,11 +608,21 @@ class LocationStateCache(Protocol):
         """
 
     async def engaged_at(
-        self, city_id: str, slot: int, node: int, *, wave: int, now: int, ttl: int
+        self, city_id: str, slot: int, node: int, *, wave: int, now: int, ttl: int, epoch: int = 0
     ) -> tuple[Engagement, ...]:
         """За какие стаи этого узла уже дерутся. Чужая волна не считается."""
 
-    async def disengage(self, city_id: str, slot: int, node: int, *, wave: int, place: int) -> None:
+    async def disengage(
+        self,
+        city_id: str,
+        slot: int,
+        node: int,
+        *,
+        wave: int,
+        place: int,
+        battle_id: str = "",
+        epoch: int = 0,
+    ) -> None:
         """Отпустить стаю: бой кончился - её либо забрали, либо она стоит дальше."""
 
     # --- блуждающее подземелье (ADR 0037) ---
@@ -630,16 +641,34 @@ class LocationStateCache(Protocol):
         заведут два разных подземелья.
         """
 
-    async def claim_roamer(self, city_id: str, slot: int, character_id: int, *, ttl: int) -> bool:
+    async def claim_roamer(
+        self,
+        city_id: str,
+        slot: int,
+        character_id: int,
+        *,
+        ttl: int,
+        encounter: str = "",
+        stamp: int = 0,
+    ) -> bool:
         """Взять замок подземелья. ``True`` - взят (или уже за этим же персонажем)."""
 
-    async def hold_roamer(self, city_id: str, slot: int, character_id: int, *, ttl: int) -> None:
+    async def hold_roamer(
+        self,
+        city_id: str,
+        slot: int,
+        character_id: int,
+        *,
+        ttl: int,
+        encounter: str = "",
+        stamp: int = 0,
+    ) -> None:
         """Продлить замок: заход идёт, внутри всё ещё этот персонаж."""
 
-    async def release_roamer(self, city_id: str, slot: int) -> None:
+    async def release_roamer(self, city_id: str, slot: int, *, encounter: str = "") -> None:
         """Снять замок: заход кончился, но само подземелье остаётся."""
 
-    async def clear_roamer(self, city_id: str, slot: int) -> None:
+    async def clear_roamer(self, city_id: str, slot: int, *, encounter: str = "") -> None:
         """Убрать подземелье целиком: его прошли до логова, оно осыпалось."""
 
     async def reset(self, city_id: str, slot: int) -> None:

@@ -8,9 +8,8 @@
 Здесь же живёт занятость: пока персонаж в бою, его нельзя вызвать во второй, и
 проверяется это по той же записи, а не по чужому экрану.
 
-Всё со сроком, как и всё, что игра кладёт в кэш (``Claude.md``, правило 8):
-брошенный бой исчезает сам, и это не потеря - раны в нём остались
-незаписанными, а персонаж цел.
+В режимах с PostgreSQL бой и экран постоянны. Пауза не удаляет ход,
+занятость и награду; явная сдача заканчивает участие (ADR 0090).
 """
 
 from __future__ import annotations
@@ -22,6 +21,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Any
 
+from mmorpg.application.operations import atomic_action
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import (
     BattleEvent,
@@ -85,6 +85,16 @@ class BattleSession:
     roamer: bool = False
     #: Расчёт после боя уже проведён: кто добил, тот и заплатил всем.
     settled: bool = False
+    version: int = 0
+    rules_version: int = 1
+    content_version: str = ""
+    roster_snapshot: str = ""
+    play_snapshot: str = ""
+    epoch: int = 0
+    encounter: str = ""
+    roamer_stamp: int = 0
+    results: str = ""
+    departed: tuple[int, ...] = ()
 
     @property
     def in_descent(self) -> bool:
@@ -104,7 +114,11 @@ class BattleSession:
 
     def live_participants(self) -> tuple[Combatant, ...]:
         """Те, кому придёт сообщение о том, что случилось."""
-        return tuple(one for one in self.participants() if one.live and one.user_id)
+        return tuple(
+            one
+            for one in self.participants()
+            if one.live and one.user_id and one.character_id not in self.departed
+        )
 
     def combatant_of(self, character_id: int) -> Combatant | None:
         for one in self.state.combatants:
@@ -259,13 +273,10 @@ class BattleStore:
         return f"battle-of:{character_id}"
 
     async def load(self, battle_id: str) -> BattleSession | None:
-        """Бой по номеру. ``None`` - его нет, истёк срок или запись не читается.
+        """Бой по номеру. Постоянную нечитаемую запись сохраняем для восстановления.
 
-        Не читается - тоже «нет». Запись переживает выпуск: бой, отложенный в
-        кэш прежним кодом, может не сойтись с нынешним разбором, и тогда падение
-        здесь заперло бы игрока в бою, которого не открыть и не бросить, - до
-        смотрителя (``Claude.md``, правило 8). Вызывающие и так умеют отвечать на
-        ``None``: «боя нет» уводит на живой экран.
+        ``None`` означает отсутствие. Только старый временный адаптер может
+        удалить несовместимую запись; SQL требует совместимого выпуска.
         """
         raw = await self._cache.get(self.key_of(battle_id))
         if not raw:
@@ -274,16 +285,51 @@ class BattleStore:
             return deserialise(raw)
         except KeyError, ValueError, TypeError, json.JSONDecodeError:
             logger.warning("battle_unreadable", battle_id=battle_id)
+            if getattr(self._cache, "durable", False):
+                raise ValueError("Saved battle needs a compatible release") from None
             await self._cache.delete(self.key_of(battle_id))
             return None
 
-    async def save(self, session: BattleSession) -> None:
+    @atomic_action
+    async def save(self, session: BattleSession) -> BattleSession:
+        session = replace(session, version=session.version + 1)
         await self._cache.set(self.key_of(session.id), serialise(session), self._ttl)
         for one in session.participants():
-            if one.character_id:
+            if one.character_id and one.live:
+                if one.character_id in session.departed:
+                    if (
+                        await self._cache.get(self.key_for_character(one.character_id))
+                        == session.id
+                    ):
+                        await self._cache.delete(self.key_for_character(one.character_id))
+                    continue
+                standing = await self._cache.get(self.key_for_character(one.character_id))
+                if standing and standing != session.id and await self.busy(one.character_id):
+                    raise ValueError("Character is already in another battle")
                 await self._cache.set(
                     self.key_for_character(one.character_id), session.id, self._ttl
                 )
+        return session
+
+    async def pin(self, session: BattleSession, content: GameContent) -> BattleSession:
+        from mmorpg.application.battle_snapshots import content_snapshot
+
+        version, raw = content_snapshot(content)
+        if await self._cache.get(f"battle-content:{version}") is None:
+            await self._cache.set(f"battle-content:{version}", raw, 2**31)
+        return replace(session, content_version=version)
+
+    async def content(self, session: BattleSession, current: GameContent) -> GameContent:
+        from mmorpg.application.battle_snapshots import restore_content
+
+        if session.rules_version != 1:
+            raise ValueError("Unsupported battle rules version")
+        if not session.content_version:
+            return current
+        raw = await self._cache.get(f"battle-content:{session.content_version}")
+        if raw is None:
+            raise ValueError("Battle content snapshot is missing")
+        return restore_content(raw)
 
     async def busy(self, character_id: int) -> str | None:
         """Номер боя, в котором этот персонаж сейчас стоит. ``None`` - свободен."""
@@ -291,44 +337,55 @@ class BattleStore:
         if not battle_id:
             return None
         session = await self.load(battle_id)
-        if session is None or session.state.is_over:
+        if session is None or session.settled:
             await self._cache.delete(self.key_for_character(character_id))
             return None
         return battle_id
 
-    async def release(self, session: BattleSession) -> None:
+    @atomic_action
+    async def release(self, session: BattleSession) -> BattleSession:
         """Бой кончен и рассчитан: занятость снята, а запись ещё стоит.
 
         Стоит она затем, что экран итога - настоящий экран: с него жмут «Идти
         глубже» и «Главное меню», и хендлеру нужно прочитать, чем всё кончилось.
-        Убирает её тот, кто с этого экрана уходит (``_leave_to_play``).
+        Постоянная запись результата остаётся для восстановления и повторов.
         """
+        session = replace(session, version=session.version + 1)
         await self._cache.set(self.key_of(session.id), serialise(session), self._ttl)
         for one in session.participants():
-            if one.character_id:
+            if (
+                one.character_id
+                and await self._cache.get(self.key_for_character(one.character_id)) == session.id
+            ):
                 await self._cache.delete(self.key_for_character(one.character_id))
+        return session
 
+    @atomic_action
     async def forget(self, session: BattleSession) -> None:
         """Убрать кончившийся бой и снять занятость со всех его участников."""
         await self._cache.delete(self.key_of(session.id))
         for one in session.participants():
-            if one.character_id:
+            if (
+                one.character_id
+                and await self._cache.get(self.key_for_character(one.character_id)) == session.id
+            ):
                 await self._cache.delete(self.key_for_character(one.character_id))
 
+    @atomic_action
     async def free(self, character_id: int) -> bool:
-        """Смотритель снимает замок застрявшего боя (ADR 0045).
-
-        Убирает только занятость этого персонажа; сама запись боя дотлевает по
-        сроку. ``True`` — замок был и снят.
-        """
+        """Исправить оставшуюся занятость, сохранив живой постоянный бой."""
         battle_id = await self._cache.get(self.key_for_character(character_id))
+        if battle_id and getattr(self._cache, "durable", False):
+            session = await self.load(battle_id)
+            if session is not None and not session.settled:
+                return False
         await self._cache.delete(self.key_for_character(character_id))
         return bool(battle_id)
 
 
 # --- дорога через хранилище -------------------------------------------
 #
-# Бой лежит в общем хранилище со сроком, поэтому он обязан пережить JSON.
+# Бой лежит в общем постоянном хранилище, поэтому он обязан пережить JSON.
 # Хранится только то, что нужно движку; всё производное считается заново.
 
 
@@ -337,6 +394,7 @@ def _effects_to_json(stack: EffectStack) -> list[dict[str, object]]:
         {
             "id": effect.id,
             "name": effect.name,
+            "source": effect.source,
             "modifiers": dict(effect.modifiers),
             "turns": effect.turns_left,
             "good": effect.beneficial,
@@ -355,6 +413,7 @@ def _effects_from_json(raw: list[dict[str, Any]]) -> EffectStack:
             ActiveEffect(
                 id=str(entry["id"]),
                 name=str(entry["name"]),
+                source=str(entry.get("source", "")),
                 modifiers={str(key): float(value) for key, value in entry["modifiers"].items()},
                 turns_left=int(entry["turns"]),
                 beneficial=bool(entry["good"]),
@@ -429,6 +488,9 @@ def _combatant_to_json(one: Combatant) -> dict[str, object]:
         "evade": one.evade_charges,
         "focus": one.focus,
         "left": one.left,
+        "powers": dict(one.powers),
+        "ways": sorted(one.ways),
+        "master_id": one.master_id,
     }
 
 
@@ -459,6 +521,9 @@ def _combatant_from_json(raw: Mapping[str, Any]) -> Combatant:
         evade_charges=int(raw["evade"]),
         focus=int(raw.get("focus", 0)),
         left=bool(raw.get("left", False)),
+        powers=MappingProxyType({str(k): float(v) for k, v in raw.get("powers", {}).items()}),
+        ways=frozenset(str(one) for one in raw.get("ways", ())),
+        master_id=int(raw.get("master_id", 0)),
     )
 
 
@@ -506,6 +571,16 @@ def serialise(session: BattleSession) -> str:
             "depth": session.depth,
             "roamer": session.roamer,
             "settled": session.settled,
+            "version": session.version,
+            "rules_version": session.rules_version,
+            "content_version": session.content_version,
+            "roster_snapshot": session.roster_snapshot,
+            "play_snapshot": session.play_snapshot,
+            "epoch": session.epoch,
+            "encounter": session.encounter,
+            "roamer_stamp": session.roamer_stamp,
+            "results": session.results,
+            "departed": list(session.departed),
             "round": state.round,
             "order": list(state.order),
             "cursor": state.cursor,
@@ -549,6 +624,16 @@ def deserialise(raw: str) -> BattleSession:
         depth=int(data.get("depth", 0)),
         roamer=bool(data.get("roamer", False)),
         settled=bool(data.get("settled", False)),
+        version=int(data.get("version", 0)),
+        rules_version=int(data.get("rules_version", 1)),
+        content_version=str(data.get("content_version", "")),
+        roster_snapshot=str(data.get("roster_snapshot", "")),
+        play_snapshot=str(data.get("play_snapshot", "")),
+        epoch=int(data.get("epoch", 0)),
+        encounter=str(data.get("encounter", "")),
+        roamer_stamp=int(data.get("roamer_stamp", 0)),
+        results=str(data.get("results", "")),
+        departed=tuple(int(one) for one in data.get("departed", ())),
     )
 
 

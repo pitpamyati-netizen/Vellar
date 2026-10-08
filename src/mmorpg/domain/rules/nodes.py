@@ -71,10 +71,10 @@ def location_epoch(state: LocationState) -> int:
     """Какое поколение округи стоит сейчас. По выработке, не по часам.
 
     Сумма волн, снятых со всех узлов, поделённая на :data:`REGROWTH_WAVES`.
-    Растёт, пока локацию работают, и оседает сама, когда кэш забывает
-    нетронутую локацию (``Claude.md``, правило 8: у каждого ключа есть срок).
+    Растёт, пока локацию работают. Постоянное смещение не позволяет сбросу
+    локации повторно использовать личность прежнего поколения (ADR 0090).
     """
-    return sum(node.wave for node in state.nodes.values()) // REGROWTH_WAVES
+    return state.epoch_offset + sum(node.wave for node in state.nodes.values()) // REGROWTH_WAVES
 
 
 def refreshed(state: NodeState, now: int) -> NodeState:

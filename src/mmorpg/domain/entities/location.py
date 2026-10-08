@@ -248,17 +248,20 @@ class LocationState:
 
     nodes: Mapping[int, NodeState] = field(default_factory=dict)
     roamer: Roamer | None = None
+    epoch_offset: int = 0
 
     def node(self, index: int) -> NodeState:
         return self.nodes.get(index, NodeState())
 
     def with_node(self, index: int, node: NodeState) -> LocationState:
         return LocationState(
-            nodes=MappingProxyType({**self.nodes, index: node}), roamer=self.roamer
+            nodes=MappingProxyType({**self.nodes, index: node}),
+            roamer=self.roamer,
+            epoch_offset=self.epoch_offset,
         )
 
     def with_roamer(self, roamer: Roamer | None) -> LocationState:
-        return LocationState(nodes=self.nodes, roamer=roamer)
+        return LocationState(nodes=self.nodes, roamer=roamer, epoch_offset=self.epoch_offset)
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,6 +289,7 @@ class Engagement:
     battle_id: str
     name: str
     character_id: int
+    epoch: int = 0
 
 
 @dataclass(frozen=True, slots=True)

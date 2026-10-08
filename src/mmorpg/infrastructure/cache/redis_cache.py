@@ -1,8 +1,9 @@
 """Кэши поверх Redis.
 
-Здесь остаются экран, начатый бой, изменения в локации, прилавок и быстрый
-отсев повторов. Экономические отметки передаются в PostgreSQL через
-PostgresEffectState (M02.2). Потеря всего боя всё ещё требует решения M03.
+В PostgreSQL-режимах M03 экран, бой и изменения локации передаются в
+PostgresStorage, PostgresGameplayState и PostgresLocationState. Эти адаптеры
+остались для переноса старых записей и временных данных; кодирование узлов
+также используется постоянным хранилищем.
 """
 
 from __future__ import annotations
@@ -55,7 +56,7 @@ def _decode(raw: Mapping[Any, Any], now: int) -> dict[int, NodeState]:
 def _engagement(field: str, value: str, now: int, ttl: int) -> Engagement | None:
     """Занятая стая из записи кэша. ``None`` - запись протухла или не читается."""
     try:
-        node, wave, place = (int(part) for part in field.split(":"))
+        *generation, node, wave, place = (int(part) for part in field.split(":"))
         entry = json.loads(value)
     except ValueError, json.JSONDecodeError:
         return None
@@ -68,6 +69,7 @@ def _engagement(field: str, value: str, now: int, ttl: int) -> Engagement | None
         battle_id=str(entry.get("battle", "")),
         name=str(entry.get("name", "")),
         character_id=int(entry.get("who", 0)),
+        epoch=generation[0] if generation else 0,
     )
 
 
@@ -121,8 +123,8 @@ class RedisLocationStateCache:
         return f"loc:{city_id}:{slot}:fights"
 
     @staticmethod
-    def _fight_field(node: int, wave: int, place: int) -> str:
-        return f"{node}:{wave}:{place}"
+    def _fight_field(node: int, wave: int, place: int, epoch: int = 0) -> str:
+        return f"{epoch}:{node}:{wave}:{place}" if epoch else f"{node}:{wave}:{place}"
 
     async def state(self, city_id: str, slot: int, *, now: int) -> LocationState:
         raw = await self._client.hgetall(self._state_key(city_id, slot))
@@ -215,9 +217,10 @@ class RedisLocationStateCache:
         character_id: int,
         now: int,
         ttl: int,
+        epoch: int = 0,
     ) -> Engagement | None:
         key = self._fights_key(city_id, slot)
-        field = self._fight_field(node, wave, place)
+        field = self._fight_field(node, wave, place, epoch)
         value = json.dumps(
             {"battle": battle_id, "name": name, "who": character_id, "seen": now},
             ensure_ascii=False,
@@ -235,7 +238,7 @@ class RedisLocationStateCache:
         return None
 
     async def engaged_at(
-        self, city_id: str, slot: int, node: int, *, wave: int, now: int, ttl: int
+        self, city_id: str, slot: int, node: int, *, wave: int, now: int, ttl: int, epoch: int = 0
     ) -> tuple[Engagement, ...]:
         key = self._fights_key(city_id, slot)
         raw = await self._client.hgetall(key)
@@ -247,16 +250,28 @@ class RedisLocationStateCache:
             if one is None:
                 stale.append(name)
                 continue
-            if one.node == node and one.wave == wave:
+            if one.node == node and one.wave == wave and one.epoch == epoch:
                 held.append(one)
         if stale:
             await self._client.hdel(key, *stale)
         return tuple(sorted(held, key=lambda one: one.slot))
 
-    async def disengage(self, city_id: str, slot: int, node: int, *, wave: int, place: int) -> None:
-        await self._client.hdel(
-            self._fights_key(city_id, slot), self._fight_field(node, wave, place)
-        )
+    async def disengage(
+        self,
+        city_id: str,
+        slot: int,
+        node: int,
+        *,
+        wave: int,
+        place: int,
+        battle_id: str = "",
+        epoch: int = 0,
+    ) -> None:
+        key = self._fights_key(city_id, slot)
+        field = self._fight_field(node, wave, place, epoch)
+        raw = await self._client.hget(key, field)
+        if raw and (not battle_id or json.loads(_text(raw))["battle"] == battle_id):
+            await self._client.hdel(key, field)
 
     # --- блуждающее подземелье (ADR 0037) ---
 
@@ -295,21 +310,39 @@ class RedisLocationStateCache:
         found = await self.roamer(city_id, slot, now=0)
         return found if found is not None else roamer
 
-    async def claim_roamer(self, city_id: str, slot: int, character_id: int, *, ttl: int) -> bool:
+    async def claim_roamer(
+        self,
+        city_id: str,
+        slot: int,
+        character_id: int,
+        *,
+        ttl: int,
+        encounter: str = "",
+        stamp: int = 0,
+    ) -> bool:
         key = self._hold_key(city_id, slot)
         stored = await self._client.set(key, str(character_id), ex=max(1, ttl), nx=True)
         if stored:
             return True
         return await self._holder(city_id, slot) == character_id
 
-    async def hold_roamer(self, city_id: str, slot: int, character_id: int, *, ttl: int) -> None:
+    async def hold_roamer(
+        self,
+        city_id: str,
+        slot: int,
+        character_id: int,
+        *,
+        ttl: int,
+        encounter: str = "",
+        stamp: int = 0,
+    ) -> None:
         if await self._holder(city_id, slot) in (0, character_id):
             await self._client.set(self._hold_key(city_id, slot), str(character_id), ex=max(1, ttl))
 
-    async def release_roamer(self, city_id: str, slot: int) -> None:
+    async def release_roamer(self, city_id: str, slot: int, *, encounter: str = "") -> None:
         await self._client.delete(self._hold_key(city_id, slot))
 
-    async def clear_roamer(self, city_id: str, slot: int) -> None:
+    async def clear_roamer(self, city_id: str, slot: int, *, encounter: str = "") -> None:
         await self._client.delete(self._roamer_key(city_id, slot), self._hold_key(city_id, slot))
 
     async def reset(self, city_id: str, slot: int) -> None:

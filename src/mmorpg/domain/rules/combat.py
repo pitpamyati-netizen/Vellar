@@ -774,6 +774,12 @@ def _refusal(
     Спрашивается до всего остального и только про то, что игра отказывается
     делать вовсе. Промах отказом не является: он и есть результат хода.
     """
+    if action.kind is ActionKind.ITEM:
+        reason = item_refusal(content, roster, state, actor, action)
+        if reason:
+            return BattleEvent(
+                kind=EventKind.ITEM_REFUSED, actor_id=actor.id, actor=actor.name, effect_name=reason
+            )
     if actor.effects.control() is not None:
         return None
     if actor.effects.has(StatusKind.CHARM) or actor.effects.has(StatusKind.CONFUSION):
@@ -2560,6 +2566,35 @@ def _answered(
 # --- расходники и бегство ---------------------------------------------
 
 
+def item_refusal(
+    content: GameContent,
+    roster: Mapping[int, Character],
+    state: BattleState,
+    actor: Combatant,
+    action: BattleAction,
+) -> str:
+    """Проверить пользу до расхода предмета и до начала хода."""
+    if (
+        actor.effects.control() is not None
+        or actor.effects.has(StatusKind.CHARM)
+        or actor.effects.has(StatusKind.CONFUSION)
+    ):
+        return "Сейчас вы не можете использовать предмет. Вещь и ход сохранены."
+    if action.item_id is None or not content.has_item(action.item_id):
+        return "Этого предмета больше нет. Вещь и ход сохранены."
+    item = content.item(action.item_id)
+    if item.effect is None:
+        return "Этот предмет нельзя использовать в бою."
+    if item.effect.kind == "buff_damage_percent":
+        existing = next((one for one in actor.effects if one.id == f"item:{item.id}"), None)
+        if existing is not None and existing.turns_left >= max(1, item.effect.turns):
+            return "Это усиление уже действует не меньше срока предмета. Вещь и ход сохранены."
+    trial = _use_item(content, roster, state, actor, action)
+    if trial.combatants == state.combatants:
+        return "Предмет сейчас ничего не изменит. Вещь и ход сохранены."
+    return ""
+
+
 def _use_item(
     content: GameContent,
     roster: Mapping[int, Character],
@@ -2588,14 +2623,19 @@ def _use_item(
                     kind=EventKind.RESOURCE,
                     actor_id=restored.id,
                     actor=restored.name,
-                    amount=amount,
+                    amount=restored.resource - actor.resource,
                 )
             )
         case "cleanse":
             cleansed = actor.effects.cleanse(round(item.effect.power))
             working = working.replace_combatant(replace(actor, effects=cleansed))
             working = working.with_events(
-                BattleEvent(kind=EventKind.CLEANSED, actor_id=actor.id, actor=actor.name, amount=1)
+                BattleEvent(
+                    kind=EventKind.CLEANSED,
+                    actor_id=actor.id,
+                    actor=actor.name,
+                    amount=len(actor.effects) - len(cleansed),
+                )
             )
         case "buff_damage_percent":
             effect = ActiveEffect(

@@ -16,6 +16,7 @@ from __future__ import annotations
 import time
 from collections.abc import Sequence
 from dataclasses import replace
+from uuid import uuid4
 
 from aiogram import Bot, F, Router
 from aiogram.enums import ChatType
@@ -96,6 +97,7 @@ from mmorpg.presentation.telegram.flows.state import (
     go_back,
 )
 from mmorpg.presentation.telegram.handlers.combat import ENGAGED_TTL, open_fight
+from mmorpg.presentation.telegram.handlers.combat import _show as show_battle
 from mmorpg.presentation.telegram.handlers.creation import welcome_screen
 from mmorpg.presentation.telegram.messaging import send_screen, send_text
 from mmorpg.presentation.telegram.screens import city as city_screens
@@ -165,6 +167,14 @@ async def play(
     if character is None:
         await state.clear()
         await send_screen(message, welcome_screen())
+        return
+    battle_store = BattleStore(state_cache)
+    if battle_id := await battle_store.busy(character.id):
+        session = await battle_store.load(battle_id)
+        assert session is not None
+        await show_battle(
+            message, state, await battle_store.content(session, content), character, session
+        )
         return
     # Аккаунт обычно уже прочитан на входе (``middlewares/moderation.py``). Здесь
     # он читается только там, где хендлер вызывают без той двери, - в тестах.
@@ -356,6 +366,8 @@ async def play(
     # Спуск в блуждающее подземелье: замок берут здесь, до боя, - подземелье
     # общее, а ветка ничего не читает и не пишет (ADR 0037).
     if updated.fight == "dungeon" and updated.descent.roamer and updated.descent.layer == 0:
+        if not updated.descent.encounter_id:
+            updated = replace(updated, descent=replace(updated.descent, encounter_id=uuid4().hex))
         blocked = await _claim_roamer(character, updated.descent, locations, parties)
         if blocked:
             updated = go_back(replace(updated, fight="", descent=Descent())).with_notice(blocked)
@@ -535,6 +547,7 @@ async def _fights(
         wave=left.wave,
         now=now,
         ttl=ENGAGED_TTL,
+        epoch=node_rules.location_epoch(here),
     )
 
 
@@ -988,7 +1001,10 @@ async def _live_op(
         if target is None:
             return f"Персонажа «{arg.strip()}» в игре нет."
         if action == "free_battle":
-            freed = await BattleStore(state_cache).free(target.id)
+            store = BattleStore(state_cache)
+            freed = await store.free(target.id)
+            if not freed and await store.busy(target.id):
+                return f"{target.name}: бой ещё идёт. Вернитесь в него или выберите «Сдаться»."
             await logged("снят замок боя", target=target.name)
             return f"{target.name}: замок боя {'снят' if freed else 'и так не стоял'}."
         await state_cache.set(
@@ -1343,7 +1359,8 @@ async def sync_location(
 
     Карта у всех одна и хранения не требует, а вот остаток в её узлах общий и
     хранения требует. Здесь шаг вынимает из узла своё одно и ставит этого игрока
-    на карту, чтобы остальные его видели. До PostgreSQL отсюда не доходит ничто.
+    на карту, чтобы остальные его видели. В PostgreSQL-режимах это часть
+    постоянной операции команды M03.
     """
     session = updated.session
     if not session.active:
@@ -1355,6 +1372,9 @@ async def sync_location(
         return updated, LocationState()
 
     state = await locations.state(session.city_id, session.slot, now=now)
+    if session.epoch < 0:
+        session = replace(session, epoch=node_rules.location_epoch(state))
+        updated = replace(updated, session=session)
     index = updated.pending.node_take
     if index >= 0:
         state = await take_from_node(content, session, index, locations, now, settings, state=state)
@@ -1397,7 +1417,12 @@ async def _claim_roamer(
         return "Подземелье для одного: с отрядом сюда не спускаются, ищите то, что на отряд."
 
     took = await locations.claim_roamer(
-        descent.city_id, descent.slot, character.id, ttl=roamer_rules.ROAMER_HOLD_TTL
+        descent.city_id,
+        descent.slot,
+        character.id,
+        ttl=roamer_rules.ROAMER_HOLD_TTL,
+        encounter=descent.encounter(character.id),
+        stamp=descent.stamp,
     )
     if not took:
         return "В подземелье только что спустились. Дождитесь, пока выйдут."
