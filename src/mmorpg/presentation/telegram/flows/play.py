@@ -2174,8 +2174,14 @@ def _handle_reforge(
         )
     seed = derive(world_seed, "reforge", character.id, item.id, clock.now)
     made_id = salvage_rules.reforged(content, item.id, source=rng(seed))
+    used = dict(character.wear.used)
+    if item.id in used:
+        used[made_id] = used.pop(item.id)
+    from mmorpg.domain.entities.character import ItemWear
+
+    reforged_character = replace(character.with_gold(-price), wear=ItemWear(used))
     write = (
-        PendingWrite(character=character.with_gold(-price))
+        PendingWrite(character=reforged_character)
         .with_items((item.id, -1), (made_id, 1))
         .because(economy_log.SERVICE)
     )

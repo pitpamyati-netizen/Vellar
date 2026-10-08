@@ -24,6 +24,7 @@ import asyncio
 import math
 import signal
 import time
+from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack, suppress
 from dataclasses import dataclass
 from typing import Any, cast
@@ -44,7 +45,7 @@ from mmorpg.domain.ports.repositories import (
     LocationStateCache,
     StateCache,
 )
-from mmorpg.health import age_seconds, heartbeat, is_alive
+from mmorpg.health import age_seconds, heartbeat, is_alive, probe_services
 from mmorpg.infrastructure.cache import (
     InMemoryIdempotencyStore,
     InMemoryLocationStateCache,
@@ -99,6 +100,7 @@ class Application:
     stack: AsyncExitStack
     #: Счётчики того, что обслужено с прошлого отчёта (``mmorpg.metrics``).
     metrics: Metrics
+    health_probe: Callable[[], Awaitable[None]] | None = None
 
 
 async def build_application(settings: Settings) -> Application:
@@ -217,6 +219,14 @@ async def build_application(settings: Settings) -> Application:
     dependencies.broadcasts.sink = bot
     worker.start()
     stack.push_async_callback(worker.aclose)
+
+    async def health_probe() -> None:
+        if not worker.healthy(settings.heartbeat_stale_after):
+            raise RuntimeError("Delivery worker stopped progressing")
+        pool = cast(Any, dependencies.characters)._pool if settings.uses_postgres else None
+        client = cast(Any, dependencies.locations)._client if settings.uses_redis else None
+        await probe_services(pool, client, str(bot.id))
+
     logger.info(
         "broadcasts",
         channel=settings.channel_id or "not configured",
@@ -230,6 +240,7 @@ async def build_application(settings: Settings) -> Application:
         dispatcher=dispatcher,
         stack=stack,
         metrics=metrics,
+        health_probe=health_probe,
     )
 
 
@@ -248,12 +259,15 @@ async def _build_adapters(
             detail="APP_ENV=local: state is lost on restart, never deploy this way",
         )
         memory_cache = MemoryEffectState(InMemoryStateCache())
+        from mmorpg.infrastructure.persistence.instances import MemoryItemInstances
+
+        instances = MemoryItemInstances(registry.current)
         dependencies = Dependencies(
             settings=settings,
             registry=registry,
             users=InMemoryUserRepository(),
-            characters=InMemoryCharacterRepository(),
-            inventory=InMemoryInventoryRepository(),
+            characters=InMemoryCharacterRepository(instances),
+            inventory=InMemoryInventoryRepository(instances),
             trades=InMemoryTradeRepository(),
             privacy=InMemoryPrivacyRepository(),
             keeper_log=InMemoryKeeperLogRepository(),
@@ -325,8 +339,8 @@ async def _build_adapters(
         settings=settings,
         registry=registry,
         users=PostgresUserRepository(pool),
-        characters=PostgresCharacterRepository(pool),
-        inventory=PostgresInventoryRepository(pool),
+        characters=PostgresCharacterRepository(pool, registry.current),
+        inventory=PostgresInventoryRepository(pool, registry.current),
         trades=PostgresTradeRepository(pool),
         privacy=PostgresPrivacyRepository(pool),
         keeper_log=PostgresKeeperLogRepository(pool),
@@ -397,7 +411,11 @@ async def run_polling(app: Application) -> None:
         concurrency_limit=settings.concurrency_limit,
     )
     await _wait_for_the_previous_copy(settings)
-    async with app.stack, heartbeat(settings), reporting(app.metrics, settings.metrics_seconds):
+    async with (
+        app.stack,
+        heartbeat(settings, probe=app.health_probe),
+        reporting(app.metrics, settings.metrics_seconds),
+    ):
         try:
             await _greet_telegram(app)
             await app.bot.delete_webhook(drop_pending_updates=True)
@@ -519,7 +537,11 @@ async def run_webhook(app: Application) -> None:
     await runner.setup()
     site = web.TCPSite(runner, host=settings.webhook_host, port=settings.webhook_port)
 
-    async with app.stack, heartbeat(settings), reporting(app.metrics, settings.metrics_seconds):
+    async with (
+        app.stack,
+        heartbeat(settings, probe=app.health_probe),
+        reporting(app.metrics, settings.metrics_seconds),
+    ):
         stop = _stop_event()
         try:
             await site.start()

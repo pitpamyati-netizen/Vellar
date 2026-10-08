@@ -75,3 +75,23 @@ async def test_the_beat_stops_even_when_the_block_raises(tmp_path) -> None:
     assert not path.exists()
     # После падения не остаётся задачи, которая продолжала бы трогать файл.
     assert all(task.get_name() != "heartbeat" for task in asyncio.all_tasks())
+
+
+async def test_storage_or_delivery_failure_stops_health_refresh(tmp_path) -> None:
+    path = tmp_path / "beat"
+    settings = settings_for(path, heartbeat_seconds=0.01)
+    working = True
+
+    async def probe():
+        if not working:
+            raise ConnectionError("stand failure")
+
+    async with heartbeat(settings, probe=probe):
+        working = False
+        first = path.stat().st_mtime_ns
+        await asyncio.sleep(0.05)
+        assert path.stat().st_mtime_ns == first
+        assert not is_alive(settings)
+        working = True
+        await asyncio.sleep(0.03)
+        assert is_alive(settings)

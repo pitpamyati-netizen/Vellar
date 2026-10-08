@@ -8,7 +8,8 @@
 Поэтому цикл доказывает, что он жив, делая то, что может сделать только живой
 цикл: фоновая задача трогает файл каждые ``heartbeat_seconds``.
 ``scripts/healthcheck.py`` читает возраст файла, контейнер объявляется
-нездоровым, как только удары прекратились, а дальше дело политики перезапуска.
+нездоровым, как только удары прекратились. Отдельный scripts.supervise
+завершает зависшего бота и запускает его снова.
 
 Файл пишется из рабочего потока. В нём 30 байт, и удары редки, но бюджет p95 в
 100 мс на обновление (``docs/architecture.md``) не оставляет места
@@ -20,15 +21,32 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from mmorpg.config import Settings
 from mmorpg.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+async def probe_services(pool: Any, redis: Any, namespace: str) -> None:
+    """Пройти запись/чтение кэша и SQL-замок, используемые игровой командой."""
+    if pool is not None:
+        from mmorpg.infrastructure.persistence.operations import ECONOMY_LOCK
+
+        async with pool.acquire() as connection, connection.transaction():
+            await connection.execute("SELECT pg_advisory_xact_lock($1)", ECONOMY_LOCK)
+            await connection.fetchval("SELECT count(*) FROM message_delivery WHERE false")
+    if redis is not None:
+        key = "health:probe:" + namespace
+        await redis.set(key, "ready", ex=30)
+        if await redis.get(key) not in {b"ready", "ready"}:
+            raise RuntimeError("Redis health round trip failed")
+        await redis.delete(key)
 
 
 def touch(path: Path) -> None:
@@ -56,7 +74,12 @@ def is_alive(settings: Settings, *, now: float | None = None) -> bool:
     return age is not None and age <= settings.heartbeat_stale_after
 
 
-async def _beat(path: Path, interval: float, stop: asyncio.Event) -> None:
+async def _beat(
+    path: Path,
+    interval: float,
+    stop: asyncio.Event,
+    probe: Callable[[], Awaitable[None]] | None = None,
+) -> None:
     """Трогать файл каждые ``interval``, пока не попросят остановиться.
 
     Остановка - это событие, а не отмена задачи, и нарочно: отмена не дотягивается
@@ -69,20 +92,35 @@ async def _beat(path: Path, interval: float, stop: asyncio.Event) -> None:
             await asyncio.wait_for(stop.wait(), timeout=interval)
         if stop.is_set():
             return
-        await asyncio.to_thread(touch, path)
+        try:
+            if probe is not None:
+                async with asyncio.timeout(interval):
+                    await probe()
+            await asyncio.to_thread(touch, path)
+        except Exception as error:
+            logger.warning("health_probe_failed", error=type(error).__name__)
 
 
 @asynccontextmanager
-async def heartbeat(settings: Settings) -> AsyncIterator[None]:
+async def heartbeat(
+    settings: Settings,
+    *,
+    probe: Callable[[], Awaitable[None]] | None = None,
+) -> AsyncIterator[None]:
     """Биться, пока выполняется блок.
 
     Первый удар ложится до входа в блок, чтобы проверке было что читать с той
     минуты, как бот начал обслуживать игроков.
     """
     path = settings.heartbeat_path
+    if probe is not None:
+        async with asyncio.timeout(settings.heartbeat_seconds):
+            await probe()
     await asyncio.to_thread(touch, path)
     stop = asyncio.Event()
-    task = asyncio.create_task(_beat(path, settings.heartbeat_seconds, stop), name="heartbeat")
+    task = asyncio.create_task(
+        _beat(path, settings.heartbeat_seconds, stop, probe), name="heartbeat"
+    )
     logger.info("heartbeat_started", path=str(path), seconds=settings.heartbeat_seconds)
     try:
         yield

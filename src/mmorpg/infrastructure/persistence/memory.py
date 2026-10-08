@@ -12,6 +12,7 @@ from dataclasses import replace
 
 from mmorpg.application.operations import StaleCharacterError
 from mmorpg.domain.entities.character import Character, InventoryEntry
+from mmorpg.domain.entities.item_instance import instance_ids, references
 from mmorpg.domain.entities.moderation import Ban, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.trade import Offer, TradeRecord, TradeStatus
@@ -26,6 +27,7 @@ from mmorpg.domain.rules.group_offers import MAX_OFFER_NUMBER
 from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
 from mmorpg.domain.rules.guild_war import War
 from mmorpg.domain.rules.party import Party
+from mmorpg.infrastructure.persistence.instances import MemoryItemInstances
 from mmorpg.infrastructure.persistence.operations import MemoryOperations
 
 
@@ -196,7 +198,8 @@ class InMemoryPrivacyRepository:
 
 
 class InMemoryCharacterRepository:
-    def __init__(self) -> None:
+    def __init__(self, instances: MemoryItemInstances | None = None) -> None:
+        self.instances = instances
         self.operations = MemoryOperations()
         self._characters: dict[int, Character] = {}
         # Когда строку последний раз трогали - то же, что ``updated_at`` в SQL.
@@ -205,12 +208,13 @@ class InMemoryCharacterRepository:
         self._next_id = 1
 
     async def get(self, character_id: int) -> Character | None:
-        return self._characters.get(character_id)
+        found = self._characters.get(character_id)
+        return self.instances.hydrate(found) if self.instances is not None else found
 
     async def get_active(self, telegram_id: int) -> Character | None:
         for character in self._characters.values():
             if character.user_id == telegram_id:
-                return character
+                return await self.get(character.id)
         return None
 
     async def list_for_user(self, telegram_id: int) -> tuple[Character, ...]:
@@ -219,6 +223,8 @@ class InMemoryCharacterRepository:
         )
 
     async def create(self, character: Character) -> Character:
+        if self.instances is not None:
+            character = self.instances.prepare(character)
         stored = replace(character, id=self._next_id)
         self._characters[stored.id] = stored
         self._touched[stored.id] = int(time.time())
@@ -229,6 +235,8 @@ class InMemoryCharacterRepository:
         current = self._characters.get(character.id)
         if current is None or current.revision != character.revision:
             raise StaleCharacterError(str(character.id))
+        if self.instances is not None:
+            self.instances.save_wear(character, current)
         stored = replace(character, revision=character.revision + 1)
         self._characters[character.id] = stored
         self._touched[character.id] = int(time.time())
@@ -353,7 +361,8 @@ class InMemoryCharacterRepository:
 
 
 class InMemoryInventoryRepository:
-    def __init__(self) -> None:
+    def __init__(self, instances: MemoryItemInstances | None = None) -> None:
+        self.instances = instances
         self.operations = MemoryOperations()
         self._items: dict[int, dict[str, int]] = {}
 
@@ -366,10 +375,42 @@ class InMemoryInventoryRepository:
         )
 
     async def add(self, character_id: int, item_id: str, quantity: int = 1) -> None:
+        if quantity <= 0:
+            raise ValueError("Positive item quantity required")
+        if instance_ids(item_id):
+            refs = references(item_id)
+            if len(refs) != quantity:
+                raise ValueError("Item instance quantity mismatch")
+            for ref in refs:
+                if any(ref in held and held[ref] > 0 for held in self._items.values()):
+                    raise ValueError("Item instance is already in a bag")
+            held = self._items.setdefault(character_id, {})
+            for ref in refs:
+                held[ref] = 1
+                if self.instances is not None:
+                    self.instances.held.setdefault(character_id, set()).add(ref)
+            return
+        if self.instances is not None and self.instances.physical(item_id):
+            for _ in range(quantity):
+                await self.add(character_id, self.instances.mint(item_id))
+            return
         held = self._items.setdefault(character_id, {})
         held[item_id] = held.get(item_id, 0) + quantity
 
     async def remove(self, character_id: int, item_id: str, quantity: int = 1) -> bool:
+        if quantity <= 0:
+            return False
+        if instance_ids(item_id):
+            refs = references(item_id)
+            counts = [await self.count(character_id, ref) for ref in refs]
+            if len(refs) != quantity or any(count < 1 for count in counts):
+                return False
+            held = self._items.setdefault(character_id, {})
+            for ref in refs:
+                held.pop(ref, None)
+                if self.instances is not None:
+                    self.instances.held.setdefault(character_id, set()).discard(ref)
+            return True
         held = self._items.setdefault(character_id, {})
         if held.get(item_id, 0) < quantity:
             return False
@@ -379,6 +420,9 @@ class InMemoryInventoryRepository:
         return True
 
     async def count(self, character_id: int, item_id: str) -> int:
+        refs = references(item_id)
+        if len(refs) > 1:
+            return sum(self._items.get(character_id, {}).get(ref, 0) for ref in refs)
         return self._items.get(character_id, {}).get(item_id, 0)
 
 

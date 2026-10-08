@@ -15,6 +15,7 @@ from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.guild_safety import disband_token, dissolve
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character
+from mmorpg.domain.entities.item_instance import instance_ids, template_id
 from mmorpg.domain.rules import guild as rules
 from mmorpg.domain.rules.guild import GuildRank
 from mmorpg.domain.rules.guild_contract import ContractKind
@@ -435,7 +436,10 @@ async def test_old_schema_preserves_guild_property_stakes_and_paid_contract(old_
             store = GuildStore(
                 PostgresGuildRepository(pool), PostgresEffectState(pool, InMemoryStateCache())
             )
-            assert await store.stock(1) == ((SWORD, 3),)
+            stock = await store.stock(1)
+            assert len(stock) == 3
+            assert all(template_id(ref) == SWORD and qty == 1 for ref, qty in stock)
+            assert len({instance_ids(ref)[0] for ref, _ in stock}) == 3
             assert not await store.disband(await store.by_id(1))
             assert await pool.fetchval("SELECT gold FROM characters WHERE id=1") == 731
             war = await store.timed_war(1, now=1000000, legacy_seconds=900, duration=259200)

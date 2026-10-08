@@ -46,7 +46,7 @@ call scripts\vellar-tools.bat backup
 if errorlevel 1 (
     echo.
     echo [Vellar] The database could not be dumped. Stopping now would still keep
-    echo [Vellar] the volume - nothing is deleted by a stop - but the readable
+    echo [Vellar] the volume - nothing is deleted by a stop - but the verified
     echo [Vellar] copy in backups\ would be missing. Nothing was stopped.
     echo [Vellar] Look at the error above, or force it with: docker compose down
     exit /b 1

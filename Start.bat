@@ -146,7 +146,7 @@ echo [Vellar] and any fight in progress are not: a restart puts them in the main
 echo [Vellar] menu, unhurt.
 echo [Vellar] Ctrl+C stops the bot, and so does closing this window.
 echo.
-uv run python -m mmorpg.main
+uv run python -m scripts.supervise
 exit /b %ERRORLEVEL%
 
 rem ---------------------------------------------------------------------------
@@ -210,7 +210,7 @@ echo [Vellar] Ctrl+C stops the bot.
 echo.
 rem Настоящая переменная окружения, поэтому она сильнее того, что говорит .env.
 set "APP_ENV=local"
-uv run python -m mmorpg.main
+uv run python -m scripts.supervise
 exit /b %ERRORLEVEL%
 
 rem ---------------------------------------------------------------------------

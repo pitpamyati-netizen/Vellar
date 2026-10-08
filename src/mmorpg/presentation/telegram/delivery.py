@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager, suppress
 from contextvars import ContextVar
@@ -80,6 +81,14 @@ class DeliveryWorker:
         self._task: asyncio.Task[None] | None = None
         self._dispatches: set[asyncio.Task[bool]] = set()
         self._wake = asyncio.Event()
+        self.last_progress = time.monotonic()
+
+    def healthy(self, limit: float) -> bool:
+        return (
+            self._task is not None
+            and not self._task.done()
+            and time.monotonic() - self.last_progress <= limit
+        )
 
     def start(self) -> None:
         if self._task is None or self._task.done():
@@ -108,6 +117,7 @@ class DeliveryWorker:
         if self._recover is not None:
             await self._recover()
         row = await self.queue.claim(self.bot.id, self.policy)
+        self.last_progress = time.monotonic()
         if row is None:
             return False
         try:

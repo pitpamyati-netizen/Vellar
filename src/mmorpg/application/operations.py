@@ -100,7 +100,7 @@ def _repositories(values: list[Any]) -> tuple[object, ...]:
                 and all(candidate is not previous for previous in found)
             ):
                 found.append(candidate)
-        for name in ("characters", "inventory", "trades", "privacy"):
+        for name in ("characters", "inventory", "trades", "privacy", "instances"):
             candidate = getattr(value, name, None)
             if (
                 candidate is not None
@@ -108,6 +108,10 @@ def _repositories(values: list[Any]) -> tuple[object, ...]:
                 and all(candidate is not previous for previous in found)
             ):
                 found.append(candidate)
+    for repository in tuple(found):
+        instances = getattr(repository, "instances", None)
+        if instances is not None and all(instances is not previous for previous in found):
+            found.append(instances)
     return tuple(sorted(found, key=lambda one: "CharacterRepository" not in type(one).__name__))
 
 

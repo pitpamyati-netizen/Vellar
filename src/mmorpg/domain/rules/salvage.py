@@ -150,6 +150,11 @@ def reforged(content: GameContent, item_id: str, *, source: Random) -> str:
     if rolls < 2:
         return item_id
     picked = source.randrange(rolls - 1)
-    return gear_procgen.gear_id(
-        archetype_id, level, rarity_id, picked if picked < roll else picked + 1
+    from mmorpg.domain.entities.item_instance import with_template
+
+    return with_template(
+        item_id,
+        gear_procgen.gear_id(
+            archetype_id, level, rarity_id, picked if picked < roll else picked + 1
+        ),
     )

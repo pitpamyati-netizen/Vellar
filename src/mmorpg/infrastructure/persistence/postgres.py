@@ -20,7 +20,9 @@ from mmorpg.domain.entities.character import (
     ItemWear,
     SkillLoadout,
 )
+from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.craft import CraftLog, CraftProgress
+from mmorpg.domain.entities.item_instance import instance_ids, references
 from mmorpg.domain.entities.moderation import Ban, KeeperAction, KeeperEntry
 from mmorpg.domain.entities.overlay import OverlayKind, OverlayRecord
 from mmorpg.domain.entities.quest import QuestLog
@@ -492,32 +494,65 @@ class PostgresPrivacyRepository:
 
 
 class PostgresCharacterRepository:
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, content: GameContent | None = None) -> None:
+        self.content = content
         self._pool = OperationPool(pool)
         self.operations = PostgresOperations(self._pool)
+
+    async def _hydrate(self, character: Character | None) -> Character | None:
+        if character is None:
+            return None
+        rows = await self._pool.fetch(
+            "SELECT ref, used FROM item_instances i JOIN ("
+            " SELECT value AS ref FROM jsonb_each_text($2::jsonb)"
+            " UNION SELECT item_id FROM inventory WHERE character_id=$1 AND quantity>0"
+            ") owned ON split_part(ref, '!', 2)=i.id::text",
+            character.id,
+            json.dumps(dict(character.equipment.items)),
+        )
+        used = {key: value for key, value in character.wear.used.items() if not instance_ids(key)}
+        used.update({row["ref"]: row["used"] for row in rows if row["used"] > 0})
+        return replace(character, wear=ItemWear(MappingProxyType(used)))
 
     async def get(self, character_id: int) -> Character | None:
         row = await self._pool.fetchrow(
             f"SELECT {CHARACTER_COLUMNS} FROM characters WHERE id = $1",
             character_id,
         )
-        return _character_from_row(row) if row else None
+        return await self._hydrate(_character_from_row(row) if row else None)
 
     async def get_active(self, telegram_id: int) -> Character | None:
         row = await self._pool.fetchrow(
             f"SELECT {CHARACTER_COLUMNS} FROM characters WHERE user_id = $1 ORDER BY id LIMIT 1",
             telegram_id,
         )
-        return _character_from_row(row) if row else None
+        return await self._hydrate(_character_from_row(row) if row else None)
 
     async def list_for_user(self, telegram_id: int) -> tuple[Character, ...]:
         rows = await self._pool.fetch(
             f"SELECT {CHARACTER_COLUMNS} FROM characters WHERE user_id = $1 ORDER BY id",
             telegram_id,
         )
-        return tuple(_character_from_row(row) for row in rows)
+        found = [await self._hydrate(_character_from_row(row)) for row in rows]
+        return tuple(one for one in found if one is not None)
 
     async def create(self, character: Character) -> Character:
+        if self.content is not None:
+            equipment = dict(character.equipment.items)
+            used = dict(character.wear.used)
+            for slot, item_id in equipment.items():
+                if (
+                    not instance_ids(item_id)
+                    and self.content.has_item(item_id)
+                    and self.content.item(item_id).is_equipment
+                ):
+                    number = await self._pool.fetchval(
+                        "INSERT INTO item_instances DEFAULT VALUES RETURNING id"
+                    )
+                    ref = f"{item_id}!{number}"
+                    equipment[slot] = ref
+                    used[ref] = used.pop(item_id, 0)
+            character = replace(character, equipment=Equipment(equipment), wear=ItemWear(used))
         row = await self._pool.fetchrow(
             """
             INSERT INTO characters (
@@ -567,7 +602,9 @@ class PostgresCharacterRepository:
             list(character.subclass_ids),
             character.is_admin,
         )
-        return replace(character, id=row["id"])
+        saved = await self._hydrate(replace(character, id=row["id"]))
+        assert saved is not None
+        return saved
 
     async def save(self, character: Character) -> Character:
         revision = await self._pool.fetchval(
@@ -617,7 +654,9 @@ class PostgresCharacterRepository:
         )
         if revision is None:
             raise StaleCharacterError(str(character.id))
-        return replace(character, revision=revision)
+        saved = await self._hydrate(replace(character, revision=revision))
+        assert saved is not None
+        return saved
 
     async def spend_gold(self, character_id: int, amount: int) -> bool:
         """Один UPDATE решает и то, есть ли золото, и то, что его больше нет.
@@ -1011,7 +1050,8 @@ class PostgresTradeRepository:
 
 
 class PostgresInventoryRepository:
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, content: GameContent | None = None) -> None:
+        self.content = content
         self._pool = OperationPool(pool)
         self.operations = PostgresOperations(self._pool)
 
@@ -1026,6 +1066,37 @@ class PostgresInventoryRepository:
         )
 
     async def add(self, character_id: int, item_id: str, quantity: int = 1) -> None:
+        if quantity <= 0:
+            raise ValueError("Positive item quantity required")
+        refs = references(item_id)
+        if refs:
+            if len(refs) != quantity:
+                raise ValueError("Item instance quantity mismatch")
+            for ref in refs:
+                number = instance_ids(ref)[0]
+                if not await self._pool.fetchval(
+                    "SELECT 1 FROM item_instances WHERE id=$1", number
+                ):
+                    raise ValueError("Unknown item instance")
+                await self._pool.execute(
+                    "INSERT INTO inventory(character_id,item_id,quantity) VALUES($1,$2,1)"
+                    " ON CONFLICT(character_id,item_id) DO UPDATE"
+                    " SET quantity=inventory.quantity+1",
+                    character_id,
+                    ref,
+                )
+            return
+        if (
+            self.content is not None
+            and self.content.has_item(item_id)
+            and self.content.item(item_id).is_equipment
+        ):
+            for _ in range(quantity):
+                number = await self._pool.fetchval(
+                    "INSERT INTO item_instances DEFAULT VALUES RETURNING id"
+                )
+                await self.add(character_id, f"{item_id}!{number}")
+            return
         await self._pool.execute(
             """
             INSERT INTO inventory (character_id, item_id, quantity)
@@ -1039,6 +1110,28 @@ class PostgresInventoryRepository:
         )
 
     async def remove(self, character_id: int, item_id: str, quantity: int = 1) -> bool:
+        if quantity <= 0:
+            return False
+        refs = references(item_id)
+        if refs:
+            if len(refs) != quantity:
+                return False
+            async with self._pool.acquire() as connection, connection.transaction():
+                rows = await connection.fetch(
+                    "SELECT item_id FROM inventory WHERE character_id=$1"
+                    " AND item_id=ANY($2::text[])"
+                    " AND quantity=1 ORDER BY item_id FOR UPDATE",
+                    character_id,
+                    list(refs),
+                )
+                if len(rows) != quantity:
+                    return False
+                await connection.execute(
+                    "DELETE FROM inventory WHERE character_id=$1 AND item_id=ANY($2::text[])",
+                    character_id,
+                    list(refs),
+                )
+            return True
         """Неделимо: строку трогают, только когда в ней хватает."""
         updated = await self._pool.fetchval(
             """
@@ -1053,6 +1146,15 @@ class PostgresInventoryRepository:
         return updated is not None
 
     async def count(self, character_id: int, item_id: str) -> int:
+        refs = references(item_id)
+        if refs:
+            count = await self._pool.fetchval(
+                "SELECT coalesce(sum(quantity),0) FROM inventory WHERE character_id=$1"
+                " AND item_id=ANY($2::text[])",
+                character_id,
+                list(refs),
+            )
+            return int(count)
         value = await self._pool.fetchval(
             "SELECT quantity FROM inventory WHERE character_id = $1 AND item_id = $2",
             character_id,

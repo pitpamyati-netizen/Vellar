@@ -2283,8 +2283,8 @@ async def _guild_store_step(
         amount=want,
         held=held,
         place=place,
-        kinds=len(stock),
-        known=item_id in stock,
+        kinds=len({key.partition("!")[0] for key in stock}),
+        known=any(key.partition("!")[0] == item_id.partition("!")[0] for key in stock),
     )
     if refusal:
         return refusal

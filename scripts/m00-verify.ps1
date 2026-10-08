@@ -7,6 +7,7 @@ $ErrorActionPreference = "Stop"
 $uvCommand = if ($env:VELLAR_UV) { $env:VELLAR_UV } else { "uv" }
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
+if ($PgBin) { $env:PATH = "$PgBin;$env:PATH" }
 
 if (-not $ReportPath) {
     $ReportPath = Join-Path $root ("backups/m00-{0}.txt" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
@@ -97,9 +98,9 @@ SELECT id, 'sword@1#common', 3 FROM characters WHERE user_id = $account;
 
 function Assert-Character([string]$database, [string]$account) {
     Assert-User $database $account
-    $saved = Query-TestDatabase $database "SELECT level || ':' || gold || ':' || bank_gold || ':' || experience || ':' || stat_str || ':' || revision || ':' || (equipment->>'weapon') FROM characters WHERE user_id = $account"
-    if ($saved -ne "12:731:219:345:8:0:sword@1#common") { throw "Control character changed during backup or migration" }
-    $items = Query-TestDatabase $database "SELECT quantity FROM inventory JOIN characters ON characters.id = inventory.character_id WHERE user_id = $account AND item_id = 'sword@1#common'"
+    $saved = Query-TestDatabase $database "SELECT level || ':' || gold || ':' || bank_gold || ':' || experience || ':' || stat_str || ':' || split_part(equipment->>'weapon', '!', 1) FROM characters WHERE user_id = $account"
+    if ($saved -ne "12:731:219:345:8:sword@1#common") { throw "Control character changed during backup or migration" }
+    $items = Query-TestDatabase $database "SELECT sum(quantity) FROM inventory JOIN characters ON characters.id = inventory.character_id WHERE user_id = $account AND split_part(item_id, '!', 1) = 'sword@1#common'"
     if ($items -ne "3") { throw "Control inventory changed during backup or migration" }
 }
 

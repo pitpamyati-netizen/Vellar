@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from hashlib import blake2b
 
 from mmorpg.domain.entities.content import (
@@ -122,7 +122,7 @@ def gear_id(archetype_id: str, level: int, rarity_id: str, roll: int = 0) -> str
 
 def parse_gear_id(item_id: str) -> tuple[str, int, str, int] | None:
     """Разобрать идентификатор вещи. ``None`` — это не собранная вещь."""
-    head, mark, tail = item_id.partition(RARITY_MARK)
+    head, mark, tail = item_id.partition("!")[0].partition(RARITY_MARK)
     if not mark:
         return None
     rarity, roll_mark, roll = tail.partition(ROLL_MARK)
@@ -413,7 +413,8 @@ def worn(content: GameContent, item: Item, hero_level: int) -> Item:
     if parsed is None or not content.has_gear_archetype(parsed[0]):
         return item
     archetype = content.gear_archetype(parsed[0])
-    return build(content, archetype, parsed[1], rarity, roll=parsed[3], hero_level=hero_level)
+    built = build(content, archetype, parsed[1], rarity, roll=parsed[3], hero_level=hero_level)
+    return replace(built, id=item.id, name=item.name)
 
 
 # --- что падает ------------------------------------------------------

@@ -5,7 +5,7 @@ rem
 rem call scripts\vellar-tools.bat stamp    поставить VELLAR_BUILD из дерева git
 rem call scripts\vellar-tools.bat report   сказать, какая сборка работает сейчас
 rem call scripts\vellar-tools.bat flush    заставить Redis выписать своё состояние
-rem call scripts\vellar-tools.bat backup   pg_dump в backups\, держать 20 копий
+rem call scripts\vellar-tools.bat backup   проверенная копия в backups\, держать 20
 rem call scripts\vellar-tools.bat running  errorlevel 0, если стек поднят
 rem call scripts\vellar-tools.bat pgtools  добавить местные psql/pg_dump в PATH
 rem call scripts\vellar-tools.bat envvar X прочитать X из .env в ENV_VALUE
@@ -15,7 +15,7 @@ rem PostgreSQL, установленный на этой машине, когд�
 rem (docs/adr/0010-a-machine-without-containers.md). Файл выходит один и тот же, и
 rem именно это позволяет развернуть одно в другое.
 rem
-rem Нарочно без setlocal: вызывающему нужны обратно VELLAR_BUILD и BACKUP_FILE.
+rem Нарочно без setlocal: вызывающему нужен обратно VELLAR_BUILD.
 rem Предполагается, что вызывающий уже перешёл в корень репозитория.
 rem ============================================================================
 if "%~1"=="stamp"   goto :stamp
@@ -83,75 +83,10 @@ rem ---------------------------------------------------------------------------
 rem Дамп всего постоянного, до того как что-либо остановлено или заменено.
 rem ---------------------------------------------------------------------------
 :backup
-set "BACKUP_FILE="
-if not exist "backups" mkdir "backups"
-for /f "usebackq delims=" %%t in (`powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd_HHmmss"`) do set "STAMP=%%t"
-set "BACKUP_FILE=backups\vellar-%STAMP%.sql"
-
-rem Базу держит контейнер, пока поднят стек, и PostgreSQL этой машины, когда стека нет.
-rem Кого спрашивать, решается здесь, а не вызывающим, поэтому stop.bat читает одно и то
-rem же в обоих случаях.
-call :running
-if errorlevel 1 goto :backup_here
-
-docker compose exec -T postgres pg_dump -U vellar -d vellar --clean --if-exists --no-owner > "%BACKUP_FILE%"
-if errorlevel 1 (
-    del /q "%BACKUP_FILE%" 2>nul
-    set "BACKUP_FILE="
-    echo [Vellar] PostgreSQL did not answer, so no backup was written.
-    exit /b 1
-)
-
-set "CHARACTERS=?"
-for /f "usebackq delims=" %%n in (`docker compose exec -T postgres psql -U vellar -d vellar -tAc "select count(*) from characters" 2^>nul`) do set "CHARACTERS=%%n"
-echo [Vellar] Saved %CHARACTERS% character(s) to %BACKUP_FILE%.
-goto :prune
-
-rem ---------------------------------------------------------------------------
-rem Тот же дамп, но снятый с PostgreSQL, установленного на этой машине.
-rem ---------------------------------------------------------------------------
-:backup_here
-call :pgtools
-if errorlevel 1 (
-    del /q "%BACKUP_FILE%" 2>nul
-    set "BACKUP_FILE="
-    echo [Vellar] Nothing is running in Docker and there is no PostgreSQL on this
-    echo [Vellar] machine either, so there is no database to dump.
-    exit /b 1
-)
-call :envvar POSTGRES_DSN
-if not defined ENV_VALUE set "ENV_VALUE=postgresql://vellar:vellar@localhost:5432/vellar"
-set "VELLAR_DSN=%ENV_VALUE%"
-rem Никогда не сидеть в ожидании базы, которой нет: это выполняется внутри остановки.
-set "PGCONNECT_TIMEOUT=5"
-
-pg_dump "%VELLAR_DSN%" --clean --if-exists --no-owner > "%BACKUP_FILE%" 2>nul
-if errorlevel 1 (
-    del /q "%BACKUP_FILE%" 2>nul
-    set "BACKUP_FILE="
-    echo [Vellar] PostgreSQL did not answer, so no backup was written.
-    exit /b 1
-)
-
-set "CHARACTERS=?"
-for /f "usebackq delims=" %%n in (`psql "%VELLAR_DSN%" -tAc "select count(*) from characters" 2^>nul`) do set "CHARACTERS=%%n"
-echo [Vellar] Saved %CHARACTERS% character(s) to %BACKUP_FILE%.
-
-:prune
-rem Двадцать — это месяц ежедневных остановок и примерно столько диска, сколько это
-rem заслуживает.
-set /a KEPT=0
-for /f "usebackq delims=" %%f in (`dir /b /a-d /o-d "backups\vellar-*.sql" 2^>nul`) do (
-    set /a KEPT+=1
-    call :prune_one "%%f"
-)
-exit /b 0
-
-rem Вызовом, а не встроенным кодом: внутри цикла выше %KEPT% раскрылось бы один раз, при
-rem разборе, и каждый файл судили бы по счёту до первого из них.
-:prune_one
-if %KEPT% gtr 20 del /q "backups\%~1" 2>nul
-exit /b 0
+rem Один и тот же проверяемый путь для расписания и остановки. Ротация только
+rem после восстановления; неудача сохраняет прежние годные копии.
+pwsh -NoProfile -File scripts\backup.ps1
+exit /b %errorlevel%
 
 rem ---------------------------------------------------------------------------
 rem Поднят ли стек вообще. Нужно, чтобы отличить «делать нечего» от «что-то пошло не

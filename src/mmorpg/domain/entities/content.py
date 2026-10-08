@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from types import MappingProxyType
 
@@ -1193,6 +1193,17 @@ class GameContent:
         собирается по требованию и запоминается: одна и та же строка всегда даёт
         одну и ту же вещь, поэтому кэш здесь - только про скорость (ADR 0059).
         """
+        from mmorpg.domain.entities.item_instance import instance_ids, template_id
+
+        if "!" in item_id:
+            ids = instance_ids(item_id)
+            base = self.item(template_id(item_id))
+            suffix = (
+                f"экземпляр {ids[0]}"
+                if len(ids) == 1
+                else "экземпляры " + ", ".join(str(number) for number in ids)
+            )
+            return replace(base, id=item_id, name=f"{suffix.capitalize()}: {base.name}")
         found = self._items_by_id.get(item_id) or self._forged.get(item_id)
         if found is not None:
             return found
@@ -1207,7 +1218,7 @@ class GameContent:
             return True
         try:
             self.item(item_id)
-        except KeyError:
+        except KeyError, ValueError:
             return False
         return True
 

@@ -35,7 +35,10 @@
 | [docs/project-map.md](project-map.md) | Карта кода, каталогов, тестов и решений |
 | [docs/architecture.md](architecture.md) | Текущее устройство и ограничения сохранности |
 | [ADR 0086](adr/0086-durable-effects-and-delivery.md) | Постоянные награды, лимиты и очередь сообщений M02 |
+| [ADR 0088](adr/0088-item-instances.md) | Номера снаряжения, износ и перенос прежних вещей |
+| [ADR 0089](adr/0089-verified-backups-and-supervision.md) | Проверка снимка до ротации и внешний контроль зависания |
 | [docs/verification.md](verification.md) | Изоляция тестов и уровни доказательства |
+| [Проверка M00–M01 от 08.10.2026](verification-m00-m01-2026-10-08.md) | Копии, зависание, физические вещи и перенос старого имущества |
 | [docs/deployment.md](deployment.md) | Запуск, резервные копии, наблюдение, ограничения нагрузки |
 | [docs/release-checklist.md](release-checklist.md) | Проверки перед выпуском |
 | [docs/content-guide.md](content-guide.md) | Изменение содержимого через TOML |
@@ -88,3 +91,5 @@ Roadmap. Новое решение связывать с отменённым AD
 
 Уточнение существующих правил M02.4–M02.10: [ADR 0087](adr/0087-guild-safety-and-current-actions.md).
 Автоматическая приёмка 08.10.2026 — [протокол](verification.md#результат-m024m0210-от-08102026).
+Дополнения M00.4–M00.5 и M01.5 —
+[протокол M00–M01](verification-m00-m01-2026-10-08.md), ADR 0088 и 0089.
