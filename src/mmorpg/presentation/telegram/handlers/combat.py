@@ -40,6 +40,7 @@ from mmorpg.application.services.battle import (
 )
 from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.party import PartyStore
+from mmorpg.application.services.recruitment import Recruitment
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import ActionKind, BattleAction, Combatant, EventKind, Verdict
@@ -192,7 +193,7 @@ async def open_fight(
         )
         return
 
-    allies = await _party_of(character, parties, characters, store)
+    allies = await _party_of(character, parties, characters, store, flow=flow, content=content)
     session, roster = await _spawn(
         message,
         content=content,
@@ -241,6 +242,9 @@ async def _party_of(
     parties: PartyStore,
     characters: CharacterRepository,
     store: BattleStore,
+    *,
+    flow: PlayState | None = None,
+    content: GameContent | None = None,
 ) -> tuple[Character, ...]:
     """Кто идёт в этот бой вместе с игроком.
 
@@ -250,13 +254,36 @@ async def _party_of(
     party = await parties.of(character.id)
     if party is None:
         return ()
+    recruitment = Recruitment(parties, characters)
+    listing = await recruitment.for_party(party.leader_id)
+    allowed = party.members
+    if listing:
+        goal_key = ""
+        if flow and flow.fight == "dungeon":
+            goal_key = (
+                f"{flow.descent.city_id}:location:{flow.descent.slot}"
+                if flow.descent.roamer
+                else f"{flow.descent.city_id}:dungeon:{flow.descent.dungeon_id}"
+            )
+        elif flow and flow.fight.startswith("node:"):
+            goal_key = f"{flow.session.city_id}:location:{flow.session.slot}"
+        allowed = await recruitment.companions(party, goal_key=goal_key)
+        if character.id not in allowed:
+            return ()
+        if content and await recruitment.with_content(content)._refusal(listing, character, party):
+            return ()
     companions: list[Character] = []
     for member_id in party.members:
-        if member_id == character.id:
+        if member_id == character.id or member_id not in allowed:
             continue
         other = await characters.get(member_id)
         if other is None or await store.busy(other.id) is not None:
             continue
+        if listing:
+            if other.city_id != character.city_id:
+                continue
+            if content and await recruitment.with_content(content)._refusal(listing, other, party):
+                continue
         companions.append(other)
         if len(companions) + 1 >= party_rules.MAX_MEMBERS:
             break

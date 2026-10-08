@@ -34,6 +34,7 @@ from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.guild_safety import disband_token, dissolve
 from mmorpg.application.services.keeper import set_keeper, sync_keeper
 from mmorpg.application.services.party import PartyStore
+from mmorpg.application.services.recruitment import Recruitment
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character, InventoryEntry
 from mmorpg.domain.entities.content import GameContent
@@ -96,7 +97,9 @@ from mmorpg.presentation.telegram.flows.state import (
     PlayState,
     go_back,
 )
+from mmorpg.presentation.telegram.handlers import recruitment as recruitment_handler
 from mmorpg.presentation.telegram.handlers.combat import ENGAGED_TTL, open_fight
+from mmorpg.presentation.telegram.handlers.combat import _party_of as fight_companions
 from mmorpg.presentation.telegram.handlers.combat import _show as show_battle
 from mmorpg.presentation.telegram.handlers.creation import welcome_screen
 from mmorpg.presentation.telegram.messaging import send_screen, send_text
@@ -208,6 +211,74 @@ async def play(
         flow = begin(character)
 
     now = int(time.time())
+    command_text = message.text
+    invitation_notice = ""
+    invite_actions = {
+        "/отряд повторить": ("party", "repeat"),
+        "Повторить зов в отряд": ("party", "repeat"),
+        "/отряд блокировать": ("party", "block"),
+        "Блокировать зов в отряд": ("party", "block"),
+        "/гильдия повторить": ("guild", "repeat"),
+        "Повторить зов в гильдию": ("guild", "repeat"),
+        "/гильдия блокировать": ("guild", "block"),
+        "Блокировать зов в гильдию": ("guild", "block"),
+    }
+    if action := invite_actions.get(command_text.strip()):
+        kind, purpose = action
+        store = parties.invitations if kind == "party" else guilds.invitations
+        call = await store.get(character.id)
+        if purpose == "block" and call and call.inviter_id:
+            await store.block(character.id, call.inviter_id)
+            invitation_notice = "Зов заблокирован. Снять блокировку: /набор разрешить Имя."
+        elif purpose == "repeat" and call:
+            invited_party = await parties.by_leader(call.group_id) if kind == "party" else None
+            guild = await guilds.by_id(call.group_id) if kind == "guild" else None
+            valid = bool(
+                invited_party and not invited_party.full and await parties.of(character.id) is None
+            )
+            if valid and invited_party:
+                leader = await characters.get(invited_party.leader_id)
+                stamp = (
+                    await state_cache.get(f"social:party-generation:{invited_party.leader_id}")
+                    or ""
+                )
+                valid = bool(
+                    leader
+                    and abs(leader.level - character.level) <= party_rules.LEVEL_WINDOW
+                    and call.group_stamp == stamp
+                    and invited_party.has(call.inviter_id)
+                )
+            if guild:
+                valid = (
+                    await guilds.of(character.id) is None
+                    and guild.size < guild_rules.standing(content, guild).seats
+                    and (not call.inviter_id or guild.can_invite(call.inviter_id))
+                )
+            renewed = valid and await store.repeat(character.id, now=now)
+            invitation_notice = (
+                "Приглашение возобновлено на сутки. Теперь можно согласиться."
+                if renewed
+                else (
+                    "Повтор недоступен: проверьте место, состав и блокировку. "
+                    "Можно выбрать другой отряд."
+                )
+            )
+        else:
+            invitation_notice = (
+                "Сохранённого приглашения нет. Попросите новый зов или откройте поиск отряда."
+            )
+        command_text = "/отряд" if kind == "party" else "/гильдия"
+    if recruitment_handler.requested(command_text, flow):
+        flow, recruitment_screen = await recruitment_handler.step(
+            command_text, flow, character, content, Recruitment(parties, characters), now=now
+        )
+        if recruitment_screen is not None:
+            await state.set_state(STATE_FOR_SCREEN[flow.screen])
+            await state.update_data({STATE_KEY: flow.serialise()})
+            await send_screen(message, recruitment_screen, emoji=emoji)
+            return
+        if command_text.startswith("/набор") or command_text in {"/назад", "/back", "Назад"}:
+            command_text = "/осмотреться"
     clock = Clock(
         now=now,
         shop_rotation=rotation_index(now, settings.shop_rotation_seconds),
@@ -221,7 +292,7 @@ async def play(
     view = await _keeper_view(
         flow,
         character,
-        message.text,
+        command_text,
         characters,
         users,
         keeper_log,
@@ -247,7 +318,7 @@ async def play(
         content,
         character,
         flow,
-        message.text,
+        command_text,
         world_seed=settings.world_seed,
         clock=clock,
         goods=goods,
@@ -259,6 +330,29 @@ async def play(
         guild=guild_view,
         location_state=here,
     )
+    if invitation_notice:
+        updated = updated.with_notice(invitation_notice)
+    if updated.screen in recruitment_handler.SCREENS:
+        updated, screen = await recruitment_handler.show(
+            updated, character, Recruitment(parties, characters).with_content(content), now=now
+        )
+        await state.set_state(STATE_FOR_SCREEN[updated.screen])
+        await state.update_data({STATE_KEY: updated.serialise()})
+        await send_screen(message, screen, emoji=emoji)
+        return
+    # Ответ со старого экрана не принимает приглашение от другого собравшего.
+    if updated.party_action in {"accept", "decline"}:
+        call = await parties.invitations.get(character.id)
+        if call and flow.party_invitation and call.identity != flow.party_invitation:
+            updated = replace(updated.at(ScreenId.PARTY), party_action="").with_notice(
+                "Прежнее приглашение сменилось. Проверьте, кто зовёт, и выберите действие заново."
+            )
+    if updated.guild_action in {"accept", "decline"}:
+        call = await guilds.invitations.get(character.id)
+        if call and flow.guild_invitation and call.identity != flow.guild_invitation:
+            updated = replace(updated.at(ScreenId.GUILD), guild_action="").with_notice(
+                "Прежнее приглашение сменилось. Проверьте гильдию и выберите действие заново."
+            )
 
     # Отряд лежит в общем хранилище, поэтому автомат его только просит: завести,
     # расформировать, позвать, согласиться. Делает всё это хендлер, и он же
@@ -368,7 +462,9 @@ async def play(
     if updated.fight == "dungeon" and updated.descent.roamer and updated.descent.layer == 0:
         if not updated.descent.encounter_id:
             updated = replace(updated, descent=replace(updated.descent, encounter_id=uuid4().hex))
-        blocked = await _claim_roamer(character, updated.descent, locations, parties)
+        blocked = await _claim_roamer(
+            character, updated.descent, locations, parties, characters=characters, content=content
+        )
         if blocked:
             updated = go_back(replace(updated, fight="", descent=Descent())).with_notice(blocked)
             await state.set_state(STATE_FOR_SCREEN[updated.screen])
@@ -423,6 +519,10 @@ async def play(
     )
     gathered = await _party_view(updated, character, characters, parties)
     guild_view = await _guild_view(updated, character, characters, guilds, content, settings, now)
+    if gathered.caller and (call := await parties.invitations.get(character.id)):
+        updated = replace(updated, party_invitation=call.identity)
+    if guild_view.caller and (call := await guilds.invitations.get(character.id)):
+        updated = replace(updated, guild_invitation=call.identity)
     if updated.screen is ScreenId.GUILD_DISBAND and not updated.guild_confirmation:
         updated = replace(updated, guild_confirmation=guild_view.disband_token)
     briefing = await _digest_view(
@@ -1402,6 +1502,9 @@ async def _claim_roamer(
     descent: Descent,
     locations: LocationStateCache,
     parties: PartyStore,
+    *,
+    characters: CharacterRepository | None = None,
+    content: GameContent | None = None,
 ) -> str:
     """Взять замок подземелья перед заходом. Пустая строка - можно идти.
 
@@ -1411,6 +1514,23 @@ async def _claim_roamer(
     """
     party = await parties.of(character.id)
     in_party = party is not None and len(party.members) >= 2
+    if party and characters:
+        recruited = Recruitment(parties, characters)
+        if content and await recruited.for_party(party.leader_id):
+            companions = await fight_companions(
+                character,
+                parties,
+                characters,
+                BattleStore(parties._cache),
+                flow=PlayState(fight="dungeon", descent=descent),
+                content=content,
+            )
+            in_party = bool(companions)
+        else:
+            ready = await recruited.companions(
+                party, goal_key=f"{descent.city_id}:location:{descent.slot}"
+            )
+            in_party = character.id in ready and len(ready) >= 2
     if descent.group and not in_party:
         return "Это подземелье рассчитано на отряд. В одиночку туда не спускаются."
     if not descent.group and in_party:
@@ -1530,6 +1650,7 @@ async def _party_view(
         members=await _party_names(party, characters) if party is not None else (),
         leader=party is not None and party.leader_id == character.id,
         caller=caller.name if caller is not None else "",
+        invitation_notice=await parties.invitations.explanation(character.id),
     )
 
 
@@ -1576,15 +1697,23 @@ async def _party_step(
             if party is None:
                 return "Вы и так идёте один."
             leading = party.leader_id == character.id
-            await parties.leave(character.id)
+            await Recruitment(parties, characters).leave(character.id)
             word = "Отряд расформирован." if leading else f"{character.name} ушёл из отряда."
             await _tell_party(message, characters, party.members, character.id, word)
             return "Отряд расформирован." if leading else "Вы вышли из отряда."
 
         case "accept":
+            call = await parties.invitations.get(character.id)
+            caller = await characters.get(call.group_id) if call else None
+            if caller and abs(caller.level - character.level) > party_rules.LEVEL_WINDOW:
+                return "Уровни изменились: этот отряд больше не подходит. Выберите набор на доске."
             party = await parties.accept(character.id)
             if party is None:
-                return "Вас сейчас никто не зовёт."
+                return await parties.invitations.explanation(character.id) or (
+                    "Приглашение больше недоступно. Откройте «Поиск отряда» и выберите набор."
+                )
+            if not party.has(character.id):
+                return "В отряде не осталось мест. Можно вернуться позже или выбрать другой набор."
             names = await _party_names(party, characters)
             await _tell_party(
                 message, characters, party.members, character.id, f"{character.name} идёт с вами."
@@ -1654,12 +1783,17 @@ async def _invite(
     if refused or party is None:
         return refused
 
-    await parties.call(leader_id=party.leader_id, invitee_id=target.id)
+    refusal = await parties.call(
+        leader_id=party.leader_id, invitee_id=target.id, inviter_id=character.id
+    )
+    if refusal:
+        return refusal
     await _tell(
         message,
         target.user_id,
         f"{character.name}, уровень {character.level}, зовёт вас в отряд. "
-        "Наберите «/отряд принять», чтобы пойти вместе, или «/отряд отказать».",
+        "Приглашение действует сутки. Наберите «/отряд принять», чтобы пойти вместе, "
+        "или «/отряд отказать». После истечения — «/отряд повторить».",
     )
     return f"Зов отправлен: {target.name}. Ответит — пойдёте вместе."
 
@@ -1748,7 +1882,10 @@ async def _guild_view(
         caller = from_guild.name if from_guild is not None else ""
     if guild is None:
         return guild_screens.GuildView(
-            my_gold=character.gold, caller=caller, tiers=content.guild_tiers
+            my_gold=character.gold,
+            caller=caller,
+            tiers=content.guild_tiers,
+            invitation_notice=await guilds.invitations.explanation(character.id, now=now),
         )
     members: list[tuple[str, guild_rules.GuildRank, int]] = []
     for one in guild.members:
@@ -1926,19 +2063,29 @@ async def _guild_step(
             )
             if refusal:
                 return refusal, character
-            await guilds.call(guild_id=guild.id, invitee_id=target.id)
+            refusal = await guilds.call(
+                guild_id=guild.id, invitee_id=target.id, inviter_id=character.id
+            )
+            if refusal:
+                return refusal, character
             await _tell(
                 message,
                 target.user_id,
                 f"Гильдия «{guild.name}» зовёт вас к себе. Наберите «/гильдия принять», "
-                "чтобы вступить, или «/гильдия отклонить».",
+                "чтобы вступить, или «/гильдия отклонить». Срок — сутки; "
+                "после истечения — «/гильдия повторить».",
             )
             return f"Зов отправлен: {target.name}.", character
 
         case "accept":
             joined = await guilds.accept(character.id, content)
             if joined is None:
-                return "Вас сейчас никакая гильдия не зовёт.", character
+                return (
+                    await guilds.invitations.explanation(character.id)
+                    or "Приглашение больше недоступно. "
+                    "Попросите новый зов или выберите другую гильдию.",
+                    character,
+                )
             if not joined.has(character.id):
                 return f"В гильдии «{joined.name}» не осталось мест.", character
             rank = joined.rank_of(character.id)

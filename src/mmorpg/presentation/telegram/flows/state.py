@@ -301,6 +301,15 @@ class PlayState:
     #: ``accept``, ``decline``. Переходное, как и ``invite``: отряд лежит в общем
     #: хранилище, а автомат не читает и не пишет ничего.
     party_action: str = ""
+    party_invitation: str = ""
+    guild_invitation: str = ""
+    recruitment_id: str = ""
+    recruitment_goal: str = ""
+    recruitment_pace: str = ""
+    recruitment_low: int = 0
+    recruitment_high: int = 0
+    recruitment_page: int = 1
+    recruitment_choices: tuple[tuple[str, str], ...] = ()
     #: То же для гильдии: ``found``, ``disband``, ``leave``, ``accept``,
     #: ``decline``, ``invite``, ``promote``, ``demote``, ``kick``, ``deposit``,
     #: ``withdraw``. ``guild_arg`` - имя или сумма к нему. Переходное.
@@ -336,6 +345,16 @@ class PlayState:
         return json.dumps(
             {
                 "screen": self.screen.value,
+                "invitations": [self.party_invitation, self.guild_invitation],
+                "recruitment": [
+                    self.recruitment_id,
+                    self.recruitment_goal,
+                    self.recruitment_pace,
+                    self.recruitment_low,
+                    self.recruitment_high,
+                    self.recruitment_page,
+                    self.recruitment_choices,
+                ],
                 "stack": self.stack.serialise(),
                 "world_page": self.world_page.page,
                 "location_page": self.location_page.page,
@@ -441,8 +460,19 @@ class PlayState:
         # Хвост читается с запасом: запись старого образца не называла передачу.
         transfer_scope, transfer_to, transfer_item = [*data.get("transfer", []), "", "", ""][:3]
         vault_action, vault_item = [*data.get("vault", []), "", ""][:2]
+        recruitment = data.get("recruitment", ["", "", "", 0, 0, 1, []])
+        invitations = data.get("invitations", ["", ""])
         return cls(
             screen=ScreenId(data["screen"]),
+            party_invitation=str(invitations[0]),
+            guild_invitation=str(invitations[1]),
+            recruitment_id=str(recruitment[0]),
+            recruitment_goal=str(recruitment[1]),
+            recruitment_pace=str(recruitment[2]),
+            recruitment_low=int(recruitment[3]),
+            recruitment_high=int(recruitment[4]),
+            recruitment_page=int(recruitment[5]),
+            recruitment_choices=tuple((str(a), str(b)) for a, b in recruitment[6]),
             stack=NavigationStack.deserialise(data.get("stack", "")),
             world_page=PageState(page=int(data.get("world_page", 1))),
             location_page=PageState(page=int(data.get("location_page", 1))),

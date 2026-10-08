@@ -160,6 +160,7 @@ def main_menu_screen(
         (labels.CHARACTER, labels.INVENTORY),
         (labels.SKILLS, labels.QUESTS),
         (labels.CRAFTS, labels.PARTY),
+        (labels.label("Поиск отряда"),),
         (labels.GUILD,),
         (labels.SETTINGS,),
     ]

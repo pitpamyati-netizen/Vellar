@@ -127,3 +127,4 @@ M01 уточняет границы ценностей в 0084; отметки, 
 
 - [ADR 0090 — Бой, место и экран сохраняются вместе](0090-durable-battles-and-sessions.md)
 - [ADR 0091 — Первое дело, возвращение и полный текст](0091-first-session-return-and-full-reading.md)
+- [ADR 0092 — Набор хранит цель и личное согласие](0092-recruitment-consent-and-invitations.md)

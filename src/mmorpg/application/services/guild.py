@@ -9,8 +9,8 @@
 
 - **состав, казна, хранилище и войны** - в базе (``GuildRepository``, ADR 0030,
   0077): гильдию и её добро нельзя терять между заходами;
-- **зовы** (в гильдию и на войну) - в кэше со сроком, как и зов в отряд: зов,
-  который нельзя ни принять, ни отменить, хуже, чем никакого;
+- **зов в гильдию** действует сутки, а SQL сохраняет исход и возможность
+  позднего повтора (ADR 0092); зов на войну сохраняет прежние правила срока;
 - **счёт периода** - выемка, подряд и зачтённые очки войны сохраняются
   в PostgreSQL вместе с ценностями (M02.2). Период входит в ключ; прежний
   счёт не удаляется при потере кэша и не переносится в следующий период.
@@ -21,6 +21,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from mmorpg.application.operations import atomic_action
+from mmorpg.application.services.invitations import DAY, Invitations
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.ports.repositories import GuildRepository, StateCache
 from mmorpg.domain.procgen.seeds import seconds_left_in_rotation
@@ -31,11 +32,11 @@ from mmorpg.domain.rules.guild_contract import Contract, ContractKind, contracts
 from mmorpg.domain.rules.guild_war import War
 
 #: Сколько ждёт ответа зов в гильдию.
-CALL_TTL = 600
+CALL_TTL = DAY
 
 
 class GuildStore:
-    """Гильдии (в базе) и незакрытые приглашения (в кэше со сроком)."""
+    """Гильдии и приглашения с явным сроком и сохранённым исходом."""
 
     def __init__(
         self, roster: GuildRepository, cache: StateCache, *, call_ttl: int = CALL_TTL
@@ -43,6 +44,10 @@ class GuildStore:
         self._roster = roster
         self._cache = cache
         self._call_ttl = call_ttl
+
+    @property
+    def invitations(self) -> Invitations:
+        return Invitations(self._cache, "guild", self._call_ttl)
 
     @staticmethod
     def _call_key(character_id: int) -> str:
@@ -170,15 +175,19 @@ class GuildStore:
         )
         await self._cache.set(key, str(already + max(0, amount)), max(1, end - now))
 
-    async def call(self, *, guild_id: int, invitee_id: int) -> None:
-        await self._cache.set(self._call_key(invitee_id), str(guild_id), self._call_ttl)
+    @atomic_action
+    async def call(
+        self, *, guild_id: int, invitee_id: int, inviter_id: int = 0, now: int | None = None
+    ) -> str:
+        guild = await self.by_id(guild_id)
+        issuer = inviter_id or (guild.founder_id if guild else 0)
+        return await self.invitations.send(guild_id, issuer, invitee_id, now=now)
 
     async def called_to(self, invitee_id: int) -> int:
-        guild_id = await self._cache.get(self._call_key(invitee_id))
-        return int(guild_id) if guild_id else 0
+        return await self.invitations.current(invitee_id)
 
     async def forget_call(self, invitee_id: int) -> None:
-        await self._cache.delete(self._call_key(invitee_id))
+        await self.invitations.finish(invitee_id)
 
     @atomic_action
     async def accept(self, invitee_id: int, content: GameContent) -> Guild | None:
@@ -188,8 +197,9 @@ class GuildStore:
         могла набраться под завязку (ADR 0076).
         """
         guild_id = await self.called_to(invitee_id)
-        await self.forget_call(invitee_id)
         if not guild_id:
+            return None
+        if await self._roster.of(invitee_id) is not None:
             return None
         guild = await self._roster.by_id(guild_id)
         if guild is None:
@@ -197,8 +207,19 @@ class GuildStore:
         seats = guild_rules.standing(content, guild).seats
         if guild.size >= seats or guild.has(invitee_id):
             return guild
+        call = await self.invitations.get(invitee_id)
+        if (
+            call
+            and call.inviter_id
+            and (
+                not guild.can_invite(call.inviter_id)
+                or await self.invitations.blocked(call.inviter_id, invitee_id)
+            )
+        ):
+            return None
         joined = guild.with_member(invitee_id, GuildRank.RECRUIT, seats=seats)
         await self._roster.save(joined)
+        await self.invitations.finish(invitee_id, "accepted")
         return joined
 
     @atomic_action

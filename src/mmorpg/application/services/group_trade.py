@@ -392,7 +392,16 @@ class GroupTrade:
                 author_name=author.name,
                 target_name=target.name,
             )
-        await self.parties.call(leader_id=mine.leader_id, invitee_id=target.character_id)
+        refusal = await self.parties.call(
+            leader_id=mine.leader_id, invitee_id=target.character_id, inviter_id=author.character_id
+        )
+        if refusal:
+            return GroupOutcome(
+                result=GroupResult.REFUSED,
+                reason=refusal,
+                author_name=author.name,
+                target_name=target.name,
+            )
         return GroupOutcome(
             result=GroupResult.PARTY_INVITED,
             author_name=author.name,

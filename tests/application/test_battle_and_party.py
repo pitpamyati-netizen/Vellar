@@ -330,8 +330,8 @@ async def test_the_party_roster_lives_in_the_repository_not_the_cache(
 ) -> None:
     """Состав отряда лежит в базе и сроком не ограничен: он переживает вылазку (ADR 0029).
 
-    Зов - другое дело, он в кэше со сроком; поэтому истечение кэша забирает
-    приглашение и не трогает состав.
+    Временный адаптер local может потерять приглашение, но не меняет состав.
+    Постоянные приглашения SQL проверяются отдельно в M05.
     """
     roster = InMemoryPartyRepository()
     parties = PartyStore(roster, cache)
@@ -343,7 +343,7 @@ async def test_the_party_roster_lives_in_the_repository_not_the_cache(
     assert (read.leader_id, read.members) == (1, (1, 2))
 
     # Кэш выметен целиком - как после разрыва Redis или суток простоя.
-    await cache.delete("party-call:3")
+    await cache.delete(parties.invitations.key(3))
     assert await parties.called_by(3) == 0
     still = await parties.of(2)
     assert still is not None and still.members == (1, 2), "состав кэшем не держится"

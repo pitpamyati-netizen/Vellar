@@ -57,6 +57,7 @@ class GuildView:
     my_gold: int = 0
     #: Имя гильдии, которая зовёт этого игрока. Пусто - никто не зовёт.
     caller: str = ""
+    invitation_notice: str = ""
     #: Ступень гильдии и её деяния (ADR 0076).
     place: Standing = field(default_factory=Standing)
     #: Вся лестница ступеней - для экрана возвышения.
@@ -236,7 +237,12 @@ def guild_screen(view: GuildView, notice: str = "") -> Screen:
 
     if view.caller:
         lines.append(f"Гильдия «{view.caller}» зовёт вас к себе.")
+        lines.append("Срок — сутки. Позже можно запросить повтор: /гильдия повторить.")
         rows.append((labels.GUILD_ACCEPT, labels.GUILD_DECLINE))
+        rows.append((labels.label("Блокировать зов в гильдию"),))
+    if view.invitation_notice:
+        lines.append(view.invitation_notice)
+        rows.append((labels.label("Повторить зов в гильдию"),))
 
     return Screen(id=ScreenId.GUILD, lines=tuple(lines), rows=tuple(rows))
 

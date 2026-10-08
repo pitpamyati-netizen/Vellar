@@ -539,6 +539,11 @@ def _render(
     if state.screen in KEEPER_SCREENS:
         return keeper_flow.render(content, character, state, keeper or KeeperView())
     match state.screen:
+        case ScreenId.RECRUITMENT | ScreenId.RECRUITMENT_SETUP | ScreenId.RECRUITMENT_CARD:
+            # Общий состав приносит отдельный маршрут обработчика.
+            return Screen(
+                state.screen, ("Поиск отряда.", "Откройте /набор, чтобы обновить состав.")
+            )
         case ScreenId.PARTY:
             return party_screens.party_screen(party or PartyView(), state.notice)
         case ScreenId.PARTY_INVITE:

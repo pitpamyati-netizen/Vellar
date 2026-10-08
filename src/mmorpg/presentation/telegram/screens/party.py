@@ -34,6 +34,7 @@ class PartyView:
     leader: bool = False
     #: Кто зовёт этого игрока к себе. Пусто - никто не зовёт.
     caller: str = ""
+    invitation_notice: str = ""
 
     @property
     def gathered(self) -> bool:
@@ -68,7 +69,13 @@ def party_screen(view: PartyView, notice: str = "") -> Screen:
 
     if view.caller:
         lines.append(f"{view.caller} зовёт вас в отряд.")
+        lines.append("Срок — сутки. Позже можно запросить повтор: /отряд повторить.")
         rows.append((labels.PARTY_ACCEPT, labels.PARTY_DECLINE))
+        rows.append((labels.label("Блокировать зов в отряд"),))
+    if view.invitation_notice:
+        lines.append(view.invitation_notice)
+        rows.append((labels.label("Повторить зов в отряд"),))
+    lines.append("Поиск попутчиков: /набор. Блокировка по имени: /набор блокировать Имя.")
 
     return Screen(id=ScreenId.PARTY, lines=tuple(lines), rows=tuple(rows))
 

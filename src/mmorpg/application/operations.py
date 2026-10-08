@@ -92,6 +92,12 @@ class OperationBoundary(Protocol):
 
 def _repositories(values: list[Any]) -> tuple[object, ...]:
     found: list[object] = []
+    # Групповая команда вызывает тот же сервис приглашений, что личное меню.
+    # Его состав и состояние должны участвовать в исходной операции целиком.
+    for value in tuple(values):
+        values.extend(
+            one for name in ("parties", "guilds") if (one := getattr(value, name, None)) is not None
+        )
     for value in values:
         for candidate in (value, getattr(value, "_roster", None), getattr(value, "_cache", None)):
             if (

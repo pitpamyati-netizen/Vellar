@@ -75,6 +75,9 @@ class Play(StatesGroup):
     npc = State()
     party = State()
     party_invite = State()
+    recruitment = State()
+    recruitment_setup = State()
+    recruitment_card = State()
     guild = State()
     guild_found = State()
     guild_invite = State()
@@ -132,6 +135,9 @@ class Play(StatesGroup):
 # Какой экран какому состоянию принадлежит. По этому разборщик говорит игроку, где он на
 # самом деле стоит, когда тот нажал кнопку старой клавиатуры.
 STATE_FOR_SCREEN: dict[ScreenId, State] = {
+    ScreenId.RECRUITMENT: Play.recruitment,
+    ScreenId.RECRUITMENT_SETUP: Play.recruitment_setup,
+    ScreenId.RECRUITMENT_CARD: Play.recruitment_card,
     ScreenId.RETURNING: Play.returning,
     ScreenId.HISTORY: Play.history,
     ScreenId.CREATE_NAME: Creation.name,
@@ -241,6 +247,9 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
 # Тот единственный шаг, куда ведёт «назад», для каждого экрана. Создание идёт назад по
 # собственным шагам, игровые экраны откатываются к главному меню.
 BACK_TARGET: dict[ScreenId, ScreenId | None] = {
+    ScreenId.RECRUITMENT: ScreenId.PARTY,
+    ScreenId.RECRUITMENT_SETUP: ScreenId.RECRUITMENT,
+    ScreenId.RECRUITMENT_CARD: ScreenId.RECRUITMENT,
     ScreenId.RETURNING: ScreenId.MAIN_MENU,
     ScreenId.HISTORY: ScreenId.MAIN_MENU,
     ScreenId.CREATE_NAME: None,  # первый шаг спрашивает подтверждение перед выходом из создания
