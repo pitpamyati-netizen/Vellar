@@ -239,13 +239,17 @@ def reclaim_lost(content: GameContent, character: Character) -> Character | None
     )
 
 
-def equippable(content: GameContent, character: Character) -> tuple[Skill, ...]:
-    """Изученные боевые умения, которых ещё нет ни в одном слоте.
+def equippable(
+    content: GameContent, character: Character, slot: int | None = None
+) -> tuple[Skill, ...]:
+    """Изученные боевые умения вне панели или уже в выбранном слоте.
 
     Только боевые: пассивному умению слот не нужен, и предлагать его к укладке
     значило бы обещать, что без укладки оно не работает.
     """
     in_panel = set(character.loadout.equipped_actives())
+    if slot is not None and 0 <= slot < len(character.loadout.actives):
+        in_panel.discard(character.loadout.actives[slot])
     return tuple(
         content.skill(code)
         for code in sorted(known_codes(character))

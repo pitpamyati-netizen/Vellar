@@ -130,6 +130,8 @@ try {
     Query-TestDatabase $fresh "INSERT INTO durable_effects(key, value) VALUES('digest:control:5', '1'); INSERT INTO message_delivery(key, bot_id, chat_id, payload, priority) VALUES('control-reply', 1, '1', jsonb_build_object('chat_id', 1, 'text', 'control'), 0); SELECT 1" | Out-Null
     & $uvCommand run python -m scripts.m03_gameplay_probe --database $fresh --seed
     Require-Success "seed persistent battle"
+    & $uvCommand run python -m scripts.m04_journey_probe --database $fresh --seed
+    Require-Success "seed journey and full reading"
     $freshDump = Join-Path $root "backups/m00-fresh.dump"
     & $pgDump -d (Test-Dsn $fresh) -Fc -f $freshDump
     Require-Success "backup fresh database"
@@ -152,6 +154,9 @@ try {
     & $uvCommand run python -m scripts.m03_gameplay_probe --database $restored
     Require-Success "restore persistent battle"
     Record "M03: persistent battle, rules, occupation and screen survived backup restore"
+    & $uvCommand run python -m scripts.m04_journey_probe --database $restored
+    Require-Success "restore journey and full reading"
+    Record "M04: journey, history and full reading survived backup restore"
 
     Reset-TestDatabase $old
     Upgrade-TestDatabase $old "0030"

@@ -18,17 +18,22 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.types import Message, ReplyKeyboardMarkup, ReplyKeyboardRemove, ReplyParameters
 
 from mmorpg.application.operations import after_commit, current_operation
+from mmorpg.presentation.telegram import reading
 from mmorpg.presentation.telegram.keyboards.reply import (
     dismiss_keyboard,
     keyboard_for,
     selective_keyboard,
 )
 from mmorpg.presentation.telegram.screens.base import Screen
+from mmorpg.presentation.telegram.screens.format import MESSAGE_LIMIT
 from mmorpg.presentation.telegram.screens.group import GroupReply
 
 
 async def send_screen(message: Message, screen: Screen, *, emoji: bool = False) -> None:
     """Отправить экран одним новым сообщением с прицепленной клавиатурой."""
+    screen = await reading.prepare(
+        message.bot.id if message.bot else 0, message.chat.id, screen, emoji
+    )
     await message.answer(
         text=screen.body(),
         reply_markup=keyboard_for(screen, emoji=emoji),
@@ -47,6 +52,7 @@ async def push_screen(bot: Bot, chat_id: int, screen: Screen, *, emoji: bool = F
     его. Бой из-за этого не падает - у оставшегося есть «Сдаться».
     """
     try:
+        screen = await reading.prepare(bot.id, chat_id, screen, emoji)
         await bot.send_message(
             chat_id=chat_id,
             text=screen.body(),
@@ -64,6 +70,18 @@ async def send_text(message: Message, text: str, screen: Screen, *, emoji: bool 
     Берётся для устаревших кнопок: игрок всегда получает и объяснение, *и* те
     кнопки, которые сейчас работают (правило 12).
     """
+    from dataclasses import replace
+
+    if len(text) > MESSAGE_LIMIT - 160:
+        screen = await reading.prepare(
+            message.bot.id if message.bot else 0,
+            message.chat.id,
+            replace(screen, lines=(text, "", *screen.lines)),
+            emoji,
+        )
+        text = screen.body()
+    elif len(reading.parts(screen)) > 1:
+        screen = reading.page(screen, 1)
     await message.answer(
         text=text,
         reply_markup=keyboard_for(screen, emoji=emoji),

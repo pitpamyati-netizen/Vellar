@@ -13,11 +13,12 @@ from aiogram.filters import CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
+from mmorpg.application.journey import JourneyRepository
 from mmorpg.application.operations import atomic_action
 from mmorpg.application.services.keeper import sync_keeper
 from mmorpg.config import Settings
 from mmorpg.domain.entities.content import GameContent
-from mmorpg.domain.ports.repositories import CharacterRepository, User, UserRepository
+from mmorpg.domain.ports.repositories import CharacterRepository, StateCache, User, UserRepository
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.presentation.telegram.flows.creation import (
     CreationState,
@@ -81,6 +82,8 @@ def created_screen(name: str, city_name: str) -> Screen:
             f"Персонаж {name} готов.",
             f"Вы в городе {city_name}, у начала дороги.",
             "Нажмите «Главное меню» — оттуда открыто всё остальное.",
+            "Первое дело — «Обучение» в главном меню или команда /обучение. "
+            "За каждый сделанный шаг полагается награда; начать можно в любое время.",
         ),
     )
 
@@ -93,6 +96,8 @@ async def start(
     settings: Settings,
     users: UserRepository,
     characters: CharacterRepository,
+    state_cache: StateCache | None = None,
+    journey: JourneyRepository | None = None,
 ) -> None:
     """Точка входа. Существующий персонаж пропускает создание целиком."""
     if message.from_user is None:  # pragma: no cover - Telegram ставит это всегда
@@ -109,9 +114,13 @@ async def start(
         existing = await sync_keeper(
             existing, message.from_user.id, settings, characters, granted=account.keeper
         )
-        await state.set_state(Play.main_menu)
-        city = play_screens.standing_in(content, existing)
-        await send_screen(message, created_screen(existing.name, city.name))
+        from mmorpg.presentation.telegram.middlewares.journey import return_to_game
+
+        if await state.get_state() is None:
+            await state.set_state(Play.main_menu)
+        await return_to_game(
+            message, state, content, existing, state_cache, journey, emoji=account.settings.emoji
+        )
         return
 
     flow = begin()

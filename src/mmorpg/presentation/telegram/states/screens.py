@@ -33,6 +33,8 @@ class Play(StatesGroup):
     """Всё, что идёт после того, как персонаж появился."""
 
     main_menu = State()
+    returning = State()
+    history = State()
     world = State()
     city = State()
     location_list = State()
@@ -130,6 +132,8 @@ class Play(StatesGroup):
 # Какой экран какому состоянию принадлежит. По этому разборщик говорит игроку, где он на
 # самом деле стоит, когда тот нажал кнопку старой клавиатуры.
 STATE_FOR_SCREEN: dict[ScreenId, State] = {
+    ScreenId.RETURNING: Play.returning,
+    ScreenId.HISTORY: Play.history,
     ScreenId.CREATE_NAME: Creation.name,
     ScreenId.CREATE_RACE: Creation.race,
     ScreenId.CREATE_RACE_DETAILS: Creation.race_details,
@@ -237,6 +241,8 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
 # Тот единственный шаг, куда ведёт «назад», для каждого экрана. Создание идёт назад по
 # собственным шагам, игровые экраны откатываются к главному меню.
 BACK_TARGET: dict[ScreenId, ScreenId | None] = {
+    ScreenId.RETURNING: ScreenId.MAIN_MENU,
+    ScreenId.HISTORY: ScreenId.MAIN_MENU,
     ScreenId.CREATE_NAME: None,  # первый шаг спрашивает подтверждение перед выходом из создания
     ScreenId.CREATE_RACE: ScreenId.CREATE_NAME,
     ScreenId.CREATE_RACE_DETAILS: ScreenId.CREATE_RACE,

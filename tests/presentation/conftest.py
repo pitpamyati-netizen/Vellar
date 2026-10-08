@@ -1491,4 +1491,8 @@ def all_screens(
             state=PageState(),
         ),
     ]
+    from mmorpg.presentation.telegram.flows.play import begin
+    from mmorpg.presentation.telegram.screens.journey import history_screen, returning_screen
+
+    screens.extend((returning_screen(content, hero, begin(hero)), history_screen(())))
     return screens

@@ -1075,6 +1075,8 @@ def advance(
 
     if command.intent is Intent.LOOK:
         return replace(state, notice="", pending=PendingWrite(), fight="")
+    if command.intent is Intent.TUTORIAL:
+        return _walk_to_tutorial_step(content, character, state)
     if command.intent is Intent.MAIN_MENU:
         return replace(
             state,
@@ -2004,7 +2006,7 @@ def _handle_slots(
 def _handle_pick(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    available = skill_rules.equippable(content, character)
+    available = skill_rules.equippable(content, character, state.pick_slot)
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите умение из списка.")
 

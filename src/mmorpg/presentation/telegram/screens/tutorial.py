@@ -174,7 +174,12 @@ def completion_line(task: TutorialTask, character: Character) -> str:
     total = len(rules.ORDER)
     if done >= total:
         return f"Шаг обучения сделан: {CARDS[task].title.lower()}. Обучение пройдено."
+    next_task = rules.next_task(character)
+    next_line = (
+        f"Следующее дело: {CARDS[next_task].title.lower()}. Наберите /обучение."
+        if next_task
+        else ""
+    )
     return (
-        f"Шаг обучения сделан: {CARDS[task].title.lower()}. "
-        f"Сделано {done} из {total}, дальше подскажет экран нужного дела."
+        f"Шаг обучения сделан: {CARDS[task].title.lower()}. Сделано {done} из {total}. {next_line}"
     )

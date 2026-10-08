@@ -96,7 +96,7 @@ class PostgresGameplayState:
 
     @staticmethod
     def persistent(key: str) -> bool:
-        return key.partition(":")[0] in {"battle", "battle-of", "battle-content"}
+        return key.partition(":")[0] in {"battle", "battle-of", "battle-content", "screen-reading"}
 
     async def get(self, key: str) -> str | None:
         # Чтение снимка не создаёт собственную запись результата команды.

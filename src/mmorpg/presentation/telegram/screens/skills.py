@@ -414,7 +414,7 @@ def pick_screen(
     notice: str = "",
 ) -> Screen:
     """Что можно положить в слот: изученные боевые умения, и больше ничего."""
-    available = skill_rules.equippable(content, character)
+    available = skill_rules.equippable(content, character, slot)
     entries = [
         ListEntry(
             key=skill.code,

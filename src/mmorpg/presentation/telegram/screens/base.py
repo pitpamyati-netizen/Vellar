@@ -20,7 +20,6 @@ from enum import StrEnum
 
 from mmorpg.presentation.telegram.keyboards.labels import SERVICE_ROW, Label
 from mmorpg.presentation.telegram.screens.format import (
-    HARD_LIMIT,
     MESSAGE_LIMIT,
     paginate_text,
 )
@@ -31,6 +30,8 @@ class ScreenId(StrEnum):
 
     START = "start"
     MAIN_MENU = "main_menu"
+    RETURNING = "returning"
+    HISTORY = "history"
     WORLD = "world"
     CITY = "city"
     LOCATION_LIST = "location_list"
@@ -175,15 +176,8 @@ class Screen:
         return paginate_text(self.text(), MESSAGE_LIMIT)
 
     def body(self) -> str:
-        """Что уходит игроку одним сообщением: тело целиком.
-
-        Отправлялась ``pages()[0]`` - первая страница из девятисот знаков, - и
-        всё, что не влезло, пропадало молча: на экране умений было восемь кнопок
-        и пять описаний. Список режется на страницы там, где он собирается
-        (``screens/paginated.py``); здесь остаётся только предел самого
-        Telegram, до которого экраны не доходят.
-        """
-        return paginate_text(self.text(), HARD_LIMIT)[0]
+        """Полный текст. Доступное чтение длинного экрана выполняет messaging."""
+        return self.text()
 
     def button_texts(self, *, emoji: bool = False) -> tuple[tuple[str, ...], ...]:
         """Раскладка обычными строками, ровно такая, какой её покажет Telegram."""

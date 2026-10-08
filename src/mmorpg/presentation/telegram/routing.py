@@ -25,6 +25,7 @@ class Intent(StrEnum):
     BACK = "back"
     LOOK = "look"
     MAIN_MENU = "main_menu"
+    TUTORIAL = "tutorial"
     ATTACK = "attack"
     DEFEND = "defend"
     SKILL = "skill"
@@ -82,6 +83,8 @@ class Command:
 # латинские написания принимаются, чтобы игрок с одной лишь латинской раскладкой не
 # оказался заперт.
 SIMPLE_COMMANDS: dict[str, Intent] = {
+    "/обучение": Intent.TUTORIAL,
+    "/tutorial": Intent.TUTORIAL,
     "/назад": Intent.BACK,
     "/back": Intent.BACK,
     "/осмотреться": Intent.LOOK,

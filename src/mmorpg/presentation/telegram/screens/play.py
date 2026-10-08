@@ -163,6 +163,9 @@ def main_menu_screen(
         (labels.GUILD,),
         (labels.SETTINGS,),
     ]
+    from mmorpg.presentation.telegram.screens.journey import HISTORY, RETURN
+
+    rows.append((RETURN, HISTORY))
     # Вступление предлагают, пока ему есть что сказать, а потом оно уходит навсегда:
     # вечная кнопка «обучение» отвечает на вопрос, которого больше никто не задаёт.
     from mmorpg.domain.rules import tutorial as tutorial_rules

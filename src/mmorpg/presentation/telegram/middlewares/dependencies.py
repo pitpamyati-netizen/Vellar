@@ -14,6 +14,7 @@ from typing import Any
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
+from mmorpg.application.journey import JourneyRepository
 from mmorpg.application.services.content import ContentRegistry
 from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.party import PartyStore
@@ -52,6 +53,7 @@ class Dependencies:
     parties: PartyStore
     guilds: GuildStore
     broadcasts: ChannelBroadcaster
+    journey: JourneyRepository | None = None
 
     def as_data(self) -> dict[str, Any]:
         return {
@@ -74,6 +76,7 @@ class Dependencies:
             "parties": self.parties,
             "guilds": self.guilds,
             "broadcasts": self.broadcasts,
+            "journey": self.journey,
         }
 
 

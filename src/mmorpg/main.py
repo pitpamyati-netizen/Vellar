@@ -66,6 +66,10 @@ from mmorpg.infrastructure.persistence import (
     InMemoryUserRepository,
 )
 from mmorpg.infrastructure.persistence.effects import MemoryEffectState, PostgresEffectState
+from mmorpg.infrastructure.persistence.journey import (
+    MemoryJourneyRepository,
+    PostgresJourneyRepository,
+)
 from mmorpg.logging import configure_logging, get_logger
 from mmorpg.metrics import Metrics, reporting
 from mmorpg.monitoring import install_slow_callback_detector
@@ -80,8 +84,10 @@ from mmorpg.presentation.telegram.middlewares.dependencies import (
 )
 from mmorpg.presentation.telegram.middlewares.errors import ErrorMiddleware
 from mmorpg.presentation.telegram.middlewares.idempotency import IdempotencyMiddleware
+from mmorpg.presentation.telegram.middlewares.journey import JourneyMiddleware
 from mmorpg.presentation.telegram.middlewares.metrics import MetricsMiddleware
 from mmorpg.presentation.telegram.middlewares.moderation import BanMiddleware
+from mmorpg.presentation.telegram.middlewares.reading import ReadingMiddleware
 from mmorpg.presentation.telegram.middlewares.retry import RetryRequestMiddleware
 from mmorpg.presentation.telegram.middlewares.sending import SendRateMiddleware, SendWindow
 from mmorpg.retry import RetryPolicy, keep_trying
@@ -204,6 +210,9 @@ async def build_application(settings: Settings) -> Application:
     # Внешняя, а не внутренняя: заблокированный не должен дойти ни до одного
     # роутера, а внутренние обёртки диспетчера до вложенных роутеров не доходят.
     dispatcher.message.outer_middleware(BanMiddleware())
+    dispatcher.message.outer_middleware(ReadingMiddleware(dependencies.state_cache))
+    if dependencies.journey is not None:
+        dispatcher.message.outer_middleware(JourneyMiddleware(dependencies.journey))
 
     dispatcher.include_router(creation.build_router())
     # Роутер боя идёт первым: он забирает два боевых состояния, а роутер игры ниже
@@ -249,9 +258,8 @@ async def _build_adapters(
 ) -> tuple[BaseStorage, Dependencies, IdempotencyStore]:
     """В памяти - для local, PostgreSQL - дальше вверх, Redis - для dev и prod.
 
-    Половины выбираются по отдельности (ADR 0005, ADR 0010): из чего сделан мир - в
-    PostgreSQL, из чего сделана сессия - в Redis, а ``solo`` берёт первое без
-    второго.
+    В режимах с PostgreSQL мир, бой и экран постоянны (ADR 0090).
+    Redis ускоряет временные данные в dev/prod; solo держит их в памяти.
     """
     if not settings.uses_postgres:
         logger.warning(
@@ -282,6 +290,7 @@ async def _build_adapters(
             # Приёмник подключается, как только появился Bot; до тех пор - и всегда,
             # когда CHANNEL_ID пуст, - объявление ничего не делает.
             broadcasts=ChannelBroadcaster(sink=None, chat_id=settings.channel_id),
+            journey=MemoryJourneyRepository(),
         )
         return AtomicMemoryStorage(), dependencies, InMemoryIdempotencyStore()
 
@@ -359,6 +368,7 @@ async def _build_adapters(
         parties=PartyStore(PostgresPartyRepository(pool), state_cache),
         guilds=GuildStore(PostgresGuildRepository(pool), state_cache),
         broadcasts=ChannelBroadcaster(sink=None, chat_id=settings.channel_id),
+        journey=PostgresJourneyRepository(pool),
     )
     return storage, dependencies, idempotency
 

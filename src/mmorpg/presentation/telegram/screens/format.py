@@ -114,13 +114,21 @@ def paginate_text(text: str, limit: int = MESSAGE_LIMIT) -> tuple[str, ...]:
     Берётся только для того содержимого, которое и правда не сократить; от экранов
     ждут, что они порежут свои данные на страницы (правило доступности 11).
     """
+    if limit < 1:
+        raise ValueError("Text page limit must be positive")
     if len(text) <= limit:
         return (text,)
 
     pages: list[str] = []
     current: list[str] = []
     length = 0
-    for line in text.split("\n"):
+    # Даже одна строка описания или Unicode-имени может превышать предел.
+    lines = [
+        part
+        for line in text.split("\n")
+        for part in (tuple(line[i : i + limit] for i in range(0, len(line), limit)) or ("",))
+    ]
+    for line in lines:
         addition = len(line) + 1
         if length + addition > limit and current:
             pages.append("\n".join(current))

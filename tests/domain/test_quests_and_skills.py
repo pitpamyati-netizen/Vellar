@@ -17,6 +17,22 @@ from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.skill_effects import spec_for
 
 
+def test_selected_slot_keeps_its_current_skill_without_copying_other_slots(content):
+    from mmorpg.application.dto.creation import CharacterDraft
+
+    hero = CharacterDraft(name="Проба", race_id="human", class_id="warrior").to_character(
+        content, 1
+    )
+    code = hero.loadout.actives[0]
+    assert code and content.skill(code) not in skill_rules.equippable(content, hero)
+    assert content.skill(code) in skill_rules.equippable(content, hero, 0)
+    assert content.skill(code) not in skill_rules.equippable(content, hero, 1)
+    assert content.skill(code) not in skill_rules.equippable(content, hero, -1)
+    same = skill_rules.put_in_slot(content, hero, 0, code)
+    assert same is not None and same.loadout.actives == hero.loadout.actives
+    assert skill_rules.put_in_slot(content, hero, 0, "missing") is None
+
+
 @pytest.fixture
 def newcomer() -> Character:
     return Character(id=1, user_id=1, name="Аргус", race_id="human", class_id="warrior", level=1)

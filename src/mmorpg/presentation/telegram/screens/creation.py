@@ -189,6 +189,7 @@ def class_screen(content: GameContent, draft: CharacterDraft, notice: str = "") 
             "Нажмите класс, чтобы выбрать его."
             if not draft.class_id
             else "Нажмите «Продолжить» или выберите другой класс.",
+            "До создания героя выбор можно изменить. После подтверждения класс остаётся с вами.",
         ),
         rows=tuple(rows),
     )
@@ -225,6 +226,8 @@ def own_gear_line(content: GameContent, class_id: str) -> str:
 def class_details_screen(content: GameContent, class_id: str) -> Screen:
     klass = content.character_class(class_id)
     key_stats = ", ".join(STAT_NAMES[code].lower() for code in klass.key_stats)
+    owned = [skill for skill in content.skills if skill.owner == f"class:{class_id}"]
+    active = sum(skill.is_active for skill in owned)
     return Screen(
         id=ScreenId.CREATE_CLASS_DETAILS,
         lines=(
@@ -237,7 +240,7 @@ def class_details_screen(content: GameContent, class_id: str) -> Screen:
             f"Ключевые характеристики: {key_stats}. Очки идут прежде всего в них.",
             own_gear_line(content, class_id),
             f"Ресурс: {klass.resource.name}. Умения тратят его, и он копится сам.",
-            "Умений у класса шестьдесят: двадцать боевых и сорок пассивных. "
+            f"Умений у класса {len(owned)}: боевых {active}, пассивных {len(owned) - active}. "
             "В панель встанут шесть боевых, и этот выбор — ваш почерк в бою; "
             "пассивные слота не занимают, изученное работает.",
         ),
