@@ -38,6 +38,7 @@ from mmorpg.application.services.battle import (
     begin,
     roster_for,
 )
+from mmorpg.application.services.city_event import CityEvents
 from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.party import PartyStore
 from mmorpg.application.services.recruitment import Recruitment
@@ -1316,6 +1317,20 @@ async def _finish(
                 )
 
     if session.kind is BattleKind.NODE:
+        events = CityEvents(content, state_cache, characters, inventory)
+        event = events.event(session.city_id)
+        event_stage = (await events.load(event)).stage if event else -1
+        for one in winners:
+            notice = await events.record(
+                one.character_id,
+                session.city_id,
+                session.slot,
+                "battle",
+                session.id,
+                expected_stage=event_stage,
+            )
+            if notice:
+                payouts[one.character_id].extra.append(notice)
         # Бой кончился - стая отпущена: победа её забрала, поражение оставило
         # стоять, и в обоих случаях держать её незачем (ADR 0065).
         await locations.disengage(

@@ -37,6 +37,7 @@ class Play(StatesGroup):
     history = State()
     world = State()
     city = State()
+    city_event = State()
     location_list = State()
     location = State()
     combat = State()
@@ -136,6 +137,7 @@ class Play(StatesGroup):
 # самом деле стоит, когда тот нажал кнопку старой клавиатуры.
 STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.RECRUITMENT: Play.recruitment,
+    ScreenId.CITY_EVENT: Play.city_event,
     ScreenId.RECRUITMENT_SETUP: Play.recruitment_setup,
     ScreenId.RECRUITMENT_CARD: Play.recruitment_card,
     ScreenId.RETURNING: Play.returning,
@@ -247,6 +249,7 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
 # Тот единственный шаг, куда ведёт «назад», для каждого экрана. Создание идёт назад по
 # собственным шагам, игровые экраны откатываются к главному меню.
 BACK_TARGET: dict[ScreenId, ScreenId | None] = {
+    ScreenId.CITY_EVENT: ScreenId.CITY,
     ScreenId.RECRUITMENT: ScreenId.PARTY,
     ScreenId.RECRUITMENT_SETUP: ScreenId.RECRUITMENT,
     ScreenId.RECRUITMENT_CARD: ScreenId.RECRUITMENT,

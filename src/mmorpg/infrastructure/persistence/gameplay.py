@@ -103,6 +103,7 @@ class PostgresGameplayState:
             "screen-reading",
             "recruitment",
             "social",
+            "city-event",
         }
 
     async def get(self, key: str) -> str | None:

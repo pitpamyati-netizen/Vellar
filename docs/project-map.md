@@ -13,6 +13,17 @@
 остановить; без стека — только дамп) · `.env.example` · `uv.lock`.
 
 **`src/mmorpg/`** — код.
+
+Общее дело M07: `domain/entities/city_event.py` (содержимое и снимок),
+`domain/rules/city_event.py` (вклад, переход, право награды и последствие),
+`application/services/city_event.py` (единая запись и ремесло),
+`infrastructure/content/city_events.py` (проверка каталога),
+`presentation/telegram/handlers/city_event.py` и `screens/city_event.py`
+(команды и экран). Содержимое — `content/city_events.toml`; постоянные ключи
+обслуживает `infrastructure/persistence/gameplay.py`. Проверки —
+`tests/domain/test_city_events.py`, `tests/application/test_city_events.py`,
+`tests/presentation/test_m07_city.py`, `tests/integration/test_city_events_m07.py`.
+
 - Корень пакета: `main.py` (композиция, polling/webhook), `config.py` (Settings,
   единственный доступ к env), `logging.py` (stdout и два файла: `vellar.log` со
   сроком и `important.log` со сроком 90 дней по умолчанию — что важно, решает

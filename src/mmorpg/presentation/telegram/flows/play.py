@@ -483,6 +483,7 @@ def render(
     guild: GuildView | None = None,
     location_state: LocationState | None = None,
     digest_view: city_screens.DigestView | None = None,
+    travel_discount: int = 0,
 ) -> Screen:
     screen = _render(
         content,
@@ -501,6 +502,10 @@ def render(
         location_state=location_state,
         digest_view=digest_view,
     )
+    if state.screen is ScreenId.WORLD and travel_discount:
+        screen = screens.world_screen(
+            content, character, state.world_page, state.notice, travel_discount=travel_discount
+        )
     # Подсказка незакрытого шага обучения — строка в теле экрана, не весть
     # (правило доступности 4). Свой notice экрана её не трогает (ADR 0038). На
     # переполненную страницу списка подсказку не клеят: там уже нет места.
@@ -1008,6 +1013,7 @@ def advance(
     party: PartyView | None = None,
     guild: GuildView | None = None,
     location_state: LocationState | None = None,
+    travel_discount: int = 0,
 ) -> PlayState:
     """Применить одно сообщение. Отвечает всегда; на неожиданный ввод не падает."""
     # Вылазку, которую больше не собрать, выбрасывают до того, как её кто-нибудь
@@ -1065,8 +1071,22 @@ def advance(
         party=party,
         guild=guild,
         location_state=location_state,
+        travel_discount=travel_discount,
     )
     command = resolve(text, screen)
+    if command.intent is Intent.CITY:
+        return replace(
+            state, city_id=character.city_id, pending=PendingWrite(), fight="", searching=False
+        ).at(ScreenId.CITY)
+    if command.intent is Intent.ROAD:
+        return replace(
+            state,
+            city_id=character.city_id,
+            world_page=PageState(),
+            pending=PendingWrite(),
+            fight="",
+            searching=False,
+        ).at(ScreenId.WORLD)
 
     # Набранное значение на экране поля - это не «неизвестная кнопка», а ответ на
     # заданный вопрос, и разобрать его может только та ветка, что его задавала.
@@ -1174,7 +1194,9 @@ def advance(
         case ScreenId.MAIN_MENU:
             return _handle_main_menu(content, character, state, command, clock=ticking)
         case ScreenId.WORLD:
-            return _handle_world(content, character, state, command)
+            return _handle_world(
+                content, character, state, command, travel_discount=travel_discount
+            )
         case ScreenId.CITY:
             return _handle_city(content, character, state, command)
         case ScreenId.CHARACTER:
@@ -1595,7 +1617,12 @@ def _handle_craft(
 
 
 def _handle_world(
-    content: GameContent, character: Character, state: PlayState, command: Command
+    content: GameContent,
+    character: Character,
+    state: PlayState,
+    command: Command,
+    *,
+    travel_discount: int = 0,
 ) -> PlayState:
     # Клавиатура, которой отвечает смотритель, перечисляет все города, поэтому шаг,
     # который её читает, обязан с ней сходиться (screens.world_screen).
@@ -1604,7 +1631,8 @@ def _handle_world(
     )
 
     if command.intent is Intent.SELECT:
-        here = known_city(content, state.city_id, character.city_id)
+        # Цена совпадает с экраном даже после переноса героя со старой дорогой в FSM.
+        here = screens.standing_in(content, character)
         for city in available:
             if city.name != command.argument:
                 continue
@@ -1616,6 +1644,7 @@ def _handle_world(
                 if character.is_admin
                 else economy.travel_price(character.level, abs(city.order - here.order))
             )
+            fare = fare * (100 - max(0, min(20, travel_discount))) // 100
             if character.gold < fare:
                 return state.with_notice(
                     f"Дорога до города {city.name} стоит {fare} золота, у вас {character.gold}."

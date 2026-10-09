@@ -189,7 +189,12 @@ def main_menu_screen(
 
 
 def world_screen(
-    content: GameContent, character: Character, state: PageState, notice: str = ""
+    content: GameContent,
+    character: Character,
+    state: PageState,
+    notice: str = "",
+    *,
+    travel_discount: int = 0,
 ) -> Screen:
     # Смотритель ходит по всей дороге даром: запрет по уровню и плата за дорогу -
     # правила для игроков.
@@ -204,6 +209,7 @@ def world_screen(
         if character.is_admin:
             return "дорога даром"
         fare = economy_rules.travel_price(character.level, abs(city.order - here.order))
+        fare = fare * (100 - max(0, min(20, travel_discount))) // 100
         return f"дорога {gold(fare)}"
 
     entries = [
@@ -223,6 +229,8 @@ def world_screen(
         "Города стоят вдоль неё по порядку: чем дальше, тем выше уровни и дороже дорога.",
         "Дорога до другого города стоит золота и проходится сразу.",
     ]
+    if travel_discount:
+        lead.append(f"Общее дело города снизило плату за выезд на {travel_discount} процентов.")
     if next_city is not None:
         lead.append(
             f"Следующий город {next_city.name} откроется на уровне {next_city.unlock_level}. "
@@ -265,6 +273,8 @@ def city_screen(content: GameContent, city: City, character: Character, notice: 
     # правкой смотрителя (``docs/keeper.md``).
     if content.npcs_in(city.id):
         offered.append(labels.NPCS)
+    if any(one.city_id == city.id for one in content.city_events):
+        offered.append(label("Городское дело"))
     rows: list[tuple[Label, ...]] = [
         tuple(offered[index : index + 2]) for index in range(0, len(offered), 2)
     ]

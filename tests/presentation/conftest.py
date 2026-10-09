@@ -1495,4 +1495,16 @@ def all_screens(
     from mmorpg.presentation.telegram.screens.journey import history_screen, returning_screen
 
     screens.extend((returning_screen(content, hero, begin(hero)), history_screen(())))
+    from mmorpg.domain.entities.city_event import CityEventState
+    from mmorpg.presentation.telegram.screens.city_event import overview
+
+    screens.append(overview(content, content.city_events[0], CityEventState(), hero.id))
+    screens.append(
+        overview(
+            content,
+            content.city_events[0],
+            CityEventState(stage=2, outcomes=("battle", "craft")),
+            hero.id,
+        )
+    )
     return screens

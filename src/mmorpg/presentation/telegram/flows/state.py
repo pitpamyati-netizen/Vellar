@@ -265,6 +265,7 @@ class PlayState:
     mastery_code: str = ""
     quest_id: str = ""
     craft_id: str = ""
+    city_event_stage: int = -1
     dungeon_pick: str = ""
     npc_id: str = ""
     #: Ветка специализации, испытание которой открыто (ADR 0074). Это выбор
@@ -348,6 +349,7 @@ class PlayState:
         return json.dumps(
             {
                 "screen": self.screen.value,
+                "city_event_stage": self.city_event_stage,
                 "invitations": [self.party_invitation, self.guild_invitation],
                 "recruitment": [
                     self.recruitment_id,
@@ -470,6 +472,7 @@ class PlayState:
         invitations = data.get("invitations", ["", ""])
         return cls(
             screen=ScreenId(data["screen"]),
+            city_event_stage=int(data.get("city_event_stage", -1)),
             party_invitation=str(invitations[0]),
             guild_invitation=str(invitations[1]),
             recruitment_id=str(recruitment[0]),

@@ -26,9 +26,10 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from mmorpg import economy_log
-from mmorpg.application.operations import MissingResourceError, atomic_action
+from mmorpg.application.operations import MissingResourceError, atomic_action, current_operation
 from mmorpg.application.services import group_trade, keeper_panel, moderation
 from mmorpg.application.services.battle import BattleStore
+from mmorpg.application.services.city_event import CityEvents
 from mmorpg.application.services.content import ContentRegistry
 from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.guild_safety import disband_token, dissolve
@@ -97,12 +98,14 @@ from mmorpg.presentation.telegram.flows.state import (
     PlayState,
     go_back,
 )
+from mmorpg.presentation.telegram.handlers import city_event as city_event_handler
 from mmorpg.presentation.telegram.handlers import recruitment as recruitment_handler
 from mmorpg.presentation.telegram.handlers.combat import ENGAGED_TTL, open_fight
 from mmorpg.presentation.telegram.handlers.combat import _party_of as fight_companions
 from mmorpg.presentation.telegram.handlers.combat import _show as show_battle
 from mmorpg.presentation.telegram.handlers.creation import welcome_screen
 from mmorpg.presentation.telegram.messaging import send_screen, send_text
+from mmorpg.presentation.telegram.routing import Intent, parse_command
 from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import guild as guild_screens
 from mmorpg.presentation.telegram.screens import keeper as keeper_screens
@@ -211,7 +214,22 @@ async def play(
         flow = begin(character)
 
     now = int(time.time())
+    city_events = CityEvents(content, state_cache, characters, inventory)
     command_text = message.text
+    if city_event_handler.requested(command_text, flow):
+        operation = current_operation()
+        assert operation is not None
+        flow, event_screen = await city_event_handler.step(
+            command_text, flow, character, city_events, receipt=operation.id
+        )
+        if event_screen is not None:
+            await state.set_state(STATE_FOR_SCREEN[flow.screen])
+            await state.update_data({STATE_KEY: flow.serialise()})
+            await send_screen(message, event_screen, emoji=emoji)
+            return
+        command = parse_command(command_text)
+        if command is None or command.intent in {Intent.BACK, Intent.MAIN_MENU}:
+            command_text = "/осмотреться"
     invitation_notice = ""
     invite_actions = {
         "/отряд повторить": ("party", "repeat"),
@@ -329,9 +347,21 @@ async def play(
         party=party,
         guild=guild_view,
         location_state=here,
+        travel_discount=await city_events.travel_discount(character.city_id),
     )
     if invitation_notice:
         updated = updated.with_notice(invitation_notice)
+    if updated.screen is ScreenId.CITY_EVENT:
+        operation = current_operation()
+        assert operation is not None
+        updated, event_screen = await city_event_handler.step(
+            "/событие", updated, character, city_events, receipt=operation.id
+        )
+        assert event_screen is not None
+        await state.set_state(STATE_FOR_SCREEN[updated.screen])
+        await state.update_data({STATE_KEY: updated.serialise()})
+        await send_screen(message, event_screen, emoji=emoji)
+        return
     if updated.screen in recruitment_handler.SCREENS:
         updated, screen = await recruitment_handler.show(
             updated, character, Recruitment(parties, characters).with_content(content), now=now
@@ -456,6 +486,14 @@ async def play(
         content, character, flow, updated, characters, locations, state_cache, now, settings
     )
     updated, here = await sync_location(content, updated, flow, character, locations, now, settings)
+    if updated.pending.node_take >= 0 and updated.pending.node_kind in {"cache", "shrine", "event"}:
+        operation = current_operation()
+        assert operation is not None
+        notice = await city_events.record(
+            character.id, updated.session.city_id, updated.session.slot, "scout", operation.id
+        )
+        if notice:
+            updated = updated.with_notice(f"{updated.notice} {notice}".strip())
 
     # Спуск в блуждающее подземелье: замок берут здесь, до боя, - подземелье
     # общее, а ветка ничего не читает и не пишет (ADR 0037).
@@ -546,6 +584,8 @@ async def play(
         guild=guild_view,
         location_state=here,
         digest_view=briefing,
+        event_summary=await city_events.summary(),
+        travel_discount=await city_events.travel_discount(character.city_id),
     )
     # Уровень объявляется вторым сообщением, и это единственное место в игре, где
     # одно действие отвечает дважды (``screens/play.level_up_report``).
@@ -576,6 +616,8 @@ async def render_play(
     guild: guild_screens.GuildView | None = None,
     location_state: LocationState | None = None,
     digest_view: city_screens.DigestView | None = None,
+    event_summary: str = "",
+    travel_discount: int = 0,
 ) -> Screen:
     """Нарисовать один игровой экран и вернуть его. Берётся здесь и боевым хендлером.
 
@@ -597,7 +639,10 @@ async def render_play(
         guild=guild,
         location_state=location_state,
         digest_view=digest_view,
+        travel_discount=travel_discount,
     )
+    if event_summary and screen.id in {ScreenId.CITY, ScreenId.SUMMARY}:
+        screen = replace(screen, lines=(*screen.lines, event_summary))
     await send_screen(message, screen, emoji=emoji)
     return screen
 

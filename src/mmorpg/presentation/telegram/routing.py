@@ -24,6 +24,8 @@ from mmorpg.presentation.telegram.screens.base import Screen
 class Intent(StrEnum):
     BACK = "back"
     LOOK = "look"
+    CITY = "city"
+    ROAD = "road"
     MAIN_MENU = "main_menu"
     TUTORIAL = "tutorial"
     ATTACK = "attack"
@@ -89,6 +91,8 @@ SIMPLE_COMMANDS: dict[str, Intent] = {
     "/back": Intent.BACK,
     "/осмотреться": Intent.LOOK,
     "/look": Intent.LOOK,
+    "/город": Intent.CITY,
+    "/дорога": Intent.ROAD,
     "/меню": Intent.MAIN_MENU,
     "/menu": Intent.MAIN_MENU,
     "/сумка": Intent.BAG,
