@@ -1610,14 +1610,13 @@ async def _settle_duel(
         tuple(updated[one.character_id] for one in losers),
     )
     for one, character in zip(winners, won, strict=True):
+        received = character.gold - updated[one.character_id].gold
         updated[one.character_id] = character
-        payouts[one.character_id].gold = spoils.gold // max(1, len(winners))
+        payouts[one.character_id].gold = received
         payouts[one.character_id].extra.append(
-            f"Поединок выигран. С побеждённых снято золота: {spoils.gold}."
+            f"Поединок выигран. С побеждённых снято золота: {spoils.gold}. Ваша доля: {received}."
         )
-        economy_log.record(
-            economy_log.DUEL, spoils.gold // max(1, len(winners)), character_id=character.id
-        )
+        economy_log.record(economy_log.DUEL, received, character_id=character.id)
     for one, character in zip(losers, lost, strict=True):
         before = updated[one.character_id]
         updated[one.character_id] = character

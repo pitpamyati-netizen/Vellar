@@ -327,8 +327,15 @@ class PostgresUserRepository:
     async def purge_blocked(self) -> int:
         """Персонажи и сумки уходят каскадом с аккаунтом - так объявлено в 0001."""
         value = await self._pool.fetchval(
-            "WITH gone AS (DELETE FROM users WHERE blocked_at > 0 RETURNING 1)"
-            " SELECT count(*) FROM gone"
+            """
+            WITH gone AS (
+              DELETE FROM users WHERE blocked_at > 0 AND NOT EXISTS (
+                SELECT 1 FROM characters c, gameplay_state g,
+                LATERAL market_escrow(coalesce(nullif(g.value, ''), '{}')::jsonb) e
+                WHERE c.user_id=users.telegram_id AND g.key='market:board' AND e.owner_id=c.id
+              ) RETURNING 1
+            ) SELECT count(*) FROM gone
+            """
         )
         return int(value or 0)
 
@@ -811,6 +818,11 @@ class PostgresCharacterRepository:
                 DELETE FROM characters
                 WHERE level = 1 AND experience = 0 AND tutorial = 0
                   AND updated_at < to_timestamp($1)
+                  AND NOT EXISTS (
+                    SELECT 1 FROM gameplay_state g,
+                    LATERAL market_escrow(coalesce(nullif(g.value, ''), '{}')::jsonb) e
+                    WHERE g.key='market:board' AND e.owner_id=characters.id
+                  )
                 RETURNING 1
             )
             SELECT count(*) FROM gone

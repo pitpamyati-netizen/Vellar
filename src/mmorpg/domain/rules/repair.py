@@ -118,7 +118,7 @@ def broken_on(content: GameContent, character: Character) -> tuple[Item, ...]:
 
 def price_of(character: Character, item: Item) -> int:
     """Во сколько станет починить эту вещь до целой."""
-    return economy.repair_price(item.price, spent(character, item), limit(item))
+    return economy.repair_price(economy.base_price(item), spent(character, item), limit(item))
 
 
 def bill(content: GameContent, character: Character) -> tuple[tuple[Item, int], ...]:

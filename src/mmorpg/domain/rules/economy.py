@@ -8,9 +8,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from fractions import Fraction
 from random import Random
 
 from mmorpg.domain.entities.content import GameContent, Item
+from mmorpg.domain.entities.item_instance import template_id
 from mmorpg.domain.entities.stats import StatCode
 from mmorpg.domain.procgen import items as gear_procgen
 from mmorpg.domain.procgen.enemies import gold_at
@@ -29,6 +31,7 @@ LEVEL_WINDOW_ABOVE = 2
 CHARISMA_DISCOUNT_PER_POINT = 0.4
 MAX_CHARISMA_DISCOUNT = 15.0
 SELL_FRACTION = 0.2
+MIN_PURCHASE_FACTOR = 0.4
 
 #: Что делает с лавкой «нужда» ближайшего города (``mood.city_strain``, 0…1,
 #: ADR 0055). При полной нужде цена растёт наполовину, а прилавок теряет половину
@@ -158,28 +161,96 @@ def buy_price(
     charisma: int = 0,
     strain: float = 0.0,
 ) -> int:
-    """Цена в лавке после редкости, нужды города, харизмы и скидок от черт."""
-    rarity = content.rarity(item.rarity)
-    price = item.price * rarity.price_factor
+    """Цена после нужды города и скидок. Редкость уже входит в базу вещи."""
+    price = float(base_price(item))
     price *= 1.0 + STRAIN_PRICE_MARKUP * max(0.0, min(1.0, strain))
 
     discount = min(MAX_CHARISMA_DISCOUNT, charisma * CHARISMA_DISCOUNT_PER_POINT)
     if modifiers:
         # shop_price_percent отрицателен, когда он помогает, поэтому вычитается прямо.
         discount += -modifiers.get("shop_price_percent", 0.0)
-    return max(1, round(price * max(0.4, 1.0 - discount / 100.0)))
+    return max(1, round(price * max(MIN_PURCHASE_FACTOR, 1.0 - discount / 100.0)))
+
+
+def base_price(item: Item) -> int:
+    """Полная базовая стоимость без скидок: редкость уже учтена (ADR 0096)."""
+    return max(0, item.price)
+
+
+def recovery_value(content: GameContent, item: Item) -> Fraction:
+    """Предел возврата ценности: самая дешёвая покупка или цепочка изготовления.
+
+    Это защитная оценка, а не рыночная цена. Учитываются все качества партии,
+    лишние изделия, промежуточное сырьё и минимум одной потраченной единицы
+    каждого материала при любых бонусах. Снаряжение одной ступени и вида имеет
+    один предел: смена оттиска и редкости не печатает золото у скупщика.
+    Дроби сохраняются точно до окончательного округления выплаты. Циклический
+    рецепт получает нулевой предел, а не возможность заработать на обходе.
+    """
+    memo: dict[str, Fraction] = {}
+    visiting: set[str] = set()
+    cyclic: set[str] = set()
+    ladder = [rarity.id for rarity in content.rarities if rarity.weight > 0 and not rarity.scaling]
+
+    def value(item_id: str) -> Fraction:
+        key = template_id(item_id)
+        if key in memo:
+            return memo[key]
+        if key in visiting:
+            cyclic.update(visiting)
+            return Fraction(0)
+        visiting.add(key)
+        current = content.item(key)
+        lowest = max(1, round(base_price(current) * MIN_PURCHASE_FACTOR))
+        result = Fraction(lowest)
+        parsed = gear_procgen.parse_gear_id(key)
+        for recipe in content.recipes:
+            output = gear_procgen.parse_gear_id(recipe.output_id)
+            if parsed is None:
+                matches = recipe.output_id == key
+            else:
+                matches = (
+                    output is not None
+                    and output[:2] == parsed[:2]
+                    and parsed[2] in ladder
+                    and output[2] in ladder
+                )
+            if not matches:
+                continue
+            for quality in content.craft_rules.qualities:
+                # При нулевом возврате бонус не сохраняет сырьё; при ненулевом
+                # любая величина бонуса упирается в crafts._spend: минимум один.
+                cost = sum(
+                    (
+                        value(need.item_id) * (1 if quality.refund_percent > 0 else need.count)
+                        for need in recipe.inputs
+                    ),
+                    start=Fraction(0),
+                )
+                count = recipe.output_count + (0 if output is not None else quality.extra)
+                result = min(result, cost / max(1, count))
+        visiting.remove(key)
+        if key in cyclic:
+            result = Fraction(0)
+        memo[key] = result
+        return result
+
+    return value(item.id)
 
 
 def sell_price(
     content: GameContent, item: Item, *, modifiers: dict[str, float] | None = None
 ) -> int:
     """Сколько торговец платит за вещь, которую игрок принёс."""
-    rarity = content.rarity(item.rarity)
-    price = item.price * rarity.price_factor * SELL_FRACTION
+    price = base_price(item) * SELL_FRACTION
     bonus = 1.0 + (modifiers.get("sell_price_percent", 0.0) if modifiers else 0.0) / 100.0
     # Даже совмещённые надбавки не позволяют выкупить вещь дешевле выплаты.
-    lowest_purchase = max(1, round(item.price * rarity.price_factor * 0.4))
-    return min(max(1, round(price * bonus)), max(1, lowest_purchase - 1))
+    lowest_purchase = max(1, round(base_price(item) * MIN_PURCHASE_FACTOR))
+    return min(
+        max(0, round(price * bonus)),
+        max(0, lowest_purchase - 1),
+        int(recovery_value(content, item)),
+    )
 
 
 def trade_tax(price: int, *, percent: int = TRADE_TAX_PERCENT) -> int:

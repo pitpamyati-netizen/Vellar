@@ -35,6 +35,7 @@ class ScreenId(StrEnum):
     WORLD = "world"
     CITY = "city"
     CITY_EVENT = "city_event"
+    MARKET = "market"
     LOCATION_LIST = "location_list"
     LOCATION = "location"
     COMBAT = "combat"

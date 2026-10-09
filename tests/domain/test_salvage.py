@@ -53,13 +53,15 @@ def test_taking_a_thing_apart_pays_less_than_selling_it(content: GameContent) ->
         item = content.item(f"sword@24#{rarity}")
         made = salvage.yield_of(content, item)
         assert made
-        worth = sum(content.item(item_id).price * count for item_id, count in made)
+        worth = sum(
+            economy.sell_price(content, content.item(item_id)) * count for item_id, count in made
+        )
         assert worth < economy.sell_price(content, item), rarity
 
 
 def test_a_rarer_thing_gives_more_material(content: GameContent) -> None:
-    plain = salvage.yield_of(content, content.item("sword@24#common"))[0][1]
-    rare = salvage.yield_of(content, content.item("sword@24#rare"))[0][1]
+    plain = salvage.yield_of(content, content.item("sword@1#common"))[0][1]
+    rare = salvage.yield_of(content, content.item("sword@1#rare"))[0][1]
     assert rare > plain
     assert rare <= salvage.SALVAGE_MAX
 
@@ -74,7 +76,7 @@ def test_what_is_worn_or_not_gear_is_refused_by_name(content: GameContent, hero:
 
 def test_the_salvage_key_is_finally_read(content: GameContent) -> None:
     """``salvage_yield_percent`` обещали давно; здесь его наконец считают."""
-    item = content.item("sword@24#rare")
+    item = content.item("sword@1#rare")
     plain = salvage.yield_of(content, item)[0][1]
     lucky = salvage.yield_of(content, item, modifiers={salvage.SALVAGE_YIELD_KEY: 50.0})[0][1]
     assert lucky > plain

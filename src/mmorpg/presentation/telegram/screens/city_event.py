@@ -11,6 +11,7 @@ OPEN = label("Городское дело")
 BATTLE = label("Помочь боем")
 SCOUT = label("Помочь разведкой")
 CRAFT = label("Сделать партию городу")
+SUPPLY = label("Передать изделия городу")
 CLAIM = label("Забрать награду города")
 REFRESH = label("Обновить городское дело")
 
@@ -53,6 +54,11 @@ def overview(
             )
         )
         rows.extend(((BATTLE, SCOUT), (CRAFT,)))
+        lines.append(
+            f"Снабжение готовыми изделиями: {content.item(recipe.output_id).name}, "
+            f"{recipe.output_count}. Их можно заказать мастеру на рынке: /рынок."
+        )
+        rows.append((SUPPLY,))
     else:
         lines.extend(
             (
@@ -69,7 +75,7 @@ def overview(
             f"К получению: {gold} золота.",
             "Срока участия нет. Обычные занятия доступны при любом итоге. "
             "Команды: /событие бой, /событие разведка, /событие ремесло, "
-            "/событие награда, /событие обновить.",
+            "/событие снабдить, /событие награда, /событие обновить.",
         )
     )
     rows.extend(((CLAIM,), (REFRESH,)))

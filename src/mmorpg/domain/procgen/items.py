@@ -284,13 +284,9 @@ def build(
         slot=archetype.slot,
         rarity=rarity.id,
         level=level,
-        # Инструмент редкостью не дорожает вдвойне: цену ему поднимает только лавка
-        # (``economy.buy_price`` и так множит на редкость), поэтому один сбор стоит
-        # одинаково любой киркой (ADR 0056).
-        price=max(
-            1,
-            round((PRICE_BASE + PRICE_PER_LEVEL * level) * (1.0 if tool else rarity.price_factor)),
-        ),
+        # Полная базовая стоимость. Редкость считается один раз при сборке,
+        # включая инструмент; лавка и кузница используют эту же базу (ADR 0096).
+        price=max(1, round((PRICE_BASE + PRICE_PER_LEVEL * level) * rarity.price_factor)),
         modifiers=modifiers,
         skill_modifiers={},
         damage=damage,

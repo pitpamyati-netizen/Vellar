@@ -266,6 +266,13 @@ class PlayState:
     quest_id: str = ""
     craft_id: str = ""
     city_event_stage: int = -1
+    market_mode: str = "board"
+    market_target: str = ""
+    market_quantity: int = 1
+    market_price: int = 0
+    market_action: str = ""
+    market_page: int = 1
+    market_choices: tuple[tuple[str, str], ...] = ()
     dungeon_pick: str = ""
     npc_id: str = ""
     #: Ветка специализации, испытание которой открыто (ADR 0074). Это выбор
@@ -350,6 +357,15 @@ class PlayState:
             {
                 "screen": self.screen.value,
                 "city_event_stage": self.city_event_stage,
+                "market": [
+                    self.market_mode,
+                    self.market_target,
+                    self.market_quantity,
+                    self.market_price,
+                    self.market_action,
+                    self.market_page,
+                    self.market_choices,
+                ],
                 "invitations": [self.party_invitation, self.guild_invitation],
                 "recruitment": [
                     self.recruitment_id,
@@ -469,10 +485,18 @@ class PlayState:
         transfer_scope, transfer_to, transfer_item = [*data.get("transfer", []), "", "", ""][:3]
         vault_action, vault_item = [*data.get("vault", []), "", ""][:2]
         recruitment = data.get("recruitment", ["", "", "", 0, 0, 1, []])
+        market_data = data.get("market", ["board", "", 1, 0, "", 1, []])
         invitations = data.get("invitations", ["", ""])
         return cls(
             screen=ScreenId(data["screen"]),
             city_event_stage=int(data.get("city_event_stage", -1)),
+            market_mode=str(market_data[0]),
+            market_target=str(market_data[1]),
+            market_quantity=int(market_data[2]),
+            market_price=int(market_data[3]),
+            market_action=str(market_data[4]),
+            market_page=int(market_data[5]),
+            market_choices=tuple((str(a), str(b)) for a, b in market_data[6]),
             party_invitation=str(invitations[0]),
             guild_invitation=str(invitations[1]),
             recruitment_id=str(recruitment[0]),

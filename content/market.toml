@@ -1,0 +1,8 @@
+# Цена объявления относится ко всей партии. Пошлина общая с обычной торговлей.
+[rules]
+lifetime = 604800
+reservation_lifetime = 86400
+open_limit = 10
+max_price = 1000000000
+max_quantity = 99
+order_recipes = ["smith_ingot@1"]

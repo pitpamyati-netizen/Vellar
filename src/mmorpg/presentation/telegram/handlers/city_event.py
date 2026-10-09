@@ -16,6 +16,7 @@ WORDS = {
     ui.BATTLE.text: "бой",
     ui.SCOUT.text: "разведка",
     ui.CRAFT.text: "ремесло",
+    ui.SUPPLY.text: "снабдить",
     ui.CLAIM.text: "награда",
     ui.REFRESH.text: "обновить",
 }
@@ -71,6 +72,8 @@ async def step(
         notice = await service.craft(actor.id, event.city_id, flow.city_event_stage, receipt)
     elif action == "награда":
         notice = await service.claim(actor.id, event.city_id)
+    elif action == "снабдить":
+        notice = await service.supply(actor.id, event.city_id, flow.city_event_stage, receipt)
     elif action not in {"", "обновить"}:
         notice = "Выберите помощь кнопкой или командой /событие."
     state = await service.load(event)

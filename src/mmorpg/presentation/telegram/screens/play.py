@@ -275,6 +275,7 @@ def city_screen(content: GameContent, city: City, character: Character, notice: 
         offered.append(labels.NPCS)
     if any(one.city_id == city.id for one in content.city_events):
         offered.append(label("Городское дело"))
+    offered.append(label("Рынок"))
     rows: list[tuple[Label, ...]] = [
         tuple(offered[index : index + 2]) for index in range(0, len(offered), 2)
     ]

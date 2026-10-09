@@ -22,6 +22,7 @@ from random import Random
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, Item
 from mmorpg.domain.procgen import items as gear_procgen
+from mmorpg.domain.rules import economy
 from mmorpg.domain.rules.crafts import SALVAGE_YIELD_KEY
 from mmorpg.domain.rules.modifiers import percent
 
@@ -34,6 +35,10 @@ SALVAGE_SHARE = 0.08
 #: легендарка последней ступени высыпала бы сотню кусков руды, и весь смысл
 #: собирать её самому пропал бы.
 SALVAGE_MAX = 12
+#: Разбор возвращает не больше 80 процентов дешёвой стоимости производства.
+#: Это ограничивает цикл сырьё → изделие → сырьё даже при отменной партии и
+#: огромном бонусе сохранения материалов (ADR 0096).
+SALVAGE_RECOVERY_PERCENT = 80
 
 #: Во что разбирается вещь: род - источник сырья. Железо идёт в железо, кожа в
 #: кожу, тканое в волокно, а украшение - в руду, потому что ничего другого в нём
@@ -66,7 +71,7 @@ def source_of(content: GameContent, item: Item) -> str:
     return _FALLBACK_SOURCE
 
 
-def _material(content: GameContent, source: str, level: int) -> str:
+def _material(content: GameContent, source: str, level: int, *, ceiling: int | None = None) -> str:
     """Лучшее сырьё этого рода, какое берут на такой глубине. Пусто - никакого."""
     found = ""
     best = -1
@@ -79,6 +84,11 @@ def _material(content: GameContent, source: str, level: int) -> str:
             if not content.has_item(entry.item_id):
                 continue
             if content.item(entry.item_id).source != source:
+                continue
+            if (
+                ceiling is not None
+                and economy.recovery_value(content, content.item(entry.item_id)) > ceiling
+            ):
                 continue
             found, best = entry.item_id, entry.level
     return found
@@ -93,7 +103,10 @@ def can_salvage(content: GameContent, character: Character, item: Item) -> str:
     if character.equipment.item_in(item.slot) == item.id:
         return "Эта вещь на вас надета. Снимите её, потом разбирайте."
     if not yield_of(content, item):
-        return "Из этой вещи ничего не выходит: разбирать её незачем."
+        return (
+            "Из этой вещи не получится целой единицы сырья: разбирать её незачем. "
+            "Продайте вещь в лавке или передайте товарищу."
+        )
     return ""
 
 
@@ -109,22 +122,29 @@ def yield_of(
     # Своего сырья на мелкой ступени может не быть вовсе - руду берут глубже
     # третьего уровня, - и тогда вещь разбирается в лом: то, что остаётся от
     # всего и всегда.
-    material = _material(content, source_of(content, item), item.level) or _material(
-        content, _FALLBACK_SOURCE, item.level
-    )
+    budget = economy.recovery_value(content, item) * SALVAGE_RECOVERY_PERCENT / 100
+    material = _material(
+        content, source_of(content, item), item.level, ceiling=int(budget)
+    ) or _material(content, _FALLBACK_SOURCE, item.level, ceiling=int(budget))
     if not material or not content.has_item(material):
         return ()
-    price = max(1, content.item(material).price)
+    material_item = content.item(material)
+    price = max(1, economy.base_price(material_item))
     bonus = percent(modifiers or {}, SALVAGE_YIELD_KEY)
-    amount = round(item.price * SALVAGE_SHARE * max(0.0, bonus) / price)
-    return ((material, max(1, min(SALVAGE_MAX, amount))),)
+    amount = max(1, round(economy.base_price(item) * SALVAGE_SHARE * max(0.0, bonus) / price))
+    material_value = economy.recovery_value(content, material_item)
+    if material_value <= 0:
+        return ()
+    ceiling = int(budget / material_value)
+    count = min(SALVAGE_MAX, amount, ceiling)
+    return ((material, count),) if count > 0 else ()
 
 
 def reforge_price(content: GameContent, item: Item) -> int:
     """Во что обойдётся перековка этой вещи. Ноль - перековывать нечего."""
     if not can_reforge(content, item):
         return 0
-    return max(1, round(item.price * REFORGE_SHARE))
+    return max(1, round(economy.base_price(item) * REFORGE_SHARE))
 
 
 def can_reforge(content: GameContent, item: Item) -> bool:

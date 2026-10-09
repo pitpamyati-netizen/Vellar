@@ -133,6 +133,34 @@ class CityEvents:
         economy_log.record(economy_log.CITY_EVENT, gold, character_id=actor.id, detail=event.id)
         return f"Награда за завершённые этапы: {gold} золота. Повторная выдача исключена."
 
+    @atomic_action
+    async def supply(
+        self, character_id: int, city_id: str, expected_stage: int, receipt: str
+    ) -> str:
+        event = self.event(city_id)
+        actor = await self.characters.get(character_id)
+        if event is None or actor is None or actor.city_id != city_id:
+            return "Для снабжения приезжайте в город общего дела."
+        if await BattleStore(self._cache).busy(actor.id):
+            return "Сначала завершите текущий бой."
+        state = await self.load(event)
+        if expected_stage != state.stage:
+            return "Общее дело изменилось. Проверьте новый этап перед передачей."
+        if reason := rules.refusal(event, state, actor.id, "craft", receipt):
+            return reason
+        recipe = self.content.recipe(event.stages[state.stage].recipe_id)
+        if not await self.inventory.remove(actor.id, recipe.output_id, recipe.output_count):
+            return (
+                "Для снабжения не хватает изделий. Их можно изготовить, "
+                "купить на рынке или заказать мастеру."
+            )
+        updated, notice = rules.contribute(event, state, actor.id, "craft", receipt)
+        await self._save(event, updated)
+        return (
+            f"Передано городу: {self.content.item(recipe.output_id).name}, "
+            f"{recipe.output_count}. {notice}"
+        )
+
     async def travel_discount(self, city_id: str) -> int:
         event = self.event(city_id)
         return rules.discount(event, await self.load(event)) if event else 0

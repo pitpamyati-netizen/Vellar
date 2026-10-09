@@ -131,3 +131,6 @@ M01 уточняет границы ценностей в 0084; отметки, 
 - [ADR 0092 — Набор хранит цель и личное согласие](0092-recruitment-consent-and-invitations.md)
 - [ADR 0093 — Участие, личный зачёт и единица общего дела](0093-participation-and-shared-expedition-rewards.md)
 - [ADR 0094 — Помощь товарищу сохраняет роли классов](0094-class-support-without-universal-assist.md)
+- [ADR 0095 — Общий город, личный предел и постоянный итог](0095-shared-city-event.md)
+- [ADR 0096 — Одна база стоимости и ограниченный возврат](0096-one-item-value-and-bounded-recovery.md)
+- [ADR 0097 — Общий рынок и оплата заказа](0097-public-market-and-craft-orders.md)

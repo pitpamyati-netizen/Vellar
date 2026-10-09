@@ -38,6 +38,7 @@ class Play(StatesGroup):
     world = State()
     city = State()
     city_event = State()
+    market = State()
     location_list = State()
     location = State()
     combat = State()
@@ -138,6 +139,7 @@ class Play(StatesGroup):
 STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.RECRUITMENT: Play.recruitment,
     ScreenId.CITY_EVENT: Play.city_event,
+    ScreenId.MARKET: Play.market,
     ScreenId.RECRUITMENT_SETUP: Play.recruitment_setup,
     ScreenId.RECRUITMENT_CARD: Play.recruitment_card,
     ScreenId.RETURNING: Play.returning,
@@ -250,6 +252,7 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
 # собственным шагам, игровые экраны откатываются к главному меню.
 BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.CITY_EVENT: ScreenId.CITY,
+    ScreenId.MARKET: ScreenId.CITY,
     ScreenId.RECRUITMENT: ScreenId.PARTY,
     ScreenId.RECRUITMENT_SETUP: ScreenId.RECRUITMENT,
     ScreenId.RECRUITMENT_CARD: ScreenId.RECRUITMENT,

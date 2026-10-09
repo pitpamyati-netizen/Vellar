@@ -104,6 +104,7 @@ class PostgresGameplayState:
             "recruitment",
             "social",
             "city-event",
+            "market",
         }
 
     async def get(self, key: str) -> str | None:

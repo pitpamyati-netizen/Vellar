@@ -1,5 +1,11 @@
 # Карта проекта
 
+Рынок M08: `domain/entities/market.py`, `domain/rules/market.py`,
+`application/services/market.py`, `presentation/telegram/handlers/market.py`,
+`content/market.toml` и миграция `0038_market_escrow_journal.py`.
+Отчёт и расчёт: `scripts/m08_economy.py`, `scripts/m08_prices.py`;
+проверка восстановленной копии: `scripts/m08_market_probe.py`.
+
 Перенесена из прежнего руководства 25 сентября 2026 года. Пути здесь даны от
 корня проекта. Карта помогает найти код, но не подтверждает готовность функции:
 проверенные возможности и ограничения — в [состоянии](current-state.md) и

@@ -37,6 +37,7 @@ from mmorpg import economy_log
 from mmorpg.application.services.content import ContentRegistry
 from mmorpg.application.services.group_trade import release_expired_offers
 from mmorpg.application.services.guild import GuildStore
+from mmorpg.application.services.market import Market
 from mmorpg.application.services.party import PartyStore
 from mmorpg.config import AppEnv, Settings, load_settings
 from mmorpg.domain.entities.content import GameContent
@@ -152,6 +153,9 @@ async def build_application(settings: Settings) -> Application:
     )
     if released:
         logger.info("offers_released", offers=released)
+    await Market(
+        registry.current, dependencies.state_cache, dependencies.characters, dependencies.inventory
+    ).sweep(int(time.time()))
 
     bot = Bot(
         token=settings.bot_token.get_secret_value(),

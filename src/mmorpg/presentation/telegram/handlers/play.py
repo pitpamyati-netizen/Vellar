@@ -34,6 +34,7 @@ from mmorpg.application.services.content import ContentRegistry
 from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.guild_safety import disband_token, dissolve
 from mmorpg.application.services.keeper import set_keeper, sync_keeper
+from mmorpg.application.services.market import Market
 from mmorpg.application.services.party import PartyStore
 from mmorpg.application.services.recruitment import Recruitment
 from mmorpg.config import Settings
@@ -99,6 +100,7 @@ from mmorpg.presentation.telegram.flows.state import (
     go_back,
 )
 from mmorpg.presentation.telegram.handlers import city_event as city_event_handler
+from mmorpg.presentation.telegram.handlers import market as market_handler
 from mmorpg.presentation.telegram.handlers import recruitment as recruitment_handler
 from mmorpg.presentation.telegram.handlers.combat import ENGAGED_TTL, open_fight
 from mmorpg.presentation.telegram.handlers.combat import _party_of as fight_companions
@@ -216,6 +218,22 @@ async def play(
     now = int(time.time())
     city_events = CityEvents(content, state_cache, characters, inventory)
     command_text = message.text
+    if market_handler.requested(command_text, flow):
+        flow, market_screen = await market_handler.step(
+            command_text,
+            flow,
+            character,
+            Market(content, state_cache, characters, inventory),
+            now=now,
+        )
+        if market_screen is not None:
+            await state.set_state(STATE_FOR_SCREEN[flow.screen])
+            await state.update_data({STATE_KEY: flow.serialise()})
+            await send_screen(message, market_screen, emoji=emoji)
+            return
+        command = parse_command(command_text)
+        if command is None or command.intent in {Intent.BACK, Intent.MAIN_MENU}:
+            command_text = "/осмотреться"
     if city_event_handler.requested(command_text, flow):
         operation = current_operation()
         assert operation is not None

@@ -1,0 +1,550 @@
+{
+  "seed": 96,
+  "catalogue_items": 5432,
+  "recipes": 467,
+  "direct_checks": 5432,
+  "salvage_checks": 4930,
+  "craft_checks": 1401,
+  "reforge_checks": 3944,
+  "unavailable_salvage": [
+    "wand@5#common",
+    "wand@5#uncommon",
+    "wand@5#rare",
+    "wand@5#legendary",
+    "wand@12#common",
+    "wand@12#uncommon",
+    "wand@12#rare",
+    "wand@12#legendary",
+    "crossbow@5#common",
+    "crossbow@5#uncommon",
+    "crossbow@5#rare",
+    "crossbow@5#legendary",
+    "crossbow@12#common",
+    "crossbow@12#uncommon",
+    "crossbow@12#rare",
+    "crossbow@12#legendary",
+    "tome@5#common",
+    "tome@5#uncommon",
+    "tome@5#rare",
+    "tome@5#legendary",
+    "tome@12#common",
+    "tome@12#uncommon",
+    "tome@12#rare",
+    "tome@12#legendary",
+    "cloth_hands@5#common",
+    "cloth_hands@5#uncommon",
+    "cloth_hands@5#rare",
+    "cloth_hands@5#legendary",
+    "cloth_hands@12#common",
+    "cloth_hands@12#uncommon",
+    "cloth_hands@12#rare",
+    "cloth_hands@12#legendary",
+    "cloth_feet@5#common",
+    "cloth_feet@5#uncommon",
+    "cloth_feet@5#rare",
+    "cloth_feet@5#legendary",
+    "cloth_feet@12#common",
+    "cloth_feet@12#uncommon",
+    "cloth_feet@12#rare",
+    "cloth_feet@12#legendary",
+    "light_hands@5#common",
+    "light_hands@5#uncommon",
+    "light_hands@5#rare",
+    "light_hands@5#legendary",
+    "light_hands@12#common",
+    "light_hands@12#uncommon",
+    "light_hands@12#rare",
+    "light_hands@12#legendary",
+    "light_feet@5#common",
+    "light_feet@5#uncommon",
+    "light_feet@5#rare",
+    "light_feet@5#legendary",
+    "light_feet@12#common",
+    "light_feet@12#uncommon",
+    "light_feet@12#rare",
+    "light_feet@12#legendary",
+    "medium_hands@5#common",
+    "medium_hands@5#uncommon",
+    "medium_hands@5#rare",
+    "medium_hands@5#legendary",
+    "medium_hands@12#common",
+    "medium_hands@12#uncommon",
+    "medium_hands@12#rare",
+    "medium_hands@12#legendary",
+    "medium_feet@5#common",
+    "medium_feet@5#uncommon",
+    "medium_feet@5#rare",
+    "medium_feet@5#legendary",
+    "medium_feet@12#common",
+    "medium_feet@12#uncommon",
+    "medium_feet@12#rare",
+    "medium_feet@12#legendary",
+    "heavy_hands@5#common",
+    "heavy_hands@5#uncommon",
+    "heavy_hands@5#rare",
+    "heavy_hands@5#legendary",
+    "heavy_hands@12#common",
+    "heavy_hands@12#uncommon",
+    "heavy_hands@12#rare",
+    "heavy_hands@12#legendary",
+    "heavy_feet@5#common",
+    "heavy_feet@5#uncommon",
+    "heavy_feet@5#rare",
+    "heavy_feet@5#legendary",
+    "heavy_feet@12#common",
+    "heavy_feet@12#uncommon",
+    "heavy_feet@12#rare",
+    "heavy_feet@12#legendary",
+    "amulet@5#common",
+    "amulet@5#uncommon",
+    "amulet@5#rare",
+    "amulet@5#legendary",
+    "amulet@12#common",
+    "amulet@12#uncommon",
+    "amulet@12#rare",
+    "amulet@12#legendary"
+  ],
+  "violations": [],
+  "prices": [
+    {
+      "level": 1,
+      "item_level": 1,
+      "rarity": "common",
+      "base": 46,
+      "previous_buy": 46,
+      "buy": 46,
+      "trader_buy": 31,
+      "minimum_buy": 18,
+      "sell": 9,
+      "trader_sell": 12,
+      "full_repair": 7,
+      "reforge": 0,
+      "salvage": [
+        [
+          "iron_scrap",
+          1
+        ]
+      ],
+      "fights_to_buy": 6.13,
+      "fights_to_repair": 0.93
+    },
+    {
+      "level": 1,
+      "item_level": 1,
+      "rarity": "uncommon",
+      "base": 110,
+      "previous_buy": 264,
+      "buy": 110,
+      "trader_buy": 74,
+      "minimum_buy": 44,
+      "sell": 22,
+      "trader_sell": 28,
+      "full_repair": 16,
+      "reforge": 38,
+      "salvage": [
+        [
+          "iron_scrap",
+          2
+        ]
+      ],
+      "fights_to_buy": 14.67,
+      "fights_to_repair": 2.13
+    },
+    {
+      "level": 1,
+      "item_level": 1,
+      "rarity": "rare",
+      "base": 276,
+      "previous_buy": 1656,
+      "buy": 276,
+      "trader_buy": 185,
+      "minimum_buy": 110,
+      "sell": 55,
+      "trader_sell": 69,
+      "full_repair": 41,
+      "reforge": 97,
+      "salvage": [
+        [
+          "iron_scrap",
+          6
+        ]
+      ],
+      "fights_to_buy": 36.8,
+      "fights_to_repair": 5.47
+    },
+    {
+      "level": 1,
+      "item_level": 1,
+      "rarity": "legendary",
+      "base": 736,
+      "previous_buy": 11776,
+      "buy": 736,
+      "trader_buy": 493,
+      "minimum_buy": 294,
+      "sell": 147,
+      "trader_sell": 184,
+      "full_repair": 110,
+      "reforge": 258,
+      "salvage": [
+        [
+          "iron_scrap",
+          12
+        ]
+      ],
+      "fights_to_buy": 98.13,
+      "fights_to_repair": 14.67
+    },
+    {
+      "level": 1,
+      "item_level": 1,
+      "rarity": "relic",
+      "base": 2070,
+      "previous_buy": 93150,
+      "buy": 2070,
+      "trader_buy": 1387,
+      "minimum_buy": 828,
+      "sell": 414,
+      "trader_sell": 518,
+      "full_repair": 310,
+      "reforge": 724,
+      "salvage": [
+        [
+          "iron_scrap",
+          12
+        ]
+      ],
+      "fights_to_buy": 276.0,
+      "fights_to_repair": 41.33
+    },
+    {
+      "level": 30,
+      "item_level": 24,
+      "rarity": "common",
+      "base": 414,
+      "previous_buy": 414,
+      "buy": 414,
+      "trader_buy": 277,
+      "minimum_buy": 166,
+      "sell": 12,
+      "trader_sell": 12,
+      "full_repair": 62,
+      "reforge": 0,
+      "salvage": [
+        [
+          "bog_iron",
+          1
+        ]
+      ],
+      "fights_to_buy": 15.49,
+      "fights_to_repair": 2.32
+    },
+    {
+      "level": 30,
+      "item_level": 24,
+      "rarity": "uncommon",
+      "base": 994,
+      "previous_buy": 2386,
+      "buy": 994,
+      "trader_buy": 666,
+      "minimum_buy": 398,
+      "sell": 12,
+      "trader_sell": 12,
+      "full_repair": 149,
+      "reforge": 348,
+      "salvage": [
+        [
+          "bog_iron",
+          1
+        ]
+      ],
+      "fights_to_buy": 37.2,
+      "fights_to_repair": 5.58
+    },
+    {
+      "level": 30,
+      "item_level": 24,
+      "rarity": "rare",
+      "base": 2484,
+      "previous_buy": 14904,
+      "buy": 2484,
+      "trader_buy": 1664,
+      "minimum_buy": 994,
+      "sell": 12,
+      "trader_sell": 12,
+      "full_repair": 373,
+      "reforge": 869,
+      "salvage": [
+        [
+          "bog_iron",
+          1
+        ]
+      ],
+      "fights_to_buy": 92.95,
+      "fights_to_repair": 13.96
+    },
+    {
+      "level": 30,
+      "item_level": 24,
+      "rarity": "legendary",
+      "base": 6624,
+      "previous_buy": 105984,
+      "buy": 6624,
+      "trader_buy": 4438,
+      "minimum_buy": 2650,
+      "sell": 12,
+      "trader_sell": 12,
+      "full_repair": 994,
+      "reforge": 2318,
+      "salvage": [
+        [
+          "bog_iron",
+          1
+        ]
+      ],
+      "fights_to_buy": 247.87,
+      "fights_to_repair": 37.2
+    },
+    {
+      "level": 30,
+      "item_level": 24,
+      "rarity": "relic",
+      "base": 18630,
+      "previous_buy": 838350,
+      "buy": 18630,
+      "trader_buy": 12482,
+      "minimum_buy": 7452,
+      "sell": 3726,
+      "trader_sell": 4658,
+      "full_repair": 2794,
+      "reforge": 6520,
+      "salvage": [
+        [
+          "bog_iron",
+          12
+        ]
+      ],
+      "fights_to_buy": 697.13,
+      "fights_to_repair": 104.55
+    },
+    {
+      "level": 75,
+      "item_level": 67,
+      "rarity": "common",
+      "base": 1102,
+      "previous_buy": 1102,
+      "buy": 1102,
+      "trader_buy": 738,
+      "minimum_buy": 441,
+      "sell": 220,
+      "trader_sell": 276,
+      "full_repair": 165,
+      "reforge": 0,
+      "salvage": [
+        [
+          "mountain_ore",
+          2
+        ]
+      ],
+      "fights_to_buy": 26.48,
+      "fights_to_repair": 3.96
+    },
+    {
+      "level": 75,
+      "item_level": 67,
+      "rarity": "uncommon",
+      "base": 2645,
+      "previous_buy": 6348,
+      "buy": 2645,
+      "trader_buy": 1772,
+      "minimum_buy": 1058,
+      "sell": 529,
+      "trader_sell": 661,
+      "full_repair": 397,
+      "reforge": 926,
+      "salvage": [
+        [
+          "mountain_ore",
+          6
+        ]
+      ],
+      "fights_to_buy": 63.56,
+      "fights_to_repair": 9.54
+    },
+    {
+      "level": 75,
+      "item_level": 67,
+      "rarity": "rare",
+      "base": 6612,
+      "previous_buy": 39672,
+      "buy": 6612,
+      "trader_buy": 4430,
+      "minimum_buy": 2645,
+      "sell": 1322,
+      "trader_sell": 1653,
+      "full_repair": 992,
+      "reforge": 2314,
+      "salvage": [
+        [
+          "mountain_ore",
+          12
+        ]
+      ],
+      "fights_to_buy": 158.89,
+      "fights_to_repair": 23.84
+    },
+    {
+      "level": 75,
+      "item_level": 67,
+      "rarity": "legendary",
+      "base": 17632,
+      "previous_buy": 282112,
+      "buy": 17632,
+      "trader_buy": 11813,
+      "minimum_buy": 7053,
+      "sell": 3526,
+      "trader_sell": 4408,
+      "full_repair": 2645,
+      "reforge": 6171,
+      "salvage": [
+        [
+          "mountain_ore",
+          12
+        ]
+      ],
+      "fights_to_buy": 423.7,
+      "fights_to_repair": 63.56
+    },
+    {
+      "level": 75,
+      "item_level": 67,
+      "rarity": "relic",
+      "base": 49590,
+      "previous_buy": 2231550,
+      "buy": 49590,
+      "trader_buy": 33225,
+      "minimum_buy": 19836,
+      "sell": 9918,
+      "trader_sell": 12398,
+      "full_repair": 7438,
+      "reforge": 17356,
+      "salvage": [
+        [
+          "mountain_ore",
+          12
+        ]
+      ],
+      "fights_to_buy": 1191.66,
+      "fights_to_repair": 178.74
+    },
+    {
+      "level": 150,
+      "item_level": 140,
+      "rarity": "common",
+      "base": 2270,
+      "previous_buy": 2270,
+      "buy": 2270,
+      "trader_buy": 1521,
+      "minimum_buy": 908,
+      "sell": 57,
+      "trader_sell": 57,
+      "full_repair": 340,
+      "reforge": 0,
+      "salvage": [
+        [
+          "sky_iron",
+          1
+        ]
+      ],
+      "fights_to_buy": 38.43,
+      "fights_to_repair": 5.76
+    },
+    {
+      "level": 150,
+      "item_level": 140,
+      "rarity": "uncommon",
+      "base": 5448,
+      "previous_buy": 13075,
+      "buy": 5448,
+      "trader_buy": 3650,
+      "minimum_buy": 2179,
+      "sell": 57,
+      "trader_sell": 57,
+      "full_repair": 817,
+      "reforge": 1907,
+      "salvage": [
+        [
+          "sky_iron",
+          1
+        ]
+      ],
+      "fights_to_buy": 92.23,
+      "fights_to_repair": 13.83
+    },
+    {
+      "level": 150,
+      "item_level": 140,
+      "rarity": "rare",
+      "base": 13620,
+      "previous_buy": 81720,
+      "buy": 13620,
+      "trader_buy": 9125,
+      "minimum_buy": 5448,
+      "sell": 57,
+      "trader_sell": 57,
+      "full_repair": 2043,
+      "reforge": 4767,
+      "salvage": [
+        [
+          "sky_iron",
+          1
+        ]
+      ],
+      "fights_to_buy": 230.57,
+      "fights_to_repair": 34.59
+    },
+    {
+      "level": 150,
+      "item_level": 140,
+      "rarity": "legendary",
+      "base": 36320,
+      "previous_buy": 581120,
+      "buy": 36320,
+      "trader_buy": 24334,
+      "minimum_buy": 14528,
+      "sell": 57,
+      "trader_sell": 57,
+      "full_repair": 5448,
+      "reforge": 12712,
+      "salvage": [
+        [
+          "sky_iron",
+          1
+        ]
+      ],
+      "fights_to_buy": 614.86,
+      "fights_to_repair": 92.23
+    },
+    {
+      "level": 150,
+      "item_level": 140,
+      "rarity": "relic",
+      "base": 102150,
+      "previous_buy": 4596750,
+      "buy": 102150,
+      "trader_buy": 68440,
+      "minimum_buy": 40860,
+      "sell": 20430,
+      "trader_sell": 25538,
+      "full_repair": 15322,
+      "reforge": 35752,
+      "salvage": [
+        [
+          "sky_iron",
+          12
+        ]
+      ],
+      "fights_to_buy": 1729.29,
+      "fights_to_repair": 259.39
+    }
+  ]
+}
