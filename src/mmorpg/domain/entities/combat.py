@@ -77,7 +77,6 @@ class ActionKind(StrEnum):
     #: Закрыться: ход уходит целиком на оборону, зато чужой удар и находит реже,
     #: и стоит дешевле (``rules/combat.DEFEND_*``).
     DEFEND = "defend"
-    ASSIST = "assist"
     SKILL = "skill"
     RACIAL = "racial"
     #: Приём породы: то, что она делает вместо удара по своей повадке

@@ -142,8 +142,6 @@ def action_for(
     text: str,
 ) -> BattleAction | None:
     """Нажатую кнопку или набранную команду - в действие боя."""
-    if text.strip().casefold() in {"/прикрыть", "прикрыть", "прикрыть товарища"}:
-        return BattleAction(kind=ActionKind.ASSIST)
     if match := re.fullmatch(r"/цель\s+(\d+)", text.strip().casefold()):
         return BattleAction(kind=ActionKind.FOCUS, target=int(match[1]))
     screen = render(content, character, session, viewer_id)
@@ -216,11 +214,6 @@ def _action_from_label(
         return BattleAction(kind=ActionKind.ATTACK)
     if labels.DEFEND.matches(argument):
         return BattleAction(kind=ActionKind.DEFEND)
-    if argument.startswith("Прикрыть товарища"):
-        screen = render(content, character, session, viewer_id)
-        if any(one.matches(argument) for row in screen.rows for one in row):
-            return BattleAction(kind=ActionKind.ASSIST)
-        return None
     if labels.FLEE.matches(argument):
         return BattleAction(kind=ActionKind.FLEE)
     if labels.BATTLE_YIELD.matches(argument):

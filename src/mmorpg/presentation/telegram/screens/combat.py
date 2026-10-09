@@ -39,7 +39,6 @@ from mmorpg.domain.rules.combat import (
     CASTER_SWEEP_SCALE,
     HEALER_SHARE,
     ROLE_MOVE_EVERY,
-    assist_target,
     blow_range,
     defend_armor,
     defend_dodge,
@@ -661,9 +660,6 @@ def battle_screen(
         # Закрыться умеет всякий: умения на это не нужно, а ход стоит целиком.
         (defend_label(viewer),),
     ]
-    if target_ally := assist_target(state, viewer):
-        barrier = max(1, target_ally.max_health * 15 // 100)
-        rows.append((label(f"Прикрыть товарища — {target_ally.name}, барьер {barrier}"),))
     # Только занятые слоты: номер за умением закреплён, а пустое место кнопки не
     # получает - нажатие на «Пустой слот» стоило игроку целого хода.
     rows.extend(

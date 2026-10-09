@@ -192,6 +192,8 @@ M03.1–M03.5 реализованы и проверены автоматиче�
 
 Реализация — [первый спуск](docs/first-expedition.md), правило —
 [ADR 0093](docs/adr/0093-participation-and-shared-expedition-rewards.md).
+Универсальное прикрытие удалено по
+[ADR 0094](docs/adr/0094-class-support-without-universal-assist.md); помощь использует классовые умения.
 Наблюдения реальных игроков и NVDA/JAWS ещё не получены; ручная приёмка
 M06.3 остаётся открытой и не заменяется моделью.
 

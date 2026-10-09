@@ -130,3 +130,4 @@ M01 уточняет границы ценностей в 0084; отметки, 
 - [ADR 0091 — Первое дело, возвращение и полный текст](0091-first-session-return-and-full-reading.md)
 - [ADR 0092 — Набор хранит цель и личное согласие](0092-recruitment-consent-and-invitations.md)
 - [ADR 0093 — Участие, личный зачёт и единица общего дела](0093-participation-and-shared-expedition-rewards.md)
+- [ADR 0094 — Помощь товарищу сохраняет роли классов](0094-class-support-without-universal-assist.md)

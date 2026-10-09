@@ -71,21 +71,23 @@ def test_invalid_sizes_and_idle_do_not_increase_pool(content):
 @pytest.mark.parametrize(
     "cls", ["warrior", "barbarian", "paladin", "ranger", "rogue", "mage", "cleric", "druid"]
 )
-def test_no_class_is_required_for_support_and_repeated_barrier_is_refused(content, cls):
+def test_universal_assist_is_unavailable_for_every_class(content, cls):
     session, roster = battle(content, cls=cls)
     actor = session.state.active
-    friend = next(one for one in session.state.heroes() if one.id != actor.id)
-    state = combat.act(
-        content, roster, session.state, BattleAction(ActionKind.ASSIST), session.seed
+    screen = flow.render(content, roster[actor.id], session, actor.id)
+    assert not any(
+        text.startswith("Прикрыть товарища") for row in screen.button_texts() for text in row
     )
-    assert state.by_id(actor.id).actions == 1
-    assert state.by_id(friend.id).barrier == max(1, friend.max_health * 15 // 100)
-    assert participation.eligible(state.by_id(actor.id))
-    held = replace(state, order=(actor.id,), cursor=0)
-    refused = combat.act(content, roster, held, BattleAction(ActionKind.ASSIST), session.seed)
-    assert refused.by_id(actor.id).actions == 1
-    assert refused.round == held.round and refused.cursor == held.cursor
-    assert "Некому" in refused.events[0].effect_name
+    for text in (
+        "/прикрыть",
+        "прикрыть",
+        "Прикрыть товарища",
+        "Прикрыть товарища — Герой 2, барьер 50",
+    ):
+        assert flow.action_for(content, roster[actor.id], session, actor.id, text) is None
+        unchanged, notice = flow.advance(content, roster, session, actor.id, text)
+        assert unchanged == session and notice
+        assert all(one.barrier == 0 and one.actions == 0 for one in unchanged.state.heroes())
 
 
 def test_refused_skill_reading_and_focus_are_not_participation(content):
@@ -94,20 +96,6 @@ def test_refused_skill_reading_and_focus_are_not_participation(content):
     for text in ("/обновить", "/разбор", "/цель 3", "/умение 6"):
         changed, _ = flow.advance(content, roster, session, actor.id, text)
         assert changed.state.by_id(actor.id).actions == 0
-    action = flow.action_for(content, roster[actor.id], session, actor.id, "/прикрыть")
-    assert action.kind is ActionKind.ASSIST
-    assert not flow.wants_breakdown(content, roster[actor.id], session, actor.id, "/прикрыть")
-    screen = flow.render(content, roster[actor.id], session, actor.id)
-    button = next(
-        text
-        for row in screen.button_texts()
-        for text in row
-        if text.startswith("Прикрыть товарища")
-    )
-    assert flow.action_for(content, roster[actor.id], session, actor.id, button) == action
-    stale = button.replace("Герой", "Другой")
-    unchanged, notice = flow.advance(content, roster, session, actor.id, stale)
-    assert unchanged == session and notice
 
 
 def test_defence_counts_and_participation_survives_serialisation(content):
