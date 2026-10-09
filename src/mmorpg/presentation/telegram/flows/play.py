@@ -2379,6 +2379,7 @@ def _handle_dungeon_pick(
                 started_at=clock.now,
                 difficulty=difficulty.value,
                 room=dungeon_rules.RoomKind.SKIRMISH.value,
+                participation_rule=1,
             )
             return replace(state, descent=descent, fight="dungeon").at(ScreenId.COMBAT)
     return state.with_notice("Выберите сложность или «Назад».")
@@ -2787,6 +2788,7 @@ def _enter_roamer(
         roamer=True,
         stamp=roamer.stamp,
         group=roamer.group,
+        participation_rule=1,
     )
     return replace(state, descent=descent, fight="dungeon").at(ScreenId.COMBAT)
 

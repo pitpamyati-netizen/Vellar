@@ -114,6 +114,8 @@ def test_a_narrowed_target_is_one_the_game_can_count(content: GameContent) -> No
                 allowed = nodes
             case ObjectiveKind.CRAFT:
                 allowed = items
+            case ObjectiveKind.DELVE:
+                allowed = {one.id for one in content.city(quest.city_id).dungeons}
             case _:
                 allowed = enemy_kinds
         assert quest.target_kind in allowed, quest.id

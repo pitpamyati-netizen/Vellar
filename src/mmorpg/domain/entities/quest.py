@@ -31,6 +31,7 @@ class ObjectiveKind(StrEnum):
     ELITE = "elite"
     SEARCH = "search"
     CRAFT = "craft"
+    DELVE = "delve"
 
 
 @dataclass(frozen=True, slots=True)

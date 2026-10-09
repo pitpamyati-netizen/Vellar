@@ -134,6 +134,8 @@ try {
     Require-Success "seed journey and full reading"
     & $uvCommand run python -m scripts.m05_gathering_probe --database $fresh --seed
     Require-Success "seed recruitment and consent"
+    & $uvCommand run python -m scripts.m06_descent_probe --database $fresh --seed
+    Require-Success "seed descent participation and reward marks"
     $entryCount = Query-TestDatabase $fresh "SELECT count(*) FROM economic_entries"
     $freshDump = Join-Path $root "backups/m00-fresh.dump"
     & $pgDump -d (Test-Dsn $fresh) -Fc -f $freshDump
@@ -163,6 +165,9 @@ try {
     & $uvCommand run python -m scripts.m05_gathering_probe --database $restored
     Require-Success "restore recruitment and consent"
     Record "M05: roster, consent, expired invitation, block and screen survived backup restore"
+    & $uvCommand run python -m scripts.m06_descent_probe --database $restored
+    Require-Success "restore descent participation and reward marks"
+    Record "M06: participation, pinned encounters and permanent reward marks survived backup restore"
 
     Reset-TestDatabase $old
     Upgrade-TestDatabase $old "0030"

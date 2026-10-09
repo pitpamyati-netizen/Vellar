@@ -1431,6 +1431,22 @@ class PostgresGuildRepository:
 
     # --- хранилище гильдии (ADR 0077) --------------------------------
 
+    async def record_group_deed(self, guild_id: int, character_ids: tuple[int, ...]) -> None:
+        if not character_ids:
+            return
+        async with self._pool.acquire() as connection, connection.transaction():
+            result = await connection.execute(
+                "UPDATE guild_members SET contributed=contributed+1"
+                " WHERE guild_id=$1 AND character_id=ANY($2::bigint[])",
+                guild_id,
+                list(set(character_ids)),
+            )
+            if result != "UPDATE 0":
+                await connection.execute(
+                    "UPDATE guilds SET deeds=deeds+1 WHERE id=$1 AND NOT disbanded",
+                    guild_id,
+                )
+
     async def stock(self, guild_id: int) -> tuple[tuple[str, int], ...]:
         rows = await self._pool.fetch(
             "SELECT item_id, quantity FROM guild_items"

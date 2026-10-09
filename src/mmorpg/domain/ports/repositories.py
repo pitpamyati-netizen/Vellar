@@ -498,6 +498,9 @@ class GuildRepository(Protocol):
         значит соврать в составе.
         """
 
+    async def record_group_deed(self, guild_id: int, character_ids: tuple[int, ...]) -> None:
+        """Одна общая победа; личная отметка каждому действовавшему участнику."""
+
     async def stock(self, guild_id: int) -> tuple[tuple[str, int], ...]:
         """Что лежит в хранилище гильдии: пары «вещь - сколько» (ADR 0077)."""
 

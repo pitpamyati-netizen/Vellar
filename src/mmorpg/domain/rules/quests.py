@@ -140,6 +140,28 @@ def record_kills(
     )
 
 
+def record_descent(
+    content: GameContent,
+    character: Character,
+    *,
+    city_id: str,
+    dungeon_id: str,
+) -> tuple[QuestLog, tuple[QuestStep, ...]]:
+    """Один полностью пройденный спуск каждому участвовавшему во всех встречах."""
+    log = character.quests
+    steps = []
+    for step in taken(content, character):
+        quest = step.quest
+        if quest.objective is not ObjectiveKind.DELVE or not _at_place(quest, city_id, 0):
+            continue
+        if quest.target_kind and quest.target_kind != dungeon_id:
+            continue
+        if step.progress < quest.target_count:
+            log = log.advanced(quest.id, 1)
+            steps.append(QuestStep(quest, log.progress(quest.id)))
+    return log, tuple(steps)
+
+
 def _counts_craft(quest: Quest, item_id: str) -> bool:
     """Та ли это работа, которую заказывали.
 

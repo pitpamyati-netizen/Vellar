@@ -54,7 +54,7 @@ from mmorpg.domain.ports.repositories import (
     StateCache,
 )
 from mmorpg.domain.procgen.seeds import derive, rng, rotation_index
-from mmorpg.domain.rules import adventure, progression
+from mmorpg.domain.rules import adventure, expedition, participation, progression, quests
 from mmorpg.domain.rules import arena as arena_rules
 from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import dungeon as dungeon_rules
@@ -194,6 +194,8 @@ async def open_fight(
         return
 
     allies = await _party_of(character, parties, characters, store, flow=flow, content=content)
+    if flow.descent.active and not flow.descent.encounter_id:
+        flow = replace(flow, descent=replace(flow.descent, encounter_id=uuid4().hex))
     session, roster = await _spawn(
         message,
         content=content,
@@ -275,6 +277,8 @@ async def _party_of(
     companions: list[Character] = []
     for member_id in party.members:
         if member_id == character.id or member_id not in allowed:
+            continue
+        if flow and member_id in flow.descent.excluded:
             continue
         other = await characters.get(member_id)
         if other is None or await store.busy(other.id) is not None:
@@ -498,6 +502,21 @@ async def _spawn(
             affix_chance=spec.affix_chance,
             affix_count=spec.affix_count,
         )
+        encounter = (
+            None
+            if descent.roamer
+            else expedition.meeting(content, descent.city_id, descent.dungeon_id, descent.layer)
+        )
+        if encounter is not None:
+            enemies = expedition.foes(
+                content,
+                encounter,
+                seed=seed,
+                level=descent.level,
+                stakes=spec.stakes,
+                bounty=dungeon_rules.bounty_of(conditions),
+                participants=len(side),
+            )
         return begin(
             content,
             battle_id=battle_id,
@@ -511,6 +530,8 @@ async def _spawn(
             depth=descent.layer + 1,
             roamer=descent.roamer,
             opening_effects=_dungeon_opening_effects(conditions),
+            participation_rule=descent.participation_rule,
+            briefing=f"{encounter.name}. {encounter.briefing}" if encounter else "",
         )
 
     location = build_location(
@@ -608,6 +629,7 @@ async def _spawn(
         node=node.index,
         wave=left.wave,
         place=place,
+        participation_rule=1,
     )
 
 
@@ -880,7 +902,9 @@ async def fight(
         # «Разбор боя» - не ход: тот же бой, другой экран, счётчик стоит.
         await send_screen(
             message,
-            combat_screens.breakdown_screen(content, character, session.state, viewer.id),
+            combat_screens.breakdown_screen(
+                content, character, session.state, viewer.id, session.briefing
+            ),
         )
         return
 
@@ -1182,6 +1206,8 @@ async def _finish(
         one for one in session.participants() if one.character_id not in session.departed
     )
     winners = tuple(one for one in heroes if session.state.verdict_for(one.id) is Verdict.VICTORY)
+    if session.participation_rule and not session.is_duel and not session.is_arena:
+        winners = tuple(one for one in winners if participation.eligible(one))
     losers = tuple(one for one in heroes if session.state.verdict_for(one.id) is Verdict.DEFEAT)
 
     for one in heroes:
@@ -1223,6 +1249,8 @@ async def _finish(
                 updated,
                 inventory,
                 character=updated.get(session.owner, roster[owner.id]),
+                payouts=payouts,
+                state_cache=state_cache,
             )
         elif session.kind is BattleKind.NODE:
             line = await _take_node(content, session, locations, settings)
@@ -1233,15 +1261,43 @@ async def _finish(
         await _settle_roamer(session, next_flow, owner, payouts, locations)
 
     if owner is not None and session.state.verdict_for(owner.id) is Verdict.VICTORY:
-        await _pay_digest(
-            content, settings, session, flow, next_flow, locations, state_cache, payouts, updated
-        )
+        for one in winners:
+            full = dict(
+                participation.room_credit(flow.descent.credits, winners, flow.descent.layer)
+            )
+            if (
+                session.in_descent
+                and not next_flow.descent.active
+                and session.participation_rule
+                and full.get(one.character_id) != session.depth
+            ):
+                continue
+            await _pay_digest(
+                content,
+                settings,
+                replace(session, owner=one.character_id),
+                flow,
+                next_flow,
+                locations,
+                state_cache,
+                payouts,
+                updated,
+            )
 
     if places and winners:
         # Подряд гильдии считается после того, как стало ясно, кончился ли спуск:
         # «пройти спусков до логова» закрывает пройденное логово, а не комната.
         await _work_contracts(
-            content, settings, guilds, places, session, next_flow, winners, payouts
+            content,
+            settings,
+            guilds,
+            places,
+            session,
+            next_flow,
+            winners,
+            payouts,
+            original_flow=flow,
+            state_cache=state_cache,
         )
 
     for character_id, character in updated.items():
@@ -1371,10 +1427,13 @@ async def _record_deeds(
     winners: Sequence[Combatant],
 ) -> None:
     """Выигранный бой - деяние гильдии и вклад того, кто его выиграл (ADR 0076)."""
+    groups: dict[int, list[int]] = {}
     for one in winners:
         place = places.get(one.character_id)
         if place is not None:
-            await guilds.record_deeds(place.guild_id, one.character_id, guild_rules.DEEDS_PER_FIGHT)
+            groups.setdefault(place.guild_id, []).append(one.character_id)
+    for guild_id, members in groups.items():
+        await guilds.record_group_deed(guild_id, tuple(members))
 
 
 async def _settle_world(
@@ -1390,14 +1449,15 @@ async def _settle_world(
 ) -> None:
     """Расчёт боя с миром: опыт, золото, добыча - и всё это делится на отряд.
 
-    Отряд не делает бой выгоднее: противник тот же, а плата делится поровну
-    (``domain/rules/party.split``). Добыча раздаётся по кругу, чтобы собравший
+    Новый бой использует единый фонд ADR 0093, прежний сохраняет деление ADR 0026.
+    Добыча раздаётся по кругу, чтобы собравший
     отряд не забирал всё ценное только потому, что он первый в списке.
     """
     state = session.state
     if winners:
-        experience = party_rules.split(state.experience, len(winners))
-        gold = party_rules.split(state.gold, len(winners))
+        splitter = participation.reward_shares if session.participation_rule else party_rules.split
+        experience = splitter(state.experience, len(winners))
+        gold = splitter(state.gold, len(winners))
         shares = party_rules.distribute(
             state.loot,
             tuple(one.character_id for one in winners),
@@ -1503,6 +1563,13 @@ async def _settle_world(
 
     for one in session.participants():
         verdict = state.verdict_for(one.id)
+        if verdict is Verdict.VICTORY and one not in winners and one.character_id in updated:
+            updated[one.character_id] = adventure.carry_wounds(
+                content, updated[one.character_id], state, one.id
+            )
+            payouts[one.character_id].extra.append(
+                "Награда и личный зачёт не начислены: в этой встрече вы не совершили действия."
+            )
         if verdict in {Verdict.FLED, Verdict.AVOIDED} and one.character_id in updated:
             updated[one.character_id] = adventure.carry_wounds(
                 content, updated[one.character_id], state, one.id
@@ -1714,6 +1781,8 @@ async def _after_dungeon_room(
     inventory: InventoryRepository,
     *,
     character: Character,
+    payouts: dict[int, Payout] | None = None,
+    state_cache: StateCache | None = None,
 ) -> PlayState:
     """Что даёт выигранная комната и куда развилка ведёт дальше (ADR 0036)."""
     descent = flow.descent
@@ -1722,27 +1791,98 @@ async def _after_dungeon_room(
     final = dungeon_rules.final_layer(dungeon_rules.DESCENT_DEPTH, difficulty)
     run_seed = dungeon_run_seed(settings.world_seed, descent)
     conditions = dungeon_rules.conditions_for(run_seed, difficulty)
+    encounter = (
+        None
+        if descent.roamer
+        else expedition.meeting(content, descent.city_id, descent.dungeon_id, descent.layer)
+    )
+    winners = tuple(
+        one
+        for one in session.participants()
+        if one.character_id not in session.departed
+        and session.state.verdict_for(one.id) is Verdict.VICTORY
+    )
+    credited = participation.room_credit(descent.credits, winners, descent.layer)
+    continued = replace(
+        descent,
+        credits=credited,
+        excluded=tuple(
+            sorted(
+                set(descent.excluded)
+                | set(session.departed)
+                | {one.character_id for one in session.participants() if one.left}
+            )
+        ),
+    )
 
-    _heal_room_winners(content, session, updated, dungeon_rules.ROOM_HEAL_PERCENT[room])
+    _heal_room_winners(
+        content,
+        session,
+        updated,
+        encounter.heal_percent if encounter else dungeon_rules.ROOM_HEAL_PERCENT[room],
+    )
 
-    if room is dungeon_rules.RoomKind.LAIR:
-        bottom = await _pay_the_bottom(
-            content,
-            updated.get(session.owner, character),
-            session,
-            payout,
-            inventory,
-            level=max(1, descent.level),
-            # «Богатая порода» обещает золото со всего захода, а дно - его часть:
-            # без множителя условия обещание кончалось у порога логова.
-            bounty=dungeon_rules.spec_of(difficulty).stakes * dungeon_rules.bounty_of(conditions),
-        )
-        updated[session.owner] = bottom
+    if room is dungeon_rules.RoomKind.LAIR or (encounter and encounter.rank == "boss"):
+        entitled = tuple(key for key, count in credited if count == session.depth)
+        if not session.participation_rule:
+            entitled = (session.owner,)
+        for index, key in enumerate(entitled):
+            target_payout = (payouts or {}).get(key, payout)
+            entitlement = f"descent-paid:{descent.encounter(session.owner)}:{key}"
+            if state_cache is not None:
+                if await state_cache.get(entitlement) is not None:
+                    target_payout.extra.append("Дно этого захода уже оплачено.")
+                    continue
+                await state_cache.set(entitlement, "1", BATTLE_TTL)
+            updated[key] = await _pay_the_bottom(
+                content,
+                updated.get(key, character),
+                session,
+                target_payout,
+                inventory,
+                level=max(1, descent.level),
+                bounty=dungeon_rules.spec_of(difficulty).stakes
+                * dungeon_rules.bounty_of(conditions),
+                members=len(entitled),
+                share_index=index,
+            )
+            log, steps = quests.record_descent(
+                content,
+                updated[key],
+                city_id=session.city_id,
+                dungeon_id="" if session.roamer else descent.dungeon_id,
+            )
+            updated[key] = replace(updated[key], quests=log)
+            target_payout.extra.extend(
+                f"Задание «{step.quest.name}»: {step.progress} из {step.quest.target_count}."
+                for step in steps
+            )
+        if payouts:
+            for one in winners:
+                if one.character_id not in entitled:
+                    payouts[one.character_id].extra.append(
+                        "Дно и зачёт полного спуска не начислены: "
+                        "пропущено участие в одной из встреч."
+                    )
         payout.extra.append("Логово пройдено. Заход окончен — наверх, к свету.")
         return replace(flow, descent=Descent())
 
     next_layer = descent.layer + 1
-    options = dungeon_rules.room_options(run_seed, next_layer, final)
+    upcoming = (
+        None
+        if descent.roamer
+        else expedition.meeting(content, descent.city_id, descent.dungeon_id, next_layer)
+    )
+    options: tuple[dungeon_rules.RoomKind, ...]
+    if upcoming:
+        next_kind = (
+            dungeon_rules.RoomKind.LAIR
+            if upcoming.rank == "boss"
+            else dungeon_rules.RoomKind.SKIRMISH
+        )
+        options = (next_kind, dungeon_rules.RoomKind.STAIRS)
+    else:
+        options = dungeon_rules.room_options(run_seed, next_layer, final)
     payout.extra.append(f"Пройдено комнат: {descent.layer + 1}. Впереди развилка.")
     if descent.layer == 0:
         # На входе называем, что несёт этот заход: дальше о том же напомнит
@@ -1750,7 +1890,9 @@ async def _after_dungeon_room(
         payout.extra.extend(dungeon_screens.condition_lines(conditions))
     payout.extra.extend(dungeon_screens.fork_lines(options))
     payout.rows.extend(dungeon_screens.fork_rows(options))
-    return flow
+    if upcoming:
+        payout.extra.append(f"Следующая встреча: {upcoming.name}. {upcoming.briefing}")
+    return replace(flow, descent=continued)
 
 
 async def _pay_the_bottom(
@@ -1762,6 +1904,8 @@ async def _pay_the_bottom(
     *,
     level: int,
     bounty: float = 1.0,
+    members: int = 1,
+    share_index: int = 0,
 ) -> Character:
     """Выдать то, ради чего заход и затевался.
 
@@ -1774,6 +1918,8 @@ async def _pay_the_bottom(
         level=level,
         seed=derive("descent-prize", session.id, session.depth),
         bounty=bounty,
+        members=members,
+        share_index=share_index,
     )
     economy_log.record(economy_log.DESCENT, prize.gold, character_id=prize.character.id)
     if prize.item_id and content.has_item(prize.item_id):
@@ -1980,6 +2126,18 @@ def _dungeon_fork(
     options = dungeon_rules.room_options(
         dungeon_run_seed(settings.world_seed, descent), next_layer, final
     )
+    upcoming = (
+        None
+        if descent.roamer
+        else expedition.meeting(content, descent.city_id, descent.dungeon_id, next_layer)
+    )
+    if upcoming:
+        options = (
+            dungeon_rules.RoomKind.LAIR
+            if upcoming.rank == "boss"
+            else dungeon_rules.RoomKind.SKIRMISH,
+            dungeon_rules.RoomKind.STAIRS,
+        )
     for kind in options:
         if dungeon_screens.room_label(kind).matches(text):
             return replace(flow, descent=replace(descent, layer=next_layer, room=kind.value))
@@ -2140,6 +2298,9 @@ async def _work_contracts(
     next_flow: PlayState,
     winners: Sequence[Combatant],
     payouts: dict[int, Payout],
+    *,
+    original_flow: PlayState | None = None,
+    state_cache: StateCache | None = None,
 ) -> None:
     """Записать выигранный бой и пройденный спуск в подряд гильдии (ADR 0077).
 
@@ -2148,14 +2309,33 @@ async def _work_contracts(
     """
     now = int(time.time())
     delved = session.in_descent and not next_flow.descent.active
+    counted: set[tuple[int, contract_rules.ContractKind]] = set()
+    full: dict[int, int] = {}
+    if original_flow is not None:
+        full = dict(
+            participation.room_credit(
+                original_flow.descent.credits, winners, original_flow.descent.layer
+            )
+        )
     for one in winners:
         place = places.get(one.character_id)
         if place is None:
             continue
         kinds = [contract_rules.ContractKind.CULL]
-        if delved and one.character_id == session.owner:
+        if delved and (
+            not session.participation_rule or full.get(one.character_id) == session.depth
+        ):
             kinds.append(contract_rules.ContractKind.DELVE)
         for kind in kinds:
+            identity = (place.guild_id, kind)
+            if identity in counted:
+                continue
+            counted.add(identity)
+            key = f"battle-credit:{session.id}:{place.guild_id}:{kind.value}"
+            if state_cache is not None:
+                if await state_cache.get(key) is not None:
+                    continue
+                await state_cache.set(key, "1", BATTLE_TTL)
             closed = await guilds.work_on_contract(
                 content,
                 guild_id=place.guild_id,

@@ -779,6 +779,20 @@ class Location:
 
 
 @dataclass(frozen=True, slots=True)
+class Encounter:
+    """Названная встреча общего спуска, обрабатываемая обычным боем."""
+
+    id: str
+    name: str
+    briefing: str
+    enemies: tuple[str, ...]
+    rank: str = "normal"
+    stakes: float = 1.0
+    heal_percent: int = 15
+    health_per_extra_member: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class Dungeon:
     """Одно названное подземелье города (ADR 0041).
 
@@ -798,6 +812,8 @@ class Dungeon:
     #: С какого уровня открыт. Ноль - открыт вместе с городом. Глубокое
     #: подземелье живёт по своему правилу (последняя локация города).
     unlock_level: int = 0
+    encounters: tuple[Encounter, ...] = ()
+    route_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)

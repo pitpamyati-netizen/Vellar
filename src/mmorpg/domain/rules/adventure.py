@@ -455,6 +455,8 @@ def descent_prize(
     level: int,
     seed: bytes,
     bounty: float = 1.0,
+    members: int = 1,
+    share_index: int = 0,
 ) -> DescentPrize:
     """Заплатить за заход, пройденный до логова. Определяется сидом.
 
@@ -477,6 +479,12 @@ def descent_prize(
             * bounty
         ),
     )
+    from mmorpg.domain.rules.participation import reward_shares
+
+    gold = reward_shares(gold, members)[share_index]
+    experience = reward_shares(experience, members)[share_index]
+    if source.randrange(members) != share_index:
+        item_id = ""
     paid = character.with_gold(gold)
     grown, level_up = grant_experience(content, paid, experience)
     return DescentPrize(

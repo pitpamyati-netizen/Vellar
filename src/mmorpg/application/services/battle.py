@@ -95,6 +95,8 @@ class BattleSession:
     roamer_stamp: int = 0
     results: str = ""
     departed: tuple[int, ...] = ()
+    participation_rule: int = 0
+    briefing: str = ""
 
     @property
     def in_descent(self) -> bool:
@@ -145,6 +147,8 @@ def begin(
     depth: int = 0,
     roamer: bool = False,
     opening_effects: Mapping[int, Sequence[ActiveEffect]] | None = None,
+    participation_rule: int = 0,
+    briefing: str = "",
 ) -> tuple[BattleSession, dict[int, Character]]:
     """Собрать бой из тех, кто в нём участвует.
 
@@ -232,6 +236,8 @@ def begin(
         place=place,
         depth=depth,
         roamer=roamer,
+        participation_rule=participation_rule,
+        briefing=briefing,
     )
     return session, roster
 
@@ -491,6 +497,7 @@ def _combatant_to_json(one: Combatant) -> dict[str, object]:
         "powers": dict(one.powers),
         "ways": sorted(one.ways),
         "master_id": one.master_id,
+        "actions": one.actions,
     }
 
 
@@ -524,6 +531,7 @@ def _combatant_from_json(raw: Mapping[str, Any]) -> Combatant:
         powers=MappingProxyType({str(k): float(v) for k, v in raw.get("powers", {}).items()}),
         ways=frozenset(str(one) for one in raw.get("ways", ())),
         master_id=int(raw.get("master_id", 0)),
+        actions=int(raw.get("actions", 0)),
     )
 
 
@@ -581,6 +589,8 @@ def serialise(session: BattleSession) -> str:
             "roamer_stamp": session.roamer_stamp,
             "results": session.results,
             "departed": list(session.departed),
+            "participation_rule": session.participation_rule,
+            "briefing": session.briefing,
             "round": state.round,
             "order": list(state.order),
             "cursor": state.cursor,
@@ -634,6 +644,8 @@ def deserialise(raw: str) -> BattleSession:
         roamer_stamp=int(data.get("roamer_stamp", 0)),
         results=str(data.get("results", "")),
         departed=tuple(int(one) for one in data.get("departed", ())),
+        participation_rule=int(data.get("participation_rule", 0)),
+        briefing=str(data.get("briefing", "")),
     )
 
 

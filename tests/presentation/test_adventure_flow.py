@@ -1066,6 +1066,86 @@ async def test_a_descent_pays_at_the_bottom_and_not_before(
     assert stored.gold > strong.gold
 
 
+async def test_catalogue_route_runs_through_four_meetings_and_personal_quest(
+    player: Player,
+    content: GameContent,
+    characters: InMemoryCharacterRepository,
+    argus: Character,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts.m06_descent_report import prepared
+
+    from mmorpg.domain.entities.combat import ActionKind
+    from mmorpg.domain.rules import combat as combat_rules
+
+    monkeypatch.setattr(combat_handler.time, "time", lambda: 100)
+    ready = replace(prepared(content, "warrior", argus.id), user_id=ACCOUNT, gold=1000)
+    ready = replace(ready, quests=ready.quests.take("farhold_pump_house"))
+    await characters.save(ready)
+    await player.deps["inventory"].add(argus.id, "small_healing_potion", 3)
+    await player.press("Мир")
+    await player.press("Подземелья")
+    picked = await player.press("Затопленный штрек")
+    assert "Встреч: 4" in picked.text()
+    await player.press("Разведка")
+    store = BattleStore(player.deps["cache"])
+    seen: list[str] = []
+    for room in range(4):
+        data = await player.state.get_data()
+        session = await store.load(data["battle"])
+        encounter = content.city("farhold").deep_dungeon.encounters[room]
+        assert session.briefing.startswith(encounter.name)
+        assert session.depth == room + 1 and session.participation_rule == 1
+        seen.append(encounter.id)
+        unchanged = session
+        shown = await player.press("/разбор")
+        assert encounter.briefing in shown.text()
+        await player.press("/обновить")
+        assert await store.load(data["battle"]) == unchanged
+        for _ in range(250):
+            session = await store.load(data["battle"])
+            if session.settled:
+                break
+            current = await characters.get(argus.id)
+            actor = session.state.active
+            action = combat_rules._chosen_by_engine(
+                content, {actor.id: current}, session.state, actor, session.seed
+            )
+            if actor.health < actor.max_health * 0.45 and await player.deps["inventory"].count(
+                argus.id, "small_healing_potion"
+            ):
+                await player.press("/сумка")
+                result = await player.press(
+                    f"{content.item('small_healing_potion').name} — использовать"
+                )
+            else:
+                result = await player.press(
+                    f"/умение {action.slot + 1}" if action.kind is ActionKind.SKILL else "Атака"
+                )
+            assert not result.text().startswith("Поражение."), result.text()
+        else:
+            pytest.fail("catalogue meeting did not end")
+        after = await player.flow()
+        if room < 3:
+            assert after.descent.layer == room
+            assert after.descent.credits == ((argus.id, room + 1),)
+            doors = [
+                one.text
+                for row in result.rows
+                for one in row
+                if one.text.startswith(("Дальше", "Логово хозяина"))
+            ]
+            assert len(doors) == 1
+            await player.press(doors[0])
+        else:
+            assert not after.descent.active
+            assert "Дно спуска:" in result.text()
+    assert seen == [one.id for one in content.city("farhold").deep_dungeon.encounters]
+    saved = await characters.get(argus.id)
+    assert saved.quests.progress("farhold_pump_house") == 1
+    assert saved.gold > ready.gold
+
+
 async def test_leaving_a_descent_leaves_it_behind(
     player: Player,
     content: GameContent,

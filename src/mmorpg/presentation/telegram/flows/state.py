@@ -235,6 +235,9 @@ class Descent:
     slot: int = 0
     stamp: int = 0
     group: bool = False
+    credits: tuple[tuple[int, int], ...] = ()
+    excluded: tuple[int, ...] = ()
+    participation_rule: int = 0
 
     @property
     def active(self) -> bool:
@@ -378,6 +381,9 @@ class PlayState:
                     self.descent.stamp,
                     self.descent.group,
                     self.descent.encounter_id,
+                    self.descent.credits,
+                    self.descent.excluded,
+                    self.descent.participation_rule,
                 ],
                 "pick": self.pick_slot,
                 "dungeon_pick": self.dungeon_pick,
@@ -493,6 +499,13 @@ class PlayState:
                 stamp=int(descent_stamp),
                 group=bool(descent_group),
                 encounter_id=str(descent_encounter),
+                credits=tuple((int(one[0]), int(one[1])) for one in raw_descent[12])
+                if len(raw_descent) > 12
+                else (),
+                excluded=tuple(int(one) for one in raw_descent[13])
+                if len(raw_descent) > 13
+                else (),
+                participation_rule=int(raw_descent[14]) if len(raw_descent) > 14 else 0,
             ),
             list_page=PageState(
                 page=int(list_page),

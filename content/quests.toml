@@ -28,6 +28,7 @@
 # tests/content/test_quests.py.
 
 # --- Дубно: младшая служба Дома Порубежья ---
+
 #
 # Безродного берут на побегушки при досмотре. Глава дома стар, младшие ветви
 # тянут службу на себя, и лишняя пара рук нужна каждой.
@@ -984,3 +985,17 @@ target_count = 1
 reward_gold = 589
 reward_experience = 8672
 reward_item = "heavy_body@140#legendary"
+
+[[quest]]
+id = "farhold_pump_house"
+city = "farhold"
+level = 15
+name = "Расчёт нижней помпы"
+giver = "Довен, писарь при досмотре"
+intro = "Писарь раскладывает счета за откачку воды из нижней выработки."
+terms = "Пройдите Затопленный штрек до нижней помпы. Участвуйте в каждой из четырёх встреч. За полный спуск плачу 190 каждому, кто взял работу."
+objective = "delve"
+target_kind = "farhold_flooded_drift"
+target_count = 1
+reward_gold = 190
+reward_experience = 1024

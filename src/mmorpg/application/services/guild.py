@@ -93,6 +93,9 @@ class GuildStore:
         """Записать деяния гильдии и вклад того, кто их сделал (ADR 0076)."""
         await self._roster.record_deeds(guild_id, character_id, deeds)
 
+    async def record_group_deed(self, guild_id: int, character_ids: tuple[int, ...]) -> None:
+        await self._roster.record_group_deed(guild_id, character_ids)
+
     @atomic_action
     async def period(
         self, guild_id: int, purpose: str, *, now: int, seconds: int

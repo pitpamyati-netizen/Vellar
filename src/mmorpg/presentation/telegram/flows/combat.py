@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
@@ -90,6 +91,9 @@ def render(
 ) -> Screen:
     """Экран этого боя для этого участника."""
     state = session.state
+    if not state.is_over and session.briefing:
+        briefing = session.briefing if state.round == 1 else session.briefing.split(". ")[0]
+        notice = f"{notice}\n{briefing}".strip()
     match state.verdict_for(viewer_id):
         case Verdict.VICTORY:
             return screens.victory_screen(
@@ -138,6 +142,10 @@ def action_for(
     text: str,
 ) -> BattleAction | None:
     """Нажатую кнопку или набранную команду - в действие боя."""
+    if text.strip().casefold() in {"/прикрыть", "прикрыть", "прикрыть товарища"}:
+        return BattleAction(kind=ActionKind.ASSIST)
+    if match := re.fullmatch(r"/цель\s+(\d+)", text.strip().casefold()):
+        return BattleAction(kind=ActionKind.FOCUS, target=int(match[1]))
     screen = render(content, character, session, viewer_id)
     command = resolve(text, screen)
 
@@ -208,6 +216,11 @@ def _action_from_label(
         return BattleAction(kind=ActionKind.ATTACK)
     if labels.DEFEND.matches(argument):
         return BattleAction(kind=ActionKind.DEFEND)
+    if argument.startswith("Прикрыть товарища"):
+        screen = render(content, character, session, viewer_id)
+        if any(one.matches(argument) for row in screen.rows for one in row):
+            return BattleAction(kind=ActionKind.ASSIST)
+        return None
     if labels.FLEE.matches(argument):
         return BattleAction(kind=ActionKind.FLEE)
     if labels.BATTLE_YIELD.matches(argument):

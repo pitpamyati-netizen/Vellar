@@ -77,6 +77,7 @@ class ActionKind(StrEnum):
     #: Закрыться: ход уходит целиком на оборону, зато чужой удар и находит реже,
     #: и стоит дешевле (``rules/combat.DEFEND_*``).
     DEFEND = "defend"
+    ASSIST = "assist"
     SKILL = "skill"
     RACIAL = "racial"
     #: Приём породы: то, что она делает вместо удара по своей повадке
@@ -225,6 +226,8 @@ class Combatant:
     focus: int = 0
     #: Ушёл из боя сам: сбежал или сдался. Не то же, что пал.
     left: bool = False
+    #: Состоявшиеся действия; чтение экрана и отказ сюда не входят.
+    actions: int = 0
 
     @property
     def alive(self) -> bool:

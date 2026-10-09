@@ -476,9 +476,24 @@ def dungeon_pick_screen(
         *head(f"{dungeon.name}.", notice),
         dungeon.flavour,
         f"Уровень спуска {dungeon.level}, ваш {character.level}{outgrew}.",
-        f"До логова около {depth} схваток. У вас {amount(health, stats.max_health)} здоровья.",
+        (
+            f"До логова {len(dungeon.encounters)} встречи, включая финал. "
+            if dungeon.encounters
+            else f"До логова около {depth} схваток. "
+        )
+        + f"У вас {amount(health, stats.max_health)} здоровья.",
         "Сложность домножает силу врагов и плату:",
     ]
+    if dungeon.encounters:
+        lines.insert(
+            3, f"Встреч: {len(dungeon.encounters)}, последняя — логово. Путь общий для отряда."
+        )
+        lines.insert(
+            4,
+            "За участие делятся золото, опыт и находки. "
+            "Для награды со дна нужно действовать в каждой встрече. "
+            "/прикрыть помогает товарищу без требования к классу.",
+        )
     for difficulty in dungeon_screens.DIFFICULTY_ORDER:
         lines.append(
             f"— {dungeon_screens.DIFFICULTY_NAMES[difficulty]}: "

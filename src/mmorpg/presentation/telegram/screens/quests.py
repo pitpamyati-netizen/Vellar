@@ -38,17 +38,18 @@ OBJECTIVES: dict[ObjectiveKind, str] = {
     # Задание на изготовление называет вещь по имени: без этой строки разговор с
     # нанимателем падал бы на KeyError.
     ObjectiveKind.CRAFT: "изготовить своими руками",
+    ObjectiveKind.DELVE: "пройти спуск до логова",
 }
 
 #: Как это засчитывается - одна фраза про то, что именно нажимать.
 HOW: dict[ObjectiveKind, str] = {
     ObjectiveKind.KILL: (
         "Считается каждый побеждённый противник в указанном месте. В отряде личный зачёт "
-        "получает каждый победитель."
+        "получает каждый действовавший участник победившей стороны, даже павший."
     ),
     ObjectiveKind.ELITE: (
         "Считается каждый побеждённый эпический противник или хозяин логова. "
-        "В отряде личный зачёт получает каждый победитель; место указывается ниже."
+        "В отряде личный зачёт получает каждый действовавший участник; место указывается ниже."
     ),
     ObjectiveKind.SEARCH: (
         "Считается выполненное действие узла без боя: заросли, тайник, святилище, событие. "
@@ -57,6 +58,10 @@ HOW: dict[ObjectiveKind, str] = {
     ObjectiveKind.CRAFT: (
         "Считается то, что вышло из работы: «Ремёсла» в главном меню, рецепт, «Изготовить». "
         "Купленное не считается."
+    ),
+    ObjectiveKind.DELVE: (
+        "Нужно действовать в каждой встрече и остаться до победы над логовом. "
+        "Личный зачёт получает каждый такой участник, в том числе павший в победившем отряде."
     ),
 }
 
@@ -82,6 +87,13 @@ def where_line(content: GameContent, quest: Quest) -> str:
     if not content.has_city(quest.city_id):
         return ""
     city = content.city(quest.city_id)
+    if quest.objective is ObjectiveKind.DELVE:
+        name = (
+            city.dungeon(quest.target_kind).name
+            if city.has_dungeon(quest.target_kind)
+            else "любой спуск"
+        )
+        return f"Где: город {city.name}, «Подземелья», {name}."
     if not quest.location_slot or not city.has_location(quest.location_slot):
         return f"Где: в локациях города {city.name}, любых по вашему уровню."
     location = city.location(quest.location_slot)
@@ -100,6 +112,13 @@ def objective_line(content: GameContent, quest: Quest) -> str:
             named = (
                 content.item(quest.target_kind).name
                 if content.has_item(quest.target_kind)
+                else named
+            )
+        if quest.objective is ObjectiveKind.DELVE:
+            city = content.city(quest.city_id)
+            named = (
+                city.dungeon(quest.target_kind).name
+                if city.has_dungeon(quest.target_kind)
                 else named
             )
         what = f"{what}, а именно {named}"

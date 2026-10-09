@@ -388,6 +388,15 @@ reward_item = "small_healing_potion"   # необязательно
 
 ## Как проверить свои правки
 
+Каталоговые спуски описаны в `expeditions.toml`: `[[expedition]]` с `id`,
+затем `[[expedition.encounter]]` с уникальным `id`, названием, подсказкой,
+списком подземных пород, рангом, ставкой, передышкой и дополнительным здоровьем
+за товарища. Только последняя встреча — босс. Ссылка `route` в `[[city.dungeon]]`
+подключает путь без изменений обработчика. Пример — `pump_house`;
+правила — [ADR 0093](adr/0093-participation-and-shared-expedition-rewards.md).
+Задание `objective = "delve"` указывает город и `target` с номером подземелья,
+число полных спусков; `location` не требуется.
+
 ```bash
 uv run pytest tests/content
 ```

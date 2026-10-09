@@ -68,6 +68,7 @@ level = 13
 
 [[city.dungeon]]
 id = "farhold_flooded_drift"
+route = "pump_house"
 name = "Затопленный штрек"
 flavour = "Нижняя выработка ушла под воду; воздух в ней держат помпой, и то не везде."
 biome = "затопленные ходы"

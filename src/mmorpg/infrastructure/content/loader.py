@@ -24,6 +24,7 @@ from mmorpg.domain.entities.content import (
     ClassAffix,
     ClassResource,
     Dungeon,
+    Encounter,
     EnemyAffix,
     EquipSlot,
     GameContent,
@@ -96,6 +97,7 @@ CONTENT_FILES = (
     "crafts.toml",
     "houses.toml",
     "guilds.toml",
+    "expeditions.toml",
 )
 
 # Виды узлов, которые может попросить задание на поиск. Держатся строками, а не
@@ -190,6 +192,7 @@ def load_content(content_dir: Path) -> GameContent:
         gear.gear_archetypes, gear.gear_tiers, gear.rarities
     )
     enemies, elite_titles, affixes = _parse_enemies(raw["enemies.toml"], item_ids, problems)
+    cities = _with_encounters(cities, raw["expeditions.toml"], enemies, problems)
     _validate_enemies(enemies, cities, problems)
     enemy_ids = {enemy.id for enemy in enemies}
     quests = _parse_quests(raw["quests.toml"], item_ids, cities, enemy_ids, problems)
@@ -2058,6 +2061,10 @@ def _parse_quests(
                     # Задание на сделанные вещи называет саму вещь, потому что именно
                     # так назвал бы её тот, кто её просит.
                     allowed = frozenset(item_ids)
+                case ObjectiveKind.DELVE:
+                    allowed = frozenset(
+                        one.id for city in cities if city.id == city_id for one in city.dungeons
+                    )
                 case _:
                     # Порода целиком - или один названный противник: «пятеро
                     # кабанов» это не «пятеро зверей», и оба условия законны
@@ -2082,8 +2089,8 @@ def _parse_quests(
                 f"which city {city_id!r} does not have"
             )
             location_slot = 0
-        if location_slot and objective is ObjectiveKind.CRAFT:
-            problems.append(f"quests.toml: {quest_id} is a craft and needs no location")
+        if location_slot and objective in {ObjectiveKind.CRAFT, ObjectiveKind.DELVE}:
+            problems.append(f"quests.toml: {quest_id} is a {objective.value} and needs no location")
             location_slot = 0
 
         parsed.append(
@@ -2171,6 +2178,7 @@ def _parse_world(raw: Mapping[str, Any], problems: list[str]) -> tuple[City, ...
                 level=int(d["level"]),
                 deep=bool(d.get("deep", False)),
                 unlock_level=int(d.get("unlock_level", 0)),
+                route_id=str(d.get("route", "")),
             )
             for d in entry.get("dungeon", ())
         )
@@ -2195,6 +2203,73 @@ def _parse_world(raw: Mapping[str, Any], problems: list[str]) -> tuple[City, ...
 #: Сколько обычных подземелий у города, чтобы список покрывал его полосу, а не
 #: пару точек (ADR 0041).
 MINIMUM_REGULAR_DUNGEONS = 4
+
+
+def _with_encounters(
+    cities: tuple[City, ...],
+    raw: dict[str, Any],
+    enemies: tuple[EnemyArchetype, ...],
+    problems: list[str],
+) -> tuple[City, ...]:
+    profiles: dict[str, tuple[Encounter, ...]] = {}
+    known = {one.id: one for one in enemies}
+    for route in raw.get("expedition", ()):
+        key = str(route.get("id", ""))
+        if not key or key in profiles:
+            problems.append("expeditions.toml: empty or duplicate route")
+        meetings: list[Encounter] = []
+        for entry in route.get("encounter", ()):
+            ids = tuple(str(one) for one in entry.get("enemies", ()))
+            rank = str(entry.get("rank", "normal"))
+            stakes = float(entry.get("stakes", 1.0))
+            heal = int(entry.get("heal_percent", 15))
+            group_health = int(entry.get("health_per_extra_member", 0))
+            if not 1 <= len(ids) <= 5 or any(
+                one not in known or not known[one].dungeon for one in ids
+            ):
+                problems.append(f"expeditions.toml: {key} has invalid enemies")
+            if (
+                rank not in {"normal", "elite", "boss"}
+                or not 0.1 <= stakes <= 5
+                or not 0 <= heal <= 100
+                or not 0 <= group_health <= 100
+            ):
+                problems.append(f"expeditions.toml: {key} has invalid encounter rules")
+            meeting = Encounter(
+                id=str(entry.get("id", "")),
+                name=str(entry.get("name", "")),
+                briefing=str(entry.get("briefing", "")),
+                enemies=ids,
+                rank=rank,
+                stakes=stakes,
+                heal_percent=heal,
+                health_per_extra_member=group_health,
+            )
+            if (
+                not meeting.id
+                or not meeting.name
+                or not meeting.briefing
+                or len(meeting.briefing) > 700
+            ):
+                problems.append(f"expeditions.toml: {key} has invalid text")
+            meetings.append(meeting)
+        if (
+            len(meetings) < 2
+            or meetings[-1].rank != "boss"
+            or any(one.rank == "boss" for one in meetings[:-1])
+            or len({one.id for one in meetings}) != len(meetings)
+        ):
+            problems.append(f"expeditions.toml: {key} needs distinct meetings and a final boss")
+        profiles[key] = tuple(meetings)
+    result = []
+    for city in cities:
+        dungeons = []
+        for one in city.dungeons:
+            if one.route_id and one.route_id not in profiles:
+                problems.append(f"world.toml: {one.id} has unknown route {one.route_id}")
+            dungeons.append(replace(one, encounters=profiles.get(one.route_id, ())))
+        result.append(replace(city, dungeons=tuple(dungeons)))
+    return tuple(result)
 
 
 def _validate_city_dungeons(city: City, problems: list[str]) -> None:

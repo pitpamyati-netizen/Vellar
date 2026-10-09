@@ -688,6 +688,11 @@ def _take_turn(
 
     working = _perform(content, roster, state, actor.id, action, source)
 
+    if actor.is_hero and actor.live and action.kind not in {ActionKind.FLEE, ActionKind.YIELD}:
+        counted = working.by_id(actor.id)
+        if counted is not None:
+            working = working.replace_combatant(replace(counted, actions=counted.actions + 1))
+
     updated = working.by_id(actor_id)
     if updated is not None:
         # «Ловкач»: первый удар из незаметности за бой хозяина не выдаёт
@@ -762,6 +767,18 @@ def _advance(state: BattleState, seed: bytes) -> BattleState:
     return replace(state, cursor=cursor, round=round_number, order=order)
 
 
+def assist_target(state: BattleState, actor: Combatant) -> Combatant | None:
+    """Прикрыть самого раненого товарища, у которого ещё нет барьера."""
+    candidates = [
+        one
+        for one in state.allies_of(actor.id, include_self=False)
+        if one.is_hero and one.live and one.barrier == 0
+    ]
+    return min(
+        candidates, key=lambda one: (one.health / max(1, one.max_health), one.id), default=None
+    )
+
+
 def _refusal(
     content: GameContent,
     roster: Mapping[int, Character],
@@ -780,6 +797,13 @@ def _refusal(
             return BattleEvent(
                 kind=EventKind.ITEM_REFUSED, actor_id=actor.id, actor=actor.name, effect_name=reason
             )
+    if action.kind is ActionKind.ASSIST and assist_target(state, actor) is None:
+        return BattleEvent(
+            kind=EventKind.ITEM_REFUSED,
+            actor_id=actor.id,
+            actor=actor.name,
+            effect_name="Некому помочь: у товарищей уже есть прикрытие или они вышли из боя.",
+        )
     if actor.effects.control() is not None:
         return None
     if actor.effects.has(StatusKind.CHARM) or actor.effects.has(StatusKind.CONFUSION):
@@ -812,6 +836,16 @@ def _perform(
             return _basic_attack(content, roster, state, actor, action.target, source)
         case ActionKind.DEFEND:
             return _defend(state, actor)
+        case ActionKind.ASSIST:
+            target = assist_target(state, actor)
+            if target is None:  # pragma: no cover - проверено до хода
+                return state
+            return _warded(
+                state,
+                target.id,
+                amount=max(1, target.max_health * 15 // 100),
+                skill_name="Прикрыть товарища",
+            )
         case ActionKind.SKILL | ActionKind.RACIAL:
             return _use_skill(content, roster, state, actor, action, source)
         case ActionKind.ROLE:

@@ -22,6 +22,8 @@ from mmorpg.infrastructure.persistence.operations import (
 EFFECT_SCOPES = frozenset(
     {
         "digest",
+        "descent-paid",
+        "battle-credit",
         "guild-taken",
         "guild-items",
         "guild-contract",

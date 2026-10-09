@@ -619,6 +619,24 @@ class InMemoryGuildRepository:
         if guild is not None and deeds > 0:
             self._guilds[guild_id] = replace(guild, deeds=guild.deeds + deeds)
 
+    async def record_group_deed(self, guild_id: int, character_ids: tuple[int, ...]) -> None:
+        guild = self._guilds.get(guild_id)
+        if guild is None or not character_ids:
+            return
+        present = {one.character_id for one in guild.members} & set(character_ids)
+        if not present:
+            return
+        self._guilds[guild_id] = replace(
+            guild,
+            deeds=guild.deeds + 1,
+            members=tuple(
+                replace(one, contributed=one.contributed + 1)
+                if one.character_id in present
+                else one
+                for one in guild.members
+            ),
+        )
+
     # --- хранилище гильдии (ADR 0077) --------------------------------
 
     async def stock(self, guild_id: int) -> tuple[tuple[str, int], ...]:
