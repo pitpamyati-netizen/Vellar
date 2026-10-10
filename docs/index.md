@@ -88,6 +88,12 @@
 | [docs/subclasses.md](subclasses.md) | Дерево специализации |
 | [docs/tutorial.md](tutorial.md) | Обучение |
 
+## Долгие цели M09
+
+- [Игровые правила](long-goals.md): проект гильдии, общий выбор, цели уровня 150 и отсутствие сезонного сброса.
+- [Проверки M09](verification-m09-2026-10-10.md): сохранность, повтор, общий бой, копия и открытая ручная приёмка.
+- [ADR 0098](adr/0098-permanent-goals-and-one-story-consequence.md), [ADR 0099](adr/0099-one-war-point-and-account-participation.md).
+
 ## История и совместимость
 
 - [Указатель всех ADR](adr/index.md) — решения с явными связями замены.

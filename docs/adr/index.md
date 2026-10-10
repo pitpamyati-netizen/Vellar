@@ -134,3 +134,6 @@ M01 уточняет границы ценностей в 0084; отметки, 
 - [ADR 0095 — Общий город, личный предел и постоянный итог](0095-shared-city-event.md)
 - [ADR 0096 — Одна база стоимости и ограниченный возврат](0096-one-item-value-and-bounded-recovery.md)
 - [ADR 0097 — Общий рынок и оплата заказа](0097-public-market-and-craft-orders.md)
+
+- [ADR 0098 — Постоянные цели и одно общее сюжетное последствие](0098-permanent-goals-and-one-story-consequence.md)
+- [ADR 0099 — Одно очко войны и участие аккаунта](0099-one-war-point-and-account-participation.md)

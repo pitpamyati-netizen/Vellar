@@ -34,9 +34,11 @@ from mmorpg.application.services.content import ContentRegistry
 from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.guild_safety import disband_token, dissolve
 from mmorpg.application.services.keeper import set_keeper, sync_keeper
+from mmorpg.application.services.long_goal import LongGoals
 from mmorpg.application.services.market import Market
 from mmorpg.application.services.party import PartyStore
 from mmorpg.application.services.recruitment import Recruitment
+from mmorpg.application.services.war_score import WarScoring
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character, InventoryEntry
 from mmorpg.domain.entities.content import GameContent
@@ -100,6 +102,7 @@ from mmorpg.presentation.telegram.flows.state import (
     go_back,
 )
 from mmorpg.presentation.telegram.handlers import city_event as city_event_handler
+from mmorpg.presentation.telegram.handlers import long_goal as goal_handler
 from mmorpg.presentation.telegram.handlers import market as market_handler
 from mmorpg.presentation.telegram.handlers import recruitment as recruitment_handler
 from mmorpg.presentation.telegram.handlers.combat import ENGAGED_TTL, open_fight
@@ -218,6 +221,21 @@ async def play(
     now = int(time.time())
     city_events = CityEvents(content, state_cache, characters, inventory)
     command_text = message.text
+    long_goals = LongGoals(content, state_cache, characters, inventory, guilds)
+    if goal_handler.requested(command_text, flow):
+        operation = current_operation()
+        assert operation is not None
+        flow, goal_screen = await goal_handler.step(
+            command_text, flow, character, long_goals, receipt=operation.id
+        )
+        if goal_screen is not None:
+            await state.set_state(STATE_FOR_SCREEN[flow.screen])
+            await state.update_data({STATE_KEY: flow.serialise()})
+            await send_screen(message, goal_screen, emoji=emoji)
+            return
+        command = parse_command(command_text)
+        if command is None or command.intent in {Intent.UNKNOWN, Intent.BACK, Intent.MAIN_MENU}:
+            command_text = "/осмотреться"
     if market_handler.requested(command_text, flow):
         flow, market_screen = await market_handler.step(
             command_text,
@@ -586,6 +604,10 @@ async def play(
     )
     await state.set_state(STATE_FOR_SCREEN[updated.screen])
     await state.update_data({STATE_KEY: updated.serialise()})
+    story = await long_goals.story()
+    story_summary = (
+        story.outcome.text if story and character.city_id == content.long_goals.city_id else ""
+    )
     screen = await render_play(
         message,
         content,
@@ -602,7 +624,9 @@ async def play(
         guild=guild_view,
         location_state=here,
         digest_view=briefing,
-        event_summary=await city_events.summary(),
+        event_summary="\n".join(
+            part for part in (await city_events.summary(), story_summary) if part
+        ),
         travel_discount=await city_events.travel_discount(character.city_id),
     )
     # Уровень объявляется вторым сообщением, и это единственное место в игре, где
@@ -2322,6 +2346,8 @@ async def _guild_vault_step(
             world_seed=settings.world_seed,
             now=now,
             rotation_seconds=settings.guild_contract_seconds,
+            contributors=(character.id,),
+            receipt=operation.id if (operation := current_operation()) else "",
         )
         said = f"В казну внесено {amount}."
         if credited < amount:
@@ -2623,6 +2649,7 @@ async def _guild_war_step(
         ends=now + settings.guild_war_seconds,
         clock_seconds=True,
     )
+    await WarScoring(guilds, characters).begin(war)
     for side, foe_name in ((challenger, guild.name), (guild, challenger.name)):
         await _tell_party(
             message,

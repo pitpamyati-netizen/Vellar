@@ -9,6 +9,7 @@ from mmorpg.application.operations import MissingResourceError, atomic_action
 from mmorpg.application.services.battle import BattleStore
 from mmorpg.domain.entities.city_event import CityEvent, CityEventState
 from mmorpg.domain.entities.content import GameContent
+from mmorpg.domain.entities.long_goal import StoryState
 from mmorpg.domain.ports.repositories import CharacterRepository, InventoryRepository, StateCache
 from mmorpg.domain.procgen.seeds import derive
 from mmorpg.domain.rules import city_event as rules
@@ -163,7 +164,14 @@ class CityEvents:
 
     async def travel_discount(self, city_id: str) -> int:
         event = self.event(city_id)
-        return rules.discount(event, await self.load(event)) if event else 0
+        discount = rules.discount(event, await self.load(event)) if event else 0
+        if city_id == self.content.long_goals.city_id:
+            raw = await self._cache.get(f"long-goal:story:{city_id}")
+            if raw:
+                discount = max(
+                    discount, TypeAdapter(StoryState).validate_json(raw).outcome.travel_discount
+                )
+        return discount
 
     async def summary(self) -> str:
         if not self.content.city_events:

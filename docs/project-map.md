@@ -318,3 +318,13 @@ M02.4–M02.10: `application/services/guild_safety.py` возвращает им
 миграция `0034_guild_safety` добавляет архив, остаток возвращённого золота и сроки войны.
 Проверки — `test_m02_guild_safety.py`, `test_m02_safety.py`, `test_quest_places.py`;
 решение — [ADR 0087](adr/0087-guild-safety-and-current-actions.md).
+
+## M09: постоянные цели и участие войны
+
+`content/long_goals.toml`, `domain/entities/long_goal.py` и `domain/rules/long_goal.py`
+описывают цель и счёт. `application/services/long_goal.py`, `war_score.py` и
+прежний `guild.py` записывают проект, выбор, награды и один общий результат боя.
+Обработчики и экраны `long_goal.py` дают `/цели`, `/проект` и `/историямира`.
+`long-goal:*` входит в `PostgresGameplayState`; вершина схемы `0038` не меняется.
+Проверки `test_long_goals_m09.py` разделены по слоям, копия проверяется
+`scripts/m09_goals_probe.py`. [Протокол M09](verification-m09-2026-10-10.md).

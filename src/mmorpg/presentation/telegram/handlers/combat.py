@@ -40,8 +40,10 @@ from mmorpg.application.services.battle import (
 )
 from mmorpg.application.services.city_event import CityEvents
 from mmorpg.application.services.guild import GuildStore
+from mmorpg.application.services.long_goal import LongGoals
 from mmorpg.application.services.party import PartyStore
 from mmorpg.application.services.recruitment import Recruitment
+from mmorpg.application.services.war_score import WarScoring
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import ActionKind, BattleAction, Combatant, EventKind, Verdict
@@ -61,7 +63,6 @@ from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import dungeon as dungeon_rules
 from mmorpg.domain.rules import guild as guild_rules
 from mmorpg.domain.rules import guild_contract as contract_rules
-from mmorpg.domain.rules import guild_war as war_rules
 from mmorpg.domain.rules import mood as mood_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import party as party_rules
@@ -69,7 +70,6 @@ from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import roamer as roamer_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
 from mmorpg.domain.rules.combat import act, join_battle, joinable
-from mmorpg.domain.rules.guild import Guild
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.domain.rules.tutorial import TutorialTask
 from mmorpg.logging import get_logger
@@ -1222,7 +1222,16 @@ async def _finish(
         await _settle_duel(session, roster, winners, losers, payouts, updated)
         _carry_wounds(content, session, updated)
         # Поединок с человеком враждебной гильдии - очко войне (ADR 0077).
-        await _score_war(guilds, settings, winners, losers, payouts)
+        await _score_war(
+            guilds,
+            settings,
+            winners,
+            losers,
+            payouts,
+            characters,
+            session.id,
+            content.long_goals.war_account_seconds,
+        )
     elif session.is_arena:
         # Круг арены не стоит десятой доли кошелька: он стоит ставки, и её уже
         # взяли перед боем. Раны при этом остаются - арена лечит только гордость.
@@ -1258,6 +1267,23 @@ async def _finish(
             if line:
                 payout.extra.append(line)
 
+    if (
+        session.in_descent
+        and not next_flow.descent.active
+        and session.participation_rule
+        and not session.roamer
+    ):
+        full_credit = dict(
+            participation.room_credit(flow.descent.credits, winners, flow.descent.layer)
+        )
+        entitled = tuple(
+            one.character_id
+            for one in winners
+            if full_credit.get(one.character_id) == session.depth
+        )
+        await LongGoals(content, state_cache, characters, inventory, guilds).record_descent(
+            entitled, flow.descent.dungeon_id, session.id
+        )
     if session.roamer:
         await _settle_roamer(session, next_flow, owner, payouts, locations)
 
@@ -2359,6 +2385,17 @@ async def _work_contracts(
                 world_seed=settings.world_seed,
                 now=now,
                 rotation_seconds=settings.guild_contract_seconds,
+                contributors=tuple(
+                    member.character_id
+                    for member in winners
+                    if places.get(member.character_id) == place
+                    and (
+                        kind is contract_rules.ContractKind.CULL
+                        or not session.participation_rule
+                        or full.get(member.character_id) == session.depth
+                    )
+                ),
+                receipt=session.id,
             )
             if closed is None:
                 continue
@@ -2379,23 +2416,15 @@ async def _score_war(
     winners: Sequence[Combatant],
     losers: Sequence[Combatant],
     payouts: dict[int, Payout],
+    characters: CharacterRepository,
+    battle_id: str,
+    account_seconds: int,
 ) -> None:
-    """Записать выигранный поединок в счёт гильдейской войны (ADR 0077).
-
-    Очко берут только за человека враждебной гильдии и только раз за переворот
-    на пару «кто кого»: иначе двое сговорившихся набивают счёт друг об друга, не
-    выходя из города. Арены это не касается вовсе - там противника не выбирают.
-    """
+    """Один общий поединок даёт максимум одно очко каждой действующей войне."""
     now = int(time.time())
-    known: dict[int, Guild | None] = {}
-
-    async def guild_of(character_id: int) -> Guild | None:
-        if character_id not in known:
-            known[character_id] = await guilds.of(character_id)
-        return known[character_id]
-
+    scored: set[int] = set()
     for one in winners:
-        mine = await guild_of(one.character_id)
+        mine = await guilds.of(one.character_id)
         if mine is None:
             continue
         war = await guilds.timed_war(
@@ -2404,25 +2433,15 @@ async def _score_war(
             legacy_seconds=settings.shop_rotation_seconds,
             duration=settings.guild_war_seconds,
         )
-        if war is None:
+        if war is None or war.id in scored:
             continue
-        for other in losers:
-            theirs = await guild_of(other.character_id)
-            if theirs is None or not war_rules.scores(
-                winner_guild=mine.id, loser_guild=theirs.id, war=war
-            ):
-                continue
-            counted = await guilds.score_war(
-                war,
-                guild_id=mine.id,
-                winner_id=one.character_id,
-                loser_id=other.character_id,
-                now=now,
-                rotation_seconds=settings.guild_limit_seconds,
-            )
-            payouts[one.character_id].extra.append(
-                f"Война с гильдией «{theirs.name}»: очко вашей гильдии."
-                if counted
-                else f"Война с гильдией «{theirs.name}»: за этого противника уже "
-                "платили в этот переворот."
-            )
+        side = tuple(member.character_id for member in winners if member.actions > 0)
+        foes = tuple(member.character_id for member in losers if member.actions > 0)
+        note = await WarScoring(guilds, characters).score(
+            war, mine.id, side, foes, battle_id, now=now, account_seconds=account_seconds
+        )
+        scored.add(war.id)
+        note = note.replace("вашей гильдии", f"гильдии «{mine.name}»")
+        for member in (*winners, *losers):
+            if member.character_id in payouts:
+                payouts[member.character_id].extra.append("Война гильдий: " + note)

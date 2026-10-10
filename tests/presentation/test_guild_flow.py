@@ -23,6 +23,7 @@ from aiogram.types import Chat, Message, User
 from mmorpg.application.services.content import ContentRegistry
 from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.party import PartyStore
+from mmorpg.application.services.war_score import WarScoring
 from mmorpg.config import Settings
 from mmorpg.domain.entities import Character, GameContent
 from mmorpg.domain.rules import guild as guild_rules
@@ -778,13 +779,16 @@ async def test_a_war_whose_time_ran_out_is_settled_by_whoever_looks(
         ends=1,
         clock_seconds=True,
     )
-    await guilds.score_war(
+    scoring = WarScoring(guilds, argus.deps["characters"])
+    await scoring.begin(war)
+    await scoring.score(
         war,
-        guild_id=ours.id,
-        winner_id=argus_character.id,
-        loser_id=mirna_character.id,
+        ours.id,
+        (argus_character.id,),
+        (mirna_character.id,),
+        "expired-test",
         now=0,
-        rotation_seconds=SETTINGS.shop_rotation_seconds,
+        account_seconds=604800,
     )
     before = await guilds.by_id(ours.id)
     assert before is not None

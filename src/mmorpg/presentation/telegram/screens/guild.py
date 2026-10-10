@@ -211,6 +211,7 @@ def guild_screen(view: GuildView, notice: str = "") -> Screen:
             lines.append(f"Гильдия «{view.war_caller}» зовёт вас на войну.")
         rows.append((labels.GUILD_ROSTER, labels.GUILD_VAULT))
         rows.append((labels.GUILD_STORE, labels.GUILD_CONTRACT))
+        rows.append((labels.label("Общий проект гильдии"),))
         rows.append((labels.GUILD_TIERS, labels.GUILD_WAR))
         if len(view.members) > 1:
             rows.append((labels.GUILD_TRANSFER,))
@@ -550,8 +551,9 @@ def war_screen(view: GuildView, notice: str = "") -> Screen:
             "Обе достаются той, чей счёт выше; поровну - каждой своя."
         )
         lines.append(
-            "Очко берут за выигранный поединок с человеком враждебной гильдии, и за "
-            "одного и того же побеждённого — раз за период расходных лимитов."
+            "Один общий бой даёт одно очко, включая бой 5 на 5. Аккаунт участвует в зачёте "
+            "один раз за войну; между зачётами в разных войнах — семь дней. "
+            "Состав закреплён при начале. Действовать должны обе стороны."
         )
     elif view.war_caller:
         lines.append(f"Гильдия «{view.war_caller}» зовёт вас на войну.")

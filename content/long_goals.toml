@@ -1,0 +1,42 @@
+[rules]
+project_id = "guild_wayhouse"
+project_name = "Гильдейский путевой двор"
+project_battles = 12
+project_descents = 3
+project_gold = 500
+project_deeds = 20
+city_id = "last_beacon"
+story_quests = ["last_beacon_signal_watch", "last_beacon_last_couriers", "last_beacon_far_claim"]
+dungeon_id = "last_beacon_base_ways"
+level = 150
+craft_rank = 10
+craft_target = 3
+reward_gold = 600
+war_account_seconds = 604800
+
+[[outcome]]
+id = "archive"
+name = "Архив смотрителей"
+text = "Дом Курганов открыл архив у основания маяка. Старые письма доступны каждому приезжему; дорожные книги помогают обходить платные посты."
+travel_discount = 5
+
+[[outcome]]
+id = "signal"
+name = "Сигнальный двор"
+text = "Дом Курганов открыл сигнальный двор. Смотрители передают путникам вести с берега и заранее предупреждают посты об их выезде."
+travel_discount = 10
+
+[[fragment]]
+quest_id = "last_beacon_signal_watch"
+title = "Три поста на Мысе"
+text = "Веденей принял счёт уцелевших постов. Дом Курганов годами платил за фонари, которых на Мысе уже не было. Теперь смотритель знает, куда идут его деньги."
+
+[[fragment]]
+quest_id = "last_beacon_last_couriers"
+title = "Письма мимо Престола"
+text = "Перехваченные письма легли в связку под печатью маяка. Дома договаривались с южными капитанами без дьяка Престола. Веденей не сжёг письма: чужой долг полезнее чужого пепла."
+
+[[fragment]]
+quest_id = "last_beacon_far_claim"
+title = "Погашенный чужой сигнал"
+text = "На Вершине больше не зовут корабли в обход маяка. Дом Курганов получил фонарь и имена тех, кто за него платил. У смотрителя остался выбор, куда положить эти сведения: в открытый архив или в ежедневную службу сигнального двора."

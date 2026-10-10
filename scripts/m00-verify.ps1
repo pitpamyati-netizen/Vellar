@@ -138,6 +138,8 @@ try {
     Require-Success "seed descent participation and reward marks"
     & $uvCommand run python -m scripts.m08_market_probe --database $fresh --seed
     Require-Success "seed market escrow, order, wear and confirmation"
+    & $uvCommand run python -m scripts.m09_goals_probe --database $fresh --seed
+    Require-Success "seed permanent project, story, goals and account score"
     $entryCount = Query-TestDatabase $fresh "SELECT count(*) FROM economic_entries"
     $freshDump = Join-Path $root "backups/m00-fresh.dump"
     & $pgDump -d (Test-Dsn $fresh) -Fc -f $freshDump
@@ -173,6 +175,9 @@ try {
     & $uvCommand run python -m scripts.m08_market_probe --database $restored
     Require-Success "restored market escrow, order, wear and confirmation"
     Record "M08: item escrow, wear, payment, crafted order, confirmation and replay survived backup restore"
+    & $uvCommand run python -m scripts.m09_goals_probe --database $restored
+    Require-Success "restored project, story, goals and account score"
+    Record "M09: project, story, goals, reward replay and account score survived backup restore"
 
     Reset-TestDatabase $old
     Upgrade-TestDatabase $old "0030"

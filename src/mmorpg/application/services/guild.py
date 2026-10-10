@@ -20,13 +20,17 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from pydantic import TypeAdapter
+
 from mmorpg.application.operations import atomic_action
 from mmorpg.application.services.invitations import DAY, Invitations
 from mmorpg.domain.entities.content import GameContent
+from mmorpg.domain.entities.long_goal import ProjectState
 from mmorpg.domain.ports.repositories import GuildRepository, StateCache
 from mmorpg.domain.procgen.seeds import seconds_left_in_rotation
 from mmorpg.domain.rules import guild as guild_rules
 from mmorpg.domain.rules import guild_war as war_rules
+from mmorpg.domain.rules import long_goal as goal_rules
 from mmorpg.domain.rules.guild import Guild, GuildRank
 from mmorpg.domain.rules.guild_contract import Contract, ContractKind, contracts
 from mmorpg.domain.rules.guild_war import War
@@ -44,6 +48,10 @@ class GuildStore:
         self._roster = roster
         self._cache = cache
         self._call_ttl = call_ttl
+
+    @property
+    def state(self) -> StateCache:
+        return self._cache
 
     @property
     def invitations(self) -> Invitations:
@@ -353,6 +361,8 @@ class GuildStore:
         world_seed: str,
         now: int,
         rotation_seconds: int,
+        contributors: tuple[int, ...] = (),
+        receipt: str = "",
     ) -> Contract | None:
         """Записать сделанное по подряду и заплатить, если дело этим закрылось.
 
@@ -360,6 +370,8 @@ class GuildStore:
         за него один раз, а сказать о нём надо тому, кто это увидел. ``None`` -
         дело ещё идёт или за него уже заплатили (ADR 0077).
         """
+        if contributors and receipt:
+            await self.work_on_project(content, guild_id, kind, amount, contributors, receipt)
         progress = await self.advance_contract(
             guild_id, kind, amount, now=now, rotation_seconds=rotation_seconds
         )
@@ -381,6 +393,36 @@ class GuildStore:
         await self._roster.deposit(guild_id, deal.reward_gold)
         await self._roster.add_deeds(guild_id, deal.reward_deeds)
         return deal
+
+    @atomic_action
+    async def work_on_project(
+        self,
+        content: GameContent,
+        guild_id: int,
+        kind: ContractKind,
+        amount: int,
+        contributors: tuple[int, ...],
+        receipt: str,
+    ) -> None:
+        key = f"long-goal:project:{guild_id}"
+        raw = await self._cache.get(key)
+        guild = await self.by_id(guild_id)
+        if not raw or guild is None:
+            return
+        codec = TypeAdapter(ProjectState)
+        previous = codec.validate_json(raw)
+        members = tuple(one for one in contributors if guild.has(one))
+        state = goal_rules.contribute(
+            previous, kind.value, amount, members, f"{kind.value}:{receipt}"
+        )
+        if state == previous:
+            return
+        await self._cache.set(key, codec.dump_json(state).decode(), 10**12)
+        if state.complete and not previous.complete:
+            await self.add_deeds(guild_id, state.rules.project_deeds)
+
+    async def record_war_point(self, war_id: int, guild_id: int) -> None:
+        await self._roster.score_war(war_id, guild_id)
 
     # --- война гильдий (ADR 0077) -------------------------------------
 
@@ -446,23 +488,8 @@ class GuildStore:
         now: int,
         rotation_seconds: int,
     ) -> bool:
-        """Записать войне очко. Ложь - за этого побеждённого уже платили сегодня.
-
-        Раз за период на пару «кто кого»: иначе двое сговорившихся набивают
-        счёт друг об друга, не выходя из города (``rules/guild_war``).
-        """
-        if war.clock_seconds and now >= war.ends:
-            return False
-        current = await self._roster.war_of(guild_id)
-        if current is None or current.id != war.id:
-            return False
-        rotation, end = await self.period(guild_id, "limits", now=now, seconds=rotation_seconds)
-        key = f"guild-war-hit-v2:{war.id}:{winner_id}:{loser_id}:{rotation}"
-        if await self._cache.get(key):
-            return False
-        await self._cache.set(key, "1", max(1, end - now))
-        await self._roster.score_war(war.id, guild_id)
-        return True
+        """Прежняя парная запись закрыта. Используйте WarScoring с аккаунтами."""
+        return False
 
     @atomic_action
     async def settle_war(self, content: GameContent, war: War, rotation: int) -> War | None:

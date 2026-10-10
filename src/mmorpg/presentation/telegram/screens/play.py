@@ -167,6 +167,7 @@ def main_menu_screen(
     from mmorpg.presentation.telegram.screens.journey import HISTORY, RETURN
 
     rows.append((RETURN, HISTORY))
+    rows.append((labels.label("Долгие цели"),))
     # Вступление предлагают, пока ему есть что сказать, а потом оно уходит навсегда:
     # вечная кнопка «обучение» отвечает на вопрос, которого больше никто не задаёт.
     from mmorpg.domain.rules import tutorial as tutorial_rules
@@ -276,6 +277,8 @@ def city_screen(content: GameContent, city: City, character: Character, notice: 
     if any(one.city_id == city.id for one in content.city_events):
         offered.append(label("Городское дело"))
     offered.append(label("Рынок"))
+    if city.id == content.long_goals.city_id:
+        offered.append(label("Решение у маяка"))
     rows: list[tuple[Label, ...]] = [
         tuple(offered[index : index + 2]) for index in range(0, len(offered), 2)
     ]

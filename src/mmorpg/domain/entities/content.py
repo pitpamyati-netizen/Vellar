@@ -22,6 +22,7 @@ from mmorpg.domain.entities.damage import DamageType
 from mmorpg.domain.entities.dice import MAX_SPREAD, Dice
 from mmorpg.domain.entities.effects import ActiveEffect
 from mmorpg.domain.entities.location import EnemyArchetype
+from mmorpg.domain.entities.long_goal import LongGoalRules
 from mmorpg.domain.entities.market import MarketRules
 from mmorpg.domain.entities.quest import Quest
 from mmorpg.domain.entities.stats import StatBlock, StatCode
@@ -1047,6 +1048,7 @@ class GameContent:
     #: Каким словом вещь называет прибавку к характеристике: «меч силача».
     #: Объявлено в ``items.toml [meta].stat_words`` рядом с прочими аффиксами.
     stat_words: Mapping[str, str] = MappingProxyType({})
+    long_goals: LongGoalRules = field(default_factory=LongGoalRules)
     city_events: tuple[CityEvent, ...] = ()
     market_rules: MarketRules = field(default_factory=MarketRules)
 
@@ -1095,6 +1097,7 @@ class GameContent:
         houses: Sequence[House] = (),
         subclasses: Sequence[Subclass] = (),
         guild_tiers: Sequence[GuildTier] = (),
+        long_goals: LongGoalRules = LongGoalRules(),
         city_events: Sequence[CityEvent] = (),
         market_rules: MarketRules = MarketRules(),
         stat_words: Mapping[str, str] | None = None,
@@ -1143,6 +1146,7 @@ class GameContent:
             houses=tuple(houses),
             subclasses=tuple(subclasses),
             guild_tiers=tuple(sorted(guild_tiers, key=lambda one: one.deeds)),
+            long_goals=long_goals,
             city_events=tuple(city_events),
             market_rules=market_rules,
             _races_by_id=MappingProxyType({race.id: race for race in races}),

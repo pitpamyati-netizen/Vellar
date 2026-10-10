@@ -11,6 +11,7 @@ import pytest_asyncio
 
 from mmorpg.application.operations import atomic_action
 from mmorpg.application.services.guild import GuildStore
+from mmorpg.application.services.war_score import WarScoring
 from mmorpg.config import Settings
 from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import guild as guild_rules
@@ -19,6 +20,7 @@ from mmorpg.domain.rules.guild import GuildRank
 from mmorpg.domain.rules.guild_contract import ContractKind
 from mmorpg.infrastructure.cache.redis_cache import RedisStateCache
 from mmorpg.infrastructure.persistence.effects import EFFECT_SCOPES, PostgresEffectState
+from mmorpg.infrastructure.persistence.gameplay import PostgresGameplayState
 from mmorpg.infrastructure.persistence.postgres import PostgresGuildRepository
 from mmorpg.presentation.telegram import digest_claim
 from mmorpg.presentation.telegram.flows.state import PlayState
@@ -33,13 +35,15 @@ SETTINGS = Settings(_env_file=None, shop_rotation_seconds=ROTATION)
 @pytest_asyncio.fixture(loop_scope="session")
 async def effects(economy):  # noqa: F811
     e = economy
+    await e.pool.execute("DELETE FROM gameplay_state WHERE key LIKE 'long-goal:%'")
     e.cache = PostgresEffectState(e.pool, RedisStateCache(e.redis))
-    e.guilds = GuildStore(PostgresGuildRepository(e.pool), e.cache)
+    e.guilds = GuildStore(PostgresGuildRepository(e.pool), PostgresGameplayState(e.pool, e.cache))
     e.guild = await e.guilds.create(f"Меры {uuid4().hex[:10]}", e.heroes[0].id)
     e.foe = await e.guilds.create(f"Камень {uuid4().hex[:10]}", e.heroes[2].id)
     try:
         yield e
     finally:
+        await e.pool.execute("DELETE FROM gameplay_state WHERE key LIKE 'long-goal:%'")
         await e.guilds.disband(e.guild)
         await e.guilds.disband(e.foe)
 
@@ -204,19 +208,23 @@ async def test_same_war_pair_is_not_scored_twice_after_restart(effects):
         started=NOW // ROTATION,
         ends=NOW // ROTATION + 5,
     )
+    scoring = WarScoring(e.guilds, e.characters)
+    await scoring.begin(war)
     options = {
         "guild_id": e.guild.id,
-        "winner_id": e.heroes[0].id,
-        "loser_id": e.heroes[2].id,
+        "winners": (e.heroes[0].id,),
+        "losers": (e.heroes[2].id,),
+        "battle_id": "effect-test",
         "now": NOW,
-        "rotation_seconds": ROTATION,
+        "account_seconds": 604800,
     }
-    assert await e.guilds.score_war(war, **options)
+    assert "одно очко" in await scoring.score(war, **options)
     await e.redis.flushdb()
     restarted = GuildStore(
-        PostgresGuildRepository(e.pool), PostgresEffectState(e.pool, RedisStateCache(e.redis))
+        PostgresGuildRepository(e.pool),
+        PostgresGameplayState(e.pool, PostgresEffectState(e.pool, RedisStateCache(e.redis))),
     )
-    assert not await restarted.score_war(war, **options)
+    assert "уже учтён" in await WarScoring(restarted, e.characters).score(war, **options)
     assert (await restarted.war_of(e.guild.id)).challenger_score == 1
 
 
@@ -307,18 +315,22 @@ async def test_failed_war_score_does_not_consume_pair(effects, monkeypatch):
         raise RuntimeError("after war score")
 
     monkeypatch.setattr(e.guilds._roster, "score_war", broken)
+    scoring = WarScoring(e.guilds, e.characters)
+    await scoring.begin(war)
     options = {
         "guild_id": e.guild.id,
-        "winner_id": e.heroes[0].id,
-        "loser_id": e.heroes[2].id,
+        "winners": (e.heroes[0].id,),
+        "losers": (e.heroes[2].id,),
+        "battle_id": "effect-test",
         "now": NOW,
-        "rotation_seconds": ROTATION,
+        "account_seconds": 604800,
     }
     with pytest.raises(RuntimeError, match="after war score"):
-        await e.guilds.score_war(war, **options)
+        await scoring.score(war, **options)
     assert (await e.guilds.war_of(e.guild.id)).challenger_score == 0
     key = e.guilds._war_hit_key(war.id, e.heroes[0].id, e.heroes[2].id, NOW // ROTATION)
     assert await e.cache.get(key) is None
+    assert not (await scoring.load(war.id)).used_accounts
     monkeypatch.setattr(e.guilds._roster, "score_war", original)
-    results = await asyncio.gather(*(e.guilds.score_war(war, **options) for _ in range(2)))
-    assert sorted(results) == [False, True]
+    results = await asyncio.gather(*(scoring.score(war, **options) for _ in range(2)))
+    assert sum("одно очко" in result for result in results) == 1

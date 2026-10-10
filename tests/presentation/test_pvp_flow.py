@@ -24,6 +24,7 @@ from aiogram.types import Chat, Message, User
 from mmorpg.application.services.battle import BattleStore
 from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.party import PartyStore
+from mmorpg.application.services.war_score import WarScoring
 from mmorpg.config import Settings
 from mmorpg.domain.entities import Character, GameContent, SkillLoadout
 from mmorpg.domain.rules import pvp as pvp_rules
@@ -483,9 +484,10 @@ async def test_a_duel_between_warring_guilds_takes_a_point(
     """Выигранный поединок с человеком враждебной гильдии - очко войне (ADR 0077)."""
     ours = await guilds.create("Ирисы", attacker.id)
     theirs = await guilds.create("Медный Крест", defender.id)
-    await guilds.open_war(
+    war = await guilds.open_war(
         challenger_id=ours.id, defender_id=theirs.id, stake=100, started=0, ends=10**6
     )
+    await WarScoring(guilds, characters).begin(war)
     await open_duel(content, storage, cache, characters, bot, attacker, defender)
 
     for _ in range(200):
