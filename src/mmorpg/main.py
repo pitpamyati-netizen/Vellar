@@ -204,7 +204,13 @@ async def build_application(settings: Settings) -> Application:
         EconomicRecoveryMiddleware(getattr(boundary, "recover", None), propagate_errors=True)
     )
     dispatcher.update.outer_middleware(
-        CommandMiddleware(dependencies, reaper, delivery=delivery_queue, wake_delivery=worker.wake)
+        CommandMiddleware(
+            dependencies,
+            reaper,
+            storage=storage,
+            delivery=delivery_queue,
+            wake_delivery=worker.wake,
+        )
     )
     dispatcher.update.outer_middleware(dispatcher.fsm)
 

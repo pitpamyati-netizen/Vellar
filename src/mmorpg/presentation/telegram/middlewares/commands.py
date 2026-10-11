@@ -10,6 +10,7 @@ from typing import Any, cast
 from aiogram import BaseMiddleware, Bot
 from aiogram.dispatcher.event.bases import UNHANDLED
 from aiogram.enums import ChatType
+from aiogram.fsm.storage.base import BaseStorage
 from aiogram.methods import SendMessage
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, TelegramObject, Update
 from pydantic import TypeAdapter
@@ -49,10 +50,13 @@ class CommandMiddleware(BaseMiddleware):
         dependencies: Dependencies,
         reaper: MessageReaper,
         *,
+        storage: BaseStorage | None = None,
         delivery: DeliveryQueue | None = None,
         wake_delivery: Callable[[], None] | None = None,
     ) -> None:
-        self._participants = _repositories(list(dependencies.as_data().values()))
+        # Экран читается после этой границы, но его хранилище уже должно входить
+        # в команду: вход в бой передаёт его вложенному обработчику.
+        self._participants = _repositories([*dependencies.as_data().values(), storage])
         self._boundary = cast(OperationBoundary, cast(Any, dependencies.characters).operations)
         self._codec = TypeAdapter(CommandResult)
         self._reaper = reaper

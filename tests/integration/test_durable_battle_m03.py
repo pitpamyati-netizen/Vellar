@@ -72,6 +72,7 @@ async def battle_env(economy, content):  # noqa: F811
             inventory=e.inventory,
         ),
         e.reaper,
+        storage=e.storage,
     )
     e.flow = PlayState(screen=ScreenId.LOCATION, session=LocationSession("farhold", 1, 1, 0))
     e.session, roster = begin(
@@ -248,6 +249,7 @@ async def test_restart_cache_loss_and_long_pause_keep_same_battle_and_screen(bat
             inventory=e.inventory,
         ),
         e.reaper,
+        storage=e.storage,
     )
     await press(e, "/продолжить")
     assert "Бой. Круг" in e.recording.sent[-1].text
@@ -415,7 +417,7 @@ async def test_actual_dispatcher_routes_returning_player_from_persistent_screen(
     if reset_screen:
         await state_for(e).set_state(Play.main_menu)
         await state_for(e).set_data({})
-    dispatcher = Dispatcher(storage=PostgresStorage(e.pool))
+    dispatcher = Dispatcher(storage=e.storage)
     dispatcher.update.outer_middleware.unregister(dispatcher.fsm)
     dispatcher.update.outer_middleware(e.journal)
     dispatcher.update.outer_middleware(dispatcher.fsm)

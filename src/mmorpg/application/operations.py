@@ -99,7 +99,12 @@ def _repositories(values: list[Any]) -> tuple[object, ...]:
             one for name in ("parties", "guilds") if (one := getattr(value, name, None)) is not None
         )
     for value in values:
-        for candidate in (value, getattr(value, "_roster", None), getattr(value, "_cache", None)):
+        for candidate in (
+            value,
+            getattr(value, "storage", None),
+            getattr(value, "_roster", None),
+            getattr(value, "_cache", None),
+        ):
             if (
                 candidate is not None
                 and hasattr(candidate, "operations")

@@ -130,6 +130,7 @@ async def test_all_individual_awards_and_entitlements_roll_back_then_recover_onc
             inventory=e.inventory,
         ),
         e.reaper,
+        storage=e.storage,
     )
     await press(e, "повтор итога новым сообщением", hook=accept)
     assert [(await e.characters.get(hero.id)).gold for hero in e.heroes[:2]] == balances
@@ -195,6 +196,7 @@ async def test_connection_outage_keeps_each_reply_and_does_not_repeat_awards(bat
             inventory=e.inventory,
         ),
         e.reaper,
+        storage=e.storage,
         delivery=queue,
         wake_delivery=worker.wake,
     )

@@ -60,6 +60,7 @@ async def duel_env(economy, content, request):  # noqa: F811
             inventory=e.inventory,
         ),
         e.reaper,
+        storage=e.storage,
     )
     e.flow = PlayState()
     e.session, _ = begin(
