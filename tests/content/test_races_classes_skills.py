@@ -170,7 +170,7 @@ def test_active_skills_cost_and_target_are_sane(content: GameContent) -> None:
             continue
         assert skill.cost >= 0, skill.code
         assert skill.cooldown >= 0, skill.code
-        assert skill.target in {"self", "enemy", "all_enemies"}, skill.code
+        assert skill.target in {"self", "ally", "enemy", "all_enemies"}, skill.code
         assert skill.power > 0, skill.code
 
 

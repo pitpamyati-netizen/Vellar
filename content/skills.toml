@@ -78,7 +78,7 @@ rank_cost = 1
 # движок не знает. Пассивное умение вместо эффекта называет ключ прибавки из
 # traits.toml [meta].modifier_keys - словарь один на особенности, снаряжение и
 # пассивные умения.
-targets = ["self", "enemy", "all_enemies"]
+targets = ["self", "ally", "enemy", "all_enemies"]
 active_effects = [
     "avoid_combat",
     "barrier",
@@ -238,28 +238,28 @@ code = "warrior_rassechenie"
 name = "Рассечение"
 owner = "class:warrior"
 kind = "active"
-level = 3
+level = 8
 cost = 10
 cooldown = 2
 target = "enemy"
 effect = "damage_bleed"
-power = 215
+power = 206
 scaling = "STR"
-text = "Разрывающий удар на 215 процентов обычного. Цель истекает кровью 3 хода."
+text = "Разрывающий удар на 206 процентов обычного. Цель истекает кровью 3 хода."
 
 [[skill]]
 code = "warrior_tarannyy_udar"
 name = "Таранный удар"
 owner = "class:warrior"
 kind = "active"
-level = 8
+level = 18
 cost = 11
 cooldown = 2
 target = "enemy"
 effect = "damage_bludgeoning"
-power = 215
+power = 226
 scaling = "STR"
-text = "Дробящий удар на 215 процентов обычного."
+text = "Дробящий удар на 226 процентов обычного."
 
 [[skill]]
 code = "warrior_stoyka_shchita"
@@ -280,7 +280,7 @@ code = "warrior_provokatsiya"
 name = "Провокация"
 owner = "class:warrior"
 kind = "active"
-level = 18
+level = 3
 cost = 11
 cooldown = 3
 target = "enemy"
@@ -299,9 +299,9 @@ cost = 12
 cooldown = 3
 target = "enemy"
 effect = "damage_weaken"
-power = 215
+power = 226
 scaling = "STR"
-text = "Удар на 215 процентов обычного. У цели слабость: её удар слабее на 25 процентов, 2 хода."
+text = "Удар на 226 процентов обычного. У цели слабость: её удар слабее на 25 процентов, 2 хода."
 
 [[skill]]
 code = "warrior_klich_splocheniya"
@@ -330,9 +330,9 @@ target = "all_enemies"
 weapons = ["sword", "axe", "greatsword"]
 effect = "damage_aoe"
 answers = "bleeding"
-power = 154
+power = 162
 scaling = "STR"
-text = "Удар по всем противникам на 154 процентов обычного."
+text = "Удар по всем противникам на 162 процентов обычного."
 
 [[skill]]
 code = "warrior_proboy_stroya"
@@ -346,9 +346,9 @@ cooldown = 2
 target = "enemy"
 effect = "damage_pierce"
 answers = "weakness"
-power = 215
+power = 221
 scaling = "STR"
-text = "Удар на 215 процентов обычного. Не считается с 50 процентов брони цели."
+text = "Удар на 221 процентов обычного. Не считается с 50 процентов брони цели."
 
 [[skill]]
 code = "warrior_udar_shchitom"
@@ -361,9 +361,9 @@ cooldown = 3
 target = "enemy"
 effect = "damage_stun"
 answers = "fear"
-power = 215
+power = 202
 scaling = "STR"
-text = "Удар на 215 процентов обычного. Цель оглушена и пропускает 1 ход."
+text = "Удар на 202 процентов обычного. Цель оглушена и пропускает 1 ход."
 
 [[skill]]
 code = "warrior_oprokidyvanie"
@@ -419,9 +419,9 @@ cost = 15
 cooldown = 3
 target = "enemy"
 effect = "damage_fear"
-power = 215
+power = 202
 scaling = "STR"
-text = "Дурманящий удар на 215 процентов обычного. Цель в страхе и пропускает 1 ход; страх спадёт от первого удара."
+text = "Дурманящий удар на 202 процентов обычного. Цель в страхе и пропускает 1 ход; страх спадёт от первого удара."
 
 [[skill]]
 code = "warrior_dobivanie"
@@ -434,9 +434,9 @@ cooldown = 2
 target = "enemy"
 effect = "damage_execute"
 answers = "bleeding"
-power = 215
+power = 224
 scaling = "STR"
-text = "Удар на 215 процента обычного. Тем сильнее, чем меньше здоровья осталось у цели."
+text = "Удар на 224 процента обычного. Тем сильнее, чем меньше здоровья осталось у цели."
 
 [[skill]]
 code = "warrior_otvetnyy_vypad"
@@ -462,9 +462,9 @@ cost = 18
 cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe_weaken"
-power = 154
+power = 162
 scaling = "STR"
-text = "Удар по всем противникам на 154 процентов обычного. У всех противников слабость: их удар слабее на 20 процентов, 2 хода."
+text = "Удар по всем противникам на 162 процентов обычного. У всех противников слабость: их удар слабее на 20 процентов, 2 хода."
 
 [[skill]]
 code = "warrior_klinkovyy_shkval"
@@ -478,7 +478,7 @@ cooldown = 2
 target = "enemy"
 effect = "damage_multi"
 answers = "weakness"
-power = 215
+power = 219
 scaling = "STR"
 text = "Бьёт 3 раза, каждый на 71 процента обычного удара."
 
@@ -494,7 +494,7 @@ cooldown = 2
 target = "enemy"
 effect = "damage_reckless"
 answers = "fear"
-power = 191
+power = 201
 scaling = "STR"
 text = "Удар на 258 процента обычного, но этот ход вы получаете на четверть больше урона."
 
@@ -563,7 +563,7 @@ kind = "active"
 level = 143
 fork = "warrior_143"
 cost = 20
-cooldown = 5
+cooldown = 4
 target = "self"
 effect = "heal_aoe"
 power = 24
@@ -800,9 +800,9 @@ cost = 9
 cooldown = 2
 target = "enemy"
 effect = "damage_bleed"
-power = 191
+power = 183
 scaling = "STR"
-text = "Разрывающий удар на 191 процентов обычного. Цель истекает кровью 3 хода."
+text = "Разрывающий удар на 183 процентов обычного. Цель истекает кровью 3 хода."
 
 [[skill]]
 code = "barbarian_raskol_cherepa"
@@ -814,9 +814,9 @@ cost = 10
 cooldown = 2
 target = "enemy"
 effect = "damage_bludgeoning"
-power = 191
+power = 201
 scaling = "STR"
-text = "Дробящий удар на 191 процентов обычного."
+text = "Дробящий удар на 201 процентов обычного."
 
 [[skill]]
 code = "barbarian_tolstaya_shkura"
@@ -856,9 +856,9 @@ cost = 10
 cooldown = 3
 target = "enemy"
 effect = "damage_weaken"
-power = 191
+power = 201
 scaling = "STR"
-text = "Удар на 191 процентов обычного. У цели слабость: её удар слабее на 25 процентов, 2 хода."
+text = "Удар на 201 процентов обычного. У цели слабость: её удар слабее на 25 процентов, 2 хода."
 
 [[skill]]
 code = "barbarian_zhazhda_krovi"
@@ -886,9 +886,9 @@ cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe"
 answers = "bleeding"
-power = 138
+power = 145
 scaling = "STR"
-text = "Удар по всем противникам на 138 процента обычного."
+text = "Удар по всем противникам на 145 процента обычного."
 
 [[skill]]
 code = "barbarian_sokrushit"
@@ -902,7 +902,7 @@ cooldown = 2
 target = "enemy"
 effect = "damage_savage"
 answers = "fear"
-power = 152
+power = 160
 scaling = "STR"
 text = "Удар на 228 процентов обычного, но бьёт он неточно."
 
@@ -974,9 +974,9 @@ cost = 15
 cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe_fear"
-power = 138
+power = 130
 scaling = "STR"
-text = "Дурманящий удар по всем противникам на 138 процента обычного. Все противники в страхе и пропускают 1 ход; страх спадёт от первого удара."
+text = "Дурманящий удар по всем противникам на 130 процента обычного. Все противники в страхе и пропускают 1 ход; страх спадёт от первого удара."
 
 [[skill]]
 code = "barbarian_dobit"
@@ -989,9 +989,9 @@ cooldown = 2
 target = "enemy"
 effect = "damage_execute"
 answers = "heal_block"
-power = 191
+power = 199
 scaling = "STR"
-text = "Удар на 191 процентов обычного. Тем сильнее, чем меньше здоровья осталось у цели."
+text = "Удар на 199 процентов обычного. Тем сильнее, чем меньше здоровья осталось у цели."
 
 [[skill]]
 code = "barbarian_zverinoe_uporstvo"
@@ -1018,9 +1018,9 @@ cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe_execute"
 answers = "bleeding"
-power = 139
+power = 145
 scaling = "STR"
-text = "Удар по всем противникам на 139 процента обычного. Тем сильнее, чем меньше здоровья осталось у цели."
+text = "Удар по всем противникам на 145 процента обычного. Тем сильнее, чем меньше здоровья осталось у цели."
 
 [[skill]]
 code = "barbarian_grad_udarov"
@@ -1034,7 +1034,7 @@ cooldown = 2
 target = "enemy"
 effect = "damage_multi"
 answers = "fear"
-power = 191
+power = 195
 scaling = "STR"
 text = "Бьёт 3 раза, каждый на 63 процентов обычного удара."
 
@@ -1050,7 +1050,7 @@ cooldown = 2
 target = "enemy"
 effect = "damage_reckless"
 answers = "heal_block"
-power = 170
+power = 178
 scaling = "STR"
 text = "Удар на 230 процентов обычного, но этот ход вы получаете на четверть больше урона."
 
@@ -1078,9 +1078,9 @@ cost = 15
 cooldown = 3
 target = "enemy"
 effect = "damage_heal_block"
-power = 191
+power = 201
 scaling = "STR"
-text = "Оскверняющий удар на 191 процентов обычного. Цель не может лечиться 3 хода."
+text = "Оскверняющий удар на 201 процентов обычного. Цель не может лечиться 3 хода."
 
 [[skill]]
 code = "barbarian_bagrovaya_yarost"
@@ -1351,14 +1351,14 @@ code = "paladin_izoblichenie"
 name = "Изобличение"
 owner = "class:paladin"
 kind = "active"
-level = 3
+level = 45
 cost = 11
 cooldown = 2
 target = "enemy"
 effect = "damage_pierce"
-power = 229
+power = 236
 scaling = "STR"
-text = "Удар на 229 процента обычного. Не считается с 50 процентов брони цели."
+text = "Удар на 236 процента обычного. Не считается с 50 процентов брони цели."
 
 [[skill]]
 code = "paladin_molot_pravdy"
@@ -1370,9 +1370,9 @@ cost = 11
 cooldown = 2
 target = "enemy"
 effect = "damage_bludgeoning"
-power = 229
+power = 240
 scaling = "STR"
-text = "Дробящий удар на 229 процента обычного."
+text = "Дробящий удар на 240 процента обычного."
 
 [[skill]]
 code = "paladin_shchit_very"
@@ -1382,11 +1382,11 @@ kind = "active"
 level = 13
 cost = 12
 cooldown = 4
-target = "self"
+target = "ally"
 effect = "barrier"
 power = 25
 scaling = "CHA"
-text = "Ставит барьер в 25 процентов вашего здоровья на 3 хода."
+text = "Даёт выбранному союзнику барьер на 25 процентов его максимального здоровья."
 
 [[skill]]
 code = "paladin_vyzov"
@@ -1412,9 +1412,9 @@ cost = 12
 cooldown = 3
 target = "enemy"
 effect = "damage_stun"
-power = 229
+power = 215
 scaling = "STR"
-text = "Удар на 229 процента обычного. Цель оглушена и пропускает 1 ход."
+text = "Удар на 215 процента обычного. Цель оглушена и пропускает 1 ход."
 
 [[skill]]
 code = "paladin_blagoslovenie_oruzhiya"
@@ -1442,9 +1442,9 @@ cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe_light"
 answers = "fear"
-power = 166
+power = 174
 scaling = "CHA"
-text = "Лучезарный удар по всем противникам на 166 процентов обычного."
+text = "Лучезарный удар по всем противникам на 174 процентов обычного."
 
 [[skill]]
 code = "paladin_vozmezdie"
@@ -1458,23 +1458,23 @@ cooldown = 2
 target = "enemy"
 effect = "damage_holy"
 answers = "silence"
-power = 230
+power = 242
 scaling = "STR"
-text = "Священный удар на 230 процент обычного."
+text = "Священный удар на 242 процент обычного."
 
 [[skill]]
 code = "paladin_dlan_pomoshchi"
 name = "Длань помощи"
 owner = "class:paladin"
 kind = "active"
-level = 45
+level = 3
 cost = 15
-cooldown = 4
-target = "self"
+cooldown = 3
+target = "ally"
 effect = "heal"
 power = 20
 scaling = "CHA"
-text = "Лечит вас на 20 процентов здоровья."
+text = "Восстанавливает выбранному союзнику 20 процентов максимального здоровья."
 
 [[skill]]
 code = "paladin_okovy_very"
@@ -1545,9 +1545,9 @@ cooldown = 2
 target = "enemy"
 effect = "damage_execute"
 answers = "stun"
-power = 230
+power = 239
 scaling = "STR"
-text = "Удар на 230 процентов обычного. Тем сильнее, чем меньше здоровья осталось у цели."
+text = "Удар на 239 процентов обычного. Тем сильнее, чем меньше здоровья осталось у цели."
 
 [[skill]]
 code = "paladin_vozdayanie"
@@ -1589,7 +1589,7 @@ cooldown = 2
 target = "enemy"
 effect = "damage_multi"
 answers = "fear"
-power = 230
+power = 235
 scaling = "STR"
 text = "Бьёт 3 раза, каждый на 76 процентов обычного удара."
 
@@ -1605,9 +1605,9 @@ cooldown = 2
 target = "enemy"
 effect = "damage_pierce"
 answers = "silence"
-power = 230
+power = 237
 scaling = "STR"
-text = "Удар на 230 процентов обычного. Не считается с 50 процентов брони цели."
+text = "Удар на 237 процентов обычного. Не считается с 50 процентов брони цели."
 
 [[skill]]
 code = "paladin_milost"
@@ -1616,7 +1616,7 @@ owner = "class:paladin"
 kind = "active"
 level = 114
 cost = 18
-cooldown = 4
+cooldown = 3
 target = "self"
 effect = "heal_aoe"
 power = 23
@@ -1648,9 +1648,9 @@ cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe_holy"
 answers = "stun"
-power = 166
+power = 174
 scaling = "CHA"
-text = "Священный удар по всем противникам на 166 процентов обычного."
+text = "Священный удар по всем противникам на 174 процентов обычного."
 
 [[skill]]
 code = "paladin_nezyblemost"
@@ -1676,11 +1676,11 @@ level = 143
 fork = "paladin_143"
 cost = 20
 cooldown = 5
-target = "self"
+target = "ally"
 effect = "cleanse_barrier"
 power = 37
 scaling = "CHA"
-text = "Ставит барьер в 37 процентов вашего здоровья на 3 хода. Снимает с вас отрицательные эффекты."
+text = "Даёт выбранному союзнику барьер на 37 процентов его максимального здоровья."
 
 [[skill]]
 code = "paladin_otvet_veroy"
@@ -1908,15 +1908,15 @@ code = "ranger_otravlennaya_strela"
 name = "Отравленная стрела"
 owner = "class:ranger"
 kind = "active"
-level = 3
+level = 18
 cost = 10
 cooldown = 2
 target = "enemy"
 effect = "damage_venom"
-power = 204
+power = 196
 scaling = "AGI"
 weapons = ["bow"]
-text = "Ядовитый выстрел на 204 процентов обычного. Яд точит цель 3 хода."
+text = "Ядовитый выстрел на 196 процентов обычного. Яд точит цель 3 хода."
 
 [[skill]]
 code = "ranger_probivayushchiy_vystrel"
@@ -1929,10 +1929,10 @@ cooldown = 2
 target = "enemy"
 effect = "damage_pierce"
 answers = "bleeding"
-power = 204
+power = 210
 scaling = "AGI"
 weapons = ["bow"]
-text = "Выстрел на 204 процентов обычного. Не считается с 50 процентов брони цели."
+text = "Выстрел на 210 процентов обычного. Не считается с 50 процентов брони цели."
 
 [[skill]]
 code = "ranger_otkhod"
@@ -1953,7 +1953,7 @@ code = "ranger_lovushka"
 name = "Ловушка"
 owner = "class:ranger"
 kind = "active"
-level = 18
+level = 3
 cost = 11
 cooldown = 3
 target = "enemy"
@@ -2002,10 +2002,10 @@ cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe_pierce"
 answers = "poison"
-power = 147
+power = 151
 scaling = "AGI"
 weapons = ["bow"]
-text = "Выстрел по всем противникам на 147 процент обычного. Не считается с 40 процентов брони цели."
+text = "Выстрел по всем противникам на 151 процент обычного. Не считается с 40 процентов брони цели."
 
 [[skill]]
 code = "ranger_pronzayushchaya_strela"
@@ -2019,7 +2019,7 @@ cooldown = 2
 target = "enemy"
 effect = "damage_double"
 answers = "weakness"
-power = 205
+power = 209
 scaling = "AGI"
 weapons = ["bow"]
 text = "Бьёт 2 раза, каждый на 113 процентов обычного удара."
@@ -2048,10 +2048,10 @@ cost = 14
 cooldown = 3
 target = "enemy"
 effect = "damage_weaken"
-power = 205
+power = 215
 scaling = "AGI"
 weapons = ["bow"]
-text = "Выстрел на 205 процентов обычного. У цели слабость: её удар слабее на 25 процентов, 2 хода."
+text = "Выстрел на 215 процентов обычного. У цели слабость: её удар слабее на 25 процентов, 2 хода."
 
 [[skill]]
 code = "ranger_zverinyy_sputnik"
@@ -2063,7 +2063,7 @@ cost = 15
 cooldown = 3
 target = "enemy"
 effect = "damage_companion"
-power = 205
+power = 197
 scaling = "WIS"
 text = "Спутник бьёт на 123 процентов обычного удара. Цель истекает кровью 3 хода."
 
@@ -2094,10 +2094,10 @@ cooldown = 2
 target = "enemy"
 effect = "damage_crit"
 answers = "bleeding"
-power = 205
+power = 215
 scaling = "AGI"
 weapons = ["bow"]
-text = "Выстрел на 205 процентов обычного. Шанс критического удара выше на 12 процентов."
+text = "Выстрел на 215 процентов обычного. Шанс критического удара выше на 12 процентов."
 
 [[skill]]
 code = "ranger_vystrel_na_dobivanie"
@@ -2110,10 +2110,10 @@ cooldown = 2
 target = "enemy"
 effect = "damage_execute"
 answers = "poison"
-power = 205
+power = 213
 scaling = "AGI"
 weapons = ["bow"]
-text = "Выстрел на 205 процентов обычного. Тем сильнее, чем меньше здоровья осталось у цели."
+text = "Выстрел на 213 процентов обычного. Тем сильнее, чем меньше здоровья осталось у цели."
 
 [[skill]]
 code = "ranger_dykhanie_lesa"
@@ -2139,10 +2139,10 @@ cost = 17
 cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe_bleed"
-power = 147
+power = 141
 scaling = "AGI"
 weapons = ["bow"]
-text = "Разрывающий выстрел по всем противникам на 147 процента обычного. Все противники истекают кровью 3 хода."
+text = "Разрывающий выстрел по всем противникам на 141 процента обычного. Все противники истекают кровью 3 хода."
 
 [[skill]]
 code = "ranger_troynoy_vystrel"
@@ -2156,7 +2156,7 @@ cooldown = 2
 target = "enemy"
 effect = "damage_multi"
 answers = "weakness"
-power = 205
+power = 209
 scaling = "AGI"
 weapons = ["bow"]
 text = "Бьёт 3 раза, каждый на 68 процентов обычного удара."
@@ -2172,10 +2172,10 @@ cost = 16
 cooldown = 2
 target = "enemy"
 effect = "damage_bleed"
-power = 205
+power = 197
 scaling = "AGI"
 weapons = ["bow"]
-text = "Разрывающий выстрел на 205 процентов обычного. Цель истекает кровью 3 хода."
+text = "Разрывающий выстрел на 197 процентов обычного. Цель истекает кровью 3 хода."
 
 [[skill]]
 code = "ranger_skrytsya_iz_vidu"
@@ -2538,9 +2538,9 @@ cost = 10
 cooldown = 2
 target = "enemy"
 effect = "damage_venom"
-power = 203
+power = 195
 scaling = "AGI"
-text = "Ядовитый удар на 203 процентов обычного. Яд точит цель 3 хода."
+text = "Ядовитый удар на 195 процентов обычного. Яд точит цель 3 хода."
 
 [[skill]]
 code = "rogue_raschetlivost"
@@ -2567,9 +2567,9 @@ cost = 14
 cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe"
-power = 147
+power = 154
 scaling = "AGI"
-text = "Удар по всем противникам на 147 процентов обычного."
+text = "Удар по всем противникам на 154 процентов обычного."
 
 [[skill]]
 code = "rogue_podrez"
@@ -2582,9 +2582,9 @@ cost = 12
 cooldown = 2
 target = "enemy"
 effect = "damage_dot"
-power = 203
+power = 195
 scaling = "AGI"
-text = "Удар на 203 процентов обычного. Цель истекает кровью 3 хода."
+text = "Удар на 195 процентов обычного. Цель истекает кровью 3 хода."
 
 [[skill]]
 code = "rogue_ischeznovenie"
@@ -2674,9 +2674,9 @@ cooldown = 2
 target = "enemy"
 effect = "damage_execute"
 answers = "silence"
-power = 203
+power = 211
 scaling = "AGI"
-text = "Удар на 203 процента обычного. Тем сильнее, чем меньше здоровья осталось у цели."
+text = "Удар на 211 процента обычного. Тем сильнее, чем меньше здоровья осталось у цели."
 
 [[skill]]
 code = "rogue_uskolzanie"
@@ -2718,7 +2718,7 @@ cooldown = 2
 target = "enemy"
 effect = "damage_multi"
 answers = "poison"
-power = 203
+power = 207
 scaling = "AGI"
 text = "Бьёт 3 раза, каждый на 66 процента обычного удара."
 
@@ -2734,9 +2734,9 @@ cooldown = 2
 target = "enemy"
 effect = "damage_steal"
 answers = "bleeding"
-power = 203
+power = 213
 scaling = "LCK"
-text = "Удар на 203 процента обычного. Забирает часть золота у противника."
+text = "Удар на 213 процента обычного. Забирает часть золота у противника."
 
 [[skill]]
 code = "rogue_pryt"
@@ -2777,7 +2777,7 @@ cooldown = 3
 target = "enemy"
 effect = "damage_double"
 answers = "silence"
-power = 203
+power = 207
 scaling = "AGI"
 text = "Бьёт 2 раза, каждый на 112 процентов обычного удара."
 
@@ -3042,9 +3042,9 @@ cost = 13
 cooldown = 3
 target = "enemy"
 effect = "damage_freeze"
-power = 245
+power = 230
 scaling = "INT"
-text = "Ледяной удар на 245 процентов обычного. Цель заморожена 1 ход: пропускает ход и получает больше урона."
+text = "Ледяной удар на 230 процентов обычного. Цель заморожена 1 ход: пропускает ход и получает больше урона."
 
 [[skill]]
 code = "mage_charodeyskiy_razryad"
@@ -3057,9 +3057,9 @@ cooldown = 2
 target = "enemy"
 effect = "damage_arcane"
 answers = "freeze"
-power = 245
+power = 257
 scaling = "INT"
-text = "Чародейский удар на 245 процентов обычного."
+text = "Чародейский удар на 257 процентов обычного."
 
 [[skill]]
 code = "mage_kamennaya_kozha"
@@ -3085,9 +3085,9 @@ cost = 15
 cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe_slow"
-power = 177
+power = 186
 scaling = "INT"
-text = "Ледяной удар по всем противникам на 177 процентов обычного. Все противники замедлены на 25 процентов, 2 хода."
+text = "Ледяной удар по всем противникам на 186 процентов обычного. Все противники замедлены на 25 процентов, 2 хода."
 
 [[skill]]
 code = "mage_razryv_char"
@@ -3099,9 +3099,9 @@ cost = 13
 cooldown = 3
 target = "enemy"
 effect = "damage_resource_block"
-power = 245
+power = 257
 scaling = "INT"
-text = "Чародейский удар на 245 процентов обычного. Цель не восстанавливает силы 3 хода."
+text = "Чародейский удар на 257 процентов обычного. Цель не восстанавливает силы 3 хода."
 
 [[skill]]
 code = "mage_volna_plameni"
@@ -3113,9 +3113,9 @@ cost = 16
 cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe_burn"
-power = 177
+power = 170
 scaling = "INT"
-text = "Огненный удар по всем противникам на 177 процентов обычного. Все противники горят 3 хода."
+text = "Огненный удар по всем противникам на 170 процентов обычного. Все противники горят 3 хода."
 
 [[skill]]
 code = "mage_tsepnaya_molniya"
@@ -3129,9 +3129,9 @@ cooldown = 3
 target = "all_enemies"
 effect = "damage_chain"
 answers = "confusion"
-power = 177
+power = 186
 scaling = "INT"
-text = "Воздушный удар по всем противникам на 177 процентов обычного. Каждая следующая цель получает меньше предыдущей."
+text = "Воздушный удар по всем противникам на 186 процентов обычного. Каждая следующая цель получает меньше предыдущей."
 
 [[skill]]
 code = "mage_ispepelenie"
@@ -3144,9 +3144,9 @@ cost = 15
 cooldown = 2
 target = "enemy"
 effect = "damage_burn"
-power = 246
+power = 236
 scaling = "INT"
-text = "Огненный удар на 246 процентов обычного. Цель горит 3 хода."
+text = "Огненный удар на 236 процентов обычного. Цель горит 3 хода."
 
 [[skill]]
 code = "mage_otsrochka"
@@ -3231,9 +3231,9 @@ cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe_fire"
 answers = "burning"
-power = 176
+power = 185
 scaling = "INT"
-text = "Огненный удар по всем противникам на 176 процента обычного."
+text = "Огненный удар по всем противникам на 185 процента обычного."
 
 [[skill]]
 code = "mage_otrazhayushchiy_pokrov"
@@ -3259,9 +3259,9 @@ cost = 17
 cooldown = 3
 target = "enemy"
 effect = "damage_confuse"
-power = 246
+power = 231
 scaling = "INT"
-text = "Дурманящий удар на 246 процентов обычного. Цель спутана 2 хода и бьёт куда попало."
+text = "Дурманящий удар на 231 процентов обычного. Цель спутана 2 хода и бьёт куда попало."
 
 [[skill]]
 code = "mage_charodeyskiy_shkval"
@@ -3275,7 +3275,7 @@ cooldown = 2
 target = "enemy"
 effect = "damage_multi"
 answers = "freeze"
-power = 246
+power = 251
 scaling = "INT"
 text = "Бьёт 3 раза, каждый на 81 процента обычного удара."
 
@@ -3291,9 +3291,9 @@ cooldown = 2
 target = "enemy"
 effect = "damage_pierce"
 answers = "confusion"
-power = 246
+power = 253
 scaling = "INT"
-text = "Удар на 246 процентов обычного. Не считается с 50 процентов брони цели."
+text = "Удар на 253 процентов обычного. Не считается с 50 процентов брони цели."
 
 [[skill]]
 code = "mage_po_pamyati"
@@ -3319,9 +3319,9 @@ cost = 20
 cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe_freeze"
-power = 177
+power = 166
 scaling = "INT"
-text = "Ледяной удар по всем противникам на 177 процентов обычного. Все противники заморожены 1 ход: пропускают ход и получают больше урона."
+text = "Ледяной удар по всем противникам на 166 процентов обычного. Все противники заморожены 1 ход: пропускают ход и получают больше урона."
 
 [[skill]]
 code = "mage_pozharishche"
@@ -3592,14 +3592,14 @@ code = "cleric_otpoved"
 name = "Отповедь"
 owner = "class:cleric"
 kind = "active"
-level = 3
+level = 13
 cost = 12
 cooldown = 3
 target = "enemy"
 effect = "damage_silence"
-power = 218
+power = 205
 scaling = "WIS"
-text = "Чародейский удар на 218 процента обычного. Цель молчит 2 хода: умения ей недоступны."
+text = "Чародейский удар на 205 процента обычного. Цель молчит 2 хода: умения ей недоступны."
 
 [[skill]]
 code = "cleric_dlan_karayushchaya"
@@ -3611,23 +3611,23 @@ cost = 11
 cooldown = 2
 target = "enemy"
 effect = "damage_bludgeoning"
-power = 218
+power = 229
 scaling = "WIS"
-text = "Дробящий удар на 218 процента обычного."
+text = "Дробящий удар на 229 процента обычного."
 
 [[skill]]
 code = "cleric_slovo_istseleniya"
 name = "Слово исцеления"
 owner = "class:cleric"
 kind = "active"
-level = 13
+level = 3
 cost = 12
-cooldown = 4
-target = "self"
+cooldown = 3
+target = "ally"
 effect = "heal"
 power = 18
 scaling = "WIS"
-text = "Лечит вас на 18 процентов здоровья."
+text = "Восстанавливает выбранному союзнику 18 процентов максимального здоровья."
 
 [[skill]]
 code = "cleric_pokrov"
@@ -3637,11 +3637,11 @@ kind = "active"
 level = 18
 cost = 13
 cooldown = 4
-target = "self"
+target = "ally"
 effect = "barrier"
 power = 25
 scaling = "WIS"
-text = "Ставит барьер в 25 процентов вашего здоровья на 3 хода."
+text = "Даёт выбранному союзнику барьер на 25 процентов его максимального здоровья."
 
 [[skill]]
 code = "cleric_zapret"
@@ -3667,9 +3667,9 @@ cost = 13
 cooldown = 2
 target = "enemy"
 effect = "damage_light"
-power = 218
+power = 229
 scaling = "WIS"
-text = "Лучезарный удар на 218 процентов обычного."
+text = "Лучезарный удар на 229 процентов обычного."
 
 [[skill]]
 code = "cleric_kara_nebes"
@@ -3682,9 +3682,9 @@ cost = 16
 cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe_holy"
-power = 157
+power = 165
 scaling = "WIS"
-text = "Священный удар по всем противникам на 157 процент обычного."
+text = "Священный удар по всем противникам на 165 процент обычного."
 
 [[skill]]
 code = "cleric_izgnanie_nezhiti"
@@ -3698,9 +3698,9 @@ cooldown = 2
 target = "enemy"
 effect = "damage_holy"
 answers = "bleeding"
-power = 218
+power = 229
 scaling = "WIS"
-text = "Священный удар на 218 процентов обычного."
+text = "Священный удар на 229 процентов обычного."
 
 [[skill]]
 code = "cleric_ochishchenie"
@@ -3710,11 +3710,11 @@ kind = "active"
 level = 45
 cost = 13
 cooldown = 4
-target = "self"
+target = "ally"
 effect = "cleanse"
 power = 3
 scaling = "WIS"
-text = "Снимает с вас до 3 отрицательных эффектов."
+text = "Снимает отрицательные эффекты с выбранного союзника; предел первого ранга — 2."
 
 [[skill]]
 code = "cleric_umirotvorenie"
@@ -3726,9 +3726,9 @@ cost = 15
 cooldown = 3
 target = "enemy"
 effect = "damage_charm"
-power = 218
+power = 205
 scaling = "WIS"
-text = "Дурманящий удар на 218 процентов обычного. Цель очарована 1 ход и бьёт по своим."
+text = "Дурманящий удар на 205 процентов обычного. Цель очарована 1 ход и бьёт по своим."
 
 [[skill]]
 code = "cleric_dlan_zhizni"
@@ -3738,11 +3738,11 @@ kind = "active"
 level = 61
 cost = 15
 cooldown = 4
-target = "self"
+target = "ally"
 effect = "heal_over_time"
 power = 9
 scaling = "WIS"
-text = "Возвращает 9 процентов здоровья каждый ход, 3 хода подряд."
+text = "Восстанавливает выбранному союзнику 9 процентов максимального здоровья каждый ход в течение 3 ходов."
 
 [[skill]]
 code = "cleric_nemota"
@@ -3770,9 +3770,9 @@ cost = 17
 cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe_silence"
-power = 157
+power = 148
 scaling = "WIS"
-text = "Чародейский удар по всем противникам на 157 процент обычного. Все противники молчат 2 хода: умения им недоступны."
+text = "Чародейский удар по всем противникам на 148 процент обычного. Все противники молчат 2 хода: умения им недоступны."
 
 [[skill]]
 code = "cleric_sud_sveta"
@@ -3785,9 +3785,9 @@ cooldown = 2
 target = "enemy"
 effect = "damage_execute"
 answers = "silence"
-power = 218
+power = 227
 scaling = "WIS"
-text = "Удар на 218 процентов обычного. Тем сильнее, чем меньше здоровья осталось у цели."
+text = "Удар на 227 процентов обычного. Тем сильнее, чем меньше здоровья осталось у цели."
 
 [[skill]]
 code = "cleric_vozlozhenie_ruk"
@@ -3796,12 +3796,12 @@ owner = "class:cleric"
 kind = "active"
 level = 86
 cost = 17
-cooldown = 4
-target = "self"
+cooldown = 3
+target = "ally"
 effect = "heal_big"
 power = 25
 scaling = "WIS"
-text = "Лечит вас на 25 процентов здоровья."
+text = "Восстанавливает выбранному союзнику 25 процентов максимального здоровья."
 
 [[skill]]
 code = "cleric_okovy"
@@ -3829,7 +3829,7 @@ cooldown = 2
 target = "enemy"
 effect = "damage_multi"
 answers = "charm"
-power = 218
+power = 222
 scaling = "WIS"
 text = "Бьёт 3 раза, каждый на 72 процентов обычного удара."
 
@@ -3845,9 +3845,9 @@ cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe_stun"
 answers = "bleeding"
-power = 157
+power = 148
 scaling = "WIS"
-text = "Удар по всем противникам на 157 процента обычного. Все противники оглушены и пропускают 1 ход."
+text = "Удар по всем противникам на 148 процента обычного. Все противники оглушены и пропускают 1 ход."
 
 [[skill]]
 code = "cleric_blagodat"
@@ -3856,7 +3856,7 @@ owner = "class:cleric"
 kind = "active"
 level = 114
 cost = 18
-cooldown = 4
+cooldown = 3
 target = "self"
 effect = "heal_aoe"
 power = 23
@@ -3888,9 +3888,9 @@ cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe_holy"
 answers = "silence"
-power = 157
+power = 165
 scaling = "WIS"
-text = "Священный удар по всем противникам на 157 процентов обычного."
+text = "Священный удар по всем противникам на 165 процентов обычного."
 
 [[skill]]
 code = "cleric_chudo"
@@ -3904,9 +3904,9 @@ cooldown = 6
 target = "all_enemies"
 effect = "damage_and_heal"
 answers = "charm"
-power = 123
+power = 129
 scaling = "WIS"
-text = "Удар по всем противникам на 123 процентов обычного. Возвращает вам всё здоровье."
+text = "Удар по всем противникам на 129 процентов обычного. Возвращает вам всё здоровье."
 
 [[skill]]
 code = "cleric_blagoslovenie"
@@ -4140,30 +4140,30 @@ cooldown = 0
 target = "enemy"
 effect = "damage_nature"
 answers = "poison"
-power = 166
+power = 174
 scaling = "WIS"
-text = "Природный удар на 166 процентов обычного."
+text = "Природный удар на 174 процентов обычного."
 
 [[skill]]
 code = "druid_shipy"
 name = "Шипы"
 owner = "class:druid"
 kind = "active"
-level = 3
+level = 8
 cost = 11
 cooldown = 2
 target = "enemy"
 effect = "damage_venom"
-power = 204
+power = 196
 scaling = "WIS"
-text = "Ядовитый удар на 204 процентов обычного. Яд точит цель 3 хода."
+text = "Ядовитый удар на 196 процентов обычного. Яд точит цель 3 хода."
 
 [[skill]]
 code = "druid_oblik_volka"
 name = "Облик волка"
 owner = "class:druid"
 kind = "active"
-level = 8
+level = 18
 cost = 12
 cooldown = 4
 target = "self"
@@ -4191,7 +4191,7 @@ code = "druid_rodnik"
 name = "Родник"
 owner = "class:druid"
 kind = "active"
-level = 18
+level = 45
 cost = 12
 cooldown = 4
 target = "self"
@@ -4240,9 +4240,9 @@ cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe_nature"
 answers = "bleeding"
-power = 147
+power = 154
 scaling = "WIS"
-text = "Природный удар по всем противникам на 147 процент обычного."
+text = "Природный удар по всем противникам на 154 процент обычного."
 
 [[skill]]
 code = "druid_klyki"
@@ -4255,23 +4255,23 @@ cost = 14
 cooldown = 2
 target = "enemy"
 effect = "damage_bleed"
-power = 205
+power = 197
 scaling = "WIS"
-text = "Разрывающий удар на 205 процентов обычного. Цель истекает кровью 3 хода."
+text = "Разрывающий удар на 197 процентов обычного. Цель истекает кровью 3 хода."
 
 [[skill]]
 code = "druid_dykhanie_roshchi"
 name = "Дыхание рощи"
 owner = "class:druid"
 kind = "active"
-level = 45
+level = 3
 cost = 15
 cooldown = 4
-target = "self"
+target = "ally"
 effect = "heal_over_time"
 power = 9
 scaling = "WIS"
-text = "Возвращает 9 процентов здоровья каждый ход, 3 хода подряд."
+text = "Восстанавливает выбранному союзнику 9 процентов максимального здоровья каждый ход в течение 3 ходов."
 
 [[skill]]
 code = "druid_otsepenenie"
@@ -4342,9 +4342,9 @@ cooldown = 2
 target = "enemy"
 effect = "damage_lifesteal"
 answers = "slow"
-power = 205
+power = 215
 scaling = "WIS"
-text = "Удар на 205 процентов обычного. Вам возвращается 30 процентов нанесённого урона."
+text = "Удар на 215 процентов обычного. Вам возвращается 30 процентов нанесённого урона."
 
 [[skill]]
 code = "druid_shkura_i_kora"
@@ -4354,11 +4354,11 @@ kind = "active"
 level = 86
 cost = 17
 cooldown = 4
-target = "self"
+target = "ally"
 effect = "barrier"
 power = 32
 scaling = "END"
-text = "Ставит барьер в 32 процента вашего здоровья на 3 хода."
+text = "Даёт выбранному союзнику барьер на 32 процентов его максимального здоровья."
 
 [[skill]]
 code = "druid_zov_zverya"
@@ -4386,7 +4386,7 @@ cooldown = 2
 target = "enemy"
 effect = "damage_multi"
 answers = "poison"
-power = 205
+power = 209
 scaling = "WIS"
 text = "Бьёт 3 раза, каждый на 68 процентов обычного удара."
 
@@ -4401,9 +4401,9 @@ cost = 18
 cooldown = 3
 target = "all_enemies"
 effect = "damage_aoe_venom"
-power = 147
+power = 141
 scaling = "WIS"
-text = "Ядовитый удар по всем противникам на 147 процента обычного. Все противники травятся 3 хода."
+text = "Ядовитый удар по всем противникам на 141 процента обычного. Все противники травятся 3 хода."
 
 [[skill]]
 code = "druid_zhivaya_voda"
@@ -4412,7 +4412,7 @@ owner = "class:druid"
 kind = "active"
 level = 114
 cost = 18
-cooldown = 4
+cooldown = 3
 target = "self"
 effect = "heal_aoe"
 power = 22
@@ -5360,11 +5360,11 @@ kind = "active"
 level = 75
 cost = 16
 cooldown = 4
-target = "self"
+target = "ally"
 effect = "barrier"
 power = 32
 scaling = "CHA"
-text = "Ставит барьер в 32 процента вашего здоровья на 3 хода."
+text = "Даёт выбранному союзнику барьер на 32 процентов его максимального здоровья."
 
 [[skill]]
 code = "paladin_inquisitor_doznanie"
@@ -5402,11 +5402,11 @@ kind = "active"
 level = 150
 cost = 19
 cooldown = 4
-target = "self"
+target = "ally"
 effect = "cleanse_barrier"
 power = 36
 scaling = "CHA"
-text = "Ставит барьер в 36 процентов вашего здоровья на 3 хода. Снимает с вас отрицательные эффекты."
+text = "Даёт выбранному союзнику барьер на 36 процентов его максимального здоровья."
 
 [[skill]]
 code = "paladin_exorcist_izgnanie"
@@ -5443,7 +5443,7 @@ owner = "subclass:paladin_martyr"
 kind = "active"
 level = 150
 cost = 19
-cooldown = 4
+cooldown = 3
 target = "self"
 effect = "heal_aoe"
 power = 26
@@ -5458,11 +5458,11 @@ kind = "active"
 level = 150
 cost = 18
 cooldown = 4
-target = "self"
+target = "ally"
 effect = "cleanse"
 power = 3
 scaling = "CHA"
-text = "Снимает с вас до 3 отрицательных эффектов."
+text = "Снимает отрицательные эффекты с выбранного союзника; предел первого ранга — 2."
 
 [[skill]]
 code = "paladin_paragon_ne_past"
@@ -6117,12 +6117,12 @@ owner = "subclass:cleric_healer"
 kind = "active"
 level = 30
 cost = 12
-cooldown = 3
-target = "self"
+cooldown = 2
+target = "ally"
 effect = "heal"
 power = 22
 scaling = "WIS"
-text = "Лечит вас на 22 процента здоровья."
+text = "Восстанавливает выбранному союзнику 22 процентов максимального здоровья."
 
 [[skill]]
 code = "cleric_monk_udar_ladonyu"
@@ -6160,11 +6160,11 @@ kind = "active"
 level = 75
 cost = 15
 cooldown = 4
-target = "self"
+target = "ally"
 effect = "heal_over_time"
 power = 10
 scaling = "WIS"
-text = "Возвращает 10 процентов здоровья каждый ход, 3 хода подряд."
+text = "Восстанавливает выбранному союзнику 10 процентов максимального здоровья каждый ход в течение 3 ходов."
 
 [[skill]]
 code = "cleric_oracle_znamenie"
@@ -6230,11 +6230,11 @@ kind = "active"
 level = 150
 cost = 19
 cooldown = 4
-target = "self"
+target = "ally"
 effect = "cleanse_barrier"
 power = 34
 scaling = "WIS"
-text = "Ставит барьер в 34 процента вашего здоровья на 3 хода. Снимает с вас отрицательные эффекты."
+text = "Даёт выбранному союзнику барьер на 34 процентов его максимального здоровья."
 
 [[skill]]
 code = "cleric_lifewarden_krug_zhizni"
@@ -6243,7 +6243,7 @@ owner = "subclass:cleric_lifewarden"
 kind = "active"
 level = 150
 cost = 19
-cooldown = 4
+cooldown = 3
 target = "self"
 effect = "heal_aoe"
 power = 26
@@ -6257,12 +6257,12 @@ owner = "subclass:cleric_miracleworker"
 kind = "active"
 level = 150
 cost = 19
-cooldown = 4
-target = "self"
+cooldown = 3
+target = "ally"
 effect = "heal_big"
 power = 30
 scaling = "WIS"
-text = "Лечит вас на 30 процентов здоровья."
+text = "Восстанавливает выбранному союзнику 30 процентов максимального здоровья."
 
 [[skill]]
 code = "cleric_prophet_prorochestvo"
@@ -6458,11 +6458,11 @@ kind = "active"
 level = 150
 cost = 19
 cooldown = 4
-target = "self"
+target = "ally"
 effect = "barrier"
 power = 36
 scaling = "WIS"
-text = "Ставит барьер в 36 процентов вашего здоровья на 3 хода."
+text = "Даёт выбранному союзнику барьер на 36 процентов его максимального здоровья."
 
 [[skill]]
 code = "druid_stormlord_groza"

@@ -71,7 +71,14 @@ def is_known(character: Character, code: str) -> bool:
 
 
 def _class_pool(content: GameContent, character: Character, kind: SkillKind) -> tuple[Skill, ...]:
-    return content.class_skills_up_to(character.class_id, character.level, kind)
+    available = content.class_skills_up_to(character.class_id, character.level, kind)
+    # Перенос уровня открытия не отнимает уже оплаченное умение у старого героя.
+    previous = tuple(
+        one
+        for one in content.skills_of(f"class:{character.class_id}", kind)
+        if one.level > character.level and is_known(character, one.code)
+    )
+    return (*available, *previous)
 
 
 def teachable(content: GameContent, character: Character) -> tuple[Skill, ...]:

@@ -21,8 +21,10 @@ from mmorpg.application.services.battle import BattleStore, begin
 from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.party import PartyStore
 from mmorpg.config import Settings
-from mmorpg.domain.entities.combat import BattleOutcome
+from mmorpg.domain.entities.character import SkillLoadout
+from mmorpg.domain.entities.combat import ActionKind, BattleAction, BattleOutcome, BattleState
 from mmorpg.domain.entities.location import Enemy, EnemyKind, Roamer
+from mmorpg.domain.rules.combat import act, hero_combatant, monster_combatant
 from mmorpg.infrastructure.cache.redis_cache import RedisStateCache
 from mmorpg.infrastructure.persistence.effects import PostgresEffectState
 from mmorpg.infrastructure.persistence.gameplay import (
@@ -585,3 +587,72 @@ async def test_yield_can_leave_immediately_and_old_result_does_not_touch_new_bat
     assert (await e.characters.get(current.id)).health == current.health
     assert await e.store.busy(current.id) == other.id
     await e.pool.execute("DELETE FROM gameplay_state WHERE key=$1", f"battle:{other.id}")
+
+
+async def test_ally_help_command_survives_restart_and_replay(battle_env, content):
+    e = battle_env
+    caster = replace(
+        e.heroes[0],
+        class_id="cleric",
+        level=50,
+        loadout=SkillLoadout(actives=("cleric_slovo_istseleniya", None, None, None, None, None)),
+    )
+    caster = await e.characters.save(caster)
+    e.heroes[0] = caster
+    friend = e.heroes[1]
+    one = hero_combatant(content, caster, combatant_id=1, side=0)
+    two = hero_combatant(content, friend, combatant_id=2, side=0)
+    two = replace(two, health=1)
+    original_enemy = next(c.enemy for c in e.session.state.combatants if c.enemy is not None)
+    three = monster_combatant(original_enemy, combatant_id=3)
+    state = BattleState(combatants=(one, two, three), order=(1, 2, 3))
+    e.session = await e.store.save(
+        replace(
+            e.session,
+            state=state,
+            roster_snapshot=json.dumps(encode({1: caster, 2: friend}), ensure_ascii=False),
+        )
+    )
+    current_state = state_for(e, 0)
+    await current_state.update_data(battle_version=e.session.version)
+    await press(e, "/союзник 2")
+    selected = await e.store.load(e.session.id)
+    assert selected.state.by_id(1).aid_focus == 2, e.recording.sent[-1].text
+    assert selected.state.by_id(1).actions == 0
+    await e.redis.delete(f"battle:{e.session.id}")
+    cold = BattleStore(
+        PostgresGameplayState(e.pool, PostgresEffectState(e.pool, RedisStateCache(e.redis)))
+    )
+    restored = await cold.load(e.session.id)
+    assert restored.state.by_id(1).aid_focus == 2
+    assert (await cold.content(restored, content)).character_class("cleric").tactics
+    message_number = await press(e, "/умение 1")
+    healed = await cold.load(e.session.id)
+    assert healed.state.by_id(2).health > 1
+    assert healed.state.by_id(1).actions == 1
+    await press(e, "/умение 1", number=message_number)
+    assert await cold.load(e.session.id) == healed
+    refused = act(
+        content,
+        {1: caster, 2: friend},
+        selected.state,
+        BattleAction(ActionKind.SKILL, slot=0, target=3),
+        b"ally",
+    )
+    assert refused.combatants == selected.state.combatants
+
+
+async def test_enemy_focus_is_saved_without_spending_turn(battle_env):
+    e = battle_env
+    viewer = e.session.state.active
+    actor = next(i for i, hero in enumerate(e.heroes) if hero.id == viewer.character_id)
+    enemy = e.session.state.foes_of(viewer.id)[0]
+    await press(e, f"/цель {enemy.id}", actor=actor)
+    selected = await e.store.load(e.session.id)
+    assert selected.state.by_id(viewer.id).focus == enemy.id
+    assert selected.state.by_id(viewer.id).actions == viewer.actions
+    assert (selected.state.round, selected.state.cursor) == (
+        e.session.state.round,
+        e.session.state.cursor,
+    )
+    assert selected.version == e.session.version + 1

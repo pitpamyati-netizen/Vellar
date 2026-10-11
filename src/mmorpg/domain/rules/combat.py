@@ -50,7 +50,7 @@ from mmorpg.domain.entities.combat import (
     CombatantKind,
     EventKind,
 )
-from mmorpg.domain.entities.content import GameContent, Skill
+from mmorpg.domain.entities.content import GameContent, OwnerKind, Skill
 from mmorpg.domain.entities.damage import UNARMED, DamageType
 from mmorpg.domain.entities.dice import Dice
 from mmorpg.domain.entities.effects import ActiveEffect, EffectStack, status_effect
@@ -65,6 +65,7 @@ from mmorpg.domain.entities.statuses import (
 from mmorpg.domain.procgen import items as item_procgen
 from mmorpg.domain.procgen.enemies import RANK_FACTORS, group_scale
 from mmorpg.domain.procgen.seeds import derive, rng, to_int
+from mmorpg.domain.rules import class_tactics as tactic_rules
 from mmorpg.domain.rules import combo as combo_rules
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import modifiers as mods
@@ -606,10 +607,13 @@ def act(
 
     # Смена цели ходом не считается: ничего не произошло, а значит и хода не
     # было (``Claude.md``, правило 3).
-    if action.kind is ActionKind.FOCUS:
+    if action.kind in {ActionKind.FOCUS, ActionKind.AID_FOCUS}:
         chosen = working.by_id(action.target)
-        if chosen is None or not chosen.alive or chosen.side == current.side:
+        aiding = action.kind is ActionKind.AID_FOCUS
+        if chosen is None or not chosen.alive or (chosen.side == current.side) != aiding:
             return working.with_events(BattleEvent(kind=EventKind.NO_TARGET))
+        if aiding:
+            return working.replace_combatant(replace(current, aid_focus=chosen.id))
         return working.replace_combatant(replace(current, focus=chosen.id))
 
     if action.kind is ActionKind.YIELD:
@@ -1119,6 +1123,11 @@ def _attempt_skill(
     if skill is None:
         return BattleEvent(kind=EventKind.EMPTY_SLOT)
 
+    if skill.target == "ally" and not _skill_spec(character, skill, actor).aoe:
+        chosen = state.by_id(action.target or actor.aid_focus or actor.id)
+        if chosen is None or not chosen.alive or chosen.side != actor.side:
+            return BattleEvent(kind=EventKind.NO_TARGET)
+
     # Умение просит оружие раньше, чем ресурс: платить за удар, который нечем
     # нанести, игрок не должен.
     if refusal := gear.skill_refusal(content, character, skill):
@@ -1285,6 +1294,20 @@ def _skill_cost(
     return max(0, round(skill_cost(skill, max_resource) * max(0.1, reduction)))
 
 
+def aid_targets(
+    state: BattleState, actor: Combatant, skill: Skill, spec: EffectSpec, requested: int = 0
+) -> tuple[int, ...]:
+    """Одна и та же цель помощи для лечения, барьера, очищения и их довесков."""
+    if spec.aoe and spec.category is not EffectCategory.DAMAGE:
+        return tuple(one.id for one in state.allies_of(actor.id))
+    if skill.target == "ally":
+        chosen = state.by_id(requested or actor.aid_focus or actor.id)
+        if chosen is None or not chosen.alive or chosen.side != actor.side:
+            return ()
+        return (chosen.id,)
+    return (actor.id,)
+
+
 def _apply_spec(
     content: GameContent,
     roster: Mapping[int, Character],
@@ -1302,6 +1325,11 @@ def _apply_spec(
     if actor is None or character is None:  # pragma: no cover
         return working
     modifiers = mods.collect_modifiers(content, character, actor.effects)
+    tactics = (
+        content.character_class(character.class_id).tactics
+        if skill.owner_kind in {OwnerKind.CLASS, OwnerKind.SUBCLASS}
+        else ()
+    )
     rank_scale = 1.0 + skill.rank_step * (character.loadout.rank_of(skill.code) - 1)
     own_dice = skill.dice
 
@@ -1353,7 +1381,8 @@ def _apply_spec(
                         blow * power / 100.0 * spec.damage_scale * falloff
                         + (own_dice.roll(source) * rank_scale if own_dice is not None else 0.0)
                     )
-                    * joined,
+                    * joined
+                    * tactic_rules.factor(tactics, "damage", actor, current),
                     spec=spec,
                     skill_name=skill.name,
                     source=source,
@@ -1402,7 +1431,7 @@ def _apply_spec(
 
     # Кого лечит и с кого снимает беды это умение: себя, а умение по площади -
     # весь свой отряд.
-    mended = tuple(one.id for one in working.allies_of(actor_id)) if spec.aoe else (actor_id,)
+    mended = aid_targets(working, actor, skill, spec, requested)
 
     if spec.category is EffectCategory.HEAL:
         # Лечение и щит - проценты от максимума здоровья, а не от удара: здоровье
@@ -1413,6 +1442,7 @@ def _apply_spec(
             if one is None:
                 continue
             amount = round(one.max_health * power / 100.0)
+            amount = round(amount * tactic_rules.factor(tactics, "heal", actor, one))
             amount = round(amount * mods.percent(modifiers, "healing_done_percent"))
             if spec.special == "heal_over_time":
                 working = _mending(
@@ -1440,15 +1470,17 @@ def _apply_spec(
                 )
 
     if spec.category is EffectCategory.BARRIER:
-        holder = working.by_id(actor_id)
-        if holder is not None:
-            held = round(holder.max_health * power / 100.0)
-            working = _barriered(working, actor_id, skill=skill, spec=spec, amount=held)
+        for beneficiary in mended:
+            holder = working.by_id(beneficiary)
+            if holder is not None:
+                held = round(holder.max_health * power / 100.0)
+                held = round(held * tactic_rules.factor(tactics, "barrier", actor, holder))
+                working = _barriered(working, beneficiary, skill=skill, spec=spec, amount=held)
 
     if spec.bonus_heal:
         # По площади - тому же отряду: «лечит ещё на 10 процентов» у полкового
         # лечения добавляет всем, а не одному знаменосцу.
-        for beneficiary in mended if spec.category is EffectCategory.HEAL else (actor_id,):
+        for beneficiary in mended if spec.category is not EffectCategory.DAMAGE else (actor_id,):
             holder = working.by_id(beneficiary)
             if holder is not None:
                 extra = round(holder.max_health * spec.bonus_heal / 100.0)
@@ -1461,15 +1493,16 @@ def _apply_spec(
                 )
 
     if spec.bonus_barrier:
-        holder = working.by_id(actor_id)
-        if holder is not None:
-            extra = round(holder.max_health * spec.bonus_barrier / 100.0)
-            working = _barriered(working, actor_id, skill=skill, spec=spec, amount=extra)
+        for beneficiary in mended:
+            holder = working.by_id(beneficiary)
+            if holder is not None:
+                extra = round(holder.max_health * spec.bonus_barrier / 100.0)
+                working = _barriered(working, beneficiary, skill=skill, spec=spec, amount=extra)
 
     if spec.cleanse_count:
         # Умение по площади снимает беды со всего отряда - «и раны закрыть»
         # у полкового лечения закрывает раны всем, а не только знаменосцу.
-        cleansed_from = mended if spec.aoe else (actor_id,)
+        cleansed_from = mended
         for beneficiary in cleansed_from:
             holder = working.by_id(beneficiary)
             if holder is None:
@@ -1558,7 +1591,7 @@ def _apply_statuses(
     keepers = (
         tuple(one.id for one in working.allies_of(actor_id))
         if (has_way(actor, "refrain") or spec.aoe) and spec.category is not EffectCategory.DAMAGE
-        else (actor_id,)
+        else aid_targets(working, actor, skill, spec, requested)
     )
     for hold in spec.holds:
         for keeper in keepers:
@@ -1867,7 +1900,11 @@ def _apply_modifier_bundles(
         # (``rules/subclass_powers``). Выучка «Разлив» делает то же самое
         # по-своему - через ``aoe``, - и оба пути сходятся здесь.
         chorus = has_way(actor, "refrain") or spec.aoe
-        blessed = tuple(one.id for one in working.allies_of(actor_id)) if chorus else (actor_id,)
+        blessed = (
+            tuple(one.id for one in working.allies_of(actor_id))
+            if chorus
+            else aid_targets(working, actor, skill, spec, requested)
+        )
         for beneficiary in blessed:
             one = working.by_id(beneficiary)
             if one is None:
@@ -3066,22 +3103,36 @@ def _chosen_by_engine(
     source = rng(derive(seed, "engine", state.round, actor.id))
     character = roster.get(actor.id)
     if character is not None:
-        ready = [
-            slot
-            for slot in range(len(character.loadout.actives))
+        ready: list[BattleAction] = []
+        allies = state.allies_of(actor.id)
+        wounded = min(allies, key=lambda one: one.health / max(1, one.max_health))
+        for slot in range(len(character.loadout.actives)):
+            candidate = BattleAction(ActionKind.SKILL, slot=slot, target=target_id)
+            skill = _resolve_skill(content, character, candidate)
+            if skill is None:
+                continue
+            spec = _skill_spec(character, skill, actor)
+            # Провокация защищает других: единственному бойцу некого прикрывать.
+            if len(allies) == 1 and any(one.kind is StatusKind.TAUNT for one in spec.inflicts):
+                continue
+            if skill.target == "ally":
+                candidate = replace(candidate, target=wounded.id)
+            beneficiary = wounded if skill.target == "ally" or spec.aoe else actor
+            if spec.category is EffectCategory.HEAL and (
+                beneficiary.health >= beneficiary.max_health * 0.75
+                or beneficiary.effects.has(StatusKind.HEAL_BLOCK)
+                or (
+                    spec.special == "heal_over_time"
+                    and beneficiary.effects.has(StatusKind.HEALTH_REGEN)
+                )
+            ):
+                continue
             if not isinstance(
-                _attempt_skill(
-                    content,
-                    roster,
-                    state,
-                    actor,
-                    BattleAction(kind=ActionKind.SKILL, slot=slot, target=target_id),
-                ),
-                BattleEvent,
-            )
-        ]
+                _attempt_skill(content, roster, state, actor, candidate), BattleEvent
+            ):
+                ready.append(candidate)
         if ready and source.uniform(0, 100) < ENGINE_SKILL_CHANCE:
-            return BattleAction(kind=ActionKind.SKILL, slot=source.choice(ready), target=target_id)
+            return source.choice(ready)
     return BattleAction(kind=ActionKind.ATTACK, target=target_id)
 
 

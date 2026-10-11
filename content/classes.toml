@@ -121,8 +121,8 @@ racial_slots = 1
 [[class]]
 id = "warrior"
 name = "Воин"
-role = "Стойкий боец ближнего боя"
-description = "Держит строй и принимает удар на себя."
+role = "Защитник строя"
+description = "Принимает удары и вызывает врага на себя; защита готовит ответный удар."
 lore = "Воина делает не удар, а место, на котором он стоит. Строй держится, пока держится крайний, и крайним всегда оказывается тот, кто согласился им быть. Отвага у него не порыв, а счёт: сколько ещё выдержу, столько и простою."
 power = "Сила ведёт удар, выносливость держит Отвагу и место в строю."
 key_stats = ["STR", "END"]
@@ -131,6 +131,20 @@ armor = ["heavy"]
 bonuses = { STR = 2, END = 1 }
 resource = { id = "valor", name = "Отвага", base = 40, per_level = 2, regen_per_turn = 6 }
 health = { base = 110, per_level = 18 }
+
+[[class.tactic]]
+name = "Ответ из строя"
+category = "damage"
+condition = "actor_status"
+bonus = 20
+statuses = ["guard"]
+
+[[class.tactic]]
+name = "Принятый вызов"
+category = "damage"
+condition = "target_status"
+bonus = 12
+statuses = ["taunt"]
 
 [class.scaling]
 STR = { blow = 2.2, health = 0.4 }
@@ -179,8 +193,8 @@ text = "Удар, после которого чинить нечего. Так 
 [[class]]
 id = "barbarian"
 name = "Варвар"
-role = "Урон в обмен на защиту"
-description = "Дерётся почти без брони и берёт напором в первые ходы."
+role = "Напор и риск"
+description = "Сильнее бьёт на исходе здоровья; выбирает между напором и восстановлением."
 lore = "Варвар не защищается, потому что защита — это признание, что бой будет долгим. Ярость приходит не в начале схватки, а в середине, когда становится ясно, кто первым устанет; и с этой минуты усталости у варвара больше нет."
 power = "Сила ведёт удар, а Ярость набирается по ходу боя."
 key_stats = ["STR"]
@@ -189,6 +203,13 @@ armor = ["medium"]
 bonuses = { STR = 2, END = 1 }
 resource = { id = "rage", name = "Ярость", base = 0, per_level = 1, regen_per_turn = 4 }
 health = { base = 120, per_level = 20 }
+
+[[class.tactic]]
+name = "Раненый зверь"
+category = "damage"
+condition = "actor_health_below"
+bonus = 20
+threshold = 50
 
 [class.scaling]
 STR = { blow = 2.3, health = 0.6, resource = 0.5 }
@@ -237,8 +258,8 @@ text = "Вас больше не останавливают. Вас пережи
 [[class]]
 id = "paladin"
 name = "Паладин"
-role = "Защита и поддержка"
-description = "Стоит за чужую спину: прикрывает и держится дольше остальных."
+role = "Защитник и заступник"
+description = "Даёт союзнику барьер и лечение; под своим барьером сильнее карает врага."
 lore = "Паладина слушают не потому, что он громче, а потому, что он остаётся, когда уходят. Благодать — это не дар сверху: это доверие тех, кто стоит рядом, посчитанное вслух. Пока за ним идут, ему есть чем лечить."
 power = "Сила ведёт удар, а Благодать приходит по харизме: за паладином идут."
 key_stats = ["STR", "CHA"]
@@ -247,6 +268,19 @@ armor = ["heavy"]
 bonuses = { STR = 1, CHA = 1, END = 1 }
 resource = { id = "grace", name = "Благодать", base = 45, per_level = 2.4, regen_per_turn = 5 }
 health = { base = 105, per_level = 17 }
+
+[[class.tactic]]
+name = "Верность обету"
+category = "damage"
+condition = "actor_barrier"
+bonus = 12
+
+[[class.tactic]]
+name = "Заступничество"
+category = "barrier"
+condition = "target_health_below"
+bonus = 20
+threshold = 50
 
 [class.scaling]
 STR = { blow = 2.3, health = 0.7 }
@@ -295,8 +329,8 @@ text = "Вас складывали дважды. Оба раза вы подн�
 [[class]]
 id = "ranger"
 name = "Следопыт"
-role = "Дальний бой и выслеживание"
-description = "Бьёт издали и читает следы там, где их никто не видит."
+role = "Стрелок и ловец"
+description = "Останавливает врага, затем точнее использует сильные выстрелы по замедленной цели."
 lore = "Следопыт живёт на расстоянии вытянутого выстрела и знает цену каждому шагу, который не пришлось делать. Выдержка у него не терпение, а счёт: сколько ещё продержится рука, столько и будет верным глаз."
 power = "Ловкость ведёт выстрел, а Выдержку держит мудрость."
 key_stats = ["AGI", "WIS"]
@@ -305,6 +339,13 @@ armor = ["medium"]
 bonuses = { AGI = 2, WIS = 1 }
 resource = { id = "focus", name = "Фокус", base = 50, per_level = 2.4, regen_per_turn = 8 }
 health = { base = 95, per_level = 15 }
+
+[[class.tactic]]
+name = "Выверенный выстрел"
+category = "damage"
+condition = "target_status"
+bonus = 18
+statuses = ["slow"]
 
 [class.scaling]
 AGI = { blow = 2.1, health = 0.4 }
@@ -353,8 +394,8 @@ text = "Ветра для вас больше нет. Есть только ра
 [[class]]
 id = "rogue"
 name = "Разбойник"
-role = "Максимальный урон и скрытность"
-description = "Ждёт удобного момента и вкладывает всё в один удар."
+role = "Засада и отравление"
+description = "Использует незаметность для сильного удара и яд для затяжной схватки."
 lore = "Разбойник платит за один удар всем боем: он ждёт, отходит, ждёт снова — и бьёт один раз так, что второго не требуется. Прыть у него не скорость, а право на этот момент: пока есть чем распорядиться, момент найдётся."
 power = "Ловкость ведёт удар, она же копит Прыть."
 key_stats = ["AGI", "LCK"]
@@ -363,6 +404,20 @@ armor = ["light"]
 bonuses = { AGI = 2, LCK = 1 }
 resource = { id = "energy", name = "Прыть", base = 60, per_level = 2, regen_per_turn = 10 }
 health = { base = 90, per_level = 14 }
+
+[[class.tactic]]
+name = "Чистая засада"
+category = "damage"
+condition = "actor_status"
+bonus = 15
+statuses = ["unseen"]
+
+[[class.tactic]]
+name = "Отравленная прореха"
+category = "damage"
+condition = "target_status"
+bonus = 10
+statuses = ["poison"]
 
 [class.scaling]
 AGI = { blow = 2.2, health = 0.4, resource = 1.0 }
@@ -411,8 +466,8 @@ text = "Вы входите и выходите между двумя удара
 [[class]]
 id = "mage"
 name = "Маг"
-role = "Стихийный урон по площади"
-description = "Бьёт стихией по площади, пока хватает чар."
+role = "Стихии и разрушение"
+description = "Подготавливает цель огнём или холодом и усиливает следующий боевой приём."
 lore = "Маг не бросает огонь — он его считает. Чары в Vellar это не сила, а мера: сколько удержишь в голове, столько и ляжет на землю. Ошибка в счёте видна сразу, и видна она обычно тому, кто стоял слишком близко."
 power = "Интеллект ведёт чары: их считают, как на заставе считают вес, и от счёта зависит удар."
 key_stats = ["INT"]
@@ -421,6 +476,13 @@ armor = ["cloth"]
 bonuses = { INT = 3 }
 resource = { id = "mana", name = "Чары", base = 70, per_level = 4, regen_per_turn = 7 }
 health = { base = 80, per_level = 12 }
+
+[[class.tactic]]
+name = "Стихийный отклик"
+category = "damage"
+condition = "target_status"
+bonus = 15
+statuses = ["burning", "freeze"]
 
 [class.scaling]
 INT = { blow = 2.4, resource = 2.5 }
@@ -469,8 +531,8 @@ text = "Стихия перестала быть стихией. Осталос�
 [[class]]
 id = "cleric"
 name = "Жрец"
-role = "Лечение и снятие эффектов"
-description = "Лечит и снимает с человека дурные последствия."
+role = "Целитель и очищение"
+description = "Лечит выбранного союзника, снимает беды и сильнее помогает тяжело раненым."
 lore = "Жреца зовут не тогда, когда страшно, а когда уже поздно, — и он приходит. Вера у него не убеждение, а работа: перевязать, поднять, сказать имя вслух. Из всего, что умеет жрец, самое трудное — остаться, когда лечить уже нечего."
 power = "Мудрость ведёт и слово, и удар, и Вера растёт из неё же."
 key_stats = ["WIS"]
@@ -479,6 +541,20 @@ armor = ["cloth"]
 bonuses = { WIS = 2, CHA = 1 }
 resource = { id = "faith", name = "Вера", base = 65, per_level = 3.6, regen_per_turn = 7 }
 health = { base = 90, per_level = 14 }
+
+[[class.tactic]]
+name = "Не дать угаснуть"
+category = "heal"
+condition = "target_health_below"
+bonus = 25
+threshold = 40
+
+[[class.tactic]]
+name = "Сдержанная кара"
+category = "damage"
+condition = "target_status"
+bonus = 10
+statuses = ["silence"]
 
 [class.scaling]
 WIS = { blow = 2.2, resource = 2.2, healing = 0.06 }
@@ -527,8 +603,8 @@ text = "Вы поднимали тех, за кем уже пришли. Два�
 [[class]]
 id = "druid"
 name = "Друид"
-role = "Контроль, превращения, регенерация"
-description = "Меняет облик, держит врага на месте и лечит понемногу, но долго."
+role = "Живая природа и формы"
+description = "Поддерживает союзников постепенным лечением, меняет облик и замедляет врага."
 lore = "Друид не повелевает лесом — он с ним договаривается, и договор этот каждый раз новый. Единение считают не в силе, а в том, насколько далеко вы отошли от себя: медведем быть проще, чем вернуться человеком."
 power = "Мудрость ведёт удар и держит Единение с тем, что вокруг."
 key_stats = ["WIS", "END"]
@@ -537,6 +613,20 @@ armor = ["light"]
 bonuses = { WIS = 2, END = 1 }
 resource = { id = "communion", name = "Единение", base = 60, per_level = 3.2, regen_per_turn = 7 }
 health = { base = 95, per_level = 15 }
+
+[[class.tactic]]
+name = "Продолжение роста"
+category = "heal"
+condition = "target_status"
+bonus = 20
+statuses = ["health_regen"]
+
+[[class.tactic]]
+name = "Хватка чащи"
+category = "damage"
+condition = "target_status"
+bonus = 12
+statuses = ["slow"]
 
 [class.scaling]
 WIS = { blow = 2.0, resource = 2.0, healing = 0.04 }

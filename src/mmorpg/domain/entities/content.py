@@ -358,6 +358,18 @@ class Subclass:
 
 
 @dataclass(frozen=True, slots=True)
+class ClassTactic:
+    """Усиление по видимому состоянию боя, без отдельного счётчика."""
+
+    name: str
+    category: str
+    condition: str
+    bonus: float
+    statuses: tuple[StatusKind, ...] = ()
+    threshold: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
 class CharacterClass:
     id: str
     name: str
@@ -386,6 +398,7 @@ class CharacterClass:
     scaling: Mapping[StatCode, StatScaling] = field(default_factory=dict)
     #: Вехи характеристик: сколько очков и что за них даётся (ADR 0068).
     milestones: tuple[StatMilestone, ...] = ()
+    tactics: tuple[ClassTactic, ...] = ()
 
     def can_wield(self, weapon_type: str) -> bool:
         return not self.weapon_types or weapon_type in self.weapon_types

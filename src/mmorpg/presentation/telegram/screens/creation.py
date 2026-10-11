@@ -10,6 +10,7 @@ from __future__ import annotations
 from mmorpg.application.dto.creation import CharacterDraft
 from mmorpg.domain.entities.content import GameContent, Trait
 from mmorpg.domain.entities.stats import StatBlock, StatCode
+from mmorpg.domain.rules import class_tactics as tactic_rules
 from mmorpg.presentation.telegram.keyboards.labels import (
     CLASS_DETAILS,
     CONFIRM,
@@ -237,6 +238,7 @@ def class_details_screen(content: GameContent, class_id: str) -> Screen:
             # Роль тут не повторяется: она стоит прямо на кнопке, которой этот
             # класс выбирают. Вместо неё - то, чего кнопка сказать не может.
             klass.power,
+            *(tactic_rules.description(one) for one in klass.tactics),
             f"Ключевые характеристики: {key_stats}. Очки идут прежде всего в них.",
             own_gear_line(content, class_id),
             f"Ресурс: {klass.resource.name}. Умения тратят его, и он копится сам.",

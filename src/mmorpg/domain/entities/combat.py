@@ -73,6 +73,7 @@ class CombatantKind(StrEnum):
 
 
 class ActionKind(StrEnum):
+    AID_FOCUS = "aid_focus"
     ATTACK = "attack"
     #: Закрыться: ход уходит целиком на оборону, зато чужой удар и находит реже,
     #: и стоит дешевле (``rules/combat.DEFEND_*``).
@@ -223,6 +224,7 @@ class Combatant:
     master_id: int = 0
     #: На кого этот боец смотрит. Ноль - ни на кого пока.
     focus: int = 0
+    aid_focus: int = 0
     #: Ушёл из боя сам: сбежал или сдался. Не то же, что пал.
     left: bool = False
     #: Состоявшиеся действия; чтение экрана и отказ сюда не входят.

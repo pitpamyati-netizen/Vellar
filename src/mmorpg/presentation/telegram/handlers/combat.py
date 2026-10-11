@@ -997,6 +997,10 @@ async def _store_and_show(
         return
 
     if not _moved(before, session):
+        # Выбор цели не расходует ход, но обязан пережить следующий запрос и перезапуск.
+        if session.state.combatants != before.state.combatants:
+            session = await store.save(session)
+            await state.update_data({"battle_version": session.version})
         await _show(message, state, content, character, session, notice=notice)
         return
     departed = tuple(

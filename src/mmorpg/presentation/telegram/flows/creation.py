@@ -231,7 +231,11 @@ def _handle_race(content: GameContent, state: CreationState, command: Command) -
 
 
 def _handle_class(content: GameContent, state: CreationState, command: Command) -> CreationState:
-    if command.intent is not Intent.SELECT:
+    old_class_label = command.intent is Intent.UNKNOWN and any(
+        command.argument == klass.name or command.argument.startswith(f"{klass.name} —")
+        for klass in content.classes
+    )
+    if command.intent is not Intent.SELECT and not old_class_label:
         return state.with_notice("Нажмите класс из списка.")
 
     if labels.CLASS_DETAILS.matches(command.argument):

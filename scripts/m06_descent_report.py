@@ -99,6 +99,12 @@ def probe(content: GameContent, classes: tuple[str, ...], trial: int) -> dict[st
                 action = BattleAction(ActionKind.ITEM, item_id="small_healing_potion")
                 potions[actor.id - 1] += 1
             updated = combat.act(content, roster, state, action, seed)
+            # Отряд согласует последний удар: товарищ без действия ещё не
+            # заслужил личный зачёт. Защита даёт ему время, но сама наград не выдаёт.
+            if updated.verdict_for(actor.id) is Verdict.VICTORY and any(
+                one.alive and one.id != actor.id and one.actions == 0 for one in state.heroes()
+            ):
+                updated = combat.act(content, roster, state, BattleAction(ActionKind.DEFEND), seed)
             if (updated.round, updated.cursor) == (
                 state.round,
                 state.cursor,
@@ -150,6 +156,7 @@ def run(content: GameContent, trials: int = 16) -> dict[str, object]:
         "seed": SEED.decode(),
         "trials_per_composition": trials,
         "reading_is_an_estimate": True,
+        "policy": "class engine, up to three potions; delay final victory until living allies act",
         "runs": [
             probe(content, classes, trial) for classes in compositions for trial in range(trials)
         ],

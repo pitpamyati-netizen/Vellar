@@ -16,11 +16,13 @@
 from __future__ import annotations
 
 from mmorpg.domain.entities.character import Character
-from mmorpg.domain.entities.content import GameContent, Skill
+from mmorpg.domain.entities.content import GameContent, OwnerKind, Skill
+from mmorpg.domain.rules import class_tactics as tactic_rules
 from mmorpg.domain.rules import combo as combo_rules
 from mmorpg.domain.rules import passives as passive_rules
 from mmorpg.domain.rules import skill_mastery as mastery_rules
 from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules.skill_effects import spec_for
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
@@ -254,11 +256,19 @@ def skill_detail(content: GameContent, skill: Skill, character: Character | None
     """
     parts = [
         skill.text,
+        "Цель: выбранный союзник; без выбора — вы сами." if skill.target == "ally" else "",
         combo_rules.demand_line(skill),
         weapon_demand(content, skill),
         fork_note(content, skill),
     ]
     if character is not None:
+        parts.extend(
+            tactic_rules.description(one)
+            for one in content.character_class(character.class_id).tactics
+            if skill.is_active
+            and skill.owner_kind in {OwnerKind.CLASS, OwnerKind.SUBCLASS}
+            and one.category == spec_for(skill.effect).category.value
+        )
         parts.extend(
             [mastery_words(content, character, skill), mastery_call(content, character, skill)]
         )

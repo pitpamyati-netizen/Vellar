@@ -23,6 +23,7 @@ from mmorpg.domain.entities.content import (
     City,
     ClassAffix,
     ClassResource,
+    ClassTactic,
     Dungeon,
     Encounter,
     EnemyAffix,
@@ -73,6 +74,7 @@ from mmorpg.domain.entities.quest import ObjectiveKind, Quest
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.procgen import items as item_procgen
+from mmorpg.domain.rules import class_tactics as tactic_rules
 from mmorpg.domain.rules import passives as passive_rules
 from mmorpg.domain.rules import skill_mastery as mastery_rules
 from mmorpg.domain.rules import subclass_powers as way_rules
@@ -402,6 +404,12 @@ def _parse_skills(
         target = str(entry.get("target", "self"))
         if kind is SkillKind.ACTIVE and target not in targets:
             problems.append(f"skills.toml: {code} has unknown target {target!r}")
+        if target == "ally" and (
+            kind is not SkillKind.ACTIVE
+            or effect not in active_effects
+            or spec_for(effect).category.value not in {"heal", "barrier", "cleanse"}
+        ):
+            problems.append(f"skills.toml: {code} cannot aim a hostile effect at an ally")
 
         # Связка: состояние, на которое умение отвечает (``rules/combo``).
         # Названо оно должно быть тем же словом, каким состояние объявлено в
@@ -864,6 +872,7 @@ def _parse_classes(
                 armor_types=armor_types,
                 scaling=scaling,
                 milestones=milestones,
+                tactics=_parse_class_tactics(class_id, entry.get("tactic", ()), problems),
             )
         )
     return tuple(parsed)
@@ -874,6 +883,41 @@ def _parse_classes(
 #: - обещание, а не механика (``Claude.md``, правило 7). Список короткий нарочно -
 #: каждый выход стоит строки в правилах.
 SCALING_CHANNELS: frozenset[str] = frozenset({"blow", "health", "resource", "armor", "healing"})
+
+
+def _parse_class_tactics(
+    class_id: str, raw: Sequence[Mapping[str, Any]], problems: list[str]
+) -> tuple[ClassTactic, ...]:
+    parsed: list[ClassTactic] = []
+    for entry in raw:
+        try:
+            one = ClassTactic(
+                name=str(entry["name"]),
+                category=str(entry["category"]),
+                condition=str(entry["condition"]),
+                bonus=float(entry["bonus"]),
+                statuses=tuple(StatusKind(value) for value in entry.get("statuses", ())),
+                threshold=float(entry.get("threshold", 0)),
+            )
+            if not one.name or one.category not in tactic_rules.CATEGORIES:
+                raise ValueError("unknown tactic category or empty name")
+            if one.condition not in tactic_rules.CONDITIONS:
+                raise ValueError("unknown tactic condition")
+            if not 0 < one.bonus <= tactic_rules.MAX_BONUS:
+                raise ValueError("tactic bonus must be between 0 and 25 percent")
+            needs_status = one.condition.endswith("_status")
+            needs_health = one.condition.endswith("_health_below")
+            if needs_status != bool(one.statuses) or len(set(one.statuses)) != len(one.statuses):
+                raise ValueError("status condition needs distinct statuses")
+            if (needs_health and not 0 < one.threshold < 100) or (
+                not needs_health and one.threshold != 0
+            ):
+                raise ValueError("health condition needs a threshold between 0 and 100")
+        except (KeyError, TypeError, ValueError) as error:
+            problems.append(f"classes.toml: {class_id}: {error}")
+            continue
+        parsed.append(one)
+    return tuple(parsed)
 
 
 def _parse_scaling(

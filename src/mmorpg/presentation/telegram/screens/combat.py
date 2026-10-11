@@ -32,6 +32,7 @@ from mmorpg.domain.entities.combat import (
 from mmorpg.domain.entities.content import GameContent, Skill
 from mmorpg.domain.entities.location import EnemyRank, EnemyRole
 from mmorpg.domain.entities.statuses import StatusKind, status_name
+from mmorpg.domain.rules import class_tactics as tactic_rules
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules.combat import (
@@ -159,6 +160,10 @@ def target_label(one: Combatant) -> Label:
     return label(f"Цель {one.id}. {one.name}, здоровье {left}", "🎯")
 
 
+def ally_target_label(one: Combatant) -> Label:
+    return label(f"Помочь {one.id}. {one.name}")
+
+
 def skill_effect(
     content: GameContent, character: Character, viewer: Combatant, skill: Skill
 ) -> str:
@@ -189,6 +194,12 @@ def skill_effect(
         return _with_extras(line, spec)
 
     if spec.category is EffectCategory.HEAL:
+        if skill.target == "ally" and not spec.aoe:
+            timing = " каждый ход" if spec.dot_turns else ""
+            line = f"лечит {power:g} процентов максимального здоровья союзника{timing}"
+            if spec.cleanse_count:
+                line = f"{line}, снимает эффекты"
+            return line
         each = round(viewer.max_health * power / 100.0)
         line = f"лечит по {each} каждый ход" if spec.dot_turns else f"лечит {each}"
         if spec.aoe:
@@ -197,6 +208,8 @@ def skill_effect(
             line = f"{line}, снимает эффекты"
         return line
     if spec.category is EffectCategory.BARRIER:
+        if skill.target == "ally" and not spec.aoe:
+            return _with_extras(f"барьер {power:g} процентов максимального здоровья союзника", spec)
         return _with_extras(f"барьер {round(viewer.max_health * power / 100.0)}", spec)
     parts = (
         *_status_phrases(spec),
@@ -649,6 +662,9 @@ def battle_screen(
     lines.extend(_sides(content, state, viewer))
     lines.extend(phase_lines(state))
     lines.extend(turn_lines(state, viewer_id))
+    lines.extend(
+        tactic_rules.description(one) for one in content.character_class(character.class_id).tactics
+    )
     target = state.target_for(viewer_id)
     if target is not None:
         lines.append(f"Ваша цель: {target.id}. {target.name}.")
@@ -670,6 +686,19 @@ def battle_screen(
     if racial_skill(content, character) is not None:
         rows.append((racial_label(content, character, viewer),))
     foes = state.visible_foes_of(viewer_id)
+    support = any(
+        (one := slotted_skill(content, character, slot)) is not None and one.target == "ally"
+        for slot in range(content.rules.active_slots)
+    )
+    if support:
+        chosen = state.by_id(viewer.aid_focus or viewer.id)
+        if chosen is not None and chosen.alive and chosen.side == viewer.side:
+            lines.append(f"Помощь: {chosen.id}. {chosen.name}.")
+        else:
+            lines.append("Цель помощи выбыла. Выберите союзника заново командой /союзник N.")
+        lines.append("/союзник N выбирает цель без хода; /умение N M применяет умение N к бойцу M.")
+        if len(state.allies_of(viewer_id)) > 1:
+            rows.extend((ally_target_label(one),) for one in state.allies_of(viewer_id))
     if len(foes) > 1:
         # Выбор цели ходом не считается: он ничего не делает с боем, кроме того,
         # что игра начинает целиться туда, куда сказали. Ушедшего из виду в

@@ -144,6 +144,10 @@ def action_for(
     """Нажатую кнопку или набранную команду - в действие боя."""
     if match := re.fullmatch(r"/цель\s+(\d+)", text.strip().casefold()):
         return BattleAction(kind=ActionKind.FOCUS, target=int(match[1]))
+    if match := re.fullmatch(r"/союзник\s+(\d+)", text.strip().casefold()):
+        return BattleAction(kind=ActionKind.AID_FOCUS, target=int(match[1]))
+    if match := re.fullmatch(r"/умение\s+([1-6])\s+(\d+)", text.strip().casefold()):
+        return BattleAction(kind=ActionKind.SKILL, slot=int(match[1]) - 1, target=int(match[2]))
     screen = render(content, character, session, viewer_id)
     command = resolve(text, screen)
 
@@ -198,6 +202,9 @@ def _action_from_label(
         if argument.startswith(f"{slot + 1}."):
             return BattleAction(kind=ActionKind.SKILL, slot=slot)
     if viewer is not None:
+        for one in state.allies_of(viewer_id):
+            if screens.ally_target_label(one).matches(argument):
+                return BattleAction(kind=ActionKind.AID_FOCUS, target=one.id)
         for one in state.foes_of(viewer_id):
             if screens.target_label(one).matches(argument):
                 return BattleAction(kind=ActionKind.FOCUS, target=one.id)
