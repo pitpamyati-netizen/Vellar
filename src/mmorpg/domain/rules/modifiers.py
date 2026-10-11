@@ -22,6 +22,7 @@ from mmorpg.domain.rules import milestones as milestone_rules
 from mmorpg.domain.rules import repair
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules import subclass as subclass_rules
+from mmorpg.domain.rules import talents as talent_rules
 from mmorpg.domain.rules.curves import softened
 
 STAT_MODIFIER_PREFIX = "stat_"
@@ -251,6 +252,7 @@ def collect_modifiers(
         race_modifiers(content, character),
         house_modifiers(content, character),
         passive_modifiers(content, character),
+        talent_rules.modifiers(content, character),
         # Сломанное надетое не даёт ничего: ни прибавок, ни рода, ни цены за
         # чужой род - сточенная до конца вещь считается снятой, пока её не
         # починят (``domain/rules/repair.py``, ADR 0057).

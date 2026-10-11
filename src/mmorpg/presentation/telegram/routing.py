@@ -72,6 +72,9 @@ class Intent(StrEnum):
     RESET_FILTERS = "reset_filters"
     SELECT = "select"
     UNKNOWN = "unknown"
+    EQUIPMENT = "equipment"
+    TALENTS = "talents"
+    TALENT = "talent"
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +88,10 @@ class Command:
 # латинские написания принимаются, чтобы игрок с одной лишь латинской раскладкой не
 # оказался заперт.
 SIMPLE_COMMANDS: dict[str, Intent] = {
+    "/экипировка": Intent.EQUIPMENT,
+    "/equipment": Intent.EQUIPMENT,
+    "/таланты": Intent.TALENTS,
+    "/talents": Intent.TALENTS,
     "/обучение": Intent.TUTORIAL,
     "/tutorial": Intent.TUTORIAL,
     "/назад": Intent.BACK,
@@ -225,6 +232,10 @@ def parse_command(text: str) -> Command | None:
     lowered = stripped.casefold()
     if lowered in SIMPLE_COMMANDS:
         return Command(intent=SIMPLE_COMMANDS[lowered])
+    if lowered in {"/выбратьталант", "/applytalent"}:
+        return Command(intent=Intent.SELECT, argument="Принять талант")
+    if (match := re.fullmatch(r"/(?:талант|talent)\s+(\d+)", lowered)) is not None:
+        return Command(intent=Intent.TALENT, number=int(match.group(1)))
 
     if (match := _SKILL_COMMAND.match(stripped)) is not None:
         return Command(intent=Intent.SKILL, number=int(match.group(1)))

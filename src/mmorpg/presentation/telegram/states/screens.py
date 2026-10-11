@@ -53,6 +53,9 @@ class Play(StatesGroup):
     sell = State()
     list_filters = State()
     character = State()
+    equipment = State()
+    talents = State()
+    talent = State()
     stats = State()
     skills = State()
     skill_slots = State()
@@ -173,6 +176,9 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.SELL: Play.sell,
     ScreenId.LIST_FILTERS: Play.list_filters,
     ScreenId.CHARACTER: Play.character,
+    ScreenId.EQUIPMENT: Play.equipment,
+    ScreenId.TALENTS: Play.talents,
+    ScreenId.TALENT: Play.talent,
     ScreenId.STATS: Play.stats,
     ScreenId.SKILLS: Play.skills,
     ScreenId.SKILL_SLOTS: Play.skill_slots,
@@ -290,6 +296,9 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.SELL: ScreenId.SHOP,
     ScreenId.LIST_FILTERS: ScreenId.INVENTORY,
     ScreenId.CHARACTER: ScreenId.MAIN_MENU,
+    ScreenId.EQUIPMENT: ScreenId.CHARACTER,
+    ScreenId.TALENTS: ScreenId.CHARACTER,
+    ScreenId.TALENT: ScreenId.TALENTS,
     ScreenId.STATS: ScreenId.CHARACTER,
     ScreenId.SKILLS: ScreenId.MAIN_MENU,
     ScreenId.SKILL_SLOTS: ScreenId.SKILLS,

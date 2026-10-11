@@ -15,6 +15,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, OwnerKind, Skill
 from mmorpg.domain.rules import class_tactics as tactic_rules
@@ -22,9 +24,11 @@ from mmorpg.domain.rules import combo as combo_rules
 from mmorpg.domain.rules import passives as passive_rules
 from mmorpg.domain.rules import skill_mastery as mastery_rules
 from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules import talents as talent_rules
 from mmorpg.domain.rules.skill_effects import spec_for
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
+from mmorpg.presentation.telegram.screens import talents as talent_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import head
 from mmorpg.presentation.telegram.screens.paginated import (
@@ -135,15 +139,15 @@ def mastery_words(content: GameContent, character: Character, skill: Skill) -> s
     taken = skill_rules.taken_masteries(character, skill)
     if not taken:
         return ""
-    return "Выучка: " + "; ".join(f"{one.name} — {mastery_rules.words(one)}" for one in taken)
+    return "Грань: " + "; ".join(f"{one.name} — {mastery_rules.words(one)}" for one in taken)
 
 
 def mastery_call(content: GameContent, character: Character, skill: Skill) -> str:
-    """Зов выбрать выучку. Пусто - выбирать нечего или не пора."""
+    """Зов выбрать грань. Пусто - выбирать нечего или не пора."""
     tier = skill_rules.mastery_tier_due(content, character, skill)
     if tier is None:
         return ""
-    return "Пора выбрать выучку: нажмите умение."
+    return "Пора выбрать грань: нажмите умение."
 
 
 def skill_standing(content: GameContent, character: Character, skill: Skill) -> str:
@@ -161,7 +165,7 @@ def skill_standing(content: GameContent, character: Character, skill: Skill) -> 
         return f"не изучено, {points_word(skill_rules.cost_to_learn(content, character, skill))}"
     said = f"ранг {character.loadout.rank_of(skill.code)} из {content.rules.max_rank}"
     if skill_rules.mastery_tier_due(content, character, skill) is not None:
-        return f"{said}, ждёт выучки"
+        return f"{said}, ждёт грани"
     return said
 
 
@@ -180,13 +184,21 @@ def rank_offer(content: GameContent, character: Character, skill: Skill) -> str:
         # строку, а не силу.
         if not skill.is_active:
             return f"Одно очко даст {passive_power_words(content, skill, 1)}."
-        return ""
+        return "За одно очко: " + active_power_words(content, character, skill, 1) + "."
     rank = character.loadout.rank_of(skill.code)
     # Ранг, купленный и не потраченный на выбор, - это очко, лежащее без дела, и
     # зовёт потратить его ``mastery_call``: два зова подряд сказали бы одно и то же.
-    if skill_rules.mastery_tier_due(content, character, skill) is not None:
-        return ""
     said = []
+    if skill.is_active:
+        said.append(f"Сейчас, ранг {rank}: {active_power_words(content, character, skill, rank)}.")
+        if rank < rules.max_rank:
+            said.append(
+                f"Следующий ранг за одно очко: "
+                f"{active_power_words(content, character, skill, rank + 1)}."
+            )
+        else:
+            said.append("Высший ранг.")
+        return " ".join(said)
     if gained := rank_gain_words(rank, skill, content):
         said.append(f"Ранг {rank} даёт: {gained}.")
     if rank >= rules.max_rank:
@@ -195,12 +207,23 @@ def rank_offer(content: GameContent, character: Character, skill: Skill) -> str:
         cost = points_word(skill_rules.cost_to_learn(content, character, skill))
         # Пассивка объявляет, во что превратится её прибавка: очко, купившее «плюс
         # шесть» вместо «плюс пяти», обязано быть названо до нажатия, а не после.
-        if not skill.is_active:
-            grown = passive_power_words(content, skill, rank + 1)
-            said.append(f"Следующий за {cost} даст {grown}.")
-        else:
-            said.append(f"Следующий за {cost}.")
+        grown = passive_power_words(content, skill, rank + 1)
+        said.append(f"Следующий за {cost} даст {grown}.")
     return " ".join(said)
+
+
+def active_power_words(content: GameContent, character: Character, skill: Skill, rank: int) -> str:
+    from mmorpg.domain.rules.combat import hero_combatant, skill_cooldown, skill_price
+    from mmorpg.presentation.telegram.screens.combat import skill_effect
+
+    candidate = replace(character, loadout=character.loadout.with_rank(skill.code, rank))
+    actor = hero_combatant(content, candidate, combatant_id=character.id, side=0)
+    return (
+        f"{skill_effect(content, candidate, actor, skill)}; расход "
+        f"{skill_price(content, candidate, skill, actor)} "
+        f"из {actor.max_resource} запаса; откат "
+        f"{turns_word(skill_cooldown(content, candidate, skill, actor))}"
+    )
 
 
 def refusal(content: GameContent, character: Character, skill: Skill) -> str:
@@ -255,13 +278,18 @@ def skill_detail(content: GameContent, skill: Skill, character: Character | None
     собирается на глаз.
     """
     parts = [
-        skill.text,
+        f"Основа первого ранга: {skill.text}" if character is not None else skill.text,
         "Цель: выбранный союзник; без выбора — вы сами." if skill.target == "ally" else "",
         combo_rules.demand_line(skill),
         weapon_demand(content, skill),
         fork_note(content, skill),
     ]
     if character is not None:
+        if skill.is_active:
+            parts.extend(
+                talent_screens.words(content, one)
+                for one in talent_rules.matching(content, character, skill)
+            )
         parts.extend(
             tactic_rules.description(one)
             for one in content.character_class(character.class_id).tactics
@@ -392,16 +420,16 @@ def mastery_screen(
 ) -> Screen:
     """Чему умение научилось, взяв ранг (``rules/skill_mastery``).
 
-    Список короткий и без страниц: выучек, подходящих одному умению, всегда
+    Список короткий и без страниц: граней, подходящих одному умению, всегда
     несколько, а не десятки. Каждая названа тем, что она делает, - и делает
     ровно это.
     """
     choices = skill_rules.mastery_choices(content, character, skill)
     tier = skill_rules.mastery_tier_due(content, character, skill)
     lines = [
-        *head(f"Выучка: {skill.name}.", notice),
+        *head(f"Грань: {skill.name}.", notice),
         skill.text,
-        "Выбранное не меняют: вернуть выучку можно только вместе с умением, у наставника.",
+        "Выбранное не меняют: вернуть грань можно только вместе с умением, у наставника.",
     ]
     if tier is not None:
         lines.append(

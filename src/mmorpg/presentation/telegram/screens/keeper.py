@@ -1003,7 +1003,7 @@ def give_entries(content: GameContent) -> tuple[tuple[str, str], ...]:
         for archetype in content.gear_archetypes
     )
     written = tuple(
-        (f"item:{item.id}", f"{item.name} — {_KIND_WORD.get(item.kind, 'вещь')}")
+        (f"item:{item.id}", f"{item.choice_name} — {_KIND_WORD.get(item.kind, 'вещь')}")
         for item in written_items(content)
     )
     return (*gear, *written)
@@ -1076,7 +1076,7 @@ def give_gear_screen(
 def give_item_screen(item: Item, player: Character, notice: str = "") -> Screen:
     """Сколько написанной вещи выдать. Отрицательное число — убрать из сумки."""
     lines = (
-        notice or f"Выдать: {item.name}. Кому: {player.name}.",
+        notice or f"Выдать: {item.choice_name}. Кому: {player.name}.",
         "Наберите количество сообщением. Со знаком минус — убрать столько из сумки.",
     )
     return Screen(id=ScreenId.KEEPER_GIVE_ITEM, lines=lines)
@@ -1252,7 +1252,7 @@ def stat_from_button(pressed: str) -> str:
 
 
 def item_name(content: GameContent, item_id: str) -> str:
-    return content.item(item_id).name if content.has_item(item_id) else item_id
+    return content.item(item_id).choice_name if content.has_item(item_id) else item_id
 
 
 def _equipped(content: GameContent, player: Character) -> tuple[tuple[str, str, str], ...]:

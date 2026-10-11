@@ -258,11 +258,12 @@ class PlayState:
     skill_page: PageState = field(default_factory=PageState)
     mentor_page: PageState = field(default_factory=PageState)
     board_page: PageState = field(default_factory=PageState)
-    # Что игрок сейчас выбирает: слот, выучку, задание, подземелье.
+    # Что игрок сейчас выбирает: слот, грань, задание, подземелье.
     pick_slot: int = 0
-    #: Умение, которому игрок сейчас выбирает выучку (``rules/skill_mastery``).
-    #: Это выбор, а не переходное: с экрана выучки уходят и возвращаются.
+    #: Умение, которому игрок сейчас выбирает грань (``rules/skill_mastery``).
+    #: Это выбор, а не переходное: с экрана грани уходят и возвращаются.
     mastery_code: str = ""
+    talent_code: str = ""
     quest_id: str = ""
     craft_id: str = ""
     city_event_stage: int = -1
@@ -408,6 +409,7 @@ class PlayState:
                 "quest": self.quest_id,
                 "npc": self.npc_id,
                 "mastery": self.mastery_code,
+                "talent": self.talent_code,
                 "subclass": self.subclass_id,
                 "item": self.item_id,
                 "shop_price": self.shop_price,
@@ -545,6 +547,7 @@ class PlayState:
             quest_id=data.get("quest", ""),
             npc_id=data.get("npc", ""),
             mastery_code=str(data.get("mastery", "")),
+            talent_code=str(data.get("talent", "")),
             subclass_id=str(data.get("subclass", "")),
             item_id=data.get("item", ""),
             shop_price=data.get("shop_price"),
@@ -620,6 +623,7 @@ LIST_PAGE_FIELD: dict[ScreenId, str] = {
     # и ищут по нему, как по сумке.
     ScreenId.CRAFT: "list_page",
     ScreenId.SKILLS: "skill_page",
+    ScreenId.TALENTS: "list_page",
     ScreenId.MENTOR: "mentor_page",
     ScreenId.QUEST_BOARD: "board_page",
     ScreenId.WORLD: "world_page",

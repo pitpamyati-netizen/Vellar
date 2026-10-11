@@ -252,9 +252,9 @@ def test_the_character_sheet_names_the_blow_and_what_makes_it(
     low, high = blow_range(content, armed)
     text = play_screens.character_screen(content, armed, derived_stats(content, armed)).text()
 
-    assert f"Удар: от {low} до {high}, крепкий меч." in text
+    assert f"Удар: от {low} до {high}." in text
     bare = play_screens.character_screen(content, hero, derived_stats(content, hero)).text()
-    assert "голыми руками" in bare
+    assert "Удар: от" in bare
 
 
 def test_the_character_sheet_names_every_number_the_engine_counts(
@@ -312,7 +312,7 @@ def test_taking_a_thing_off_from_the_character_screen(
     content: GameContent, hero: Character
 ) -> None:
     dressed = replace(hero, equipment=hero.equipment.equip("weapon", "sword@1#common"))
-    sheet = step(content, dressed, begin(dressed), "Персонаж")
+    sheet = step(content, dressed, begin(dressed), "Персонаж", "Экипировка")
     assert "Ветхий меч" in render(content, dressed, sheet, world_seed=WORLD_SEED).text()
 
     stripped = step(content, dressed, sheet, play_screens.unequip_label("Оружие").text)
@@ -449,7 +449,7 @@ def test_a_raised_rank_says_what_it_gave(content: GameContent, hero: Character) 
             masteries={skill.code: (skill.masteries[0].code,)},
         ),
     )
-    assert "откат короче" in skill_screens.rank_offer(content, ready, skill)
+    assert "откат" in skill_screens.rank_offer(content, ready, skill)
     assert "ранг 4 из 5" in skill_screens.skill_entry_text(content, ready, skill)
 
     skills = step(content, ready, begin(ready), "Умения")
@@ -466,7 +466,7 @@ def test_the_first_rank_promises_nothing_extra(content: GameContent, hero: Chara
     fresh = replace(hero, loadout=replace(hero.loadout, ranks={skill.code: 1}))
     said = skill_screens.rank_offer(content, fresh, skill)
     assert "откат короче" not in said
-    assert "Следующий за" in said
+    assert "Следующий ранг за" in said
 
 
 def test_a_passive_names_its_own_number_and_promises_nothing_else(

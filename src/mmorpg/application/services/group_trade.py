@@ -718,7 +718,7 @@ class GroupTrade:
         # сумка переживает выпуски, а сохранённому состоянию не верят
         # (``Claude.md``, правило 8).
         catalogue = [
-            ItemOption(item_id=entry.item_id, name=self.content.item(entry.item_id).name)
+            ItemOption(item_id=entry.item_id, name=self.content.item(entry.item_id).choice_name)
             for entry in entries
             if self.content.has_item(entry.item_id)
         ]

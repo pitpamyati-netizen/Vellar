@@ -1202,7 +1202,7 @@ def _step_give_gear(
     tier = item_procgen.tier_at(content, _give_level(state, view))
     tier_level = tier.level if tier is not None else _give_level(state, view)
     item = item_procgen.build(content, archetype, tier_level, rarity)
-    return _granted(state, view.target, item.id, 1, item.name)
+    return _granted(state, view.target, item.id, 1, item.choice_name)
 
 
 def _step_give_item(state: PlayState, command: Command) -> PlayState:
@@ -1219,7 +1219,7 @@ def _typed_give_item(
     if value is None or value == 0:
         return state.with_notice("Нужно ненулевое целое число.")
     item = content.item(state.keeper_entity)
-    return _granted(state, view.target, item.id, value, item.name)
+    return _granted(state, view.target, item.id, value, item.choice_name)
 
 
 def _granted(

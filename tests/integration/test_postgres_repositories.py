@@ -25,6 +25,7 @@ from mmorpg.domain.entities.quest import QuestLog
 from mmorpg.domain.entities.stats import StatBlock
 from mmorpg.domain.entities.trade import Offer, OfferKind, Party, TradeStatus
 from mmorpg.domain.ports.repositories import AccessibilitySettings, PlayerFilter, User
+from mmorpg.domain.rules import talents
 from mmorpg.domain.rules.guild import Guild, GuildMember, GuildRank
 from mmorpg.domain.rules.party import Party as PlayerParty
 from mmorpg.infrastructure.persistence.postgres import (
@@ -120,6 +121,29 @@ def a_character(
         house_id="borderland",
         is_admin=True,
     )
+
+
+async def test_old_loadout_accepts_and_keeps_talents_without_losing_ranks(
+    pool, clean_user, content
+) -> None:
+    await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user))
+    characters = PostgresCharacterRepository(pool)
+    original = await characters.create(a_character(clean_user, level=150))
+    # Сохранение прошлой версии действительно не содержит нового поля.
+    await pool.execute("UPDATE characters SET loadout=loadout-'talents' WHERE id=$1", original.id)
+    old = await characters.get(original.id)
+    assert old.loadout.talents == ()
+    chosen = talents.choose(content, old, "warrior_1_1")
+    await characters.save(chosen)
+    restarted = await PostgresCharacterRepository(pool).get(old.id)
+    assert restarted.loadout.talents == ("warrior_1_1",)
+    assert restarted.loadout.ranks == old.loadout.ranks
+    assert restarted.gold == old.gold and restarted.equipment == old.equipment
+    changed = talents.choose(content, restarted, "warrior_1_2")
+    await characters.save(changed)
+    final = await characters.get(old.id)
+    assert final.loadout.talents == ("warrior_1_2",)
+    assert final.unspent_skill_points == old.unspent_skill_points
 
 
 # --- users -------------------------------------------------------------------

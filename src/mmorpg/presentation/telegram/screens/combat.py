@@ -35,6 +35,7 @@ from mmorpg.domain.entities.statuses import StatusKind, status_name
 from mmorpg.domain.rules import class_tactics as tactic_rules
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import skills as skill_rules
+from mmorpg.domain.rules import talents as talent_rules
 from mmorpg.domain.rules.combat import (
     BASIC_ATTACK_PERCENT,
     CASTER_SWEEP_SCALE,
@@ -44,13 +45,14 @@ from mmorpg.domain.rules.combat import (
     defend_armor,
     defend_dodge,
     role_of,
-    skill_cost,
+    skill_cooldown,
+    skill_price,
 )
 from mmorpg.domain.rules.skill_effects import (
     EffectCategory,
     EffectSpec,
+    Inflict,
     cleansed_count,
-    spec_for,
 )
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import BUTTON_LIMIT, Label, label, shortened
@@ -176,16 +178,30 @@ def skill_effect(
     rank = character.loadout.rank_of(skill.code)
     # Сроки называются те, что даст ранг: карточка обязана обещать ровно то, что
     # сделает движок (``skill_rules.at_rank``, ADR 0067).
-    spec = skill_rules.at_rank(spec_for(skill.effect), rank)
+    spec = skill_rules.effective_spec(content, character, skill)
     power = skill.power_at_rank(rank)
+    # Условные прибавки зависят от цели и называются отдельно в карточке.
+    bonus = min(
+        talent_rules.MAX_POWER_BONUS,
+        sum(
+            one.amount
+            for one in talent_rules.matching(content, character, skill)
+            if one.effect == "power" and one.condition == "always"
+        ),
+    )
+    talent_factor = 1.0 + bonus / 100.0
 
     if spec.category is EffectCategory.DAMAGE:
         low, high = blow_range(content, character, viewer.effects, skill.scaling)
         share = power / 100.0 * spec.damage_scale
         rank_scale = 1.0 + skill.rank_step * (rank - 1)
         extra = skill.dice
-        least = max(1, round(low * share + (extra.low * rank_scale if extra else 0)))
-        most = max(least, round(high * share + (extra.high * rank_scale if extra else 0)))
+        least = max(
+            1, round((low * share + (extra.low * rank_scale if extra else 0)) * talent_factor)
+        )
+        most = max(
+            least, round((high * share + (extra.high * rank_scale if extra else 0)) * talent_factor)
+        )
         line = f"урон от {least} до {most}"
         if spec.hits > 1:
             line = f"{line}, {spec.hits} раза"
@@ -194,6 +210,7 @@ def skill_effect(
         return _with_extras(line, spec)
 
     if spec.category is EffectCategory.HEAL:
+        power *= talent_factor
         if skill.target == "ally" and not spec.aoe:
             timing = " каждый ход" if spec.dot_turns else ""
             line = f"лечит {power:g} процентов максимального здоровья союзника{timing}"
@@ -208,23 +225,31 @@ def skill_effect(
             line = f"{line}, снимает эффекты"
         return line
     if spec.category is EffectCategory.BARRIER:
+        power *= talent_factor
         if skill.target == "ally" and not spec.aoe:
             return _with_extras(f"барьер {power:g} процентов максимального здоровья союзника", spec)
         return _with_extras(f"барьер {round(viewer.max_health * power / 100.0)}", spec)
     parts = (
-        *_status_phrases(spec),
+        *_status_phrases(spec, power),
         _modifier_phrase(spec, power),
         SPECIAL_NAMES.get(spec.special, ""),
     )
     return ", ".join(part for part in parts if part) or "особое действие"
 
 
-def _status_phrases(spec: EffectSpec) -> tuple[str, ...]:
+def _status_phrases(spec: EffectSpec, power: float) -> tuple[str, ...]:
     """Состояния, которые умение вешает: на цель и на себя, произносимой строкой.
 
     Провокацию называют тем, что она делает, - уводит удар, - а не именем
     состояния: «цель бьёт по вам» игрок понимает сразу, «провокация цели» - нет.
     """
+    from mmorpg.domain.entities.statuses import status_spec
+
+    def magnitude(one: Inflict) -> str:
+        return (
+            f", сила {one.magnitude(power):g} процентов" if status_spec(one.kind).modifiers else ""
+        )
+
     out: list[str] = []
     for one in spec.inflicts:
         if one.kind is StatusKind.TAUNT:
@@ -233,8 +258,13 @@ def _status_phrases(spec: EffectSpec) -> tuple[str, ...]:
             out.append(f"{who} {verb} по вам на {turns(spec.duration or one.turns)}")
         else:
             reach = "по всем" if spec.aoe else "цели"
-            out.append(f"{status_name(one.kind).lower()} {reach} на {turns(one.turns)}")
-    out.extend(f"вам {status_name(one.kind).lower()} на {turns(one.turns)}" for one in spec.holds)
+            out.append(
+                f"{status_name(one.kind).lower()} {reach} на {turns(one.turns)}{magnitude(one)}"
+            )
+    out.extend(
+        f"вам {status_name(one.kind).lower()} на {turns(one.turns)}{magnitude(one)}"
+        for one in spec.holds
+    )
     return tuple(out)
 
 
@@ -270,14 +300,22 @@ def _modifier_phrase(spec: EffectSpec, power: float) -> str:
     if not bundle:
         return ""
 
-    if len(bundle) == 1:
-        item = bundle[0]
-        name = MODIFIER_NAMES.get(item.key, item.key)
+    parts = []
+    for item in bundle:
+        name = MODIFIER_NAMES.get(
+            item.key,
+            {
+                "_counter_percent": "ответный удар",
+                "_undying": "не пасть",
+                "_unstunnable": "ход нельзя отнять",
+            }.get(item.key, "особая защита"),
+        )
         value = item.amount(power)
-        phrase = f"{whose} {name} {'плюс' if value >= 0 else 'минус'} {percent(abs(value))}"
-    else:
-        many = "несколько усилений" if spec.self_modifiers else "несколько помех"
-        phrase = f"{whose} {many}"
+        if item.key in {"_undying", "_unstunnable"}:
+            parts.append(name)
+        else:
+            parts.append(f"{name} {'плюс' if value >= 0 else 'минус'} {percent(abs(value))}")
+    phrase = f"{whose} " + ", ".join(parts)
     return f"{phrase} на {turns(spec.duration)}" if spec.duration else phrase
 
 
@@ -303,20 +341,21 @@ def _stealth_status(skill: Skill, viewer: Combatant) -> str:
     return NEEDS_STEALTH
 
 
-def _slot_status(skill: Skill, character: Character, viewer: Combatant) -> str:
+def _slot_status(
+    content: GameContent, skill: Skill, character: Character, viewer: Combatant
+) -> str:
     """Готовность, цена и цена применения - всегда словами."""
     cooldown = viewer.cooldown_of(skill.code)
     if cooldown > 0:
         return f"ещё {turns(cooldown)}"
 
-    rank = character.loadout.rank_of(skill.code)
     # Откат и цена считаются по рангу: ранг укорачивает первое и удешевляет
     # второе (``skill_rules.rank_gain``, ADR 0067).
-    ready_in = skill_rules.cooldown_at_rank(skill, rank)
+    ready_in = skill_cooldown(content, character, skill, viewer)
     parts = []
     # Цена объявлена долей запаса (ADR 0058), а игроку называется числом: доля -
     # это правило, а на экране стоит то, что сейчас спишут.
-    price = round(skill_cost(skill, viewer.max_resource) * skill_rules.cost_factor(rank))
+    price = skill_price(content, character, skill, viewer)
     if price:
         parts.append(f"стоит {price}")
     if ready_in:
@@ -345,7 +384,7 @@ def skill_label(content: GameContent, character: Character, viewer: Combatant, s
     status = (
         _weapon_status(content, character, skill)
         or _stealth_status(skill, viewer)
-        or _slot_status(skill, character, viewer)
+        or _slot_status(content, skill, character, viewer)
     )
     return _panel_label(
         head=f"{slot + 1}. {skill.name} — ",
@@ -379,7 +418,7 @@ def racial_label(content: GameContent, character: Character, viewer: Combatant) 
     return _panel_label(
         head=f"{skill.name} — расовое, ",
         effect=skill_effect(content, character, viewer, skill),
-        status=_slot_status(skill, character, viewer),
+        status=_slot_status(content, skill, character, viewer),
     )
 
 

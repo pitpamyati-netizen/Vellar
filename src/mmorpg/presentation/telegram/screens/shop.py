@@ -74,7 +74,7 @@ def matches_filters(item: Item, state: PageState, content: GameContent) -> bool:
         return False
     if filters.query:
         needle = filters.query.casefold().strip()
-        if needle not in item.name.casefold() and needle not in _kind_words(content, item):
+        if needle not in item.choice_name.casefold() and needle not in _kind_words(content, item):
             return False
     if filters.level_min and item.level < filters.level_min:
         return False
@@ -118,7 +118,7 @@ def inventory_text(item: Item, quantity: int) -> str:
     """Текст кнопки одной строки сумки: вещь, сколько её и что с ней можно сделать."""
     verb = ITEM_VERBS.get(item.kind.value, "")
     tail = f" — {verb}" if verb else ""
-    return f"{item.name}, штук {quantity}{tail}"
+    return f"{item.choice_name}, штук {quantity}{tail}"
 
 
 def sell_screen(
@@ -160,7 +160,7 @@ def sell_screen(
 
 
 def sell_text(item: Item, price: int) -> str:
-    return f"{item.name} — {price} золота, {SELL_SUFFIX}"
+    return f"{item.choice_name} — {price} золота, {SELL_SUFFIX}"
 
 
 def shop_screen(
@@ -182,7 +182,7 @@ def shop_screen(
         entries.append(
             ListEntry(
                 key=item.id,
-                text=f"{item.name} — {price} золота, {BUY_SUFFIX}",
+                text=f"{item.choice_name} — {price} золота, {BUY_SUFFIX}",
                 detail=f"уровень {item.level}, {content.rarity(item.rarity).name.lower()}, "
                 f"{affordable}",
             )
@@ -204,13 +204,13 @@ def shop_screen(
 
 
 def buy_label(item: Item, price: int) -> Label:
-    return label(f"{item.name} — {price} золота, {BUY_SUFFIX}")
+    return label(f"{item.choice_name} — {price} золота, {BUY_SUFFIX}")
 
 
 def item_from_button(content: GameContent, text: str, stock: Sequence[Item]) -> Item | None:
     """Свести нажатую кнопку лавки обратно к её вещи."""
     for item in stock:
-        if text.startswith(f"{item.name} — ") and text.endswith(BUY_SUFFIX):
+        if text.startswith(f"{item.choice_name} — ") and text.endswith(BUY_SUFFIX):
             return item
     return None
 
@@ -218,7 +218,7 @@ def item_from_button(content: GameContent, text: str, stock: Sequence[Item]) -> 
 def owned_from_button(content: GameContent, text: str, owned: Sequence[OwnedItem]) -> Item | None:
     for held in owned:
         item = content.item(held.item_id)
-        if text.startswith(f"{item.name}, штук "):
+        if text.startswith(f"{item.choice_name}, штук "):
             return item
     return None
 
@@ -227,6 +227,6 @@ def sold_from_button(content: GameContent, text: str, owned: Sequence[OwnedItem]
     """Свести нажатую кнопку скупки обратно к её вещи."""
     for held in owned:
         item = content.item(held.item_id)
-        if text.startswith(f"{item.name} — ") and text.endswith(SELL_SUFFIX):
+        if text.startswith(f"{item.choice_name} — ") and text.endswith(SELL_SUFFIX):
             return item
     return None

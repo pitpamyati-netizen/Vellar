@@ -32,7 +32,9 @@ def activity_line(activity: Activity, content: GameContent | None = None) -> str
         if value:
             parts.append(f"{name}: {'плюс' if value > 0 else 'минус'} {abs(value)}")
     for item_id, value in activity.items:
-        name = content.item(item_id).name if content and content.has_item(item_id) else "Вещь"
+        name = (
+            content.item(item_id).choice_name if content and content.has_item(item_id) else "Вещь"
+        )
         parts.append(f"{name}: {'получено' if value > 0 else 'отдано'} {abs(value)}")
     return "; ".join(parts) + "."
 

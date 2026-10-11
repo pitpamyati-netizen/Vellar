@@ -1,0 +1,1159 @@
+# Таланты: пять ступеней, по одному из трёх вариантов на ступень.
+# Выбор и бесплатная замена доступны вне боя; очки умений не тратятся.
+# Текст эффекта строится по этим же числам и условиям.
+
+[[talent]]
+code = "warrior_1_1"
+name = "Верный замах"
+class = "warrior"
+level = 10
+effect = "power"
+amount = 10
+category = "damage"
+
+[[talent]]
+code = "warrior_1_2"
+name = "Расчётливый боец"
+class = "warrior"
+level = 10
+effect = "cost"
+amount = 15
+category = "all"
+
+[[talent]]
+code = "warrior_1_3"
+name = "Крепкое сложение"
+class = "warrior"
+level = 10
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "health_percent"
+
+[[talent]]
+code = "warrior_2_1"
+name = "Удар из защиты"
+class = "warrior"
+level = 30
+effect = "power"
+amount = 20
+category = "damage"
+condition = "actor_status"
+statuses = ["guard"]
+
+[[talent]]
+code = "warrior_2_2"
+name = "Частый натиск"
+class = "warrior"
+level = 30
+effect = "cooldown"
+amount = 1
+category = "damage"
+
+[[talent]]
+code = "warrior_2_3"
+name = "Ровное дыхание воина"
+class = "warrior"
+level = 30
+effect = "modifier"
+amount = 20
+category = "all"
+modifier = "resource_regen_percent"
+
+[[talent]]
+code = "warrior_3_1"
+name = "Долгая стойка"
+class = "warrior"
+level = 60
+effect = "duration"
+amount = 1
+category = "buff"
+
+[[talent]]
+code = "warrior_3_2"
+name = "Надёжный щит"
+class = "warrior"
+level = 60
+effect = "power"
+amount = 15
+category = "barrier"
+
+[[talent]]
+code = "warrior_3_3"
+name = "Закалённый доспех"
+class = "warrior"
+level = 60
+effect = "modifier"
+amount = 8
+category = "all"
+modifier = "armor_percent"
+
+[[talent]]
+code = "warrior_4_1"
+name = "Бережный удар"
+class = "warrior"
+level = 100
+effect = "cost"
+amount = 20
+category = "damage"
+
+[[talent]]
+code = "warrior_4_2"
+name = "Быстрый щит"
+class = "warrior"
+level = 100
+effect = "cooldown"
+amount = 1
+category = "barrier"
+
+[[talent]]
+code = "warrior_4_3"
+name = "Точный клинок"
+class = "warrior"
+level = 100
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "accuracy_percent"
+
+[[talent]]
+code = "warrior_5_1"
+name = "Мастер клинка"
+class = "warrior"
+level = 150
+effect = "power"
+amount = 15
+category = "damage"
+
+[[talent]]
+code = "warrior_5_2"
+name = "Добивание противника"
+class = "warrior"
+level = 150
+effect = "power"
+amount = 25
+category = "damage"
+condition = "target_health_below"
+threshold = 35
+
+[[talent]]
+code = "warrior_5_3"
+name = "Возврат крови"
+class = "warrior"
+level = 150
+effect = "modifier"
+amount = 6
+category = "all"
+modifier = "lifesteal_percent"
+
+[[talent]]
+code = "barbarian_1_1"
+name = "Тяжёлая рука"
+class = "barbarian"
+level = 10
+effect = "power"
+amount = 10
+category = "damage"
+
+[[talent]]
+code = "barbarian_1_2"
+name = "Мера ярости"
+class = "barbarian"
+level = 10
+effect = "cost"
+amount = 15
+category = "all"
+
+[[talent]]
+code = "barbarian_1_3"
+name = "Жилистый боец"
+class = "barbarian"
+level = 10
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "health_percent"
+
+[[talent]]
+code = "barbarian_2_1"
+name = "Ярость раненого"
+class = "barbarian"
+level = 30
+effect = "power"
+amount = 20
+category = "damage"
+condition = "actor_health_below"
+threshold = 50
+
+[[talent]]
+code = "barbarian_2_2"
+name = "Непрерывный натиск"
+class = "barbarian"
+level = 30
+effect = "cooldown"
+amount = 1
+category = "damage"
+
+[[talent]]
+code = "barbarian_2_3"
+name = "Второе дыхание варвара"
+class = "barbarian"
+level = 30
+effect = "modifier"
+amount = 20
+category = "all"
+modifier = "resource_regen_percent"
+
+[[talent]]
+code = "barbarian_3_1"
+name = "Долгое неистовство"
+class = "barbarian"
+level = 60
+effect = "duration"
+amount = 1
+category = "buff"
+
+[[talent]]
+code = "barbarian_3_2"
+name = "Запас бешенства"
+class = "barbarian"
+level = 60
+effect = "modifier"
+amount = 15
+category = "all"
+modifier = "resource_percent"
+
+[[talent]]
+code = "barbarian_3_3"
+name = "Костяная крепь"
+class = "barbarian"
+level = 60
+effect = "modifier"
+amount = 8
+category = "all"
+modifier = "armor_percent"
+
+[[talent]]
+code = "barbarian_4_1"
+name = "Бережная ярость"
+class = "barbarian"
+level = 100
+effect = "cost"
+amount = 20
+category = "damage"
+
+[[talent]]
+code = "barbarian_4_2"
+name = "Быстрый заслон"
+class = "barbarian"
+level = 100
+effect = "cooldown"
+amount = 1
+category = "barrier"
+
+[[talent]]
+code = "barbarian_4_3"
+name = "Крепкий хват"
+class = "barbarian"
+level = 100
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "accuracy_percent"
+
+[[talent]]
+code = "barbarian_5_1"
+name = "Сокрушитель"
+class = "barbarian"
+level = 150
+effect = "power"
+amount = 15
+category = "damage"
+
+[[talent]]
+code = "barbarian_5_2"
+name = "Почуять слабину"
+class = "barbarian"
+level = 150
+effect = "power"
+amount = 25
+category = "damage"
+condition = "target_health_below"
+threshold = 35
+
+[[talent]]
+code = "barbarian_5_3"
+name = "Кровавый возврат"
+class = "barbarian"
+level = 150
+effect = "modifier"
+amount = 6
+category = "all"
+modifier = "lifesteal_percent"
+
+[[talent]]
+code = "paladin_1_1"
+name = "Твёрдая рука"
+class = "paladin"
+level = 10
+effect = "power"
+amount = 10
+category = "barrier"
+
+[[talent]]
+code = "paladin_1_2"
+name = "Мера обета"
+class = "paladin"
+level = 10
+effect = "cost"
+amount = 15
+category = "all"
+
+[[talent]]
+code = "paladin_1_3"
+name = "Крепость стража"
+class = "paladin"
+level = 10
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "health_percent"
+
+[[talent]]
+code = "paladin_2_1"
+name = "Удар под барьером"
+class = "paladin"
+level = 30
+effect = "power"
+amount = 20
+category = "barrier"
+condition = "actor_barrier"
+
+[[talent]]
+code = "paladin_2_2"
+name = "Частый заслон"
+class = "paladin"
+level = 30
+effect = "cooldown"
+amount = 1
+category = "barrier"
+
+[[talent]]
+code = "paladin_2_3"
+name = "Дыхание стража"
+class = "paladin"
+level = 30
+effect = "modifier"
+amount = 20
+category = "all"
+modifier = "resource_regen_percent"
+
+[[talent]]
+code = "paladin_3_1"
+name = "Долгий барьер"
+class = "paladin"
+level = 60
+effect = "duration"
+amount = 1
+category = "barrier"
+
+[[talent]]
+code = "paladin_3_2"
+name = "Забота о раненых"
+class = "paladin"
+level = 60
+effect = "power"
+amount = 15
+category = "heal"
+
+[[talent]]
+code = "paladin_3_3"
+name = "Кованая броня"
+class = "paladin"
+level = 60
+effect = "modifier"
+amount = 8
+category = "all"
+modifier = "armor_percent"
+
+[[talent]]
+code = "paladin_4_1"
+name = "Бережная защита"
+class = "paladin"
+level = 100
+effect = "cost"
+amount = 20
+category = "barrier"
+
+[[talent]]
+code = "paladin_4_2"
+name = "Скорое исцеление"
+class = "paladin"
+level = 100
+effect = "cooldown"
+amount = 1
+category = "heal"
+
+[[talent]]
+code = "paladin_4_3"
+name = "Точность стража"
+class = "paladin"
+level = 100
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "accuracy_percent"
+
+[[talent]]
+code = "paladin_5_1"
+name = "Мастер барьера"
+class = "paladin"
+level = 150
+effect = "power"
+amount = 15
+category = "barrier"
+
+[[talent]]
+code = "paladin_5_2"
+name = "Щит для раненого"
+class = "paladin"
+level = 150
+effect = "power"
+amount = 25
+category = "barrier"
+condition = "target_health_below"
+threshold = 35
+
+[[talent]]
+code = "paladin_5_3"
+name = "Отражение стража"
+class = "paladin"
+level = 150
+effect = "modifier"
+amount = 6
+category = "all"
+modifier = "reflect_percent"
+
+[[talent]]
+code = "ranger_1_1"
+name = "Верный выстрел"
+class = "ranger"
+level = 10
+effect = "power"
+amount = 10
+category = "damage"
+
+[[talent]]
+code = "ranger_1_2"
+name = "Мера прыти"
+class = "ranger"
+level = 10
+effect = "cost"
+amount = 15
+category = "all"
+
+[[talent]]
+code = "ranger_1_3"
+name = "Выносливый охотник"
+class = "ranger"
+level = 10
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "health_percent"
+
+[[talent]]
+code = "ranger_2_1"
+name = "Выстрел по замедленному"
+class = "ranger"
+level = 30
+effect = "power"
+amount = 20
+category = "damage"
+condition = "target_status"
+statuses = ["slow"]
+
+[[talent]]
+code = "ranger_2_2"
+name = "Частые выстрелы"
+class = "ranger"
+level = 30
+effect = "cooldown"
+amount = 1
+category = "damage"
+
+[[talent]]
+code = "ranger_2_3"
+name = "Дыхание следопыта"
+class = "ranger"
+level = 30
+effect = "modifier"
+amount = 20
+category = "all"
+modifier = "resource_regen_percent"
+
+[[talent]]
+code = "ranger_3_1"
+name = "Цепкий след"
+class = "ranger"
+level = 60
+effect = "duration"
+amount = 1
+category = "debuff"
+
+[[talent]]
+code = "ranger_3_2"
+name = "Меткий охотник"
+class = "ranger"
+level = 60
+effect = "modifier"
+amount = 8
+category = "all"
+modifier = "crit_chance_percent"
+
+[[talent]]
+code = "ranger_3_3"
+name = "Лёгкая поступь"
+class = "ranger"
+level = 60
+effect = "modifier"
+amount = 8
+category = "all"
+modifier = "dodge_percent"
+
+[[talent]]
+code = "ranger_4_1"
+name = "Бережный выстрел"
+class = "ranger"
+level = 100
+effect = "cost"
+amount = 20
+category = "damage"
+
+[[talent]]
+code = "ranger_4_2"
+name = "Скорые путы"
+class = "ranger"
+level = 100
+effect = "cooldown"
+amount = 1
+category = "debuff"
+
+[[talent]]
+code = "ranger_4_3"
+name = "Острый глаз"
+class = "ranger"
+level = 100
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "accuracy_percent"
+
+[[talent]]
+code = "ranger_5_1"
+name = "Мастер выстрела"
+class = "ranger"
+level = 150
+effect = "power"
+amount = 15
+category = "damage"
+
+[[talent]]
+code = "ranger_5_2"
+name = "Завершить охоту"
+class = "ranger"
+level = 150
+effect = "power"
+amount = 25
+category = "damage"
+condition = "target_health_below"
+threshold = 35
+
+[[talent]]
+code = "ranger_5_3"
+name = "Стойкость к чарам"
+class = "ranger"
+level = 150
+effect = "modifier"
+amount = 15
+category = "all"
+modifier = "resist_magic_percent"
+
+[[talent]]
+code = "rogue_1_1"
+name = "Ловкая рука"
+class = "rogue"
+level = 10
+effect = "power"
+amount = 10
+category = "damage"
+
+[[talent]]
+code = "rogue_1_2"
+name = "Мера хитрости"
+class = "rogue"
+level = 10
+effect = "cost"
+amount = 15
+category = "all"
+
+[[talent]]
+code = "rogue_1_3"
+name = "Выносливый лазутчик"
+class = "rogue"
+level = 10
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "health_percent"
+
+[[talent]]
+code = "rogue_2_1"
+name = "Удар из тени"
+class = "rogue"
+level = 30
+effect = "power"
+amount = 20
+category = "damage"
+condition = "actor_status"
+statuses = ["unseen"]
+
+[[talent]]
+code = "rogue_2_2"
+name = "Частые выпады"
+class = "rogue"
+level = 30
+effect = "cooldown"
+amount = 1
+category = "damage"
+
+[[talent]]
+code = "rogue_2_3"
+name = "Дыхание лазутчика"
+class = "rogue"
+level = 30
+effect = "modifier"
+amount = 20
+category = "all"
+modifier = "resource_regen_percent"
+
+[[talent]]
+code = "rogue_3_1"
+name = "Долгая помеха"
+class = "rogue"
+level = 60
+effect = "duration"
+amount = 1
+category = "debuff"
+
+[[talent]]
+code = "rogue_3_2"
+name = "Жгучие яды"
+class = "rogue"
+level = 60
+effect = "modifier"
+amount = 20
+category = "all"
+modifier = "dot_damage_percent"
+
+[[talent]]
+code = "rogue_3_3"
+name = "Ускользающий шаг"
+class = "rogue"
+level = 60
+effect = "modifier"
+amount = 8
+category = "all"
+modifier = "dodge_percent"
+
+[[talent]]
+code = "rogue_4_1"
+name = "Бережный выпад"
+class = "rogue"
+level = 100
+effect = "cost"
+amount = 20
+category = "damage"
+
+[[talent]]
+code = "rogue_4_2"
+name = "Скорые помехи"
+class = "rogue"
+level = 100
+effect = "cooldown"
+amount = 1
+category = "debuff"
+
+[[talent]]
+code = "rogue_4_3"
+name = "Точность лазутчика"
+class = "rogue"
+level = 100
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "accuracy_percent"
+
+[[talent]]
+code = "rogue_5_1"
+name = "Мастер кинжала"
+class = "rogue"
+level = 150
+effect = "power"
+amount = 15
+category = "damage"
+
+[[talent]]
+code = "rogue_5_2"
+name = "Ядовитая расплата"
+class = "rogue"
+level = 150
+effect = "power"
+amount = 25
+category = "damage"
+condition = "target_status"
+statuses = ["poison"]
+
+[[talent]]
+code = "rogue_5_3"
+name = "Отнять кровь"
+class = "rogue"
+level = 150
+effect = "modifier"
+amount = 6
+category = "all"
+modifier = "lifesteal_percent"
+
+[[talent]]
+code = "mage_1_1"
+name = "Вес заклинания"
+class = "mage"
+level = 10
+effect = "power"
+amount = 10
+category = "damage"
+
+[[talent]]
+code = "mage_1_2"
+name = "Мера чар"
+class = "mage"
+level = 10
+effect = "cost"
+amount = 15
+category = "all"
+
+[[talent]]
+code = "mage_1_3"
+name = "Крепость чародея"
+class = "mage"
+level = 10
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "health_percent"
+
+[[talent]]
+code = "mage_2_1"
+name = "Стихийный отклик"
+class = "mage"
+level = 30
+effect = "power"
+amount = 20
+category = "damage"
+condition = "target_status"
+statuses = ["burning", "freeze"]
+
+[[talent]]
+code = "mage_2_2"
+name = "Частые заклинания"
+class = "mage"
+level = 30
+effect = "cooldown"
+amount = 1
+category = "damage"
+
+[[talent]]
+code = "mage_2_3"
+name = "Дыхание мага"
+class = "mage"
+level = 30
+effect = "modifier"
+amount = 20
+category = "all"
+modifier = "resource_regen_percent"
+
+[[talent]]
+code = "mage_3_1"
+name = "Долгий ожог"
+class = "mage"
+level = 60
+effect = "duration"
+amount = 1
+category = "damage"
+
+[[talent]]
+code = "mage_3_2"
+name = "Плотный барьер"
+class = "mage"
+level = 60
+effect = "power"
+amount = 15
+category = "barrier"
+
+[[talent]]
+code = "mage_3_3"
+name = "Оберег от чар"
+class = "mage"
+level = 60
+effect = "modifier"
+amount = 8
+category = "all"
+modifier = "resist_magic_percent"
+
+[[talent]]
+code = "mage_4_1"
+name = "Бережное заклинание"
+class = "mage"
+level = 100
+effect = "cost"
+amount = 20
+category = "damage"
+
+[[talent]]
+code = "mage_4_2"
+name = "Скорый барьер"
+class = "mage"
+level = 100
+effect = "cooldown"
+amount = 1
+category = "barrier"
+
+[[talent]]
+code = "mage_4_3"
+name = "Верное наведение"
+class = "mage"
+level = 100
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "accuracy_percent"
+
+[[talent]]
+code = "mage_5_1"
+name = "Мастер заклинаний"
+class = "mage"
+level = 150
+effect = "power"
+amount = 15
+category = "damage"
+
+[[talent]]
+code = "mage_5_2"
+name = "Сломить раненого"
+class = "mage"
+level = 150
+effect = "power"
+amount = 25
+category = "damage"
+condition = "target_health_below"
+threshold = 35
+
+[[talent]]
+code = "mage_5_3"
+name = "Глубокий запас чар"
+class = "mage"
+level = 150
+effect = "modifier"
+amount = 15
+category = "all"
+modifier = "resource_percent"
+
+[[talent]]
+code = "cleric_1_1"
+name = "Добрая рука"
+class = "cleric"
+level = 10
+effect = "power"
+amount = 10
+category = "heal"
+
+[[talent]]
+code = "cleric_1_2"
+name = "Мера сил"
+class = "cleric"
+level = 10
+effect = "cost"
+amount = 15
+category = "all"
+
+[[talent]]
+code = "cleric_1_3"
+name = "Стойкость знахаря"
+class = "cleric"
+level = 10
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "health_percent"
+
+[[talent]]
+code = "cleric_2_1"
+name = "Помощь тяжело раненому"
+class = "cleric"
+level = 30
+effect = "power"
+amount = 20
+category = "heal"
+condition = "target_health_below"
+threshold = 50
+
+[[talent]]
+code = "cleric_2_2"
+name = "Скорое врачевание"
+class = "cleric"
+level = 30
+effect = "cooldown"
+amount = 1
+category = "heal"
+
+[[talent]]
+code = "cleric_2_3"
+name = "Дыхание знахаря"
+class = "cleric"
+level = 30
+effect = "modifier"
+amount = 20
+category = "all"
+modifier = "resource_regen_percent"
+
+[[talent]]
+code = "cleric_3_1"
+name = "Долгое врачевание"
+class = "cleric"
+level = 60
+effect = "duration"
+amount = 1
+category = "heal"
+
+[[talent]]
+code = "cleric_3_2"
+name = "Оберегающая рука"
+class = "cleric"
+level = 60
+effect = "power"
+amount = 15
+category = "barrier"
+
+[[talent]]
+code = "cleric_3_3"
+name = "Плотный доспех знахаря"
+class = "cleric"
+level = 60
+effect = "modifier"
+amount = 8
+category = "all"
+modifier = "armor_percent"
+
+[[talent]]
+code = "cleric_4_1"
+name = "Бережное лечение"
+class = "cleric"
+level = 100
+effect = "cost"
+amount = 20
+category = "heal"
+
+[[talent]]
+code = "cleric_4_2"
+name = "Скорый оберег"
+class = "cleric"
+level = 100
+effect = "cooldown"
+amount = 1
+category = "barrier"
+
+[[talent]]
+code = "cleric_4_3"
+name = "Воздаяние немому"
+class = "cleric"
+level = 100
+effect = "power"
+amount = 20
+category = "damage"
+condition = "target_status"
+statuses = ["silence"]
+
+[[talent]]
+code = "cleric_5_1"
+name = "Мастер врачевания"
+class = "cleric"
+level = 150
+effect = "power"
+amount = 15
+category = "heal"
+
+[[talent]]
+code = "cleric_5_2"
+name = "Последняя помощь"
+class = "cleric"
+level = 150
+effect = "power"
+amount = 25
+category = "heal"
+condition = "target_health_below"
+threshold = 35
+
+[[talent]]
+code = "cleric_5_3"
+name = "Глубокий запас знахаря"
+class = "cleric"
+level = 150
+effect = "modifier"
+amount = 15
+category = "all"
+modifier = "resource_percent"
+
+[[talent]]
+code = "druid_1_1"
+name = "Живая рука"
+class = "druid"
+level = 10
+effect = "power"
+amount = 10
+category = "heal"
+
+[[talent]]
+code = "druid_1_2"
+name = "Мера живой силы"
+class = "druid"
+level = 10
+effect = "cost"
+amount = 15
+category = "all"
+
+[[talent]]
+code = "druid_1_3"
+name = "Стойкость друида"
+class = "druid"
+level = 10
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "health_percent"
+
+[[talent]]
+code = "druid_2_1"
+name = "Поддержать восстановление"
+class = "druid"
+level = 30
+effect = "power"
+amount = 20
+category = "heal"
+condition = "target_status"
+statuses = ["health_regen"]
+
+[[talent]]
+code = "druid_2_2"
+name = "Скорое восстановление"
+class = "druid"
+level = 30
+effect = "cooldown"
+amount = 1
+category = "heal"
+
+[[talent]]
+code = "druid_2_3"
+name = "Дыхание друида"
+class = "druid"
+level = 30
+effect = "modifier"
+amount = 20
+category = "all"
+modifier = "resource_regen_percent"
+
+[[talent]]
+code = "druid_3_1"
+name = "Долгий рост"
+class = "druid"
+level = 60
+effect = "duration"
+amount = 1
+category = "heal"
+
+[[talent]]
+code = "druid_3_2"
+name = "Крепкий покров"
+class = "druid"
+level = 60
+effect = "power"
+amount = 15
+category = "barrier"
+
+[[talent]]
+code = "druid_3_3"
+name = "Оберег друида"
+class = "druid"
+level = 60
+effect = "modifier"
+amount = 8
+category = "all"
+modifier = "resist_magic_percent"
+
+[[talent]]
+code = "druid_4_1"
+name = "Бережное восстановление"
+class = "druid"
+level = 100
+effect = "cost"
+amount = 20
+category = "heal"
+
+[[talent]]
+code = "druid_4_2"
+name = "Скорый покров"
+class = "druid"
+level = 100
+effect = "cooldown"
+amount = 1
+category = "barrier"
+
+[[talent]]
+code = "druid_4_3"
+name = "Удар по опутанному"
+class = "druid"
+level = 100
+effect = "power"
+amount = 20
+category = "damage"
+condition = "target_status"
+statuses = ["slow"]
+
+[[talent]]
+code = "druid_5_1"
+name = "Мастер живой силы"
+class = "druid"
+level = 150
+effect = "power"
+amount = 15
+category = "heal"
+
+[[talent]]
+code = "druid_5_2"
+name = "Помощь на краю"
+class = "druid"
+level = 150
+effect = "power"
+amount = 25
+category = "heal"
+condition = "target_health_below"
+threshold = 35
+
+[[talent]]
+code = "druid_5_3"
+name = "Глубокий запас друида"
+class = "druid"
+level = 150
+effect = "modifier"
+amount = 15
+category = "all"
+modifier = "resource_percent"

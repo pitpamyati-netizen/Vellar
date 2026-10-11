@@ -66,7 +66,7 @@ def test_the_choice_is_named_before_it_is_made(content: GameContent, hero: Chara
     ready = ranked(hero, 3)
     state = replace(begin(ready), screen=ScreenId.SKILL_MASTERY, mastery_code=STRIKE)
     text = render(content, ready, state, world_seed=WORLD_SEED, clock=CLOCK).text()
-    assert "Выучка" in text
+    assert "Грань" in text
     for one in skill_rules.mastery_choices(content, ready, content.skill(STRIKE)):
         assert one.name in text
         assert mastery_rules.words(one)[:20] in text
@@ -93,7 +93,7 @@ def test_a_waiting_skill_leads_to_the_choice_instead_of_a_rank(
     skill = content.skill(STRIKE)
     skills = step(content, ready, begin(ready), "Умения")
     said = skill_screens.skill_entry_text(content, ready, skill)
-    assert "ждёт выучки" in said
+    assert "ждёт грани" in said
 
     pressed = step(content, ready, skills, said)
     assert pressed.screen is ScreenId.SKILL_MASTERY

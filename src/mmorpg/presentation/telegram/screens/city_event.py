@@ -40,7 +40,7 @@ def overview(
                 f"Место помощи: {location.name}.",
                 "Ремесло: изготовить партию и передать все изделия городу. Материалы: "
                 + ", ".join(
-                    f"{content.item(one.item_id).name}, {one.count}" for one in recipe.inputs
+                    f"{content.item(one.item_id).choice_name}, {one.count}" for one in recipe.inputs
                 )
                 + ".",
                 "Ваш вклад: "
@@ -55,7 +55,7 @@ def overview(
         )
         rows.extend(((BATTLE, SCOUT), (CRAFT,)))
         lines.append(
-            f"Снабжение готовыми изделиями: {content.item(recipe.output_id).name}, "
+            f"Снабжение готовыми изделиями: {content.item(recipe.output_id).choice_name}, "
             f"{recipe.output_count}. Их можно заказать мастеру на рынке: /рынок."
         )
         rows.append((SUPPLY,))

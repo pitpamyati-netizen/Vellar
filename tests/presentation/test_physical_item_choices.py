@@ -7,7 +7,7 @@ from mmorpg.presentation.telegram.screens.shop import OwnedItem, inventory_scree
 def test_two_identical_items_have_distinct_readable_buttons(content):
     owned = (OwnedItem("sword@1#common!1", 1), OwnedItem("sword@1#common!2", 1))
     screen = inventory_screen(content, owned, PageState(), gold=10)
-    buttons = [button for row in screen.rows for button in row if "Экземпляр" in button.text]
+    buttons = [button for row in screen.rows for button in row if "метка" in button.text]
     assert len(buttons) == 2 and buttons[0].text != buttons[1].text
     for button, entry in zip(buttons, owned, strict=True):
         assert owned_from_button(content, button.text, owned).id == entry.item_id

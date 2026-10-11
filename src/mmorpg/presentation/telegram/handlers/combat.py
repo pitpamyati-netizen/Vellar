@@ -1555,7 +1555,9 @@ async def _settle_world(
             payout.experience = won.experience
             payout.gold = won.gold
             payout.loot = tuple(
-                content.item(item_id).name for item_id in share_loot if content.has_item(item_id)
+                content.item(item_id).choice_name
+                for item_id in share_loot
+                if content.has_item(item_id)
             )
             payout.extra.extend(
                 f"Задание «{step.quest.name}»: {step.progress} из {step.quest.target_count}."
@@ -1572,7 +1574,7 @@ async def _settle_world(
             if won.skinned_id and content.has_item(won.skinned_id):
                 await inventory.add(character.id, won.skinned_id, won.skinned_count)
                 payout.extra.append(
-                    f"Снято шкур: {content.item(won.skinned_id).name}, "
+                    f"Снято шкур: {content.item(won.skinned_id).choice_name}, "
                     f"{won.skinned_count} штук. Работы записано: {won.skinned_work}."
                 )
             if won.knife_broken:
@@ -1968,7 +1970,7 @@ async def _pay_the_bottom(
     economy_log.record(economy_log.DESCENT, prize.gold, character_id=prize.character.id)
     if prize.item_id and content.has_item(prize.item_id):
         await inventory.add(prize.character.id, prize.item_id, 1)
-        found = f" Со дна поднято: {content.item(prize.item_id).name}."
+        found = f" Со дна поднято: {content.item(prize.item_id).choice_name}."
     else:  # pragma: no cover - содержимое всегда что-то держит на этом уровне
         found = ""
     payout.extra.append(f"Дно спуска: {prize.gold} золота и {prize.experience} опыта.{found}")
@@ -2245,7 +2247,7 @@ async def _consumables(
 ) -> tuple[tuple[str, str, int], ...]:
     held = await inventory.list_items(character.id)
     return tuple(
-        (entry.item_id, content.item(entry.item_id).name, entry.quantity)
+        (entry.item_id, content.item(entry.item_id).choice_name, entry.quantity)
         for entry in held
         if content.has_item(entry.item_id)
         and content.item(entry.item_id).kind is ItemKind.CONSUMABLE

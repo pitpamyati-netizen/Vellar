@@ -86,6 +86,7 @@ from mmorpg.domain.rules.tools import TOOL_SLOT
 from mmorpg.infrastructure.content.city_events import parse_city_events
 from mmorpg.infrastructure.content.long_goals import parse_long_goals
 from mmorpg.infrastructure.content.market import parse_market
+from mmorpg.infrastructure.content.talents import parse_talents
 
 CONTENT_FILES = (
     "world.toml",
@@ -95,6 +96,7 @@ CONTENT_FILES = (
     "traits.toml",
     "skills.toml",
     "masteries.toml",
+    "talents.toml",
     "items.toml",
     "item_generator.toml",
     "enemies.toml",
@@ -189,6 +191,7 @@ def load_content(content_dir: Path) -> GameContent:
     written, rarities = gear.items, gear.rarities
     races = _parse_races(raw["races.toml"], skills_by_code, problems)
     classes = _parse_classes(raw["classes.toml"], gear, problems)
+    talents = parse_talents(raw["talents.toml"], classes, skills, problems)
     traits = _parse_traits(raw["traits.toml"], modifier_keys, set(categories), problems)
     _validate_skill_weapons(skills, classes, gear, problems)
     cities = _parse_world(raw["world.toml"], problems)
@@ -259,6 +262,7 @@ def load_content(content_dir: Path) -> GameContent:
         "city_events": city_events,
         "long_goals": long_goals,
         "market_rules": market_rules,
+        "talents": talents,
         "trait_categories": categories,
         "granted_trait_categories": granted_categories,
         "inverted_modifiers": inverted_modifiers,

@@ -1994,7 +1994,7 @@ async def _guild_view(
         stored = tuple(
             (
                 item_id,
-                content.item(item_id).name
+                content.item(item_id).choice_name
                 if content.has_item(item_id)
                 else "Вещь из прежней версии",
                 held,
@@ -2467,7 +2467,7 @@ async def _transfer_step(
     ):
         return f"С {to_name} у вас закрыты дела: передача не проходит."
 
-    name = content.item(item_id).name
+    name = content.item(item_id).choice_name
     held = await inventory.count(character.id, item_id)
     if held < amount:
         return f"{name}: у вас {held} из {amount}, столько не передать."
@@ -2508,7 +2508,7 @@ async def _guild_store_step(
     item_id, want = flow.vault_item, flow.vault_amount
     if not content.has_item(item_id) or want <= 0:
         return "Не понял, что положить или взять."
-    name = content.item(item_id).name
+    name = content.item(item_id).choice_name
     place = guild_rules.standing(content, guild)
     stock = dict(await guilds.stock(guild.id))
 

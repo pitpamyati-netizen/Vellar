@@ -94,6 +94,7 @@ SELECT id, 'sword@1#common', 3 FROM characters WHERE user_id = $account;
 "@
     & $psql (Test-Dsn $database) -v ON_ERROR_STOP=1 -c $seed | Out-Null
     Require-Success "seed control character"
+    Query-TestDatabase $database "UPDATE characters SET loadout = jsonb_build_object('actives', jsonb_build_array('warrior_rassechenie', null, null, null, null, null), 'ranks', jsonb_build_object('warrior_rassechenie', 3), 'masteries', jsonb_build_object(), 'talents', jsonb_build_array('warrior_1_1')) WHERE user_id=$account; SELECT 1" | Out-Null
 }
 
 function Assert-Character([string]$database, [string]$account) {
@@ -102,6 +103,8 @@ function Assert-Character([string]$database, [string]$account) {
     if ($saved -ne "12:731:219:345:8:sword@1#common") { throw "Control character changed during backup or migration" }
     $items = Query-TestDatabase $database "SELECT sum(quantity) FROM inventory JOIN characters ON characters.id = inventory.character_id WHERE user_id = $account AND split_part(item_id, '!', 1) = 'sword@1#common'"
     if ($items -ne "3") { throw "Control inventory changed during backup or migration" }
+    $progress = Query-TestDatabase $database "SELECT (loadout->'ranks'->>'warrior_rassechenie') || ':' || (loadout->'talents'->>0) FROM characters WHERE user_id=$account"
+    if ($progress -ne "3:warrior_1_1") { throw "Control ranks or talent changed during backup or migration" }
 }
 
 try {

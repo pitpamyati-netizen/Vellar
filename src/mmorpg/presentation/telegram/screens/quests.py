@@ -110,7 +110,7 @@ def objective_line(content: GameContent, quest: Quest) -> str:
         named = TARGET_KINDS.get(quest.target_kind, quest.target_kind)
         if quest.objective is ObjectiveKind.CRAFT:
             named = (
-                content.item(quest.target_kind).name
+                content.item(quest.target_kind).choice_name
                 if content.has_item(quest.target_kind)
                 else named
             )
@@ -142,7 +142,7 @@ def instructions(content: GameContent, quest: Quest) -> tuple[str, ...]:
 def reward_line(content: GameContent, quest: Quest) -> str:
     parts = [f"{quest.reward_gold} золота", f"{quest.reward_experience} опыта"]
     if quest.reward_item and content.has_item(quest.reward_item):
-        parts.append(content.item(quest.reward_item).name)
+        parts.append(content.item(quest.reward_item).choice_name)
     return f"Плата: {', '.join(parts)}."
 
 

@@ -75,6 +75,7 @@ from mmorpg.presentation.telegram.screens import quests as quest_screens
 from mmorpg.presentation.telegram.screens import settings as settings_screens
 from mmorpg.presentation.telegram.screens import skills as skill_screens
 from mmorpg.presentation.telegram.screens import subclass as subclass_screens
+from mmorpg.presentation.telegram.screens import talents as talent_screens
 from mmorpg.presentation.telegram.screens import transfer as transfer_screens
 from mmorpg.presentation.telegram.screens import tutorial as tutorial_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
@@ -981,6 +982,9 @@ def all_screens(
         ),
         play.character_screen(content, hero, derived_stats(content, hero)),
         play.character_screen(content, digger, derived_stats(content, digger)),
+        play.equipment_screen(content, fighter),
+        talent_screens.talents_screen(content, hero, PageState()),
+        talent_screens.talent_screen(content, hero, "warrior_1_1"),
         play.character_screen(content, fighter, derived_stats(content, fighter)),
         play.character_screen(
             content,

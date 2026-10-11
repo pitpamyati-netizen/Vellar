@@ -50,6 +50,7 @@ from mmorpg.domain.rules import salvage as salvage_rules
 from mmorpg.domain.rules import skill_mastery as mastery_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules import subclass as subclass_rules
+from mmorpg.domain.rules import talents as talent_rules
 from mmorpg.domain.rules import tools as tool_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
 from mmorpg.domain.rules.stats import derived_stats
@@ -86,6 +87,7 @@ from mmorpg.presentation.telegram.screens import settings as settings_screens
 from mmorpg.presentation.telegram.screens import shop as shop_screens
 from mmorpg.presentation.telegram.screens import skills as skill_screens
 from mmorpg.presentation.telegram.screens import subclass as subclass_screens
+from mmorpg.presentation.telegram.screens import talents as talent_screens
 from mmorpg.presentation.telegram.screens import transfer as transfer_screens
 from mmorpg.presentation.telegram.screens import tutorial as tutorial_screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
@@ -411,7 +413,7 @@ def _vein_line(
         here = craft_rules.best_per_source(
             content, craft_rules.yields_here(content, level=node.level, sources=sources)
         )
-    named = ", ".join(content.item(item_id).name for item_id in here[:VEIN_NAMES])
+    named = ", ".join(content.item(item_id).choice_name for item_id in here[:VEIN_NAMES])
     return f"{named} и другое" if len(here) > VEIN_NAMES else named
 
 
@@ -578,7 +580,7 @@ def _render(
         case ScreenId.GUILD_STORE_AMOUNT if content.has_item(state.vault_item):
             return guild_screens.store_amount_screen(
                 replace(guild or GuildView(), vault_action=state.vault_action),
-                content.item(state.vault_item).name,
+                content.item(state.vault_item).choice_name,
                 _stored_count(guild, state.vault_item)
                 if state.vault_action == "take"
                 else _owned_count(shelf, state.vault_item),
@@ -742,6 +744,12 @@ def _render(
             return screens.character_screen(
                 content, character, derived_stats(content, character), state.notice
             )
+        case ScreenId.EQUIPMENT:
+            return screens.equipment_screen(content, character, state.notice)
+        case ScreenId.TALENTS:
+            return talent_screens.talents_screen(content, character, state.list_page, state.notice)
+        case ScreenId.TALENT:
+            return talent_screens.talent_screen(content, character, state.talent_code, state.notice)
         case ScreenId.STATS:
             return screens.stats_screen(
                 content,
@@ -1074,6 +1082,25 @@ def advance(
         travel_discount=travel_discount,
     )
     command = resolve(text, screen)
+    if state.screen in {ScreenId.COMBAT, ScreenId.COMBAT_BAG} and (
+        command.intent in {Intent.TALENTS, Intent.TALENT, Intent.EQUIPMENT}
+        or command.argument == talent_screens.APPLY.text
+    ):
+        return state.with_notice("Развитие и экипировка доступны после боя.")
+    if command.intent is Intent.EQUIPMENT:
+        return replace(state, pending=PendingWrite()).at(ScreenId.EQUIPMENT)
+    if command.intent is Intent.TALENTS:
+        return replace(state, list_page=PageState(), pending=PendingWrite()).at(ScreenId.TALENTS)
+    if command.intent is Intent.TALENT:
+        pool = talent_rules.pool(content, character)
+        number = command.number or 0
+        if not 1 <= number <= len(pool):
+            return state.with_notice(
+                f"Номер таланта должен быть от 1 до {len(pool)}. Откройте /таланты."
+            )
+        return replace(state, talent_code=pool[number - 1].code, pending=PendingWrite()).at(
+            ScreenId.TALENT
+        )
     if command.intent is Intent.CITY:
         return replace(
             state, city_id=character.city_id, pending=PendingWrite(), fight="", searching=False
@@ -1201,6 +1228,37 @@ def advance(
             return _handle_city(content, character, state, command)
         case ScreenId.CHARACTER:
             return _handle_character(content, character, state, command)
+        case ScreenId.EQUIPMENT:
+            return _handle_equipment(content, character, state, command)
+        case ScreenId.TALENTS:
+            for index, one in enumerate(talent_rules.pool(content, character), 1):
+                if command.intent is Intent.SELECT and labels.label(
+                    talent_screens.entry(one, index, character)
+                ).matches(command.argument):
+                    return replace(state, talent_code=one.code).at(ScreenId.TALENT)
+            return state.with_notice("Нажмите талант из списка или наберите /талант N.")
+        case ScreenId.TALENT:
+            if command.intent is Intent.SELECT and talent_screens.APPLY.matches(command.argument):
+                changed = talent_rules.choose(content, character, state.talent_code)
+                if changed is None:
+                    return state.with_notice(
+                        "Этот талант уже выбран или пока недоступен. Вернитесь к списку."
+                    )
+                one = next(
+                    one
+                    for one in talent_rules.selected(content, changed)
+                    if one.code == state.talent_code
+                )
+                return (
+                    go_back(state)
+                    .storing(PendingWrite(character=changed))
+                    .with_notice(
+                        f"Выбран талант «{one.name}». {talent_screens.words(content, one)}"
+                    )
+                )
+            return state.with_notice(
+                "Для выбора нажмите «Принять талант» или наберите /выбратьталант."
+            )
         case ScreenId.STATS:
             return _handle_stats(content, character, state, command)
         case ScreenId.SKILLS:
@@ -1708,6 +1766,18 @@ def _handle_character(
         return replace(state, skill_page=PageState()).at(ScreenId.SKILLS)
     if labels.STATS.matches(command.argument):
         return mark_task(state.at(ScreenId.STATS), character, TutorialTask.STATS)
+    if labels.EQUIPMENT.matches(command.argument):
+        return state.at(ScreenId.EQUIPMENT)
+    if labels.TALENTS.matches(command.argument):
+        return replace(state, list_page=PageState()).at(ScreenId.TALENTS)
+    return state.with_notice("Нажмите кнопку из списка.")
+
+
+def _handle_equipment(
+    content: GameContent, character: Character, state: PlayState, command: Command
+) -> PlayState:
+    if command.intent is not Intent.SELECT:
+        return state.with_notice("Нажмите действие из списка.")
 
     for slot, slot_name in item_screens.SLOT_NAMES.items():
         if not screens.unequip_label(slot_name).matches(command.argument):
@@ -1724,7 +1794,7 @@ def _handle_character(
             )
         write = PendingWrite(character=stripped, items=((item_id, 1),))
         return state.storing(write).with_notice(
-            f"{content.item(item_id).name} снят и убран в сумку."
+            f"{content.item(item_id).choice_name} снят и убран в сумку."
         )
     return state.with_notice("Нажмите кнопку из списка.")
 
@@ -1819,7 +1889,7 @@ def _handle_shop_item(
         )
     if price > goods.gold:
         return state.with_notice(
-            f"{item.name} стоит {price} золота, у вас {goods.gold}. Не хватает."
+            f"{item.choice_name} стоит {price} золота, у вас {goods.gold}. Не хватает."
         )
     write = PendingWrite(character=character.with_gold(-price), items=((item.id, 1),)).because(
         economy_log.SHOP
@@ -1827,7 +1897,7 @@ def _handle_shop_item(
     bought = (
         go_back(replace(state, item_id=""))
         .storing(write)
-        .with_notice(f"{item.name} куплен за {price} золота.")
+        .with_notice(f"{item.choice_name} куплен за {price} золота.")
     )
     return mark_task(bought, character, TutorialTask.TRADE)
 
@@ -1853,7 +1923,7 @@ def _handle_sell(
     write = PendingWrite(character=character.with_gold(price), items=((item.id, -1),)).because(
         economy_log.SHOP
     )
-    sold = state.storing(write).with_notice(f"{item.name} продан за {price} золота.")
+    sold = state.storing(write).with_notice(f"{item.choice_name} продан за {price} золота.")
     return mark_task(sold, character, TutorialTask.TRADE)
 
 
@@ -1910,12 +1980,12 @@ def _handle_item(
     if item_screens.USE.matches(command.argument) and item.kind.value == "consumable":
         healed_character, healed = adventure.use_consumable(content, character, item.id)
         if healed <= 0:
-            return state.with_notice(f"{item.name} сейчас ничего не даст.")
+            return state.with_notice(f"{item.choice_name} сейчас ничего не даст.")
         write = PendingWrite(character=healed_character, items=((item.id, -1),))
         return (
             go_back(replace(state, item_id=""))
             .storing(write)
-            .with_notice(f"{item.name} выпито, восстановлено {healed} здоровья.")
+            .with_notice(f"{item.choice_name} выпито, восстановлено {healed} здоровья.")
         )
     return state.with_notice("Нажмите действие или «Назад».")
 
@@ -1932,9 +2002,9 @@ def _equip(content: GameContent, character: Character, state: PlayState, item: I
     write = PendingWrite(character=dressed, items=((item.id, -1),))
     if previous is not None and content.has_item(previous):
         write = write.with_items((previous, 1))
-        said = f"{item.name} надет, {content.item(previous).name} убран в сумку."
+        said = f"{item.choice_name} надет, {content.item(previous).choice_name} убран в сумку."
     else:
-        said = f"{item.name} надет."
+        said = f"{item.choice_name} надет."
     if warning := gear.equip_warning(content, character, item):
         said = f"{said} {warning}"
     return state.storing(write).with_notice(said)
@@ -1975,7 +2045,7 @@ def _handle_skills(
     for skill in pool:
         if not command.argument.startswith(f"{skill.name} —"):
             continue
-        # Ранг, уже купленный, но не потраченный на выучку, тратится первым:
+        # Ранг, уже купленный, но не потраченный на грань, тратится первым:
         # иначе игрок платил бы очко за то, чего ещё не выбрал (ADR 0079).
         if skill_rules.mastery_tier_due(content, character, skill) is not None:
             return replace(state, mastery_code=skill.code).at(ScreenId.SKILL_MASTERY)
@@ -1986,7 +2056,9 @@ def _handle_skills(
         said = f"{skill.name}: ранг {rank}. Осталось очков: {learned.unspent_skill_points}."
         # Что ранг дал, говорится сразу: очко, о котором молчат, потрачено
         # впустую (ADR 0067).
-        if gained := skill_screens.rank_gain_words(rank, skill, content):
+        if skill.is_active:
+            said += f" Теперь {skill_screens.active_power_words(content, learned, skill, rank)}."
+        elif gained := skill_screens.rank_gain_words(rank, skill, content):
             said = f"{said} Теперь {gained}."
         if skill.is_active and skill.code not in learned.loadout.equipped_actives():
             said += " Положите его в слот, иначе в бою его не будет."
@@ -2006,24 +2078,24 @@ def _handle_skills(
 def _handle_mastery(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    """Выбор выучки: чему умение научилось, взяв ранг (``rules/skill_mastery``)."""
+    """Выбор грани: чему умение научилось, взяв ранг (``rules/skill_mastery``)."""
     if not content.has_skill(state.mastery_code):
         return state.at(ScreenId.SKILLS).with_notice("Этого умения больше нет.")
     skill = content.skill(state.mastery_code)
     if command.intent is not Intent.SELECT:
-        return state.with_notice("Нажмите выучку из списка.")
+        return state.with_notice("Нажмите грань из списка.")
     for one in skill_rules.mastery_choices(content, character, skill):
         if not labels.label(one.name).matches(command.argument):
             continue
         taught = skill_rules.choose_mastery(content, character, skill, one.code)
         if taught is None:  # pragma: no cover - выбор берётся из того же списка
-            return state.with_notice("Эту выучку взять нельзя.")
+            return state.with_notice("Эту грань взять нельзя.")
         return (
             state.storing(PendingWrite(character=taught))
             .at(ScreenId.SKILLS)
             .with_notice(f"{skill.name}: {one.name}. {mastery_rules.words(one)}")
         )
-    return state.with_notice("Нажмите выучку из списка.")
+    return state.with_notice("Нажмите грань из списка.")
 
 
 def _handle_slots(
@@ -2174,8 +2246,8 @@ def _handle_salvage(
         content, item, modifiers=mods.collect_modifiers(content, character)
     )
     write = PendingWrite().with_items((item.id, -1), *made)
-    got = ", ".join(f"{content.item(item_id).name} {count}" for item_id, count in made)
-    return state.storing(write).with_notice(f"{item.name} разобран. Вышло: {got}.")
+    got = ", ".join(f"{content.item(item_id).choice_name} {count}" for item_id, count in made)
+    return state.storing(write).with_notice(f"{item.choice_name} разобран. Вышло: {got}.")
 
 
 def _handle_reforge(
@@ -2223,7 +2295,7 @@ def _handle_reforge(
     )
     made = content.item(made_id)
     return state.storing(write).with_notice(
-        f"{item.name} перекован. Теперь это {made.name}. Уплачено {price} золота."
+        f"{item.choice_name} перекован. Теперь это {made.name}. Уплачено {price} золота."
     )
 
 
@@ -2243,7 +2315,7 @@ def _hand_in(content: GameContent, character: Character, state: PlayState) -> Pl
     )
     if payout.item_id and content.has_item(payout.item_id):
         write = write.with_items((payout.item_id, 1))
-        said += f" Сверху дали: {content.item(payout.item_id).name}."
+        said += f" Сверху дали: {content.item(payout.item_id).choice_name}."
     # Об уровне здесь не говорят: он приходит своим сообщением, сразу за этим
     # экраном (``handlers/play``, ``screens/play.level_up_report``).
     return mark_task(state.storing(write).with_notice(said), character, TutorialTask.HAND_IN)
@@ -2911,7 +2983,7 @@ def search_line(content: GameContent, node_name: str, result: adventure.SearchRe
     if result.gold:
         parts.append(f"Найдено золота: {result.gold}.")
     if result.item_id and content.has_item(result.item_id):
-        taken = content.item(result.item_id).name
+        taken = content.item(result.item_id).choice_name
         many = f"Взято: {taken}, {result.count} штук."
         parts.append(many if result.count > 1 else f"Взято: {taken}.")
     if result.craft_experience:

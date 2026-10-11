@@ -191,7 +191,7 @@ def goals(
         index += 1
         name = output_name(content, recipe)
         materials = ", ".join(
-            f"{content.item(one.item_id).name}: {one.count}" for one in recipe.inputs
+            f"{content.item(one.item_id).choice_name}: {one.count}" for one in recipe.inputs
         )
         lines.append(
             f"Работа {index}: {name}. Ранг {recipe.rank}; материалы: "

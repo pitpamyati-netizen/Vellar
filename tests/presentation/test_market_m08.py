@@ -33,6 +33,7 @@ async def test_sell_buy_confirm_buttons_back_and_commands(table):
     assert (await player.press("Рынок")).id is ScreenId.MARKET
     bag = await player.press("Продать вещь на рынке")
     assert "Вещь 1" in bag.body()
+    assert "Номер вещи" not in bag.body()
     await player.press(next(one for one in buttons(bag) if one.startswith("Продать вещь 1:")))
     await player.press("/рынок количество 2")
     preview = await player.press("/рынок цена 101")
@@ -89,3 +90,19 @@ async def test_bad_input_pages_restore_state_and_single_instances(table):
     assert PlayState.deserialise(flow.serialise()).market_price == 101
     assert preview.fits_message_limit()
     assert (await player.press("Отменить выбор")).id is ScreenId.MARKET
+
+
+async def test_market_hides_instance_numbers_and_keeps_exact_duplicate_choice(table):
+    player, _other, hero, _guest = table
+    await prepare(player, hero)
+    refs = ("sword@1#common!9223372036854775806", "sword@1#common!9223372036854775807")
+    for ref in refs:
+        await player.deps["inventory"].add(hero.id, ref)
+    bag = await player.press("/рынок сумка")
+    assert "Номер вещи" not in bag.body() and "922337" not in bag.body()
+    choices = [one for one in buttons(bag) if one.startswith("Продать вещь")]
+    assert len(choices) == 2 and choices[0] != choices[1]
+    assert all("метка" in one for one in choices)
+    await player.press(next(one for one in choices if one.startswith("Продать вещь 2:")))
+    flow = PlayState.deserialise((await player.state.get_data())["play"])
+    assert flow.market_target == refs[1]

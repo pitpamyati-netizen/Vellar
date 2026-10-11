@@ -71,6 +71,21 @@ class SkillMastery:
 
 
 @dataclass(frozen=True, slots=True)
+class Talent:
+    code: str
+    name: str
+    class_id: str
+    level: int
+    effect: str
+    amount: float
+    category: str = "all"
+    modifier: str = ""
+    condition: str = "always"
+    statuses: tuple[StatusKind, ...] = ()
+    threshold: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
 class Skill:
     code: str
     name: str
@@ -460,6 +475,27 @@ class Item:
     price: int
     modifiers: Mapping[str, float]
     skill_modifiers: Mapping[str, float]
+
+    @property
+    def choice_name(self) -> str:
+        """Название выбора без номера экземпляра; буквы различают одинаковые вещи."""
+        from mmorpg.domain.entities.item_instance import instance_ids
+
+        if "!" not in self.id:
+            return self.name
+        alphabet = "АБВГДЕЖЗИКЛМНОПРСТУФХЦЧШЭЮЯ"
+        marks = []
+        for number in instance_ids(self.id):
+            word = ""
+            while number:
+                number, digit = divmod(number - 1, len(alphabet))
+                word = alphabet[digit] + word
+            marks.append(word)
+        suffix = " — метка " + ", ".join(marks)
+        room = max(1, 80 - len(suffix))
+        name = self.name if len(self.name) <= room else self.name[: room - 1].rstrip() + "…"
+        return name + suffix
+
     stack: int = 1
     effect: ItemEffect | None = None
     #: Урон оружия — числом в границах, а не долей чего-то. Пусто у всего, что не
@@ -1064,6 +1100,7 @@ class GameContent:
     long_goals: LongGoalRules = field(default_factory=LongGoalRules)
     city_events: tuple[CityEvent, ...] = ()
     market_rules: MarketRules = field(default_factory=MarketRules)
+    talents: tuple[Talent, ...] = ()
 
     #: Чем собрать вещь, которой нет в реестре. Снаряжение собирается из вида,
     #: ступени, редкости и оттиска (``procgen/items.py``), и оттисков у одной вещи
@@ -1113,6 +1150,7 @@ class GameContent:
         long_goals: LongGoalRules = LongGoalRules(),
         city_events: Sequence[CityEvent] = (),
         market_rules: MarketRules = MarketRules(),
+        talents: Sequence[Talent] = (),
         stat_words: Mapping[str, str] | None = None,
         assemble: Callable[[GameContent, str], Item | None] | None = None,
     ) -> GameContent:
@@ -1162,6 +1200,7 @@ class GameContent:
             long_goals=long_goals,
             city_events=tuple(city_events),
             market_rules=market_rules,
+            talents=tuple(talents),
             _races_by_id=MappingProxyType({race.id: race for race in races}),
             _classes_by_id=MappingProxyType({klass.id: klass for klass in classes}),
             _traits_by_id=MappingProxyType({trait.id: trait for trait in traits}),
@@ -1238,14 +1277,9 @@ class GameContent:
         from mmorpg.domain.entities.item_instance import instance_ids, template_id
 
         if "!" in item_id:
-            ids = instance_ids(item_id)
+            instance_ids(item_id)
             base = self.item(template_id(item_id))
-            suffix = (
-                f"экземпляр {ids[0]}"
-                if len(ids) == 1
-                else "экземпляры " + ", ".join(str(number) for number in ids)
-            )
-            return replace(base, id=item_id, name=f"{suffix.capitalize()}: {base.name}")
+            return replace(base, id=item_id)
         found = self._items_by_id.get(item_id) or self._forged.get(item_id)
         if found is not None:
             return found

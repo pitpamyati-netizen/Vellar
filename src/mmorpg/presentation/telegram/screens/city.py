@@ -204,7 +204,7 @@ def bank_screen(content: GameContent, character: Character, city: City, notice: 
 
 
 def repair_label(item: Item) -> Label:
-    return label(f"Починить: {item.name}")
+    return label(f"Починить: {item.choice_name}")
 
 
 def forge_screen(
@@ -239,7 +239,7 @@ def forge_screen(
             if repair_rules.is_broken(character, item)
             else f"прочность {amount(left, limit)}"
         )
-        lines.append(f"— {item.name}: {state}. Починка: {gold(price)}.")
+        lines.append(f"— {item.choice_name}: {state}. Починка: {gold(price)}.")
     lines.append(f"Починить всё разом: {gold(whole)}.")
     lines.append("Инструмент здесь не чинят: сточенный меняют в лавке.")
 
@@ -251,11 +251,11 @@ def forge_screen(
 
 
 def salvage_label(item: Item) -> Label:
-    return label(f"Разобрать: {item.name}")
+    return label(f"Разобрать: {item.choice_name}")
 
 
 def reforge_label(item: Item) -> Label:
-    return label(f"Перековать: {item.name}")
+    return label(f"Перековать: {item.choice_name}")
 
 
 def _bag_gear(content: GameContent, owned: Sequence[OwnedItem]) -> tuple[Item, ...]:
@@ -309,7 +309,7 @@ def _salvage_detail(content: GameContent, item: Item) -> str:
     made = salvage_rules.yield_of(content, item)
     if not made:
         return "ничего не выйдет"
-    return ", ".join(f"{content.item(item_id).name} {count}" for item_id, count in made)
+    return ", ".join(f"{content.item(item_id).choice_name} {count}" for item_id, count in made)
 
 
 def reforge_screen(

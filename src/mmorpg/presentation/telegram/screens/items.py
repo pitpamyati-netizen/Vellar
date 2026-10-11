@@ -373,7 +373,7 @@ def card_lines(
 ) -> tuple[str, ...]:
     """Общее тело карточки. Первая строка отвечает «что это»."""
     where = SLOT_NAMES.get(item.slot, "")
-    head = f"{item.name}. {content.rarity(item.rarity).name}, уровень {item.level}."
+    head = f"{item.choice_name}. {content.rarity(item.rarity).name}, уровень {item.level}."
     lines = [notice or head]
     if notice:
         lines.append(head)

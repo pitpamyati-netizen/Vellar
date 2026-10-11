@@ -87,10 +87,10 @@ def output_name(content: GameContent, recipe: Recipe) -> str:
     """
     parsed = gear_procgen.parse_gear_id(recipe.output_id)
     if parsed is None:
-        return content.item(recipe.output_id).name
+        return content.item(recipe.output_id).choice_name
     archetype_id, level, rarity_id, _ = parsed
     if not content.has_gear_archetype(archetype_id) or not content.has_rarity(rarity_id):
-        return content.item(recipe.output_id).name
+        return content.item(recipe.output_id).choice_name
     return gear_procgen.name_of(
         content, content.gear_archetype(archetype_id), level, content.rarity(rarity_id)
     )
@@ -98,7 +98,9 @@ def output_name(content: GameContent, recipe: Recipe) -> str:
 
 def recipe_button(content: GameContent, recipe: Recipe) -> Label:
     """Рецепт называет свою цену в сырье до того, как его нажали."""
-    needs = ", ".join(f"{content.item(need.item_id).name} {need.count}" for need in recipe.inputs)
+    needs = ", ".join(
+        f"{content.item(need.item_id).choice_name} {need.count}" for need in recipe.inputs
+    )
     return label(f"{output_name(content, recipe)} — нужно: {needs}")
 
 
@@ -207,14 +209,14 @@ def gathering_lines(
 ) -> tuple[str, ...]:
     """Что это ремесло берёт, где и чем. Работать отсюда нельзя - и об этом сказано."""
     brought = ", ".join(
-        content.item(entry.item_id).name
+        content.item(entry.item_id).choice_name
         for entry in craft.yields
         if entry.level <= character.level and (not biomes or entry.found_in(biomes))
     )
     where = f" вокруг города {place}" if place else ""
     lines = [f"Берут{where}: {brought}." if brought else f"Для вашего уровня{where} пусто."]
     elsewhere = ", ".join(
-        content.item(entry.item_id).name
+        content.item(entry.item_id).choice_name
         for entry in craft.yields
         if entry.level <= character.level and biomes and not entry.found_in(biomes)
     )
@@ -246,14 +248,14 @@ def tool_line(content: GameContent, character: Character, source: str = "") -> s
     if item is None:  # pragma: no cover - отказ выше уже сказал бы об этом
         return ""
     left = tool_rules.left(content, character, item)
-    return f"В руках: {item.name}. Сборов осталось {left} из {tool_rules.limit(item)}."
+    return f"В руках: {item.choice_name}. Сборов осталось {left} из {tool_rules.limit(item)}."
 
 
 def gathered_line(content: GameContent, item_id: str, count: int, experience: int) -> str:
     """Что принесла одна отработанная жила, одной фразой."""
     item = content.item(item_id)
     work = f" Работы записано: {experience}." if experience else ""
-    return f"Собрано: {item.name}, {count} штук.{work}"
+    return f"Собрано: {item.choice_name}, {count} штук.{work}"
 
 
 def made_line(content: GameContent, result: craft_rules.CraftResult) -> str:
@@ -263,9 +265,9 @@ def made_line(content: GameContent, result: craft_rules.CraftResult) -> str:
     item = content.item(result.item_id)
     quality = result.quality.name.lower() if result.quality is not None else "обычное"
     spent = ", ".join(
-        f"{content.item(item_id).name} {abs(count)}" for item_id, count in result.spent
+        f"{content.item(item_id).choice_name} {abs(count)}" for item_id, count in result.spent
     )
     return (
-        f"Сделано: {item.name}, {result.count} штук, качество {quality}. "
+        f"Сделано: {item.choice_name}, {result.count} штук, качество {quality}. "
         f"Ушло: {spent}. Работы записано: {result.experience}."
     )

@@ -74,6 +74,7 @@ from mmorpg.domain.rules import skill_mastery as mastery_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules import subclass as subclass_rules
 from mmorpg.domain.rules import subclass_powers as way_rules
+from mmorpg.domain.rules import talents as talent_rules
 from mmorpg.domain.rules.progression import experience_reward
 from mmorpg.domain.rules.skill_effects import (
     COUNTER,
@@ -83,7 +84,6 @@ from mmorpg.domain.rules.skill_effects import (
     EffectSpec,
     Inflict,
     cleansed_count,
-    spec_for,
 )
 from mmorpg.domain.rules.stats import DerivedStats, derived_stats, primary_stats
 
@@ -1094,17 +1094,15 @@ def _weathered(spec: EffectSpec, actor: Combatant) -> EffectSpec:
     return working
 
 
-def _skill_spec(character: Character, skill: Skill, actor: Combatant) -> EffectSpec:
+def _skill_spec(
+    content: GameContent, character: Character, skill: Skill, actor: Combatant
+) -> EffectSpec:
     """Что это умение делает у ЭТОГО бойца: с его выучками, рангом и укладами.
 
     Одно место на всю игру: и цена хода, и сам ход считаются отсюда, поэтому
     «Лёгкая рука» не может подешеветь на экране и остаться дорогой в бою.
     """
-    rank = character.loadout.rank_of(skill.code)
-    spec = mastery_rules.applied(
-        skill, spec_for(skill.effect), character.loadout.masteries_of(skill.code)
-    )
-    return _weathered(skill_rules.at_rank(spec, rank), actor)
+    return _weathered(skill_rules.effective_spec(content, character, skill), actor)
 
 
 def _attempt_skill(
@@ -1123,7 +1121,7 @@ def _attempt_skill(
     if skill is None:
         return BattleEvent(kind=EventKind.EMPTY_SLOT)
 
-    if skill.target == "ally" and not _skill_spec(character, skill, actor).aoe:
+    if skill.target == "ally" and not _skill_spec(content, character, skill, actor).aoe:
         chosen = state.by_id(action.target or actor.aid_focus or actor.id)
         if chosen is None or not chosen.alive or chosen.side != actor.side:
             return BattleEvent(kind=EventKind.NO_TARGET)
@@ -1142,12 +1140,7 @@ def _attempt_skill(
     if cooldown > 0:
         return BattleEvent(kind=EventKind.ON_COOLDOWN, skill_name=skill.name, turns=cooldown)
 
-    modifiers = mods.collect_modifiers(content, character, actor.effects)
-    cost = round(
-        _skill_cost(skill, modifiers, free=actor.free_cast, max_resource=actor.max_resource)
-        * skill_rules.cost_factor(character.loadout.rank_of(skill.code))
-        * mastery_rules.cost_factor(_skill_spec(character, skill, actor))
-    )
+    cost = skill_price(content, character, skill, actor)
     if cost > actor.resource:
         return BattleEvent(kind=EventKind.NOT_ENOUGH_RESOURCE, skill_name=skill.name, amount=cost)
     return skill, cost
@@ -1171,13 +1164,8 @@ def _use_skill(
     # Ранг меняет умение вчетвером сразу: сила, откат, срок наложенного и цена
     # (``rules/skills.rank_gain``, ADR 0067). Цена уже посчитана в ``_attempt_skill``.
     power = skill.power_at_rank(rank)
-    spec = _skill_spec(character, skill, actor)
-    cooldown = skill_rules.cooldown_at_rank(skill, rank)
-    reduction = mods.collect_modifiers(content, character, actor.effects).get(
-        "cooldown_reduction_percent", 0.0
-    )
-    if cooldown and reduction:
-        cooldown = max(1, round(cooldown * max(0.0, 1.0 - reduction / 100.0)))
+    spec = _skill_spec(content, character, skill, actor)
+    cooldown = skill_cooldown(content, character, skill, actor)
 
     spent = replace(actor, resource=actor.resource - cost, free_cast=False)
     if cooldown:
@@ -1294,6 +1282,35 @@ def _skill_cost(
     return max(0, round(skill_cost(skill, max_resource) * max(0.1, reduction)))
 
 
+def skill_price(content: GameContent, character: Character, skill: Skill, actor: Combatant) -> int:
+    modifiers = mods.collect_modifiers(content, character, actor.effects)
+    return round(
+        _skill_cost(skill, modifiers, free=actor.free_cast, max_resource=actor.max_resource)
+        * skill_rules.cost_factor(character.loadout.rank_of(skill.code))
+        * mastery_rules.cost_factor(_skill_spec(content, character, skill, actor))
+        * talent_rules.cost_factor(content, character, skill)
+    )
+
+
+def skill_cooldown(
+    content: GameContent, character: Character, skill: Skill, actor: Combatant
+) -> int:
+    cooldown = talent_rules.cooldown(
+        content,
+        character,
+        skill,
+        skill_rules.cooldown_at_rank(skill, character.loadout.rank_of(skill.code)),
+    )
+    reduction = mods.collect_modifiers(content, character, actor.effects).get(
+        "cooldown_reduction_percent", 0.0
+    )
+    return (
+        max(1, round(cooldown * max(0.0, 1.0 - reduction / 100.0)))
+        if cooldown and reduction
+        else cooldown
+    )
+
+
 def aid_targets(
     state: BattleState, actor: Combatant, skill: Skill, spec: EffectSpec, requested: int = 0
 ) -> tuple[int, ...]:
@@ -1382,7 +1399,8 @@ def _apply_spec(
                         + (own_dice.roll(source) * rank_scale if own_dice is not None else 0.0)
                     )
                     * joined
-                    * tactic_rules.factor(tactics, "damage", actor, current),
+                    * tactic_rules.factor(tactics, "damage", actor, current)
+                    * talent_rules.power_factor(content, character, skill, actor, current),
                     spec=spec,
                     skill_name=skill.name,
                     source=source,
@@ -1443,6 +1461,9 @@ def _apply_spec(
                 continue
             amount = round(one.max_health * power / 100.0)
             amount = round(amount * tactic_rules.factor(tactics, "heal", actor, one))
+            amount = round(
+                amount * talent_rules.power_factor(content, character, skill, actor, one)
+            )
             amount = round(amount * mods.percent(modifiers, "healing_done_percent"))
             if spec.special == "heal_over_time":
                 working = _mending(
@@ -1475,6 +1496,9 @@ def _apply_spec(
             if holder is not None:
                 held = round(holder.max_health * power / 100.0)
                 held = round(held * tactic_rules.factor(tactics, "barrier", actor, holder))
+                held = round(
+                    held * talent_rules.power_factor(content, character, skill, actor, holder)
+                )
                 working = _barriered(working, beneficiary, skill=skill, spec=spec, amount=held)
 
     if spec.bonus_heal:
@@ -3111,7 +3135,7 @@ def _chosen_by_engine(
             skill = _resolve_skill(content, character, candidate)
             if skill is None:
                 continue
-            spec = _skill_spec(character, skill, actor)
+            spec = _skill_spec(content, character, skill, actor)
             # Провокация защищает других: единственному бойцу некого прикрывать.
             if len(allies) == 1 and any(one.kind is StatusKind.TAUNT for one in spec.inflicts):
                 continue

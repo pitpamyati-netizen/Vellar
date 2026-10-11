@@ -201,7 +201,7 @@ async def test_reforge_keeps_identity_and_damage(physical, content):
 
 async def test_real_offer_reserve_accept_and_rollback_keep_damage(physical, content):
     e = physical
-    name = content.item(e.refs[0]).name
+    name = content.item(e.refs[0]).choice_name
     parsed = parse_group_command(f"продать 100 {name}")
     assert parsed is not None
     result = await e.trade.run(parsed, author_id=e.accounts[0], target_id=e.accounts[1], now=1000)

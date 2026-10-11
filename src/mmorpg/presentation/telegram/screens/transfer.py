@@ -81,7 +81,7 @@ def bag_screen(
 
 def item_button_text(item: Item, quantity: int) -> str:
     """Текст кнопки вещи в списке передачи."""
-    return f"{item.name}, штук {quantity}"
+    return f"{item.choice_name}, штук {quantity}"
 
 
 def item_from_button(content: GameContent, text: str, owned: Sequence[OwnedItem]) -> Item | None:
@@ -90,7 +90,7 @@ def item_from_button(content: GameContent, text: str, owned: Sequence[OwnedItem]
         if not content.has_item(held.item_id):
             continue
         item = content.item(held.item_id)
-        if text.startswith(f"{item.name}, штук "):
+        if text.startswith(f"{item.choice_name}, штук "):
             return item
     return None
 
@@ -98,7 +98,7 @@ def item_from_button(content: GameContent, text: str, owned: Sequence[OwnedItem]
 def amount_screen(item: Item, held: int, to_name: str, notice: str = "") -> Screen:
     """Сколько передать. Число вводят сообщением; «Передать всё» — быстрый путь."""
     lines = [
-        *head(f"Сколько передать: {item.name}.", notice),
+        *head(f"Сколько передать: {item.choice_name}.", notice),
         f"Получатель: {to_name}. В сумке {held} {plural(held, 'штука', 'штуки', 'штук')}.",
         "Наберите число сообщением или нажмите «Передать всё».",
     ]

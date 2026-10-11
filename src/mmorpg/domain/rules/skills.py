@@ -10,11 +10,11 @@
 пятнадцатую долю силы и на предельном возвращал умение на ход раньше - за очко
 это не читалось никак. Теперь каждый ранг:
 
-- поднимает силу на ``rank_step`` умения (пятый ранг - вдвое против первого);
+- поднимает силу на ``rank_step`` умения (пятый ранг - 220 процентов первого при шаге 0.3);
 - через ранг укорачивает откат на ход;
 - через ранг удлиняет на ход всё, что умение накладывает, - кроме того, что
   отнимает ход: лишний ход оглушения бой не разменивает, а кончает;
-- на десятую долю удешевляет умение, до половины на пятом ранге.
+- на 12.5 процента первого ранга удешевляет умение, до половины на пятом ранге.
 
 **А третий ранг и пятый вдобавок спрашивают, чему умение научилось**
 (``rules/skill_mastery``): игрок берёт одну из ЧЕТЫРЁХ, написанных этому умению
@@ -38,9 +38,10 @@ from mmorpg.domain.entities.content import (
     SkillKind,
     SkillMastery,
 )
-from mmorpg.domain.entities.statuses import CONTROL_STATUSES
+from mmorpg.domain.entities.statuses import CONTROL_STATUSES, StatusKind
 from mmorpg.domain.rules import skill_mastery as mastery_rules
 from mmorpg.domain.rules import subclass as subclass_rules
+from mmorpg.domain.rules import talents as talent_rules
 from mmorpg.domain.rules.skill_effects import EffectSpec, Inflict, spec_for
 
 #: Через сколько рангов откат укорачивается на ход и наложенное держится на ход
@@ -48,9 +49,9 @@ from mmorpg.domain.rules.skill_effects import EffectSpec, Inflict, spec_for
 RANK_COOLDOWN_EVERY = 2
 RANK_DURATION_EVERY = 2
 
-#: На какую долю ранг удешевляет умение. Десятая за ранг, половина на пятом:
+#: На какую долю ранг удешевляет умение. 12.5 процента за повышение, половина на пятом:
 #: цена - доля запаса (ADR 0058), и скидка тоже доля.
-RANK_COST_STEP = 0.1
+RANK_COST_STEP = 0.125
 
 #: Дешевле этой доли умение не станет ни на каком ранге.
 MIN_COST_FACTOR = 0.5
@@ -187,7 +188,7 @@ def forget(content: GameContent, character: Character, skill: Skill) -> Characte
     refund = spent_on(content, character, skill.code)
     ranks = {key: value for key, value in character.loadout.ranks.items() if key != skill.code}
     actives = tuple(None if code == skill.code else code for code in character.loadout.actives)
-    # Выучка уходит вместе с умением: чему было научено то, чего никто не знает,
+    # Грань уходит вместе с умением: чему было научено то, чего никто не знает,
     # не значит ничего, а выученное заново начинается с чистого листа.
     loadout = character.loadout.without_masteries(skill.code)
     return replace(
@@ -324,7 +325,7 @@ def rank_gain(rank: int) -> RankGain:
     steps = max(0, rank - 1)
     return RankGain(
         rank=max(1, rank),
-        cooldown_cut=steps // RANK_COOLDOWN_EVERY,
+        cooldown_cut=(steps + 1) // RANK_COOLDOWN_EVERY,
         duration_bonus=steps // RANK_DURATION_EVERY,
         cost_factor=max(MIN_COST_FACTOR, 1.0 - RANK_COST_STEP * steps),
     )
@@ -352,13 +353,16 @@ def _stretched(held: tuple[Inflict, ...], bonus: int) -> tuple[Inflict, ...]:
     )
 
 
-def at_rank(spec: EffectSpec, rank: int) -> EffectSpec:
+def at_rank(spec: EffectSpec, rank: int, rank_step: float = 0.3) -> EffectSpec:
     """Действие умения так, как его удлинил ранг.
 
     Возвращается новое описание: сами описания неизменяемы и общие для всех, у
     кого это умение есть, поэтому править их на месте нельзя.
     """
-    bonus = rank_gain(rank).duration_bonus
+    return _rank_duration(_rank_numbers(spec, rank, rank_step), rank_gain(rank).duration_bonus)
+
+
+def _rank_duration(spec: EffectSpec, bonus: int) -> EffectSpec:
     if not bonus:
         return spec
     return replace(
@@ -371,6 +375,54 @@ def at_rank(spec: EffectSpec, rank: int) -> EffectSpec:
     )
 
 
+def _rank_numbers(spec: EffectSpec, rank: int, rank_step: float) -> EffectSpec:
+    if rank <= 1:
+        return spec
+    factor = 1.0 + rank_step * (rank - 1)
+
+    # Числовые довески тоже развиваются. Служебные признаки и номера целей
+    # не являются силой и не умножаются. Грани применяются после этой правки.
+    def grown(held: tuple[Inflict, ...]) -> tuple[Inflict, ...]:
+        numeric = {
+            StatusKind.WEAKNESS,
+            StatusKind.EMPOWER,
+            StatusKind.BERSERK,
+            StatusKind.RESOURCE_REGEN,
+            StatusKind.HEALTH_REGEN,
+            StatusKind.HASTE,
+            StatusKind.SLOW,
+            StatusKind.BARRIER,
+        }
+        return tuple(
+            replace(one, value=one.value * factor)
+            if one.kind in numeric and one.value is not None
+            else one
+            for one in held
+        )
+
+    return replace(
+        spec,
+        inflicts=grown(spec.inflicts),
+        holds=grown(spec.holds),
+        bonus_heal=spec.bonus_heal * factor,
+        bonus_barrier=spec.bonus_barrier * factor,
+        self_modifiers=tuple(
+            replace(one, value=one.value * factor)
+            if one.value is not None
+            and not one.key.startswith("_")
+            and ((one.value < 0) if one.key == "damage_taken_percent" else (one.value > 0))
+            else one
+            for one in spec.self_modifiers
+        ),
+        target_modifiers=tuple(
+            replace(one, value=one.value * factor)
+            if one.value is not None and not one.key.startswith("_")
+            else one
+            for one in spec.target_modifiers
+        ),
+    )
+
+
 # --- чему умение научено ----------------------------------------------
 
 
@@ -379,20 +431,29 @@ def spec_of(skill: Skill) -> EffectSpec:
     return spec_for(skill.effect)
 
 
+def effective_spec(content: GameContent, character: Character, skill: Skill) -> EffectSpec:
+    rank = character.loadout.rank_of(skill.code)
+    ranked = _rank_numbers(spec_for(skill.effect), rank, skill.rank_step)
+    faceted = mastery_rules.applied(skill, ranked, character.loadout.masteries_of(skill.code))
+    # Добавленные гранью состояния получают прежнюю прибавку срока от ранга.
+    stretched = _rank_duration(faceted, rank_gain(rank).duration_bonus)
+    return talent_rules.applied(content, character, skill, stretched)
+
+
 def masteries_of(character: Character, skill: Skill) -> tuple[str, ...]:
-    """Коды выучек, взятых этому умению."""
+    """Коды граней, взятых этому умению."""
     return character.loadout.masteries_of(skill.code)
 
 
 def taken_masteries(character: Character, skill: Skill) -> tuple[SkillMastery, ...]:
-    """Выучки этого умения так, как их знает игра сейчас."""
+    """Грани этого умения так, как их знает игра сейчас."""
     return mastery_rules.known(skill, masteries_of(character, skill))
 
 
 def mastery_tier_due(content: GameContent, character: Character, skill: Skill) -> int | None:
-    """Ступень выучки, которую этому умению пора выбрать. ``None`` - нечего.
+    """Ступень грани, которую этому умению пора выбрать. ``None`` - нечего.
 
-    Пассивному умению выучек не предлагают вовсе: у пассивки нет ни хода, ни
+    Пассивному умению граней не предлагают вовсе: у пассивки нет ни хода, ни
     цели, и менять в её действии нечего - ранг платит ей размером (ADR 0073).
     """
     if not skill.is_active or not is_known(character, skill.code):
@@ -418,7 +479,7 @@ def mastery_choices(
 def choose_mastery(
     content: GameContent, character: Character, skill: Skill, code: str
 ) -> Character | None:
-    """Научить умение выучке. ``None`` - так делать нельзя.
+    """Научить умение грани. ``None`` - так делать нельзя.
 
     Выбор необратим, как выбор ветки: обратимый выбор - это настройка. Вернуть
     его можно только вместе с самим умением, разобрав его у наставника.

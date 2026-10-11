@@ -53,7 +53,8 @@ def test_repair_and_reforge_do_not_affect_another_copy(content):
     forged = salvage.reforged(content, a, source=Random(1))
     assert instance_ids(forged) == (1,)
     assert template_id(forged) != template_id(a)
-    assert content.item(a).name != content.item(b).name
+    assert content.item(a).name == content.item(b).name
+    assert content.item(a).choice_name != content.item(b).choice_name
     relic = content.item("sword@1#relic!3")
     assert worn(content, relic, 150).id == relic.id
 

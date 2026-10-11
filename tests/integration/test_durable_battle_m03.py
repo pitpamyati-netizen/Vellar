@@ -448,6 +448,81 @@ async def test_actual_dispatcher_routes_returning_player_from_persistent_screen(
     assert (await state_for(e).get_data())["play"] == e.flow.serialise()
 
 
+async def test_talent_confirmation_survives_cache_loss_and_busy_player_cannot_change_it(battle_env):
+    from mmorpg.application.services.content import ContentRegistry
+    from mmorpg.presentation.telegram.flows import play as play_flow
+    from mmorpg.presentation.telegram.handlers import play
+
+    e = battle_env
+    registry = ContentRegistry(e.content)
+    free = await e.characters.save(replace(e.heroes[2], level=150))
+    e.journal = CommandMiddleware(
+        dependencies(
+            e.characters,
+            users=e.users,
+            inventory=e.inventory,
+            trades=e.trades,
+            cache=e.cache,
+            world=e.world,
+            parties=e.parties,
+            guilds=e.guilds,
+        ),
+        e.reaper,
+        storage=e.storage,
+    )
+    await state_for(e, 2).set_state(Play.main_menu)
+    await state_for(e, 2).set_data({"play": play_flow.begin(free).serialise()})
+    dispatcher = Dispatcher(storage=e.storage)
+    dispatcher.update.outer_middleware.unregister(dispatcher.fsm)
+    dispatcher.update.outer_middleware(e.journal)
+    dispatcher.update.outer_middleware(dispatcher.fsm)
+    dispatcher.include_router(combat.build_router())
+    dispatcher.include_router(play.build_router())
+
+    async def send(text, actor=2, number=None):
+        msg = message(e, text, actor, number=number)
+        await dispatcher.feed_update(
+            e.bot,
+            Update(update_id=msg.message_id, message=msg).as_(e.bot),
+            content=e.content,
+            settings=SETTINGS,
+            characters=e.characters,
+            inventory=e.inventory,
+            locations=e.world,
+            state_cache=e.cache,
+            parties=e.parties,
+            guilds=e.guilds,
+            users=e.users,
+            keeper_log=None,
+            overlays=None,
+            registry=registry,
+            trades=e.trades,
+        )
+        return msg.message_id
+
+    await send("/таланты")
+    await send("/талант 1")
+    assert (await e.characters.get(free.id)).loadout.talents == ()
+    confirmation = await send("/выбратьталант")
+    assert (await e.characters.get(free.id)).loadout.talents == ("warrior_1_1",)
+    await e.redis.flushdb()
+    await send("/выбратьталант", number=confirmation)
+    assert (await e.characters.get(free.id)).loadout.talents == ("warrior_1_1",)
+    await send("/таланты")
+    assert "выбран" in e.recording.sent[-1].text
+    await send("/талант 2")
+    await send("/выбратьталант")
+    reloaded = await e.characters.get(free.id)
+    assert reloaded.loadout.talents == ("warrior_1_2",)
+    assert reloaded.gold == free.gold and reloaded.unspent_skill_points == free.unspent_skill_points
+    # Даже сохранённый главный экран не позволяет обойти живое участие в бою.
+    await state_for(e).set_state(Play.main_menu)
+    await state_for(e).set_data({"play": play_flow.begin(e.heroes[0]).serialise()})
+    await send("/талант 1", actor=0)
+    assert "Бой. Круг" in e.recording.sent[-1].text
+    assert (await e.characters.get(e.heroes[0].id)).loadout.talents == ()
+
+
 async def test_useless_bag_item_does_not_decrease_inventory_or_version(battle_env):
     e = battle_env
     item = next(

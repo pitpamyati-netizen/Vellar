@@ -210,22 +210,18 @@ async def show(
         flow = replace(flow, market_page=page)
         lines.append(f"Сумка. Страница {page} из {pages}. Выберите вещь для продажи.")
         for index, owned in enumerate(items[(page - 1) * 8 : page * 8], 1):
-            name = content.item(owned.item_id).name
-            mark = owned.item_id.rpartition("!")[2] if "!" in owned.item_id else "партия"
-            lines.append(
-                f"Вещь {index}: {name}, {owned.quantity}. Номер вещи: {mark}. "
-                f"Команда: /рынок вещь {index}."
-            )
+            name = content.item(owned.item_id).choice_name
+            lines.append(f"Вещь {index}: {name}, {owned.quantity}. Команда: /рынок вещь {index}.")
             button(f"Продать вещь {index}: {name}", f"вещь {index} {owned.item_id}")
         if not items:
             lines.append("В сумке нет вещей для продажи.")
     elif mode in {"quantity", "price"}:
         if flow.market_action == "sell":
-            lines.append(f"Продажа: {content.item(flow.market_target).name}.")
+            lines.append(f"Продажа: {content.item(flow.market_target).choice_name}.")
         else:
             recipe = content.recipe(flow.market_target)
             lines.append(
-                f"Заказ на изготовление: {content.item(recipe.output_id).name}, "
+                f"Заказ на изготовление: {content.item(recipe.output_id).choice_name}, "
                 f"не менее {recipe.output_count}."
             )
         if mode == "quantity":
@@ -243,7 +239,7 @@ async def show(
         lot = next(one for one in state.lots if str(one.id) == flow.market_target)
         lines.extend(
             (
-                f"Лот {lot.id}: {content.item(lot.item_id).name}, {lot.quantity}.",
+                f"Лот {lot.id}: {content.item(lot.item_id).choice_name}, {lot.quantity}.",
                 f"Цена партии {lot.price} золота. Пошлина {trade_tax(lot.price)}. "
                 f"Состояние: {_status(lot.status)}.",
             )
@@ -266,13 +262,13 @@ async def show(
         recipe = content.recipe(order.recipe_id)
         lines.extend(
             (
-                f"Заказ {order.id}: {content.item(recipe.output_id).name}, "
+                f"Заказ {order.id}: {content.item(recipe.output_id).choice_name}, "
                 f"не менее {recipe.output_count}.",
                 f"Оплата: {order.price}. Мастеру: {order.price - trade_tax(order.price)}. "
                 f"Пошлина: {trade_tax(order.price)} золота. Состояние: {_status(order.status)}.",
                 "Материалы мастера: "
                 + ", ".join(
-                    f"{content.item(one.item_id).name}, {one.count}" for one in recipe.inputs
+                    f"{content.item(one.item_id).choice_name}, {one.count}" for one in recipe.inputs
                 )
                 + ".",
             )
@@ -295,13 +291,14 @@ async def show(
         )
         if purpose == "sell":
             lines.append(
-                f"Товар: {content.item(flow.market_target).name}, {flow.market_quantity}. "
+                f"Товар: {content.item(flow.market_target).choice_name}, {flow.market_quantity}. "
                 "Он уйдёт из сумки в резерв рынка."
             )
         elif purpose == "order":
             recipe = content.recipe(flow.market_target)
             lines.append(
-                f"Изделие: {content.item(recipe.output_id).name}, не менее {recipe.output_count}. "
+                f"Изделие: {content.item(recipe.output_id).choice_name}, не менее "
+                f"{recipe.output_count}. "
                 "Оплата уйдёт в резерв до выполнения или возврата."
             )
         else:
@@ -310,14 +307,15 @@ async def show(
             )
             if purpose in {"купить", "резерв"}:
                 lot = next(one for one in state.lots if str(one.id) == flow.market_target)
-                lines.append(f"Товар: {content.item(lot.item_id).name}.")
+                lines.append(f"Товар: {content.item(lot.item_id).choice_name}.")
             if purpose == "изготовить":
                 order = next(one for one in state.orders if str(one.id) == flow.market_target)
                 recipe = content.recipe(order.recipe_id)
                 lines.append(
                     "Материалы будут потрачены: "
                     + ", ".join(
-                        f"{content.item(one.item_id).name}, {one.count}" for one in recipe.inputs
+                        f"{content.item(one.item_id).choice_name}, {one.count}"
+                        for one in recipe.inputs
                     )
                     + ". Изделия сразу получит заказчик."
                 )
@@ -335,7 +333,8 @@ async def show(
         lines.append(f"Страница {page} из {pages}.")
         for item, offered, asked, sold in observations[(page - 1) * 8 : page * 8]:
             lines.append(
-                f"{content.item(item).name}: предложение {offered}; спрос {asked}; куплено {sold}."
+                f"{content.item(item).choice_name}: предложение {offered}; спрос {asked}; "
+                f"куплено {sold}."
             )
         if not observations:
             lines.append("Объявлений и покупок пока нет.")
@@ -358,10 +357,10 @@ async def show(
         for number, kind, item, price, status in visible[(page - 1) * 8 : page * 8]:
             title = "Лот" if kind == "лот" else "Заказ"
             lines.append(
-                f"{title} {number}: {content.item(item).name}. Цена партии {price} золота. "
+                f"{title} {number}: {content.item(item).choice_name}. Цена партии {price} золота. "
                 f"{_status(status)}. Команда: /рынок {kind} {number}."
             )
-            button(f"{title} {number}: {content.item(item).name}", f"{kind} {number}")
+            button(f"{title} {number}: {content.item(item).choice_name}", f"{kind} {number}")
         if not visible:
             lines.append("Объявлений пока нет. Можно продать вещь или заказать изготовление.")
         lines.extend(

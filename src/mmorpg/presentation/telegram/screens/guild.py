@@ -468,7 +468,7 @@ def stow_screen(
     entries = [
         ListEntry(
             key=content.item(held.item_id).id,
-            text=stored_button_text(content.item(held.item_id).name, held.quantity),
+            text=stored_button_text(content.item(held.item_id).choice_name, held.quantity),
             detail=f"уровень {content.item(held.item_id).level}",
         )
         for held in owned

@@ -721,24 +721,13 @@ def character_screen(
         f"{content.character_class(character.class_id).name}.",
         f"Здоровье: {character.health_or(stats.max_health)} из {stats.max_health}. "
         f"{stats.resource_name}: {stats.max_resource}.",
-        f"Удар: {damage_line(content, character)}.",
+        f"Удар: {damage_line(content, character).split(',')[0]}.",
         *derived_lines(stats),
     ]
     lines.extend(f"{name}: {primary[code]}." for code, name in STAT_NAMES.items())
     if character.trait_ids:
         names = ", ".join(content.trait(trait_id).name for trait_id in character.trait_ids)
         lines.append(f"Особенности: {names}.")
-
-    worn: list[tuple[Label, ...]] = []
-    for slot, slot_name in SLOT_NAMES.items():
-        item_id = character.equipment.item_in(slot)
-        if item_id is None or not content.has_item(item_id):
-            continue
-        note = _wear_note(content, character, item_id)
-        lines.append(f"{slot_name}: {content.item(item_id).name}{note}.")
-        worn.append((unequip_label(slot_name),))
-    if not worn:
-        lines.append("Ничего не надето. Снаряжение надевается из инвентаря.")
 
     if character.unspent_stat_points or character.unspent_skill_points:
         lines.append(
@@ -750,8 +739,29 @@ def character_screen(
     return Screen(
         id=ScreenId.CHARACTER,
         lines=tuple(lines),
-        rows=((labels.STATS, labels.SKILLS), *worn),
+        rows=((labels.STATS, labels.SKILLS), (labels.EQUIPMENT, labels.TALENTS)),
     )
+
+
+def equipment_screen(content: GameContent, character: Character, notice: str = "") -> Screen:
+    from mmorpg.presentation.telegram.screens.items import gives_lines
+
+    lines = [*head("Экипировка.", notice)]
+    worn: list[tuple[Label, ...]] = []
+    for slot, slot_name in SLOT_NAMES.items():
+        item_id = character.equipment.item_in(slot)
+        if item_id is None:
+            lines.append(f"{slot_name}: пусто.")
+            continue
+        if not content.has_item(item_id):
+            lines.append(f"{slot_name}: вещь больше не существует. Её можно снять.")
+        else:
+            item = content.item(item_id)
+            lines.append(f"{slot_name}: {item.name}{_wear_note(content, character, item_id)}.")
+            lines.extend(gives_lines(content, item))
+        worn.append((unequip_label(slot_name),))
+    lines.append("Новое снаряжение надевается из инвентаря. Команда: /экипировка.")
+    return Screen(id=ScreenId.EQUIPMENT, lines=tuple(lines), rows=tuple(worn))
 
 
 def level_up_report(
@@ -784,6 +794,13 @@ def level_up_report(
     ]
     if opened:
         lines.append(f"Открылись умения: {', '.join(opened)}.")
+    from mmorpg.domain.rules.talents import LEVELS
+
+    if unlocked := [level for level in LEVELS if previous < level <= new]:
+        lines.append(
+            f"Открылись ступени талантов: {', '.join(str(level) for level in unlocked)}. "
+            f"Выберите талант в разделе «Персонаж», «Таланты»."
+        )
 
     cities = [city.name for city in content.cities if previous < city.unlock_level <= new]
     if cities:
