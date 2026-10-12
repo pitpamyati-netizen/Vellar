@@ -8,6 +8,7 @@ from mmorpg.application.services.battle import BattleSession, deserialise, seria
 from mmorpg.domain.entities.character import Character, Equipment, ItemWear, SkillLoadout
 from mmorpg.domain.entities.combat import ActionKind, BattleAction, BattleState, EventKind
 from mmorpg.domain.entities.effects import EffectStack, status_effect
+from mmorpg.domain.entities.location import Enemy, EnemyKind
 from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.rules import adventure, combat, repair
 
@@ -39,7 +40,10 @@ def heroes(content, wear=0):
 def perform(content, roster, state, action=BattleAction(ActionKind.ATTACK), *, landed=True):
     for number in range(100):
         result = combat.act(content, roster, state, action, str(number).encode())
-        hit = any(event.kind in {EventKind.DAMAGE, EventKind.CRIT} for event in result.events)
+        hit = any(
+            event.actor_id == state.active.id and event.kind in {EventKind.DAMAGE, EventKind.CRIT}
+            for event in result.events
+        )
         if hit == landed:
             return result
     raise AssertionError("Не найден контрольный исход")
@@ -54,11 +58,50 @@ def test_attack_wears_weapon_and_landed_hit_wears_target_gear(content):
         assert repair.character_with_wear(roster[hero], result.by_id(hero)).wear.spent(TOOL) == 0
 
 
-def test_missed_attack_wears_weapon_but_does_not_wear_target(content):
+@pytest.mark.parametrize("kind", [ActionKind.ATTACK, ActionKind.SKILL])
+@pytest.mark.parametrize("target_is_hero", [True, False])
+def test_missed_attack_or_skill_does_not_wear_or_break_any_gear(content, kind, target_is_hero):
+    roster, state = heroes(content, content.item(SWORD).durability - 1)
+    if not target_is_hero:
+        enemy = Enemy(
+            archetype_id="grey_wolf",
+            name="Волк",
+            kind=EnemyKind.BEAST,
+            level=10,
+            max_health=9999,
+            damage=1,
+            armor=0,
+            initiative=0,
+            loot=(),
+            gold=0,
+        )
+        state = state.replace_combatant(combat.monster_combatant(enemy, combatant_id=2))
+        third = replace(roster[1], id=3, user_id=13, name="Мерла")
+        roster[3] = third
+        state = replace(
+            state,
+            combatants=(
+                *state.combatants,
+                combat.hero_combatant(content, third, combatant_id=3, side=0),
+            ),
+            order=(1, 3, 2),
+        )
+    result = perform(content, roster, state, BattleAction(kind, slot=0), landed=False)
+    expected = EventKind.DODGE if target_is_hero else EventKind.MISS
+    assert expected in {event.kind for event in result.events}
+    assert all(not one.gear_wear for one in result.combatants)
+    assert not any(event.kind is EventKind.GEAR_BROKEN for event in result.events)
+    worn = repair.character_with_wear(roster[1], result.by_id(1))
+    assert repair.left(worn, content.item(SWORD)) == 1
+
+
+def test_guaranteed_dodge_does_not_wear_weapon(content):
     roster, state = heroes(content)
-    result = perform(content, roster, state, landed=False)
-    assert dict(result.by_id(1).gear_wear) == {SWORD: 1}
-    assert not result.by_id(2).gear_wear
+    state = state.replace_combatant(replace(state.by_id(2), evade_charges=1))
+    result = combat.act(content, roster, state, BattleAction(ActionKind.ATTACK), b"wear")
+    assert EventKind.DODGE in {event.kind for event in result.events}
+    assert result.by_id(2).evade_charges == 0
+    assert all(not one.gear_wear for one in result.combatants)
 
 
 @pytest.mark.parametrize("kind", [ActionKind.DEFEND, ActionKind.FOCUS, ActionKind.YIELD])
@@ -97,8 +140,8 @@ def test_immunity_stops_equipment_wear(content):
     effect = status_effect(StatusKind.INVULNERABILITY, turns=3, source="test")
     state = state.replace_combatant(replace(second, effects=EffectStack().apply(effect)))
     result = combat.act(content, roster, state, BattleAction(ActionKind.ATTACK), b"wear")
-    assert result.by_id(1).gear_wear[SWORD] == 1
-    assert not result.by_id(2).gear_wear
+    assert EventKind.IMMUNE in {event.kind for event in result.events}
+    assert all(not one.gear_wear for one in result.combatants)
 
 
 def test_weapon_breaks_after_its_last_attack_and_next_attack_uses_fists(content):
@@ -189,7 +232,8 @@ def test_arena_snapshot_does_not_wear_real_opponents_equipment(content):
     assert not result.by_id(1).gear_wear
 
 
-def test_counterattack_wears_defenders_weapon_once(content):
+@pytest.mark.parametrize("landed", [True, False])
+def test_counterattack_wears_defenders_weapon_only_on_hit(content, landed):
     from mmorpg.domain.entities.effects import ActiveEffect
     from mmorpg.domain.rules.skill_effects import COUNTER
 
@@ -199,12 +243,24 @@ def test_counterattack_wears_defenders_weapon_once(content):
         id="counter", name="Ответный выпад", modifiers={COUNTER: 100}, turns_left=3
     )
     state = state.replace_combatant(replace(second, effects=EffectStack().apply(effect)))
-    result = perform(content, roster, state)
-    assert result.by_id(2).gear_wear[SWORD] == 1
+    for number in range(100):
+        result = combat.act(
+            content, roster, state, BattleAction(ActionKind.ATTACK), str(number).encode()
+        )
+        attacks = [event for event in result.events if event.actor_id == 2]
+        hit = any(event.kind in {EventKind.DAMAGE, EventKind.CRIT} for event in attacks)
+        missed = any(event.kind is EventKind.DODGE for event in attacks)
+        if hit if landed else missed:
+            break
+    else:
+        raise AssertionError("Не найден контрольный ответный удар")
+    assert result.by_id(2).gear_wear.get(SWORD, 0) == int(landed)
     assert result.by_id(1).gear_wear[SWORD] == 1
+    assert result.by_id(1).gear_wear.get(ARMOR, 0) == int(landed)
 
 
-def test_attack_on_multiple_targets_spends_one_weapon_point(content):
+@pytest.mark.parametrize("landed", [True, False])
+def test_attack_on_multiple_targets_spends_one_weapon_point_only_if_it_hits(content, landed):
     roster, state = heroes(content)
     roster[1] = replace(
         roster[1],
@@ -220,8 +276,8 @@ def test_attack_on_multiple_targets_spends_one_weapon_point(content):
         ),
         order=(1, 2, 3),
     )
-    result = perform(content, roster, state, BattleAction(ActionKind.SKILL, slot=0))
-    assert result.by_id(1).gear_wear[SWORD] == 1
+    result = perform(content, roster, state, BattleAction(ActionKind.SKILL, slot=0), landed=landed)
+    assert result.by_id(1).gear_wear.get(SWORD, 0) == int(landed)
     attempts = [
         event
         for event in result.events

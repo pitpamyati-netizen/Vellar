@@ -746,13 +746,11 @@ def _take_turn(
     was_unseen = actor.effects.has(StatusKind.UNSEEN)
 
     working = _perform(content, roster, state, actor.id, action, source)
-    attempted = any(
-        event.actor_id == actor.id
-        and event.kind
-        in {EventKind.DAMAGE, EventKind.CRIT, EventKind.MISS, EventKind.DODGE, EventKind.IMMUNE}
+    landed = any(
+        event.actor_id == actor.id and event.kind in {EventKind.DAMAGE, EventKind.CRIT}
         for event in working.events[len(state.events) :]
     )
-    if attempted and action.kind in {ActionKind.ATTACK, ActionKind.SKILL, ActionKind.RACIAL}:
+    if landed and action.kind in {ActionKind.ATTACK, ActionKind.SKILL, ActionKind.RACIAL}:
         working = _wear_gear(content, roster, working, actor.id, weapon=True)
 
     if actor.is_hero and actor.live and action.kind not in {ActionKind.FLEE, ActionKind.YIELD}:
@@ -2682,7 +2680,7 @@ def _answered(
             (effect.name for effect in defender.effects if COUNTER in effect.modifiers),
             "",
         )
-        working, _ = _strike(
+        working, landed = _strike(
             content,
             roster,
             working,
@@ -2694,7 +2692,8 @@ def _answered(
             source=source,
             answering=True,
         )
-        working = _wear_gear(content, roster, working, defender.id, weapon=True)
+        if landed:
+            working = _wear_gear(content, roster, working, defender.id, weapon=True)
     return working
 
 

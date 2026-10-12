@@ -22,7 +22,13 @@ from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.party import PartyStore
 from mmorpg.config import Settings
 from mmorpg.domain.entities.character import SkillLoadout
-from mmorpg.domain.entities.combat import ActionKind, BattleAction, BattleOutcome, BattleState
+from mmorpg.domain.entities.combat import (
+    ActionKind,
+    BattleAction,
+    BattleOutcome,
+    BattleState,
+    EventKind,
+)
 from mmorpg.domain.entities.location import Enemy, EnemyKind, Roamer
 from mmorpg.domain.rules.combat import act, hero_combatant, monster_combatant
 from mmorpg.infrastructure.cache.redis_cache import RedisStateCache
@@ -767,8 +773,18 @@ async def equip_for_wear(e):
         state = state.replace_combatant(
             hero_combatant(e.content, hero, combatant_id=one.id, side=one.side)
         )
+    for number in range(100):
+        seed = f"wear-hit-{number}".encode()
+        result = act(e.content, roster, state, BattleAction(ActionKind.ATTACK), seed)
+        if any(
+            event.actor_id == state.active.id and event.kind in {EventKind.DAMAGE, EventKind.CRIT}
+            for event in result.events
+        ):
+            break
+    else:
+        raise AssertionError("Не найден контрольный попавший удар")
     e.session = await e.store.save(
-        replace(e.session, state=state, roster_snapshot=json.dumps(encode(roster)))
+        replace(e.session, state=state, seed=seed, roster_snapshot=json.dumps(encode(roster)))
     )
     for actor in (0, 1):
         await state_for(e, actor).update_data({"battle_version": e.session.version})
@@ -823,3 +839,30 @@ async def test_failed_turn_rolls_back_physical_wear_then_retry_wears_once(battle
     assert (await e.store.load(e.session.id)).version == e.session.version
     await press(e, "Атака", actor, number=number)
     assert (await e.characters.get(hero.id)).wear.spent(sword) == 1
+
+
+async def test_missed_attack_preserves_physical_wear_after_restart_and_replay(battle_env):
+    from mmorpg.infrastructure.cache.memory import InMemoryStateCache
+
+    e = battle_env
+    actor = await equip_for_wear(e)
+    hero = e.heroes[actor]
+    sword = hero.equipment.item_in("weapon")
+    enemy = e.session.state.foes_of(e.session.state.active.id)[0]
+    e.session = await e.store.save(
+        replace(
+            e.session,
+            state=e.session.state.replace_combatant(replace(enemy, evade_charges=1)),
+        )
+    )
+    await state_for(e, actor).update_data({"battle_version": e.session.version})
+    number = await press(e, "Атака", actor)
+    assert (await e.characters.get(hero.id)).wear.spent(sword) == 0
+    cold = BattleStore(PostgresGameplayState(e.pool, InMemoryStateCache()))
+    await e.redis.flushdb()
+    restarted = await cold.load(e.session.id)
+    assert restarted.state.by_id(enemy.id).evade_charges == 0
+    assert not restarted.combatant_of(hero.id).gear_wear
+    await press(e, "Атака", actor, number=number)
+    assert (await e.characters.get(hero.id)).wear.spent(sword) == 0
+    assert (await cold.load(e.session.id)).version == restarted.version
