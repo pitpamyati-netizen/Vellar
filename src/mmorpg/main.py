@@ -76,7 +76,7 @@ from mmorpg.metrics import Metrics, reporting
 from mmorpg.monitoring import install_slow_callback_detector
 from mmorpg.presentation.telegram.broadcast import ChannelBroadcaster
 from mmorpg.presentation.telegram.cleanup import MessageReaper
-from mmorpg.presentation.telegram.handlers import combat, creation, group, play
+from mmorpg.presentation.telegram.handlers import character_reset, combat, creation, group, play
 from mmorpg.presentation.telegram.middlewares.audit import AuditMiddleware
 from mmorpg.presentation.telegram.middlewares.commands import CommandMiddleware
 from mmorpg.presentation.telegram.middlewares.dependencies import (
@@ -224,6 +224,7 @@ async def build_application(settings: Settings) -> Application:
     if dependencies.journey is not None:
         dispatcher.message.outer_middleware(JourneyMiddleware(dependencies.journey))
 
+    dispatcher.include_router(character_reset.build_router())
     dispatcher.include_router(creation.build_router())
     # Роутер боя идёт первым: он забирает два боевых состояния, а роутер игры ниже
     # фильтрует по всей группе Play, куда они входят.

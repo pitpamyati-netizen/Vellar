@@ -627,7 +627,8 @@ class PostgresCharacterRepository:
                 health = $18, bank_gold = $19, quests = $20::jsonb,
                 crafts = $21::jsonb, wear = $22::jsonb, tutorial = $23,
                 arena_wins = $24, arena_losses = $25, arena_credit = $26,
-                is_admin = $27, house_id = $28, subclass_ids = $29, updated_at = now()
+                is_admin = $27, house_id = $28, subclass_ids = $29, class_id = $31, race_id = $32,
+                updated_at = now()
             WHERE id = $1 AND revision = $30 RETURNING revision
             """,
             character.id,
@@ -660,6 +661,8 @@ class PostgresCharacterRepository:
             character.house_id,
             list(character.subclass_ids),
             character.revision,
+            character.class_id,
+            character.race_id,
         )
         if revision is None:
             raise StaleCharacterError(str(character.id))
@@ -1002,6 +1005,15 @@ class PostgresTradeRepository:
             number,
         )
         return _trade_from_row(row) if row else None
+
+    async def has_pending(self, character_id: int) -> bool:
+        return bool(
+            await self._pool.fetchval(
+                "SELECT EXISTS(SELECT 1 FROM trades WHERE status='pending' AND "
+                "(author_character_id=$1 OR target_character_id=$1))",
+                character_id,
+            )
+        )
 
     async def close(
         self,

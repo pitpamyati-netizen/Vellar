@@ -138,3 +138,4 @@ M01 уточняет границы ценностей в 0084; отметки, 
 - [ADR 0098 — Постоянные цели и одно общее сюжетное последствие](0098-permanent-goals-and-one-story-consequence.md)
 - [ADR 0099 — Одно очко войны и участие аккаунта](0099-one-war-point-and-account-participation.md)
 - [ADR 0100 — Условия класса и адресная помощь](0100-class-tactics-and-targeted-aid.md)
+- [ADR 0102 — Добровольный полный сброс персонажа](0102-voluntary-character-reset.md)

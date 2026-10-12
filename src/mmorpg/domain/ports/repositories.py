@@ -367,6 +367,9 @@ class TradeRepository(Protocol):
 
     async def pending(self, number: int, *, scope: str) -> TradeRecord | None: ...
 
+    async def has_pending(self, character_id: int) -> bool:
+        """Есть ли незавершённая сделка с участием персонажа в любой группе."""
+
     async def close(
         self,
         number: int,

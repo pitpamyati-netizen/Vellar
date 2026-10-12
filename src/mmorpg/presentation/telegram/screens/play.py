@@ -739,7 +739,11 @@ def character_screen(
     return Screen(
         id=ScreenId.CHARACTER,
         lines=tuple(lines),
-        rows=((labels.STATS, labels.SKILLS), (labels.EQUIPMENT, labels.TALENTS)),
+        rows=(
+            (labels.STATS, labels.SKILLS),
+            (labels.EQUIPMENT, labels.TALENTS),
+            (labels.label("Сбросить персонажа"),),
+        ),
     )
 
 

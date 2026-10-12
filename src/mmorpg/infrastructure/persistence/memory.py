@@ -726,6 +726,13 @@ class InMemoryTradeRepository:
     async def pending(self, number: int, *, scope: str) -> TradeRecord | None:
         return self._pending(number, scope)
 
+    async def has_pending(self, character_id: int) -> bool:
+        return any(
+            record.is_pending
+            and character_id in (record.offer.author.character_id, record.offer.target.character_id)
+            for record in self._records
+        )
+
     async def close(
         self,
         number: int,

@@ -60,6 +60,9 @@
 
 ## Игровые справочники
 
+- [Полный сброс персонажа](character-reset.md): новый выбор и потеря прогресса.
+- [Проверка сброса](verification-reset-2026-10-12.md), [ADR 0102](adr/0102-voluntary-character-reset.md).
+
 | Документ | Назначение |
 | --- | --- |
 | [docs/accessibility.md](accessibility.md) | Спецификация доступности |

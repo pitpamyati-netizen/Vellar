@@ -75,10 +75,10 @@ class CharacterDraft:
     def points_left(self, budget: int) -> int:
         return max(0, budget - self.spent_points)
 
-    def is_complete(self, content: GameContent) -> bool:
+    def is_complete(self, content: GameContent, *, check_name: bool = True) -> bool:
         rules = content.rules
         return bool(
-            validate_name(self.name).ok
+            (not check_name or validate_name(self.name).ok)
             and self.race_id
             and self.class_id
             and len(self.trait_ids) == rules.traits_at_creation
