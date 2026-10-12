@@ -76,7 +76,7 @@ INITIATIVE_BASE = 19.65
 INITIATIVE_PER_LEVEL = 0.7
 INITIATIVE_PER_AGILITY = 0.8
 #: Что мудрость даёт запасу. Проценты от максимума за ход, с убывающей отдачей и
-#: своим пределом: запас растёт с уровнем, и прибавка числом сделала бы Чары
+#: своим пределом: запас растёт с уровнем, и прибавка числом сделала бы ресурс
 #: бездонными к середине пути (ADR 0058).
 RESOURCE_REGEN_PER_WISDOM = 0.4
 RESOURCE_REGEN_SOFTENER = 120.0
@@ -98,6 +98,7 @@ class DerivedStats:
     initiative: float
     resource_regen: float
     health_regen_percent: float
+    health_recovery_per_minute: float = 0.0
 
 
 def primary_stats(
@@ -215,6 +216,19 @@ def derived_stats(
         initiative=round(initiative, 2),
         resource_regen=round(resource_regen, 2),
         health_regen_percent=round(mods.flat(modifiers, "regen_per_turn_percent"), 2),
+        health_recovery_per_minute=round(
+            max(1, round(max_health))
+            * (
+                content.rules.health_recovery_base_percent
+                + softened(
+                    max(0, stats[StatCode.END]),
+                    content.rules.health_recovery_endurance_softener,
+                    content.rules.health_recovery_endurance_percent,
+                )
+            )
+            / 100.0,
+            6,
+        ),
     )
 
 

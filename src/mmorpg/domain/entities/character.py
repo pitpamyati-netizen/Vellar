@@ -172,6 +172,9 @@ class Character:
     # узла, и платит за то, чтобы его залатали. Ноль значит «как новенький» - именно
     # таков только что созданный персонаж, см. ``health_or``.
     health: int = 0
+    # Момент расчёта отдыха и доля следующего очка здоровья. None — старое сохранение.
+    health_recovered_at: int | None = None
+    health_recovery_remainder: int = 0
     bank_gold: int = 0
     quests: QuestLog = field(default_factory=QuestLog)
     # Работа, уже сделанная в ремесле. Ранг не хранится никогда - его отсчитывает

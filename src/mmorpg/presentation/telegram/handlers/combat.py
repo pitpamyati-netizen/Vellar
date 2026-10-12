@@ -40,6 +40,7 @@ from mmorpg.application.services.battle import (
 )
 from mmorpg.application.services.city_event import CityEvents
 from mmorpg.application.services.guild import GuildStore
+from mmorpg.application.services.health_recovery import HealthRecovery
 from mmorpg.application.services.long_goal import LongGoals
 from mmorpg.application.services.party import PartyStore
 from mmorpg.application.services.recruitment import Recruitment
@@ -70,6 +71,7 @@ from mmorpg.domain.rules import pvp as pvp_rules
 from mmorpg.domain.rules import roamer as roamer_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
 from mmorpg.domain.rules.combat import act, join_battle, joinable
+from mmorpg.domain.rules.health_recovery import restart as restart_recovery
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.domain.rules.tutorial import TutorialTask
 from mmorpg.logging import get_logger
@@ -174,6 +176,10 @@ async def open_fight(
             await _show(message, state, content, character, session, storage=storage, emoji=emoji)
             return
 
+    now = now or int(time.time())
+    recovery = HealthRecovery(content, characters, state_cache)
+    character = await recovery.apply(character.id, now=now) or character
+
     if flow.fight.startswith("join:"):
         # Вмешаться - это не завести бой, а войти в чужой (ADR 0065): ни сборки
         # противника, ни занятости стаи здесь нет, стая уже занята тем боем.
@@ -195,6 +201,10 @@ async def open_fight(
         return
 
     allies = await _party_of(character, parties, characters, store, flow=flow, content=content)
+    rested_allies = []
+    for ally in allies:
+        rested_allies.append(await recovery.apply(ally.id, now=now) or ally)
+    allies = tuple(rested_allies)
     if flow.descent.active and not flow.descent.encounter_id:
         flow = replace(flow, descent=replace(flow.descent, encounter_id=uuid4().hex))
     session, roster = await _spawn(
@@ -445,6 +455,7 @@ async def _spawn(
             store=store,
             parties=parties,
             battle_id=battle_id,
+            now=now,
         )
 
     if flow.fight == "arena":
@@ -645,6 +656,7 @@ async def _spawn_duel(
     store: BattleStore,
     parties: PartyStore,
     battle_id: str,
+    now: int,
 ) -> tuple[BattleSession | None, dict[int, Character]]:
     """Поединок с живым игроком - и с его отрядом, если он не один.
 
@@ -661,6 +673,9 @@ async def _spawn_duel(
         await message.answer(f"{target.name} уже в бою. Дождитесь, чем это кончится.")
         return None, {}
 
+    recovery = HealthRecovery(content, characters, store._cache)
+    target = await recovery.apply(target.id, now=now) or target
+
     defenders: list[tuple[Character, bool]] = [(target, True)]
     party = await parties.of(target.id)
     if party is not None:
@@ -670,6 +685,7 @@ async def _spawn_duel(
             other = await characters.get(member_id)
             if other is None or await store.busy(other.id) is not None:
                 continue
+            other = await recovery.apply(other.id, now=now) or other
             defenders.append((other, True))
 
     seed = derive("duel", character.id, target.id, flow.session.node, battle_id)
@@ -1011,7 +1027,12 @@ async def _store_and_show(
     for one in departed:
         current = await characters.get(one.character_id)
         if current is not None:
-            await characters.save(adventure.carry_wounds(content, current, session.state, one.id))
+            await characters.save(
+                restart_recovery(
+                    adventure.carry_wounds(content, current, session.state, one.id),
+                    now=int(time.time()),
+                )
+            )
     if departed:
         session = replace(
             session, departed=(*session.departed, *(one.character_id for one in departed))
@@ -1337,7 +1358,7 @@ async def _finish(
             # Слепок арены не сохраняется: он дрался, но ничего не терял.
             continue
         before = roster.get(fighter.id)
-        await characters.save(character)
+        await characters.save(restart_recovery(character, now=int(time.time())))
         await checkpoint("after_character")
         if before is not None:
             grown = progression.growth(content, before.level, character.level)

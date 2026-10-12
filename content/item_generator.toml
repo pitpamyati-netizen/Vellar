@@ -353,7 +353,7 @@ class_restriction = "cleric"
 key = "resource_regen_percent"
 value = 16
 min_item_level = 76
-text = "Только жрецу: Вера возвращается на 16 процентов быстрее."
+text = "Только жрецу: мана восстанавливается на 16 процентов быстрее."
 
 [[class_affix]]
 id = "slow_growth"

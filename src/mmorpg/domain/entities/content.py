@@ -226,7 +226,7 @@ class GuildTier:
 
 @dataclass(frozen=True, slots=True)
 class ClassResource:
-    """Ресурс класса - доблесть, ярость, мана и так далее.
+    """Ресурс класса: мана или выносливость.
 
     Чем запас растёт, здесь больше не сказано: это решает классовая сетка
     (``CharacterClass.scaling``), где у каждой из семи характеристик написано,
@@ -240,6 +240,14 @@ class ClassResource:
     base: float
     per_level: float
     regen_per_turn: float
+
+    def __post_init__(self) -> None:
+        # Старые каталоги незавершённых боёв сохраняют числа, но получают новые названия.
+        from mmorpg.domain.entities.resources import resource_kind
+
+        kind, name = resource_kind(self.id, self.name)
+        object.__setattr__(self, "id", kind)
+        object.__setattr__(self, "name", name)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1005,6 +1013,9 @@ class ProgressionRules:
     #: Чего стоит ранг умения. Одно число на все ранги: ранг платит тем, что
     #: умение делает, а не тем, чего он стоит (ADR 0067).
     rank_cost: int
+    health_recovery_base_percent: float = 1.0
+    health_recovery_endurance_percent: float = 4.0
+    health_recovery_endurance_softener: float = 100.0
 
     def innate_stat_value(self, level: int) -> int:
         """Что каждая характеристика имеет на этом уровне до всяких прибавок."""

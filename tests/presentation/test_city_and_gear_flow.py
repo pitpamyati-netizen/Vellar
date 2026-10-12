@@ -283,6 +283,7 @@ def test_the_character_sheet_names_every_number_the_engine_counts(
         "initiative": number(stats.initiative),
         "resource_regen": number(stats.resource_regen),
         "health_regen_percent": number(stats.health_regen_percent),
+        "health_recovery_per_minute": number(stats.health_recovery_per_minute),
     }
     assert stats.health_regen_percent, "«Ровное дыхание» и есть лечение по ходам"
     for name, value in spoken.items():

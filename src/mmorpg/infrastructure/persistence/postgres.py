@@ -49,7 +49,8 @@ CHARACTER_COLUMNS = """
     stat_str, stat_agi, stat_end, stat_int, stat_wis, stat_cha, stat_lck,
     trait_ids, loadout, equipment, city_id, unspent_stat_points, unspent_skill_points,
     health, bank_gold, quests, crafts, wear, tutorial, arena_wins, arena_losses,
-    arena_credit, house_id, subclass_ids, is_admin, revision
+    arena_credit, house_id, subclass_ids, is_admin, revision,
+    health_recovered_at, health_recovery_remainder
 """
 
 TRADE_COLUMNS = """
@@ -101,6 +102,8 @@ def _character_from_row(row: Any) -> Character:
         unspent_stat_points=row["unspent_stat_points"],
         unspent_skill_points=row["unspent_skill_points"],
         health=row["health"],
+        health_recovered_at=row["health_recovered_at"],
+        health_recovery_remainder=row["health_recovery_remainder"],
         bank_gold=row["bank_gold"],
         quests=_quests_from_json(row["quests"]),
         crafts=_crafts_from_json(row["crafts"]),
@@ -571,11 +574,11 @@ class PostgresCharacterRepository:
                 unspent_stat_points, unspent_skill_points,
                 health, bank_gold, quests, crafts, wear, tutorial, arena_wins,
                 arena_losses, arena_credit,
-                house_id, subclass_ids, is_admin
+                house_id, subclass_ids, is_admin, health_recovered_at, health_recovery_remainder
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                     $15, $16::jsonb, $17::jsonb, $18, $19, $20, $21, $22, $23::jsonb,
-                    $24::jsonb, $25::jsonb, $26, $27, $28, $29, $30, $31, $32)
+                    $24::jsonb, $25::jsonb, $26, $27, $28, $29, $30, $31, $32, $33, $34)
             RETURNING id
             """,
             character.user_id,
@@ -610,6 +613,8 @@ class PostgresCharacterRepository:
             character.house_id,
             list(character.subclass_ids),
             character.is_admin,
+            character.health_recovered_at,
+            character.health_recovery_remainder,
         )
         saved = await self._hydrate(replace(character, id=row["id"]))
         assert saved is not None
@@ -628,7 +633,7 @@ class PostgresCharacterRepository:
                 crafts = $21::jsonb, wear = $22::jsonb, tutorial = $23,
                 arena_wins = $24, arena_losses = $25, arena_credit = $26,
                 is_admin = $27, house_id = $28, subclass_ids = $29, class_id = $31, race_id = $32,
-                updated_at = now()
+                health_recovered_at = $33, health_recovery_remainder = $34, updated_at = now()
             WHERE id = $1 AND revision = $30 RETURNING revision
             """,
             character.id,
@@ -663,6 +668,8 @@ class PostgresCharacterRepository:
             character.revision,
             character.class_id,
             character.race_id,
+            character.health_recovered_at,
+            character.health_recovery_remainder,
         )
         if revision is None:
             raise StaleCharacterError(str(character.id))

@@ -507,3 +507,27 @@ async def test_a_duel_between_warring_guilds_takes_a_point(
     for guild_id in (ours.id, theirs.id):
         side = await guilds.by_id(guild_id)
         assert side is not None and side.deeds == 0
+
+
+async def test_both_parties_receive_offline_rest_before_the_duel(
+    content, storage, cache, characters, screens, bot, parties, attacker, defender
+):
+    from mmorpg.domain.rules.health_recovery import recover
+
+    attacker = await characters.save(replace(attacker, health=1, health_recovered_at=NOW - 600))
+    defender = await characters.save(replace(defender, health=1, health_recovered_at=NOW - 600))
+    ally = await characters.create(
+        replace(a_fighter("Тьен", 700_003), health=1, health_recovered_at=NOW - 600)
+    )
+    other = await characters.create(
+        replace(a_fighter("Ольна", 700_004), health=1, health_recovered_at=NOW - 600)
+    )
+    for leader, companion in ((attacker, ally), (defender, other)):
+        await parties.create(leader.id)
+        await parties.call(leader_id=leader.id, invitee_id=companion.id)
+        await parties.accept(companion.id)
+    await open_duel(content, storage, cache, characters, bot, attacker, defender, parties)
+    session = await BattleStore(cache).load(await BattleStore(cache).busy(attacker.id))
+    for hero in (attacker, defender, ally, other):
+        assert session.combatant_of(hero.id).health == recover(content, hero, now=NOW).health
+        assert (await characters.get(hero.id)).health > hero.health

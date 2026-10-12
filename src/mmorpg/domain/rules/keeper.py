@@ -59,7 +59,11 @@ def set_health(content: GameContent, character: Character, value: int) -> Charac
     ниже единицы играть нельзя, выше максимума нечем.
     """
     maximum = derived_stats(content, character).max_health
-    return character.with_health(value, maximum)
+    return replace(
+        character.with_health(value, maximum),
+        health_recovered_at=None,
+        health_recovery_remainder=0,
+    )
 
 
 def rename(character: Character, name: str) -> Character:

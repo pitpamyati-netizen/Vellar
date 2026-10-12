@@ -71,7 +71,7 @@ STAT_GENITIVE: dict[StatCode, str] = {
 STAT_EFFECTS: dict[StatCode, str] = {
     StatCode.STR: "тяжесть удара в ближнем бою",
     StatCode.AGI: "точность, уклонение и то, кто бьёт первым",
-    StatCode.END: "здоровье и броню",
+    StatCode.END: "здоровье, броню и восстановление здоровья вне боя",
     StatCode.INT: "силу чар",
     StatCode.WIS: "восстановление ресурса за ход",
     StatCode.CHA: "цену в лавке: чем выше, тем дешевле отдают",

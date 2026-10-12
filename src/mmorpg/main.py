@@ -84,6 +84,7 @@ from mmorpg.presentation.telegram.middlewares.dependencies import (
     DependencyMiddleware,
 )
 from mmorpg.presentation.telegram.middlewares.errors import ErrorMiddleware
+from mmorpg.presentation.telegram.middlewares.health_recovery import HealthRecoveryMiddleware
 from mmorpg.presentation.telegram.middlewares.idempotency import IdempotencyMiddleware
 from mmorpg.presentation.telegram.middlewares.journey import JourneyMiddleware
 from mmorpg.presentation.telegram.middlewares.metrics import MetricsMiddleware
@@ -220,6 +221,7 @@ async def build_application(settings: Settings) -> Application:
     # Внешняя, а не внутренняя: заблокированный не должен дойти ни до одного
     # роутера, а внутренние обёртки диспетчера до вложенных роутеров не доходят.
     dispatcher.message.outer_middleware(BanMiddleware())
+    dispatcher.message.outer_middleware(HealthRecoveryMiddleware())
     dispatcher.message.outer_middleware(ReadingMiddleware(dependencies.state_cache))
     if dependencies.journey is not None:
         dispatcher.message.outer_middleware(JourneyMiddleware(dependencies.journey))

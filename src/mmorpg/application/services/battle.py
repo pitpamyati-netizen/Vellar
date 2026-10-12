@@ -35,6 +35,7 @@ from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.damage import DamageType
 from mmorpg.domain.entities.effects import ActiveEffect, EffectStack, status_effect
 from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
+from mmorpg.domain.entities.resources import resource_name as normal_resource_name
 from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.ports.repositories import StateCache
 from mmorpg.domain.rules.combat import hero_combatant, monster_combatant, open_battle
@@ -513,7 +514,7 @@ def _combatant_from_json(raw: Mapping[str, Any]) -> Combatant:
         health=int(raw["health"]),
         max_resource=int(raw["max_resource"]),
         resource=int(raw["resource"]),
-        resource_name=str(raw["resource_name"]),
+        resource_name=normal_resource_name(str(raw["resource_name"])),
         initiative=float(raw["initiative"]),
         live=bool(raw["live"]),
         character_id=int(raw["character_id"]),

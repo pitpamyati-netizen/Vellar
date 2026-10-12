@@ -317,11 +317,32 @@ def _build_rules(raw: Mapping[str, Mapping[str, Any]], problems: list[str]) -> P
         max_rank=int(skill_meta.get("max_rank", 5)),
         levels_per_skill_point=int(skill_meta.get("levels_per_skill_point", 2)),
         rank_cost=int(skill_meta.get("rank_cost", 1)),
+        health_recovery_base_percent=float(class_meta.get("health_recovery_base_percent", 1)),
+        health_recovery_endurance_percent=float(
+            class_meta.get("health_recovery_endurance_percent", 4)
+        ),
+        health_recovery_endurance_softener=float(
+            class_meta.get("health_recovery_endurance_softener", 100)
+        ),
     )
     if rules.levels_per_skill_point < 1:
         problems.append("skills.toml: [meta].levels_per_skill_point must be at least 1")
     if rules.rank_cost < 1:
         problems.append("skills.toml: [meta].rank_cost must be at least 1")
+    from math import isfinite
+
+    for name in (
+        "health_recovery_base_percent",
+        "health_recovery_endurance_percent",
+        "health_recovery_endurance_softener",
+    ):
+        value = getattr(rules, name)
+        if (
+            not isfinite(value)
+            or value < 0
+            or (name == "health_recovery_endurance_softener" and value == 0)
+        ):
+            problems.append(f"classes.toml: [meta].{name} must be finite and positive or zero")
     unlock_count = ACTIVES_PER_CLASS - FORKS_PER_CLASS
     if len(rules.active_unlock_levels) != unlock_count:
         problems.append(

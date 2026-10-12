@@ -139,3 +139,4 @@ M01 уточняет границы ценностей в 0084; отметки, 
 - [ADR 0099 — Одно очко войны и участие аккаунта](0099-one-war-point-and-account-participation.md)
 - [ADR 0100 — Условия класса и адресная помощь](0100-class-tactics-and-targeted-aid.md)
 - [ADR 0102 — Добровольный полный сброс персонажа](0102-voluntary-character-reset.md)
+- [ADR 0103 — Восстановление здоровья и два ресурса](0103-health-recovery-and-class-resources.md)

@@ -679,7 +679,7 @@ name = "Неистраченный"
 category = "milestone"
 tags = ["веха", "сила"]
 modifiers = { resource_regen_percent = 12, cost_reduction_percent = 5 }
-text = "Ярость возвращается на 12 процентов быстрее, а умения стоят на 5 процентов дешевле."
+text = "Выносливость восстанавливается на 12 процентов быстрее, а умения стоят на 5 процентов дешевле."
 
 [[trait]]
 id = "ms_barbarian_avalanche"
@@ -763,7 +763,7 @@ name = "Долгий дозор"
 category = "milestone"
 tags = ["веха", "мудрость"]
 modifiers = { resource_regen_percent = 12 }
-text = "Фокус возвращается на 12 процентов быстрее."
+text = "Выносливость восстанавливается на 12 процентов быстрее."
 
 [[trait]]
 id = "ms_ranger_windless"
@@ -889,7 +889,7 @@ name = "Родник"
 category = "milestone"
 tags = ["веха", "мудрость"]
 modifiers = { resource_regen_percent = 14 }
-text = "Вера возвращается на 14 процентов быстрее."
+text = "Мана восстанавливается на 14 процентов быстрее."
 
 [[trait]]
 id = "ms_cleric_lastword"

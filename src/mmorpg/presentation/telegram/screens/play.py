@@ -827,6 +827,8 @@ def derived_lines(stats: DerivedStats) -> tuple[str, ...]:
         f"Сила крита: {percent(stats.crit_damage)} от урона. "
         f"Инициатива: {number(stats.initiative)}.",
         f"{stats.resource_name} за ход: {number(stats.resource_regen)}.",
+        f"Восстановление здоровья вне боя: {number(stats.health_recovery_per_minute)} в минуту. "
+        "Скорость растёт от выносливости; отдых действует и без входа в игру.",
     ]
     if stats.health_regen_percent:
         lines.append(f"Здоровья за ход в бою: {percent(stats.health_regen_percent)} от максимума.")
@@ -871,6 +873,7 @@ def stat_effect_lines(content: GameContent, character: Character) -> tuple[str, 
     # Что каждая характеристика делает помимо сетки: это правила, общие для всех
     # классов, и живут они постоянными, а не содержимым.
     common: dict[StatCode, str] = {
+        StatCode.END: "восстановление здоровья вне боя становится быстрее",
         StatCode.AGI: (
             f"точность {number(stat_rules.ACCURACY_PER_AGILITY)}, "
             f"уклонение {percent(stat_rules.DODGE_PER_AGILITY)}, "

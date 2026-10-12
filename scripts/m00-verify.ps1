@@ -87,8 +87,8 @@ function Assert-User([string]$database, [string]$account) {
 function Seed-TestCharacter([string]$database, [string]$account) {
     $seed = @"
 INSERT INTO users (telegram_id, username) VALUES ($account, 'migration_control');
-INSERT INTO characters (user_id, name, race_id, class_id, level, gold, bank_gold, equipment, experience, stat_str)
-VALUES ($account, 'Control', 'human', 'warrior', 12, 731, 219, '{"weapon":"sword@1#common"}', 345, 8);
+INSERT INTO characters (user_id, name, race_id, class_id, level, gold, bank_gold, equipment, experience, stat_str, health)
+VALUES ($account, 'Control', 'human', 'warrior', 12, 731, 219, '{"weapon":"sword@1#common"}', 345, 8, 5);
 INSERT INTO inventory (character_id, item_id, quantity)
 SELECT id, 'sword@1#common', 3 FROM characters WHERE user_id = $account;
 "@
@@ -143,6 +143,8 @@ try {
     Require-Success "seed market escrow, order, wear and confirmation"
     & $uvCommand run python -m scripts.m09_goals_probe --database $fresh --seed
     Require-Success "seed permanent project, story, goals and account score"
+    & $uvCommand run python -m scripts.health_recovery_probe --database $fresh --seed
+    Require-Success "seed health recovery time and fraction"
     $entryCount = Query-TestDatabase $fresh "SELECT count(*) FROM economic_entries"
     $freshDump = Join-Path $root "backups/m00-fresh.dump"
     & $pgDump -d (Test-Dsn $fresh) -Fc -f $freshDump
@@ -181,6 +183,9 @@ try {
     & $uvCommand run python -m scripts.m09_goals_probe --database $restored
     Require-Success "restored project, story, goals and account score"
     Record "M09: project, story, goals, reward replay and account score survived backup restore"
+    & $uvCommand run python -m scripts.health_recovery_probe --database $restored
+    Require-Success "restore health recovery time, fraction and continuation"
+    Record "Health recovery: time, fraction and continuation survived backup restore"
 
     Reset-TestDatabase $old
     Upgrade-TestDatabase $old "0030"
@@ -196,6 +201,9 @@ try {
     Upgrade-TestDatabase $oldCopy "head"
     Assert-Revision $oldCopy $schemaHead
     Assert-Character $oldCopy "-99990002"
+    if ((Query-TestDatabase $oldCopy "SELECT health || ':' || (health_recovered_at IS NULL)::text || ':' || health_recovery_remainder FROM characters WHERE user_id=-99990002") -ne "5:true:0") {
+        throw "Old wounds or initial health recovery changed during migration"
+    }
     Record "M00.2/M02: schema 0030 copy upgraded to $schemaHead; hero, wallet, bank, equipment and bag preserved"
 
     Record "M00.3: controlled failure and concurrency tests passed in project checks"
