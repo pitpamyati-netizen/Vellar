@@ -29,8 +29,8 @@ def test_invalid_recovery_settings_are_rejected(tmp_path, setting, value):
     shutil.copytree(CONTENT_ROOT, tmp_path / "content")
     path = tmp_path / "content/classes.toml"
     original = {
-        "health_recovery_base_percent": "1.0",
-        "health_recovery_endurance_percent": "4.0",
+        "health_recovery_base_percent": "5.0",
+        "health_recovery_endurance_percent": "20.0",
         "health_recovery_endurance_softener": "100.0",
     }[setting]
     path.write_text(

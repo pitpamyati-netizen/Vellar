@@ -1013,8 +1013,8 @@ class ProgressionRules:
     #: Чего стоит ранг умения. Одно число на все ранги: ранг платит тем, что
     #: умение делает, а не тем, чего он стоит (ADR 0067).
     rank_cost: int
-    health_recovery_base_percent: float = 1.0
-    health_recovery_endurance_percent: float = 4.0
+    health_recovery_base_percent: float = 5.0
+    health_recovery_endurance_percent: float = 20.0
     health_recovery_endurance_softener: float = 100.0
 
     def innate_stat_value(self, level: int) -> int:

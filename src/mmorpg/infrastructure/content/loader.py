@@ -317,9 +317,9 @@ def _build_rules(raw: Mapping[str, Mapping[str, Any]], problems: list[str]) -> P
         max_rank=int(skill_meta.get("max_rank", 5)),
         levels_per_skill_point=int(skill_meta.get("levels_per_skill_point", 2)),
         rank_cost=int(skill_meta.get("rank_cost", 1)),
-        health_recovery_base_percent=float(class_meta.get("health_recovery_base_percent", 1)),
+        health_recovery_base_percent=float(class_meta.get("health_recovery_base_percent", 5)),
         health_recovery_endurance_percent=float(
-            class_meta.get("health_recovery_endurance_percent", 4)
+            class_meta.get("health_recovery_endurance_percent", 20)
         ),
         health_recovery_endurance_softener=float(
             class_meta.get("health_recovery_endurance_softener", 100)

@@ -75,7 +75,9 @@ def test_old_battle_catalog_has_new_resource_labels_and_default_recovery(content
             rules.pop(name)
     restored = restore_content(json.dumps(old))
     assert restored.character_class("paladin").resource.name == "Выносливость"
-    assert restored.rules.health_recovery_base_percent == 1
+    assert restored.rules.health_recovery_base_percent == 5
+    assert restored.rules.health_recovery_endurance_percent == 20
+    assert restored.rules.health_recovery_endurance_softener == 100
 
 
 @pytest.mark.parametrize("now", [900, 1000])
@@ -106,7 +108,7 @@ def test_every_class_recovers_faster_with_effective_endurance(content, wounded, 
     for character in (hero, tougher):
         stats = derived_stats(content, character)
         end = primary_stats(content, character)[StatCode.END]
-        expected = stats.max_health * (1 + 4 * end / (end + 100)) / 100
+        expected = stats.max_health * (5 + 20 * end / (end + 100)) / 100
         assert stats.health_recovery_per_minute == pytest.approx(expected, abs=0.000001)
     assert (
         derived_stats(content, tougher).health_recovery_per_minute
