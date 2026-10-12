@@ -55,6 +55,8 @@ class Play(StatesGroup):
     character = State()
     equipment = State()
     talents = State()
+    talent_branch = State()
+    talent_reset = State()
     talent = State()
     stats = State()
     skills = State()
@@ -178,6 +180,8 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.CHARACTER: Play.character,
     ScreenId.EQUIPMENT: Play.equipment,
     ScreenId.TALENTS: Play.talents,
+    ScreenId.TALENT_BRANCH: Play.talent_branch,
+    ScreenId.TALENT_RESET: Play.talent_reset,
     ScreenId.TALENT: Play.talent,
     ScreenId.STATS: Play.stats,
     ScreenId.SKILLS: Play.skills,
@@ -298,7 +302,9 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.CHARACTER: ScreenId.MAIN_MENU,
     ScreenId.EQUIPMENT: ScreenId.CHARACTER,
     ScreenId.TALENTS: ScreenId.CHARACTER,
-    ScreenId.TALENT: ScreenId.TALENTS,
+    ScreenId.TALENT: ScreenId.TALENT_BRANCH,
+    ScreenId.TALENT_BRANCH: ScreenId.TALENTS,
+    ScreenId.TALENT_RESET: ScreenId.TALENTS,
     ScreenId.STATS: ScreenId.CHARACTER,
     ScreenId.SKILLS: ScreenId.MAIN_MENU,
     ScreenId.SKILL_SLOTS: ScreenId.SKILLS,

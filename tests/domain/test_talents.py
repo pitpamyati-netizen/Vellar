@@ -23,6 +23,14 @@ from mmorpg.domain.rules.skill_effects import EffectCategory, Inflict, spec_for
 from tests.domain.test_combat import make_enemy
 
 
+@pytest.fixture
+def content(content):
+    """Прежний каталог незавершённого боя сохраняет правила пяти выборов."""
+    return replace(
+        content, talents=tuple(replace(one, branch="") for one in content.talents if one.legacy)
+    )
+
+
 def hero(class_id="warrior", level=150, code="warrior_sekushchiy_roscherk", rank=1):
     return Character(
         1,

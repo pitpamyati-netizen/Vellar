@@ -39,8 +39,10 @@ class SkillLoadout:
     #: умения (``domain/rules/skill_mastery``). Две за жизнь умения - на третьем
     #: ранге и на пятом, - и обе меняют то, что умение делает.
     masteries: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
-    #: Один выбранный талант на ступень; старые сохранения получают пустой набор.
+    #: Прежние выборы сохраняют действие до подтверждённого перехода на дерево.
     talents: tuple[str, ...] = ()
+    talent_ranks: Mapping[str, int] = field(default_factory=dict)
+    talent_tree_version: int = 0
 
     def __post_init__(self) -> None:
         if len(self.actives) != ACTIVE_SLOTS:

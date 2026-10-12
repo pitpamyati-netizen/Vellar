@@ -96,6 +96,8 @@ def _character_from_row(row: Any) -> Character:
                 }
             ),
             talents=tuple(str(one) for one in loadout_raw.get("talents", ())),
+            talent_ranks=MappingProxyType(dict(loadout_raw.get("talent_ranks", {}))),
+            talent_tree_version=int(loadout_raw.get("talent_tree_version", 0)),
         ),
         equipment=Equipment(MappingProxyType(dict(equipment_raw))),
         city_id=row["city_id"],
@@ -170,6 +172,8 @@ def _loadout_to_json(loadout: SkillLoadout) -> str:
             "ranks": dict(loadout.ranks),
             "masteries": {code: list(taken) for code, taken in loadout.masteries.items()},
             "talents": list(loadout.talents),
+            "talent_ranks": dict(loadout.talent_ranks),
+            "talent_tree_version": loadout.talent_tree_version,
         },
         ensure_ascii=False,
     )

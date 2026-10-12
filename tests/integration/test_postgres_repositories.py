@@ -123,27 +123,53 @@ def a_character(
     )
 
 
-async def test_old_loadout_accepts_and_keeps_talents_without_losing_ranks(
+async def test_old_loadout_accepts_tree_and_keeps_talent_ranks_after_restart(
     pool, clean_user, content
 ) -> None:
     await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user))
     characters = PostgresCharacterRepository(pool)
     original = await characters.create(a_character(clean_user, level=150))
     # Сохранение прошлой версии действительно не содержит нового поля.
-    await pool.execute("UPDATE characters SET loadout=loadout-'talents' WHERE id=$1", original.id)
+    await pool.execute(
+        "UPDATE characters SET loadout=loadout-'talents'-'talent_ranks'-'talent_tree_version' "
+        "WHERE id=$1",
+        original.id,
+    )
     old = await characters.get(original.id)
     assert old.loadout.talents == ()
-    chosen = talents.choose(content, old, "warrior_1_1")
+    assert old.loadout.talent_ranks == {} and old.loadout.talent_tree_version == 0
+    chosen = talents.choose(content, old, "warrior_path_1_1_a")
     await characters.save(chosen)
     restarted = await PostgresCharacterRepository(pool).get(old.id)
-    assert restarted.loadout.talents == ("warrior_1_1",)
+    assert restarted.loadout.talent_ranks == {"warrior_path_1_1_a": 1}
+    assert restarted.loadout.talent_tree_version == 1
     assert restarted.loadout.ranks == old.loadout.ranks
     assert restarted.gold == old.gold and restarted.equipment == old.equipment
-    changed = talents.choose(content, restarted, "warrior_1_2")
+    changed = talents.choose(content, restarted, "warrior_path_1_1_a")
     await characters.save(changed)
     final = await characters.get(old.id)
-    assert final.loadout.talents == ("warrior_1_2",)
+    assert final.loadout.talent_ranks == {"warrior_path_1_1_a": 2}
     assert final.unspent_skill_points == old.unspent_skill_points
+
+
+async def test_old_sql_choices_stay_active_until_confirmed_transition(pool, clean_user, content):
+    await PostgresUserRepository(pool).upsert(User(telegram_id=clean_user))
+    characters = PostgresCharacterRepository(pool)
+    original = await characters.create(a_character(clean_user, level=150))
+    await pool.execute(
+        "UPDATE characters SET loadout=jsonb_set(loadout-'talent_ranks'-'talent_tree_version', "
+        "'{talents}', '[\"warrior_1_1\", \"warrior_2_1\"]'::jsonb) WHERE id=$1",
+        original.id,
+    )
+    old = await characters.get(original.id)
+    assert len(talents.selected(content, old)) == 2
+    assert talents.choose(content, old, "warrior_path_1_1_a") is None
+    await characters.save(talents.reset(old))
+    new = await PostgresCharacterRepository(pool).get(old.id)
+    assert new.loadout.talents == () and new.loadout.talent_tree_version == 1
+    assert new.loadout.ranks == old.loadout.ranks and new.equipment == old.equipment
+    assert new.gold == old.gold and new.unspent_skill_points == old.unspent_skill_points
+    assert talents.choose(content, new, "warrior_path_1_1_a") is not None
 
 
 # --- users -------------------------------------------------------------------

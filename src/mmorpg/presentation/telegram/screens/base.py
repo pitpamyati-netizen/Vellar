@@ -52,6 +52,8 @@ class ScreenId(StrEnum):
     CHARACTER = "character"
     EQUIPMENT = "equipment"
     TALENTS = "talents"
+    TALENT_BRANCH = "talent_branch"
+    TALENT_RESET = "talent_reset"
     TALENT = "talent"
     STATS = "stats"
     SKILLS = "skills"

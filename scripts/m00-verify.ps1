@@ -145,6 +145,8 @@ try {
     Require-Success "seed permanent project, story, goals and account score"
     & $uvCommand run python -m scripts.health_recovery_probe --database $fresh --seed
     Require-Success "seed health recovery time and fraction"
+    & $uvCommand run python -m scripts.talent_trees_probe --database $fresh --seed
+    Require-Success "seed talent tree ranks and legacy choices"
     $entryCount = Query-TestDatabase $fresh "SELECT count(*) FROM economic_entries"
     $freshDump = Join-Path $root "backups/m00-fresh.dump"
     & $pgDump -d (Test-Dsn $fresh) -Fc -f $freshDump
@@ -186,6 +188,9 @@ try {
     & $uvCommand run python -m scripts.health_recovery_probe --database $restored
     Require-Success "restore health recovery time, fraction and continuation"
     Record "Health recovery: time, fraction and continuation survived backup restore"
+    & $uvCommand run python -m scripts.talent_trees_probe --database $restored
+    Require-Success "restore talent ranks, final route and legacy choices"
+    Record "Talent trees: ranks, final route, continuation and legacy choices survived backup restore"
 
     Reset-TestDatabase $old
     Upgrade-TestDatabase $old "0030"

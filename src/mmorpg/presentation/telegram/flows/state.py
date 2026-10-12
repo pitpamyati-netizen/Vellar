@@ -264,6 +264,9 @@ class PlayState:
     #: Это выбор, а не переходное: с экрана грани уходят и возвращаются.
     mastery_code: str = ""
     talent_code: str = ""
+    talent_branch: str = ""
+    talent_rank: int = 0
+    talent_confirmation: str = ""
     quest_id: str = ""
     craft_id: str = ""
     city_event_stage: int = -1
@@ -410,6 +413,9 @@ class PlayState:
                 "npc": self.npc_id,
                 "mastery": self.mastery_code,
                 "talent": self.talent_code,
+                "talent_branch": self.talent_branch,
+                "talent_rank": self.talent_rank,
+                "talent_confirmation": self.talent_confirmation,
                 "subclass": self.subclass_id,
                 "item": self.item_id,
                 "shop_price": self.shop_price,
@@ -548,6 +554,9 @@ class PlayState:
             npc_id=data.get("npc", ""),
             mastery_code=str(data.get("mastery", "")),
             talent_code=str(data.get("talent", "")),
+            talent_branch=str(data.get("talent_branch", "")),
+            talent_rank=int(data.get("talent_rank", 0)),
+            talent_confirmation=str(data.get("talent_confirmation", "")),
             subclass_id=str(data.get("subclass", "")),
             item_id=data.get("item", ""),
             shop_price=data.get("shop_price"),
@@ -624,6 +633,7 @@ LIST_PAGE_FIELD: dict[ScreenId, str] = {
     ScreenId.CRAFT: "list_page",
     ScreenId.SKILLS: "skill_page",
     ScreenId.TALENTS: "list_page",
+    ScreenId.TALENT_BRANCH: "list_page",
     ScreenId.MENTOR: "mentor_page",
     ScreenId.QUEST_BOARD: "board_page",
     ScreenId.WORLD: "world_page",

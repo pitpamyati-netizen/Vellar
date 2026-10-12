@@ -1,6 +1,34 @@
-# Таланты: пять ступеней, по одному из трёх вариантов на ступень.
-# Выбор и бесплатная замена доступны вне боя; очки умений не тратятся.
-# Текст эффекта строится по этим же числам и условиям.
+# Три ветки на класс, пять рядов по три таланта.
+# Проходные таланты имеют два ранга; ключевые требуют полный проходной талант.
+# Последняя развилка допускает только один из двух проходных талантов.
+
+[[talent]]
+code = "warrior_path_1_1_a"
+name = "Точный приём воина"
+class = "warrior"
+level = 10
+effect = "power"
+amount = 2
+category = "damage"
+branch = "warrior_branch_1"
+branch_name = "Клинок"
+row = 1
+max_rank = 2
+points_required = 0
+
+[[talent]]
+code = "warrior_path_1_1_b"
+name = "Мера усилия воина"
+class = "warrior"
+level = 10
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "warrior_branch_1"
+branch_name = "Клинок"
+row = 1
+max_rank = 2
+points_required = 0
 
 [[talent]]
 code = "warrior_1_1"
@@ -10,25 +38,43 @@ level = 10
 effect = "power"
 amount = 10
 category = "damage"
+branch = "warrior_branch_1"
+branch_name = "Клинок"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["warrior_path_1_1_a", "warrior_path_1_1_b"]
+legacy = true
 
 [[talent]]
-code = "warrior_1_2"
-name = "Расчётливый боец"
+code = "warrior_path_1_2_a"
+name = "Отработанный приём воина"
 class = "warrior"
-level = 10
+level = 30
+effect = "power"
+amount = 2
+category = "damage"
+branch = "warrior_branch_1"
+branch_name = "Клинок"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["warrior_1_1"]
+
+[[talent]]
+code = "warrior_path_1_2_b"
+name = "Верный расчёт воина"
+class = "warrior"
+level = 30
 effect = "cost"
-amount = 15
-category = "all"
-
-[[talent]]
-code = "warrior_1_3"
-name = "Крепкое сложение"
-class = "warrior"
-level = 10
-effect = "modifier"
-amount = 10
-category = "all"
-modifier = "health_percent"
+amount = 2
+category = "damage"
+branch = "warrior_branch_1"
+branch_name = "Клинок"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["warrior_1_1"]
 
 [[talent]]
 code = "warrior_2_1"
@@ -40,25 +86,43 @@ amount = 20
 category = "damage"
 condition = "actor_status"
 statuses = ["guard"]
+branch = "warrior_branch_1"
+branch_name = "Клинок"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["warrior_path_1_2_a", "warrior_path_1_2_b"]
+legacy = true
 
 [[talent]]
-code = "warrior_2_2"
-name = "Частый натиск"
+code = "warrior_path_1_3_a"
+name = "Сильный приём воина"
 class = "warrior"
-level = 30
-effect = "cooldown"
-amount = 1
+level = 60
+effect = "power"
+amount = 2
 category = "damage"
+branch = "warrior_branch_1"
+branch_name = "Клинок"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["warrior_2_1"]
 
 [[talent]]
-code = "warrior_2_3"
-name = "Ровное дыхание воина"
+code = "warrior_path_1_3_b"
+name = "Сбережённое усилие воина"
 class = "warrior"
-level = 30
-effect = "modifier"
-amount = 20
-category = "all"
-modifier = "resource_regen_percent"
+level = 60
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "warrior_branch_1"
+branch_name = "Клинок"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["warrior_2_1"]
 
 [[talent]]
 code = "warrior_3_1"
@@ -68,25 +132,43 @@ level = 60
 effect = "duration"
 amount = 1
 category = "buff"
+branch = "warrior_branch_1"
+branch_name = "Клинок"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["warrior_path_1_3_a", "warrior_path_1_3_b"]
+legacy = true
 
 [[talent]]
-code = "warrior_3_2"
-name = "Надёжный щит"
+code = "warrior_path_1_4_a"
+name = "Совершенный приём воина"
 class = "warrior"
-level = 60
+level = 100
 effect = "power"
-amount = 15
-category = "barrier"
+amount = 2
+category = "damage"
+branch = "warrior_branch_1"
+branch_name = "Клинок"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["warrior_3_1"]
 
 [[talent]]
-code = "warrior_3_3"
-name = "Закалённый доспех"
+code = "warrior_path_1_4_b"
+name = "Точный расход воина"
 class = "warrior"
-level = 60
-effect = "modifier"
-amount = 8
-category = "all"
-modifier = "armor_percent"
+level = 100
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "warrior_branch_1"
+branch_name = "Клинок"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["warrior_3_1"]
 
 [[talent]]
 code = "warrior_4_1"
@@ -96,25 +178,45 @@ level = 100
 effect = "cost"
 amount = 20
 category = "damage"
+branch = "warrior_branch_1"
+branch_name = "Клинок"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["warrior_path_1_4_a", "warrior_path_1_4_b"]
+legacy = true
 
 [[talent]]
-code = "warrior_4_2"
-name = "Быстрый щит"
+code = "warrior_path_1_5_a"
+name = "Мастерский приём воина"
 class = "warrior"
-level = 100
-effect = "cooldown"
-amount = 1
-category = "barrier"
+level = 150
+effect = "power"
+amount = 2
+category = "damage"
+branch = "warrior_branch_1"
+branch_name = "Клинок"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["warrior_4_1"]
+choice_group = "warrior_branch_1_final_route"
 
 [[talent]]
-code = "warrior_4_3"
-name = "Точный клинок"
+code = "warrior_path_1_5_b"
+name = "Выверенное усилие воина"
 class = "warrior"
-level = 100
-effect = "modifier"
-amount = 10
-category = "all"
-modifier = "accuracy_percent"
+level = 150
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "warrior_branch_1"
+branch_name = "Клинок"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["warrior_4_1"]
+choice_group = "warrior_branch_1_final_route"
 
 [[talent]]
 code = "warrior_5_1"
@@ -124,6 +226,232 @@ level = 150
 effect = "power"
 amount = 15
 category = "damage"
+branch = "warrior_branch_1"
+branch_name = "Клинок"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["warrior_path_1_5_a", "warrior_path_1_5_b"]
+legacy = true
+
+[[talent]]
+code = "warrior_path_2_1_a"
+name = "Спокойное начало воина"
+class = "warrior"
+level = 10
+effect = "cost"
+amount = 2
+category = "all"
+branch = "warrior_branch_2"
+branch_name = "Стража"
+row = 1
+max_rank = 2
+points_required = 0
+
+[[talent]]
+code = "warrior_path_2_1_b"
+name = "Первый вдох воина"
+class = "warrior"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "warrior_branch_2"
+branch_name = "Стража"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "resource_regen_percent"
+
+[[talent]]
+code = "warrior_1_2"
+name = "Расчётливый боец"
+class = "warrior"
+level = 10
+effect = "cost"
+amount = 15
+category = "all"
+branch = "warrior_branch_2"
+branch_name = "Стража"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["warrior_path_2_1_a", "warrior_path_2_1_b"]
+legacy = true
+
+[[talent]]
+code = "warrior_path_2_2_a"
+name = "Размеренная работа воина"
+class = "warrior"
+level = 30
+effect = "cost"
+amount = 2
+category = "all"
+branch = "warrior_branch_2"
+branch_name = "Стража"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["warrior_1_2"]
+
+[[talent]]
+code = "warrior_path_2_2_b"
+name = "Ровный ритм воина"
+class = "warrior"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "warrior_branch_2"
+branch_name = "Стража"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "resource_regen_percent"
+requires_all = ["warrior_1_2"]
+
+[[talent]]
+code = "warrior_2_2"
+name = "Частый натиск"
+class = "warrior"
+level = 30
+effect = "cooldown"
+amount = 1
+category = "damage"
+branch = "warrior_branch_2"
+branch_name = "Стража"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["warrior_path_2_2_a", "warrior_path_2_2_b"]
+legacy = true
+
+[[talent]]
+code = "warrior_path_2_3_a"
+name = "Согласованная работа воина"
+class = "warrior"
+level = 60
+effect = "cost"
+amount = 2
+category = "all"
+branch = "warrior_branch_2"
+branch_name = "Стража"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["warrior_2_2"]
+
+[[talent]]
+code = "warrior_path_2_3_b"
+name = "Долгое дыхание воина"
+class = "warrior"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "warrior_branch_2"
+branch_name = "Стража"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "resource_regen_percent"
+requires_all = ["warrior_2_2"]
+
+[[talent]]
+code = "warrior_3_2"
+name = "Надёжный щит"
+class = "warrior"
+level = 60
+effect = "power"
+amount = 15
+category = "barrier"
+branch = "warrior_branch_2"
+branch_name = "Стража"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["warrior_path_2_3_a", "warrior_path_2_3_b"]
+legacy = true
+
+[[talent]]
+code = "warrior_path_2_4_a"
+name = "Чёткий порядок воина"
+class = "warrior"
+level = 100
+effect = "cost"
+amount = 2
+category = "all"
+branch = "warrior_branch_2"
+branch_name = "Стража"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["warrior_3_2"]
+
+[[talent]]
+code = "warrior_path_2_4_b"
+name = "Второе дыхание воина"
+class = "warrior"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "warrior_branch_2"
+branch_name = "Стража"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "resource_regen_percent"
+requires_all = ["warrior_3_2"]
+
+[[talent]]
+code = "warrior_4_2"
+name = "Быстрый щит"
+class = "warrior"
+level = 100
+effect = "cooldown"
+amount = 1
+category = "barrier"
+branch = "warrior_branch_2"
+branch_name = "Стража"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["warrior_path_2_4_a", "warrior_path_2_4_b"]
+legacy = true
+
+[[talent]]
+code = "warrior_path_2_5_a"
+name = "Безошибочный порядок воина"
+class = "warrior"
+level = 150
+effect = "cost"
+amount = 2
+category = "all"
+branch = "warrior_branch_2"
+branch_name = "Стража"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["warrior_4_2"]
+choice_group = "warrior_branch_2_final_route"
+
+[[talent]]
+code = "warrior_path_2_5_b"
+name = "Полный запас воина"
+class = "warrior"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "warrior_branch_2"
+branch_name = "Стража"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "resource_regen_percent"
+requires_all = ["warrior_4_2"]
+choice_group = "warrior_branch_2_final_route"
 
 [[talent]]
 code = "warrior_5_2"
@@ -135,6 +463,241 @@ amount = 25
 category = "damage"
 condition = "target_health_below"
 threshold = 35
+branch = "warrior_branch_2"
+branch_name = "Стража"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["warrior_path_2_5_a", "warrior_path_2_5_b"]
+legacy = true
+
+[[talent]]
+code = "warrior_path_3_1_a"
+name = "Крепкое тело воина"
+class = "warrior"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "warrior_branch_3"
+branch_name = "Выдержка"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "health_percent"
+
+[[talent]]
+code = "warrior_path_3_1_b"
+name = "Собранность воина"
+class = "warrior"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "warrior_branch_3"
+branch_name = "Выдержка"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "armor_percent"
+
+[[talent]]
+code = "warrior_1_3"
+name = "Крепкое сложение"
+class = "warrior"
+level = 10
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "health_percent"
+branch = "warrior_branch_3"
+branch_name = "Выдержка"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["warrior_path_3_1_a", "warrior_path_3_1_b"]
+legacy = true
+
+[[talent]]
+code = "warrior_path_3_2_a"
+name = "Закалка воина"
+class = "warrior"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "warrior_branch_3"
+branch_name = "Выдержка"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "health_percent"
+requires_all = ["warrior_1_3"]
+
+[[talent]]
+code = "warrior_path_3_2_b"
+name = "Осмотрительность воина"
+class = "warrior"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "warrior_branch_3"
+branch_name = "Выдержка"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "armor_percent"
+requires_all = ["warrior_1_3"]
+
+[[talent]]
+code = "warrior_2_3"
+name = "Ровное дыхание воина"
+class = "warrior"
+level = 30
+effect = "modifier"
+amount = 20
+category = "all"
+modifier = "resource_regen_percent"
+branch = "warrior_branch_3"
+branch_name = "Выдержка"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["warrior_path_3_2_a", "warrior_path_3_2_b"]
+legacy = true
+
+[[talent]]
+code = "warrior_path_3_3_a"
+name = "Выносливое тело воина"
+class = "warrior"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "warrior_branch_3"
+branch_name = "Выдержка"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "health_percent"
+requires_all = ["warrior_2_3"]
+
+[[talent]]
+code = "warrior_path_3_3_b"
+name = "Готовность воина"
+class = "warrior"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "warrior_branch_3"
+branch_name = "Выдержка"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "armor_percent"
+requires_all = ["warrior_2_3"]
+
+[[talent]]
+code = "warrior_3_3"
+name = "Закалённый доспех"
+class = "warrior"
+level = 60
+effect = "modifier"
+amount = 8
+category = "all"
+modifier = "armor_percent"
+branch = "warrior_branch_3"
+branch_name = "Выдержка"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["warrior_path_3_3_a", "warrior_path_3_3_b"]
+legacy = true
+
+[[talent]]
+code = "warrior_path_3_4_a"
+name = "Стойкое тело воина"
+class = "warrior"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "warrior_branch_3"
+branch_name = "Выдержка"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "health_percent"
+requires_all = ["warrior_3_3"]
+
+[[talent]]
+code = "warrior_path_3_4_b"
+name = "Надёжность воина"
+class = "warrior"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "warrior_branch_3"
+branch_name = "Выдержка"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "armor_percent"
+requires_all = ["warrior_3_3"]
+
+[[talent]]
+code = "warrior_4_3"
+name = "Точный клинок"
+class = "warrior"
+level = 100
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "accuracy_percent"
+branch = "warrior_branch_3"
+branch_name = "Выдержка"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["warrior_path_3_4_a", "warrior_path_3_4_b"]
+legacy = true
+
+[[talent]]
+code = "warrior_path_3_5_a"
+name = "Предельная закалка воина"
+class = "warrior"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "warrior_branch_3"
+branch_name = "Выдержка"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "health_percent"
+requires_all = ["warrior_4_3"]
+choice_group = "warrior_branch_3_final_route"
+
+[[talent]]
+code = "warrior_path_3_5_b"
+name = "Полная готовность воина"
+class = "warrior"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "warrior_branch_3"
+branch_name = "Выдержка"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "armor_percent"
+requires_all = ["warrior_4_3"]
+choice_group = "warrior_branch_3_final_route"
 
 [[talent]]
 code = "warrior_5_3"
@@ -145,6 +708,41 @@ effect = "modifier"
 amount = 6
 category = "all"
 modifier = "lifesteal_percent"
+branch = "warrior_branch_3"
+branch_name = "Выдержка"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["warrior_path_3_5_a", "warrior_path_3_5_b"]
+legacy = true
+
+[[talent]]
+code = "barbarian_path_1_1_a"
+name = "Точный приём варвара"
+class = "barbarian"
+level = 10
+effect = "power"
+amount = 2
+category = "damage"
+branch = "barbarian_branch_1"
+branch_name = "Натиск"
+row = 1
+max_rank = 2
+points_required = 0
+
+[[talent]]
+code = "barbarian_path_1_1_b"
+name = "Мера усилия варвара"
+class = "barbarian"
+level = 10
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "barbarian_branch_1"
+branch_name = "Натиск"
+row = 1
+max_rank = 2
+points_required = 0
 
 [[talent]]
 code = "barbarian_1_1"
@@ -154,25 +752,43 @@ level = 10
 effect = "power"
 amount = 10
 category = "damage"
+branch = "barbarian_branch_1"
+branch_name = "Натиск"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["barbarian_path_1_1_a", "barbarian_path_1_1_b"]
+legacy = true
 
 [[talent]]
-code = "barbarian_1_2"
-name = "Мера ярости"
+code = "barbarian_path_1_2_a"
+name = "Отработанный приём варвара"
 class = "barbarian"
-level = 10
+level = 30
+effect = "power"
+amount = 2
+category = "damage"
+branch = "barbarian_branch_1"
+branch_name = "Натиск"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["barbarian_1_1"]
+
+[[talent]]
+code = "barbarian_path_1_2_b"
+name = "Верный расчёт варвара"
+class = "barbarian"
+level = 30
 effect = "cost"
-amount = 15
-category = "all"
-
-[[talent]]
-code = "barbarian_1_3"
-name = "Жилистый боец"
-class = "barbarian"
-level = 10
-effect = "modifier"
-amount = 10
-category = "all"
-modifier = "health_percent"
+amount = 2
+category = "damage"
+branch = "barbarian_branch_1"
+branch_name = "Натиск"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["barbarian_1_1"]
 
 [[talent]]
 code = "barbarian_2_1"
@@ -184,25 +800,43 @@ amount = 20
 category = "damage"
 condition = "actor_health_below"
 threshold = 50
+branch = "barbarian_branch_1"
+branch_name = "Натиск"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["barbarian_path_1_2_a", "barbarian_path_1_2_b"]
+legacy = true
 
 [[talent]]
-code = "barbarian_2_2"
-name = "Непрерывный натиск"
+code = "barbarian_path_1_3_a"
+name = "Сильный приём варвара"
 class = "barbarian"
-level = 30
-effect = "cooldown"
-amount = 1
+level = 60
+effect = "power"
+amount = 2
 category = "damage"
+branch = "barbarian_branch_1"
+branch_name = "Натиск"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["barbarian_2_1"]
 
 [[talent]]
-code = "barbarian_2_3"
-name = "Второе дыхание варвара"
+code = "barbarian_path_1_3_b"
+name = "Сбережённое усилие варвара"
 class = "barbarian"
-level = 30
-effect = "modifier"
-amount = 20
-category = "all"
-modifier = "resource_regen_percent"
+level = 60
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "barbarian_branch_1"
+branch_name = "Натиск"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["barbarian_2_1"]
 
 [[talent]]
 code = "barbarian_3_1"
@@ -212,6 +846,230 @@ level = 60
 effect = "duration"
 amount = 1
 category = "buff"
+branch = "barbarian_branch_1"
+branch_name = "Натиск"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["barbarian_path_1_3_a", "barbarian_path_1_3_b"]
+legacy = true
+
+[[talent]]
+code = "barbarian_path_1_4_a"
+name = "Совершенный приём варвара"
+class = "barbarian"
+level = 100
+effect = "power"
+amount = 2
+category = "damage"
+branch = "barbarian_branch_1"
+branch_name = "Натиск"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["barbarian_3_1"]
+
+[[talent]]
+code = "barbarian_path_1_4_b"
+name = "Точный расход варвара"
+class = "barbarian"
+level = 100
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "barbarian_branch_1"
+branch_name = "Натиск"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["barbarian_3_1"]
+
+[[talent]]
+code = "barbarian_4_1"
+name = "Бережная ярость"
+class = "barbarian"
+level = 100
+effect = "cost"
+amount = 20
+category = "damage"
+branch = "barbarian_branch_1"
+branch_name = "Натиск"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["barbarian_path_1_4_a", "barbarian_path_1_4_b"]
+legacy = true
+
+[[talent]]
+code = "barbarian_path_1_5_a"
+name = "Мастерский приём варвара"
+class = "barbarian"
+level = 150
+effect = "power"
+amount = 2
+category = "damage"
+branch = "barbarian_branch_1"
+branch_name = "Натиск"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["barbarian_4_1"]
+choice_group = "barbarian_branch_1_final_route"
+
+[[talent]]
+code = "barbarian_path_1_5_b"
+name = "Выверенное усилие варвара"
+class = "barbarian"
+level = 150
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "barbarian_branch_1"
+branch_name = "Натиск"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["barbarian_4_1"]
+choice_group = "barbarian_branch_1_final_route"
+
+[[talent]]
+code = "barbarian_5_1"
+name = "Сокрушитель"
+class = "barbarian"
+level = 150
+effect = "power"
+amount = 15
+category = "damage"
+branch = "barbarian_branch_1"
+branch_name = "Натиск"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["barbarian_path_1_5_a", "barbarian_path_1_5_b"]
+legacy = true
+
+[[talent]]
+code = "barbarian_path_2_1_a"
+name = "Спокойное начало варвара"
+class = "barbarian"
+level = 10
+effect = "cost"
+amount = 2
+category = "all"
+branch = "barbarian_branch_2"
+branch_name = "Неистовство"
+row = 1
+max_rank = 2
+points_required = 0
+
+[[talent]]
+code = "barbarian_path_2_1_b"
+name = "Первый вдох варвара"
+class = "barbarian"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "barbarian_branch_2"
+branch_name = "Неистовство"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "resource_regen_percent"
+
+[[talent]]
+code = "barbarian_1_2"
+name = "Мера ярости"
+class = "barbarian"
+level = 10
+effect = "cost"
+amount = 15
+category = "all"
+branch = "barbarian_branch_2"
+branch_name = "Неистовство"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["barbarian_path_2_1_a", "barbarian_path_2_1_b"]
+legacy = true
+
+[[talent]]
+code = "barbarian_path_2_2_a"
+name = "Размеренная работа варвара"
+class = "barbarian"
+level = 30
+effect = "cost"
+amount = 2
+category = "all"
+branch = "barbarian_branch_2"
+branch_name = "Неистовство"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["barbarian_1_2"]
+
+[[talent]]
+code = "barbarian_path_2_2_b"
+name = "Ровный ритм варвара"
+class = "barbarian"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "barbarian_branch_2"
+branch_name = "Неистовство"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "resource_regen_percent"
+requires_all = ["barbarian_1_2"]
+
+[[talent]]
+code = "barbarian_2_2"
+name = "Непрерывный натиск"
+class = "barbarian"
+level = 30
+effect = "cooldown"
+amount = 1
+category = "damage"
+branch = "barbarian_branch_2"
+branch_name = "Неистовство"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["barbarian_path_2_2_a", "barbarian_path_2_2_b"]
+legacy = true
+
+[[talent]]
+code = "barbarian_path_2_3_a"
+name = "Согласованная работа варвара"
+class = "barbarian"
+level = 60
+effect = "cost"
+amount = 2
+category = "all"
+branch = "barbarian_branch_2"
+branch_name = "Неистовство"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["barbarian_2_2"]
+
+[[talent]]
+code = "barbarian_path_2_3_b"
+name = "Долгое дыхание варвара"
+class = "barbarian"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "barbarian_branch_2"
+branch_name = "Неистовство"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "resource_regen_percent"
+requires_all = ["barbarian_2_2"]
 
 [[talent]]
 code = "barbarian_3_2"
@@ -222,25 +1080,44 @@ effect = "modifier"
 amount = 15
 category = "all"
 modifier = "resource_percent"
+branch = "barbarian_branch_2"
+branch_name = "Неистовство"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["barbarian_path_2_3_a", "barbarian_path_2_3_b"]
+legacy = true
 
 [[talent]]
-code = "barbarian_3_3"
-name = "Костяная крепь"
-class = "barbarian"
-level = 60
-effect = "modifier"
-amount = 8
-category = "all"
-modifier = "armor_percent"
-
-[[talent]]
-code = "barbarian_4_1"
-name = "Бережная ярость"
+code = "barbarian_path_2_4_a"
+name = "Чёткий порядок варвара"
 class = "barbarian"
 level = 100
 effect = "cost"
-amount = 20
-category = "damage"
+amount = 2
+category = "all"
+branch = "barbarian_branch_2"
+branch_name = "Неистовство"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["barbarian_3_2"]
+
+[[talent]]
+code = "barbarian_path_2_4_b"
+name = "Налаженное дыхание варвара"
+class = "barbarian"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "barbarian_branch_2"
+branch_name = "Неистовство"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "resource_regen_percent"
+requires_all = ["barbarian_3_2"]
 
 [[talent]]
 code = "barbarian_4_2"
@@ -250,25 +1127,46 @@ level = 100
 effect = "cooldown"
 amount = 1
 category = "barrier"
+branch = "barbarian_branch_2"
+branch_name = "Неистовство"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["barbarian_path_2_4_a", "barbarian_path_2_4_b"]
+legacy = true
 
 [[talent]]
-code = "barbarian_4_3"
-name = "Крепкий хват"
-class = "barbarian"
-level = 100
-effect = "modifier"
-amount = 10
-category = "all"
-modifier = "accuracy_percent"
-
-[[talent]]
-code = "barbarian_5_1"
-name = "Сокрушитель"
+code = "barbarian_path_2_5_a"
+name = "Безошибочный порядок варвара"
 class = "barbarian"
 level = 150
-effect = "power"
-amount = 15
-category = "damage"
+effect = "cost"
+amount = 2
+category = "all"
+branch = "barbarian_branch_2"
+branch_name = "Неистовство"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["barbarian_4_2"]
+choice_group = "barbarian_branch_2_final_route"
+
+[[talent]]
+code = "barbarian_path_2_5_b"
+name = "Полный запас варвара"
+class = "barbarian"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "barbarian_branch_2"
+branch_name = "Неистовство"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "resource_regen_percent"
+requires_all = ["barbarian_4_2"]
+choice_group = "barbarian_branch_2_final_route"
 
 [[talent]]
 code = "barbarian_5_2"
@@ -280,6 +1178,241 @@ amount = 25
 category = "damage"
 condition = "target_health_below"
 threshold = 35
+branch = "barbarian_branch_2"
+branch_name = "Неистовство"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["barbarian_path_2_5_a", "barbarian_path_2_5_b"]
+legacy = true
+
+[[talent]]
+code = "barbarian_path_3_1_a"
+name = "Крепкое тело варвара"
+class = "barbarian"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "barbarian_branch_3"
+branch_name = "Живучесть"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "health_percent"
+
+[[talent]]
+code = "barbarian_path_3_1_b"
+name = "Собранность варвара"
+class = "barbarian"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "barbarian_branch_3"
+branch_name = "Живучесть"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "armor_percent"
+
+[[talent]]
+code = "barbarian_1_3"
+name = "Жилистый боец"
+class = "barbarian"
+level = 10
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "health_percent"
+branch = "barbarian_branch_3"
+branch_name = "Живучесть"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["barbarian_path_3_1_a", "barbarian_path_3_1_b"]
+legacy = true
+
+[[talent]]
+code = "barbarian_path_3_2_a"
+name = "Закалка варвара"
+class = "barbarian"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "barbarian_branch_3"
+branch_name = "Живучесть"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "health_percent"
+requires_all = ["barbarian_1_3"]
+
+[[talent]]
+code = "barbarian_path_3_2_b"
+name = "Осмотрительность варвара"
+class = "barbarian"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "barbarian_branch_3"
+branch_name = "Живучесть"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "armor_percent"
+requires_all = ["barbarian_1_3"]
+
+[[talent]]
+code = "barbarian_2_3"
+name = "Второе дыхание варвара"
+class = "barbarian"
+level = 30
+effect = "modifier"
+amount = 20
+category = "all"
+modifier = "resource_regen_percent"
+branch = "barbarian_branch_3"
+branch_name = "Живучесть"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["barbarian_path_3_2_a", "barbarian_path_3_2_b"]
+legacy = true
+
+[[talent]]
+code = "barbarian_path_3_3_a"
+name = "Выносливое тело варвара"
+class = "barbarian"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "barbarian_branch_3"
+branch_name = "Живучесть"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "health_percent"
+requires_all = ["barbarian_2_3"]
+
+[[talent]]
+code = "barbarian_path_3_3_b"
+name = "Готовность варвара"
+class = "barbarian"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "barbarian_branch_3"
+branch_name = "Живучесть"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "armor_percent"
+requires_all = ["barbarian_2_3"]
+
+[[talent]]
+code = "barbarian_3_3"
+name = "Костяная крепь"
+class = "barbarian"
+level = 60
+effect = "modifier"
+amount = 8
+category = "all"
+modifier = "armor_percent"
+branch = "barbarian_branch_3"
+branch_name = "Живучесть"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["barbarian_path_3_3_a", "barbarian_path_3_3_b"]
+legacy = true
+
+[[talent]]
+code = "barbarian_path_3_4_a"
+name = "Стойкое тело варвара"
+class = "barbarian"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "barbarian_branch_3"
+branch_name = "Живучесть"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "health_percent"
+requires_all = ["barbarian_3_3"]
+
+[[talent]]
+code = "barbarian_path_3_4_b"
+name = "Надёжность варвара"
+class = "barbarian"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "barbarian_branch_3"
+branch_name = "Живучесть"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "armor_percent"
+requires_all = ["barbarian_3_3"]
+
+[[talent]]
+code = "barbarian_4_3"
+name = "Крепкий хват"
+class = "barbarian"
+level = 100
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "accuracy_percent"
+branch = "barbarian_branch_3"
+branch_name = "Живучесть"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["barbarian_path_3_4_a", "barbarian_path_3_4_b"]
+legacy = true
+
+[[talent]]
+code = "barbarian_path_3_5_a"
+name = "Предельная закалка варвара"
+class = "barbarian"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "barbarian_branch_3"
+branch_name = "Живучесть"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "health_percent"
+requires_all = ["barbarian_4_3"]
+choice_group = "barbarian_branch_3_final_route"
+
+[[talent]]
+code = "barbarian_path_3_5_b"
+name = "Полная готовность варвара"
+class = "barbarian"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "barbarian_branch_3"
+branch_name = "Живучесть"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "armor_percent"
+requires_all = ["barbarian_4_3"]
+choice_group = "barbarian_branch_3_final_route"
 
 [[talent]]
 code = "barbarian_5_3"
@@ -290,6 +1423,41 @@ effect = "modifier"
 amount = 6
 category = "all"
 modifier = "lifesteal_percent"
+branch = "barbarian_branch_3"
+branch_name = "Живучесть"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["barbarian_path_3_5_a", "barbarian_path_3_5_b"]
+legacy = true
+
+[[talent]]
+code = "paladin_path_1_1_a"
+name = "Точный приём паладина"
+class = "paladin"
+level = 10
+effect = "power"
+amount = 2
+category = "barrier"
+branch = "paladin_branch_1"
+branch_name = "Оплот"
+row = 1
+max_rank = 2
+points_required = 0
+
+[[talent]]
+code = "paladin_path_1_1_b"
+name = "Мера усилия паладина"
+class = "paladin"
+level = 10
+effect = "cost"
+amount = 2
+category = "barrier"
+branch = "paladin_branch_1"
+branch_name = "Оплот"
+row = 1
+max_rank = 2
+points_required = 0
 
 [[talent]]
 code = "paladin_1_1"
@@ -299,25 +1467,43 @@ level = 10
 effect = "power"
 amount = 10
 category = "barrier"
+branch = "paladin_branch_1"
+branch_name = "Оплот"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["paladin_path_1_1_a", "paladin_path_1_1_b"]
+legacy = true
 
 [[talent]]
-code = "paladin_1_2"
-name = "Мера обета"
+code = "paladin_path_1_2_a"
+name = "Отработанный приём паладина"
 class = "paladin"
-level = 10
+level = 30
+effect = "power"
+amount = 2
+category = "barrier"
+branch = "paladin_branch_1"
+branch_name = "Оплот"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["paladin_1_1"]
+
+[[talent]]
+code = "paladin_path_1_2_b"
+name = "Верный расчёт паладина"
+class = "paladin"
+level = 30
 effect = "cost"
-amount = 15
-category = "all"
-
-[[talent]]
-code = "paladin_1_3"
-name = "Крепость стража"
-class = "paladin"
-level = 10
-effect = "modifier"
-amount = 10
-category = "all"
-modifier = "health_percent"
+amount = 2
+category = "barrier"
+branch = "paladin_branch_1"
+branch_name = "Оплот"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["paladin_1_1"]
 
 [[talent]]
 code = "paladin_2_1"
@@ -328,25 +1514,43 @@ effect = "power"
 amount = 20
 category = "barrier"
 condition = "actor_barrier"
+branch = "paladin_branch_1"
+branch_name = "Оплот"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["paladin_path_1_2_a", "paladin_path_1_2_b"]
+legacy = true
 
 [[talent]]
-code = "paladin_2_2"
-name = "Частый заслон"
+code = "paladin_path_1_3_a"
+name = "Сильный приём паладина"
 class = "paladin"
-level = 30
-effect = "cooldown"
-amount = 1
+level = 60
+effect = "power"
+amount = 2
 category = "barrier"
+branch = "paladin_branch_1"
+branch_name = "Оплот"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["paladin_2_1"]
 
 [[talent]]
-code = "paladin_2_3"
-name = "Дыхание стража"
+code = "paladin_path_1_3_b"
+name = "Сбережённое усилие паладина"
 class = "paladin"
-level = 30
-effect = "modifier"
-amount = 20
-category = "all"
-modifier = "resource_regen_percent"
+level = 60
+effect = "cost"
+amount = 2
+category = "barrier"
+branch = "paladin_branch_1"
+branch_name = "Оплот"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["paladin_2_1"]
 
 [[talent]]
 code = "paladin_3_1"
@@ -356,25 +1560,43 @@ level = 60
 effect = "duration"
 amount = 1
 category = "barrier"
+branch = "paladin_branch_1"
+branch_name = "Оплот"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["paladin_path_1_3_a", "paladin_path_1_3_b"]
+legacy = true
 
 [[talent]]
-code = "paladin_3_2"
-name = "Забота о раненых"
+code = "paladin_path_1_4_a"
+name = "Совершенный приём паладина"
 class = "paladin"
-level = 60
+level = 100
 effect = "power"
-amount = 15
-category = "heal"
+amount = 2
+category = "barrier"
+branch = "paladin_branch_1"
+branch_name = "Оплот"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["paladin_3_1"]
 
 [[talent]]
-code = "paladin_3_3"
-name = "Кованая броня"
+code = "paladin_path_1_4_b"
+name = "Точный расход паладина"
 class = "paladin"
-level = 60
-effect = "modifier"
-amount = 8
-category = "all"
-modifier = "armor_percent"
+level = 100
+effect = "cost"
+amount = 2
+category = "barrier"
+branch = "paladin_branch_1"
+branch_name = "Оплот"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["paladin_3_1"]
 
 [[talent]]
 code = "paladin_4_1"
@@ -384,25 +1606,45 @@ level = 100
 effect = "cost"
 amount = 20
 category = "barrier"
+branch = "paladin_branch_1"
+branch_name = "Оплот"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["paladin_path_1_4_a", "paladin_path_1_4_b"]
+legacy = true
 
 [[talent]]
-code = "paladin_4_2"
-name = "Скорое исцеление"
+code = "paladin_path_1_5_a"
+name = "Мастерский приём паладина"
 class = "paladin"
-level = 100
-effect = "cooldown"
-amount = 1
-category = "heal"
+level = 150
+effect = "power"
+amount = 2
+category = "barrier"
+branch = "paladin_branch_1"
+branch_name = "Оплот"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["paladin_4_1"]
+choice_group = "paladin_branch_1_final_route"
 
 [[talent]]
-code = "paladin_4_3"
-name = "Точность стража"
+code = "paladin_path_1_5_b"
+name = "Выверенное усилие паладина"
 class = "paladin"
-level = 100
-effect = "modifier"
-amount = 10
-category = "all"
-modifier = "accuracy_percent"
+level = 150
+effect = "cost"
+amount = 2
+category = "barrier"
+branch = "paladin_branch_1"
+branch_name = "Оплот"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["paladin_4_1"]
+choice_group = "paladin_branch_1_final_route"
 
 [[talent]]
 code = "paladin_5_1"
@@ -412,6 +1654,232 @@ level = 150
 effect = "power"
 amount = 15
 category = "barrier"
+branch = "paladin_branch_1"
+branch_name = "Оплот"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["paladin_path_1_5_a", "paladin_path_1_5_b"]
+legacy = true
+
+[[talent]]
+code = "paladin_path_2_1_a"
+name = "Спокойное начало паладина"
+class = "paladin"
+level = 10
+effect = "cost"
+amount = 2
+category = "all"
+branch = "paladin_branch_2"
+branch_name = "Служение"
+row = 1
+max_rank = 2
+points_required = 0
+
+[[talent]]
+code = "paladin_path_2_1_b"
+name = "Первый вдох паладина"
+class = "paladin"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "paladin_branch_2"
+branch_name = "Служение"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "resource_regen_percent"
+
+[[talent]]
+code = "paladin_1_2"
+name = "Мера обета"
+class = "paladin"
+level = 10
+effect = "cost"
+amount = 15
+category = "all"
+branch = "paladin_branch_2"
+branch_name = "Служение"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["paladin_path_2_1_a", "paladin_path_2_1_b"]
+legacy = true
+
+[[talent]]
+code = "paladin_path_2_2_a"
+name = "Размеренная работа паладина"
+class = "paladin"
+level = 30
+effect = "cost"
+amount = 2
+category = "all"
+branch = "paladin_branch_2"
+branch_name = "Служение"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["paladin_1_2"]
+
+[[talent]]
+code = "paladin_path_2_2_b"
+name = "Ровный ритм паладина"
+class = "paladin"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "paladin_branch_2"
+branch_name = "Служение"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "resource_regen_percent"
+requires_all = ["paladin_1_2"]
+
+[[talent]]
+code = "paladin_2_2"
+name = "Частый заслон"
+class = "paladin"
+level = 30
+effect = "cooldown"
+amount = 1
+category = "barrier"
+branch = "paladin_branch_2"
+branch_name = "Служение"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["paladin_path_2_2_a", "paladin_path_2_2_b"]
+legacy = true
+
+[[talent]]
+code = "paladin_path_2_3_a"
+name = "Согласованная работа паладина"
+class = "paladin"
+level = 60
+effect = "cost"
+amount = 2
+category = "all"
+branch = "paladin_branch_2"
+branch_name = "Служение"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["paladin_2_2"]
+
+[[talent]]
+code = "paladin_path_2_3_b"
+name = "Долгое дыхание паладина"
+class = "paladin"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "paladin_branch_2"
+branch_name = "Служение"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "resource_regen_percent"
+requires_all = ["paladin_2_2"]
+
+[[talent]]
+code = "paladin_3_2"
+name = "Забота о раненых"
+class = "paladin"
+level = 60
+effect = "power"
+amount = 15
+category = "heal"
+branch = "paladin_branch_2"
+branch_name = "Служение"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["paladin_path_2_3_a", "paladin_path_2_3_b"]
+legacy = true
+
+[[talent]]
+code = "paladin_path_2_4_a"
+name = "Чёткий порядок паладина"
+class = "paladin"
+level = 100
+effect = "cost"
+amount = 2
+category = "all"
+branch = "paladin_branch_2"
+branch_name = "Служение"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["paladin_3_2"]
+
+[[talent]]
+code = "paladin_path_2_4_b"
+name = "Второе дыхание паладина"
+class = "paladin"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "paladin_branch_2"
+branch_name = "Служение"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "resource_regen_percent"
+requires_all = ["paladin_3_2"]
+
+[[talent]]
+code = "paladin_4_2"
+name = "Скорое исцеление"
+class = "paladin"
+level = 100
+effect = "cooldown"
+amount = 1
+category = "heal"
+branch = "paladin_branch_2"
+branch_name = "Служение"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["paladin_path_2_4_a", "paladin_path_2_4_b"]
+legacy = true
+
+[[talent]]
+code = "paladin_path_2_5_a"
+name = "Безошибочный порядок паладина"
+class = "paladin"
+level = 150
+effect = "cost"
+amount = 2
+category = "all"
+branch = "paladin_branch_2"
+branch_name = "Служение"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["paladin_4_2"]
+choice_group = "paladin_branch_2_final_route"
+
+[[talent]]
+code = "paladin_path_2_5_b"
+name = "Полный запас паладина"
+class = "paladin"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "paladin_branch_2"
+branch_name = "Служение"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "resource_regen_percent"
+requires_all = ["paladin_4_2"]
+choice_group = "paladin_branch_2_final_route"
 
 [[talent]]
 code = "paladin_5_2"
@@ -423,6 +1891,241 @@ amount = 25
 category = "barrier"
 condition = "target_health_below"
 threshold = 35
+branch = "paladin_branch_2"
+branch_name = "Служение"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["paladin_path_2_5_a", "paladin_path_2_5_b"]
+legacy = true
+
+[[talent]]
+code = "paladin_path_3_1_a"
+name = "Крепкое тело паладина"
+class = "paladin"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "paladin_branch_3"
+branch_name = "Стойкость"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "health_percent"
+
+[[talent]]
+code = "paladin_path_3_1_b"
+name = "Собранность паладина"
+class = "paladin"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "paladin_branch_3"
+branch_name = "Стойкость"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "armor_percent"
+
+[[talent]]
+code = "paladin_1_3"
+name = "Крепость стража"
+class = "paladin"
+level = 10
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "health_percent"
+branch = "paladin_branch_3"
+branch_name = "Стойкость"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["paladin_path_3_1_a", "paladin_path_3_1_b"]
+legacy = true
+
+[[talent]]
+code = "paladin_path_3_2_a"
+name = "Закалка паладина"
+class = "paladin"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "paladin_branch_3"
+branch_name = "Стойкость"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "health_percent"
+requires_all = ["paladin_1_3"]
+
+[[talent]]
+code = "paladin_path_3_2_b"
+name = "Осмотрительность паладина"
+class = "paladin"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "paladin_branch_3"
+branch_name = "Стойкость"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "armor_percent"
+requires_all = ["paladin_1_3"]
+
+[[talent]]
+code = "paladin_2_3"
+name = "Дыхание стража"
+class = "paladin"
+level = 30
+effect = "modifier"
+amount = 20
+category = "all"
+modifier = "resource_regen_percent"
+branch = "paladin_branch_3"
+branch_name = "Стойкость"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["paladin_path_3_2_a", "paladin_path_3_2_b"]
+legacy = true
+
+[[talent]]
+code = "paladin_path_3_3_a"
+name = "Выносливое тело паладина"
+class = "paladin"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "paladin_branch_3"
+branch_name = "Стойкость"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "health_percent"
+requires_all = ["paladin_2_3"]
+
+[[talent]]
+code = "paladin_path_3_3_b"
+name = "Готовность паладина"
+class = "paladin"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "paladin_branch_3"
+branch_name = "Стойкость"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "armor_percent"
+requires_all = ["paladin_2_3"]
+
+[[talent]]
+code = "paladin_3_3"
+name = "Кованая броня"
+class = "paladin"
+level = 60
+effect = "modifier"
+amount = 8
+category = "all"
+modifier = "armor_percent"
+branch = "paladin_branch_3"
+branch_name = "Стойкость"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["paladin_path_3_3_a", "paladin_path_3_3_b"]
+legacy = true
+
+[[talent]]
+code = "paladin_path_3_4_a"
+name = "Стойкое тело паладина"
+class = "paladin"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "paladin_branch_3"
+branch_name = "Стойкость"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "health_percent"
+requires_all = ["paladin_3_3"]
+
+[[talent]]
+code = "paladin_path_3_4_b"
+name = "Надёжность паладина"
+class = "paladin"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "paladin_branch_3"
+branch_name = "Стойкость"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "armor_percent"
+requires_all = ["paladin_3_3"]
+
+[[talent]]
+code = "paladin_4_3"
+name = "Точность стража"
+class = "paladin"
+level = 100
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "accuracy_percent"
+branch = "paladin_branch_3"
+branch_name = "Стойкость"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["paladin_path_3_4_a", "paladin_path_3_4_b"]
+legacy = true
+
+[[talent]]
+code = "paladin_path_3_5_a"
+name = "Предельная закалка паладина"
+class = "paladin"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "paladin_branch_3"
+branch_name = "Стойкость"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "health_percent"
+requires_all = ["paladin_4_3"]
+choice_group = "paladin_branch_3_final_route"
+
+[[talent]]
+code = "paladin_path_3_5_b"
+name = "Полная готовность паладина"
+class = "paladin"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "paladin_branch_3"
+branch_name = "Стойкость"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "armor_percent"
+requires_all = ["paladin_4_3"]
+choice_group = "paladin_branch_3_final_route"
 
 [[talent]]
 code = "paladin_5_3"
@@ -433,6 +2136,41 @@ effect = "modifier"
 amount = 6
 category = "all"
 modifier = "reflect_percent"
+branch = "paladin_branch_3"
+branch_name = "Стойкость"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["paladin_path_3_5_a", "paladin_path_3_5_b"]
+legacy = true
+
+[[talent]]
+code = "ranger_path_1_1_a"
+name = "Точный приём следопыта"
+class = "ranger"
+level = 10
+effect = "power"
+amount = 2
+category = "damage"
+branch = "ranger_branch_1"
+branch_name = "Меткость"
+row = 1
+max_rank = 2
+points_required = 0
+
+[[talent]]
+code = "ranger_path_1_1_b"
+name = "Мера усилия следопыта"
+class = "ranger"
+level = 10
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "ranger_branch_1"
+branch_name = "Меткость"
+row = 1
+max_rank = 2
+points_required = 0
 
 [[talent]]
 code = "ranger_1_1"
@@ -442,25 +2180,43 @@ level = 10
 effect = "power"
 amount = 10
 category = "damage"
+branch = "ranger_branch_1"
+branch_name = "Меткость"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["ranger_path_1_1_a", "ranger_path_1_1_b"]
+legacy = true
 
 [[talent]]
-code = "ranger_1_2"
-name = "Мера прыти"
+code = "ranger_path_1_2_a"
+name = "Отработанный приём следопыта"
 class = "ranger"
-level = 10
+level = 30
+effect = "power"
+amount = 2
+category = "damage"
+branch = "ranger_branch_1"
+branch_name = "Меткость"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["ranger_1_1"]
+
+[[talent]]
+code = "ranger_path_1_2_b"
+name = "Верный расчёт следопыта"
+class = "ranger"
+level = 30
 effect = "cost"
-amount = 15
-category = "all"
-
-[[talent]]
-code = "ranger_1_3"
-name = "Выносливый охотник"
-class = "ranger"
-level = 10
-effect = "modifier"
-amount = 10
-category = "all"
-modifier = "health_percent"
+amount = 2
+category = "damage"
+branch = "ranger_branch_1"
+branch_name = "Меткость"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["ranger_1_1"]
 
 [[talent]]
 code = "ranger_2_1"
@@ -472,25 +2228,43 @@ amount = 20
 category = "damage"
 condition = "target_status"
 statuses = ["slow"]
+branch = "ranger_branch_1"
+branch_name = "Меткость"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["ranger_path_1_2_a", "ranger_path_1_2_b"]
+legacy = true
 
 [[talent]]
-code = "ranger_2_2"
-name = "Частые выстрелы"
+code = "ranger_path_1_3_a"
+name = "Сильный приём следопыта"
 class = "ranger"
-level = 30
-effect = "cooldown"
-amount = 1
+level = 60
+effect = "power"
+amount = 2
 category = "damage"
+branch = "ranger_branch_1"
+branch_name = "Меткость"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["ranger_2_1"]
 
 [[talent]]
-code = "ranger_2_3"
-name = "Дыхание следопыта"
+code = "ranger_path_1_3_b"
+name = "Сбережённое усилие следопыта"
 class = "ranger"
-level = 30
-effect = "modifier"
-amount = 20
-category = "all"
-modifier = "resource_regen_percent"
+level = 60
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "ranger_branch_1"
+branch_name = "Меткость"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["ranger_2_1"]
 
 [[talent]]
 code = "ranger_3_1"
@@ -500,6 +2274,230 @@ level = 60
 effect = "duration"
 amount = 1
 category = "debuff"
+branch = "ranger_branch_1"
+branch_name = "Меткость"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["ranger_path_1_3_a", "ranger_path_1_3_b"]
+legacy = true
+
+[[talent]]
+code = "ranger_path_1_4_a"
+name = "Совершенный приём следопыта"
+class = "ranger"
+level = 100
+effect = "power"
+amount = 2
+category = "damage"
+branch = "ranger_branch_1"
+branch_name = "Меткость"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["ranger_3_1"]
+
+[[talent]]
+code = "ranger_path_1_4_b"
+name = "Точный расход следопыта"
+class = "ranger"
+level = 100
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "ranger_branch_1"
+branch_name = "Меткость"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["ranger_3_1"]
+
+[[talent]]
+code = "ranger_4_1"
+name = "Бережный выстрел"
+class = "ranger"
+level = 100
+effect = "cost"
+amount = 20
+category = "damage"
+branch = "ranger_branch_1"
+branch_name = "Меткость"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["ranger_path_1_4_a", "ranger_path_1_4_b"]
+legacy = true
+
+[[talent]]
+code = "ranger_path_1_5_a"
+name = "Мастерский приём следопыта"
+class = "ranger"
+level = 150
+effect = "power"
+amount = 2
+category = "damage"
+branch = "ranger_branch_1"
+branch_name = "Меткость"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["ranger_4_1"]
+choice_group = "ranger_branch_1_final_route"
+
+[[talent]]
+code = "ranger_path_1_5_b"
+name = "Выверенное усилие следопыта"
+class = "ranger"
+level = 150
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "ranger_branch_1"
+branch_name = "Меткость"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["ranger_4_1"]
+choice_group = "ranger_branch_1_final_route"
+
+[[talent]]
+code = "ranger_5_1"
+name = "Мастер выстрела"
+class = "ranger"
+level = 150
+effect = "power"
+amount = 15
+category = "damage"
+branch = "ranger_branch_1"
+branch_name = "Меткость"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["ranger_path_1_5_a", "ranger_path_1_5_b"]
+legacy = true
+
+[[talent]]
+code = "ranger_path_2_1_a"
+name = "Спокойное начало следопыта"
+class = "ranger"
+level = 10
+effect = "cost"
+amount = 2
+category = "all"
+branch = "ranger_branch_2"
+branch_name = "Преследование"
+row = 1
+max_rank = 2
+points_required = 0
+
+[[talent]]
+code = "ranger_path_2_1_b"
+name = "Первый вдох следопыта"
+class = "ranger"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "ranger_branch_2"
+branch_name = "Преследование"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "resource_regen_percent"
+
+[[talent]]
+code = "ranger_1_2"
+name = "Мера прыти"
+class = "ranger"
+level = 10
+effect = "cost"
+amount = 15
+category = "all"
+branch = "ranger_branch_2"
+branch_name = "Преследование"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["ranger_path_2_1_a", "ranger_path_2_1_b"]
+legacy = true
+
+[[talent]]
+code = "ranger_path_2_2_a"
+name = "Размеренная работа следопыта"
+class = "ranger"
+level = 30
+effect = "cost"
+amount = 2
+category = "all"
+branch = "ranger_branch_2"
+branch_name = "Преследование"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["ranger_1_2"]
+
+[[talent]]
+code = "ranger_path_2_2_b"
+name = "Ровный ритм следопыта"
+class = "ranger"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "ranger_branch_2"
+branch_name = "Преследование"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "resource_regen_percent"
+requires_all = ["ranger_1_2"]
+
+[[talent]]
+code = "ranger_2_2"
+name = "Частые выстрелы"
+class = "ranger"
+level = 30
+effect = "cooldown"
+amount = 1
+category = "damage"
+branch = "ranger_branch_2"
+branch_name = "Преследование"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["ranger_path_2_2_a", "ranger_path_2_2_b"]
+legacy = true
+
+[[talent]]
+code = "ranger_path_2_3_a"
+name = "Согласованная работа следопыта"
+class = "ranger"
+level = 60
+effect = "cost"
+amount = 2
+category = "all"
+branch = "ranger_branch_2"
+branch_name = "Преследование"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["ranger_2_2"]
+
+[[talent]]
+code = "ranger_path_2_3_b"
+name = "Долгое дыхание следопыта"
+class = "ranger"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "ranger_branch_2"
+branch_name = "Преследование"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "resource_regen_percent"
+requires_all = ["ranger_2_2"]
 
 [[talent]]
 code = "ranger_3_2"
@@ -510,25 +2508,44 @@ effect = "modifier"
 amount = 8
 category = "all"
 modifier = "crit_chance_percent"
+branch = "ranger_branch_2"
+branch_name = "Преследование"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["ranger_path_2_3_a", "ranger_path_2_3_b"]
+legacy = true
 
 [[talent]]
-code = "ranger_3_3"
-name = "Лёгкая поступь"
-class = "ranger"
-level = 60
-effect = "modifier"
-amount = 8
-category = "all"
-modifier = "dodge_percent"
-
-[[talent]]
-code = "ranger_4_1"
-name = "Бережный выстрел"
+code = "ranger_path_2_4_a"
+name = "Чёткий порядок следопыта"
 class = "ranger"
 level = 100
 effect = "cost"
-amount = 20
-category = "damage"
+amount = 2
+category = "all"
+branch = "ranger_branch_2"
+branch_name = "Преследование"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["ranger_3_2"]
+
+[[talent]]
+code = "ranger_path_2_4_b"
+name = "Второе дыхание следопыта"
+class = "ranger"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "ranger_branch_2"
+branch_name = "Преследование"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "resource_regen_percent"
+requires_all = ["ranger_3_2"]
 
 [[talent]]
 code = "ranger_4_2"
@@ -538,25 +2555,46 @@ level = 100
 effect = "cooldown"
 amount = 1
 category = "debuff"
+branch = "ranger_branch_2"
+branch_name = "Преследование"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["ranger_path_2_4_a", "ranger_path_2_4_b"]
+legacy = true
 
 [[talent]]
-code = "ranger_4_3"
-name = "Острый глаз"
-class = "ranger"
-level = 100
-effect = "modifier"
-amount = 10
-category = "all"
-modifier = "accuracy_percent"
-
-[[talent]]
-code = "ranger_5_1"
-name = "Мастер выстрела"
+code = "ranger_path_2_5_a"
+name = "Безошибочный порядок следопыта"
 class = "ranger"
 level = 150
-effect = "power"
-amount = 15
-category = "damage"
+effect = "cost"
+amount = 2
+category = "all"
+branch = "ranger_branch_2"
+branch_name = "Преследование"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["ranger_4_2"]
+choice_group = "ranger_branch_2_final_route"
+
+[[talent]]
+code = "ranger_path_2_5_b"
+name = "Полный запас следопыта"
+class = "ranger"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "ranger_branch_2"
+branch_name = "Преследование"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "resource_regen_percent"
+requires_all = ["ranger_4_2"]
+choice_group = "ranger_branch_2_final_route"
 
 [[talent]]
 code = "ranger_5_2"
@@ -568,6 +2606,241 @@ amount = 25
 category = "damage"
 condition = "target_health_below"
 threshold = 35
+branch = "ranger_branch_2"
+branch_name = "Преследование"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["ranger_path_2_5_a", "ranger_path_2_5_b"]
+legacy = true
+
+[[talent]]
+code = "ranger_path_3_1_a"
+name = "Крепкое тело следопыта"
+class = "ranger"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "ranger_branch_3"
+branch_name = "Лесная выучка"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "health_percent"
+
+[[talent]]
+code = "ranger_path_3_1_b"
+name = "Собранность следопыта"
+class = "ranger"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "ranger_branch_3"
+branch_name = "Лесная выучка"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "dodge_percent"
+
+[[talent]]
+code = "ranger_1_3"
+name = "Выносливый охотник"
+class = "ranger"
+level = 10
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "health_percent"
+branch = "ranger_branch_3"
+branch_name = "Лесная выучка"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["ranger_path_3_1_a", "ranger_path_3_1_b"]
+legacy = true
+
+[[talent]]
+code = "ranger_path_3_2_a"
+name = "Закалка следопыта"
+class = "ranger"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "ranger_branch_3"
+branch_name = "Лесная выучка"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "health_percent"
+requires_all = ["ranger_1_3"]
+
+[[talent]]
+code = "ranger_path_3_2_b"
+name = "Осмотрительность следопыта"
+class = "ranger"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "ranger_branch_3"
+branch_name = "Лесная выучка"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "dodge_percent"
+requires_all = ["ranger_1_3"]
+
+[[talent]]
+code = "ranger_2_3"
+name = "Дыхание следопыта"
+class = "ranger"
+level = 30
+effect = "modifier"
+amount = 20
+category = "all"
+modifier = "resource_regen_percent"
+branch = "ranger_branch_3"
+branch_name = "Лесная выучка"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["ranger_path_3_2_a", "ranger_path_3_2_b"]
+legacy = true
+
+[[talent]]
+code = "ranger_path_3_3_a"
+name = "Выносливое тело следопыта"
+class = "ranger"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "ranger_branch_3"
+branch_name = "Лесная выучка"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "health_percent"
+requires_all = ["ranger_2_3"]
+
+[[talent]]
+code = "ranger_path_3_3_b"
+name = "Готовность следопыта"
+class = "ranger"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "ranger_branch_3"
+branch_name = "Лесная выучка"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "dodge_percent"
+requires_all = ["ranger_2_3"]
+
+[[talent]]
+code = "ranger_3_3"
+name = "Лёгкая поступь"
+class = "ranger"
+level = 60
+effect = "modifier"
+amount = 8
+category = "all"
+modifier = "dodge_percent"
+branch = "ranger_branch_3"
+branch_name = "Лесная выучка"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["ranger_path_3_3_a", "ranger_path_3_3_b"]
+legacy = true
+
+[[talent]]
+code = "ranger_path_3_4_a"
+name = "Стойкое тело следопыта"
+class = "ranger"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "ranger_branch_3"
+branch_name = "Лесная выучка"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "health_percent"
+requires_all = ["ranger_3_3"]
+
+[[talent]]
+code = "ranger_path_3_4_b"
+name = "Надёжность следопыта"
+class = "ranger"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "ranger_branch_3"
+branch_name = "Лесная выучка"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "dodge_percent"
+requires_all = ["ranger_3_3"]
+
+[[talent]]
+code = "ranger_4_3"
+name = "Острый глаз"
+class = "ranger"
+level = 100
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "accuracy_percent"
+branch = "ranger_branch_3"
+branch_name = "Лесная выучка"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["ranger_path_3_4_a", "ranger_path_3_4_b"]
+legacy = true
+
+[[talent]]
+code = "ranger_path_3_5_a"
+name = "Предельная закалка следопыта"
+class = "ranger"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "ranger_branch_3"
+branch_name = "Лесная выучка"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "health_percent"
+requires_all = ["ranger_4_3"]
+choice_group = "ranger_branch_3_final_route"
+
+[[talent]]
+code = "ranger_path_3_5_b"
+name = "Полная готовность следопыта"
+class = "ranger"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "ranger_branch_3"
+branch_name = "Лесная выучка"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "dodge_percent"
+requires_all = ["ranger_4_3"]
+choice_group = "ranger_branch_3_final_route"
 
 [[talent]]
 code = "ranger_5_3"
@@ -578,6 +2851,41 @@ effect = "modifier"
 amount = 15
 category = "all"
 modifier = "resist_magic_percent"
+branch = "ranger_branch_3"
+branch_name = "Лесная выучка"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["ranger_path_3_5_a", "ranger_path_3_5_b"]
+legacy = true
+
+[[talent]]
+code = "rogue_path_1_1_a"
+name = "Точный приём разбойника"
+class = "rogue"
+level = 10
+effect = "power"
+amount = 2
+category = "damage"
+branch = "rogue_branch_1"
+branch_name = "Яды"
+row = 1
+max_rank = 2
+points_required = 0
+
+[[talent]]
+code = "rogue_path_1_1_b"
+name = "Мера усилия разбойника"
+class = "rogue"
+level = 10
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "rogue_branch_1"
+branch_name = "Яды"
+row = 1
+max_rank = 2
+points_required = 0
 
 [[talent]]
 code = "rogue_1_1"
@@ -587,25 +2895,43 @@ level = 10
 effect = "power"
 amount = 10
 category = "damage"
+branch = "rogue_branch_1"
+branch_name = "Яды"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["rogue_path_1_1_a", "rogue_path_1_1_b"]
+legacy = true
 
 [[talent]]
-code = "rogue_1_2"
-name = "Мера хитрости"
+code = "rogue_path_1_2_a"
+name = "Отработанный приём разбойника"
 class = "rogue"
-level = 10
+level = 30
+effect = "power"
+amount = 2
+category = "damage"
+branch = "rogue_branch_1"
+branch_name = "Яды"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["rogue_1_1"]
+
+[[talent]]
+code = "rogue_path_1_2_b"
+name = "Верный расчёт разбойника"
+class = "rogue"
+level = 30
 effect = "cost"
-amount = 15
-category = "all"
-
-[[talent]]
-code = "rogue_1_3"
-name = "Выносливый лазутчик"
-class = "rogue"
-level = 10
-effect = "modifier"
-amount = 10
-category = "all"
-modifier = "health_percent"
+amount = 2
+category = "damage"
+branch = "rogue_branch_1"
+branch_name = "Яды"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["rogue_1_1"]
 
 [[talent]]
 code = "rogue_2_1"
@@ -617,25 +2943,43 @@ amount = 20
 category = "damage"
 condition = "actor_status"
 statuses = ["unseen"]
+branch = "rogue_branch_1"
+branch_name = "Яды"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["rogue_path_1_2_a", "rogue_path_1_2_b"]
+legacy = true
 
 [[talent]]
-code = "rogue_2_2"
-name = "Частые выпады"
+code = "rogue_path_1_3_a"
+name = "Сильный приём разбойника"
 class = "rogue"
-level = 30
-effect = "cooldown"
-amount = 1
+level = 60
+effect = "power"
+amount = 2
 category = "damage"
+branch = "rogue_branch_1"
+branch_name = "Яды"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["rogue_2_1"]
 
 [[talent]]
-code = "rogue_2_3"
-name = "Дыхание лазутчика"
+code = "rogue_path_1_3_b"
+name = "Сбережённое усилие разбойника"
 class = "rogue"
-level = 30
-effect = "modifier"
-amount = 20
-category = "all"
-modifier = "resource_regen_percent"
+level = 60
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "rogue_branch_1"
+branch_name = "Яды"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["rogue_2_1"]
 
 [[talent]]
 code = "rogue_3_1"
@@ -645,6 +2989,230 @@ level = 60
 effect = "duration"
 amount = 1
 category = "debuff"
+branch = "rogue_branch_1"
+branch_name = "Яды"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["rogue_path_1_3_a", "rogue_path_1_3_b"]
+legacy = true
+
+[[talent]]
+code = "rogue_path_1_4_a"
+name = "Совершенный приём разбойника"
+class = "rogue"
+level = 100
+effect = "power"
+amount = 2
+category = "damage"
+branch = "rogue_branch_1"
+branch_name = "Яды"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["rogue_3_1"]
+
+[[talent]]
+code = "rogue_path_1_4_b"
+name = "Точный расход разбойника"
+class = "rogue"
+level = 100
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "rogue_branch_1"
+branch_name = "Яды"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["rogue_3_1"]
+
+[[talent]]
+code = "rogue_4_1"
+name = "Бережный выпад"
+class = "rogue"
+level = 100
+effect = "cost"
+amount = 20
+category = "damage"
+branch = "rogue_branch_1"
+branch_name = "Яды"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["rogue_path_1_4_a", "rogue_path_1_4_b"]
+legacy = true
+
+[[talent]]
+code = "rogue_path_1_5_a"
+name = "Мастерский приём разбойника"
+class = "rogue"
+level = 150
+effect = "power"
+amount = 2
+category = "damage"
+branch = "rogue_branch_1"
+branch_name = "Яды"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["rogue_4_1"]
+choice_group = "rogue_branch_1_final_route"
+
+[[talent]]
+code = "rogue_path_1_5_b"
+name = "Выверенное усилие разбойника"
+class = "rogue"
+level = 150
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "rogue_branch_1"
+branch_name = "Яды"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["rogue_4_1"]
+choice_group = "rogue_branch_1_final_route"
+
+[[talent]]
+code = "rogue_5_1"
+name = "Мастер кинжала"
+class = "rogue"
+level = 150
+effect = "power"
+amount = 15
+category = "damage"
+branch = "rogue_branch_1"
+branch_name = "Яды"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["rogue_path_1_5_a", "rogue_path_1_5_b"]
+legacy = true
+
+[[talent]]
+code = "rogue_path_2_1_a"
+name = "Спокойное начало разбойника"
+class = "rogue"
+level = 10
+effect = "cost"
+amount = 2
+category = "all"
+branch = "rogue_branch_2"
+branch_name = "Быстрый клинок"
+row = 1
+max_rank = 2
+points_required = 0
+
+[[talent]]
+code = "rogue_path_2_1_b"
+name = "Первый вдох разбойника"
+class = "rogue"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "rogue_branch_2"
+branch_name = "Быстрый клинок"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "resource_regen_percent"
+
+[[talent]]
+code = "rogue_1_2"
+name = "Мера хитрости"
+class = "rogue"
+level = 10
+effect = "cost"
+amount = 15
+category = "all"
+branch = "rogue_branch_2"
+branch_name = "Быстрый клинок"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["rogue_path_2_1_a", "rogue_path_2_1_b"]
+legacy = true
+
+[[talent]]
+code = "rogue_path_2_2_a"
+name = "Размеренная работа разбойника"
+class = "rogue"
+level = 30
+effect = "cost"
+amount = 2
+category = "all"
+branch = "rogue_branch_2"
+branch_name = "Быстрый клинок"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["rogue_1_2"]
+
+[[talent]]
+code = "rogue_path_2_2_b"
+name = "Ровный ритм разбойника"
+class = "rogue"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "rogue_branch_2"
+branch_name = "Быстрый клинок"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "resource_regen_percent"
+requires_all = ["rogue_1_2"]
+
+[[talent]]
+code = "rogue_2_2"
+name = "Частые выпады"
+class = "rogue"
+level = 30
+effect = "cooldown"
+amount = 1
+category = "damage"
+branch = "rogue_branch_2"
+branch_name = "Быстрый клинок"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["rogue_path_2_2_a", "rogue_path_2_2_b"]
+legacy = true
+
+[[talent]]
+code = "rogue_path_2_3_a"
+name = "Согласованная работа разбойника"
+class = "rogue"
+level = 60
+effect = "cost"
+amount = 2
+category = "all"
+branch = "rogue_branch_2"
+branch_name = "Быстрый клинок"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["rogue_2_2"]
+
+[[talent]]
+code = "rogue_path_2_3_b"
+name = "Долгое дыхание разбойника"
+class = "rogue"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "rogue_branch_2"
+branch_name = "Быстрый клинок"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "resource_regen_percent"
+requires_all = ["rogue_2_2"]
 
 [[talent]]
 code = "rogue_3_2"
@@ -655,25 +3223,44 @@ effect = "modifier"
 amount = 20
 category = "all"
 modifier = "dot_damage_percent"
+branch = "rogue_branch_2"
+branch_name = "Быстрый клинок"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["rogue_path_2_3_a", "rogue_path_2_3_b"]
+legacy = true
 
 [[talent]]
-code = "rogue_3_3"
-name = "Ускользающий шаг"
-class = "rogue"
-level = 60
-effect = "modifier"
-amount = 8
-category = "all"
-modifier = "dodge_percent"
-
-[[talent]]
-code = "rogue_4_1"
-name = "Бережный выпад"
+code = "rogue_path_2_4_a"
+name = "Чёткий порядок разбойника"
 class = "rogue"
 level = 100
 effect = "cost"
-amount = 20
-category = "damage"
+amount = 2
+category = "all"
+branch = "rogue_branch_2"
+branch_name = "Быстрый клинок"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["rogue_3_2"]
+
+[[talent]]
+code = "rogue_path_2_4_b"
+name = "Второе дыхание разбойника"
+class = "rogue"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "rogue_branch_2"
+branch_name = "Быстрый клинок"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "resource_regen_percent"
+requires_all = ["rogue_3_2"]
 
 [[talent]]
 code = "rogue_4_2"
@@ -683,25 +3270,46 @@ level = 100
 effect = "cooldown"
 amount = 1
 category = "debuff"
+branch = "rogue_branch_2"
+branch_name = "Быстрый клинок"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["rogue_path_2_4_a", "rogue_path_2_4_b"]
+legacy = true
 
 [[talent]]
-code = "rogue_4_3"
-name = "Точность лазутчика"
-class = "rogue"
-level = 100
-effect = "modifier"
-amount = 10
-category = "all"
-modifier = "accuracy_percent"
-
-[[talent]]
-code = "rogue_5_1"
-name = "Мастер кинжала"
+code = "rogue_path_2_5_a"
+name = "Безошибочный порядок разбойника"
 class = "rogue"
 level = 150
-effect = "power"
-amount = 15
-category = "damage"
+effect = "cost"
+amount = 2
+category = "all"
+branch = "rogue_branch_2"
+branch_name = "Быстрый клинок"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["rogue_4_2"]
+choice_group = "rogue_branch_2_final_route"
+
+[[talent]]
+code = "rogue_path_2_5_b"
+name = "Полный запас разбойника"
+class = "rogue"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "rogue_branch_2"
+branch_name = "Быстрый клинок"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "resource_regen_percent"
+requires_all = ["rogue_4_2"]
+choice_group = "rogue_branch_2_final_route"
 
 [[talent]]
 code = "rogue_5_2"
@@ -713,6 +3321,241 @@ amount = 25
 category = "damage"
 condition = "target_status"
 statuses = ["poison"]
+branch = "rogue_branch_2"
+branch_name = "Быстрый клинок"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["rogue_path_2_5_a", "rogue_path_2_5_b"]
+legacy = true
+
+[[talent]]
+code = "rogue_path_3_1_a"
+name = "Крепкое тело разбойника"
+class = "rogue"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "rogue_branch_3"
+branch_name = "Ускользание"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "health_percent"
+
+[[talent]]
+code = "rogue_path_3_1_b"
+name = "Собранность разбойника"
+class = "rogue"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "rogue_branch_3"
+branch_name = "Ускользание"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "dodge_percent"
+
+[[talent]]
+code = "rogue_1_3"
+name = "Выносливый лазутчик"
+class = "rogue"
+level = 10
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "health_percent"
+branch = "rogue_branch_3"
+branch_name = "Ускользание"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["rogue_path_3_1_a", "rogue_path_3_1_b"]
+legacy = true
+
+[[talent]]
+code = "rogue_path_3_2_a"
+name = "Закалка разбойника"
+class = "rogue"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "rogue_branch_3"
+branch_name = "Ускользание"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "health_percent"
+requires_all = ["rogue_1_3"]
+
+[[talent]]
+code = "rogue_path_3_2_b"
+name = "Осмотрительность разбойника"
+class = "rogue"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "rogue_branch_3"
+branch_name = "Ускользание"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "dodge_percent"
+requires_all = ["rogue_1_3"]
+
+[[talent]]
+code = "rogue_2_3"
+name = "Дыхание лазутчика"
+class = "rogue"
+level = 30
+effect = "modifier"
+amount = 20
+category = "all"
+modifier = "resource_regen_percent"
+branch = "rogue_branch_3"
+branch_name = "Ускользание"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["rogue_path_3_2_a", "rogue_path_3_2_b"]
+legacy = true
+
+[[talent]]
+code = "rogue_path_3_3_a"
+name = "Выносливое тело разбойника"
+class = "rogue"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "rogue_branch_3"
+branch_name = "Ускользание"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "health_percent"
+requires_all = ["rogue_2_3"]
+
+[[talent]]
+code = "rogue_path_3_3_b"
+name = "Готовность разбойника"
+class = "rogue"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "rogue_branch_3"
+branch_name = "Ускользание"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "dodge_percent"
+requires_all = ["rogue_2_3"]
+
+[[talent]]
+code = "rogue_3_3"
+name = "Ускользающий шаг"
+class = "rogue"
+level = 60
+effect = "modifier"
+amount = 8
+category = "all"
+modifier = "dodge_percent"
+branch = "rogue_branch_3"
+branch_name = "Ускользание"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["rogue_path_3_3_a", "rogue_path_3_3_b"]
+legacy = true
+
+[[talent]]
+code = "rogue_path_3_4_a"
+name = "Стойкое тело разбойника"
+class = "rogue"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "rogue_branch_3"
+branch_name = "Ускользание"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "health_percent"
+requires_all = ["rogue_3_3"]
+
+[[talent]]
+code = "rogue_path_3_4_b"
+name = "Надёжность разбойника"
+class = "rogue"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "rogue_branch_3"
+branch_name = "Ускользание"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "dodge_percent"
+requires_all = ["rogue_3_3"]
+
+[[talent]]
+code = "rogue_4_3"
+name = "Точность лазутчика"
+class = "rogue"
+level = 100
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "accuracy_percent"
+branch = "rogue_branch_3"
+branch_name = "Ускользание"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["rogue_path_3_4_a", "rogue_path_3_4_b"]
+legacy = true
+
+[[talent]]
+code = "rogue_path_3_5_a"
+name = "Предельная закалка разбойника"
+class = "rogue"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "rogue_branch_3"
+branch_name = "Ускользание"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "health_percent"
+requires_all = ["rogue_4_3"]
+choice_group = "rogue_branch_3_final_route"
+
+[[talent]]
+code = "rogue_path_3_5_b"
+name = "Полная готовность разбойника"
+class = "rogue"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "rogue_branch_3"
+branch_name = "Ускользание"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "dodge_percent"
+requires_all = ["rogue_4_3"]
+choice_group = "rogue_branch_3_final_route"
 
 [[talent]]
 code = "rogue_5_3"
@@ -723,6 +3566,41 @@ effect = "modifier"
 amount = 6
 category = "all"
 modifier = "lifesteal_percent"
+branch = "rogue_branch_3"
+branch_name = "Ускользание"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["rogue_path_3_5_a", "rogue_path_3_5_b"]
+legacy = true
+
+[[talent]]
+code = "mage_path_1_1_a"
+name = "Точный приём мага"
+class = "mage"
+level = 10
+effect = "power"
+amount = 2
+category = "damage"
+branch = "mage_branch_1"
+branch_name = "Разрушение"
+row = 1
+max_rank = 2
+points_required = 0
+
+[[talent]]
+code = "mage_path_1_1_b"
+name = "Мера усилия мага"
+class = "mage"
+level = 10
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "mage_branch_1"
+branch_name = "Разрушение"
+row = 1
+max_rank = 2
+points_required = 0
 
 [[talent]]
 code = "mage_1_1"
@@ -732,25 +3610,43 @@ level = 10
 effect = "power"
 amount = 10
 category = "damage"
+branch = "mage_branch_1"
+branch_name = "Разрушение"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["mage_path_1_1_a", "mage_path_1_1_b"]
+legacy = true
 
 [[talent]]
-code = "mage_1_2"
-name = "Мера чар"
+code = "mage_path_1_2_a"
+name = "Отработанный приём мага"
 class = "mage"
-level = 10
+level = 30
+effect = "power"
+amount = 2
+category = "damage"
+branch = "mage_branch_1"
+branch_name = "Разрушение"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["mage_1_1"]
+
+[[talent]]
+code = "mage_path_1_2_b"
+name = "Верный расчёт мага"
+class = "mage"
+level = 30
 effect = "cost"
-amount = 15
-category = "all"
-
-[[talent]]
-code = "mage_1_3"
-name = "Крепость чародея"
-class = "mage"
-level = 10
-effect = "modifier"
-amount = 10
-category = "all"
-modifier = "health_percent"
+amount = 2
+category = "damage"
+branch = "mage_branch_1"
+branch_name = "Разрушение"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["mage_1_1"]
 
 [[talent]]
 code = "mage_2_1"
@@ -762,25 +3658,43 @@ amount = 20
 category = "damage"
 condition = "target_status"
 statuses = ["burning", "freeze"]
+branch = "mage_branch_1"
+branch_name = "Разрушение"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["mage_path_1_2_a", "mage_path_1_2_b"]
+legacy = true
 
 [[talent]]
-code = "mage_2_2"
-name = "Частые заклинания"
+code = "mage_path_1_3_a"
+name = "Сильный приём мага"
 class = "mage"
-level = 30
-effect = "cooldown"
-amount = 1
+level = 60
+effect = "power"
+amount = 2
 category = "damage"
+branch = "mage_branch_1"
+branch_name = "Разрушение"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["mage_2_1"]
 
 [[talent]]
-code = "mage_2_3"
-name = "Дыхание мага"
+code = "mage_path_1_3_b"
+name = "Сбережённое усилие мага"
 class = "mage"
-level = 30
-effect = "modifier"
-amount = 20
-category = "all"
-modifier = "resource_regen_percent"
+level = 60
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "mage_branch_1"
+branch_name = "Разрушение"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["mage_2_1"]
 
 [[talent]]
 code = "mage_3_1"
@@ -790,25 +3704,43 @@ level = 60
 effect = "duration"
 amount = 1
 category = "damage"
+branch = "mage_branch_1"
+branch_name = "Разрушение"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["mage_path_1_3_a", "mage_path_1_3_b"]
+legacy = true
 
 [[talent]]
-code = "mage_3_2"
-name = "Плотный барьер"
+code = "mage_path_1_4_a"
+name = "Совершенный приём мага"
 class = "mage"
-level = 60
+level = 100
 effect = "power"
-amount = 15
-category = "barrier"
+amount = 2
+category = "damage"
+branch = "mage_branch_1"
+branch_name = "Разрушение"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["mage_3_1"]
 
 [[talent]]
-code = "mage_3_3"
-name = "Оберег от чар"
+code = "mage_path_1_4_b"
+name = "Точный расход мага"
 class = "mage"
-level = 60
-effect = "modifier"
-amount = 8
-category = "all"
-modifier = "resist_magic_percent"
+level = 100
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "mage_branch_1"
+branch_name = "Разрушение"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["mage_3_1"]
 
 [[talent]]
 code = "mage_4_1"
@@ -818,25 +3750,45 @@ level = 100
 effect = "cost"
 amount = 20
 category = "damage"
+branch = "mage_branch_1"
+branch_name = "Разрушение"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["mage_path_1_4_a", "mage_path_1_4_b"]
+legacy = true
 
 [[talent]]
-code = "mage_4_2"
-name = "Скорый барьер"
+code = "mage_path_1_5_a"
+name = "Мастерский приём мага"
 class = "mage"
-level = 100
-effect = "cooldown"
-amount = 1
-category = "barrier"
+level = 150
+effect = "power"
+amount = 2
+category = "damage"
+branch = "mage_branch_1"
+branch_name = "Разрушение"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["mage_4_1"]
+choice_group = "mage_branch_1_final_route"
 
 [[talent]]
-code = "mage_4_3"
-name = "Верное наведение"
+code = "mage_path_1_5_b"
+name = "Выверенное усилие мага"
 class = "mage"
-level = 100
-effect = "modifier"
-amount = 10
-category = "all"
-modifier = "accuracy_percent"
+level = 150
+effect = "cost"
+amount = 2
+category = "damage"
+branch = "mage_branch_1"
+branch_name = "Разрушение"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["mage_4_1"]
+choice_group = "mage_branch_1_final_route"
 
 [[talent]]
 code = "mage_5_1"
@@ -846,6 +3798,232 @@ level = 150
 effect = "power"
 amount = 15
 category = "damage"
+branch = "mage_branch_1"
+branch_name = "Разрушение"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["mage_path_1_5_a", "mage_path_1_5_b"]
+legacy = true
+
+[[talent]]
+code = "mage_path_2_1_a"
+name = "Спокойное начало мага"
+class = "mage"
+level = 10
+effect = "cost"
+amount = 2
+category = "all"
+branch = "mage_branch_2"
+branch_name = "Чародейский расчёт"
+row = 1
+max_rank = 2
+points_required = 0
+
+[[talent]]
+code = "mage_path_2_1_b"
+name = "Первый вдох мага"
+class = "mage"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "mage_branch_2"
+branch_name = "Чародейский расчёт"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "resource_regen_percent"
+
+[[talent]]
+code = "mage_1_2"
+name = "Мера чар"
+class = "mage"
+level = 10
+effect = "cost"
+amount = 15
+category = "all"
+branch = "mage_branch_2"
+branch_name = "Чародейский расчёт"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["mage_path_2_1_a", "mage_path_2_1_b"]
+legacy = true
+
+[[talent]]
+code = "mage_path_2_2_a"
+name = "Размеренная работа мага"
+class = "mage"
+level = 30
+effect = "cost"
+amount = 2
+category = "all"
+branch = "mage_branch_2"
+branch_name = "Чародейский расчёт"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["mage_1_2"]
+
+[[talent]]
+code = "mage_path_2_2_b"
+name = "Ровный ритм мага"
+class = "mage"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "mage_branch_2"
+branch_name = "Чародейский расчёт"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "resource_regen_percent"
+requires_all = ["mage_1_2"]
+
+[[talent]]
+code = "mage_2_2"
+name = "Частые заклинания"
+class = "mage"
+level = 30
+effect = "cooldown"
+amount = 1
+category = "damage"
+branch = "mage_branch_2"
+branch_name = "Чародейский расчёт"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["mage_path_2_2_a", "mage_path_2_2_b"]
+legacy = true
+
+[[talent]]
+code = "mage_path_2_3_a"
+name = "Согласованная работа мага"
+class = "mage"
+level = 60
+effect = "cost"
+amount = 2
+category = "all"
+branch = "mage_branch_2"
+branch_name = "Чародейский расчёт"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["mage_2_2"]
+
+[[talent]]
+code = "mage_path_2_3_b"
+name = "Долгое дыхание мага"
+class = "mage"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "mage_branch_2"
+branch_name = "Чародейский расчёт"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "resource_regen_percent"
+requires_all = ["mage_2_2"]
+
+[[talent]]
+code = "mage_3_2"
+name = "Плотный барьер"
+class = "mage"
+level = 60
+effect = "power"
+amount = 15
+category = "barrier"
+branch = "mage_branch_2"
+branch_name = "Чародейский расчёт"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["mage_path_2_3_a", "mage_path_2_3_b"]
+legacy = true
+
+[[talent]]
+code = "mage_path_2_4_a"
+name = "Чёткий порядок мага"
+class = "mage"
+level = 100
+effect = "cost"
+amount = 2
+category = "all"
+branch = "mage_branch_2"
+branch_name = "Чародейский расчёт"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["mage_3_2"]
+
+[[talent]]
+code = "mage_path_2_4_b"
+name = "Второе дыхание мага"
+class = "mage"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "mage_branch_2"
+branch_name = "Чародейский расчёт"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "resource_regen_percent"
+requires_all = ["mage_3_2"]
+
+[[talent]]
+code = "mage_4_2"
+name = "Скорый барьер"
+class = "mage"
+level = 100
+effect = "cooldown"
+amount = 1
+category = "barrier"
+branch = "mage_branch_2"
+branch_name = "Чародейский расчёт"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["mage_path_2_4_a", "mage_path_2_4_b"]
+legacy = true
+
+[[talent]]
+code = "mage_path_2_5_a"
+name = "Безошибочный порядок мага"
+class = "mage"
+level = 150
+effect = "cost"
+amount = 2
+category = "all"
+branch = "mage_branch_2"
+branch_name = "Чародейский расчёт"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["mage_4_2"]
+choice_group = "mage_branch_2_final_route"
+
+[[talent]]
+code = "mage_path_2_5_b"
+name = "Полный запас мага"
+class = "mage"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "mage_branch_2"
+branch_name = "Чародейский расчёт"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "resource_regen_percent"
+requires_all = ["mage_4_2"]
+choice_group = "mage_branch_2_final_route"
 
 [[talent]]
 code = "mage_5_2"
@@ -857,6 +4035,241 @@ amount = 25
 category = "damage"
 condition = "target_health_below"
 threshold = 35
+branch = "mage_branch_2"
+branch_name = "Чародейский расчёт"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["mage_path_2_5_a", "mage_path_2_5_b"]
+legacy = true
+
+[[talent]]
+code = "mage_path_3_1_a"
+name = "Крепкое тело мага"
+class = "mage"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "mage_branch_3"
+branch_name = "Магическая защита"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "health_percent"
+
+[[talent]]
+code = "mage_path_3_1_b"
+name = "Собранность мага"
+class = "mage"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "mage_branch_3"
+branch_name = "Магическая защита"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "resource_percent"
+
+[[talent]]
+code = "mage_1_3"
+name = "Крепость чародея"
+class = "mage"
+level = 10
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "health_percent"
+branch = "mage_branch_3"
+branch_name = "Магическая защита"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["mage_path_3_1_a", "mage_path_3_1_b"]
+legacy = true
+
+[[talent]]
+code = "mage_path_3_2_a"
+name = "Закалка мага"
+class = "mage"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "mage_branch_3"
+branch_name = "Магическая защита"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "health_percent"
+requires_all = ["mage_1_3"]
+
+[[talent]]
+code = "mage_path_3_2_b"
+name = "Осмотрительность мага"
+class = "mage"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "mage_branch_3"
+branch_name = "Магическая защита"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "resource_percent"
+requires_all = ["mage_1_3"]
+
+[[talent]]
+code = "mage_2_3"
+name = "Дыхание мага"
+class = "mage"
+level = 30
+effect = "modifier"
+amount = 20
+category = "all"
+modifier = "resource_regen_percent"
+branch = "mage_branch_3"
+branch_name = "Магическая защита"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["mage_path_3_2_a", "mage_path_3_2_b"]
+legacy = true
+
+[[talent]]
+code = "mage_path_3_3_a"
+name = "Выносливое тело мага"
+class = "mage"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "mage_branch_3"
+branch_name = "Магическая защита"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "health_percent"
+requires_all = ["mage_2_3"]
+
+[[talent]]
+code = "mage_path_3_3_b"
+name = "Готовность мага"
+class = "mage"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "mage_branch_3"
+branch_name = "Магическая защита"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "resource_percent"
+requires_all = ["mage_2_3"]
+
+[[talent]]
+code = "mage_3_3"
+name = "Оберег от чар"
+class = "mage"
+level = 60
+effect = "modifier"
+amount = 8
+category = "all"
+modifier = "resist_magic_percent"
+branch = "mage_branch_3"
+branch_name = "Магическая защита"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["mage_path_3_3_a", "mage_path_3_3_b"]
+legacy = true
+
+[[talent]]
+code = "mage_path_3_4_a"
+name = "Стойкое тело мага"
+class = "mage"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "mage_branch_3"
+branch_name = "Магическая защита"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "health_percent"
+requires_all = ["mage_3_3"]
+
+[[talent]]
+code = "mage_path_3_4_b"
+name = "Надёжность мага"
+class = "mage"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "mage_branch_3"
+branch_name = "Магическая защита"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "resource_percent"
+requires_all = ["mage_3_3"]
+
+[[talent]]
+code = "mage_4_3"
+name = "Верное наведение"
+class = "mage"
+level = 100
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "accuracy_percent"
+branch = "mage_branch_3"
+branch_name = "Магическая защита"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["mage_path_3_4_a", "mage_path_3_4_b"]
+legacy = true
+
+[[talent]]
+code = "mage_path_3_5_a"
+name = "Предельная закалка мага"
+class = "mage"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "mage_branch_3"
+branch_name = "Магическая защита"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "health_percent"
+requires_all = ["mage_4_3"]
+choice_group = "mage_branch_3_final_route"
+
+[[talent]]
+code = "mage_path_3_5_b"
+name = "Полная готовность мага"
+class = "mage"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "mage_branch_3"
+branch_name = "Магическая защита"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "resource_percent"
+requires_all = ["mage_4_3"]
+choice_group = "mage_branch_3_final_route"
 
 [[talent]]
 code = "mage_5_3"
@@ -867,6 +4280,41 @@ effect = "modifier"
 amount = 15
 category = "all"
 modifier = "resource_percent"
+branch = "mage_branch_3"
+branch_name = "Магическая защита"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["mage_path_3_5_a", "mage_path_3_5_b"]
+legacy = true
+
+[[talent]]
+code = "cleric_path_1_1_a"
+name = "Точный приём жреца"
+class = "cleric"
+level = 10
+effect = "power"
+amount = 2
+category = "heal"
+branch = "cleric_branch_1"
+branch_name = "Исцеление"
+row = 1
+max_rank = 2
+points_required = 0
+
+[[talent]]
+code = "cleric_path_1_1_b"
+name = "Мера усилия жреца"
+class = "cleric"
+level = 10
+effect = "cost"
+amount = 2
+category = "heal"
+branch = "cleric_branch_1"
+branch_name = "Исцеление"
+row = 1
+max_rank = 2
+points_required = 0
 
 [[talent]]
 code = "cleric_1_1"
@@ -876,25 +4324,43 @@ level = 10
 effect = "power"
 amount = 10
 category = "heal"
+branch = "cleric_branch_1"
+branch_name = "Исцеление"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["cleric_path_1_1_a", "cleric_path_1_1_b"]
+legacy = true
 
 [[talent]]
-code = "cleric_1_2"
-name = "Мера сил"
+code = "cleric_path_1_2_a"
+name = "Отработанный приём жреца"
 class = "cleric"
-level = 10
+level = 30
+effect = "power"
+amount = 2
+category = "heal"
+branch = "cleric_branch_1"
+branch_name = "Исцеление"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["cleric_1_1"]
+
+[[talent]]
+code = "cleric_path_1_2_b"
+name = "Верный расчёт жреца"
+class = "cleric"
+level = 30
 effect = "cost"
-amount = 15
-category = "all"
-
-[[talent]]
-code = "cleric_1_3"
-name = "Стойкость знахаря"
-class = "cleric"
-level = 10
-effect = "modifier"
-amount = 10
-category = "all"
-modifier = "health_percent"
+amount = 2
+category = "heal"
+branch = "cleric_branch_1"
+branch_name = "Исцеление"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["cleric_1_1"]
 
 [[talent]]
 code = "cleric_2_1"
@@ -906,25 +4372,43 @@ amount = 20
 category = "heal"
 condition = "target_health_below"
 threshold = 50
+branch = "cleric_branch_1"
+branch_name = "Исцеление"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["cleric_path_1_2_a", "cleric_path_1_2_b"]
+legacy = true
 
 [[talent]]
-code = "cleric_2_2"
-name = "Скорое врачевание"
+code = "cleric_path_1_3_a"
+name = "Сильный приём жреца"
 class = "cleric"
-level = 30
-effect = "cooldown"
-amount = 1
+level = 60
+effect = "power"
+amount = 2
 category = "heal"
+branch = "cleric_branch_1"
+branch_name = "Исцеление"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["cleric_2_1"]
 
 [[talent]]
-code = "cleric_2_3"
-name = "Дыхание знахаря"
+code = "cleric_path_1_3_b"
+name = "Сбережённое усилие жреца"
 class = "cleric"
-level = 30
-effect = "modifier"
-amount = 20
-category = "all"
-modifier = "resource_regen_percent"
+level = 60
+effect = "cost"
+amount = 2
+category = "heal"
+branch = "cleric_branch_1"
+branch_name = "Исцеление"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["cleric_2_1"]
 
 [[talent]]
 code = "cleric_3_1"
@@ -934,25 +4418,43 @@ level = 60
 effect = "duration"
 amount = 1
 category = "heal"
+branch = "cleric_branch_1"
+branch_name = "Исцеление"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["cleric_path_1_3_a", "cleric_path_1_3_b"]
+legacy = true
 
 [[talent]]
-code = "cleric_3_2"
-name = "Оберегающая рука"
+code = "cleric_path_1_4_a"
+name = "Совершенный приём жреца"
 class = "cleric"
-level = 60
+level = 100
 effect = "power"
-amount = 15
-category = "barrier"
+amount = 2
+category = "heal"
+branch = "cleric_branch_1"
+branch_name = "Исцеление"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["cleric_3_1"]
 
 [[talent]]
-code = "cleric_3_3"
-name = "Плотный доспех знахаря"
+code = "cleric_path_1_4_b"
+name = "Точный расход жреца"
 class = "cleric"
-level = 60
-effect = "modifier"
-amount = 8
-category = "all"
-modifier = "armor_percent"
+level = 100
+effect = "cost"
+amount = 2
+category = "heal"
+branch = "cleric_branch_1"
+branch_name = "Исцеление"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["cleric_3_1"]
 
 [[talent]]
 code = "cleric_4_1"
@@ -962,26 +4464,45 @@ level = 100
 effect = "cost"
 amount = 20
 category = "heal"
+branch = "cleric_branch_1"
+branch_name = "Исцеление"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["cleric_path_1_4_a", "cleric_path_1_4_b"]
+legacy = true
 
 [[talent]]
-code = "cleric_4_2"
-name = "Скорый оберег"
+code = "cleric_path_1_5_a"
+name = "Мастерский приём жреца"
 class = "cleric"
-level = 100
-effect = "cooldown"
-amount = 1
-category = "barrier"
-
-[[talent]]
-code = "cleric_4_3"
-name = "Воздаяние немому"
-class = "cleric"
-level = 100
+level = 150
 effect = "power"
-amount = 20
-category = "damage"
-condition = "target_status"
-statuses = ["silence"]
+amount = 2
+category = "heal"
+branch = "cleric_branch_1"
+branch_name = "Исцеление"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["cleric_4_1"]
+choice_group = "cleric_branch_1_final_route"
+
+[[talent]]
+code = "cleric_path_1_5_b"
+name = "Выверенное усилие жреца"
+class = "cleric"
+level = 150
+effect = "cost"
+amount = 2
+category = "heal"
+branch = "cleric_branch_1"
+branch_name = "Исцеление"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["cleric_4_1"]
+choice_group = "cleric_branch_1_final_route"
 
 [[talent]]
 code = "cleric_5_1"
@@ -991,6 +4512,232 @@ level = 150
 effect = "power"
 amount = 15
 category = "heal"
+branch = "cleric_branch_1"
+branch_name = "Исцеление"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["cleric_path_1_5_a", "cleric_path_1_5_b"]
+legacy = true
+
+[[talent]]
+code = "cleric_path_2_1_a"
+name = "Спокойное начало жреца"
+class = "cleric"
+level = 10
+effect = "cost"
+amount = 2
+category = "all"
+branch = "cleric_branch_2"
+branch_name = "Попечение"
+row = 1
+max_rank = 2
+points_required = 0
+
+[[talent]]
+code = "cleric_path_2_1_b"
+name = "Первый вдох жреца"
+class = "cleric"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "cleric_branch_2"
+branch_name = "Попечение"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "resource_regen_percent"
+
+[[talent]]
+code = "cleric_1_2"
+name = "Мера сил"
+class = "cleric"
+level = 10
+effect = "cost"
+amount = 15
+category = "all"
+branch = "cleric_branch_2"
+branch_name = "Попечение"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["cleric_path_2_1_a", "cleric_path_2_1_b"]
+legacy = true
+
+[[talent]]
+code = "cleric_path_2_2_a"
+name = "Размеренная работа жреца"
+class = "cleric"
+level = 30
+effect = "cost"
+amount = 2
+category = "all"
+branch = "cleric_branch_2"
+branch_name = "Попечение"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["cleric_1_2"]
+
+[[talent]]
+code = "cleric_path_2_2_b"
+name = "Ровный ритм жреца"
+class = "cleric"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "cleric_branch_2"
+branch_name = "Попечение"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "resource_regen_percent"
+requires_all = ["cleric_1_2"]
+
+[[talent]]
+code = "cleric_2_2"
+name = "Скорое врачевание"
+class = "cleric"
+level = 30
+effect = "cooldown"
+amount = 1
+category = "heal"
+branch = "cleric_branch_2"
+branch_name = "Попечение"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["cleric_path_2_2_a", "cleric_path_2_2_b"]
+legacy = true
+
+[[talent]]
+code = "cleric_path_2_3_a"
+name = "Согласованная работа жреца"
+class = "cleric"
+level = 60
+effect = "cost"
+amount = 2
+category = "all"
+branch = "cleric_branch_2"
+branch_name = "Попечение"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["cleric_2_2"]
+
+[[talent]]
+code = "cleric_path_2_3_b"
+name = "Долгое дыхание жреца"
+class = "cleric"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "cleric_branch_2"
+branch_name = "Попечение"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "resource_regen_percent"
+requires_all = ["cleric_2_2"]
+
+[[talent]]
+code = "cleric_3_2"
+name = "Оберегающая рука"
+class = "cleric"
+level = 60
+effect = "power"
+amount = 15
+category = "barrier"
+branch = "cleric_branch_2"
+branch_name = "Попечение"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["cleric_path_2_3_a", "cleric_path_2_3_b"]
+legacy = true
+
+[[talent]]
+code = "cleric_path_2_4_a"
+name = "Чёткий порядок жреца"
+class = "cleric"
+level = 100
+effect = "cost"
+amount = 2
+category = "all"
+branch = "cleric_branch_2"
+branch_name = "Попечение"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["cleric_3_2"]
+
+[[talent]]
+code = "cleric_path_2_4_b"
+name = "Второе дыхание жреца"
+class = "cleric"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "cleric_branch_2"
+branch_name = "Попечение"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "resource_regen_percent"
+requires_all = ["cleric_3_2"]
+
+[[talent]]
+code = "cleric_4_2"
+name = "Скорый оберег"
+class = "cleric"
+level = 100
+effect = "cooldown"
+amount = 1
+category = "barrier"
+branch = "cleric_branch_2"
+branch_name = "Попечение"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["cleric_path_2_4_a", "cleric_path_2_4_b"]
+legacy = true
+
+[[talent]]
+code = "cleric_path_2_5_a"
+name = "Безошибочный порядок жреца"
+class = "cleric"
+level = 150
+effect = "cost"
+amount = 2
+category = "all"
+branch = "cleric_branch_2"
+branch_name = "Попечение"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["cleric_4_2"]
+choice_group = "cleric_branch_2_final_route"
+
+[[talent]]
+code = "cleric_path_2_5_b"
+name = "Полный запас жреца"
+class = "cleric"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "cleric_branch_2"
+branch_name = "Попечение"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "resource_regen_percent"
+requires_all = ["cleric_4_2"]
+choice_group = "cleric_branch_2_final_route"
 
 [[talent]]
 code = "cleric_5_2"
@@ -1002,6 +4749,242 @@ amount = 25
 category = "heal"
 condition = "target_health_below"
 threshold = 35
+branch = "cleric_branch_2"
+branch_name = "Попечение"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["cleric_path_2_5_a", "cleric_path_2_5_b"]
+legacy = true
+
+[[talent]]
+code = "cleric_path_3_1_a"
+name = "Крепкое тело жреца"
+class = "cleric"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "cleric_branch_3"
+branch_name = "Сохранение сил"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "health_percent"
+
+[[talent]]
+code = "cleric_path_3_1_b"
+name = "Собранность жреца"
+class = "cleric"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "cleric_branch_3"
+branch_name = "Сохранение сил"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "resource_percent"
+
+[[talent]]
+code = "cleric_1_3"
+name = "Стойкость знахаря"
+class = "cleric"
+level = 10
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "health_percent"
+branch = "cleric_branch_3"
+branch_name = "Сохранение сил"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["cleric_path_3_1_a", "cleric_path_3_1_b"]
+legacy = true
+
+[[talent]]
+code = "cleric_path_3_2_a"
+name = "Закалка жреца"
+class = "cleric"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "cleric_branch_3"
+branch_name = "Сохранение сил"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "health_percent"
+requires_all = ["cleric_1_3"]
+
+[[talent]]
+code = "cleric_path_3_2_b"
+name = "Осмотрительность жреца"
+class = "cleric"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "cleric_branch_3"
+branch_name = "Сохранение сил"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "resource_percent"
+requires_all = ["cleric_1_3"]
+
+[[talent]]
+code = "cleric_2_3"
+name = "Дыхание знахаря"
+class = "cleric"
+level = 30
+effect = "modifier"
+amount = 20
+category = "all"
+modifier = "resource_regen_percent"
+branch = "cleric_branch_3"
+branch_name = "Сохранение сил"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["cleric_path_3_2_a", "cleric_path_3_2_b"]
+legacy = true
+
+[[talent]]
+code = "cleric_path_3_3_a"
+name = "Выносливое тело жреца"
+class = "cleric"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "cleric_branch_3"
+branch_name = "Сохранение сил"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "health_percent"
+requires_all = ["cleric_2_3"]
+
+[[talent]]
+code = "cleric_path_3_3_b"
+name = "Готовность жреца"
+class = "cleric"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "cleric_branch_3"
+branch_name = "Сохранение сил"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "resource_percent"
+requires_all = ["cleric_2_3"]
+
+[[talent]]
+code = "cleric_3_3"
+name = "Плотный доспех знахаря"
+class = "cleric"
+level = 60
+effect = "modifier"
+amount = 8
+category = "all"
+modifier = "armor_percent"
+branch = "cleric_branch_3"
+branch_name = "Сохранение сил"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["cleric_path_3_3_a", "cleric_path_3_3_b"]
+legacy = true
+
+[[talent]]
+code = "cleric_path_3_4_a"
+name = "Стойкое тело жреца"
+class = "cleric"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "cleric_branch_3"
+branch_name = "Сохранение сил"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "health_percent"
+requires_all = ["cleric_3_3"]
+
+[[talent]]
+code = "cleric_path_3_4_b"
+name = "Надёжность жреца"
+class = "cleric"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "cleric_branch_3"
+branch_name = "Сохранение сил"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "resource_percent"
+requires_all = ["cleric_3_3"]
+
+[[talent]]
+code = "cleric_4_3"
+name = "Воздаяние немому"
+class = "cleric"
+level = 100
+effect = "power"
+amount = 20
+category = "damage"
+condition = "target_status"
+statuses = ["silence"]
+branch = "cleric_branch_3"
+branch_name = "Сохранение сил"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["cleric_path_3_4_a", "cleric_path_3_4_b"]
+legacy = true
+
+[[talent]]
+code = "cleric_path_3_5_a"
+name = "Предельная закалка жреца"
+class = "cleric"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "cleric_branch_3"
+branch_name = "Сохранение сил"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "health_percent"
+requires_all = ["cleric_4_3"]
+choice_group = "cleric_branch_3_final_route"
+
+[[talent]]
+code = "cleric_path_3_5_b"
+name = "Полная готовность жреца"
+class = "cleric"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "cleric_branch_3"
+branch_name = "Сохранение сил"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "resource_percent"
+requires_all = ["cleric_4_3"]
+choice_group = "cleric_branch_3_final_route"
 
 [[talent]]
 code = "cleric_5_3"
@@ -1012,6 +4995,41 @@ effect = "modifier"
 amount = 15
 category = "all"
 modifier = "resource_percent"
+branch = "cleric_branch_3"
+branch_name = "Сохранение сил"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["cleric_path_3_5_a", "cleric_path_3_5_b"]
+legacy = true
+
+[[talent]]
+code = "druid_path_1_1_a"
+name = "Точный приём друида"
+class = "druid"
+level = 10
+effect = "power"
+amount = 2
+category = "heal"
+branch = "druid_branch_1"
+branch_name = "Живая сила"
+row = 1
+max_rank = 2
+points_required = 0
+
+[[talent]]
+code = "druid_path_1_1_b"
+name = "Мера усилия друида"
+class = "druid"
+level = 10
+effect = "cost"
+amount = 2
+category = "heal"
+branch = "druid_branch_1"
+branch_name = "Живая сила"
+row = 1
+max_rank = 2
+points_required = 0
 
 [[talent]]
 code = "druid_1_1"
@@ -1021,25 +5039,43 @@ level = 10
 effect = "power"
 amount = 10
 category = "heal"
+branch = "druid_branch_1"
+branch_name = "Живая сила"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["druid_path_1_1_a", "druid_path_1_1_b"]
+legacy = true
 
 [[talent]]
-code = "druid_1_2"
-name = "Мера живой силы"
+code = "druid_path_1_2_a"
+name = "Отработанный приём друида"
 class = "druid"
-level = 10
+level = 30
+effect = "power"
+amount = 2
+category = "heal"
+branch = "druid_branch_1"
+branch_name = "Живая сила"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["druid_1_1"]
+
+[[talent]]
+code = "druid_path_1_2_b"
+name = "Верный расчёт друида"
+class = "druid"
+level = 30
 effect = "cost"
-amount = 15
-category = "all"
-
-[[talent]]
-code = "druid_1_3"
-name = "Стойкость друида"
-class = "druid"
-level = 10
-effect = "modifier"
-amount = 10
-category = "all"
-modifier = "health_percent"
+amount = 2
+category = "heal"
+branch = "druid_branch_1"
+branch_name = "Живая сила"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["druid_1_1"]
 
 [[talent]]
 code = "druid_2_1"
@@ -1051,25 +5087,43 @@ amount = 20
 category = "heal"
 condition = "target_status"
 statuses = ["health_regen"]
+branch = "druid_branch_1"
+branch_name = "Живая сила"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["druid_path_1_2_a", "druid_path_1_2_b"]
+legacy = true
 
 [[talent]]
-code = "druid_2_2"
-name = "Скорое восстановление"
+code = "druid_path_1_3_a"
+name = "Сильный приём друида"
 class = "druid"
-level = 30
-effect = "cooldown"
-amount = 1
+level = 60
+effect = "power"
+amount = 2
 category = "heal"
+branch = "druid_branch_1"
+branch_name = "Живая сила"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["druid_2_1"]
 
 [[talent]]
-code = "druid_2_3"
-name = "Дыхание друида"
+code = "druid_path_1_3_b"
+name = "Сбережённое усилие друида"
 class = "druid"
-level = 30
-effect = "modifier"
-amount = 20
-category = "all"
-modifier = "resource_regen_percent"
+level = 60
+effect = "cost"
+amount = 2
+category = "heal"
+branch = "druid_branch_1"
+branch_name = "Живая сила"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["druid_2_1"]
 
 [[talent]]
 code = "druid_3_1"
@@ -1079,25 +5133,43 @@ level = 60
 effect = "duration"
 amount = 1
 category = "heal"
+branch = "druid_branch_1"
+branch_name = "Живая сила"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["druid_path_1_3_a", "druid_path_1_3_b"]
+legacy = true
 
 [[talent]]
-code = "druid_3_2"
-name = "Крепкий покров"
+code = "druid_path_1_4_a"
+name = "Совершенный приём друида"
 class = "druid"
-level = 60
+level = 100
 effect = "power"
-amount = 15
-category = "barrier"
+amount = 2
+category = "heal"
+branch = "druid_branch_1"
+branch_name = "Живая сила"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["druid_3_1"]
 
 [[talent]]
-code = "druid_3_3"
-name = "Оберег друида"
+code = "druid_path_1_4_b"
+name = "Точный расход друида"
 class = "druid"
-level = 60
-effect = "modifier"
-amount = 8
-category = "all"
-modifier = "resist_magic_percent"
+level = 100
+effect = "cost"
+amount = 2
+category = "heal"
+branch = "druid_branch_1"
+branch_name = "Живая сила"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["druid_3_1"]
 
 [[talent]]
 code = "druid_4_1"
@@ -1107,26 +5179,45 @@ level = 100
 effect = "cost"
 amount = 20
 category = "heal"
+branch = "druid_branch_1"
+branch_name = "Живая сила"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["druid_path_1_4_a", "druid_path_1_4_b"]
+legacy = true
 
 [[talent]]
-code = "druid_4_2"
-name = "Скорый покров"
+code = "druid_path_1_5_a"
+name = "Мастерский приём друида"
 class = "druid"
-level = 100
-effect = "cooldown"
-amount = 1
-category = "barrier"
-
-[[talent]]
-code = "druid_4_3"
-name = "Удар по опутанному"
-class = "druid"
-level = 100
+level = 150
 effect = "power"
-amount = 20
-category = "damage"
-condition = "target_status"
-statuses = ["slow"]
+amount = 2
+category = "heal"
+branch = "druid_branch_1"
+branch_name = "Живая сила"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["druid_4_1"]
+choice_group = "druid_branch_1_final_route"
+
+[[talent]]
+code = "druid_path_1_5_b"
+name = "Выверенное усилие друида"
+class = "druid"
+level = 150
+effect = "cost"
+amount = 2
+category = "heal"
+branch = "druid_branch_1"
+branch_name = "Живая сила"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["druid_4_1"]
+choice_group = "druid_branch_1_final_route"
 
 [[talent]]
 code = "druid_5_1"
@@ -1136,6 +5227,232 @@ level = 150
 effect = "power"
 amount = 15
 category = "heal"
+branch = "druid_branch_1"
+branch_name = "Живая сила"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["druid_path_1_5_a", "druid_path_1_5_b"]
+legacy = true
+
+[[talent]]
+code = "druid_path_2_1_a"
+name = "Спокойное начало друида"
+class = "druid"
+level = 10
+effect = "cost"
+amount = 2
+category = "all"
+branch = "druid_branch_2"
+branch_name = "Круговорот"
+row = 1
+max_rank = 2
+points_required = 0
+
+[[talent]]
+code = "druid_path_2_1_b"
+name = "Первый вдох друида"
+class = "druid"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "druid_branch_2"
+branch_name = "Круговорот"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "resource_regen_percent"
+
+[[talent]]
+code = "druid_1_2"
+name = "Мера живой силы"
+class = "druid"
+level = 10
+effect = "cost"
+amount = 15
+category = "all"
+branch = "druid_branch_2"
+branch_name = "Круговорот"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["druid_path_2_1_a", "druid_path_2_1_b"]
+legacy = true
+
+[[talent]]
+code = "druid_path_2_2_a"
+name = "Размеренная работа друида"
+class = "druid"
+level = 30
+effect = "cost"
+amount = 2
+category = "all"
+branch = "druid_branch_2"
+branch_name = "Круговорот"
+row = 2
+max_rank = 2
+points_required = 4
+requires_all = ["druid_1_2"]
+
+[[talent]]
+code = "druid_path_2_2_b"
+name = "Ровный ритм друида"
+class = "druid"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "druid_branch_2"
+branch_name = "Круговорот"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "resource_regen_percent"
+requires_all = ["druid_1_2"]
+
+[[talent]]
+code = "druid_2_2"
+name = "Скорое восстановление"
+class = "druid"
+level = 30
+effect = "cooldown"
+amount = 1
+category = "heal"
+branch = "druid_branch_2"
+branch_name = "Круговорот"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["druid_path_2_2_a", "druid_path_2_2_b"]
+legacy = true
+
+[[talent]]
+code = "druid_path_2_3_a"
+name = "Согласованная работа друида"
+class = "druid"
+level = 60
+effect = "cost"
+amount = 2
+category = "all"
+branch = "druid_branch_2"
+branch_name = "Круговорот"
+row = 3
+max_rank = 2
+points_required = 8
+requires_all = ["druid_2_2"]
+
+[[talent]]
+code = "druid_path_2_3_b"
+name = "Долгое дыхание друида"
+class = "druid"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "druid_branch_2"
+branch_name = "Круговорот"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "resource_regen_percent"
+requires_all = ["druid_2_2"]
+
+[[talent]]
+code = "druid_3_2"
+name = "Крепкий покров"
+class = "druid"
+level = 60
+effect = "power"
+amount = 15
+category = "barrier"
+branch = "druid_branch_2"
+branch_name = "Круговорот"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["druid_path_2_3_a", "druid_path_2_3_b"]
+legacy = true
+
+[[talent]]
+code = "druid_path_2_4_a"
+name = "Чёткий порядок друида"
+class = "druid"
+level = 100
+effect = "cost"
+amount = 2
+category = "all"
+branch = "druid_branch_2"
+branch_name = "Круговорот"
+row = 4
+max_rank = 2
+points_required = 12
+requires_all = ["druid_3_2"]
+
+[[talent]]
+code = "druid_path_2_4_b"
+name = "Второе дыхание друида"
+class = "druid"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "druid_branch_2"
+branch_name = "Круговорот"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "resource_regen_percent"
+requires_all = ["druid_3_2"]
+
+[[talent]]
+code = "druid_4_2"
+name = "Скорый покров"
+class = "druid"
+level = 100
+effect = "cooldown"
+amount = 1
+category = "barrier"
+branch = "druid_branch_2"
+branch_name = "Круговорот"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["druid_path_2_4_a", "druid_path_2_4_b"]
+legacy = true
+
+[[talent]]
+code = "druid_path_2_5_a"
+name = "Безошибочный порядок друида"
+class = "druid"
+level = 150
+effect = "cost"
+amount = 2
+category = "all"
+branch = "druid_branch_2"
+branch_name = "Круговорот"
+row = 5
+max_rank = 2
+points_required = 16
+requires_all = ["druid_4_2"]
+choice_group = "druid_branch_2_final_route"
+
+[[talent]]
+code = "druid_path_2_5_b"
+name = "Полный запас друида"
+class = "druid"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "druid_branch_2"
+branch_name = "Круговорот"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "resource_regen_percent"
+requires_all = ["druid_4_2"]
+choice_group = "druid_branch_2_final_route"
 
 [[talent]]
 code = "druid_5_2"
@@ -1147,6 +5464,242 @@ amount = 25
 category = "heal"
 condition = "target_health_below"
 threshold = 35
+branch = "druid_branch_2"
+branch_name = "Круговорот"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["druid_path_2_5_a", "druid_path_2_5_b"]
+legacy = true
+
+[[talent]]
+code = "druid_path_3_1_a"
+name = "Крепкое тело друида"
+class = "druid"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "druid_branch_3"
+branch_name = "Крепкие корни"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "health_percent"
+
+[[talent]]
+code = "druid_path_3_1_b"
+name = "Собранность друида"
+class = "druid"
+level = 10
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "druid_branch_3"
+branch_name = "Крепкие корни"
+row = 1
+max_rank = 2
+points_required = 0
+modifier = "armor_percent"
+
+[[talent]]
+code = "druid_1_3"
+name = "Стойкость друида"
+class = "druid"
+level = 10
+effect = "modifier"
+amount = 10
+category = "all"
+modifier = "health_percent"
+branch = "druid_branch_3"
+branch_name = "Крепкие корни"
+row = 1
+max_rank = 1
+points_required = 0
+requires_any = ["druid_path_3_1_a", "druid_path_3_1_b"]
+legacy = true
+
+[[talent]]
+code = "druid_path_3_2_a"
+name = "Закалка друида"
+class = "druid"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "druid_branch_3"
+branch_name = "Крепкие корни"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "health_percent"
+requires_all = ["druid_1_3"]
+
+[[talent]]
+code = "druid_path_3_2_b"
+name = "Осмотрительность друида"
+class = "druid"
+level = 30
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "druid_branch_3"
+branch_name = "Крепкие корни"
+row = 2
+max_rank = 2
+points_required = 4
+modifier = "armor_percent"
+requires_all = ["druid_1_3"]
+
+[[talent]]
+code = "druid_2_3"
+name = "Дыхание друида"
+class = "druid"
+level = 30
+effect = "modifier"
+amount = 20
+category = "all"
+modifier = "resource_regen_percent"
+branch = "druid_branch_3"
+branch_name = "Крепкие корни"
+row = 2
+max_rank = 1
+points_required = 4
+requires_any = ["druid_path_3_2_a", "druid_path_3_2_b"]
+legacy = true
+
+[[talent]]
+code = "druid_path_3_3_a"
+name = "Выносливое тело друида"
+class = "druid"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "druid_branch_3"
+branch_name = "Крепкие корни"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "health_percent"
+requires_all = ["druid_2_3"]
+
+[[talent]]
+code = "druid_path_3_3_b"
+name = "Готовность друида"
+class = "druid"
+level = 60
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "druid_branch_3"
+branch_name = "Крепкие корни"
+row = 3
+max_rank = 2
+points_required = 8
+modifier = "armor_percent"
+requires_all = ["druid_2_3"]
+
+[[talent]]
+code = "druid_3_3"
+name = "Оберег друида"
+class = "druid"
+level = 60
+effect = "modifier"
+amount = 8
+category = "all"
+modifier = "resist_magic_percent"
+branch = "druid_branch_3"
+branch_name = "Крепкие корни"
+row = 3
+max_rank = 1
+points_required = 8
+requires_any = ["druid_path_3_3_a", "druid_path_3_3_b"]
+legacy = true
+
+[[talent]]
+code = "druid_path_3_4_a"
+name = "Стойкое тело друида"
+class = "druid"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "druid_branch_3"
+branch_name = "Крепкие корни"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "health_percent"
+requires_all = ["druid_3_3"]
+
+[[talent]]
+code = "druid_path_3_4_b"
+name = "Надёжность друида"
+class = "druid"
+level = 100
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "druid_branch_3"
+branch_name = "Крепкие корни"
+row = 4
+max_rank = 2
+points_required = 12
+modifier = "armor_percent"
+requires_all = ["druid_3_3"]
+
+[[talent]]
+code = "druid_4_3"
+name = "Удар по опутанному"
+class = "druid"
+level = 100
+effect = "power"
+amount = 20
+category = "damage"
+condition = "target_status"
+statuses = ["slow"]
+branch = "druid_branch_3"
+branch_name = "Крепкие корни"
+row = 4
+max_rank = 1
+points_required = 12
+requires_any = ["druid_path_3_4_a", "druid_path_3_4_b"]
+legacy = true
+
+[[talent]]
+code = "druid_path_3_5_a"
+name = "Предельная закалка друида"
+class = "druid"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "druid_branch_3"
+branch_name = "Крепкие корни"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "health_percent"
+requires_all = ["druid_4_3"]
+choice_group = "druid_branch_3_final_route"
+
+[[talent]]
+code = "druid_path_3_5_b"
+name = "Полная готовность друида"
+class = "druid"
+level = 150
+effect = "modifier"
+amount = 2
+category = "all"
+branch = "druid_branch_3"
+branch_name = "Крепкие корни"
+row = 5
+max_rank = 2
+points_required = 16
+modifier = "armor_percent"
+requires_all = ["druid_4_3"]
+choice_group = "druid_branch_3_final_route"
 
 [[talent]]
 code = "druid_5_3"
@@ -1157,3 +5710,10 @@ effect = "modifier"
 amount = 15
 category = "all"
 modifier = "resource_percent"
+branch = "druid_branch_3"
+branch_name = "Крепкие корни"
+row = 5
+max_rank = 1
+points_required = 16
+requires_any = ["druid_path_3_5_a", "druid_path_3_5_b"]
+legacy = true

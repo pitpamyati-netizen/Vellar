@@ -748,6 +748,12 @@ def _render(
             return screens.equipment_screen(content, character, state.notice)
         case ScreenId.TALENTS:
             return talent_screens.talents_screen(content, character, state.list_page, state.notice)
+        case ScreenId.TALENT_BRANCH:
+            return talent_screens.branch_screen(
+                content, character, state.talent_branch, state.list_page, state.notice
+            )
+        case ScreenId.TALENT_RESET:
+            return talent_screens.reset_screen(content, character, state.notice)
         case ScreenId.TALENT:
             return talent_screens.talent_screen(content, character, state.talent_code, state.notice)
         case ScreenId.STATS:
@@ -1083,14 +1089,39 @@ def advance(
     )
     command = resolve(text, screen)
     if state.screen in {ScreenId.COMBAT, ScreenId.COMBAT_BAG} and (
-        command.intent in {Intent.TALENTS, Intent.TALENT, Intent.EQUIPMENT}
-        or command.argument == talent_screens.APPLY.text
+        command.intent
+        in {
+            Intent.TALENTS,
+            Intent.TALENT,
+            Intent.TALENT_BRANCH,
+            Intent.TALENT_RESET,
+            Intent.EQUIPMENT,
+        }
+        or command.argument
+        in {talent_screens.APPLY.text, talent_screens.CONFIRM_RESET.text, talent_screens.RESET.text}
     ):
         return state.with_notice("Развитие и экипировка доступны после боя.")
     if command.intent is Intent.EQUIPMENT:
         return replace(state, pending=PendingWrite()).at(ScreenId.EQUIPMENT)
     if command.intent is Intent.TALENTS:
         return replace(state, list_page=PageState(), pending=PendingWrite()).at(ScreenId.TALENTS)
+    if command.intent is Intent.TALENT_RESET or talent_screens.RESET.matches(command.argument):
+        return replace(
+            state,
+            talent_confirmation=talent_screens.reset_signature(character),
+            pending=PendingWrite(),
+        ).at(ScreenId.TALENT_RESET)
+    if command.intent is Intent.TALENT_BRANCH:
+        branches = talent_screens.branches(content, character)
+        number = command.number or 0
+        if not 1 <= number <= len(branches):
+            return state.with_notice("Номер ветки должен быть от 1 до 3. Откройте /таланты.")
+        return replace(
+            state,
+            talent_branch=branches[number - 1][0],
+            list_page=PageState(),
+            pending=PendingWrite(),
+        ).at(ScreenId.TALENT_BRANCH)
     if command.intent is Intent.TALENT:
         pool = talent_rules.pool(content, character)
         number = command.number or 0
@@ -1098,9 +1129,14 @@ def advance(
             return state.with_notice(
                 f"Номер таланта должен быть от 1 до {len(pool)}. Откройте /таланты."
             )
-        return replace(state, talent_code=pool[number - 1].code, pending=PendingWrite()).at(
-            ScreenId.TALENT
-        )
+        one = pool[number - 1]
+        return replace(
+            state,
+            talent_code=one.code,
+            talent_branch=one.branch,
+            talent_rank=talent_rules.rank_of(content, character, one.code),
+            pending=PendingWrite(),
+        ).at(ScreenId.TALENT)
     if command.intent is Intent.CITY:
         return replace(
             state, city_id=character.city_id, pending=PendingWrite(), fight="", searching=False
@@ -1231,29 +1267,74 @@ def advance(
         case ScreenId.EQUIPMENT:
             return _handle_equipment(content, character, state, command)
         case ScreenId.TALENTS:
-            for index, one in enumerate(talent_rules.pool(content, character), 1):
+            for i, (branch, name) in enumerate(talent_screens.branches(content, character), 1):
                 if command.intent is Intent.SELECT and labels.label(
-                    talent_screens.entry(one, index, character)
+                    talent_screens.branch_entry(content, character, branch, name, i)
                 ).matches(command.argument):
-                    return replace(state, talent_code=one.code).at(ScreenId.TALENT)
+                    return replace(state, talent_branch=branch, list_page=PageState()).at(
+                        ScreenId.TALENT_BRANCH
+                    )
+            return state.with_notice("Откройте ветку кнопкой или наберите /веткаталантов N.")
+        case ScreenId.TALENT_BRANCH:
+            for index, one in enumerate(talent_rules.pool(content, character), 1):
+                if (
+                    one.branch == state.talent_branch
+                    and command.intent is Intent.SELECT
+                    and labels.label(talent_screens.entry(one, index, character)).matches(
+                        command.argument
+                    )
+                ):
+                    return replace(
+                        state,
+                        talent_code=one.code,
+                        talent_rank=talent_rules.rank_of(content, character, one.code),
+                    ).at(ScreenId.TALENT)
             return state.with_notice("Нажмите талант из списка или наберите /талант N.")
+        case ScreenId.TALENT_RESET:
+            if command.intent is Intent.SELECT and talent_screens.CONFIRM_RESET.matches(
+                command.argument
+            ):
+                if state.talent_confirmation != talent_screens.reset_signature(character):
+                    return state.with_notice(
+                        "Набор талантов изменился. Снова откройте /сброситьталанты."
+                    )
+                reset_character = talent_rules.reset(character)
+                return (
+                    replace(state, talent_confirmation="", list_page=PageState())
+                    .at(ScreenId.TALENTS)
+                    .storing(PendingWrite(character=reset_character))
+                    .with_notice(
+                        "Таланты сброшены. Для распределения доступно "
+                        f"{talent_rules.points(reset_character)} очков."
+                    )
+                )
+            return state.with_notice("Подтвердите сброс или нажмите «Назад» для отмены.")
         case ScreenId.TALENT:
             if command.intent is Intent.SELECT and talent_screens.APPLY.matches(command.argument):
-                changed = talent_rules.choose(content, character, state.talent_code)
+                changed = talent_rules.choose(
+                    content, character, state.talent_code, expected_rank=state.talent_rank
+                )
                 if changed is None:
                     return state.with_notice(
-                        "Этот талант уже выбран или пока недоступен. Вернитесь к списку."
+                        "Талант недоступен или его ранг уже изменился. Снова откройте карточку."
                     )
                 one = next(
                     one
                     for one in talent_rules.selected(content, changed)
                     if one.code == state.talent_code
                 )
+                rank = talent_rules.rank_of(content, changed, one.code)
+                effect_words = talent_screens.words(
+                    content, replace(one, amount=talent_rules.strength(content, changed, one))
+                )
                 return (
                     go_back(state)
                     .storing(PendingWrite(character=changed))
                     .with_notice(
-                        f"Выбран талант «{one.name}». {talent_screens.words(content, one)}"
+                        f"Изучен талант «{one.name}»: ранг {rank} "
+                        f"из {one.max_rank}. Свободных очков: "
+                        f"{talent_rules.points(changed) - talent_rules.spent(content, changed)}. "
+                        f"{effect_words}"
                     )
                 )
             return state.with_notice(

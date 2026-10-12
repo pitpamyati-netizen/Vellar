@@ -83,6 +83,15 @@ class Talent:
     condition: str = "always"
     statuses: tuple[StatusKind, ...] = ()
     threshold: float = 0.0
+    branch: str = ""
+    branch_name: str = ""
+    row: int = 0
+    max_rank: int = 1
+    points_required: int = 0
+    requires_all: tuple[str, ...] = ()
+    requires_any: tuple[str, ...] = ()
+    choice_group: str = ""
+    legacy: bool = False
 
 
 @dataclass(frozen=True, slots=True)

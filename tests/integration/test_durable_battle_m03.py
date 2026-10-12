@@ -510,23 +510,34 @@ async def test_talent_confirmation_survives_cache_loss_and_busy_player_cannot_ch
     await send("/талант 1")
     assert (await e.characters.get(free.id)).loadout.talents == ()
     confirmation = await send("/выбратьталант")
-    assert (await e.characters.get(free.id)).loadout.talents == ("warrior_1_1",)
+    assert (await e.characters.get(free.id)).loadout.talent_ranks == {"warrior_path_1_1_a": 1}
     await e.redis.flushdb()
     await send("/выбратьталант", number=confirmation)
-    assert (await e.characters.get(free.id)).loadout.talents == ("warrior_1_1",)
+    assert (await e.characters.get(free.id)).loadout.talent_ranks == {"warrior_path_1_1_a": 1}
     await send("/таланты")
-    assert "выбран" in e.recording.sent[-1].text
-    await send("/талант 2")
+    assert "вложено 1 из 29" in e.recording.sent[-1].text
+    await send("/талант 1")
     await send("/выбратьталант")
     reloaded = await e.characters.get(free.id)
-    assert reloaded.loadout.talents == ("warrior_1_2",)
+    assert reloaded.loadout.talent_ranks == {"warrior_path_1_1_a": 2}
     assert reloaded.gold == free.gold and reloaded.unspent_skill_points == free.unspent_skill_points
+    await send("/сброситьталанты")
+    assert (await e.characters.get(free.id)).loadout.talent_ranks == reloaded.loadout.talent_ranks
+    reset_confirmation = await send("/подтвердитьсбросталантов")
+    await e.redis.flushdb()
+    await send("/подтвердитьсбросталантов", number=reset_confirmation)
+    reset = await e.characters.get(free.id)
+    assert reset.loadout.talent_ranks == {} and reset.loadout.talent_tree_version == 1
+    assert reset.loadout.ranks == free.loadout.ranks and reset.gold == free.gold
     # Даже сохранённый главный экран не позволяет обойти живое участие в бою.
     await state_for(e).set_state(Play.main_menu)
     await state_for(e).set_data({"play": play_flow.begin(e.heroes[0]).serialise()})
     await send("/талант 1", actor=0)
     assert "Бой. Круг" in e.recording.sent[-1].text
     assert (await e.characters.get(e.heroes[0].id)).loadout.talents == ()
+    await send("/сброситьталанты", actor=0)
+    assert "Бой. Круг" in e.recording.sent[-1].text
+    assert (await e.characters.get(e.heroes[0].id)).loadout.talent_tree_version == 0
 
 
 async def test_useless_bag_item_does_not_decrease_inventory_or_version(battle_env):

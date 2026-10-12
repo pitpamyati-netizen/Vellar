@@ -74,6 +74,8 @@ class Intent(StrEnum):
     UNKNOWN = "unknown"
     EQUIPMENT = "equipment"
     TALENTS = "talents"
+    TALENT_BRANCH = "talent_branch"
+    TALENT_RESET = "talent_reset"
     TALENT = "talent"
 
 
@@ -92,6 +94,8 @@ SIMPLE_COMMANDS: dict[str, Intent] = {
     "/equipment": Intent.EQUIPMENT,
     "/таланты": Intent.TALENTS,
     "/talents": Intent.TALENTS,
+    "/сброситьталанты": Intent.TALENT_RESET,
+    "/resettalents": Intent.TALENT_RESET,
     "/обучение": Intent.TUTORIAL,
     "/tutorial": Intent.TUTORIAL,
     "/назад": Intent.BACK,
@@ -234,6 +238,10 @@ def parse_command(text: str) -> Command | None:
         return Command(intent=SIMPLE_COMMANDS[lowered])
     if lowered in {"/выбратьталант", "/applytalent"}:
         return Command(intent=Intent.SELECT, argument="Принять талант")
+    if lowered in {"/подтвердитьсбросталантов", "/confirmtalentreset"}:
+        return Command(intent=Intent.SELECT, argument="Подтвердить сброс талантов")
+    if (match := re.fullmatch(r"/(?:веткаталантов|talentbranch)\s+(\d+)", lowered)) is not None:
+        return Command(intent=Intent.TALENT_BRANCH, number=int(match.group(1)))
     if (match := re.fullmatch(r"/(?:талант|talent)\s+(\d+)", lowered)) is not None:
         return Command(intent=Intent.TALENT, number=int(match.group(1)))
 

@@ -141,3 +141,9 @@ Roadmap. Новое решение связывать с отменённым AD
 - [Источники решения](skills-rework-sources-2026-10-11.md).
 - [ADR 0101](adr/0101-ranks-facets-talents.md).
 - [Проверка](verification-skills-2026-10-11.md).
+
+## Деревья талантов 12 октября 2026
+
+- [Правила 360 талантов и перехода старых сборок](talents.md).
+- [ADR 0105](adr/0105-talent-trees-and-confirmed-transition.md).
+- [Проверки](verification-talent-trees-2026-10-12.md).
