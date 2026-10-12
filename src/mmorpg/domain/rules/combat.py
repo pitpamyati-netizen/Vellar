@@ -70,6 +70,7 @@ from mmorpg.domain.rules import combo as combo_rules
 from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import modifiers as mods
 from mmorpg.domain.rules import passives as passive_rules
+from mmorpg.domain.rules import repair as repair_rules
 from mmorpg.domain.rules import skill_mastery as mastery_rules
 from mmorpg.domain.rules import skills as skill_rules
 from mmorpg.domain.rules import subclass as subclass_rules
@@ -304,6 +305,60 @@ def has_way(one: Combatant, code: str) -> bool:
 def power_of(one: Combatant, code: str) -> float:
     """Величина уклада пассивки у этого бойца. Ноль - уклада у него нет."""
     return passive_rules.amount(one.powers, code)
+
+
+def _character_of(roster: Mapping[int, Character], one: Combatant) -> Character | None:
+    character = roster.get(one.id)
+    return repair_rules.character_with_wear(character, one) if character is not None else None
+
+
+def _wear_gear(
+    content: GameContent,
+    roster: Mapping[int, Character],
+    state: BattleState,
+    combatant_id: int,
+    *,
+    weapon: bool,
+) -> BattleState:
+    one = state.by_id(combatant_id)
+    if one is None or not one.is_hero or not one.live:
+        return state
+    character = _character_of(roster, one)
+    if character is None:
+        return state
+    worn, broke = repair_rules.wear(
+        content,
+        character,
+        repair_rules.WEAR_PER_ATTACK if weapon else repair_rules.WEAR_PER_HIT,
+        weapon=weapon,
+    )
+    used = dict(one.gear_wear)
+    for item_id, value in worn.wear.used.items():
+        if character.wear.spent(item_id) != value:
+            used[item_id] = value
+    updated = replace(one, gear_wear=used)
+    if broke:
+        stats = derived_stats(content, worn, one.effects)
+        updated = replace(
+            updated,
+            max_health=stats.max_health,
+            health=min(one.health, stats.max_health),
+            max_resource=stats.max_resource,
+            resource=min(one.resource, stats.max_resource),
+            initiative=stats.initiative,
+            damage_type=gear.weapon_damage_type(content, worn),
+        )
+    working = state.replace_combatant(updated)
+    for item in broke:
+        working = working.with_events(
+            BattleEvent(
+                kind=EventKind.GEAR_BROKEN,
+                target_id=one.id,
+                target=one.name,
+                effect_name=item.choice_name,
+            )
+        )
+    return working
 
 
 def _once_done(one: Combatant, code: str) -> bool:
@@ -691,6 +746,14 @@ def _take_turn(
     was_unseen = actor.effects.has(StatusKind.UNSEEN)
 
     working = _perform(content, roster, state, actor.id, action, source)
+    attempted = any(
+        event.actor_id == actor.id
+        and event.kind
+        in {EventKind.DAMAGE, EventKind.CRIT, EventKind.MISS, EventKind.DODGE, EventKind.IMMUNE}
+        for event in working.events[len(state.events) :]
+    )
+    if attempted and action.kind in {ActionKind.ATTACK, ActionKind.SKILL, ActionKind.RACIAL}:
+        working = _wear_gear(content, roster, working, actor.id, weapon=True)
 
     if actor.is_hero and actor.live and action.kind not in {ActionKind.FLEE, ActionKind.YIELD}:
         counted = working.by_id(actor.id)
@@ -904,7 +967,7 @@ def _basic_attack(
         )
 
     if actor.is_hero:
-        character = roster.get(actor.id)
+        character = _character_of(roster, actor)
         if character is None:  # pragma: no cover - герой всегда приходит с персонажем
             return state
         power = blow_roll(content, character, source, actor.effects) * BASIC_ATTACK_PERCENT / 100.0
@@ -1113,7 +1176,7 @@ def _attempt_skill(
     action: BattleAction,
 ) -> tuple[Skill, int] | BattleEvent:
     """Умение и его цена, или событие, говорящее, почему им не воспользоваться."""
-    character = roster.get(actor.id)
+    character = _character_of(roster, actor)
     if character is None:
         return BattleEvent(kind=EventKind.EMPTY_SLOT)
 
@@ -1157,7 +1220,8 @@ def _use_skill(
     attempt = _attempt_skill(content, roster, state, actor, action)
     if isinstance(attempt, BattleEvent):
         return state.with_events(attempt)
-    character = roster[actor.id]
+    character = _character_of(roster, actor)
+    assert character is not None
 
     skill, cost = attempt
     rank = character.loadout.rank_of(skill.code)
@@ -1338,7 +1402,7 @@ def _apply_spec(
 ) -> BattleState:
     working = state
     actor = working.by_id(actor_id)
-    character = roster.get(actor_id)
+    character = _character_of(roster, actor) if actor is not None else None
     if actor is None or character is None:  # pragma: no cover
         return working
     modifiers = mods.collect_modifiers(content, character, actor.effects)
@@ -1985,7 +2049,7 @@ def _repooled(
     вместе с ним и то, что в него влезает. Здоровье при этом не дарится.
     """
     one = state.by_id(combatant_id)
-    character = roster.get(combatant_id)
+    character = _character_of(roster, one) if one is not None else None
     if one is None or character is None:
         return state
     stats = derived_stats(content, character, one.effects)
@@ -2048,13 +2112,13 @@ def _apply_special(
 
 
 def _accuracy_of(content: GameContent, roster: Mapping[int, Character], one: Combatant) -> float:
-    if one.is_hero and (character := roster.get(one.id)) is not None:
+    if one.is_hero and (character := _character_of(roster, one)) is not None:
         return derived_stats(content, character, one.effects).accuracy
     return MONSTER_ACCURACY * mods.percent(one.effects.modifiers(), "accuracy_percent")
 
 
 def _dodge_of(content: GameContent, roster: Mapping[int, Character], one: Combatant) -> float:
-    if one.is_hero and (character := roster.get(one.id)) is not None:
+    if one.is_hero and (character := _character_of(roster, one)) is not None:
         return derived_stats(content, character, one.effects).dodge
     # У породы своего уклонения нет: её защита - броня и здоровье. Прозвище
     # («Верткий» и подобные) может его дать эффектом (ADR 0042).
@@ -2062,7 +2126,7 @@ def _dodge_of(content: GameContent, roster: Mapping[int, Character], one: Combat
 
 
 def _armor_of(content: GameContent, roster: Mapping[int, Character], one: Combatant) -> float:
-    if one.is_hero and (character := roster.get(one.id)) is not None:
+    if one.is_hero and (character := _character_of(roster, one)) is not None:
         armor = float(derived_stats(content, character, one.effects).armor)
     else:
         base = float(one.enemy.armor if one.enemy is not None else 0)
@@ -2079,7 +2143,7 @@ def _modifiers_of(
     content: GameContent, roster: Mapping[int, Character], one: Combatant
 ) -> Mapping[str, float]:
     """Все прибавки, действующие на бойца. У породы это только её эффекты."""
-    if one.is_hero and (character := roster.get(one.id)) is not None:
+    if one.is_hero and (character := _character_of(roster, one)) is not None:
         return mods.collect_modifiers(content, character, one.effects)
     return one.effects.modifiers()
 
@@ -2087,7 +2151,7 @@ def _modifiers_of(
 def _stats_of(
     content: GameContent, roster: Mapping[int, Character], one: Combatant
 ) -> DerivedStats | None:
-    if one.is_hero and (character := roster.get(one.id)) is not None:
+    if one.is_hero and (character := _character_of(roster, one)) is not None:
         return derived_stats(content, character, one.effects)
     return None
 
@@ -2242,6 +2306,8 @@ def _strike(
     кровотечение, помеха, оглушение, - идёт следом за попаданием.
     """
     working = state
+    actor = state.by_id(actor.id) or actor
+    target = state.by_id(target.id) or target
     attacker_mods = _modifiers_of(content, roster, actor)
     target_mods = _modifiers_of(content, roster, target)
 
@@ -2376,6 +2442,8 @@ def _strike(
             replace(hurt, health=max(1, round(hurt.max_health * stand / 100.0))), "last_stand"
         )
     working = working.replace_combatant(hurt)
+    working = _wear_gear(content, roster, working, hurt.id, weapon=False)
+    hurt = working.by_id(hurt.id) or hurt
     working = working.with_events(
         BattleEvent(
             kind=EventKind.CRIT if is_crit else EventKind.DAMAGE,
@@ -2607,7 +2675,7 @@ def _answered(
         attacker = hurt
 
     counter = defender.effects.modifiers().get(COUNTER, 0.0)
-    character = roster.get(defender.id)
+    character = _character_of(roster, defender)
     if counter > 0 and character is not None:
         # Именем отвечает то умение, которое отвечать и научило.
         named = next(
@@ -2626,6 +2694,7 @@ def _answered(
             source=source,
             answering=True,
         )
+        working = _wear_gear(content, roster, working, defender.id, weapon=True)
     return working
 
 
@@ -3073,7 +3142,7 @@ def _spoils(
         winners = tuple(
             character.class_id
             for one in victors
-            if one.is_hero and (character := roster.get(one.id)) is not None
+            if one.is_hero and (character := _character_of(roster, one)) is not None
         )
         loot = (
             *loot,
@@ -3125,7 +3194,7 @@ def _chosen_by_engine(
         )
 
     source = rng(derive(seed, "engine", state.round, actor.id))
-    character = roster.get(actor.id)
+    character = _character_of(roster, actor)
     if character is not None:
         ready: list[BattleAction] = []
         allies = state.allies_of(actor.id)

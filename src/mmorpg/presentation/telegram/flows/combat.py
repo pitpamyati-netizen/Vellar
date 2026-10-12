@@ -28,6 +28,7 @@ from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.location import Enemy, EnemyRank
 from mmorpg.domain.procgen.enemies import generate_group
 from mmorpg.domain.rules.combat import act
+from mmorpg.domain.rules.repair import character_with_wear
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label
 from mmorpg.presentation.telegram.routing import Intent, resolve
@@ -91,6 +92,9 @@ def render(
 ) -> Screen:
     """Экран этого боя для этого участника."""
     state = session.state
+    viewer = state.by_id(viewer_id)
+    if viewer is not None:
+        character = character_with_wear(character, viewer)
     if not state.is_over and session.briefing:
         briefing = session.briefing if state.round == 1 else session.briefing.split(". ")[0]
         notice = f"{notice}\n{briefing}".strip()

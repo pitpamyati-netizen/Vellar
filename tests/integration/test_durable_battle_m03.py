@@ -16,7 +16,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.types import Chat, Message, Update, User
 
-from mmorpg.application.battle_snapshots import encode
+from mmorpg.application.battle_snapshots import decode, encode
 from mmorpg.application.services.battle import BattleStore, begin
 from mmorpg.application.services.guild import GuildStore
 from mmorpg.application.services.party import PartyStore
@@ -731,3 +731,95 @@ async def test_enemy_focus_is_saved_without_spending_turn(battle_env):
         e.session.state.cursor,
     )
     assert selected.version == e.session.version + 1
+
+
+async def equip_for_wear(e):
+    from mmorpg.domain.entities.character import Equipment
+    from mmorpg.domain.rules.combat import hero_combatant
+    from mmorpg.infrastructure.persistence.postgres import PostgresCharacterRepository
+
+    e.characters = PostgresCharacterRepository(e.pool, e.content)
+    e.journal = CommandMiddleware(
+        dependencies(
+            e.characters,
+            cache=e.cache,
+            world=e.world,
+            guilds=e.guilds,
+            parties=e.parties,
+            inventory=e.inventory,
+        ),
+        e.reaper,
+        storage=e.storage,
+    )
+
+    roster = decode(json.loads(e.session.roster_snapshot))
+    state = e.session.state
+    for index, hero in enumerate(e.heroes[:2]):
+        hero = await e.characters.save(
+            replace(
+                hero,
+                equipment=Equipment({"weapon": "sword@1#common", "body": "heavy_body@1#common"}),
+            )
+        )
+        e.heroes[index] = hero
+        one = e.session.combatant_of(hero.id)
+        roster[one.id] = hero
+        state = state.replace_combatant(
+            hero_combatant(e.content, hero, combatant_id=one.id, side=one.side)
+        )
+    e.session = await e.store.save(
+        replace(e.session, state=state, roster_snapshot=json.dumps(encode(roster)))
+    )
+    for actor in (0, 1):
+        await state_for(e, actor).update_data({"battle_version": e.session.version})
+    return next(
+        i for i, hero in enumerate(e.heroes[:2]) if hero.id == e.session.state.active.character_id
+    )
+
+
+async def test_wear_saved_each_turn_survives_restart_replay_and_settlement(battle_env):
+    from mmorpg.infrastructure.cache.memory import InMemoryStateCache
+
+    e = battle_env
+    actor = await equip_for_wear(e)
+    hero = e.heroes[actor]
+    sword = hero.equipment.item_in("weapon")
+    number = await press(e, "Атака", actor)
+    saved = await e.characters.get(hero.id)
+    assert saved.wear.spent(sword) == 1
+    cold = BattleStore(PostgresGameplayState(e.pool, InMemoryStateCache()))
+    await e.redis.flushdb()
+    restarted = await cold.load(e.session.id)
+    assert restarted.combatant_of(hero.id).gear_wear[sword] == 1
+    await press(e, "Атака", actor, number=number)
+    assert (await e.characters.get(hero.id)).wear.spent(sword) == 1
+    assert (await cold.load(e.session.id)).version == restarted.version
+
+    async def accept(_point):
+        pass
+
+    await press(e, "закончить", actor, hook=accept)
+    assert (await e.characters.get(hero.id)).wear.spent(sword) == 1
+
+
+async def test_failed_turn_rolls_back_physical_wear_then_retry_wears_once(battle_env, monkeypatch):
+    e = battle_env
+    actor = await equip_for_wear(e)
+    hero = e.heroes[actor]
+    sword = hero.equipment.item_in("weapon")
+    original = BattleStore.save
+
+    async def fail(self, session):
+        if session.id == e.session.id and session.combatant_of(hero.id).gear_wear:
+            raise RuntimeError("failure after physical wear write")
+        return await original(self, session)
+
+    number = hero.id * 1000 + 500
+    with monkeypatch.context() as patch:
+        patch.setattr(BattleStore, "save", fail)
+        with pytest.raises(RuntimeError, match="after physical wear"):
+            await press(e, "Атака", actor, number=number)
+    assert (await e.characters.get(hero.id)).wear.spent(sword) == 0
+    assert (await e.store.load(e.session.id)).version == e.session.version
+    await press(e, "Атака", actor, number=number)
+    assert (await e.characters.get(hero.id)).wear.spent(sword) == 1

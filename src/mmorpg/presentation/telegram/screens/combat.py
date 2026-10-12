@@ -495,6 +495,9 @@ def describe_event(event: BattleEvent, viewer_id: int = 0) -> str:
     hit_you = bool(viewer_id) and event.target_id == viewer_id
     you_hit = bool(viewer_id) and event.actor_id == viewer_id
     match event.kind:
+        case EventKind.GEAR_BROKEN:
+            owner = "У вас" if hit_you else f"У бойца {event.target}"
+            return f"{owner} сломана вещь: {event.effect_name}. Почините её в кузнице."
         case EventKind.DAMAGE if hit_you:
             actor = event.actor or "Что-то"
             return f"{actor} наносит вам {event.amount} урона."

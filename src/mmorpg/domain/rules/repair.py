@@ -1,16 +1,15 @@
 """Прочность снаряжения и кузница, которая её возвращает.
 
-Инструмент стачивается о работу (ADR 0056), надетое - о бои (ADR 0057), и счёт
+Инструмент стачивается о работу (ADR 0056), надетое - об удары (ADR 0104), и счёт
 у второго идёт по трём правилам.
 
 1. **Прочность считается от уровня вещи и её редкости.** Число печётся в вещь
    при сборке (``procgen/items.build``): ступень даёт основу, редкость множит
-   (``Rarity.toughness``). Ветхий меч обычной работы держит сорок боёв, кованый
+   (``Rarity.toughness``). Ветхий меч обычной работы держит сорок атак, кованый
    именной славы - под две сотни.
-2. **Точит бой.** Выигранный - на единицу, проигранный - втрое
-   (``domain/rules/adventure.py``). Точится всё надетое разом, кроме
-   инструмента: его точит своя работа, и два счётчика на одну вещь разошлись бы
-   в первый же день.
+2. **Точат атаки и попадания.** Оружие теряет единицу после выполненной атаки,
+   остальное надетое снаряжение - после попавшего удара. Промах точит только
+   оружие. Инструмент точит своя работа. Исход боя износ не начисляет.
 3. **Сточенная вещь не работает.** Ни брони, ни костей, ни прибавок, ни даже
    штрафа за чужой род. Она не пропадает и не снимается: её чинят в кузнице
    любого города, и цена идёт от цены самой вещи (``economy.repair_price``).
@@ -25,16 +24,16 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import replace
 
-from mmorpg.domain.entities.character import Character
+from mmorpg.domain.entities.character import Character, ItemWear
+from mmorpg.domain.entities.combat import Combatant
 from mmorpg.domain.entities.content import GameContent, Item
 from mmorpg.domain.procgen import items as gear_procgen
 from mmorpg.domain.rules import economy
 from mmorpg.domain.rules.tools import TOOL_SLOT
 
-#: Чего стоит бой надетому. Проигранный дороже: с поля боя выносят не только
-#: раны, и десятой доли кошелька за поражение мало, чтобы игрок берёгся.
-WEAR_PER_FIGHT = 1
-WEAR_ON_DEFEAT = 3
+#: Прочность расходуется отдельными действиями, независимо от исхода боя.
+WEAR_PER_ATTACK = 1
+WEAR_PER_HIT = 1
 
 #: С какой доли прочности вещь считается изношенной настолько, что об этом стоит
 #: сказать вслух. Сломаться в бою она может, а вот сломаться незаметно - нет.
@@ -57,7 +56,7 @@ def worn_of(content: GameContent, character: Character, item_id: str) -> Item | 
 
 
 def limit(item: Item) -> int:
-    """Сколько боёв эта вещь держит всего."""
+    """Сколько единиц прочности у вещи всего."""
     return max(0, item.durability)
 
 
@@ -67,7 +66,7 @@ def spent(character: Character, item: Item) -> int:
 
 
 def left(character: Character, item: Item) -> int:
-    """Сколько боёв в ней ещё осталось."""
+    """Сколько единиц прочности в ней ещё осталось."""
     return max(0, limit(item) - character.wear.spent(item.id))
 
 
@@ -145,7 +144,7 @@ def repaired(character: Character, items: Iterable[Item]) -> Character:
 
 
 def wear(
-    content: GameContent, character: Character, amount: int = WEAR_PER_FIGHT
+    content: GameContent, character: Character, amount: int = 1, *, weapon: bool | None = None
 ) -> tuple[Character, tuple[Item, ...]]:
     """Стереть всё надетое на ``amount``. Возвращает персонажа и то, что сломалось.
 
@@ -158,9 +157,19 @@ def wear(
     updated = character
     broke: list[Item] = []
     for item in gear_on(content, character):
+        if weapon is not None and (item.slot == "weapon") != weapon:
+            continue
         if is_broken(character, item):
             continue
-        updated = replace(updated, wear=updated.wear.worn(item.id, amount))
+        amount_left = min(amount, left(updated, item))
+        updated = replace(updated, wear=updated.wear.worn(item.id, amount_left))
         if is_broken(updated, item):
             broke.append(item)
     return updated, tuple(broke)
+
+
+def character_with_wear(character: Character, fighter: Combatant) -> Character:
+    """Износ этого боя дополняет прежний износ, без повторного начисления."""
+    if not fighter.gear_wear:
+        return character
+    return replace(character, wear=ItemWear({**character.wear.used, **fighter.gear_wear}))

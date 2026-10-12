@@ -72,6 +72,7 @@ from mmorpg.domain.rules import roamer as roamer_rules
 from mmorpg.domain.rules import tutorial as tutorial_rules
 from mmorpg.domain.rules.combat import act, join_battle, joinable
 from mmorpg.domain.rules.health_recovery import restart as restart_recovery
+from mmorpg.domain.rules.repair import character_with_wear
 from mmorpg.domain.rules.stats import derived_stats
 from mmorpg.domain.rules.tutorial import TutorialTask
 from mmorpg.logging import get_logger
@@ -994,6 +995,12 @@ async def _store_and_show(
 ) -> None:
     """Сохранить то, что ход изменил, и ответить ровно одним экраном каждому."""
     store = BattleStore(state_cache)
+    for one in session.live_participants():
+        old = before.state.by_id(one.id)
+        if old is not None and old.gear_wear != one.gear_wear:
+            current = await characters.get(one.character_id)
+            if current is not None:
+                await characters.save(character_with_wear(current, one))
     if session.state.is_over:
         await _finish(
             message,
@@ -1241,7 +1248,7 @@ async def _finish(
         if character is None:
             continue
         payouts[one.character_id] = Payout()
-        updated[one.character_id] = character
+        updated[one.character_id] = character_with_wear(character, one)
 
     if session.is_duel:
         await _settle_duel(session, roster, winners, losers, payouts, updated)

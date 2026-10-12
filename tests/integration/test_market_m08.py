@@ -12,10 +12,106 @@ from mmorpg.application.services.market import Market
 from mmorpg.domain.entities.market import MarketResult
 from mmorpg.infrastructure.cache.memory import InMemoryStateCache
 from mmorpg.infrastructure.persistence.gameplay import PostgresGameplayState
+from tests.integration.test_durable_battle_m03 import battle_env as battle_env
 from tests.integration.test_economic_operations import economy as economy
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 NOW = 1000
+
+
+async def test_real_market_sale_buttons_numbers_saved_confirmation_and_replay(battle_env):
+    from aiogram import Dispatcher
+    from aiogram.types import Update
+
+    from mmorpg.application.services.content import ContentRegistry
+    from mmorpg.infrastructure.persistence.postgres import (
+        PostgresCharacterRepository,
+        PostgresInventoryRepository,
+    )
+    from mmorpg.presentation.telegram.flows.play import begin
+    from mmorpg.presentation.telegram.handlers import play
+    from mmorpg.presentation.telegram.middlewares.commands import CommandMiddleware
+    from mmorpg.presentation.telegram.states.screens import Play
+    from tests.integration.test_durable_battle_m03 import SETTINGS, message, state_for
+    from tests.presentation.test_command_journal import dependencies
+
+    e = battle_env
+    await e.pool.execute("DELETE FROM gameplay_state WHERE key='market:board'")
+    e.characters = PostgresCharacterRepository(e.pool, e.content)
+    e.inventory = PostgresInventoryRepository(e.pool, e.content)
+    e.journal = CommandMiddleware(
+        dependencies(
+            e.characters,
+            users=e.users,
+            inventory=e.inventory,
+            trades=e.trades,
+            cache=e.cache,
+            world=e.world,
+            parties=e.parties,
+            guilds=e.guilds,
+        ),
+        e.reaper,
+        storage=e.storage,
+    )
+    dispatcher = Dispatcher(storage=e.storage)
+    dispatcher.update.outer_middleware.unregister(dispatcher.fsm)
+    dispatcher.update.outer_middleware(e.journal)
+    dispatcher.update.outer_middleware(dispatcher.fsm)
+    dispatcher.include_router(play.build_router())
+    registry = ContentRegistry(e.content)
+    hero = e.heroes[2]
+    await e.inventory.add(hero.id, "iron_scrap", 2)
+    await e.inventory.add(hero.id, "removed_old_item")
+    await state_for(e, 2).set_state(Play.main_menu)
+    await state_for(e, 2).set_data({"play": begin(hero).serialise()})
+
+    async def send(text, number=None):
+        msg = message(e, text, 2, number=number)
+        await dispatcher.feed_update(
+            e.bot,
+            Update(update_id=msg.message_id, message=msg).as_(e.bot),
+            content=e.content,
+            settings=SETTINGS,
+            characters=e.characters,
+            inventory=e.inventory,
+            locations=e.world,
+            state_cache=e.cache,
+            parties=e.parties,
+            guilds=e.guilds,
+            users=e.users,
+            keeper_log=None,
+            overlays=None,
+            registry=registry,
+            trades=e.trades,
+        )
+        return msg.message_id
+
+    try:
+        await send("/рынок")
+        await send("Продать вещь на рынке")
+        assert "Выберите вещь" in e.recording.sent[-1].text
+        assert "старые вещи" in e.recording.sent[-1].text
+        button = next(
+            one.text
+            for row in e.recording.sent[-1].reply_markup.keyboard
+            for one in row
+            if one.text.startswith("Продать вещь") and e.content.item("iron_scrap").name in one.text
+        )
+        await send(button)
+        await send("2")
+        await send("101")
+        assert "Подтверждение" in e.recording.sent[-1].text
+        number = await send("Подтвердить сделку")
+        assert "опубликован" in e.recording.sent[-1].text
+        await e.redis.flushdb()
+        await send("Подтвердить сделку", number)
+        market = Market(e.content, e.cache, e.characters, e.inventory)
+        assert len((await market.load()).lots) == 1
+        assert await e.inventory.count(hero.id, "iron_scrap") == 0
+        assert await e.inventory.count(hero.id, "removed_old_item") == 1
+        assert (await state_for(e, 2).get_data())["play"]
+    finally:
+        await e.pool.execute("DELETE FROM gameplay_state WHERE key='market:board'")
 
 
 @pytest_asyncio.fixture(loop_scope="session")

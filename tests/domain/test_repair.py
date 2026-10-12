@@ -64,15 +64,15 @@ def test_a_thing_that_is_not_worn_has_no_durability(content: GameContent) -> Non
 
 
 def test_a_fight_wears_everything_that_is_on(content: GameContent, knight: Character) -> None:
-    after, broke = repair_rules.wear(content, knight, repair_rules.WEAR_PER_FIGHT)
-    assert after.wear.spent(SWORD) == repair_rules.WEAR_PER_FIGHT
-    assert after.wear.spent(PLATE) == repair_rules.WEAR_PER_FIGHT
+    after, broke = repair_rules.wear(content, knight, 1)
+    assert after.wear.spent(SWORD) == 1
+    assert after.wear.spent(PLATE) == 1
     assert broke == ()
 
 
-def test_a_defeat_wears_three_times_as_much(content: GameContent, knight: Character) -> None:
+def test_a_defeat_does_not_wear_equipment(content: GameContent, knight: Character) -> None:
     lost = adventure.resolve_defeat(content, knight)
-    assert lost.character.wear.spent(SWORD) == repair_rules.WEAR_ON_DEFEAT
+    assert lost.character.wear.spent(SWORD) == 0
     assert lost.broken == ()
 
 
@@ -81,7 +81,7 @@ def test_the_tool_is_worn_by_its_own_work_and_not_by_fights(
 ) -> None:
     """Два счёта на одну вещь разошлись бы: инструмент точат сборы (ADR 0056)."""
     digger = replace(knight, equipment=knight.equipment.equip(tool_rules.TOOL_SLOT, PICK))
-    after, _ = repair_rules.wear(content, digger, repair_rules.WEAR_ON_DEFEAT)
+    after, _ = repair_rules.wear(content, digger, 3)
     assert after.wear.spent(PICK) == 0
 
 

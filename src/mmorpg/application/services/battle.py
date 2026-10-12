@@ -500,6 +500,7 @@ def _combatant_to_json(one: Combatant) -> dict[str, object]:
         "ways": sorted(one.ways),
         "master_id": one.master_id,
         "actions": one.actions,
+        "gear_wear": dict(one.gear_wear),
     }
 
 
@@ -535,6 +536,7 @@ def _combatant_from_json(raw: Mapping[str, Any]) -> Combatant:
         ways=frozenset(str(one) for one in raw.get("ways", ())),
         master_id=int(raw.get("master_id", 0)),
         actions=int(raw.get("actions", 0)),
+        gear_wear=MappingProxyType({str(k): int(v) for k, v in raw.get("gear_wear", {}).items()}),
     )
 
 

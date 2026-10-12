@@ -149,8 +149,10 @@ def carry_wounds(
     Ниже единицы оно не опускается: персонаж с нулём здоровья не может ни
     драться, ни дойти до лекаря, и это был бы тупик, а не цена поражения.
     """
-    stats = derived_stats(content, character)
     one = state.by_id(combatant_id)
+    if one is not None:
+        character = repair_rules.character_with_wear(character, one)
+    stats = derived_stats(content, character)
     health = one.health if one is not None else character.health_or(stats.max_health)
     return character.with_health(max(1, health), stats.max_health)
 
@@ -186,10 +188,7 @@ def resolve_victory(
         carry_wounds(content, character, state, combatant_id).with_gold(share_gold), quests=log
     )
     grown, level_up = grant_experience(content, paid, share_experience)
-    # Бой точит надетое, и выигранный тоже: доспех держит удары независимо от
-    # того, кто в итоге упал (``domain/rules/repair.py``, ADR 0057).
-    worn, broke = repair_rules.wear(content, grown, repair_rules.WEAR_PER_FIGHT)
-    skinned = _skin(content, worn, fallen)
+    skinned = _skin(content, grown, fallen)
     return Aftermath(
         character=skinned.character,
         experience=earned(content, paid, share_experience),
@@ -197,7 +196,6 @@ def resolve_victory(
         loot=share_loot,
         level_up=level_up,
         quest_steps=steps,
-        broken=tuple(item.name for item in broke),
         skinned_id=skinned.item_id,
         skinned_count=skinned.count,
         skinned_work=skinned.experience,
@@ -261,9 +259,7 @@ def resolve_defeat(content: GameContent, character: Character) -> Aftermath:
     revived = character.with_gold(-lost).with_health(
         max(1, stats.max_health * DEFEAT_HEALTH_PERCENT // 100), stats.max_health
     )
-    # Поражение точит надетое втрое: с поля боя выносят не только раны.
-    worn, broke = repair_rules.wear(content, revived, repair_rules.WEAR_ON_DEFEAT)
-    return Aftermath(character=worn, gold_lost=lost, broken=tuple(item.name for item in broke))
+    return Aftermath(character=revived, gold_lost=lost)
 
 
 def resolve_search(

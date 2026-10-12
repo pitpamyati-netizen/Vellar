@@ -141,6 +141,7 @@ class EventKind(StrEnum):
     #: (``rules/subclass_powers``).
     SUMMONED = "summoned"
     ROUND = "round"
+    GEAR_BROKEN = "gear_broken"
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,6 +230,8 @@ class Combatant:
     left: bool = False
     #: Состоявшиеся действия; чтение экрана и отказ сюда не входят.
     actions: int = 0
+    #: Полный износ затронутых вещей. Старые снимки начинают с пустой записи.
+    gear_wear: Mapping[str, int] = field(default_factory=dict)
 
     @property
     def alive(self) -> bool:

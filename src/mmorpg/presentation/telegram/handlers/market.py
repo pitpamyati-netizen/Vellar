@@ -199,12 +199,24 @@ async def show(
     choices: list[tuple[str, str]] = []
 
     def button(title: str, action: str) -> None:
-        rows.append((label(title),))
-        choices.append((title, action))
+        shown = label(title)
+        rows.append((shown,))
+        choices.append((shown.text, action))
 
     mode = flow.market_mode
+    if (
+        flow.market_action == "sell"
+        and mode in {"quantity", "price", "confirm"}
+        and not content.has_item(flow.market_target)
+    ):
+        lines.append("Эта вещь больше не продаётся. Выберите другую вещь из сумки.")
+        flow = replace(flow, market_mode="bag", market_target="", market_action="")
+        mode = "bag"
     if mode == "bag":
-        items = list(await service.inventory.list_items(actor.id))
+        held = await service.inventory.list_items(actor.id)
+        items = [one for one in held if content.has_item(one.item_id)]
+        if len(items) != len(held):
+            lines.append("Некоторые старые вещи больше не продаются. Они остаются в сумке.")
         pages = max(1, ceil(len(items) / 8))
         page = min(flow.market_page, pages)
         flow = replace(flow, market_page=page)

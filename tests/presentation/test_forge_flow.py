@@ -75,7 +75,19 @@ def test_a_whole_character_is_told_there_is_nothing_to_mend(
     state = _step(content, whole, begin(whole), "Мир", "Кузница")
     screen = render(content, whole, state, world_seed=WORLD_SEED, clock=CLOCK)
     assert "Чинить нечего" in screen.text()
-    assert screen.rows == ()
+    assert {button.text for row in screen.rows for button in row} == {
+        "Разобрать вещи",
+        "Перековать вещь",
+    }
+    for text, target in (
+        ("Разобрать вещи", ScreenId.SALVAGE),
+        ("Перековать вещь", ScreenId.REFORGE),
+    ):
+        chosen = _step(content, whole, state, text, goods=_bag(whole))
+        assert chosen.screen is target
+        assert render(
+            content, whole, chosen, world_seed=WORLD_SEED, clock=CLOCK, goods=_bag(whole)
+        ).rows
 
 
 def test_mending_one_thing_pays_and_returns_it(content: GameContent, battered: Character) -> None:

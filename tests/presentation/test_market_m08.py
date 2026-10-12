@@ -106,3 +106,51 @@ async def test_market_hides_instance_numbers_and_keeps_exact_duplicate_choice(ta
     await player.press(next(one for one in choices if one.startswith("Продать вещь 2:")))
     flow = PlayState.deserialise((await player.state.get_data())["play"])
     assert flow.market_target == refs[1]
+
+
+async def test_sell_list_keeps_unknown_old_item_without_crashing(table):
+    player, _other, hero, _guest = table
+    await prepare(player, hero)
+    await player.deps["inventory"].add(hero.id, "removed_old_item")
+    await player.deps["inventory"].add(hero.id, "iron_scrap")
+    await player.press("/рынок")
+    bag = await player.press("Продать вещь на рынке")
+    assert "старые вещи" in bag.body()
+    assert any(one.startswith("Продать вещь") for one in buttons(bag))
+    assert await player.deps["inventory"].count(hero.id, "removed_old_item") == 1
+
+
+async def test_shortened_sell_button_still_selects_shown_item(table):
+    from mmorpg.presentation.telegram.handlers import market as handler
+
+    player, _other, hero, _guest = table
+    service = await prepare(player, hero)
+    service.content = replace(
+        service.content,
+        _items_by_id={
+            **service.content._items_by_id,
+            "iron_scrap": replace(service.content.item("iron_scrap"), name="Лом " * 60),
+        },
+    )
+    await service.inventory.add(hero.id, "iron_scrap")
+    flow, screen = await handler.show(PlayState(market_mode="bag"), hero, service)
+    pressed = next(one for one in buttons(screen) if one.startswith("Продать вещь"))
+    assert len(pressed) <= 128 and pressed.endswith("…")
+    selected, _screen = await handler.step(pressed, flow, hero, service, now=1)
+    assert selected.market_target == "iron_scrap" and selected.market_mode == "quantity"
+
+
+async def test_saved_sale_of_removed_item_returns_to_bag(table):
+    from mmorpg.presentation.telegram.handlers import market as handler
+
+    player, _other, hero, _guest = table
+    service = await prepare(player, hero)
+    old = PlayState(
+        screen=ScreenId.MARKET,
+        market_mode="quantity",
+        market_action="sell",
+        market_target="removed_old_item",
+    )
+    flow, screen = await handler.step("/рынок количество 1", old, hero, service, now=1)
+    assert flow.market_mode == "bag" and not flow.market_target
+    assert "Выберите другую вещь" in screen.body()
