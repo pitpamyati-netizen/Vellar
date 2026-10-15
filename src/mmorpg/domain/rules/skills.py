@@ -71,6 +71,38 @@ def is_known(character: Character, code: str) -> bool:
     return code in character.loadout.ranks
 
 
+def belongs_to(content: GameContent, character: Character, skill: Skill) -> bool:
+    """Умение своего класса, своей расы или действительно выбранной ветки.
+
+    Сохранённый код и подпись кнопки сами по себе не дают право пользоваться
+    умением. Неподходящие старые записи сохраняются для возврата у наставника.
+    """
+    if not content.has_skill(skill.code):
+        return False
+    match skill.owner_kind:
+        case OwnerKind.CLASS:
+            return skill.owner_id == character.class_id
+        case OwnerKind.RACE:
+            return skill.owner_id == character.race_id
+        case OwnerKind.SUBCLASS:
+            return any(one.id == skill.owner_id for one in subclass_rules.taken(content, character))
+
+
+def usable(content: GameContent, character: Character, skill: Skill) -> bool:
+    """Ранее изученное своё умение продолжает действовать после переноса открытия."""
+    return belongs_to(content, character, skill) and is_known(character, skill.code)
+
+
+def next_rank_level(content: GameContent, character: Character, skill: Skill) -> int | None:
+    """Уровень для следующего вложения; ``None`` — ранг уже предельный."""
+    rank = character.loadout.rank_of(skill.code) if is_known(character, skill.code) else 0
+    if rank >= content.rules.max_rank:
+        return None
+    levels = content.rules.rank_unlock_levels
+    required = levels[min(max(0, rank), len(levels) - 1)]
+    return required if rank else max(required, skill.level)
+
+
 def _class_pool(content: GameContent, character: Character, kind: SkillKind) -> tuple[Skill, ...]:
     available = content.class_skills_up_to(character.class_id, character.level, kind)
     # Перенос уровня открытия не отнимает уже оплаченное умение у старого героя.
@@ -139,9 +171,12 @@ def fork_taken(content: GameContent, character: Character, skill: Skill) -> Skil
 def learnable(content: GameContent, character: Character, skill: Skill) -> bool:
     """Можно ли прямо сейчас потратить очко на это умение.
 
-    Два условия, и каждое объясняется словами: хватает очков, свободна развилка.
-    Ранг предельный - тратить тоже не на что.
+    Принадлежность, уровень, очки и развилка проверяются здесь, независимо
+    от того, из какого экрана или сохранения пришёл запрос.
     """
+    required = next_rank_level(content, character, skill)
+    if not belongs_to(content, character, skill) or required is None or character.level < required:
+        return False
     cost = cost_to_learn(content, character, skill)
     if cost < 1 or character.unspent_skill_points < cost:
         return False
@@ -264,6 +299,7 @@ def equippable(
         if content.has_skill(code)
         and content.skill(code).kind is SkillKind.ACTIVE
         and content.skill(code).owner_kind in _PANEL_OWNERS
+        and usable(content, character, content.skill(code))
         and code not in in_panel
     )
 
@@ -273,7 +309,9 @@ def known_passives(content: GameContent, character: Character) -> tuple[Skill, .
     return tuple(
         content.skill(code)
         for code in sorted(known_codes(character))
-        if content.has_skill(code) and content.skill(code).kind is SkillKind.PASSIVE
+        if content.has_skill(code)
+        and content.skill(code).kind is SkillKind.PASSIVE
+        and usable(content, character, content.skill(code))
     )
 
 
@@ -287,8 +325,14 @@ def put_in_slot(
         return None
     if code is not None and not content.has_skill(code):
         return None
-    if code is not None and content.skill(code).kind is not SkillKind.ACTIVE:
-        return None
+    if code is not None:
+        skill = content.skill(code)
+        if (
+            skill.kind is not SkillKind.ACTIVE
+            or skill.owner_kind not in _PANEL_OWNERS
+            or not usable(content, character, skill)
+        ):
+            return None
     loadout = character.loadout
     if code is not None:
         # Умение лежит разом в одном слоте: положить его во второй значило бы дать ему
@@ -434,15 +478,21 @@ def spec_of(skill: Skill) -> EffectSpec:
 def effective_spec(content: GameContent, character: Character, skill: Skill) -> EffectSpec:
     rank = character.loadout.rank_of(skill.code)
     ranked = _rank_numbers(spec_for(skill.effect), rank, skill.rank_step)
-    faceted = mastery_rules.applied(skill, ranked, character.loadout.masteries_of(skill.code))
+    faceted = mastery_rules.applied(
+        skill, ranked, character.loadout.masteries_of(skill.code), rank=rank
+    )
     # Добавленные гранью состояния получают прежнюю прибавку срока от ранга.
     stretched = _rank_duration(faceted, rank_gain(rank).duration_bonus)
     return talent_rules.applied(content, character, skill, stretched)
 
 
 def masteries_of(character: Character, skill: Skill) -> tuple[str, ...]:
-    """Коды граней, взятых этому умению."""
-    return character.loadout.masteries_of(skill.code)
+    """Коды действующих граней; исходные записи остаются в сохранении."""
+    rank = character.loadout.rank_of(skill.code) if is_known(character, skill.code) else 0
+    return tuple(
+        one.code
+        for one in mastery_rules.known(skill, character.loadout.masteries_of(skill.code), rank=rank)
+    )
 
 
 def taken_masteries(character: Character, skill: Skill) -> tuple[SkillMastery, ...]:
@@ -456,10 +506,10 @@ def mastery_tier_due(content: GameContent, character: Character, skill: Skill) -
     Пассивному умению граней не предлагают вовсе: у пассивки нет ни хода, ни
     цели, и менять в её действии нечего - ранг платит ей размером (ADR 0073).
     """
-    if not skill.is_active or not is_known(character, skill.code):
+    if not skill.is_active or not usable(content, character, skill):
         return None
     rank = character.loadout.rank_of(skill.code)
-    return mastery_rules.pending_tier(skill, rank, masteries_of(character, skill))
+    return mastery_rules.pending_tier(skill, rank, character.loadout.masteries_of(skill.code))
 
 
 def mastery_choices(

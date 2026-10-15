@@ -304,15 +304,16 @@ def test_the_same_thing_is_the_same_thing_for_everyone(content: GameContent) -> 
     assert once == twice
 
 
-def test_a_relic_grows_with_the_hero_and_nothing_else_does(content: GameContent) -> None:
+def test_a_relic_keeps_its_own_level_when_the_hero_grows(content: GameContent) -> None:
     relic = content.item("sword@35#relic")
     legendary = content.item("sword@35#legendary")
 
     assert gear_procgen.worn(content, legendary, 300) == legendary
     grown = gear_procgen.worn(content, relic, 300)
     assert grown.damage is not None and relic.damage is not None
-    assert grown.damage.high > relic.damage.high
-    assert min(grown.stat_bonuses.values()) > min(relic.stat_bonuses.values())
+    assert grown is relic
+    assert grown.damage.high == relic.damage.high
+    assert grown.stat_bonuses == relic.stat_bonuses
 
 
 def test_a_relic_on_the_character_sheet_counts_by_the_hero(content: GameContent) -> None:

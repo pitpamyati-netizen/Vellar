@@ -11,8 +11,9 @@ import pytest_asyncio
 from mmorpg.application.operations import atomic_action
 from mmorpg.application.services.group_trade import GroupResult, GroupTrade, roll_back
 from mmorpg.domain.entities.character import Character, Equipment, ItemWear
-from mmorpg.domain.entities.item_instance import instance_ids
+from mmorpg.domain.entities.item_instance import instance_ids, template_id
 from mmorpg.domain.ports.repositories import User
+from mmorpg.domain.procgen import items as gear_procgen
 from mmorpg.domain.rules import repair, salvage
 from mmorpg.domain.rules.group_commands import parse_group_command
 from mmorpg.infrastructure.persistence.postgres import (
@@ -123,6 +124,37 @@ async def test_restart_replay_and_failure_keep_one_instance(physical):
     assert await move(new_characters, new_inventory, e.heroes[0].id, e.heroes[1].id, e.refs[0], op)
     assert await new_inventory.count(e.heroes[1].id, e.refs[0]) == 1
     assert (await new_characters.get(e.heroes[1].id)).wear.spent(e.refs[0]) == 40
+
+
+async def test_new_loot_stamp_survives_physical_storage_transfer_and_replay(physical, content):
+    e = physical
+    generated = gear_procgen.reward_gear_id(
+        content, "ring@76#legendary", class_id="mage", seed="sql-new-loot"
+    )
+    assert "~v2-" in generated
+    before = content.item(generated)
+    await e.inventory.add(e.heroes[0].id, generated)
+    ref = next(
+        row.item_id
+        for row in await e.inventory.list_items(e.heroes[0].id)
+        if template_id(row.item_id) == generated
+    )
+    hero = await e.characters.get(e.heroes[0].id)
+    await e.characters.save(replace(hero, wear=hero.wear.worn(ref, 7)))
+    op = "new-loot:" + str(uuid4())
+    assert await move(e.characters, e.inventory, hero.id, e.heroes[1].id, ref, op)
+    restarted_characters = PostgresCharacterRepository(e.pool, content)
+    restarted_inventory = PostgresInventoryRepository(e.pool, content)
+    assert await move(restarted_characters, restarted_inventory, hero.id, e.heroes[1].id, ref, op)
+    assert await restarted_inventory.count(e.heroes[1].id, ref) == 1
+    assert await restarted_inventory.count(hero.id, ref) == 0
+    assert (await restarted_characters.get(e.heroes[1].id)).wear.spent(ref) == 7
+    after = content.item(ref)
+    assert after.stat_bonuses == before.stat_bonuses
+    assert after.modifiers == before.modifiers
+    assert after.prefixes == before.prefixes and after.suffixes == before.suffixes
+    assert after.class_affix_id == before.class_affix_id
+    assert instance_ids(after.id) == instance_ids(ref)
 
 
 async def test_two_receivers_cannot_duplicate_one_item(physical):

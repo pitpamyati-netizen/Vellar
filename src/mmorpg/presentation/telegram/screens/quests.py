@@ -139,10 +139,13 @@ def instructions(content: GameContent, quest: Quest) -> tuple[str, ...]:
     )
 
 
-def reward_line(content: GameContent, quest: Quest) -> str:
+def reward_line(content: GameContent, quest: Quest, character: Character | None) -> str:
     parts = [f"{quest.reward_gold} золота", f"{quest.reward_experience} опыта"]
-    if quest.reward_item and content.has_item(quest.reward_item):
-        parts.append(content.item(quest.reward_item).choice_name)
+    item_id = (
+        quest_rules.reward_item_id(content, character, quest) if character else quest.reward_item
+    )
+    if item_id and content.has_item(item_id):
+        parts.append(content.item(item_id).choice_name)
     return f"Плата: {', '.join(parts)}."
 
 
@@ -187,7 +190,7 @@ def board_screen(
     )
     ready = sum(1 for step in working if step.done)
     lead = [
-        notice or "Доска заданий. Берут не всех и не всё.",
+        notice or "Городская работа: выберите задание и прочитайте условия перед согласием.",
         f"Ваш уровень: {character.level}. Взято отсюда: {len(working)}.",
         "Нажмите задание, чтобы прочитать, что делать и куда идти.",
     ]
@@ -200,8 +203,8 @@ def board_screen(
         state=state,
         lead_lines=tuple(lead),
         empty_text=(
-            "Свободных заданий нет. Следующее откроется с уровнем или после того, "
-            "как закроете начатое."
+            "В этом городе нет доступных заданий. Проверьте взятые задания в журнале "
+            "или посетите другой город."
         ),
         show_filters=False,
     )
@@ -219,7 +222,7 @@ def offer_screen(
 
     lines = [*head(f"{quest.giver}. {quest.intro}", notice), f"— {quest.terms}"]
     lines.extend(instructions(content, quest))
-    lines.append(reward_line(content, quest))
+    lines.append(reward_line(content, quest, character))
     if is_taken:
         mark = "готово, можно сдавать" if progress >= quest.target_count else "в работе"
         lines.append(f"Задание уже взято: {progress} из {quest.target_count}, {mark}.")
@@ -260,6 +263,9 @@ def journal_screen(
         lines.append(step_line(content, step))
         lines.append(objective_line(content, step.quest))
         lines.append(where_line(content, step.quest))
-    lines.append("Сдают там же, где брали: в таверне того города.")
+    lines.append(
+        "Городские задания сдают в таверне города, где их взяли. "
+        "Испытания ветки сдают у наставника на экране «Ступень»."
+    )
     lines.append(f"Закрыто заданий за всё время: {len(character.quests.done)}.")
     return Screen(id=ScreenId.QUESTS, lines=tuple(line for line in lines if line))

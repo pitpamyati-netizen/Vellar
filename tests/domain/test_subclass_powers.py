@@ -78,7 +78,11 @@ def hero_of(content: GameContent, way: str, *, level: int = 150) -> Character:
         level=level,
         loadout=SkillLoadout(racial="race_human_second_wind"),
     )
-    return character.with_subclass(branch.id)
+    road = [branch.id]
+    while branch.parent:
+        branch = content.subclass(branch.parent)
+        road.append(branch.id)
+    return replace(character, subclass_ids=tuple(reversed(road)))
 
 
 def start(

@@ -132,7 +132,7 @@ class CityEvents:
             replace(state, claimed=(*state.claimed, *((index, actor.id) for index in stages))),
         )
         economy_log.record(economy_log.CITY_EVENT, gold, character_id=actor.id, detail=event.id)
-        return f"Награда за завершённые этапы: {gold} золота. Повторная выдача исключена."
+        return f"Награда за завершённые этапы получена: {gold} золота."
 
     @atomic_action
     async def supply(

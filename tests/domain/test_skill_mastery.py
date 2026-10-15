@@ -180,8 +180,8 @@ def test_masteries_stack_in_a_fixed_order(content: GameContent) -> None:
     skill = content.skill(STRIKE)
     spec = spec_for(skill.effect)
     codes = (skill.masteries[0].code, skill.masteries[2].code)
-    one = mastery_rules.applied(skill, spec, codes)
-    other = mastery_rules.applied(skill, spec, tuple(reversed(codes)))
+    one = mastery_rules.applied(skill, spec, codes, rank=5)
+    other = mastery_rules.applied(skill, spec, tuple(reversed(codes)), rank=5)
     assert one == other
     assert one != spec
 
@@ -190,14 +190,14 @@ def test_a_forgotten_mastery_does_not_crash(content: GameContent) -> None:
     """Выучка, которой у умения не осталось, просто не работает (правило 8)."""
     skill = content.skill(STRIKE)
     spec = spec_for(skill.effect)
-    assert mastery_rules.applied(skill, spec, ("нет такой",)) == spec
+    assert mastery_rules.applied(skill, spec, ("нет такой",), rank=5) == spec
 
 
 def test_the_cheap_hand_halves_the_cost(content: GameContent) -> None:
     """«Подешевле» - пометка, и цену по ней считает бой."""
     skill = next(one for one in content.skills if any(two.way == "cheap" for two in one.masteries))
     cheap = next(one for one in skill.masteries if one.way == "cheap")
-    spec = mastery_rules.applied(skill, spec_for(skill.effect), (cheap.code,))
+    spec = mastery_rules.applied(skill, spec_for(skill.effect), (cheap.code,), rank=5)
     assert mastery_rules.MARK_CHEAP in spec.marks
     assert mastery_rules.cost_factor(spec) == pytest.approx(mastery_rules.CHEAP_FACTOR)
     assert mastery_rules.cost_factor(spec_for(skill.effect)) == 1.0

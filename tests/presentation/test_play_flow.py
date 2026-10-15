@@ -231,7 +231,7 @@ def test_buying_defers_the_write_to_the_handler(
     assert bought.pending.items == ((first.id, 1),)
     assert bought.pending.character is not None
     assert bought.pending.character.gold == wealthy.gold - prices[first.id]
-    assert "куплен" in bought.notice
+    assert bought.notice.startswith("Куплено:")
 
     broke = advance(content, hero, shop, pressed, clock=CLOCK, world_seed=WORLD_SEED, goods=poor)
     assert broke.pending.empty

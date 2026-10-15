@@ -128,7 +128,7 @@ def _stamped(content: GameContent, source: Random, item: Item) -> Item:
     if parsed is None or item.is_tool or not content.rarity(item.rarity).affixes:
         return item
     archetype_id, level, rarity_id, _ = parsed
-    roll = source.randrange(max(1, gear_procgen.rolls_of(content)))
+    roll = gear_procgen.new_roll(content, source, content.gear_archetype(archetype_id))
     return content.item(gear_procgen.gear_id(archetype_id, level, rarity_id, roll))
 
 
@@ -190,7 +190,9 @@ def recovery_value(content: GameContent, item: Item) -> Fraction:
     memo: dict[str, Fraction] = {}
     visiting: set[str] = set()
     cyclic: set[str] = set()
-    ladder = [rarity.id for rarity in content.rarities if rarity.weight > 0 and not rarity.scaling]
+    ladder = [
+        rarity.id for rarity in content.rarities if rarity.weight > 0 and not rarity.boss_only
+    ]
 
     def value(item_id: str) -> Fraction:
         key = template_id(item_id)

@@ -85,9 +85,18 @@ def way_code(content: GameContent, way: str) -> str:
 
 def taught(content: GameContent, character: Character, way: str, rank: int = 1) -> Character:
     """Персонаж, изучивший пассивку с этим укладом."""
+    own = next(
+        (
+            one
+            for one in content.skills_of(f"class:{character.class_id}")
+            if not one.is_active and one.effect == way
+        ),
+        content.skill(way_code(content, way)),
+    )
     return replace(
         character,
-        loadout=character.loadout.with_rank(way_code(content, way), rank),
+        class_id=own.owner_id,
+        loadout=character.loadout.with_rank(own.code, rank),
     )
 
 
@@ -199,13 +208,18 @@ def test_a_guard_answers(content: GameContent, hero: Character) -> None:
 
 def test_overheal_becomes_a_barrier(content: GameContent, hero: Character) -> None:
     """«Избыток»: лечение, которому некуда лечь, становится барьером."""
-    mender = taught(content, hero, "overheal", 5)
+    mender = taught(content, replace(hero, class_id="cleric"), "overheal", 5)
+    healing_code = next(
+        one.code
+        for one in content.skills_of("class:cleric")
+        if one.is_active and one.effect == "heal"
+    )
     healing = replace(
         mender,
         loadout=replace(
             mender.loadout,
-            actives=("warrior_znamya_ne_padaet", None, None, None, None, None),
-            ranks={**dict(mender.loadout.ranks), "warrior_znamya_ne_padaet": 1},
+            actives=(healing_code, None, None, None, None, None),
+            ranks={**dict(mender.loadout.ranks), healing_code: 1},
         ),
     )
     state, roster = start(content, healing)

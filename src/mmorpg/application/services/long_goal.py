@@ -150,7 +150,7 @@ class LongGoals:
         if actor is None or actor.level < config.level:
             return (
                 "Ремесленная цель открывается на уровне 150. До неё можно развивать "
-                "ремесло в таверне."
+                "ремесло в разделе «Ремёсла» главного меню."
             )
         if not 1 <= number <= len(recipes):
             return "Выберите номер работы на экране /цели."

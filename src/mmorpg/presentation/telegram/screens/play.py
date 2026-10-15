@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import MappingProxyType
 
 from mmorpg.domain.entities.character import Character
@@ -322,7 +322,8 @@ def location_list_screen(
         lead_lines=(
             notice or f"Ваш уровень: {character.level}.",
             "В локации ходят по узлам: бой платит опытом, золотом и добычей, "
-            "тайники и заросли — находками. Раны остаются с вами до лекаря.",
+            "тайники и заросли — находками. Вне боя здоровье постепенно восстанавливается; "
+            "зелья и отдых в таверне помогают вернуться в строй быстрее.",
             "Локации перекрываются по уровням: всегда есть куда идти и куда вернуться.",
         ),
         show_filters=False,
@@ -359,8 +360,10 @@ def risk_note(node: LocationNode, character_level: int) -> str:
     else:
         risk = "противник намного сильнее вас, сюда рано"
     tier = {
-        NodeKind.ELITE_BATTLE: " Эпический противник держится вдвое дольше обычного.",
-        NodeKind.BOSS_BATTLE: " Хозяин логова держится вчетверо дольше обычного.",
+        NodeKind.ELITE_BATTLE: " У эпического противника заметно больше здоровья, чем у обычного.",
+        NodeKind.BOSS_BATTLE: (
+            " У хозяина логова большой запас здоровья; приготовьтесь к долгому бою."
+        ),
     }.get(node.kind, "")
     return f"{risk}.{tier}"
 
@@ -852,67 +855,87 @@ def spend_label(stat_name: str) -> Label:
 
 
 def stat_effect_lines(content: GameContent, character: Character) -> tuple[str, ...]:
-    """Что даёт одно очко в каждой характеристике — ЭТОМУ классу, в его числах.
-
-    Читается из классовой сетки (``classes.toml``, ``[class.scaling]``, ADR 0068),
-    а не выписано руками, поэтому правка баланса не может оставить объяснение
-    лгать. Чего не стоит за числом, того не пишут вовсе (``Claude.md``,
-    правило 7).
-
-    Отсюда и весь ответ на «куда вкладывать»: воин читает, что сила даёт ему
-    удар и здоровье, а маг — что сила не даёт ему почти ничего. Прежде обе
-    строки были одинаковы у всех восьми классов, и выбор очка был выбором вслепую.
-    """
-    from mmorpg.domain.entities.stats import StatCode
-    from mmorpg.domain.rules import economy
+    """Настоящая разница от следующего очка с учётом ветвей, вех и округления."""
+    from mmorpg.domain.rules import economy, milestones, modifiers
     from mmorpg.domain.rules import stats as stat_rules
+    from mmorpg.domain.rules.combat import blow_of
     from mmorpg.presentation.telegram.screens.creation import STAT_NAMES
 
-    klass = content.character_class(character.class_id)
+    before = stat_rules.derived_stats(content, character)
+    before_modifiers = modifiers.collect_modifiers(content, character)
+    before_blow = blow_of(content, character)
+    before_primary = stat_rules.primary_stats(content, character)
+    previous_milestones = {one.trait_id for one in milestones.reached(content, character)}
+    parts: list[str] = []
 
-    # Что каждая характеристика делает помимо сетки: это правила, общие для всех
-    # классов, и живут они постоянными, а не содержимым.
-    common: dict[StatCode, str] = {
-        StatCode.END: "восстановление здоровья вне боя становится быстрее",
-        StatCode.AGI: (
-            f"точность {number(stat_rules.ACCURACY_PER_AGILITY)}, "
-            f"уклонение {percent(stat_rules.DODGE_PER_AGILITY)}, "
-            f"инициатива {number(stat_rules.INITIATIVE_PER_AGILITY)}"
-        ),
-        StatCode.WIS: (f"запас в ход {number(stat_rules.RESOURCE_REGEN_PER_WISDOM)} процента"),
-        StatCode.CHA: (
-            f"в лавке уступают {percent(economy.CHARISMA_DISCOUNT_PER_POINT)}, "
-            f"до {percent(economy.MAX_CHARISMA_DISCOUNT)}"
-        ),
-        StatCode.LCK: (f"крит {number(stat_rules.CRIT_CHANCE_PER_LUCK)} и столько же к его силе"),
-    }
+    def changed(name: str, previous: float, following: float, unit: str = "") -> None:
+        delta = round(following - previous, 2)
+        if delta:
+            sign = "плюс" if delta > 0 else "минус"
+            if unit:
+                magnitude = abs(delta)
+                unit = " " + (
+                    "процентного пункта"
+                    if magnitude != int(magnitude)
+                    else plural(
+                        int(magnitude),
+                        "процентный пункт",
+                        "процентных пункта",
+                        "процентных пунктов",
+                    )
+                )
+            parts.append(f"{name} {sign} {number(abs(delta))}{unit}")
 
-    lines: list[str] = []
-    if klass.power:
-        lines.append(klass.power)
+    lines = ["Следующее очко: расчёт для вашей нынешней экипировки и специализации."]
     for code in STAT_NAMES:
-        scaling = klass.scaling_of(code)
-        parts: list[str] = []
-        if scaling.blow:
-            parts.append(f"удар {number(scaling.blow)}")
-        if scaling.health:
-            parts.append(f"здоровье {number(scaling.health)}")
-        if scaling.resource:
-            parts.append(f"{klass.resource.name.lower()} {number(scaling.resource)}")
-        if scaling.armor:
-            parts.append(f"броня {number(scaling.armor)}")
-        if scaling.healing:
-            parts.append("лечение")
-        extra = common.get(code, "")
-        if extra:
-            parts.append(extra)
-        name = STAT_NAMES[code]
+        candidate = replace(character, allocated=character.allocated.with_change(code, 1))
+        after = stat_rules.derived_stats(content, candidate)
+        after_modifiers = modifiers.collect_modifiers(content, candidate)
+        parts.clear()
+        changed("основа обычного удара", before_blow, blow_of(content, candidate))
+        changed("максимальное здоровье", before.max_health, after.max_health)
+        changed("максимальный запас", before.max_resource, after.max_resource)
+        changed("броня", before.armor, after.armor)
+        changed("точность", before.accuracy, after.accuracy)
+        for name, previous, following in (
+            ("шанс уклонения", before.dodge, after.dodge),
+            ("шанс критического удара", before.crit_chance, after.crit_chance),
+            ("критический урон", before.crit_damage, after.crit_damage),
+        ):
+            changed(name, previous, following, " процентного пункта")
+        changed("инициатива", before.initiative, after.initiative)
+        changed("запас за ход", before.resource_regen, after.resource_regen)
+        changed(
+            "здоровье вне боя в минуту",
+            before.health_recovery_per_minute,
+            after.health_recovery_per_minute,
+        )
+        changed(
+            "усиление лечения",
+            before_modifiers.get("healing_done_percent", 0),
+            after_modifiers.get("healing_done_percent", 0),
+            " процентного пункта",
+        )
+        after_primary = stat_rules.primary_stats(content, candidate)
+        changed(
+            "скидка от харизмы в лавке",
+            min(
+                economy.MAX_CHARISMA_DISCOUNT,
+                before_primary[StatCode.CHA] * economy.CHARISMA_DISCOUNT_PER_POINT,
+            ),
+            min(
+                economy.MAX_CHARISMA_DISCOUNT,
+                after_primary[StatCode.CHA] * economy.CHARISMA_DISCOUNT_PER_POINT,
+            ),
+            " процентного пункта",
+        )
+        for milestone in milestones.reached(content, candidate):
+            if milestone.trait_id not in previous_milestones:
+                parts.append(f"веха «{milestone.name}»: {milestone_gift(content, milestone)}")
         if parts:
-            lines.append(f"{name}: за очко {', '.join(parts)}.")
+            lines.append(f"{STAT_NAMES[code]}: за очко {', '.join(parts)}.")
         else:
-            # Ноль сказан вслух. Промолчать значило бы дать игроку думать, что
-            # характеристика что-то даёт, — экран всё равно печатает её число.
-            lines.append(f"{name}: этому классу не даёт ничего.")
+            lines.append(f"{STAT_NAMES[code]}: сейчас показатели после округления не изменятся.")
     return tuple(lines)
 
 

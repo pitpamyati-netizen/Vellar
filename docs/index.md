@@ -1,5 +1,10 @@
 # Указатель документации Vellar
 
+Переработка 15.10.2026: [развитие, сложность, добыча и тексты](character-rework-2026-10-15.md),
+[новые правила](adr/0106-coherent-progression-fixed-gear-and-challenge.md),
+[проверка добычи](loot-rework-2026-10-15.md),
+[литературная проверка](narrative-rework-2026-10-15.md).
+
 Износ от атак и попаданий, доступность кузницы:
 [ADR 0104](adr/0104-combat-hit-wear.md), [правила прочности](repair.md).
 

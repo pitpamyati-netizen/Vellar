@@ -1403,7 +1403,9 @@ def advance(
         case ScreenId.GUILD_STORE_AMOUNT:
             return _handle_guild_store_amount(content, state, command, text, shelf, guild)
         case ScreenId.GUILD_CONTRACT:
-            return state.with_notice("Подряд закрывается сам: делайте дела, а не жмите кнопки.")
+            return state.with_notice(
+                "Подряд продвигается от обычных действий. Его условия перечислены на экране."
+            )
         case ScreenId.GUILD_WAR:
             return state.with_notice("Нажмите кнопку войны.")
         case ScreenId.GUILD_WAR_DECLARE:
@@ -1724,7 +1726,10 @@ def _handle_craft(
         # инструментом (ADR 0056), поэтому и отвечать ему нужно об этом, а не о
         # кнопках, которых на экране нет.
         if craft.gathers:
-            return state.with_notice("Сырьё берут в локации, у жилы, а не отсюда.")
+            return state.with_notice(
+                "Сырьё собирают в локациях. Найдите место для сбора "
+                "и используйте нужный инструмент."
+            )
         return state.with_notice("Нажмите кнопку работы или «Назад».")
 
     owned = _bag(goods)
@@ -1875,7 +1880,7 @@ def _handle_equipment(
             )
         write = PendingWrite(character=stripped, items=((item_id, 1),))
         return state.storing(write).with_notice(
-            f"{content.item(item_id).choice_name} снят и убран в сумку."
+            f"Снято в сумку: {content.item(item_id).choice_name}."
         )
     return state.with_notice("Нажмите кнопку из списка.")
 
@@ -1978,7 +1983,7 @@ def _handle_shop_item(
     bought = (
         go_back(replace(state, item_id=""))
         .storing(write)
-        .with_notice(f"{item.choice_name} куплен за {price} золота.")
+        .with_notice(f"Куплено: {item.choice_name}. Уплачено {price} золота.")
     )
     return mark_task(bought, character, TutorialTask.TRADE)
 
@@ -2004,7 +2009,9 @@ def _handle_sell(
     write = PendingWrite(character=character.with_gold(price), items=((item.id, -1),)).because(
         economy_log.SHOP
     )
-    sold = state.storing(write).with_notice(f"{item.choice_name} продан за {price} золота.")
+    sold = state.storing(write).with_notice(
+        f"Продано: {item.choice_name}. Получено {price} золота."
+    )
     return mark_task(sold, character, TutorialTask.TRADE)
 
 
@@ -2066,7 +2073,7 @@ def _handle_item(
         return (
             go_back(replace(state, item_id=""))
             .storing(write)
-            .with_notice(f"{item.choice_name} выпито, восстановлено {healed} здоровья.")
+            .with_notice(f"Использовано: {item.choice_name}. Восстановлено {healed} здоровья.")
         )
     return state.with_notice("Нажмите действие или «Назад».")
 
@@ -2083,9 +2090,9 @@ def _equip(content: GameContent, character: Character, state: PlayState, item: I
     write = PendingWrite(character=dressed, items=((item.id, -1),))
     if previous is not None and content.has_item(previous):
         write = write.with_items((previous, 1))
-        said = f"{item.choice_name} надет, {content.item(previous).choice_name} убран в сумку."
+        said = f"Надето: {item.choice_name}. В сумку убрано: {content.item(previous).choice_name}."
     else:
-        said = f"{item.choice_name} надет."
+        said = f"Надето: {item.choice_name}."
     if warning := gear.equip_warning(content, character, item):
         said = f"{said} {warning}"
     return state.storing(write).with_notice(said)
@@ -2097,7 +2104,7 @@ def _handle_settings(
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите переключатель из списка.")
     if settings_screens.REPEAT_SCREEN.matches(command.argument):
-        return state.with_notice("Настройки доступности.")
+        return state.with_notice("Настройки игры.")
 
     updated, said = settings_screens.toggled(settings, command.argument)
     if not said:
@@ -2328,7 +2335,9 @@ def _handle_salvage(
     )
     write = PendingWrite().with_items((item.id, -1), *made)
     got = ", ".join(f"{content.item(item_id).choice_name} {count}" for item_id, count in made)
-    return state.storing(write).with_notice(f"{item.choice_name} разобран. Вышло: {got}.")
+    return state.storing(write).with_notice(
+        f"Разобрано: {item.choice_name}. Получены материалы: {got}."
+    )
 
 
 def _handle_reforge(
@@ -2376,7 +2385,7 @@ def _handle_reforge(
     )
     made = content.item(made_id)
     return state.storing(write).with_notice(
-        f"{item.choice_name} перекован. Теперь это {made.name}. Уплачено {price} золота."
+        f"Перековано: {item.choice_name}. Получено: {made.name}. Уплачено {price} золота."
     )
 
 

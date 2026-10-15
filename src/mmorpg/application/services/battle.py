@@ -34,7 +34,7 @@ from mmorpg.domain.entities.combat import (
 from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.damage import DamageType
 from mmorpg.domain.entities.effects import ActiveEffect, EffectStack, status_effect
-from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank
+from mmorpg.domain.entities.location import Enemy, EnemyKind, EnemyRank, EnemyRole
 from mmorpg.domain.entities.resources import resource_name as normal_resource_name
 from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.domain.ports.repositories import StateCache
@@ -443,6 +443,7 @@ def _enemy_to_json(enemy: Enemy) -> dict[str, object]:
         "armor": enemy.armor,
         "initiative": enemy.initiative,
         "rank": enemy.rank.value,
+        "role": enemy.role.value,
         "loot": list(enemy.loot),
         "gold": enemy.gold,
         "element": enemy.element.value,
@@ -462,6 +463,7 @@ def _enemy_from_json(raw: Mapping[str, Any]) -> Enemy:
         armor=int(raw["armor"]),
         initiative=float(raw["initiative"]),
         rank=EnemyRank(raw["rank"]),
+        role=EnemyRole(raw.get("role", EnemyRole.BRUTE.value)),
         loot=tuple(raw["loot"]),
         gold=int(raw["gold"]),
         element=DamageType(raw.get("element", DamageType.SLASHING.value)),

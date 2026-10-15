@@ -248,8 +248,8 @@ def _prey_for(
 _SEARCH_KINDS: tuple[NodeKind, ...] = (NodeKind.CACHE, NodeKind.GATHER)
 
 _SEARCH_LINE: dict[str, str] = {
-    NodeKind.CACHE.value: "Обыскать тайник у места «{place}».",
-    NodeKind.GATHER.value: "Собрать сырьё у места «{place}».",
+    NodeKind.CACHE.value: "Обыскать тайник в локации «{place}».",
+    NodeKind.GATHER.value: "Собрать сырьё в локации «{place}».",
 }
 
 
@@ -282,7 +282,7 @@ def _deed_level(location: Location, level: int) -> int:
 def _hunt(location: Location, prey: EnemyArchetype, level: int) -> Deed:
     return Deed(
         kind=DeedKind.HUNT,
-        line=f"Выбить стаю «{prey.name}» у места «{location.name}».",
+        line=f"Выбить стаю с противником «{prey.name}» в локации «{location.name}».",
         where=location.name,
         level=_deed_level(location, level),
         slot=location.slot,
@@ -304,7 +304,7 @@ def _search(location: Location, kind: NodeKind, level: int) -> Deed:
 def _cull(location: Location, level: int) -> Deed:
     return Deed(
         kind=DeedKind.CULL,
-        line=f"Разредить стаю у места «{location.name}».",
+        line=f"Победить в любом бою в локации «{location.name}».",
         where=location.name,
         level=_deed_level(location, level),
         slot=location.slot,
@@ -314,7 +314,7 @@ def _cull(location: Location, level: int) -> Deed:
 def _haul(city: City, level: int) -> Deed:
     return Deed(
         kind=DeedKind.HAUL,
-        line=f"Проводить обоз до города {city.name}.",
+        line=f"Добраться с обозом до города {city.name} через «Дорогу».",
         where=city.name,
         level=max(1, level),
         city_id=city.id,
@@ -324,7 +324,7 @@ def _haul(city: City, level: int) -> Deed:
 def _delve(dungeon: Dungeon) -> Deed:
     return Deed(
         kind=DeedKind.DELVE,
-        line=f"Спуститься в подземелье «{dungeon.name}».",
+        line=f"Пройти до конца подземелье «{dungeon.name}» или блуждающий спуск этого города.",
         where=dungeon.name,
         level=max(1, dungeon.level),
         dungeon_id=dungeon.id,

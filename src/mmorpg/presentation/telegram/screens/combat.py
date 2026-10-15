@@ -182,9 +182,11 @@ def skill_effect(
     power = skill.power_at_rank(rank)
     # Условные прибавки зависят от цели и называются отдельно в карточке.
     bonus = min(
-        talent_rules.MAX_POWER_BONUS,
+        talent_rules.TREE_POWER_BONUS
+        if character.loadout.talent_tree_version
+        else talent_rules.MAX_POWER_BONUS,
         sum(
-            one.amount
+            talent_rules.strength(content, character, one)
             for one in talent_rules.matching(content, character, skill)
             if one.effect == "power" and one.condition == "always"
         ),
@@ -246,9 +248,7 @@ def _status_phrases(spec: EffectSpec, power: float) -> tuple[str, ...]:
     from mmorpg.domain.entities.statuses import status_spec
 
     def magnitude(one: Inflict) -> str:
-        return (
-            f", сила {one.magnitude(power):g} процентов" if status_spec(one.kind).modifiers else ""
-        )
+        return f", сила {percent(one.magnitude(power))}" if status_spec(one.kind).modifiers else ""
 
     out: list[str] = []
     for one in spec.inflicts:

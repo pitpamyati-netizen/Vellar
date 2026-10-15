@@ -56,6 +56,10 @@ def prepared(content: GameContent, class_id: str, key: int) -> Character:
 
 
 def probe(content: GameContent, classes: tuple[str, ...], trial: int) -> dict[str, object]:
+    from scripts.character_balance_report import DecisionMemory, action_for
+
+    from mmorpg.domain.entities.location import EnemyRole
+
     heroes = [prepared(content, cls, i) for i, cls in enumerate(classes, 1)]
     dungeon = content.city("farhold").dungeon("farhold_flooded_drift")
     words = [0] * len(heroes)
@@ -86,6 +90,7 @@ def probe(content: GameContent, classes: tuple[str, ...], trial: int) -> dict[st
             briefing=f"{meeting.name}. {meeting.briefing}",
         )
         state = session.state
+        memory = DecisionMemory()
         turns = 0
         while not state.is_over and turns < 300:
             actor = state.active
@@ -94,8 +99,39 @@ def probe(content: GameContent, classes: tuple[str, ...], trial: int) -> dict[st
                 words[i - 1] += len(
                     render(content, character, replace(session, state=state), i).text().split()
                 )
-            action = combat._chosen_by_engine(content, roster, state, actor, seed)
-            if actor.health < actor.max_health * 0.45 and potions[actor.id - 1] < 3:
+            # Согласованный бой: сначала лекарь, затем заклинатель общего
+            # удара. Урон и поддержка выбираются по выученным умениям и цене,
+            # как в общей модели; случайный ход слепка арены здесь не подходит.
+            foes = state.visible_foes_of(actor.id)
+            if not foes:
+                raise RuntimeError(
+                    f"Незавершённый бой без целей: {classes=}, {trial=}, "
+                    f"{layer=}, seed={seed.hex()}, state={state!r}"
+                )
+            target = min(
+                foes,
+                key=lambda one: (
+                    {EnemyRole.HEALER: 0, EnemyRole.CASTER: 1, None: 2}.get(combat.role_of(one), 2),
+                    one.health / one.max_health,
+                ),
+            )
+            action = action_for(content, roster[actor.id], state, memory)
+            selected = (
+                roster[actor.id].loadout.actives[action.slot]
+                if action.kind is ActionKind.SKILL and action.slot is not None
+                else None
+            )
+            if action.kind is ActionKind.ATTACK or (
+                selected is not None and content.skill(selected).target == "enemy"
+            ):
+                action = replace(action, target=target.id)
+            racial = BattleAction(ActionKind.RACIAL)
+            if (
+                actor.health <= actor.max_health * 0.70
+                and combat._refusal(content, roster, state, actor, racial) is None
+            ):
+                action = racial
+            elif actor.health < actor.max_health * 0.45 and potions[actor.id - 1] < 3:
                 action = BattleAction(ActionKind.ITEM, item_id="small_healing_potion")
                 potions[actor.id - 1] += 1
             updated = combat.act(content, roster, state, action, seed)
@@ -109,7 +145,13 @@ def probe(content: GameContent, classes: tuple[str, ...], trial: int) -> dict[st
                 state.round,
                 state.cursor,
             ) and not updated.is_over:
-                updated = combat.act(content, roster, state, BattleAction(ActionKind.ATTACK), seed)
+                updated = combat.act(
+                    content,
+                    roster,
+                    state,
+                    BattleAction(ActionKind.ATTACK, target=target.id),
+                    seed,
+                )
             state = updated
             decisions[actor.id - 1] += 1
             turns += 1
@@ -156,7 +198,10 @@ def run(content: GameContent, trials: int = 16) -> dict[str, object]:
         "seed": SEED.decode(),
         "trials_per_composition": trials,
         "reading_is_an_estimate": True,
-        "policy": "class engine, up to three potions; delay final victory until living allies act",
+        "policy": (
+            "learned skill choice, healer/caster focus, racial healing, up to three potions; "
+            "delay final victory until living allies act"
+        ),
         "runs": [
             probe(content, classes, trial) for classes in compositions for trial in range(trials)
         ],

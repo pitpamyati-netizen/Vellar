@@ -182,7 +182,7 @@ def test_a_boss_always_leaves_something_and_a_wolf_rarely_does(content: GameCont
 
 def test_a_relic_comes_off_a_boss_and_nothing_else(content: GameContent) -> None:
     """Реликтовое не лежит на прилавке и не падает с волка."""
-    relics = {rarity.id for rarity in content.rarities if rarity.scaling}
+    relics = {rarity.id for rarity in content.rarities if rarity.boss_only}
 
     def relic_count(rank: EnemyRank) -> int:
         return sum(

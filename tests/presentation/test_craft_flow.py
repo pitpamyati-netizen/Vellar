@@ -159,7 +159,7 @@ def test_pressing_gather_from_an_old_keyboard_writes_nothing(
     state = step(
         content, hero, listed, button(content, hero, listed, "Горное дело"), "Собрать сырьё"
     )
-    assert "в локации" in state.notice
+    assert "в локациях" in state.notice
     assert state.pending.empty
 
 

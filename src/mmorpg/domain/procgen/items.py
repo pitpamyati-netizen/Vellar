@@ -17,8 +17,8 @@
 - **Оттиск** - какой аффикс у вещи ведущий. Он же стоит в её имени («Крепкий
   меч ярости редкой работы») и в её идентификаторе, поэтому две находки одного
   вида и одной редкости - две **разные** вещи, а не две одинаковые кнопки.
-- **Реликтовая вещь считается от уровня героя, а не от своего**: она растёт
-  вместе с ним и потому не устаревает.
+- **Ступень вещи постоянна**, включая реликты: развитие героя требует новой
+  экипировки, а старые номера и оттиски продолжают читаться.
 
 Величина аффикса берётся из опорной, растёт со ступенью вещи (``_tier_factor``)
 и бросается в границах ``AFFIX_SPREAD``. Легендарной и реликтовой вещи прибавка
@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from hashlib import blake2b
 
 from mmorpg.domain.entities.content import (
@@ -100,6 +100,70 @@ LEVEL_MARK = "@"
 RARITY_MARK = "#"
 ROLL_MARK = "~"
 
+# Старые числовые оттиски сохраняют имена и свойства. Новый формат отдельно
+# хранит профиль класса и случайный вариант; номера физических вещей не меняются.
+STAMP_V2 = 1_000_000_000
+STAMP_VARIANTS = 1_000_000
+STAMP_PROFILES = 65_536
+
+
+def _profile(class_id: str) -> int:
+    return int.from_bytes(blake2b(class_id.encode("utf-8"), digest_size=2).digest(), "big") or 1
+
+
+def stamp_class(content: GameContent, roll: int) -> str:
+    token = (roll - STAMP_V2) // STAMP_VARIANTS
+    return next((one.id for one in content.classes if _profile(one.id) == token), "")
+
+
+def new_roll(
+    content: GameContent,
+    source: random.Random,
+    archetype: GearArchetype,
+    *,
+    class_id: str = "",
+) -> int:
+    """Новый оттиск: профиль подходящего класса записан на самой вещи."""
+    wanted = class_id if content.has_character_class(class_id) else ""
+    if not wanted:
+        candidates = [one.id for one in content.classes if suits(content, archetype, (one.id,))]
+        if candidates:
+            wanted = source.choice(candidates)
+    token = _profile(wanted) if wanted else 0
+    return STAMP_V2 + token * STAMP_VARIANTS + source.randrange(STAMP_VARIANTS)
+
+
+def reward_gear_id(content: GameContent, item_id: str, *, class_id: str, seed: str) -> str:
+    """Личная награда той же ступени и редкости, подходящая классу.
+
+    Расходник, сырьё и неизвестная ссылка остаются как были. Выбор повторяем:
+    просмотр обещает ту же вещь, которую выдаст завершение задания.
+    """
+    parsed = parse_gear_id(item_id)
+    if parsed is None or not content.has_item(item_id) or not content.has_character_class(class_id):
+        return item_id
+    kind, level, rarity, _ = parsed
+    original = content.gear_archetype(kind)
+    if original.tool_type:
+        return item_id
+    source = _source(seed)
+    candidates = [
+        one
+        for one in content.gear_archetypes
+        if one.slot == original.slot and suits(content, one, (class_id,))
+    ]
+    chosen = (
+        original
+        if suits(content, original, (class_id,))
+        else (source.choice(candidates) if candidates else original)
+    )
+    roll = (
+        new_roll(content, source, chosen, class_id=class_id)
+        if content.rarity(rarity).affixes
+        else 0
+    )
+    return gear_id(chosen.id, level, rarity, roll)
+
 
 @dataclass(frozen=True, slots=True)
 class Affix:
@@ -116,7 +180,11 @@ class Affix:
 
 
 def gear_id(archetype_id: str, level: int, rarity_id: str, roll: int = 0) -> str:
-    tail = f"{ROLL_MARK}{roll}" if roll else ""
+    if roll >= STAMP_V2:
+        token, variant = divmod(roll - STAMP_V2, STAMP_VARIANTS)
+        tail = f"{ROLL_MARK}v2-{token}-{variant}"
+    else:
+        tail = f"{ROLL_MARK}{roll}" if roll else ""
     return f"{archetype_id}{LEVEL_MARK}{level}{RARITY_MARK}{rarity_id}{tail}"
 
 
@@ -126,12 +194,24 @@ def parse_gear_id(item_id: str) -> tuple[str, int, str, int] | None:
     if not mark:
         return None
     rarity, roll_mark, roll = tail.partition(ROLL_MARK)
-    if roll_mark and not roll.isdigit():
-        return None
+    stamp = 0
+    if roll_mark:
+        if roll.startswith("v2-"):
+            bits = roll.split("-")
+            if len(bits) != 3 or not all(one.isdigit() for one in bits[1:]):
+                return None
+            token, variant = int(bits[1]), int(bits[2])
+            if token >= STAMP_PROFILES or variant >= STAMP_VARIANTS:
+                return None
+            stamp = STAMP_V2 + token * STAMP_VARIANTS + variant
+        elif roll.isdigit() and int(roll) < STAMP_V2:
+            stamp = int(roll)
+        else:
+            return None
     archetype_id, mark, level = head.partition(LEVEL_MARK)
     if not mark or not level.isdigit():
         return None
-    return archetype_id, int(level), rarity, int(roll) if roll_mark else 0
+    return archetype_id, int(level), rarity, stamp
 
 
 def _source(item_id: str) -> random.Random:
@@ -225,6 +305,80 @@ def _affixes_of(
     return stats, modifiers, tuple(great), lead.word
 
 
+def _new_affixes(
+    content: GameContent,
+    source: random.Random,
+    rarity: Rarity,
+    *,
+    roll: int,
+    level: int,
+) -> tuple[
+    dict[str, int], dict[str, float], tuple[str, ...], str, tuple[str, ...], tuple[str, ...]
+]:
+    """Префикс даёт характеристику, суффикс — процент; бюджет задаёт редкость."""
+    class_id = stamp_class(content, roll)
+    klass = content.character_class(class_id) if class_id else None
+    keys = list(klass.key_stats) if klass else []
+    # После главной характеристики полезнее здоровье, чем случайная бесполезная
+    # прибавка. Остальные действительно работающие характеристики дополняют пул.
+    if StatCode.END not in keys:
+        keys.append(StatCode.END)
+    remaining = [
+        code
+        for code in StatCode
+        if code not in keys
+        and (
+            klass is None
+            or any(
+                vars_ > 0
+                for vars_ in (
+                    klass.scaling_of(code).blow,
+                    klass.scaling_of(code).health,
+                    klass.scaling_of(code).resource,
+                    klass.scaling_of(code).armor,
+                    klass.scaling_of(code).healing,
+                )
+            )
+        )
+    ]
+    source.shuffle(remaining)
+    keys.extend(remaining)
+    prefix_keys = tuple(f"stat_{code.value}" for code in keys[: rarity.prefixes])
+    pool = [one for one in affix_pool(content) if not one.stat]
+    if klass and klass.key_stats:
+        magical = klass.key_stats[0] in (StatCode.INT, StatCode.WIS)
+        wrong_damage = "physical_damage_percent" if magical else "magic_damage_percent"
+        can_heal = any(klass.scaling_of(code).healing > 0 for code in StatCode)
+        pool = [
+            one
+            for one in pool
+            if one.key != wrong_damage and (can_heal or one.key != "healing_done_percent")
+        ]
+    source.shuffle(pool)
+    picked = pool[: rarity.suffixes + int(rarity.special)]
+    suffix_keys = tuple(one.key for one in picked)
+    stats: dict[str, int] = {}
+    modifiers: dict[str, float] = {}
+    great: list[str] = []
+    for key in prefix_keys:
+        shade = source.uniform(1.0 - AFFIX_SPREAD, 1.0 + AFFIX_SPREAD)
+        if rarity.special and source.random() < GREAT_CHANCE:
+            shade *= GREAT_FACTOR
+            great.append(key)
+        stats[key.removeprefix("stat_")] = max(1, round(STAT_PER_LEVEL * level * shade))
+    for index, affix in enumerate(picked):
+        shade = source.uniform(1.0 - AFFIX_SPREAD, 1.0 + AFFIX_SPREAD)
+        if rarity.special and source.random() < GREAT_CHANCE:
+            shade *= GREAT_FACTOR
+            great.append(affix.key)
+        full = rarity.special and index == len(picked) - 1
+        scale = 1.0 if full else ORDINARY_AFFIX_SCALE
+        amount = affix.value * scale * _tier_factor(content, level) * shade
+        modifiers[affix.key] = float(round(amount)) or (1.0 if affix.value > 0 else -1.0)
+    word = picked[0].word if picked else ""
+    return stats, modifiers, tuple(great), word, prefix_keys, suffix_keys
+
+
 def build(
     content: GameContent,
     archetype: GearArchetype,
@@ -234,10 +388,15 @@ def build(
     roll: int = 0,
     hero_level: int = 0,
 ) -> Item:
-    """Собрать вещь. ``hero_level`` нужен только реликтовым — они растут по нему."""
+    """Собрать вещь по её собственной ступени; уровень владельца чисел не меняет."""
     item_id = gear_id(archetype.id, level, rarity.id, roll)
-    counted = hero_level if rarity.scaling and hero_level > 0 else level
+    counted = level
+    durability_level = (
+        content.rules.max_character_level if rarity.boss_only and roll < STAMP_V2 else level
+    )
     source = _source(item_id)
+    prefixes: tuple[str, ...] = ()
+    suffixes: tuple[str, ...] = ()
 
     damage = None
     if archetype.weapon_type and content.has_weapon_type(archetype.weapon_type):
@@ -261,6 +420,10 @@ def build(
         modifiers: dict[str, float] = {}
         great: tuple[str, ...] = ()
         word = ""
+    elif roll >= STAMP_V2:
+        stat_bonuses, modifiers, great, word, prefixes, suffixes = _new_affixes(
+            content, source, rarity, roll=roll, level=counted
+        )
     else:
         stat_bonuses, modifiers, great, word = _affixes_of(
             content, source, rarity, roll=roll, counted=counted
@@ -273,13 +436,18 @@ def build(
     class_affix_id = ""
     if not tool and rarity.special:
         pool = content.class_affixes_for((archetype.weapon_type, archetype.armor_type), level)
+        if roll >= STAMP_V2:
+            profile = stamp_class(content, roll)
+            if not archetype.weapon_type and not archetype.armor_type:
+                pool = tuple(one for one in content.class_affixes if one.min_item_level <= level)
+            pool = tuple(one for one in pool if one.class_id == profile)
         if pool:
             named = pool[roll % len(pool)]
             class_affix_id = named.id
 
     return Item(
         id=item_id,
-        name=name_of(content, archetype, level, rarity, word),
+        name=name_of(content, archetype, level, rarity, word, prefixes=prefixes),
         kind=ItemKind.EQUIPMENT,
         slot=archetype.slot,
         rarity=rarity.id,
@@ -294,17 +462,21 @@ def build(
         stat_bonuses=stat_bonuses,
         great=great,
         class_affix_id=class_affix_id,
+        prefixes=prefixes,
+        suffixes=suffixes,
         weapon_type=archetype.weapon_type,
         armor_type=archetype.armor_type,
         tool_type=archetype.tool_type,
         # Инструмент стачивается о сборы и считается по редкости; всё прочее надетое -
-        # о бои и по ступени с поправкой на редкость. Реликтовая вещь и здесь идёт по
-        # уровню героя (ADR 0057).
+        # о попадания и по собственной ступени с поправкой на редкость.
         durability=(
             rarity.durability
             if tool
             else max(
-                1, round((DURABILITY_BASE + DURABILITY_PER_LEVEL * counted) * rarity.toughness)
+                1,
+                round(
+                    (DURABILITY_BASE + DURABILITY_PER_LEVEL * durability_level) * rarity.toughness
+                ),
             )
         ),
     )
@@ -316,6 +488,8 @@ def name_of(
     level: int,
     rarity: Rarity,
     word: str = "",
+    *,
+    prefixes: tuple[str, ...] = (),
 ) -> str:
     """«Крепкий меч ярости редкой работы».
 
@@ -325,6 +499,16 @@ def name_of(
     tier = tier_at(content, level)
     prefix = tier.named(archetype.gender) if tier is not None else ""
     head = f"{prefix} {archetype.noun}".strip() if prefix else archetype.noun
+    if prefixes:
+        adjectives = [
+            content.loot_rules.prefix_words.get(key.removeprefix("stat_"), {}).get(
+                archetype.gender, ""
+            )
+            for key in prefixes
+        ]
+        lead = ", ".join(word.lower() for word in adjectives if word)
+        if lead:
+            head = f"{lead.capitalize()} {head[:1].lower()}{head[1:]}"
     if word:
         head = f"{head} {word}"
     return f"{head} {rarity.mark}".strip() if rarity.mark else head
@@ -387,7 +571,9 @@ def assemble(content: GameContent, item_id: str) -> Item | None:
         return None
     if not any(tier.level == level for tier in content.gear_tiers):
         return None
-    if roll < 0 or roll >= max(1, rolls_of(content)):
+    if roll < 0 or (roll < STAMP_V2 and roll >= max(1, rolls_of(content))):
+        return None
+    if roll >= STAMP_V2 and not stamp_class(content, roll):
         return None
     return build(
         content, content.gear_archetype(archetype_id), level, content.rarity(rarity_id), roll=roll
@@ -395,22 +581,8 @@ def assemble(content: GameContent, item_id: str) -> Item | None:
 
 
 def worn(content: GameContent, item: Item, hero_level: int) -> Item:
-    """Вещь такой, какая она на этом герое.
-
-    Для всего, кроме реликтового, это она сама. Реликтовая пересобирается по
-    уровню героя - в этом её суть, и потому её числа нигде не хранятся.
-    """
-    if not item.is_equipment or not content.has_rarity(item.rarity):
-        return item
-    rarity = content.rarity(item.rarity)
-    if not rarity.scaling or hero_level <= 0:
-        return item
-    parsed = parse_gear_id(item.id)
-    if parsed is None or not content.has_gear_archetype(parsed[0]):
-        return item
-    archetype = content.gear_archetype(parsed[0])
-    built = build(content, archetype, parsed[1], rarity, roll=parsed[3], hero_level=hero_level)
-    return replace(built, id=item.id, name=item.name)
+    """Надевание сохраняет ступень, свойства, номер и износ самой вещи."""
+    return item
 
 
 # --- что падает ------------------------------------------------------
@@ -426,7 +598,7 @@ DROP_CHANCE: dict[EnemyRank, float] = {
 
 #: И насколько часто эта вещь оказывается реликтовой. Только с хозяина логова:
 #: реликтовое не лежит на прилавке, не выпадает с волка и не куётся. Число
-#: низкое нарочно (ADR 0052) - реликтовая вещь не устаревает никогда.
+#: низкое: реликтовая вещь несёт больше свойств, но сохраняет свою ступень.
 RELIC_CHANCE: dict[EnemyRank, float] = {
     EnemyRank.NORMAL: 0.0,
     EnemyRank.ELITE: 0.0,
@@ -440,26 +612,6 @@ RELIC_CHANCE: dict[EnemyRank, float] = {
 RARITY_PULL = 0.02
 
 
-#: Во сколько раз тяжелее весит вид, который победителю подходит (ADR 0071).
-#:
-#: Считается из доли своего: при ``class_share`` 0,85 своё обязано выпадать в
-#: восьмидесяти пяти случаях из ста, а сколько видов на той и другой стороне,
-#: решает содержимое. Поэтому здесь не написано «в шесть раз» - здесь написано,
-#: как это число получить из объявленной доли и числа видов.
-def _class_pull(share: float, mine: int, others: int) -> float:
-    """Вес одного своего вида против одного чужого.
-
-    ``share`` доли находок обязаны достаться своим видам. При ``mine`` своих и
-    ``others`` чужих это значит ``mine * w / (mine * w + others) == share``,
-    откуда ``w = share * others / ((1 - share) * mine)``.
-    """
-    if not mine or not others or share <= 0.0:
-        return 1.0
-    if share >= 1.0:
-        return float(mine + others) * 1000.0
-    return share * others / ((1.0 - share) * mine)
-
-
 def suits(content: GameContent, archetype: GearArchetype, class_ids: Iterable[str]) -> bool:
     """Подходит ли вид хоть кому-то из названных классов.
 
@@ -471,6 +623,8 @@ def suits(content: GameContent, archetype: GearArchetype, class_ids: Iterable[st
         if not content.has_character_class(class_id):
             continue
         klass = content.character_class(class_id)
+        if not archetype.tool_type and not archetype.weapon_type and not archetype.armor_type:
+            return True
         if archetype.weapon_type and klass.can_wield(archetype.weapon_type):
             return True
         if archetype.armor_type and klass.can_wear(archetype.armor_type):
@@ -490,12 +644,14 @@ def _pick_archetype(
     if not wanted or share <= 0.0:
         return droppable[source.randrange(len(droppable))]
     mine = [one for one in droppable if suits(content, one, wanted)]
-    others = len(droppable) - len(mine)
-    if not mine or not others:
-        return droppable[source.randrange(len(droppable))]
-    pull = _class_pull(share, len(mine), others)
-    weights = [pull if one in mine else 1.0 for one in droppable]
-    return source.choices(list(droppable), weights=weights, k=1)[0]
+    others = [one for one in droppable if one not in mine]
+    if not mine:
+        return source.choice(droppable)
+    pool = mine if not others or source.random() < share else others
+    # Сначала место экипировки, потом вид: добавление десяти мечей в каталог
+    # не отнимает у мага шанс обновить мантию или украшение.
+    slot = source.choice(sorted({one.slot for one in pool}))
+    return source.choice([one for one in pool if one.slot == slot])
 
 
 def roll_drop(
@@ -538,19 +694,23 @@ def roll_drop(
     droppable = [one for one in content.gear_archetypes if not one.tool_type]
     if not droppable:
         return None
-    archetype = _pick_archetype(content, source, droppable, class_ids)
-    roll = source.randrange(max(1, rolls_of(content)))
+    wanted = tuple(class_ids)
+    archetype = _pick_archetype(content, source, droppable, wanted)
+    matches = [one for one in wanted if suits(content, archetype, (one,))]
+    profile = source.choice(matches) if matches else ""
+    roll = new_roll(content, source, archetype, class_id=profile)
 
-    relics = [rarity for rarity in content.rarities if rarity.scaling]
+    relics = [rarity for rarity in content.rarities if rarity.boss_only]
     if relics and source.random() < RELIC_CHANCE.get(rank, 0.0):
         return gear_id(archetype.id, tier.level, relics[0].id, roll)
 
-    sellable = [rarity for rarity in content.rarities if rarity.weight > 0]
+    sellable = [rarity for rarity in content.rarities if rarity.weight > 0 and not rarity.boss_only]
     if not sellable:
         return None
     heaviest = max(rarity.weight for rarity in sellable)
     weights = [
-        rarity.weight * (1.0 + rarity_bonus * RARITY_PULL * (1.0 - rarity.weight / heaviest))
+        rarity.weight
+        * max(0.0, 1.0 + rarity_bonus * RARITY_PULL * (1.0 - rarity.weight / heaviest))
         for rarity in sellable
     ]
     picked = source.choices(sellable, weights=weights, k=1)[0]

@@ -142,3 +142,4 @@ M01 уточняет границы ценностей в 0084; отметки, 
 - [ADR 0102 — Добровольный полный сброс персонажа](0102-voluntary-character-reset.md)
 - [ADR 0103 — Восстановление здоровья и два ресурса](0103-health-recovery-and-class-resources.md)
 - [ADR 0105 — Деревья талантов и подтверждённый переход](0105-talent-trees-and-confirmed-transition.md)
+- [ADR 0106 — Согласованное развитие, фиксированные вещи и сложность областей](0106-coherent-progression-fixed-gear-and-challenge.md)

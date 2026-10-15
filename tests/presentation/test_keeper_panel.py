@@ -732,7 +732,7 @@ def walk_to(panel: Panel, screen: ScreenId) -> Panel:
             return walked.press(labels.KEEPER_QUESTS_BTN.text)
         case ScreenId.KEEPER_QUEST:
             walked = walk_to(panel, ScreenId.KEEPER_QUESTS)
-            return walked.press(walked.button_with("Столбы на Тракте"))
+            return walked.press(walked.button_with("Сверка лугового обхода"))
         case ScreenId.KEEPER_BAG:
             walked = walk_to(panel, ScreenId.KEEPER_PLAYER)
             return walked.press(labels.KEEPER_BAG_BTN.text)
@@ -1078,7 +1078,7 @@ def _quests(with_players: Panel) -> Panel:
 
 def test_a_quest_is_forced_closed_then_removed_from_the_journal(with_players: Panel) -> None:
     card = _quests(with_players)
-    card.press(card.button_with("Столбы на Тракте"))
+    card.press(card.button_with("Сверка лугового обхода"))
     card.press(labels.KEEPER_QUEST_DONE.text)
     assert card.target is not None and card.target.quests.is_done("farhold_tallies")
 
@@ -1089,7 +1089,7 @@ def test_a_quest_is_forced_closed_then_removed_from_the_journal(with_players: Pa
 
 def test_a_quest_counter_is_set_by_a_typed_number(with_players: Panel) -> None:
     card = _quests(with_players)
-    card.press(card.button_with("Столбы на Тракте"))
+    card.press(card.button_with("Сверка лугового обхода"))
     card.press(labels.KEEPER_QUEST_COUNT.text, "3")
 
     assert card.target is not None and card.target.quests.progress("farhold_tallies") == 3

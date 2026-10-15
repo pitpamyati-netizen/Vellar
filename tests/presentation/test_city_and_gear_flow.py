@@ -126,7 +126,7 @@ def test_putting_on_a_thing_takes_it_out_of_the_bag(content: GameContent, hero: 
     assert worn.pending.character is not None
     assert worn.pending.character.equipment.item_in("body") == "medium_body@5#uncommon"
     assert worn.pending.items == (("medium_body@5#uncommon", -1),)
-    assert "надет" in worn.notice
+    assert worn.notice.startswith("Надето:")
 
 
 def test_what_it_replaces_goes_back_into_the_bag(content: GameContent, hero: Character) -> None:
@@ -230,7 +230,7 @@ def test_a_common_thing_gives_no_stats_and_says_nothing_about_them(
     assert "Прибавка от редкости" not in text
 
 
-def test_a_relic_says_that_it_grows_with_you(content: GameContent, hero: Character) -> None:
+def test_a_relic_names_its_fixed_item_level(content: GameContent, hero: Character) -> None:
     goods = Goods(gold=hero.gold, owned=(OwnedItem("charm@9#relic", 1),))
     inventory = step(content, hero, begin(hero), "Инвентарь", goods=goods)
     card = step(
@@ -242,7 +242,8 @@ def test_a_relic_says_that_it_grows_with_you(content: GameContent, hero: Charact
     )
     text = render(content, hero, card, world_seed=WORLD_SEED, goods=goods).text()
 
-    assert "растут вместе с вашим уровнем" in text
+    assert "Уровень вещи: 9; свойства закреплены за ней" in text
+    assert "растут вместе с вашим уровнем" not in text
 
 
 def test_the_character_sheet_names_the_blow_and_what_makes_it(
@@ -370,7 +371,7 @@ def test_a_potion_is_drunk_from_the_bag_and_only_when_it_helps(
         goods=goods,
     )
     assert drunk.pending.items == (("small_healing_potion", -1),)
-    assert "восстановлено" in drunk.notice
+    assert "Восстановлено" in drunk.notice
 
     whole = step(
         content,
@@ -442,6 +443,7 @@ def test_a_raised_rank_says_what_it_gave(content: GameContent, hero: Character) 
     skill = content.skill("warrior_rassechenie")
     ready = replace(
         hero,
+        level=100,
         unspent_skill_points=5,
         loadout=replace(
             hero.loadout,
@@ -735,7 +737,7 @@ def test_the_journal_lists_what_is_taken(content: GameContent, hero: Character) 
     journal = step(content, took, begin(took), "Задания")
     assert journal.screen is ScreenId.QUESTS
     text = render(content, took, journal, world_seed=WORLD_SEED).text()
-    assert "Столбы на Тракте: 0 из 3" in text
+    assert "Сверка лугового обхода: 0 из 3" in text
 
 
 def test_walking_away_from_a_contract_keeps_it_on_the_board(
@@ -803,7 +805,7 @@ def test_a_taken_contract_stays_on_the_board_with_its_count(
 
     again = step(content, holder, begin(holder), "Мир", "Таверна", "Доска заданий")
     text = render(content, holder, again, world_seed=WORLD_SEED).text()
-    assert "Столбы на Тракте — взято, 0 из 3" in text
+    assert "Сверка лугового обхода — взято, 0 из 3" in text
     assert "Взято отсюда: 1" in text
 
 

@@ -262,6 +262,16 @@ class QuestPayout:
 QUEST_REWARD_KEY = "quest_reward_percent"
 
 
+def reward_item_id(content: GameContent, character: Character, quest: Quest) -> str:
+    """Предмет в обещанной награде совпадает с предметом при выдаче."""
+    return gear_procgen.reward_gear_id(
+        content,
+        quest.reward_item,
+        class_id=character.class_id,
+        seed=f"quest-reward-v2:{quest.id}:{character.id}:{character.class_id}",
+    )
+
+
 def hand_in(content: GameContent, character: Character, quest: Quest) -> QuestPayout | None:
     """Закрыть досчитанное задание и заплатить за него. ``None``, если срок не подошёл."""
     log = character.quests
@@ -278,5 +288,5 @@ def hand_in(content: GameContent, character: Character, quest: Quest) -> QuestPa
         gold=gold,
         experience=earned(content, given, experience),
         level_up=level_up,
-        item_id=quest.reward_item,
+        item_id=reward_item_id(content, character, quest),
     )

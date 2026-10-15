@@ -69,6 +69,7 @@
 [meta]
 # Доля находок, подобранных под класс победителя.
 class_share = 0.85
+prefix_words = { STR = { m = "Могучий", f = "Могучая", n = "Могучее", p = "Могучие" }, AGI = { m = "Проворный", f = "Проворная", n = "Проворное", p = "Проворные" }, END = { m = "Стойкий", f = "Стойкая", n = "Стойкое", p = "Стойкие" }, INT = { m = "Чародейский", f = "Чародейская", n = "Чародейское", p = "Чародейские" }, WIS = { m = "Благословенный", f = "Благословенная", n = "Благословенное", p = "Благословенные" }, CHA = { m = "Величавый", f = "Величавая", n = "Величавое", p = "Величавые" }, LCK = { m = "Счастливый", f = "Счастливая", n = "Счастливое", p = "Счастливые" } }
 # Насколько дороже своего рода обходится недобранный порог характеристики.
 # Те же две цифры, что за чужой род (ADR 0064): точность и инициатива.
 requirement_accuracy_penalty = 4.0
@@ -236,7 +237,7 @@ class_restriction = "warrior"
 key = "physical_damage_percent"
 value = 14
 min_item_level = 46
-text = "Только воину: физический удар сильнее на 14 процентов."
+text = "Воину: физический урон увеличен на 14 процентов."
 
 [[class_affix]]
 id = "unbroken_line"
@@ -245,7 +246,7 @@ class_restriction = "warrior"
 key = "damage_taken_percent"
 value = -10
 min_item_level = 76
-text = "Только воину: удар по вам слабее на 10 процентов."
+text = "Воину: получаемый урон уменьшен на 10 процентов."
 
 [[class_affix]]
 id = "red_haze"
@@ -254,7 +255,7 @@ class_restriction = "barbarian"
 key = "wounded_target_damage_percent"
 value = 18
 min_item_level = 46
-text = "Только варвару: по раненому вы бьёте на 18 процентов сильнее."
+text = "Варвару: урон по раненой цели увеличен на 18 процентов."
 
 [[class_affix]]
 id = "unspent_wrath"
@@ -263,7 +264,7 @@ class_restriction = "barbarian"
 key = "lifesteal_percent"
 value = 9
 min_item_level = 76
-text = "Только варвару: девятая доля нанесённого возвращается вам."
+text = "Варвару: 9 процентов нанесённого урона возвращаются здоровьем."
 
 [[class_affix]]
 id = "borrowed_light"
@@ -272,7 +273,7 @@ class_restriction = "paladin"
 key = "healing_done_percent"
 value = 16
 min_item_level = 46
-text = "Только паладину: вы лечите на 16 процентов сильнее."
+text = "Паладину: ваши умения восстанавливают на 16 процентов больше здоровья."
 
 [[class_affix]]
 id = "standing_vow"
@@ -281,7 +282,7 @@ class_restriction = "paladin"
 key = "armor_percent"
 value = 12
 min_item_level = 76
-text = "Только паладину: брони на 12 процентов больше."
+text = "Паладину: броня увеличена на 12 процентов."
 
 [[class_affix]]
 id = "long_sighting"
@@ -290,7 +291,7 @@ class_restriction = "ranger"
 key = "single_target_damage_percent"
 value = 15
 min_item_level = 46
-text = "Только следопыту: по одиночной цели вы бьёте на 15 процентов сильнее."
+text = "Следопыту: урон атак по одной цели увеличен на 15 процентов."
 
 [[class_affix]]
 id = "read_ground"
@@ -299,7 +300,7 @@ class_restriction = "ranger"
 key = "accuracy_percent"
 value = 9
 min_item_level = 76
-text = "Только следопыту: точность выше на 9 процентов."
+text = "Следопыту: точность увеличена на 9 процентов."
 
 [[class_affix]]
 id = "quiet_opening"
@@ -308,7 +309,7 @@ class_restriction = "rogue"
 key = "crit_chance_percent"
 value = 7
 min_item_level = 46
-text = "Только разбойнику: решающий удар случается на 7 процентов чаще."
+text = "Разбойнику: вероятность решающего удара увеличена на 7 процентных пунктов."
 
 [[class_affix]]
 id = "one_breath"
@@ -317,7 +318,7 @@ class_restriction = "rogue"
 key = "crit_damage_percent"
 value = 30
 min_item_level = 76
-text = "Только разбойнику: решающий удар злее на 30 процентов."
+text = "Разбойнику: прибавка к урону решающего удара увеличена на 30 процентных пунктов."
 
 [[class_affix]]
 id = "clean_reckoning"
@@ -326,7 +327,7 @@ class_restriction = "mage"
 key = "magic_damage_percent"
 value = 15
 min_item_level = 46
-text = "Только магу: магический удар сильнее на 15 процентов."
+text = "Магу: магический урон увеличен на 15 процентов."
 
 [[class_affix]]
 id = "deep_well"
@@ -335,7 +336,7 @@ class_restriction = "mage"
 key = "cost_reduction_percent"
 value = 12
 min_item_level = 76
-text = "Только магу: умения стоят на 12 процентов дешевле."
+text = "Магу: умения расходуют на 12 процентов меньше маны."
 
 [[class_affix]]
 id = "steady_hands"
@@ -344,7 +345,7 @@ class_restriction = "cleric"
 key = "healing_done_percent"
 value = 18
 min_item_level = 46
-text = "Только жрецу: вы лечите на 18 процентов сильнее."
+text = "Жрецу: ваши умения восстанавливают на 18 процентов больше здоровья."
 
 [[class_affix]]
 id = "named_aloud"
@@ -353,7 +354,7 @@ class_restriction = "cleric"
 key = "resource_regen_percent"
 value = 16
 min_item_level = 76
-text = "Только жрецу: мана восстанавливается на 16 процентов быстрее."
+text = "Жрецу: за ход восстанавливается на 16 процентов больше маны."
 
 [[class_affix]]
 id = "slow_growth"
@@ -362,7 +363,7 @@ class_restriction = "druid"
 key = "regen_per_turn_percent"
 value = 3
 min_item_level = 46
-text = "Только друиду: каждый ход вам возвращается 3 процента здоровья."
+text = "Друиду: каждый ход восстанавливается 3 процента максимального здоровья."
 
 [[class_affix]]
 id = "old_compact"
@@ -371,4 +372,4 @@ class_restriction = "druid"
 key = "dot_damage_percent"
 value = 20
 min_item_level = 76
-text = "Только друиду: яд, горение и кровотечение от вас точат на 20 процентов сильнее."
+text = "Друиду: урон наложенных вами яда, горения и кровотечения увеличен на 20 процентов."

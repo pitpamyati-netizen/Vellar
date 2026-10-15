@@ -190,6 +190,10 @@ def test_three_compositions_finish_and_each_member_has_full_credit(content):
             result = probe(content, composition, trial)
             assert result["completed"] == 4, result
             assert result["full_participants"] == list(range(1, len(composition) + 1)), result
+            assert max(result["potions"]) <= 3, result
+            assert all(all(actions > 0 for actions in room) for room in result["room_actions"]), (
+                result
+            )
 
 
 @pytest.mark.parametrize("members", [1, 2, 5])

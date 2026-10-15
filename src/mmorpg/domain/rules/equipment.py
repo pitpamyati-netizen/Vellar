@@ -81,8 +81,7 @@ def armor_factor(armor: float, level: int) -> float:
 def worn_item(content: GameContent, item_id: str, hero_level: int = 0) -> Item | None:
     """Вещь такой, какая она на этом герое, или ``None``, если её больше нет.
 
-    Реликтовая вещь пересобирается по уровню героя: в этом вся её суть. Всё
-    остальное отдаётся как есть.
+    Любая вещь, включая реликтовую, сохраняет свою ступень при надевании.
     """
     if not content.has_item(item_id):
         return None

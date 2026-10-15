@@ -1523,8 +1523,8 @@ async def _settle_world(
     """Расчёт боя с миром: опыт, золото, добыча - и всё это делится на отряд.
 
     Новый бой использует единый фонд ADR 0093, прежний сохраняет деление ADR 0026.
-    Добыча раздаётся по кругу, чтобы собравший
-    отряд не забирал всё ценное только потому, что он первый в списке.
+    Подходящее снаряжение получает его класс; между подходящими участниками
+    очередь сохраняется. Номер бойца отличается от постоянного номера героя.
     """
     state = session.state
     if winners:
@@ -1535,6 +1535,8 @@ async def _settle_world(
             state.loot,
             tuple(one.character_id for one in winners),
             rng(derive(session.seed, "loot")),
+            content=content,
+            roster={character.id: character for character in roster.values()},
         )
         for index, one in enumerate(winners):
             character = updated[one.character_id]

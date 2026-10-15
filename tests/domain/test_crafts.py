@@ -202,7 +202,7 @@ def test_good_work_on_gear_comes_out_a_grade_rarer(content: GameContent, miner: 
 
 def test_a_relic_is_never_forged(content: GameContent, miner: Character) -> None:
     """Реликтовое берут с хозяина логова, а не куют: лестница качества туда не ведёт."""
-    relics = {rarity.id for rarity in content.rarities if rarity.scaling}
+    relics = {rarity.id for rarity in content.rarities if rarity.boss_only}
     top = content.craft_rules.quality("fine")
     for rarity in content.rarities:
         made = craft_rules.upgraded(content, f"sword@24#{rarity.id}", top, source=Random(1))

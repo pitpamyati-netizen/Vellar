@@ -136,7 +136,9 @@ def prepare_level(content: GameContent, character: Character, level: int) -> Cha
     candidates = [
         s
         for s in skills.teachable(content, character)
-        if s.is_active and not equipment.skill_refusal(content, character, s)
+        if s.is_active
+        and s.owner_kind is not OwnerKind.RACE
+        and not equipment.skill_refusal(content, character, s)
     ]
     while character.unspent_skill_points:
         available = [s for s in candidates if skills.learnable(content, character, s)]

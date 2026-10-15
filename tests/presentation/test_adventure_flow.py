@@ -821,7 +821,7 @@ async def test_a_contract_is_taken_counted_and_paid(
     await player.press("Мир")
     await player.press("Таверна")
     board = await player.press("Доска заданий")
-    assert "Столбы на Тракте" in board.text()
+    assert "Сверка лугового обхода" in board.text()
 
     quest = content.quest("farhold_tallies")
     offer = await player.press(f"{quest.name} — уровень {quest.level}, плата {quest.reward_gold}")
@@ -1075,12 +1075,18 @@ async def test_catalogue_route_runs_through_four_meetings_and_personal_quest(
 ) -> None:
     from scripts.m06_descent_report import prepared
 
-    from mmorpg.domain.entities.combat import ActionKind
+    from mmorpg.domain.entities.combat import ActionKind, BattleAction
+    from mmorpg.domain.entities.location import EnemyRole
     from mmorpg.domain.rules import combat as combat_rules
 
     monkeypatch.setattr(combat_handler.time, "time", lambda: 100)
     ready = replace(prepared(content, "warrior", argus.id), user_id=ACCOUNT, gold=1000)
     ready = replace(ready, quests=ready.quests.take("farhold_pump_house"))
+    assert ready.level == 15
+    assert all(
+        content.item(item_id).rarity == "common" and content.item(item_id).level <= ready.level
+        for item_id in ready.equipment.items.values()
+    )
     await characters.save(ready)
     await player.deps["inventory"].add(argus.id, "small_healing_potion", 3)
     await player.press("Мир")
@@ -1108,10 +1114,36 @@ async def test_catalogue_route_runs_through_four_meetings_and_personal_quest(
                 break
             current = await characters.get(argus.id)
             actor = session.state.active
-            action = combat_rules._chosen_by_engine(
-                content, {actor.id: current}, session.state, actor, session.seed
+            roster = {actor.id: current}
+            foes = session.state.visible_foes_of(actor.id)
+            # Объявленный лекарь погибает первым: удары по рудокопу он лечит.
+            # Затем убираем заклинателя с общим ударом, как советует разбор.
+            target = min(
+                foes,
+                key=lambda one: (
+                    {
+                        EnemyRole.HEALER: 0,
+                        EnemyRole.CASTER: 1,
+                    }.get(combat_rules.role_of(one), 2),
+                    one.health / one.max_health,
+                ),
             )
-            if actor.health < actor.max_health * 0.45 and await player.deps["inventory"].count(
+            if actor.focus != target.id:
+                before_choice = (session.state.round, actor.actions, actor.health, actor.resource)
+                await player.press(f"/цель {target.id}")
+                session = await store.load(data["battle"])
+                actor = session.state.active
+                assert actor.focus == target.id
+                assert (session.state.round, actor.actions, actor.health, actor.resource) == (
+                    before_choice
+                )
+            racial = BattleAction(ActionKind.RACIAL)
+            can_recover = (
+                combat_rules._refusal(content, roster, session.state, actor, racial) is None
+            )
+            if actor.health <= actor.max_health * 0.70 and can_recover:
+                result = await player.press("/раса")
+            elif actor.health < actor.max_health * 0.45 and await player.deps["inventory"].count(
                 argus.id, "small_healing_potion"
             ):
                 await player.press("/сумка")
@@ -1119,10 +1151,27 @@ async def test_catalogue_route_runs_through_four_meetings_and_personal_quest(
                     f"{content.item('small_healing_potion').name} — использовать"
                 )
             else:
+                # У подготовленного воина есть два оплаченных атакующих умения.
+                # Не используем провокацию без товарищей и не отдаём ход
+                # случайному выбору умения вместо доступного сильного удара.
+                action = BattleAction(ActionKind.ATTACK, target=target.id)
+                for code in ("warrior_rassechenie", "warrior_sekushchiy_roscherk"):
+                    slot = current.loadout.actives.index(code)
+                    candidate = BattleAction(ActionKind.SKILL, slot=slot, target=target.id)
+                    if (
+                        combat_rules._refusal(content, roster, session.state, actor, candidate)
+                        is None
+                    ):
+                        action = candidate
+                        break
                 result = await player.press(
-                    f"/умение {action.slot + 1}" if action.kind is ActionKind.SKILL else "Атака"
+                    f"/умение {action.slot + 1} {action.target}"
+                    if action.kind is ActionKind.SKILL
+                    else "Атака"
                 )
-            assert not result.text().startswith("Поражение."), result.text()
+            assert not result.text().startswith("Поражение."), (
+                f"Встреча {encounter.id}, seed={session.seed.hex()}: {result.text()}"
+            )
         else:
             pytest.fail("catalogue meeting did not end")
         after = await player.flow()
@@ -1144,6 +1193,7 @@ async def test_catalogue_route_runs_through_four_meetings_and_personal_quest(
     saved = await characters.get(argus.id)
     assert saved.quests.progress("farhold_pump_house") == 1
     assert saved.gold > ready.gold
+    assert 0 <= await player.deps["inventory"].count(argus.id, "small_healing_potion") <= 3
 
 
 async def test_leaving_a_descent_leaves_it_behind(

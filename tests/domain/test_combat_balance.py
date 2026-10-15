@@ -1,14 +1,8 @@
-"""Сколько длится бой и чего стоит хорошее решение.
+"""Проверка боёв законных полных и развивающихся сборок всех восьми классов.
 
-Это те числа, которые замысел обещает вслух: обычный бой — примерно три хода,
-эпический вдвое дольше, босс вчетверо, а игрок, читающий объявленные намерения,
-кончает раньше того, кто только жмёт «Атака». Здесь не проверяется ни одна
-формула — проверяется то ощущение, в которое формулы складываются, а это
-единственное, что игрок может почувствовать.
-
-Бои разыгрываются нарочно простым «толковым игроком»: бери самый сильный
-доступный удар, предпочитай тег, отвечающий объявленному намерению. Живой игрок
-сыграет лучше; если уж этот не укладывается в срок, значит, баланс неверен.
+Победы, незавершённые бои и неудачные начальные значения показываются явно.
+Старые помощники первых рангов сохранены для сравнений и построения основы
+персонажа; их исторические длины боя и потери HP не обещаются игроку.
 """
 
 from __future__ import annotations
@@ -50,62 +44,13 @@ from mmorpg.domain.rules.combat import (
     open_battle,
 )
 from mmorpg.domain.rules.skill_effects import EffectCategory, spec_for
-from mmorpg.domain.rules.stats import derived_stats, stat_allowance
+from mmorpg.domain.rules.stats import stat_allowance
 
-#: Бой, взятый по всей полосе уровней, а не только на тех уровнях, на которых случается
-#: играть разработчику.
+# Старые помощники используют эти контрольные уровни. Действующая матрица
+# законных сборок ниже отдельно задаёт восемь классов и шесть ступеней.
 LEVELS = (1, 10, 40, 90, 150)
 CLASSES = ("warrior", "rogue", "mage", "cleric")
 TRIALS = 20
-
-#: Что обещает замысел. Медиана - это договор; потолок лишь не даёт назвать откатом один
-#: неудачный бросок, а пол не даёт случиться откату обратному - бою, который кончился
-#: раньше, чем стал боем.
-#:
-#: Стало на ход больше: пока «лучшее оружие» бралось любой редкости, толковому
-#: игроку доставался реликтовый клинок, растущий по уровню героя, - и он ел
-#: обычный бой в три хода. С тех пор как редкость обычная (``armed``, ADR 0052),
-#: разбойник к середине пути открывает бой уходом в тень и лишь потом бьёт из-за
-#: спины: пять ходов - это его ступенчатый разгон на честном оружии, а не откат.
-ORDINARY_TURNS = 5
-ORDINARY_FLOOR = 2
-#: Потолок стал выше на два хода вместе с костями: урон теперь бросается, и один
-#: неудачный бой действительно бывает вдвое длиннее обычного. Медиана — вот
-#: договор; потолок только отделяет невезение от поломки, и хвост у распределения
-#: с костями честно длиннее, чем был у одного числа (ADR 0015).
-ORDINARY_CEILING = 10
-ELITE_FLOOR = 1.5
-BOSS_FLOOR = 2.5
-
-#: Обычный бой выигрывают, но он не бесплатен: как раз эта доля запаса здоровья и делает
-#: проход по локации чередой решений, а не формальностью. Сложено по классам - воин в
-#: латах тратит меньше мага, и в этом весь смысл лат.
-ORDINARY_HEALTH_COST = 0.07
-#: По скольким обычным боям подряд стоит мерить проход по локации: примерно столько и
-#: стоит между входом и выходом.
-RUN_LENGTH_FLOOR = 4
-#: Сколько таких пробегов меряется и какая их доля должна дойти до конца.
-#: Один пробег - это один сид, а один сид это не обещание: полгода он был
-#: единственным, и стоило костям лечь иначе, как «мага держит четыре боя»
-#: превращалось в «мага держал именно этот бой». Доля считается по всем классам
-#: разом - ровно потому же, почему по ним разом считается цена боя: латы и
-#: должны доходить чаще рясы, и вопрос только в том, доходит ли вылазка.
-RUN_TRIALS = 16
-RUN_SURVIVAL = 0.7
-#: Сколько боёв из двадцати обычный герой обязан выиграть. Не все двадцать: с
-#: тех пор как урон бросается костями (ADR 0015), а очередь решается инициативой
-#: (ADR 0021), у боя есть хвост - двое быстрых противников на хрупком классе
-#: складываются в проигрыш примерно раз в двадцать боёв. Обещание игры - «бой,
-#: который мир кладёт перед тобой, выигрывается», а не «выигрывается, что бы ни
-#: выпало»: второе значило бы, что бросок ничего не решает.
-ORDINARY_WINS = 0.95
-#: Насколько толковый выбор умения вправе ускорить бой. Он обязан платить
-#: (``test_playing_the_panel_well_shortens_the_fight``) и обязан остаться способом
-#: драться хорошо, а не единственным существующим боем.
-PANEL_CEILING = 2.25
-#: Насколько далеко могут стоять самый быстрый и самый медленный класс на боссе. Классу
-#: позволен характер; превращать одного и того же босса в другую игру ему не позволено.
-CLASS_SPREAD = 1.75
 
 
 def armed(
@@ -370,155 +315,172 @@ def sample(
     return [result.turns for result in trials(content, class_id, level, rank=rank, clever=clever)]
 
 
-# --- обещание ---------------------------------------------------------
+# --- действующая проверка законных сборок -----------------------------
+
+# Старые build/fight выше оставлены как контрольная модель первых рангов.
+# Она не обещает игроку определённое число ходов и не измеряет полный билд.
+PREPARED_CLASSES = ("warrior", "barbarian", "paladin", "ranger", "rogue", "mage", "cleric", "druid")
+PREPARED_LEVELS = (1, 10, 30, 60, 100, 150)
 
 
-@pytest.mark.parametrize("class_id", CLASSES)
-@pytest.mark.parametrize("level", LEVELS)
-def test_an_ordinary_fight_is_about_three_turns(
-    content: GameContent, class_id: str, level: int
+def _real_enemies(content: GameContent, class_id: str, level: int, rank: EnemyRank, trial: int):
+    from scripts.character_balance_report import SEED
+
+    seed = derive(SEED, class_id, level, rank.value, trial)
+    enemies = generate_group(
+        seed,
+        archetypes=content.enemy_archetypes,
+        biome="*",
+        level=level,
+        rank=rank,
+        elite_titles=content.elite_titles,
+    )
+    return seed, enemies
+
+
+@pytest.fixture(scope="module")
+def prepared_ordinary(content: GameContent):
+    from scripts.character_balance_report import developed, simulate
+
+    class Samples(dict):
+        def __missing__(self, key):
+            class_id, level, partial = key
+            character = developed(content, class_id, level, partial=partial)
+            measured = []
+            for trial in range(TRIALS):
+                seed, enemies = _real_enemies(content, class_id, level, EnemyRank.NORMAL, trial)
+                measured.append(simulate(content, {character.id: character}, enemies, seed))
+            self[key] = measured
+            return measured
+
+    return Samples()
+
+
+@pytest.mark.parametrize("class_id", PREPARED_CLASSES)
+@pytest.mark.parametrize("level", PREPARED_LEVELS)
+@pytest.mark.parametrize("partial", [False, True], ids=["prepared-common", "half-points-common"])
+def test_ordinary_encounters_are_passable_for_all_eight_classes(
+    prepared_ordinary, class_id: str, level: int, partial: bool
 ) -> None:
-    turns = sample(content, class_id, level, rank=EnemyRank.NORMAL)
-    median = statistics.median(turns)
-    assert ORDINARY_FLOOR <= median <= ORDINARY_TURNS, f"{class_id} at {level}: median {median}"
-    assert max(turns) <= ORDINARY_CEILING, f"{class_id} at {level}: worst {max(turns)} turns"
-
-
-@pytest.mark.parametrize("class_id", CLASSES)
-@pytest.mark.parametrize("level", LEVELS)
-def test_an_ordinary_fight_at_your_own_level_is_won(
-    content: GameContent, class_id: str, level: int
-) -> None:
-    """Бой, который выдаёт мир, - не подбрасывание монеты. Проигрывают тем ступеням,
-    которые сами объявляют себя долгими.
-    """
-    results = trials(content, class_id, level, rank=EnemyRank.NORMAL)
-    won = sum(1 for result in results if result.outcome is Verdict.VICTORY)
-    assert won >= ORDINARY_WINS * len(results), f"{class_id} at {level}: won {won}/{len(results)}"
-
-
-def test_the_long_tiers_are_the_only_long_fights(content: GameContent) -> None:
-    """Сложено по классам нарочно: ступени - это обещание об игре, а не о каком-то
-    одном классе, а отношение по классам поверх медиан из двух и трёх ходов -
-    арифметический шум.
-    """
-
-    def pooled(rank: EnemyRank) -> float:
-        turns = [turn for class_id in CLASSES for turn in sample(content, class_id, 40, rank=rank)]
-        return statistics.median(turns)
-
-    ordinary = pooled(EnemyRank.NORMAL)
-    elite = pooled(EnemyRank.ELITE)
-    boss = pooled(EnemyRank.BOSS)
-    assert elite >= ordinary * ELITE_FLOOR, f"epic {elite} against ordinary {ordinary}"
-    assert boss >= ordinary * BOSS_FLOOR, f"boss {boss} against ordinary {ordinary}"
-
-
-@pytest.mark.parametrize("level", LEVELS)
-def test_an_ordinary_fight_is_won_but_not_for_free(content: GameContent, level: int) -> None:
-    """Бой, который ничего не стоит, — это не бой, а кнопка.
-
-    Обычные противники когда-то отнимали примерно двадцатую часть запаса здоровья, и
-    локацию можно было пройти из конца в конец не задумываясь: раны, переживающие
-    бой, зелья и постели были украшением. Сложено по классам, потому что латам
-    *полагается* тратить меньше робы.
-    """
-    spent = [
-        result.health_spent
-        for class_id in CLASSES
-        for result in trials(content, class_id, level, rank=EnemyRank.NORMAL)
-    ]
-    median = statistics.median(spent)
-    assert median >= ORDINARY_HEALTH_COST, f"at {level}: an ordinary fight costs {median:.0%}"
-
-
-def _walk(content: GameContent, class_id: str, offset: int) -> tuple[bool, float]:
-    """Один проход по локации: бои подряд, ничего не выпито, постель не оплачена.
-
-    Возвращает, пройдена ли вылазка до конца и какая доля запаса здоровья осталась к
-    этой минуте.
-    """
-    character = build(content, class_id, 40)
-    stats = derived_stats(content, character)
-    for step in range(RUN_LENGTH_FLOOR):
-        result = fight(
-            content, character, rank=EnemyRank.NORMAL, trial=offset * RUN_LENGTH_FLOOR + step
-        )
-        if result.outcome is not Verdict.VICTORY:
-            return False, 0.0
-        character = character.with_health(result.health_left, stats.max_health)
-    return True, character.health / stats.max_health
-
-
-def test_wounds_add_up_over_a_run(content: GameContent) -> None:
-    """Раны переносятся, поэтому по локации идут, поглядывая на полосу здоровья.
-
-    Бой за боем, ничего не выпито и за постель не заплачено. Как далеко дойдёт
-    персонаж - его дело: латы проходят локацию целиком, а роба останавливается на
-    зелье посередине, - но вылазку проходят куда чаще, чем нет, и нетронутым из неё
-    не выходит никто.
-    """
-    walked = [
-        _walk(content, klass.id, offset)
-        for klass in content.classes
-        for offset in range(RUN_TRIALS)
-    ]
-    share = sum(1 for done, _ in walked if done) / len(walked)
-    assert share >= RUN_SURVIVAL, f"only {share:.0%} of runs are walked to the end"
-
-    left = [health for done, health in walked if done]
-    # «Нетронутым не выходит никто» - про правило, а не про каждый сид: с тех пор
-    # как напор объявленного противника выносит его броню и режет ответ вполсилы
-    # (ADR 0050), один пробег из сотни у самого хрупкого-и-быстрого класса
-    # случается идеальным. Договор держит медиана, а не единственный лучший бросок.
-    assert statistics.median(left) < 0.9, f"{RUN_LENGTH_FLOOR} fights and barely a scratch"
-    pristine = sum(health >= 1.0 for health in left)
-    assert pristine <= 1, "чаще одного идеального пробега - это уже не рана"
-
-
-def test_no_class_makes_a_boss_a_different_game(content: GameContent) -> None:
-    """Классам позволено ощущаться по-разному, но не быть разной длины.
-
-    Разбойник когда-то кончал босса вдвое быстрее, чем требовалось жрецу, и одно и то
-    же содержимое было десятиходовым боем для одного игрока и пятиходовым для
-    другого. Берётся с обоих концов полосы: разрыв был шире всего наверху, где крит
-    упирается в потолок.
-    """
-    for level in (10, 40, 90, 150):
-        medians = {
-            class_id: statistics.median(sample(content, class_id, level, rank=EnemyRank.BOSS))
-            for class_id in (klass.id for klass in content.classes)
-        }
-        fastest = min(medians.values())
-        slowest = max(medians.values())
-        assert slowest <= fastest * CLASS_SPREAD, f"at {level}: {medians}"
-
-
-@pytest.mark.parametrize("class_id", CLASSES)
-def test_playing_the_panel_well_shortens_the_fight(content: GameContent, class_id: str) -> None:
-    """Панель обязана платить: жать «Атаку» - это хуже, чем выбирать умение.
-
-    Обычные бои, где выигрывают оба игрока, чтобы сравнивались ходы, а не выживание:
-    игрок, погибший на четвёртом ходу, тоже «закончил» за четыре хода.
-
-    Потолок — вторая половина обещания: панель это то, как бой ведут хорошо, а не
-    единственный существующий бой. Если умения когда-нибудь станут стоить больше
-    всего остального вместе взятого, двигать надо содержимое, а не механику.
-    """
-    clever = sum(sample(content, class_id, 40, rank=EnemyRank.NORMAL))
-    plain = sum(sample(content, class_id, 40, rank=EnemyRank.NORMAL, clever=False))
-    assert clever < plain, f"{class_id}: {clever} turns played well vs {plain} turns of attacking"
-    assert clever * PANEL_CEILING >= plain, (
-        f"{class_id}: the panel alone is worth {plain / clever:.1f} fights"
+    """Порог выбран до измерений: первый уровень 95%, полная сборка 90%, неполная 80%."""
+    results = prepared_ordinary[class_id, level, partial]
+    required = 0.95 if level == 1 else 0.8 if partial else 0.9
+    won = sum(bool(one["won"]) for one in results)
+    failed = [index for index, one in enumerate(results) if not one["won"]]
+    assert won >= required * len(results), (
+        f"{class_id}, level={level}, partial={partial}: {won}/{len(results)} wins; "
+        f"failed seeds={failed}, required={required:.0%}"
+    )
+    assert not any(one["unfinished"] for one in results), (
+        f"{class_id}, level={level}, partial={partial}: battle exceeded 80 player commands"
     )
 
 
+@pytest.mark.parametrize("level", PREPARED_LEVELS)
+def test_ordinary_encounters_have_measured_pressure_and_real_resource_spend(
+    prepared_ordinary, level: int
+) -> None:
+    """Барьер и восстановление могут вернуть полное HP; проверяем действительный урон и расход."""
+    results = [
+        one for class_id in PREPARED_CLASSES for one in prepared_ordinary[class_id, level, False]
+    ]
+    assert sum(one["received_damage"] for one in results) > 0
+    assert sum(one["used_resource"] for one in results) > 0
+    assert all(0 <= one["minimum_health_ratio"] <= 1 for one in results)
+
+
+@pytest.mark.parametrize("level", (1, 30, 100, 150))
+def test_stronger_ranks_have_more_health_armor_and_total_threat(
+    content: GameContent, level: int
+) -> None:
+    """Сравнивается одна порода: сильная ступень требует больше урона и выдерживает больше атак."""
+    enemies = [
+        generate_enemy(
+            derive(b"rank-comparison", level),
+            archetypes=(content.enemy_archetypes[0],),
+            biome=content.enemy_archetypes[0].biomes[0],
+            level=level,
+            rank=rank,
+            elite_titles=content.elite_titles,
+        )
+        for rank in (EnemyRank.NORMAL, EnemyRank.ELITE, EnemyRank.BOSS)
+    ]
+    assert enemies[0].max_health < enemies[1].max_health < enemies[2].max_health
+    assert enemies[0].armor <= enemies[1].armor <= enemies[2].armor
+    threat = [one.max_health * one.damage for one in enemies]
+    assert threat[0] < threat[1] < threat[2]
+    assert enemies[0].gold < enemies[1].gold < enemies[2].gold
+
+
+@pytest.mark.parametrize(
+    "class_ids", [("warrior", "mage", "cleric"), ("barbarian", "rogue", "druid")]
+)
+@pytest.mark.parametrize("level", PREPARED_LEVELS)
+def test_three_prepared_heroes_can_defeat_a_boss(
+    content: GameContent, class_ids: tuple[str, ...], level: int
+) -> None:
+    """Групповой ориентир: не менее 19 побед из 20; одиночный босс не обещан всем классам."""
+    from scripts.character_balance_report import SEED, developed, simulate
+
+    roster = {
+        index: replace(developed(content, class_id, level), id=index, user_id=index)
+        for index, class_id in enumerate(class_ids, 1)
+    }
+    results = []
+    for trial in range(TRIALS):
+        seed = derive(SEED, "party", level, trial)
+        enemies = generate_group(
+            seed,
+            archetypes=content.enemy_archetypes,
+            biome="*",
+            level=level,
+            rank=EnemyRank.BOSS,
+            elite_titles=content.elite_titles,
+        )
+        results.append(simulate(content, roster, enemies, seed, limit=240))
+    won = sum(bool(one["won"]) for one in results)
+    failed = [index for index, one in enumerate(results) if not one["won"]]
+    assert won >= 0.95 * len(results), (
+        f"{class_ids}, level={level}: {won}/{len(results)} wins; failed seeds={failed}"
+    )
+    assert not any(one["unfinished"] for one in results)
+
+
+@pytest.mark.parametrize("class_id", PREPARED_CLASSES)
+def test_using_learned_skills_improves_a_real_build(content: GameContent, class_id: str) -> None:
+    """Один законный герой и одни противники: учитываются победы, затем скорость общих побед."""
+    from unittest.mock import patch
+
+    from scripts.character_balance_report import developed, simulate
+
+    character = developed(content, class_id, 60)
+    clever, plain = [], []
+    for trial in range(TRIALS):
+        seed, enemies = _real_enemies(content, class_id, 60, EnemyRank.NORMAL, trial)
+        clever.append(simulate(content, {character.id: character}, enemies, seed))
+        with patch(
+            "scripts.character_balance_report.action_for",
+            return_value=BattleAction(kind=ActionKind.ATTACK),
+        ):
+            plain.append(simulate(content, {character.id: character}, enemies, seed))
+    wins = sum(bool(one["won"]) for one in clever)
+    plain_wins = sum(bool(one["won"]) for one in plain)
+    assert wins >= plain_wins, f"{class_id}: panel wins={wins}, attacking wins={plain_wins}"
+    paired = [
+        (left, right)
+        for left, right in zip(clever, plain, strict=True)
+        if left["won"] and right["won"]
+    ]
+    assert wins > plain_wins or (
+        paired
+        and statistics.median(left["actions"] for left, _ in paired)
+        < statistics.median(right["actions"] for _, right in paired)
+    ), f"{class_id}: panel gives neither more wins nor faster paired victories"
+
+
 @pytest.mark.parametrize("level", (1, 40, 150))
-def test_a_skill_always_beats_a_plain_attack(content: GameContent, level: int) -> None:
-    """Тот откат, с которого всё началось: сила умения была в содержимом плоским
-    числом, пока обычная атака росла с уровнем, — и к тридцатому уровню всякое
-    умение в игре было хуже нажатия «Атака».
-    """
+def test_a_damage_skill_keeps_a_useful_base_power(content: GameContent, level: int) -> None:
+    """Рост обычной атаки не превращает навык в слабый плоский удар."""
     character = build(content, "warrior", level)
     blow = blow_of(content, character)
     for code in character.loadout.equipped_actives():

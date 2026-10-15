@@ -546,6 +546,9 @@ class Item:
     #: Именной аффикс класса, если вещь его несёт (ADR 0071). Выведен из имени
     #: вещи, как всё остальное; классом решается лишь то, работает ли он.
     class_affix_id: str = ""
+    #: Свойства нового поколения; старые оттиски сохраняют прежнюю сборку.
+    prefixes: tuple[str, ...] = ()
+    suffixes: tuple[str, ...] = ()
 
     @property
     def is_equipment(self) -> bool:
@@ -723,6 +726,7 @@ class LootRules:
     requirement_accuracy_penalty: float = 0.0
     requirement_initiative_penalty: float = 0.0
     requirement_step: int = 20
+    prefix_words: Mapping[str, Mapping[str, str]] = field(default_factory=dict)
 
     def shortfall_steps(self, short: int) -> float:
         """Во сколько цен обходится недобор в ``short`` очков.
@@ -783,8 +787,7 @@ class Rarity:
     Редкость решает, сколько у вещи аффиксов: обычная не несёт ни одного,
     необычная один, редкая два, легендарная три, реликтовая четыре, и у двух
     старших один из аффиксов - особое свойство в полную силу (ADR 0059).
-    Числа реликтовой считаются от уровня героя, а не от уровня вещи, поэтому
-    она растёт вместе с ним.
+    Числа каждой редкости закреплены за собственной ступенью вещи.
     """
 
     id: str
@@ -795,8 +798,14 @@ class Rarity:
     affixes: int = 0
     #: Есть ли среди них особое свойство - аффикс полной силы.
     special: bool = False
-    #: Считать ли числа вещи от уровня героя, а не от уровня самой вещи.
+    #: Устаревшее поле содержимого. Рост вещей от уровня героя отключён.
     scaling: bool = False
+    #: Редкость не продаётся и выпадает только с хозяина логова или за цепочку.
+    boss_only: bool = False
+    #: Число префиксов-характеристик у новых оттисков.
+    prefixes: int = 0
+    #: Число суффиксов-процентов у новых оттисков, без особого свойства.
+    suffixes: int = 0
     #: Чем имя вещи этой редкости отличается от обычной: «редкой работы». Кнопки
     #: в списке различаются только текстом.
     mark: str = ""
@@ -1022,6 +1031,9 @@ class ProgressionRules:
     #: Чего стоит ранг умения. Одно число на все ранги: ранг платит тем, что
     #: умение делает, а не тем, чего он стоит (ADR 0067).
     rank_cost: int
+    #: Уровень героя для каждого нового ранга. Отсутствующее поле старого
+    #: снимка получает базовый набор порогов без изменения персонажа.
+    rank_unlock_levels: tuple[int, ...] = (1, 10, 30, 60, 100)
     health_recovery_base_percent: float = 5.0
     health_recovery_endurance_percent: float = 20.0
     health_recovery_endurance_softener: float = 100.0
@@ -1306,6 +1318,10 @@ class GameContent:
         forged = self._assemble(self, item_id) if self._assemble is not None else None
         if forged is None:
             raise KeyError(item_id)
+        # Новые оттиски дают много вариантов. Кэш не хранит имущество: удаление
+        # старой записи лишь заставит повторить ту же чистую сборку по ID.
+        if len(self._forged) >= 8192:
+            self._forged.pop(next(iter(self._forged)))
         self._forged[item_id] = forged
         return forged
 

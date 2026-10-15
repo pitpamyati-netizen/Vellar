@@ -241,10 +241,11 @@ def class_details_screen(content: GameContent, class_id: str) -> Screen:
             *(tactic_rules.description(one) for one in klass.tactics),
             f"Ключевые характеристики: {key_stats}. Очки идут прежде всего в них.",
             own_gear_line(content, class_id),
-            f"Ресурс: {klass.resource.name}. Умения тратят его, и он копится сам.",
+            f"Боевой ресурс: {klass.resource.name}. "
+            "Он тратится на умения и восстанавливается в бою.",
             f"Умений у класса {len(owned)}: боевых {active}, пассивных {len(owned) - active}. "
-            "В панель встанут шесть боевых, и этот выбор — ваш почерк в бою; "
-            "пассивные слота не занимают, изученное работает.",
+            f"В панели помещается боевых умений: {content.rules.active_slots}. "
+            "Изученные пассивные умения действуют без слота.",
         ),
     )
 

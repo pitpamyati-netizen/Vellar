@@ -137,9 +137,17 @@ def passive_power_words(content: GameContent, skill: Skill, rank: int) -> str:
 def mastery_words(content: GameContent, character: Character, skill: Skill) -> str:
     """Чему умение научено. Пусто - ничему пока (``rules/skill_mastery``)."""
     taken = skill_rules.taken_masteries(character, skill)
+    conflicts = mastery_rules.conflicted_tiers(skill, character.loadout.masteries_of(skill.code))
+    warning = (
+        "Сохранённые грани одной ступени несовместимы и не действуют. "
+        "Разберите умение у наставника, чтобы выбрать заново."
+        if conflicts
+        else ""
+    )
     if not taken:
-        return ""
-    return "Грань: " + "; ".join(f"{one.name} — {mastery_rules.words(one)}" for one in taken)
+        return warning
+    said = "Грань: " + "; ".join(f"{one.name} — {mastery_rules.words(one)}" for one in taken)
+    return f"{said} {warning}".strip()
 
 
 def mastery_call(content: GameContent, character: Character, skill: Skill) -> str:
@@ -177,14 +185,16 @@ def rank_offer(content: GameContent, character: Character, skill: Skill) -> str:
     места нет, она отдаётся Telegram обрезанной.
     """
     rules = content.rules
+    required = skill_rules.next_rank_level(content, character, skill)
+    opening = f"Следующее вложение доступно с уровня {required}." if required is not None else ""
     if not skill_rules.is_known(character, skill.code):
         if skill_rules.fork_taken(content, character, skill) is not None:
             return ""
         # Пассивка объявляет свою прибавку числом: без него «одно очко» покупает
         # строку, а не силу.
         if not skill.is_active:
-            return f"Одно очко даст {passive_power_words(content, skill, 1)}."
-        return "За одно очко: " + active_power_words(content, character, skill, 1) + "."
+            return f"Одно очко даст {passive_power_words(content, skill, 1)}. {opening}"
+        return "За одно очко: " + active_power_words(content, character, skill, 1) + f". {opening}"
     rank = character.loadout.rank_of(skill.code)
     # Ранг, купленный и не потраченный на выбор, - это очко, лежащее без дела, и
     # зовёт потратить его ``mastery_call``: два зова подряд сказали бы одно и то же.
@@ -198,6 +208,8 @@ def rank_offer(content: GameContent, character: Character, skill: Skill) -> str:
             )
         else:
             said.append("Высший ранг.")
+        if opening:
+            said.append(opening)
         return " ".join(said)
     if gained := rank_gain_words(rank, skill, content):
         said.append(f"Ранг {rank} даёт: {gained}.")
@@ -209,6 +221,7 @@ def rank_offer(content: GameContent, character: Character, skill: Skill) -> str:
         # шесть» вместо «плюс пяти», обязано быть названо до нажатия, а не после.
         grown = passive_power_words(content, skill, rank + 1)
         said.append(f"Следующий за {cost} даст {grown}.")
+        said.append(opening)
     return " ".join(said)
 
 
@@ -228,6 +241,14 @@ def active_power_words(content: GameContent, character: Character, skill: Skill,
 
 def refusal(content: GameContent, character: Character, skill: Skill) -> str:
     """Почему очко не легло. Отказ обязан называть причину, а не просто случиться."""
+    if not skill_rules.belongs_to(content, character, skill):
+        return "Это умение другого класса, расы или невыбранной специализации."
+    required = skill_rules.next_rank_level(content, character, skill)
+    if required is not None and character.level < required:
+        return (
+            f"Следующий ранг умения «{skill.name}» доступен с уровня {required}. "
+            f"Ваш уровень: {character.level}. Очки сохранены."
+        )
     if skill_rules.is_known(character, skill.code):
         if character.loadout.rank_of(skill.code) >= content.rules.max_rank:
             return f"{skill.name} уже на высшем ранге."
@@ -355,6 +376,9 @@ def skills_screen(
     lead = [
         notice or f"Умения. Очков умений: {character.unspent_skill_points}.",
         f"Ваш уровень: {character.level}. Пассивные умения слотов не занимают.",
+        f"Ранги с 1 по {content.rules.max_rank} открываются на уровнях "
+        f"{', '.join(str(level) for level in content.rules.rank_unlock_levels)}. "
+        "Первый ранг также требует уровня самого умения.",
         spent_line(content, character),
     ]
     if not character.unspent_skill_points:
@@ -377,6 +401,14 @@ def slot_label(content: GameContent, character: Character, slot: int) -> Label:
     """Кнопка слота несёт свой номер и то, что в нём лежит."""
     code = character.loadout.actives[slot]
     name = content.skill(code).name if code and content.has_skill(code) else EMPTY_SLOT
+    if code and content.has_skill(code):
+        skill = content.skill(code)
+        if (
+            not skill.is_active
+            or skill.owner_kind not in {OwnerKind.CLASS, OwnerKind.SUBCLASS}
+            or not skill_rules.usable(content, character, skill)
+        ):
+            name += " (недоступно)"
     return label(f"Боевой слот {slot + 1}: {name}")
 
 
@@ -389,6 +421,12 @@ def slots_screen(content: GameContent, character: Character, notice: str = "") -
         if racial_code and content.has_skill(racial_code)
         else EMPTY_SLOT
     )
+    if (
+        racial_code
+        and content.has_skill(racial_code)
+        and not skill_rules.belongs_to(content, character, content.skill(racial_code))
+    ):
+        racial += " (недоступно)"
     working = skill_rules.known_passives(content, character)
     lines = [
         *head("Слоты умений.", notice),

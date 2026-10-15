@@ -153,7 +153,7 @@ def test_taking_a_thing_apart_gives_material_back(
     )
     made = salvage_rules.yield_of(content, item)
     assert state.pending.items == ((SPARE, -1), *made)
-    assert "разобран" in state.notice
+    assert state.notice.startswith("Разобрано:")
 
 
 def test_the_forge_never_takes_apart_what_is_worn(

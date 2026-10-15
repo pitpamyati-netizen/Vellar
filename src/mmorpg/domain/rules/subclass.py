@@ -47,13 +47,27 @@ def taken(content: GameContent, character: Character) -> tuple[Subclass, ...]:
     вычеркнули из ``subclasses.toml``, здесь просто не появляется, а не роняет
     экран. По той же причине сюда не попадает ветка чужого класса.
     """
-    found = [
-        content.subclass(one)
+    found = {
+        one: content.subclass(one)
         for one in character.subclass_ids
-        if content.has_subclass(one) and content.subclass(one).class_id == character.class_id
-    ]
-    found.sort(key=lambda one: (one.tier, one.id))
-    return tuple(found)
+        if content.has_subclass(one)
+        and content.subclass(one).class_id == character.class_id
+        and content.subclass(one).level <= character.level
+    }
+    # Читаем только одну непрерывную дорогу. Две разные ветки одной ступени,
+    # пропущенный предок и чужой родитель не складывают силу. Исходные коды
+    # остаются в сохранении; повтор одной записи не даёт вторую прибавку.
+    road: list[Subclass] = []
+    for tier in content.subclass_tiers(character.class_id):
+        choices = [one for one in found.values() if one.tier == tier]
+        if len(choices) != 1:
+            break
+        one = choices[0]
+        parent = road[-1].id if road else ""
+        if one.parent != parent:
+            break
+        road.append(one)
+    return tuple(road)
 
 
 def taken_at(content: GameContent, character: Character, tier: int) -> Subclass | None:

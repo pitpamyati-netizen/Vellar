@@ -51,8 +51,8 @@ def party_screen(view: PartyView, notice: str = "") -> Screen:
         for index, name in enumerate(view.members):
             lines.append(f"{name} — собрал отряд." if index == 0 else f"{name}.")
         lines.append(
-            "Бой у отряда общий, а опыт и золото делятся поровну: впятером ходят ради "
-            "боя, который в одиночку не берётся."
+            "Отряд сражается в общем бою. Опыт и золото делятся между участниками; "
+            "награда за полный спуск требует действий в каждой встрече."
         )
         rows.append((labels.PARTY_INVITE,))
         if len(view.members) > 1:
@@ -61,8 +61,8 @@ def party_screen(view: PartyView, notice: str = "") -> Screen:
     else:
         lines.append("Вы идёте один.")
         lines.append(
-            "Отряд — это те, с кем вы ходите вместе: подземелья, спуски и всё, что "
-            "к ним прирастёт. Мест в отряде нет, каждый дерётся своим."
+            "Соберите попутчиков для общих боёв и спусков в подземелья. "
+            "Каждый управляет своим героем и выбирает действия сам."
         )
         lines.append(f"Помещается в отряд: {MAX_MEMBERS} человек.")
         rows.append((labels.PARTY_CREATE,))

@@ -266,7 +266,7 @@ def test_rank_keeps_the_existing_duration_of_every_facet(content):
                     masteries={skill.code: (facet.code,)},
                 ),
             )
-            original = skill_mastery.applied(skill, spec_for(skill.effect), (facet.code,))
+            original = skill_mastery.applied(skill, spec_for(skill.effect), (facet.code,), rank=5)
             previous = skills.at_rank(original, 5, 0)
             current = skills.effective_spec(content, character, skill)
             assert (current.duration, current.dot_turns, current.barrier_turns) == (

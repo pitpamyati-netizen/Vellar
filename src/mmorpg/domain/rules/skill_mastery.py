@@ -49,6 +49,7 @@ from mmorpg.domain.rules.skill_effects import (
     Inflict,
     ModifierSpec,
 )
+from mmorpg.domain.rules.wording import percentage, percentage_points
 
 #: Ранги, на которых умение спрашивает, чему оно научилось. Третий и пятый:
 #: первый ранг - это само умение, а на втором и четвёртом игрок ещё копит.
@@ -295,14 +296,14 @@ WAYS: tuple[Way, ...] = (
         shapes=_STRIKING,
         low=20,
         high=60,
-        words=lambda a: f"Удар не считает {_n(a)} процентов брони цели.",
+        words=lambda a: f"Удар игнорирует {percentage(a)} брони цели.",
         change=lambda spec, a: replace(spec, pierce=min(1.0, spec.pierce + a / 100.0)),
     ),
     Way(
         code="sure",
         tier=1,
         shapes=_STRIKING,
-        words=lambda a: "От удара нельзя уклониться: цель его принимает или отвечает.",
+        words=lambda a: "Удар не может промахнуться; уклонение цели не действует.",
         change=lambda spec, a: replace(spec, always_hits=True),
     ),
     Way(
@@ -311,7 +312,7 @@ WAYS: tuple[Way, ...] = (
         shapes=_STRIKING,
         low=10,
         high=35,
-        words=lambda a: f"{_n(a)} процентов нанесённого возвращаются вам здоровьем.",
+        words=lambda a: f"{percentage(a)} нанесённого возвращаются вам здоровьем.",
         change=lambda spec, a: replace(spec, lifesteal=spec.lifesteal + a / 100.0),
     ),
     Way(
@@ -320,7 +321,7 @@ WAYS: tuple[Way, ...] = (
         shapes=_STRIKING,
         low=8,
         high=30,
-        words=lambda a: f"Крит этим умением случается на {_n(a)} процентов чаще.",
+        words=lambda a: f"Шанс критического удара этим умением выше на {percentage_points(a)}.",
         change=lambda spec, a: replace(spec, crit_bonus=spec.crit_bonus + a),
     ),
     Way(
@@ -329,7 +330,7 @@ WAYS: tuple[Way, ...] = (
         shapes=_STRIKING,
         low=10,
         high=35,
-        words=lambda a: f"Удар сильнее на {_n(a)} процентов.",
+        words=lambda a: f"Удар сильнее на {percentage(a)}.",
         change=lambda spec, a: replace(spec, damage_scale=spec.damage_scale * (1.0 + a / 100.0)),
     ),
     Way(
@@ -338,7 +339,7 @@ WAYS: tuple[Way, ...] = (
         shapes=frozenset({Shape.STRIKE}),
         low=15,
         high=45,
-        words=lambda a: f"Соседу цели достаётся {_n(a)} процентов удара.",
+        words=lambda a: f"Соседу цели достаётся {percentage(a)} удара.",
         change=lambda spec, a: replace(spec, splash=spec.splash + a / 100.0),
     ),
     Way(
@@ -359,7 +360,7 @@ WAYS: tuple[Way, ...] = (
         shapes=frozenset({Shape.OVER_TIME}),
         low=25,
         high=80,
-        words=lambda a: f"То, что точит цель каждый ход, точит на {_n(a)} процентов сильнее.",
+        words=lambda a: f"То, что точит цель каждый ход, точит на {percentage(a)} сильнее.",
         change=lambda spec, a: replace(spec, dot_scale=spec.dot_scale * (1.0 + a / 100.0)),
     ),
     Way(
@@ -375,7 +376,7 @@ WAYS: tuple[Way, ...] = (
         shapes=_ANY,
         low=5,
         high=18,
-        words=lambda a: f"Вдобавок ставит вам барьер на {_n(a)} процентов здоровья.",
+        words=lambda a: f"Вдобавок ставит вам барьер на {percentage(a)} здоровья.",
         change=lambda spec, a: replace(spec, bonus_barrier=spec.bonus_barrier + a),
     ),
     Way(
@@ -384,7 +385,7 @@ WAYS: tuple[Way, ...] = (
         shapes=_ANY,
         low=5,
         high=18,
-        words=lambda a: f"Вдобавок лечит вас на {_n(a)} процентов здоровья.",
+        words=lambda a: f"Вдобавок лечит вас на {percentage(a)} здоровья.",
         change=lambda spec, a: replace(spec, bonus_heal=spec.bonus_heal + a),
     ),
     Way(
@@ -394,7 +395,7 @@ WAYS: tuple[Way, ...] = (
         low=20,
         high=55,
         words=lambda a: (
-            f"{_turns(SHORT_TURNS)} ваша инициатива выше на {_n(a)} процентов: вы ходите раньше."
+            f"{_turns(SHORT_TURNS)} ваша инициатива выше на {percentage(a)}: вы ходите раньше."
         ),
         change=lambda spec, a: _self_mod(spec, "initiative_percent", a, SHORT_TURNS),
     ),
@@ -404,7 +405,7 @@ WAYS: tuple[Way, ...] = (
         shapes=_ANY,
         low=10,
         high=30,
-        words=lambda a: f"{_turns(HELD_TURNS)} ваш урон выше на {_n(a)} процентов.",
+        words=lambda a: f"{_turns(HELD_TURNS)} ваш урон выше на {percentage(a)}.",
         change=lambda spec, a: _self_mod(spec, "damage_percent", a),
     ),
     Way(
@@ -413,7 +414,7 @@ WAYS: tuple[Way, ...] = (
         shapes=_ANY,
         low=10,
         high=35,
-        words=lambda a: f"{_turns(HELD_TURNS)} ваша броня выше на {_n(a)} процентов.",
+        words=lambda a: f"{_turns(HELD_TURNS)} ваша броня выше на {percentage(a)}.",
         change=lambda spec, a: _self_mod(spec, "armor_percent", a),
     ),
     Way(
@@ -422,7 +423,7 @@ WAYS: tuple[Way, ...] = (
         shapes=_ANY,
         low=10,
         high=30,
-        words=lambda a: f"{_turns(HELD_TURNS)} вы уклоняетесь на {_n(a)} процентов чаще.",
+        words=lambda a: f"{_turns(HELD_TURNS)} шанс уклонения выше на {percentage_points(a)}.",
         change=lambda spec, a: _self_mod(spec, "dodge_percent", a),
     ),
     Way(
@@ -432,7 +433,7 @@ WAYS: tuple[Way, ...] = (
         low=15,
         high=40,
         words=lambda a: (
-            f"{_turns(SHORT_TURNS)} цель промахивается чаще: точность ниже на {_n(a)} процентов."
+            f"{_turns(SHORT_TURNS)} цель промахивается чаще: точность ниже на {percentage(a)}."
         ),
         change=lambda spec, a: _target_mod(spec, "accuracy_percent", -a),
     ),
@@ -442,7 +443,7 @@ WAYS: tuple[Way, ...] = (
         shapes=_HURTING,
         low=15,
         high=35,
-        words=lambda a: f"{_turns(SHORT_TURNS)} цель бьёт слабее на {_n(a)} процентов.",
+        words=lambda a: f"{_turns(SHORT_TURNS)} цель бьёт слабее на {percentage(a)}.",
         change=lambda spec, a: _target_mod(spec, "damage_percent", -a),
     ),
     Way(
@@ -452,7 +453,7 @@ WAYS: tuple[Way, ...] = (
         low=15,
         high=45,
         words=lambda a: (
-            f"{_turns(SHORT_TURNS)} цель ходит позже: инициатива ниже на {_n(a)} процентов."
+            f"{_turns(SHORT_TURNS)} цель ходит позже: инициатива ниже на {percentage(a)}."
         ),
         change=lambda spec, a: _target_mod(spec, "initiative_percent", -a),
     ),
@@ -491,7 +492,7 @@ WAYS: tuple[Way, ...] = (
         shapes=frozenset({Shape.MENDING, Shape.WARD}),
         low=1,
         high=3,
-        words=lambda a: f"Вдобавок снимает с вас {_n(a)} беды.",
+        words=lambda a: f"Снимает отрицательные эффекты; предел — {_n(a)}.",
         change=lambda spec, a: replace(spec, cleanse_count=spec.cleanse_count + int(a)),
     ),
     # ============ ступень вторая: пятый ранг ============
@@ -501,7 +502,7 @@ WAYS: tuple[Way, ...] = (
         shapes=frozenset({Shape.STRIKE}),
         low=40,
         high=75,
-        words=lambda a: f"Бьёт всю стаю разом, но каждого — на {_n(a)} процентов удара.",
+        words=lambda a: f"Бьёт всю стаю разом, но каждого — на {percentage(a)} удара.",
         change=lambda spec, a: replace(spec, aoe=True, damage_scale=spec.damage_scale * a / 100.0),
     ),
     Way(
@@ -510,7 +511,7 @@ WAYS: tuple[Way, ...] = (
         shapes=frozenset({Shape.SWEEP}),
         low=30,
         high=70,
-        words=lambda a: f"Бьёт одну цель вместо всех, зато сильнее на {_n(a)} процентов.",
+        words=lambda a: f"Бьёт одну цель вместо всех, зато сильнее на {percentage(a)}.",
         change=lambda spec, a: replace(
             spec, aoe=False, damage_scale=spec.damage_scale * (1.0 + a / 100.0)
         ),
@@ -521,7 +522,7 @@ WAYS: tuple[Way, ...] = (
         shapes=frozenset({Shape.STRIKE}),
         low=55,
         high=75,
-        words=lambda a: f"Бьёт лишний раз, и каждый удар — {_n(a)} процентов прежнего.",
+        words=lambda a: f"Бьёт лишний раз, и каждый удар — {percentage(a)} прежнего.",
         change=lambda spec, a: replace(
             spec, hits=spec.hits + 1, damage_scale=spec.damage_scale * a / 100.0
         ),
@@ -533,7 +534,7 @@ WAYS: tuple[Way, ...] = (
         low=40,
         high=90,
         words=lambda a: (
-            f"Чем меньше здоровья у цели, тем сильнее удар: у почти павшей — на {_n(a)} процентов."
+            f"Чем меньше здоровья у цели, тем сильнее удар: у почти павшей — на {percentage(a)}."
         ),
         change=lambda spec, a: replace(spec, execute_scaling=spec.execute_scaling + a / 100.0),
     ),
@@ -555,14 +556,14 @@ WAYS: tuple[Way, ...] = (
         code="spread",
         tier=2,
         shapes=_KEEPING,
-        words=lambda a: "Ложится на весь отряд, а не на вас одного.",
+        words=lambda a: "Действует на весь ваш отряд.",
         change=lambda spec, a: spec if spec.aoe else replace(spec, aoe=True),
     ),
     Way(
         code="contagion",
         tier=2,
         shapes=frozenset({Shape.OVER_TIME, Shape.BANE}),
-        words=lambda a: "Ложится на всю стаю, а не на одну цель.",
+        words=lambda a: "Действует на всех противников.",
         change=lambda spec, a: spec if spec.aoe else replace(spec, aoe=True),
     ),
     Way(
@@ -571,7 +572,7 @@ WAYS: tuple[Way, ...] = (
         shapes=_HURTING,
         low=15,
         high=45,
-        words=lambda a: f"Вдобавок ломает цели броню на {_n(a)} процентов, {_turns(HELD_TURNS)}.",
+        words=lambda a: f"Вдобавок ломает цели броню на {percentage(a)}, {_turns(HELD_TURNS)}.",
         change=lambda spec, a: _target_mod(spec, "armor_percent", -a, HELD_TURNS),
     ),
     Way(
@@ -581,7 +582,7 @@ WAYS: tuple[Way, ...] = (
         low=15,
         high=40,
         words=lambda a: (
-            f"Вдобавок цель принимает на {_n(a)} процентов больше урона, {_turns(HELD_TURNS)} — "
+            f"Вдобавок цель принимает на {percentage(a)} больше урона, {_turns(HELD_TURNS)} — "
             "от вас и от ваших."
         ),
         change=lambda spec, a: _target_mod(spec, "damage_taken_percent", a, HELD_TURNS),
@@ -624,14 +625,14 @@ WAYS: tuple[Way, ...] = (
         code="terrify",
         tier=2,
         shapes=_HURTING,
-        words=lambda a: "Вдобавок цель на ход теряет голову от страха.",
+        words=lambda a: "Цель в страхе пропускает ход. Полученный удар снимает страх.",
         change=lambda spec, a: _inflicted(spec, Inflict(kind=StatusKind.FEAR, turns=1)),
     ),
     Way(
         code="frost",
         tier=2,
         shapes=_HURTING,
-        words=lambda a: "Вдобавок цель на ход схватывает морозом.",
+        words=lambda a: "Цель заморожена и пропускает ход.",
         change=lambda spec, a: _inflicted(spec, Inflict(kind=StatusKind.FREEZE, turns=1)),
     ),
     Way(
@@ -641,7 +642,7 @@ WAYS: tuple[Way, ...] = (
         low=20,
         high=45,
         words=lambda a: (
-            f"Вдобавок {_turns(SHORT_TURNS)} цель медлит: инициатива ниже на {_n(a)} процентов."
+            f"Вдобавок {_turns(SHORT_TURNS)} цель медлит: инициатива ниже на {percentage(a)}."
         ),
         change=lambda spec, a: _inflicted(
             spec, Inflict(kind=StatusKind.SLOW, turns=SHORT_TURNS, value=a)
@@ -653,7 +654,7 @@ WAYS: tuple[Way, ...] = (
         shapes=_HURTING,
         low=20,
         high=45,
-        words=lambda a: f"Вдобавок {_turns(HELD_TURNS)} цель бьёт слабее на {_n(a)} процентов.",
+        words=lambda a: f"Вдобавок {_turns(HELD_TURNS)} цель бьёт слабее на {percentage(a)}.",
         change=lambda spec, a: _inflicted(
             spec, Inflict(kind=StatusKind.WEAKNESS, turns=HELD_TURNS, value=a)
         ),
@@ -695,7 +696,7 @@ WAYS: tuple[Way, ...] = (
         low=18,
         high=40,
         words=lambda a: (
-            f"Барьер вдобавок — {_n(a)} процентов здоровья, и держится он {_turns(LONG_TURNS)}."
+            f"Барьер вдобавок — {percentage(a)} здоровья, и держится он {_turns(LONG_TURNS)}."
         ),
         change=lambda spec, a: replace(
             spec,
@@ -710,7 +711,7 @@ WAYS: tuple[Way, ...] = (
         low=20,
         high=50,
         words=lambda a: (
-            f"{_turns(HELD_TURNS)} вы отвечаете ударившему на {_n(a)} процентов своего удара."
+            f"{_turns(HELD_TURNS)} вы отвечаете ударившему на {percentage(a)} своего удара."
         ),
         change=lambda spec, a: _self_mod(spec, COUNTER, a),
     ),
@@ -721,7 +722,7 @@ WAYS: tuple[Way, ...] = (
         low=15,
         high=40,
         words=lambda a: (
-            f"{_turns(HELD_TURNS)} {_n(a)} процентов полученного возвращается ударившему."
+            f"{_turns(HELD_TURNS)} {percentage(a)} полученного возвращается ударившему."
         ),
         change=lambda spec, a: _self_mod(spec, "reflect_percent", a),
     ),
@@ -743,7 +744,10 @@ WAYS: tuple[Way, ...] = (
         code="haste",
         tier=2,
         shapes=_KEEPING,
-        words=lambda a: f"Вдобавок {_turns(HELD_TURNS)} вы разогнаны: ходите чаще.",
+        words=lambda a: (
+            f"В течение {_turns(HELD_TURNS)} ваша инициатива повышена; "
+            "это помогает раньше получить ход в круге."
+        ),
         change=lambda spec, a: _holding(spec, Inflict(kind=StatusKind.HASTE, turns=HELD_TURNS)),
     ),
     Way(
@@ -759,7 +763,8 @@ WAYS: tuple[Way, ...] = (
         shapes=frozenset({Shape.BOON, Shape.DEED}),
         words=lambda a: (
             f"Вдобавок вы уходите из виду на {_turns(SHORT_TURNS)}: "
-            "целью вас не выбрать, пока вы сами не ударите."
+            "вас нельзя выбрать целью до вашего действия, кроме защиты. "
+            "Урон по всем и периодический урон раскрывают вас."
         ),
         change=lambda spec, a: _holding(spec, Inflict(kind=StatusKind.UNSEEN, turns=SHORT_TURNS)),
     ),
@@ -802,7 +807,19 @@ def offered(skill: Skill, tier: int) -> tuple[SkillMastery, ...]:
     return tuple(one for one in skill.masteries if one.tier == tier)
 
 
-def known(skill: Skill, codes: Iterable[str]) -> tuple[SkillMastery, ...]:
+def conflicted_tiers(skill: Skill, codes: Iterable[str]) -> frozenset[int]:
+    """Два разных сохранённых выбора одной ступени не дают обе прибавки."""
+    taken = set(codes)
+    counts: dict[int, int] = {}
+    for one in skill.masteries:
+        if one.code in taken:
+            counts[one.tier] = counts.get(one.tier, 0) + 1
+    return frozenset(tier for tier, count in counts.items() if count > 1)
+
+
+def known(
+    skill: Skill, codes: Iterable[str], *, rank: int | None = None
+) -> tuple[SkillMastery, ...]:
     """Грани, которые у этого умения есть. Выбор переживает содержимое (правило 8).
 
     Порядок - тот, в котором грани написаны умению, а не тот, в котором их
@@ -810,12 +827,22 @@ def known(skill: Skill, codes: Iterable[str]) -> tuple[SkillMastery, ...]:
     взявших одно и то же.
     """
     taken = set(codes)
-    return tuple(one for one in skill.masteries if one.code in taken)
+    conflicts = conflicted_tiers(skill, taken)
+    return tuple(
+        one
+        for one in skill.masteries
+        if one.code in taken
+        and one.tier not in conflicts
+        and (rank is None or rank >= rank_of_tier(one.tier))
+    )
 
 
 def chosen_tiers(skill: Skill, codes: Iterable[str]) -> frozenset[int]:
     """Ступени, на которых уже выбрано."""
-    return frozenset(one.tier for one in known(skill, codes))
+    taken = set(codes)
+    # Конфликтный старый выбор не переписывается новым нажатием. Вернуть
+    # вложение и выбрать заново можно через обычный разбор у наставника.
+    return frozenset(one.tier for one in skill.masteries if one.code in taken)
 
 
 def pending_tier(skill: Skill, rank: int, codes: Iterable[str]) -> int | None:
@@ -834,10 +861,10 @@ def pending_tier(skill: Skill, rank: int, codes: Iterable[str]) -> int | None:
     return None
 
 
-def applied(skill: Skill, spec: EffectSpec, codes: Iterable[str]) -> EffectSpec:
+def applied(skill: Skill, spec: EffectSpec, codes: Iterable[str], *, rank: int) -> EffectSpec:
     """Описание эффекта так, как его переделали выбранные грани."""
     working = spec
-    for one in known(skill, codes):
+    for one in known(skill, codes, rank=rank):
         working = changed(one, working)
     return working
 

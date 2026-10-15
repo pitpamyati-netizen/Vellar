@@ -655,8 +655,9 @@ def act(
     if state.is_over:
         return replace(state, events=())
     current = state.active
-    if current is None:  # pragma: no cover - очередь без живых уже была бы концом
-        return replace(state, events=())
+    if current is None:
+        # Прежняя запись могла сохранить пустую очередь до определения исхода.
+        return _check_outcome(content, roster, replace(state, events=()), _turn_source(state, seed))
 
     working = replace(state, events=())
 
@@ -716,8 +717,9 @@ def _take_turn(
     """Один ход целиком: действие, след, исход, содержание, очередь."""
     source = _turn_source(state, seed)
     actor = state.by_id(actor_id)
-    if actor is None or not actor.alive:  # pragma: no cover - очередь чистится сама
-        return _advance(state, seed)
+    if actor is None or not actor.alive:
+        working = _check_outcome(content, roster, state, source)
+        return working if working.is_over else _advance(working, seed)
 
     unstunnable = actor.effects.modifiers().get(UNSTUNNABLE, 0.0) > 0
     if unstunnable and actor.effects.control() is not None:
@@ -736,7 +738,10 @@ def _take_turn(
             )
         )
         working = _upkeep(content, roster, working, actor.id)
-        return _advance(working, seed)
+        # Пропущенный ход тоже завершает собственные эффекты. Яд или горение
+        # могут добить последнего бойца, и следующему игроку уже нечего нажимать.
+        working = _check_outcome(content, roster, working, source)
+        return working if working.is_over else _advance(working, seed)
 
     # Очарованный дерётся против своих, спутанный бьёт куда попало. Ход у них
     # есть - они просто не решают, куда он уйдёт.
@@ -1110,14 +1115,32 @@ def _resolve_skill(
     """
     if action.kind is ActionKind.RACIAL:
         code = character.loadout.racial or content.race(character.race_id).active_code
-        return content.skill(code) if content.has_skill(code) else None
+        if not content.has_skill(code):
+            return None
+        skill = content.skill(code)
+        return (
+            skill
+            if skill.is_active
+            and skill.owner_kind is OwnerKind.RACE
+            and skill_rules.belongs_to(content, character, skill)
+            else None
+        )
     if action.slot is None:
         return None
     actives = character.loadout.actives
     if not 0 <= action.slot < len(actives):
         return None
     slotted = actives[action.slot]
-    return content.skill(slotted) if slotted and content.has_skill(slotted) else None
+    if not slotted or not content.has_skill(slotted):
+        return None
+    skill = content.skill(slotted)
+    return (
+        skill
+        if skill.is_active
+        and skill.owner_kind in {OwnerKind.CLASS, OwnerKind.SUBCLASS}
+        and skill_rules.usable(content, character, skill)
+        else None
+    )
 
 
 def _weathered(spec: EffectSpec, actor: Combatant) -> EffectSpec:

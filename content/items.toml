@@ -25,7 +25,9 @@
 #            он же стоит в её имени, чтобы два меча одной ступени и одной
 #            редкости не читались одной строкой
 #   special  есть ли сверх них особое свойство - аффикс полной силы
-#   scaling  считать числа от уровня героя, а не от уровня вещи
+#   prefixes сколько прибавок к характеристикам у нового оттиска
+#   suffixes сколько процентных прибавок, без особого свойства
+#   boss_only редкость добывают у хозяина логова или за цепочку заданий
 #   weight   как часто попадается; ноль - не попадается вовсе
 #   mark     чем имя отличается от обычного: две вещи одного вида должны
 #            называться по-разному, иначе в списке будут две одинаковые кнопки
@@ -39,10 +41,10 @@
 #            но и дороже - цена починки идёт от цены вещи (ADR 0057).
 rarities = [
     { id = "common", name = "Обычный", weight = 100, price_factor = 1.0, affixes = 0, mark = "", durability = 25, toughness = 1.0 },
-    { id = "uncommon", name = "Необычный", weight = 42, price_factor = 2.4, affixes = 1, mark = "доброй ковки", durability = 60, toughness = 1.2 },
-    { id = "rare", name = "Редкий", weight = 14, price_factor = 6.0, affixes = 2, mark = "редкой работы", durability = 150, toughness = 1.5 },
-    { id = "legendary", name = "Легендарный", weight = 3, price_factor = 16.0, affixes = 3, special = true, mark = "именной славы", durability = 400, toughness = 1.9 },
-    { id = "relic", name = "Реликтовый", weight = 0, price_factor = 45.0, affixes = 4, special = true, scaling = true, mark = "давних времён", durability = 1000, toughness = 2.4 },
+    { id = "uncommon", name = "Необычный", weight = 42, price_factor = 2.4, affixes = 1, prefixes = 1, mark = "доброй ковки", durability = 60, toughness = 1.2 },
+    { id = "rare", name = "Редкий", weight = 14, price_factor = 6.0, affixes = 2, prefixes = 1, suffixes = 1, mark = "редкой работы", durability = 150, toughness = 1.5 },
+    { id = "legendary", name = "Легендарный", weight = 3, price_factor = 16.0, affixes = 3, prefixes = 2, suffixes = 1, special = true, mark = "именной славы", durability = 400, toughness = 1.9 },
+    { id = "relic", name = "Реликтовый", weight = 0, price_factor = 45.0, affixes = 4, prefixes = 2, suffixes = 2, special = true, boss_only = true, mark = "давних времён", durability = 1000, toughness = 2.4 },
 ]
 
 # Ступени снаряжения: с какого уровня и каким словом её называют. Вещь бывает

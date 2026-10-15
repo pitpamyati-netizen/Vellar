@@ -69,7 +69,7 @@ name = "Берсерк"
 category = "combat"
 tags = ["урон", "риск"]
 modifiers = { damage_percent = 10, armor_percent = -10 }
-text = "Вы бьёте на 10 процентов сильнее и держите удар на 10 процентов хуже."
+text = "Общий урон выше на 10 процентов. Броня ниже на 10 процентов."
 
 [[trait]]
 id = "duelist"
@@ -77,7 +77,7 @@ name = "Дуэлянт"
 category = "combat"
 tags = ["точность", "одиночная цель"]
 modifiers = { accuracy_percent = 15, single_target_damage_percent = 5 }
-text = "Против одиночной цели ваша точность выше на 15 процентов."
+text = "Точность выше на 15 процентов. Урон по одной цели выше на 5 процентов."
 
 [[trait]]
 id = "first_strike"
@@ -85,7 +85,7 @@ name = "Первый удар"
 category = "combat"
 tags = ["инициатива"]
 modifiers = { initiative_percent = 20, first_turn_damage_percent = 15 }
-text = "Вы чаще ходите первым, и первый ваш удар сильнее на 15 процентов."
+text = "Инициатива выше на 20 процентов. В первом круге боя урон выше на 15 процентов."
 
 [[trait]]
 id = "heavy_hand"
@@ -93,7 +93,7 @@ name = "Тяжёлая рука"
 category = "combat"
 tags = ["урон", "точность"]
 modifiers = { physical_damage_percent = 12, accuracy_percent = -5 }
-text = "Физический урон выше на 12 процентов, точность ниже на 5."
+text = "Физический урон выше на 12 процентов. Точность ниже на 5 процентов."
 
 [[trait]]
 id = "executioner"
@@ -101,7 +101,7 @@ name = "Палач"
 category = "combat"
 tags = ["добивание"]
 modifiers = { low_health_damage_percent = 25 }
-text = "По раненым целям вы наносите на 25 процентов больше урона."
+text = "При вашем здоровье не выше 35 процентов урон выше на 25 процентов."
 
 [[trait]]
 id = "giant_slayer"
@@ -109,7 +109,7 @@ name = "Убийца великанов"
 category = "combat"
 tags = ["элита"]
 modifiers = { elite_damage_percent = 18, damage_taken_percent = 3 }
-text = "Урон по элитным противникам выше на 18 процентов."
+text = "Урон по элитным противникам и боссам выше на 18 процентов. Получаемый урон выше на 3 процентов."
 
 [[trait]]
 id = "whirlwind_training"
@@ -117,7 +117,7 @@ name = "Круговая выучка"
 category = "combat"
 tags = ["площадь"]
 modifiers = { aoe_damage_percent = 20, single_target_damage_percent = -8 }
-text = "Умения по площади сильнее на 20 процентов, по одной цели слабее на 8."
+text = "Урон по нескольким целям выше на 20 процентов. Урон по одной цели ниже на 8 процентов."
 
 [[trait]]
 id = "keen_edge"
@@ -125,7 +125,7 @@ name = "Острая кромка"
 category = "combat"
 tags = ["крит"]
 modifiers = { crit_chance_percent = 5, crit_damage_percent = 10 }
-text = "Шанс критического удара выше на 5 процентов, урон крита - на 10."
+text = "Шанс критического удара выше на 5 процентных пунктов. Критический урон в долях обычного удара выше на 10 процентных пунктов."
 
 [[trait]]
 id = "beast_hunter"
@@ -149,7 +149,7 @@ name = "Драчун"
 category = "combat"
 tags = ["ресурс"]
 modifiers = { resource_regen_percent = 15, armor_percent = -5 }
-text = "Ресурс класса восстанавливается на 15 процентов быстрее."
+text = "Количество запаса, возвращаемое за свой ход, выше на 15 процентов. Броня ниже на 5 процентов."
 
 [[trait]]
 id = "relentless"
@@ -157,7 +157,7 @@ name = "Неотступный"
 category = "combat"
 tags = ["откаты"]
 modifiers = { cooldown_reduction_percent = 8 }
-text = "Откаты умений короче на 8 процентов."
+text = "Ожидание умений короче на 8 процентов до округления в ходы."
 
 # --- Magic ---
 
@@ -167,7 +167,7 @@ name = "Магический склад ума"
 category = "magic"
 tags = ["урон", "чары"]
 modifiers = { magic_damage_percent = 12, stat_INT = 1 }
-text = "Магический урон выше на 12 процентов, интеллект выше на 1."
+text = "Магический урон выше на 12 процентов. Интеллект выше на 1."
 
 [[trait]]
 id = "deep_well"
@@ -175,7 +175,7 @@ name = "Глубокий источник"
 category = "magic"
 tags = ["ресурс"]
 modifiers = { resource_percent = 20, resource_regen_percent = -5 }
-text = "Запас ресурса больше на 20 процентов."
+text = "Максимальный запас класса выше на 20 процентов. Количество запаса, возвращаемое за свой ход, ниже на 5 процентов."
 
 [[trait]]
 id = "frugal_caster"
@@ -183,7 +183,7 @@ name = "Экономный чтец"
 category = "magic"
 tags = ["стоимость"]
 modifiers = { cost_reduction_percent = 12 }
-text = "Умения стоят на 12 процентов меньше ресурса."
+text = "Расход запаса на умения ниже на 12 процентов."
 
 [[trait]]
 id = "flame_affinity"
@@ -191,7 +191,7 @@ name = "Родство с огнём"
 category = "magic"
 tags = ["огонь"]
 modifiers = { magic_damage_percent = 8, resist_fire_percent = 15 }
-text = "Магический урон выше на 8 процентов, сопротивление огню - на 15."
+text = "Магический урон выше на 8 процентов. Сопротивление огню выше на 15 процентных пунктов."
 
 [[trait]]
 id = "frost_affinity"
@@ -199,7 +199,7 @@ name = "Родство со льдом"
 category = "magic"
 tags = ["холод"]
 modifiers = { magic_damage_percent = 8, resist_cold_percent = 15 }
-text = "Магический урон выше на 8 процентов, сопротивление холоду - на 15."
+text = "Магический урон выше на 8 процентов. Сопротивление холоду выше на 15 процентных пунктов."
 
 [[trait]]
 id = "ley_reader"
@@ -207,7 +207,7 @@ name = "Чтец силовых линий"
 category = "magic"
 tags = ["восстановление"]
 modifiers = { resource_regen_percent = 20, health_percent = -5 }
-text = "Ресурс восстанавливается на 20 процентов быстрее, здоровья на 5 меньше."
+text = "Количество запаса, возвращаемое за свой ход, выше на 20 процентов. Максимальное здоровье ниже на 5 процентов."
 
 [[trait]]
 id = "healers_touch"
@@ -215,7 +215,7 @@ name = "Рука целителя"
 category = "magic"
 tags = ["лечение"]
 modifiers = { healing_done_percent = 15 }
-text = "Ваше лечение сильнее на 15 процентов."
+text = "Ваше лечение выше на 15 процентов."
 
 [[trait]]
 id = "spell_ward"
@@ -223,7 +223,7 @@ name = "Оберег"
 category = "magic"
 tags = ["сопротивление"]
 modifiers = { resist_magic_percent = 15 }
-text = "Сопротивление магии выше на 15 процентов."
+text = "Сопротивление магическому урону выше на 15 процентных пунктов."
 
 # --- Defense ---
 
@@ -233,7 +233,7 @@ name = "Железная шкура"
 category = "defense"
 tags = ["броня"]
 modifiers = { armor_percent = 12, initiative_percent = -8 }
-text = "Броня выше на 12 процентов, инициатива ниже на 8."
+text = "Броня выше на 12 процентов. Инициатива ниже на 8 процентов."
 
 [[trait]]
 id = "bulwark"
@@ -249,7 +249,7 @@ name = "Уклончивый"
 category = "defense"
 tags = ["уклонение"]
 modifiers = { dodge_percent = 10, health_percent = -5 }
-text = "Уклонение выше на 10 процентов, здоровья на 5 процентов меньше."
+text = "Шанс уклонения выше на 10 процентных пунктов. Максимальное здоровье ниже на 5 процентов."
 
 [[trait]]
 id = "second_skin"
@@ -257,7 +257,7 @@ name = "Вторая кожа"
 category = "defense"
 tags = ["урон по вам"]
 modifiers = { damage_taken_percent = -8 }
-text = "Вы получаете на 8 процентов меньше урона."
+text = "Получаемый урон ниже на 8 процентов."
 
 [[trait]]
 id = "poison_blood"
@@ -265,7 +265,7 @@ name = "Стойкая кровь"
 category = "defense"
 tags = ["яд"]
 modifiers = { resist_poison_percent = 25 }
-text = "Сопротивление яду выше на 25 процентов."
+text = "Сопротивление яду выше на 25 процентных пунктов."
 
 [[trait]]
 id = "steady_breath"
@@ -273,7 +273,7 @@ name = "Ровное дыхание"
 category = "defense"
 tags = ["регенерация"]
 modifiers = { regen_per_turn_percent = 2 }
-text = "В конце хода вы восстанавливаете 2 процента здоровья."
+text = "Восстановление здоровья за свой ход выше на 2 процентных пункта от максимального здоровья; ниже нуля оно не падает."
 
 [[trait]]
 id = "trap_sense"
@@ -281,7 +281,7 @@ name = "Чутьё на подвох"
 category = "defense"
 tags = ["урон"]
 modifiers = { damage_taken_percent = -4 }
-text = "Подвох вы замечаете первым: получаемый урон ниже на 4 процента."
+text = "Получаемый урон ниже на 4 процентов."
 
 [[trait]]
 id = "shield_wall"
@@ -289,7 +289,7 @@ name = "Щитоносец"
 category = "defense"
 tags = ["броня", "урон"]
 modifiers = { armor_percent = 8, damage_percent = -4 }
-text = "Броня выше на 8 процентов, урон ниже на 4."
+text = "Броня выше на 8 процентов. Общий урон ниже на 4 процентов."
 
 # --- Social ---
 
@@ -299,7 +299,7 @@ name = "Торгаш"
 category = "social"
 tags = ["цены"]
 modifiers = { shop_price_percent = -12, sell_price_percent = 10 }
-text = "Покупка дешевле на 12 процентов, продажа выгоднее на 10."
+text = "Цены покупки в лавке ниже на 12 процентов. Цена продажи в лавку выше на 10 процентов."
 
 [[trait]]
 id = "silver_tongue"
@@ -307,7 +307,7 @@ name = "Серебряный язык"
 category = "social"
 tags = ["задания"]
 modifiers = { quest_reward_percent = 15 }
-text = "Награды за задания выше на 15 процентов."
+text = "Золото и опыт за задания выше на 15 процентов."
 
 [[trait]]
 id = "known_face"
@@ -315,7 +315,7 @@ name = "Знакомое лицо"
 category = "social"
 tags = ["репутация"]
 modifiers = { reputation_percent = 20 }
-text = "Вас знают: лавки держат для вас на две вещи больше и на два уровня выше."
+text = "Репутация в лавке выше на 20 процентов: каждые 10 расширяют полку на одну вещь и повышают её предел на один уровень."
 
 [[trait]]
 id = "storyteller"
@@ -323,7 +323,7 @@ name = "Рассказчик"
 category = "social"
 tags = ["события"]
 modifiers = { event_reward_percent = 15 }
-text = "Награды за события выше на 15 процентов."
+text = "Золото и опыт за исследование без боя выше на 15 процентов; святилища прибавку не получают."
 
 [[trait]]
 id = "intimidating"
@@ -331,7 +331,7 @@ name = "Устрашающий"
 category = "social"
 tags = ["страх"]
 modifiers = { stat_CHA = 1, flee_chance_percent = 15 }
-text = "Харизма выше на 1, сбежать из боя проще на 15 процентов."
+text = "Харизма выше на 1. Шанс побега выше на 15 процентных пунктов."
 
 [[trait]]
 id = "guild_contact"
@@ -339,7 +339,7 @@ name = "Связи в гильдии"
 category = "social"
 tags = ["золото"]
 modifiers = { gold_percent = 12 }
-text = "Вы получаете на 12 процентов больше золота."
+text = "Золото за победы в бою выше на 12 процентов."
 
 [[trait]]
 id = "diplomatic_immunity"
@@ -347,7 +347,7 @@ name = "Дипломатическая неприкосновенность"
 category = "social"
 tags = ["разумные"]
 modifiers = { humanoid_damage_percent = -10, quest_reward_percent = 10 }
-text = "Разумные противники ценят вас больше, чем боятся."
+text = "Урон по разумным противникам ниже на 10 процентов. Золото и опыт за задания выше на 10 процентов."
 
 [[trait]]
 id = "patron"
@@ -355,7 +355,7 @@ name = "Покровитель"
 category = "social"
 tags = ["цены", "опыт"]
 modifiers = { shop_price_percent = -6, exp_percent = 4 }
-text = "Скидка в лавках 6 процентов и небольшая прибавка к опыту."
+text = "Цены покупки в лавке ниже на 6 процентов. Получаемый опыт выше на 4 процентов."
 
 # --- Crafting ---
 
@@ -365,7 +365,7 @@ name = "Подмастерье кузнеца"
 category = "crafting"
 tags = ["ремесло"]
 modifiers = { craft_quality_percent = 15 }
-text = "Качество изготовленных вещей выше на 15 процентов."
+text = "Шансы улучшенного качества при изготовлении выше на 15 процентов."
 
 [[trait]]
 id = "salvager"
@@ -373,7 +373,7 @@ name = "Разборщик"
 category = "crafting"
 tags = ["разбор"]
 modifiers = { salvage_yield_percent = 25 }
-text = "После работы у вас уцелевает на 25 процентов больше материалов."
+text = "Возврат сырья при разборе и доля сбережённых материалов при изготовлении больше на 25 процентов; действуют обычные пределы и округление."
 
 [[trait]]
 id = "herbalist"
@@ -381,7 +381,7 @@ name = "Травник"
 category = "crafting"
 tags = ["сбор"]
 modifiers = { gather_yield_percent = 20 }
-text = "Со сбора ресурсов вы получаете на 20 процентов больше."
+text = "Количество сырья при сборе больше на 20 процентов до округления."
 
 [[trait]]
 id = "appraiser"
@@ -389,7 +389,7 @@ name = "Оценщик"
 category = "crafting"
 tags = ["цены"]
 modifiers = { sell_price_percent = 15 }
-text = "Вы продаёте вещи на 15 процентов дороже."
+text = "Цена продажи в лавку выше на 15 процентов."
 
 [[trait]]
 id = "field_repair"
@@ -397,7 +397,7 @@ name = "Полевой ремонт"
 category = "crafting"
 tags = ["ремонт"]
 modifiers = { armor_percent = 5, craft_quality_percent = 5 }
-text = "Снаряжение служит лучше: броня выше на 5 процентов."
+text = "Броня выше на 5 процентов. Шансы улучшенного качества при изготовлении выше на 5 процентов."
 
 [[trait]]
 id = "alchemists_eye"
@@ -405,7 +405,7 @@ name = "Глаз алхимика"
 category = "crafting"
 tags = ["зелья"]
 modifiers = { healing_taken_percent = 12, gather_yield_percent = 8 }
-text = "Зелья лечат вас на 12 процентов сильнее."
+text = "Получаемое вами лечение выше на 12 процентов. Количество сырья при сборе больше на 8 процентов до округления."
 
 # --- Survival ---
 
@@ -415,7 +415,7 @@ name = "Следопыт троп"
 category = "survival"
 tags = ["инициатива"]
 modifiers = { initiative_percent = 10 }
-text = "Чужой лагерь вы видите раньше, чем он вас: инициатива выше на 10 процентов."
+text = "Инициатива выше на 10 процентов."
 
 [[trait]]
 id = "light_sleeper"
@@ -431,7 +431,7 @@ name = "Разведчик"
 category = "survival"
 tags = ["исследование"]
 modifiers = { event_reward_percent = 10, drop_rate_percent = 5 }
-text = "Вы чаще находите то, что стоит найти."
+text = "Золото и опыт за исследование без боя выше на 10 процентов; святилища прибавку не получают. Вероятность находки снаряжения после боя выше на 5 процентов."
 
 [[trait]]
 id = "iron_stomach"
@@ -439,7 +439,7 @@ name = "Лужёный желудок"
 category = "survival"
 tags = ["яд"]
 modifiers = { resist_poison_percent = 15, health_percent = 4 }
-text = "Сопротивление яду выше на 15 процентов."
+text = "Сопротивление яду выше на 15 процентных пунктов. Максимальное здоровье выше на 4 процентов."
 
 [[trait]]
 id = "cold_born"
@@ -447,7 +447,7 @@ name = "Рождённый в стуже"
 category = "survival"
 tags = ["холод"]
 modifiers = { resist_cold_percent = 25 }
-text = "Сопротивление холоду выше на 25 процентов."
+text = "Сопротивление холоду выше на 25 процентных пунктов."
 
 [[trait]]
 id = "fire_born"
@@ -455,7 +455,7 @@ name = "Рождённый в пепле"
 category = "survival"
 tags = ["огонь"]
 modifiers = { resist_fire_percent = 25 }
-text = "Сопротивление огню выше на 25 процентов."
+text = "Сопротивление огню выше на 25 процентных пунктов."
 
 [[trait]]
 id = "runner"
@@ -463,7 +463,7 @@ name = "Ходок"
 category = "survival"
 tags = ["бегство"]
 modifiers = { flee_chance_percent = 25 }
-text = "Сбежать из боя удаётся на 25 процентов чаще."
+text = "Шанс побега выше на 25 процентных пунктов."
 
 [[trait]]
 id = "hardened"
@@ -471,7 +471,7 @@ name = "Закалённый"
 category = "survival"
 tags = ["опыт"]
 modifiers = { exp_percent = 8, health_percent = -4 }
-text = "Опыта на 8 процентов больше, здоровья на 4 процента меньше."
+text = "Получаемый опыт выше на 8 процентов. Максимальное здоровье ниже на 4 процентов."
 
 # --- Судьба и удача ---
 
@@ -481,7 +481,7 @@ name = "Родился в рубашке"
 category = "fate"
 tags = ["удача"]
 modifiers = { stat_LCK = 2, stat_END = -1 }
-text = "Удача выше на 2, выносливость ниже на 1."
+text = "Удача выше на 2. Выносливость ниже на 1."
 
 [[trait]]
 id = "treasure_sense"
@@ -489,7 +489,7 @@ name = "Нюх на клады"
 category = "fate"
 tags = ["добыча"]
 modifiers = { drop_rate_percent = 15 }
-text = "Добыча выпадает на 15 процентов чаще."
+text = "Вероятность находки снаряжения после боя выше на 15 процентов."
 
 [[trait]]
 id = "collector"
@@ -497,7 +497,7 @@ name = "Собиратель"
 category = "fate"
 tags = ["редкость"]
 modifiers = { rarity_percent = 12, gold_percent = -5 }
-text = "Шанс редкой добычи выше на 12 процентов."
+text = "Прибавка к выбору более редкого снаряжения: 12 процентов. Она влияет на редкость уже выпавшей находки. Золото за победы в бою ниже на 5 процентов."
 
 [[trait]]
 id = "golden_hour"
@@ -505,7 +505,7 @@ name = "Золотой час"
 category = "fate"
 tags = ["золото"]
 modifiers = { gold_percent = 18, drop_rate_percent = -6 }
-text = "Золота на 18 процентов больше, вещей немного меньше."
+text = "Золото за победы в бою выше на 18 процентов. Вероятность находки снаряжения после боя ниже на 6 процентов."
 
 [[trait]]
 id = "fated_blow"
@@ -513,7 +513,7 @@ name = "Предначертанный удар"
 category = "fate"
 tags = ["крит"]
 modifiers = { crit_chance_percent = 4, crit_damage_percent = 15 }
-text = "Криты случаются чаще и бьют сильнее."
+text = "Шанс критического удара выше на 4 процентных пункта. Критический урон в долях обычного удара выше на 15 процентных пунктов."
 
 [[trait]]
 id = "quick_study"
@@ -521,7 +521,7 @@ name = "Схватывает на лету"
 category = "fate"
 tags = ["опыт"]
 modifiers = { exp_percent = 10, gold_percent = -8 }
-text = "Опыта на 10 процентов больше, золота на 8 меньше."
+text = "Получаемый опыт выше на 10 процентов. Золото за победы в бою ниже на 8 процентов."
 
 [[trait]]
 id = "second_chance"
@@ -529,7 +529,7 @@ name = "Второй шанс"
 category = "fate"
 tags = ["удача"]
 modifiers = { stat_LCK = 1, dodge_percent = 4 }
-text = "Удача выше на 1, уклонение - на 4 процента."
+text = "Удача выше на 1. Шанс уклонения выше на 4 процентных пункта."
 
 [[trait]]
 id = "wanderers_star"
@@ -537,7 +537,7 @@ name = "Звезда странника"
 category = "fate"
 tags = ["события"]
 modifiers = { event_reward_percent = 20, damage_taken_percent = 3 }
-text = "События приносят на 20 процентов больше."
+text = "Золото и опыт за исследование без боя выше на 20 процентов; святилища прибавку не получают. Получаемый урон выше на 3 процентов."
 
 # --- Dark ---
 
@@ -547,7 +547,7 @@ name = "Стеклянная пушка"
 category = "dark"
 tags = ["урон", "риск"]
 modifiers = { damage_percent = 25, health_percent = -20 }
-text = "Урон выше на 25 процентов, здоровья на 20 процентов меньше."
+text = "Общий урон выше на 25 процентов. Максимальное здоровье ниже на 20 процентов."
 
 [[trait]]
 id = "blood_pact"
@@ -555,7 +555,7 @@ name = "Уговор на крови"
 category = "dark"
 tags = ["ресурс", "риск"]
 modifiers = { resource_regen_percent = 30, regen_per_turn_percent = -2 }
-text = "Ресурс копится на 30 процентов быстрее ценой вашей крови."
+text = "Количество запаса, возвращаемое за свой ход, выше на 30 процентов. Восстановление здоровья за свой ход ниже на 2 процентных пункта от максимального здоровья; ниже нуля оно не падает."
 
 [[trait]]
 id = "cursed_luck"
@@ -563,7 +563,7 @@ name = "Дурная удача"
 category = "dark"
 tags = ["удача", "риск"]
 modifiers = { rarity_percent = 25, dodge_percent = -8 }
-text = "Редкая добыча на 25 процентов чаще, уклонение ниже на 8."
+text = "Прибавка к выбору более редкого снаряжения: 25 процентов. Она влияет на редкость уже выпавшей находки. Шанс уклонения ниже на 8 процентных пунктов."
 
 [[trait]]
 id = "pain_eater"
@@ -571,7 +571,7 @@ name = "Пожиратель боли"
 category = "dark"
 tags = ["низкое здоровье"]
 modifiers = { low_health_damage_percent = 30, healing_taken_percent = -20 }
-text = "На низком здоровье вы бьёте на 30 процентов сильнее, но лечитесь хуже."
+text = "При вашем здоровье не выше 35 процентов урон выше на 30 процентов. Получаемое вами лечение ниже на 20 процентов."
 
 [[trait]]
 id = "soul_debt"
@@ -579,7 +579,7 @@ name = "Долг души"
 category = "dark"
 tags = ["опыт", "риск"]
 modifiers = { exp_percent = 20, damage_taken_percent = 10 }
-text = "Опыта на 20 процентов больше, урона по вам - на 10."
+text = "Получаемый опыт выше на 20 процентов. Получаемый урон выше на 10 процентов."
 
 [[trait]]
 id = "shadow_bargain"
@@ -587,7 +587,7 @@ name = "Сделка с тенью"
 category = "dark"
 tags = ["крит", "риск"]
 modifiers = { crit_damage_percent = 30, armor_percent = -15 }
-text = "Критический урон выше на 30 процентов, броня ниже на 15."
+text = "Критический урон в долях обычного удара выше на 30 процентных пунктов. Броня ниже на 15 процентов."
 
 # ============================================================================
 # ЧЕРТЫ ВЕХ ХАРАКТЕРИСТИК (ADR 0068)
@@ -613,7 +613,7 @@ name = "Хватка"
 category = "milestone"
 tags = ["веха", "сила"]
 modifiers = { accuracy_percent = 4, physical_damage_percent = 3 }
-text = "Рукоять стала продолжением руки: точность выше на 4 процента, физический удар — на 3."
+text = "Точность выше на 4 процентов. Физический урон выше на 3 процентов."
 
 [[trait]]
 id = "ms_warrior_footing"
@@ -621,7 +621,7 @@ name = "Упор"
 category = "milestone"
 tags = ["веха", "выносливость"]
 modifiers = { armor_percent = 6, dodge_percent = 2 }
-text = "Ноги нашли землю: брони на 6 процентов больше, уклонения — на 2 больше."
+text = "Броня выше на 6 процентов. Шанс уклонения выше на 2 процентных пункта."
 
 [[trait]]
 id = "ms_warrior_breach"
@@ -629,7 +629,7 @@ name = "Пролом"
 category = "milestone"
 tags = ["веха", "сила"]
 modifiers = { physical_damage_percent = 6 }
-text = "Вы бьёте сквозь доспех: физический удар сильнее на 6 процентов."
+text = "Физический урон выше на 6 процентов."
 
 [[trait]]
 id = "ms_warrior_bulwark"
@@ -637,7 +637,7 @@ name = "Незыблемый оплот"
 category = "milestone"
 tags = ["веха", "выносливость"]
 modifiers = { damage_taken_percent = -6, armor_percent = 6 }
-text = "Вы держите удар на 6 процентов лучше, и брони у вас на 6 процентов больше."
+text = "Получаемый урон ниже на 6 процентов. Броня выше на 6 процентов."
 
 [[trait]]
 id = "ms_warrior_sundering"
@@ -645,7 +645,7 @@ name = "Раскол"
 category = "milestone"
 tags = ["веха", "сила"]
 modifiers = { physical_damage_percent = 8, crit_damage_percent = 15 }
-text = "Физический удар сильнее на 8 процентов, а решающий — на 15 процентов злее."
+text = "Физический урон выше на 8 процентов. Критический урон в долях обычного удара выше на 15 процентных пунктов."
 
 # --- Варвар ---
 
@@ -655,7 +655,7 @@ name = "Разогрев"
 category = "milestone"
 tags = ["веха", "сила"]
 modifiers = { first_turn_damage_percent = 10 }
-text = "В первый ход боя вы бьёте на 10 процентов сильнее."
+text = "В первом круге боя урон выше на 10 процентов."
 
 [[trait]]
 id = "ms_barbarian_thickskin"
@@ -663,7 +663,7 @@ name = "Толстая кожа"
 category = "milestone"
 tags = ["веха", "сила"]
 modifiers = { armor_percent = 6, health_percent = 3 }
-text = "Брони на 6 процентов больше, здоровья — на 3 процента больше."
+text = "Броня выше на 6 процентов. Максимальное здоровье выше на 3 процентов."
 
 [[trait]]
 id = "ms_barbarian_bloodscent"
@@ -671,7 +671,7 @@ name = "Запах крови"
 category = "milestone"
 tags = ["веха", "сила"]
 modifiers = { wounded_target_damage_percent = 8 }
-text = "По раненому противнику вы бьёте на 8 процентов сильнее."
+text = "Урон по цели с оставшейся четвертью здоровья или меньше выше на 8 процентов."
 
 [[trait]]
 id = "ms_barbarian_unspent"
@@ -679,7 +679,7 @@ name = "Неистраченный"
 category = "milestone"
 tags = ["веха", "сила"]
 modifiers = { resource_regen_percent = 12, cost_reduction_percent = 5 }
-text = "Выносливость восстанавливается на 12 процентов быстрее, а умения стоят на 5 процентов дешевле."
+text = "Количество запаса, возвращаемое за свой ход, выше на 12 процентов. Расход запаса на умения ниже на 5 процентов."
 
 [[trait]]
 id = "ms_barbarian_avalanche"
@@ -687,7 +687,7 @@ name = "Обвал"
 category = "milestone"
 tags = ["веха", "сила", "риск"]
 modifiers = { damage_percent = 8, damage_taken_percent = 4 }
-text = "Вы бьёте на 8 процентов сильнее и держите удар на 4 процента хуже."
+text = "Общий урон выше на 8 процентов. Получаемый урон выше на 4 процентов."
 
 # --- Паладин ---
 
@@ -697,7 +697,7 @@ name = "Обет"
 category = "milestone"
 tags = ["веха", "сила"]
 modifiers = { damage_percent = 5, healing_done_percent = 4 }
-text = "Ваш удар сильнее на 5 процентов, а лечение — на 4 процента."
+text = "Общий урон выше на 5 процентов. Ваше лечение выше на 4 процентов."
 
 [[trait]]
 id = "ms_paladin_standard"
@@ -705,7 +705,7 @@ name = "Знамя"
 category = "milestone"
 tags = ["веха", "харизма"]
 modifiers = { healing_done_percent = 8 }
-text = "Вы лечите на 8 процентов сильнее."
+text = "Ваше лечение выше на 8 процентов."
 
 [[trait]]
 id = "ms_paladin_shieldwall"
@@ -713,7 +713,7 @@ name = "Стена щитов"
 category = "milestone"
 tags = ["веха", "сила"]
 modifiers = { armor_percent = 7, damage_taken_percent = -4 }
-text = "Брони на 7 процентов больше, а удар по вам слабее на 4 процента."
+text = "Броня выше на 7 процентов. Получаемый урон ниже на 4 процентов."
 
 [[trait]]
 id = "ms_paladin_intercession"
@@ -721,7 +721,7 @@ name = "Заступничество"
 category = "milestone"
 tags = ["веха", "харизма"]
 modifiers = { healing_done_percent = 10, healing_taken_percent = 5 }
-text = "Вы лечите на 10 процентов сильнее, а вас лечат на 5 процентов лучше."
+text = "Ваше лечение выше на 10 процентов. Получаемое вами лечение выше на 5 процентов."
 
 [[trait]]
 id = "ms_paladin_unbroken"
@@ -729,7 +729,7 @@ name = "Несломленный"
 category = "milestone"
 tags = ["веха", "сила"]
 modifiers = { damage_percent = 6, damage_taken_percent = -5 }
-text = "Вы бьёте на 6 процентов сильнее, а удар по вам слабее на 5 процентов."
+text = "Общий урон выше на 6 процентов. Получаемый урон ниже на 5 процентов."
 
 # --- Следопыт ---
 
@@ -739,7 +739,7 @@ name = "Прицел"
 category = "milestone"
 tags = ["веха", "ловкость"]
 modifiers = { accuracy_percent = 5 }
-text = "Ваша точность выше на 5 процентов."
+text = "Точность выше на 5 процентов."
 
 [[trait]]
 id = "ms_ranger_reading"
@@ -747,7 +747,7 @@ name = "Чтение следа"
 category = "milestone"
 tags = ["веха", "мудрость"]
 modifiers = { single_target_damage_percent = 4, initiative_percent = 2 }
-text = "По одиночной цели вы бьёте на 4 процента сильнее и ходите на 2 процента раньше."
+text = "Урон по одной цели выше на 4 процентов. Инициатива выше на 2 процентов."
 
 [[trait]]
 id = "ms_ranger_looseness"
@@ -755,7 +755,7 @@ name = "Лёгкая рука"
 category = "milestone"
 tags = ["веха", "ловкость"]
 modifiers = { crit_chance_percent = 4, accuracy_percent = 3 }
-text = "Решающий удар случается на 4 процента чаще, точность выше на 3 процента."
+text = "Шанс критического удара выше на 4 процентных пункта. Точность выше на 3 процентов."
 
 [[trait]]
 id = "ms_ranger_longwatch"
@@ -763,7 +763,7 @@ name = "Долгий дозор"
 category = "milestone"
 tags = ["веха", "мудрость"]
 modifiers = { resource_regen_percent = 12 }
-text = "Выносливость восстанавливается на 12 процентов быстрее."
+text = "Количество запаса, возвращаемое за свой ход, выше на 12 процентов."
 
 [[trait]]
 id = "ms_ranger_windless"
@@ -771,7 +771,7 @@ name = "Безветрие"
 category = "milestone"
 tags = ["веха", "ловкость"]
 modifiers = { single_target_damage_percent = 6, crit_damage_percent = 10 }
-text = "По одиночной цели вы бьёте на 6 процентов сильнее, решающий удар злее на 10."
+text = "Урон по одной цели выше на 6 процентов. Критический урон в долях обычного удара выше на 10 процентных пунктов."
 
 # --- Разбойник ---
 
@@ -781,7 +781,7 @@ name = "Тихий шаг"
 category = "milestone"
 tags = ["веха", "ловкость"]
 modifiers = { dodge_percent = 3, initiative_percent = 2 }
-text = "Уклонения на 3 больше, ходите на 2 процента раньше."
+text = "Шанс уклонения выше на 3 процентных пункта. Инициатива выше на 2 процентов."
 
 [[trait]]
 id = "ms_rogue_opening"
@@ -789,7 +789,7 @@ name = "Прореха"
 category = "milestone"
 tags = ["веха", "удача"]
 modifiers = { crit_chance_percent = 4 }
-text = "Решающий удар случается на 4 процента чаще."
+text = "Шанс критического удара выше на 4 процентных пункта."
 
 [[trait]]
 id = "ms_rogue_backhand"
@@ -797,7 +797,7 @@ name = "Со спины"
 category = "milestone"
 tags = ["веха", "ловкость"]
 modifiers = { single_target_damage_percent = 5 }
-text = "По одиночной цели вы бьёте на 5 процентов сильнее."
+text = "Урон по одной цели выше на 5 процентов."
 
 [[trait]]
 id = "ms_rogue_longodds"
@@ -805,7 +805,7 @@ name = "Долгий расчёт"
 category = "milestone"
 tags = ["веха", "удача"]
 modifiers = { crit_damage_percent = 15, rarity_percent = 5 }
-text = "Решающий удар злее на 15 процентов, добыча выпадает на 5 процентов ценнее."
+text = "Критический урон в долях обычного удара выше на 15 процентных пунктов. Прибавка к выбору более редкого снаряжения: 5 процентов. Она влияет на редкость уже выпавшей находки."
 
 [[trait]]
 id = "ms_rogue_onebreath"
@@ -813,7 +813,7 @@ name = "На одном вдохе"
 category = "milestone"
 tags = ["веха", "ловкость"]
 modifiers = { crit_chance_percent = 4, initiative_percent = 5 }
-text = "Решающий удар на 4 процента чаще, ходите на 5 процентов раньше."
+text = "Шанс критического удара выше на 4 процентных пункта. Инициатива выше на 5 процентов."
 
 # --- Маг ---
 
@@ -823,7 +823,7 @@ name = "Счёт"
 category = "milestone"
 tags = ["веха", "интеллект"]
 modifiers = { magic_damage_percent = 3 }
-text = "Магический удар сильнее на 3 процента."
+text = "Магический урон выше на 3 процентов."
 
 [[trait]]
 id = "ms_mage_widening"
@@ -831,7 +831,7 @@ name = "Разлёт"
 category = "milestone"
 tags = ["веха", "интеллект"]
 modifiers = { aoe_damage_percent = 5 }
-text = "Удар по всем сильнее на 5 процентов."
+text = "Урон по нескольким целям выше на 5 процентов."
 
 [[trait]]
 id = "ms_mage_deepwell"
@@ -839,7 +839,7 @@ name = "Глубокий колодец"
 category = "milestone"
 tags = ["веха", "интеллект"]
 modifiers = { resource_percent = 10 }
-text = "Чар у вас на 10 процентов больше."
+text = "Максимальный запас класса выше на 10 процентов."
 
 [[trait]]
 id = "ms_mage_thrift"
@@ -847,7 +847,7 @@ name = "Бережливость"
 category = "milestone"
 tags = ["веха", "интеллект"]
 modifiers = { cost_reduction_percent = 8 }
-text = "Умения стоят на 8 процентов дешевле."
+text = "Расход запаса на умения ниже на 8 процентов."
 
 [[trait]]
 id = "ms_mage_arithmetic"
@@ -855,7 +855,7 @@ name = "Чистая арифметика"
 category = "milestone"
 tags = ["веха", "интеллект"]
 modifiers = { magic_damage_percent = 6, aoe_damage_percent = 5 }
-text = "Магический удар сильнее на 6 процентов, удар по всем — на 5."
+text = "Магический урон выше на 6 процентов. Урон по нескольким целям выше на 5 процентов."
 
 # --- Жрец ---
 
@@ -865,7 +865,7 @@ name = "Твёрдые руки"
 category = "milestone"
 tags = ["веха", "мудрость"]
 modifiers = { healing_done_percent = 6 }
-text = "Вы лечите на 6 процентов сильнее."
+text = "Ваше лечение выше на 6 процентов."
 
 [[trait]]
 id = "ms_cleric_naming"
@@ -873,7 +873,7 @@ name = "Названное имя"
 category = "milestone"
 tags = ["веха", "мудрость"]
 modifiers = { resist_mental_percent = 8, resist_negative_percent = 8 }
-text = "Рассудочный и негативный урон вредят вам на 8 процентов меньше."
+text = "Сопротивление рассудочному урону выше на 8 процентных пунктов. Сопротивление тёмному урону выше на 8 процентных пунктов."
 
 [[trait]]
 id = "ms_cleric_vigil"
@@ -881,7 +881,7 @@ name = "Бдение"
 category = "milestone"
 tags = ["веха", "мудрость"]
 modifiers = { health_percent = 6, healing_taken_percent = 5 }
-text = "Здоровья на 6 процентов больше, вас лечат на 5 процентов лучше."
+text = "Максимальное здоровье выше на 6 процентов. Получаемое вами лечение выше на 5 процентов."
 
 [[trait]]
 id = "ms_cleric_wellspring"
@@ -889,7 +889,7 @@ name = "Родник"
 category = "milestone"
 tags = ["веха", "мудрость"]
 modifiers = { resource_regen_percent = 14 }
-text = "Мана восстанавливается на 14 процентов быстрее."
+text = "Количество запаса, возвращаемое за свой ход, выше на 14 процентов."
 
 [[trait]]
 id = "ms_cleric_lastword"
@@ -897,7 +897,7 @@ name = "Последнее слово"
 category = "milestone"
 tags = ["веха", "мудрость"]
 modifiers = { healing_done_percent = 14 }
-text = "Вы лечите на 14 процентов сильнее."
+text = "Ваше лечение выше на 14 процентов."
 
 # --- Друид ---
 
@@ -907,7 +907,7 @@ name = "Укоренение"
 category = "milestone"
 tags = ["веха", "мудрость"]
 modifiers = { resist_nature_percent = 8, armor_percent = 3 }
-text = "Природный урон вредит вам на 8 процентов меньше, брони на 3 процента больше."
+text = "Сопротивление природному урону выше на 8 процентных пунктов. Броня выше на 3 процентов."
 
 [[trait]]
 id = "ms_druid_pelt"
@@ -915,7 +915,7 @@ name = "Шкура"
 category = "milestone"
 tags = ["веха", "выносливость"]
 modifiers = { health_percent = 5, armor_percent = 4 }
-text = "Здоровья на 5 процентов больше, брони — на 4 процента."
+text = "Максимальное здоровье выше на 5 процентов. Броня выше на 4 процентов."
 
 [[trait]]
 id = "ms_druid_slowgrowth"
@@ -923,7 +923,7 @@ name = "Медленный рост"
 category = "milestone"
 tags = ["веха", "мудрость"]
 modifiers = { regen_per_turn_percent = 3 }
-text = "Каждый ход вам возвращается 3 процента здоровья."
+text = "Восстановление здоровья за свой ход выше на 3 процентных пункта от максимального здоровья; ниже нуля оно не падает."
 
 [[trait]]
 id = "ms_druid_thicket"
@@ -931,7 +931,7 @@ name = "Чаща"
 category = "milestone"
 tags = ["веха", "выносливость"]
 modifiers = { damage_taken_percent = -6 }
-text = "Удар по вам слабее на 6 процентов."
+text = "Получаемый урон ниже на 6 процентов."
 
 [[trait]]
 id = "ms_druid_oldcompact"
@@ -939,4 +939,4 @@ name = "Старый договор"
 category = "milestone"
 tags = ["веха", "мудрость"]
 modifiers = { dot_damage_percent = 12, healing_done_percent = 8 }
-text = "Яд, горение и кровотечение от вас точат на 12 процентов сильнее, лечение выше на 8."
+text = "Периодический урон от наложенных вами состояний выше на 12 процентов. Ваше лечение выше на 8 процентов."

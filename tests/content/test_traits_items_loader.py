@@ -120,25 +120,32 @@ def test_a_skill_never_asks_for_a_weapon_its_class_cannot_hold(content: GameCont
         assert set(skill.weapon_types) <= set(klass.weapon_types), skill.code
 
 
-def test_rarity_is_what_gives_affixes_and_only_the_top_two_scale(content: GameContent) -> None:
+def test_rarity_sets_affix_counts_and_no_item_scales(content: GameContent) -> None:
     """Договор редкостей, как он назван игроку: 0, 1, 2, 3, 4 плюс свойство у двух старших."""
     by_id = {rarity.id: rarity for rarity in content.rarities}
     assert [rarity.affixes for rarity in content.rarities] == [0, 1, 2, 3, 4]
     assert not by_id["common"].special
     assert by_id["legendary"].special
     assert by_id["relic"].special
-    assert by_id["relic"].scaling
-    assert sum(rarity.scaling for rarity in content.rarities) == 1
+    assert by_id["relic"].boss_only
+    assert not any(rarity.scaling for rarity in content.rarities)
+    assert [(one.prefixes, one.suffixes) for one in content.rarities] == [
+        (0, 0),
+        (1, 0),
+        (1, 1),
+        (2, 1),
+        (2, 2),
+    ]
 
 
 def test_only_a_relic_is_kept_off_the_shelves(content: GameContent) -> None:
     for rarity in content.rarities:
-        assert (rarity.weight == 0) is rarity.scaling, rarity.id
+        assert (rarity.weight == 0) is rarity.boss_only, rarity.id
 
 
 def test_a_relic_is_paid_only_for_a_whole_chain(content: GameContent) -> None:
     """Второй путь к реликтовой вещи — цепочка заданий, пройденная до конца."""
-    relics = {rarity.id for rarity in content.rarities if rarity.scaling}
+    relics = {rarity.id for rarity in content.rarities if rarity.boss_only}
     by_id = {quest.id: quest for quest in content.quests}
     paid = [
         quest

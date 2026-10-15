@@ -302,6 +302,13 @@ def _build_rules(raw: Mapping[str, Mapping[str, Any]], problems: list[str]) -> P
     trait_meta = raw["traits.toml"].get("meta", {})
     skill_meta = raw["skills.toml"].get("meta", {})
 
+    rank_levels = skill_meta.get("rank_unlock_levels", (1, 10, 30, 60, 100))
+    if not isinstance(rank_levels, (list, tuple)) or any(
+        type(one) is not int for one in rank_levels
+    ):
+        problems.append("skills.toml: [meta].rank_unlock_levels must list integer levels")
+        rank_levels = (1, 10, 30, 60, 100)
+
     rules = ProgressionRules(
         max_character_level=int(world_meta.get("max_character_level", 150)),
         base_stat_value=int(class_meta.get("base_stat_value", 5)),
@@ -317,6 +324,7 @@ def _build_rules(raw: Mapping[str, Mapping[str, Any]], problems: list[str]) -> P
         max_rank=int(skill_meta.get("max_rank", 5)),
         levels_per_skill_point=int(skill_meta.get("levels_per_skill_point", 2)),
         rank_cost=int(skill_meta.get("rank_cost", 1)),
+        rank_unlock_levels=tuple(rank_levels),
         health_recovery_base_percent=float(class_meta.get("health_recovery_base_percent", 5)),
         health_recovery_endurance_percent=float(
             class_meta.get("health_recovery_endurance_percent", 20)
@@ -329,6 +337,22 @@ def _build_rules(raw: Mapping[str, Mapping[str, Any]], problems: list[str]) -> P
         problems.append("skills.toml: [meta].levels_per_skill_point must be at least 1")
     if rules.rank_cost < 1:
         problems.append("skills.toml: [meta].rank_cost must be at least 1")
+    if (
+        len(rules.rank_unlock_levels) != rules.max_rank
+        or not rules.rank_unlock_levels
+        or rules.rank_unlock_levels[0] != 1
+        or any(not 1 <= level <= rules.max_character_level for level in rules.rank_unlock_levels)
+        or any(
+            previous >= following
+            for previous, following in zip(
+                rules.rank_unlock_levels, rules.rank_unlock_levels[1:], strict=False
+            )
+        )
+    ):
+        problems.append(
+            "skills.toml: [meta].rank_unlock_levels must list one increasing level per rank, "
+            "starting at 1 and within the character level limit"
+        )
     from math import isfinite
 
     for name in (
@@ -1030,7 +1054,12 @@ def _parse_loot(
         requirement_accuracy_penalty=float(meta.get("requirement_accuracy_penalty", 0.0)),
         requirement_initiative_penalty=float(meta.get("requirement_initiative_penalty", 0.0)),
         requirement_step=max(1, int(meta.get("requirement_step", 20))),
+        prefix_words=meta.get("prefix_words", {}),
     )
+    for code in StatCode:
+        words = rules.prefix_words.get(code.value, {})
+        if not all(str(words.get(gender, "")).strip() for gender in GENDERS):
+            problems.append(f"item_generator.toml: no prefix adjective for {code.value}")
 
     known_kinds = (
         {one.id for one in gear.weapon_types}
@@ -1453,8 +1482,8 @@ def _validate_skill_weapons(
 
 
 #: Сколько заданий подряд должна вести цепочка, чтобы за её конец давали
-#: реликтовую вещь. Реликтовое не устаревает никогда: платить за него надо
-#: либо логовом, либо длинной дорогой.
+#: реликтовую вещь. Цепочка оплачивает редкость и число свойств реликта;
+#: его собственная ступень остаётся прежней и требует замены по мере развития.
 RELIC_CHAIN_LENGTH = 4
 
 
@@ -1464,7 +1493,7 @@ def _validate_quest_rewards(
     problems: list[str],
 ) -> None:
     """Реликтовое даётся только за конец длинной цепочки — или не даётся вовсе."""
-    relics = {rarity.id for rarity in gear.rarities if rarity.scaling}
+    relics = {rarity.id for rarity in gear.rarities if rarity.boss_only}
     if not relics:
         return
     by_id = {quest.id: quest for quest in quests}
@@ -1684,6 +1713,9 @@ def _parse_rarities(meta: Mapping[str, Any], problems: list[str]) -> tuple[Rarit
             affixes=int(entry.get("affixes", 0)),
             special=bool(entry.get("special", False)),
             scaling=bool(entry.get("scaling", False)),
+            boss_only=bool(entry.get("boss_only", False)),
+            prefixes=int(entry.get("prefixes", 0)),
+            suffixes=int(entry.get("suffixes", 0)),
             mark=str(entry.get("mark", "")),
             durability=int(entry.get("durability", 0)),
             toughness=float(entry.get("toughness", 1.0)),
@@ -1692,6 +1724,16 @@ def _parse_rarities(meta: Mapping[str, Any], problems: list[str]) -> tuple[Rarit
         # кнопка в списке - это её текст (правила доступности 6).
         if not rarity.mark and rarity.id != "common":
             problems.append(f"items.toml: rarity {rarity.id} has no mark to tell its things apart")
+        if rarity.scaling:
+            problems.append(f"items.toml: rarity {rarity.id} must have fixed item-level numbers")
+        if rarity.prefixes < 0 or rarity.suffixes < 0:
+            problems.append(f"items.toml: rarity {rarity.id} has negative affix counts")
+        if rarity.prefixes + rarity.suffixes != rarity.affixes:
+            problems.append(f"items.toml: rarity {rarity.id} affix budget does not match")
+        if rarity.prefixes > len(StatCode) or rarity.suffixes + int(rarity.special) > len(
+            meta.get("special_properties", ())
+        ):
+            problems.append(f"items.toml: rarity {rarity.id} asks for too many unique affixes")
         # Инструмент этой редкости должен что-то держать: прочность - всё, что
         # редкость ему даёт, и ноль означал бы кирку, ломающуюся о первый камень.
         if rarity.durability < 1:

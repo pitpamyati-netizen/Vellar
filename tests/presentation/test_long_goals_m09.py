@@ -26,7 +26,7 @@ async def prepare(player, hero):
     )
 
 
-async def test_main_goals_commands_back_and_real_trial_navigation(table):
+async def test_main_goals_commands_back_and_real_trial_navigation(table, content):
     player, _, hero, _ = table
     await prepare(player, hero)
     assert "Долгие цели" in buttons(await player.press("Главное меню"))
@@ -42,7 +42,7 @@ async def test_main_goals_commands_back_and_real_trial_navigation(table):
     assert (await player.press("/меню")).id is ScreenId.MAIN_MENU
     collected = await player.press("/цели хроника")
     assert "Письма мимо Престола" in collected.text()
-    assert "Веденей не сжёг письма" in collected.text()
+    assert content.long_goals.fragments[1].text in collected.text()
     assert (
         "не распознано" in (await player.press("/цели неизвестно")).text()
         or "Условия" in (await player.press("/цели неизвестно")).text()

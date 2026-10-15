@@ -301,12 +301,17 @@ def upgraded(content: GameContent, item_id: str, quality: QualityTier, *, source
     archetype_id, level, rarity_id, _ = parsed
     # Реликтовое не куют, а невыкладываемое на прилавок и подавно: лестница -
     # это то, чем город торгует.
-    ladder = [rarity for rarity in content.rarities if rarity.weight > 0 and not rarity.scaling]
+    ladder = [rarity for rarity in content.rarities if rarity.weight > 0 and not rarity.boss_only]
     known = [rarity.id for rarity in ladder]
     if rarity_id not in known:
         return item_id
     picked = ladder[min(known.index(rarity_id) + max(0, quality.rarity_step), len(ladder) - 1)]
-    roll = source.randrange(max(1, gear_procgen.rolls_of(content))) if picked.affixes else 0
+    archetype = content.gear_archetype(archetype_id)
+    roll = (
+        gear_procgen.new_roll(content, source, archetype)
+        if picked.affixes and not archetype.tool_type
+        else 0
+    )
     return gear_procgen.gear_id(archetype_id, level, picked.id, roll)
 
 

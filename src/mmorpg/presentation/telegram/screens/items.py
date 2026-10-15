@@ -27,6 +27,7 @@ from mmorpg.domain.rules import equipment as gear
 from mmorpg.domain.rules import milestones as milestone_rules
 from mmorpg.domain.rules import repair as repair_rules
 from mmorpg.domain.rules import tools as tool_rules
+from mmorpg.domain.rules.wording import percentage_points
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import amount, number, percent
@@ -157,7 +158,12 @@ def modifier_line(content: GameContent, key: str, value: float) -> str:
         return f"{name} {sign} {abs(int(value))}"
     sign = "плюс" if value > 0 else "минус"
     tail = "" if content.is_bonus(key, value) else ", это хуже"
-    return f"{name} {sign} {percent(abs(value))}{tail}"
+    size = (
+        percentage_points(abs(value))
+        if key in {"crit_chance_percent", "crit_damage_percent", "dodge_percent"}
+        else percent(abs(value))
+    )
+    return f"{name} {sign} {size}{tail}"
 
 
 def effect_line(item: Item) -> str:
@@ -250,8 +256,32 @@ def kind_lines(content: GameContent, character: Character, item: Item) -> tuple[
         lines.append(f"Великая работа: {named} — выше того, что даёт эта редкость обычно.")
     lines.extend(requirement_lines(content, character, worn))
     lines.extend(named_affix_lines(content, character, worn))
-    if content.has_rarity(worn.rarity) and content.rarity(worn.rarity).scaling:
-        lines.append("Реликтовая вещь: её числа растут вместе с вашим уровнем.")
+    if worn.prefixes or worn.suffixes:
+        names = []
+        for key in worn.prefixes:
+            code = key.removeprefix("stat_")
+            names.append(f"{STAT_NAMES.get(code, code).lower()} плюс {worn.stat_bonuses[code]}")
+        lines.append(f"Префиксы: {'; '.join(names)}.")
+        special = (
+            worn.suffixes[-1]
+            if content.has_rarity(worn.rarity)
+            and content.rarity(worn.rarity).special
+            and worn.suffixes
+            else ""
+        )
+        names = [
+            f"{MODIFIER_NAMES.get(key, key)} {percent(worn.modifiers[key])}"
+            for key in worn.suffixes
+            if key != special
+        ]
+        lines.append(f"Суффиксы: {'; '.join(names)}." if names else "Суффиксов нет.")
+        if special:
+            lines.append(
+                f"Особое свойство: {MODIFIER_NAMES.get(special, special)} "
+                f"{percent(worn.modifiers[special])}."
+            )
+    if content.has_rarity(worn.rarity) and content.rarity(worn.rarity).boss_only:
+        lines.append(f"Реликтовая вещь. Уровень вещи: {worn.level}; свойства закреплены за ней.")
     return tuple(lines)
 
 

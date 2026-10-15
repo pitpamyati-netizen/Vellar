@@ -19,9 +19,13 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
+from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.combat import MAX_SIDE
+from mmorpg.domain.entities.content import GameContent
+from mmorpg.domain.procgen import items as gear_procgen
 
 #: Сколько человек помещается в отряд. Столько же, сколько бойцов на стороне:
 #: отряд и есть сторона (``domain/entities/combat.MAX_SIDE``).
@@ -121,7 +125,12 @@ def split(amount: int, members: int) -> tuple[int, ...]:
 
 
 def distribute(
-    loot: tuple[str, ...], members: tuple[int, ...], source: random.Random
+    loot: tuple[str, ...],
+    members: tuple[int, ...],
+    source: random.Random,
+    *,
+    content: GameContent | None = None,
+    roster: Mapping[int, Character] | None = None,
 ) -> dict[int, tuple[str, ...]]:
     """Кому какая вещь досталась.
 
@@ -133,5 +142,30 @@ def distribute(
     shares: dict[int, list[str]] = {member: [] for member in members}
     start = source.randrange(len(members)) if len(members) > 1 else 0
     for index, item_id in enumerate(loot):
-        shares[members[(start + index) % len(members)]].append(item_id)
+        recipient = members[(start + index) % len(members)]
+        if content is not None and roster is not None and content.has_item(item_id):
+            item = content.item(item_id)
+            parsed = gear_procgen.parse_gear_id(item_id)
+            if parsed is not None and item.is_equipment and not item.is_tool:
+                archetype = content.gear_archetype(parsed[0])
+                eligible = [
+                    member
+                    for member in members
+                    if member in roster
+                    and gear_procgen.suits(content, archetype, (roster[member].class_id,))
+                ]
+                profile = (
+                    gear_procgen.stamp_class(content, parsed[3])
+                    if parsed[3] >= gear_procgen.STAMP_V2
+                    else ""
+                )
+                profiled = [member for member in eligible if roster[member].class_id == profile]
+                eligible = profiled or eligible
+                if eligible:
+                    for offset in range(len(members)):
+                        candidate = members[(start + index + offset) % len(members)]
+                        if candidate in eligible:
+                            recipient = candidate
+                            break
+        shares[recipient].append(item_id)
     return {member: tuple(items) for member, items in shares.items()}

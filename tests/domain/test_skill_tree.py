@@ -20,7 +20,7 @@ from mmorpg.domain.rules.stats import skill_point_allowance
 def test_every_rank_costs_the_same_single_point(content: GameContent, warrior: Character) -> None:
     """Ранг стоит одно очко, любой: за очко он платит не ценой, а делом."""
     skill = content.class_skills_up_to("warrior", 1, SkillKind.ACTIVE)[0]
-    rich = replace(warrior, unspent_skill_points=99)
+    rich = replace(warrior, level=150, unspent_skill_points=99)
     costs = []
     for _ in range(content.rules.max_rank):
         costs.append(skill_rules.cost_to_learn(content, rich, skill))
@@ -60,7 +60,7 @@ def test_the_mentor_returns_exactly_what_was_spent(
     content: GameContent, warrior: Character
 ) -> None:
     skill = content.class_skills_up_to("warrior", 1, SkillKind.ACTIVE)[0]
-    rich = replace(warrior, unspent_skill_points=10)
+    rich = replace(warrior, level=150, unspent_skill_points=10)
     for _ in range(3):
         raised = skill_rules.learn(content, rich, skill)
         assert raised is not None

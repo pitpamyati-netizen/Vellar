@@ -163,18 +163,26 @@ def reforged(content: GameContent, item_id: str, *, source: Random) -> str:
     - это не работа, а пошлина.
     """
     parsed = gear_procgen.parse_gear_id(item_id)
-    if parsed is None:
+    if (
+        parsed is None
+        or not content.has_item(item_id)
+        or not can_reforge(content, content.item(item_id))
+    ):
         return item_id
     archetype_id, level, rarity_id, roll = parsed
-    rolls = max(1, gear_procgen.rolls_of(content))
-    if rolls < 2:
-        return item_id
-    picked = source.randrange(rolls - 1)
+    archetype = content.gear_archetype(archetype_id)
+    profile = gear_procgen.stamp_class(content, roll) if roll >= gear_procgen.STAMP_V2 else ""
+    picked = gear_procgen.new_roll(content, source, archetype, class_id=profile)
+    if picked == roll:
+        token, variant = divmod(roll - gear_procgen.STAMP_V2, gear_procgen.STAMP_VARIANTS)
+        picked = (
+            gear_procgen.STAMP_V2
+            + token * gear_procgen.STAMP_VARIANTS
+            + (variant + 1) % gear_procgen.STAMP_VARIANTS
+        )
     from mmorpg.domain.entities.item_instance import with_template
 
     return with_template(
         item_id,
-        gear_procgen.gear_id(
-            archetype_id, level, rarity_id, picked if picked < roll else picked + 1
-        ),
+        gear_procgen.gear_id(archetype_id, level, rarity_id, picked),
     )
