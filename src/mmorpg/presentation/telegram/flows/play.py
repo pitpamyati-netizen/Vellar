@@ -73,6 +73,7 @@ from mmorpg.presentation.telegram.flows.state import (
 )
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.routing import Command, Intent, resolve
+from mmorpg.presentation.telegram.screens import amounts
 from mmorpg.presentation.telegram.screens import arena as arena_screens
 from mmorpg.presentation.telegram.screens import city as city_screens
 from mmorpg.presentation.telegram.screens import crafts as craft_screens
@@ -680,6 +681,7 @@ def _render(
                 item,
                 price=shelf.prices[item.id],
                 gold=shelf.gold,
+                quantity=state.shop_quantity,
                 notice=state.notice,
             )
         case ScreenId.SHOP | ScreenId.SHOP_ITEM:
@@ -777,6 +779,7 @@ def _render(
                 character,
                 derived_stats(content, character),
                 state.notice,
+                spend_amount=state.stat_amount,
                 verbose=(settings or DEFAULT_SETTINGS).verbose,
             )
         case ScreenId.TUTORIAL:
@@ -1903,28 +1906,44 @@ def _handle_equipment(
 def _handle_stats(
     content: GameContent, character: Character, state: PlayState, command: Command
 ) -> PlayState:
-    """Очко на нажатие. Экран, на котором отвечают, говорит, что это очко купило."""
+    """Выбор размера не тратит очков; вложение проверяет весь выбранный размер."""
     if command.intent is not Intent.SELECT:
-        return state.with_notice("Нажмите характеристику, чтобы вложить очко.")
+        if character.unspent_stat_points < 1:
+            return state.with_notice("Свободных очков характеристик нет, их даёт новый уровень.")
+        return state.with_notice("Выберите размер вложения или характеристику.")
     if labels.SUBCLASS.matches(command.argument):
         return state.at(ScreenId.SUBCLASS)
+    for size in amounts.STAT_AMOUNTS:
+        if amounts.stat_amount_label(size).matches(command.argument):
+            if character.unspent_stat_points < size:
+                return state.with_notice(f"Для этого нужно {size} свободных очков.")
+            return replace(state, stat_amount=size)
+    size = amounts.stat_amount(state.stat_amount, character.unspent_stat_points)
     for code, stat_name in STAT_NAMES.items():
-        if not screens.spend_label(stat_name).matches(command.argument):
+        if not screens.spend_label(stat_name, size).matches(command.argument):
             continue
         if character.unspent_stat_points < 1:
             return state.with_notice("Свободных очков характеристик нет, их даёт новый уровень.")
         stronger = replace(
             character,
-            allocated=character.allocated.with_change(StatCode(code), 1),
-            unspent_stat_points=character.unspent_stat_points - 1,
+            allocated=character.allocated.with_change(StatCode(code), size),
+            unspent_stat_points=character.unspent_stat_points - size,
         )
-        said = f"{stat_name} повышена. Осталось очков: {stronger.unspent_stat_points}."
+        said = (
+            f"В характеристику «{stat_name}» вложено {size} "
+            f"{format_screens.plural(size, 'очко', 'очка', 'очков')}. "
+            f"Осталось очков: {stronger.unspent_stat_points}."
+        )
         # Взятая веха объявляется тем же нажатием, которым её взяли (ADR 0068):
         # порог, о котором молчат, ничем не отличается от порога, которого нет.
         if taken := screens.milestone_taken(content, character, stronger):
             said = f"{said} {taken}"
-        return state.storing(PendingWrite(character=stronger)).with_notice(said)
-    return state.with_notice("Нажмите характеристику, чтобы вложить очко.")
+        return (
+            replace(state, stat_amount=amounts.stat_amount(size, stronger.unspent_stat_points))
+            .storing(PendingWrite(character=stronger))
+            .with_notice(said)
+        )
+    return state.with_notice("Выберите размер вложения или характеристику.")
 
 
 # --- goods ------------------------------------------------------------
@@ -1951,9 +1970,9 @@ def _handle_shop(
         return state.with_notice("Нажмите товар из списка.")
     # Нажатие открывает карточку, а не кошелёк: сначала игрок узнаёт, что вещь
     # даёт и чем она лучше надетого, и только потом платит (``screens/items.py``).
-    return replace(state, item_id=item.id, shop_price=goods.prices.get(item.id)).at(
-        ScreenId.SHOP_ITEM
-    )
+    return replace(
+        state, item_id=item.id, shop_price=goods.prices.get(item.id), shop_quantity=1
+    ).at(ScreenId.SHOP_ITEM)
 
 
 def _visible_stock(content: GameContent, state: PlayState, goods: Goods) -> tuple[Item, ...]:
@@ -1970,7 +1989,7 @@ def _handle_shop_item(
     command: Command,
     goods: Goods,
 ) -> PlayState:
-    """Карточка товара: одна кнопка, и она стоит денег."""
+    """Количество выбирается до покупки; оплата и выдача — одним намерением."""
     if (
         not content.has_item(state.item_id)
         or not any(one.id == state.item_id for one in goods.stock)
@@ -1978,27 +1997,57 @@ def _handle_shop_item(
     ):
         return go_back(state).with_notice("Этого товара больше нет на прилавке.")
     item = content.item(state.item_id)
-    if command.intent is not Intent.SELECT or not item_screens.BUY.matches(command.argument):
-        return state.with_notice("Нажмите «Купить» или «Назад».")
-
     price = goods.prices[item.id]
     if price <= 0:
         return go_back(state).with_notice("Этот товар сейчас не продаётся.")
+    selected = command.number if command.intent is Intent.SHOP_QUANTITY else None
+    if command.intent is Intent.SELECT:
+        selected = next(
+            (
+                n
+                for n in item_screens.SHOP_QUANTITIES
+                if item_screens.quantity_label(n).matches(command.argument)
+            ),
+            None,
+        )
+    if selected is not None:
+        if item.stack <= 1:
+            return state.with_notice("Этот товар продаётся поштучно.")
+        if selected < 1:
+            return state.with_notice("Количество должно быть целым числом больше нуля.")
+        total = price * selected
+        if total > goods.gold:
+            return state.with_notice(
+                f"За {selected} нужно {total} золота, у вас {goods.gold}. Не хватает."
+            )
+        return replace(state, shop_quantity=selected, shop_price=price)
+    if command.intent not in {Intent.SELECT, Intent.UNKNOWN} or not item_screens.BUY.matches(
+        command.argument
+    ):
+        return state.with_notice("Выберите количество или нажмите «Купить» либо «Назад».")
+
+    quantity = max(1, state.shop_quantity) if item.stack > 1 else 1
+    total = price * quantity
     if state.shop_price != price:
         return replace(state, shop_price=price).with_notice(
-            f"Нынешняя цена: {price} золота. Проверьте её и нажмите «Купить» ещё раз для согласия."
+            f"Нынешняя цена: {price} золота за штуку, за {quantity} — {total} золота. "
+            "Проверьте её и нажмите «Купить» ещё раз для согласия."
         )
-    if price > goods.gold:
+    if total > goods.gold:
         return state.with_notice(
-            f"{item.choice_name} стоит {price} золота, у вас {goods.gold}. Не хватает."
+            f"{item.choice_name}: за {quantity} нужно {total} золота, "
+            f"у вас {goods.gold}. Не хватает."
         )
-    write = PendingWrite(character=character.with_gold(-price), items=((item.id, 1),)).because(
-        economy_log.SHOP
+    write = PendingWrite(
+        character=character.with_gold(-total), items=((item.id, quantity),)
+    ).because(economy_log.SHOP)
+    named = (
+        f"{item.choice_name}." if quantity == 1 else f"{item.choice_name}, количество {quantity}."
     )
     bought = (
-        go_back(replace(state, item_id=""))
+        go_back(replace(state, item_id="", shop_quantity=1))
         .storing(write)
-        .with_notice(f"Куплено: {item.choice_name}. Уплачено {price} золота.")
+        .with_notice(f"Куплено: {named} Уплачено {total} золота.")
     )
     return mark_task(bought, character, TutorialTask.TRADE)
 
@@ -2455,13 +2504,8 @@ def _handle_offer(
             "Этого задания больше нет. Посмотрите доску заново."
         )
     if command.intent is not Intent.SELECT:
-        return state.with_notice("Согласитесь, спросите или уйдите.")
+        return state.with_notice("Выберите действие задания или уйдите.")
     quest = content.quest(state.quest_id)
-    if labels.QUEST_ASK.matches(command.argument):
-        return state.with_notice(
-            f"Платит {quest.giver}, из своего кармана, после счёта. "
-            f"Сбор берут с торговли, а не с задания."
-        )
     if labels.QUEST_LEAVE.matches(command.argument):
         # Отказ никогда не закрывает задание насовсем (Narrative.md, раздел 4).
         return go_back(state).with_notice("Вы ушли. Задание останется на доске.")
@@ -2477,7 +2521,7 @@ def _handle_offer(
             )
         )
     if not labels.QUEST_ACCEPT.matches(command.argument):
-        return state.with_notice("Согласитесь, спросите или уйдите.")
+        return state.with_notice("Выберите действие задания или уйдите.")
 
     accepted = quest_rules.take(content, character, quest)
     if accepted == character:

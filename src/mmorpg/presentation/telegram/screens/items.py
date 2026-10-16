@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.content import GameContent, Item
@@ -148,6 +148,11 @@ EQUIP = label("Надеть", "🛡")
 USE = label("Использовать", "🧪")
 BUY = label("Купить", "🛒")
 SELL_ONE = label("Продать одну", "💱")
+SHOP_QUANTITIES = (1, 5, 10, 50, 100)
+
+
+def quantity_label(quantity: int) -> Label:
+    return label(f"Количество: {quantity}")
 
 
 def modifier_line(content: GameContent, key: str, value: float) -> str:
@@ -458,14 +463,28 @@ def shop_item_screen(
     *,
     price: int,
     gold: int,
+    quantity: int = 1,
     notice: str = "",
 ) -> Screen:
     """Карточка товара на прилавке: то же самое плюс цена и кнопка «Купить»."""
     lines = list(card_lines(content, character, item, price=price, notice=notice))
+    if item.stack > 1:
+        lines.append("Цена указана за одну штуку.")
+    quantity = max(1, quantity) if item.stack > 1 else 1
+    total = price * quantity
+    lines.append(f"Количество к покупке: {quantity}. За всё: {gold_words(total)}.")
     lines.append(
         f"У вас {gold_words(gold)}."
-        if price <= gold
-        else f"У вас {gold_words(gold)}, не хватает {price - gold}."
+        if total <= gold
+        else f"У вас {gold_words(gold)}, не хватает {total - gold}."
     )
-    rows: Sequence[tuple[Label, ...]] = ((BUY,),) if price <= gold else ()
+    rows: list[tuple[Label, ...]] = [(BUY,)] if 0 < total <= gold else []
+    if item.stack > 1 and price > 0:
+        choices = [quantity_label(n) for n in SHOP_QUANTITIES if n * price <= gold]
+        rows.extend(tuple(choices[index : index + 2]) for index in range(0, len(choices), 2))
+        lines.append(
+            "Выберите количество, затем нажмите «Купить». "
+            "Другое количество: /количество N, например /количество 3. "
+            "Покупка текстом: /купить."
+        )
     return Screen(id=ScreenId.SHOP_ITEM, lines=tuple(lines), rows=tuple(rows))

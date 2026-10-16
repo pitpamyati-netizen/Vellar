@@ -18,6 +18,7 @@ from mmorpg.domain.entities.content import GameContent
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.routing import Command, Intent, resolve
+from mmorpg.presentation.telegram.screens import amounts
 from mmorpg.presentation.telegram.screens import creation as screens
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.paginated import (
@@ -45,6 +46,7 @@ class CreationState:
     searching: bool = False
     finished: bool = False
     exited: bool = False
+    stat_amount: int = 1
 
     def at(self, screen: ScreenId) -> CreationState:
         """Перейти на экран, запомнив шаг, с которого пришли."""
@@ -70,6 +72,7 @@ class CreationState:
                 "trait_category": self.trait_page.filters.category,
                 "trait_query": self.trait_page.filters.query,
                 "searching": self.searching,
+                "stat_amount": self.stat_amount,
             },
             ensure_ascii=False,
         )
@@ -96,6 +99,7 @@ class CreationState:
                 ),
             ),
             searching=bool(data.get("searching", False)),
+            stat_amount=int(data.get("stat_amount", 1)),
         )
 
 
@@ -121,7 +125,9 @@ def render(content: GameContent, state: CreationState) -> Screen:
         case ScreenId.CREATE_TRAIT_FILTERS:
             return screens.trait_filters_screen(content, state.trait_page)
         case ScreenId.CREATE_POINTS:
-            return screens.points_screen(content, state.draft, state.notice)
+            return screens.points_screen(
+                content, state.draft, state.notice, spend_amount=state.stat_amount
+            )
         case _:
             return screens.confirm_screen(content, state.draft)
 
@@ -342,6 +348,8 @@ def _handle_traits(content: GameContent, state: CreationState, command: Command)
 def _handle_points(content: GameContent, state: CreationState, command: Command) -> CreationState:
     budget = content.rules.free_points_at_creation
     if command.intent is not Intent.SELECT:
+        if not state.draft.points_left(budget):
+            return state.with_notice("Свободных очков не осталось.")
         return state.with_notice("Нажмите характеристику, чтобы вложить очко.")
 
     argument = command.argument
@@ -357,14 +365,20 @@ def _handle_points(content: GameContent, state: CreationState, command: Command)
         return state.at(ScreenId.CREATE_CONFIRM)
 
     for code, name in screens.STAT_NAMES.items():
-        if argument.startswith(name):
-            updated = state.draft.spend_point(StatCode(code), budget)
+        size = amounts.stat_amount(state.stat_amount, state.draft.points_left(budget))
+        if screens.point_label(name, size).matches(argument):
+            updated = state.draft.spend_point(StatCode(code), budget, size)
             if updated == state.draft:
                 return state.with_notice("Свободных очков не осталось.")
             left = updated.points_left(budget)
-            return replace(state, draft=updated).with_notice(
-                f"{name} повышена. Осталось распределить {left}."
-            )
+            return replace(
+                state, draft=updated, stat_amount=amounts.stat_amount(size, left)
+            ).with_notice(f"{name} повышена. Осталось распределить {left}.")
+    for size in amounts.STAT_AMOUNTS:
+        if amounts.stat_amount_label(size).matches(argument):
+            if size > state.draft.points_left(budget):
+                return state.with_notice(f"Для этого нужно {size} свободных очков.")
+            return replace(state, stat_amount=size)
     return state.with_notice("Не узнал характеристику.")
 
 

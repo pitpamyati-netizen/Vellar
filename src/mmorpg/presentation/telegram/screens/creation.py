@@ -20,7 +20,7 @@ from mmorpg.presentation.telegram.keyboards.labels import (
     label,
 )
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
-from mmorpg.presentation.telegram.screens.format import percent
+from mmorpg.presentation.telegram.screens.format import percent, plural
 from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
     PageState,
@@ -326,9 +326,18 @@ def trait_filters_screen(content: GameContent, state: PageState) -> Screen:
     )
 
 
-def points_screen(content: GameContent, draft: CharacterDraft, notice: str = "") -> Screen:
+def point_label(name: str, amount: int = 1) -> Label:
+    return label(f"{name} плюс один" if amount == 1 else f"{name} плюс {amount}")
+
+
+def points_screen(
+    content: GameContent, draft: CharacterDraft, notice: str = "", *, spend_amount: int = 1
+) -> Screen:
+    from mmorpg.presentation.telegram.screens import amounts
+
     budget = content.rules.free_points_at_creation
     left = draft.points_left(budget)
+    spend_amount = amounts.stat_amount(spend_amount, left)
     base = content.rules.base_stat_value
     race = content.race(draft.race_id).bonuses
     klass = content.character_class(draft.class_id).bonuses
@@ -339,11 +348,15 @@ def points_screen(content: GameContent, draft: CharacterDraft, notice: str = "")
         notice or f"Осталось распределить: {left} из {budget}.",
         # Пять очков раздаются вслепую, если не сказать, чем этот класс бьёт.
         content.character_class(draft.class_id).power,
+        f"За нажатие вкладывается {spend_amount} "
+        f"{plural(spend_amount, 'очко', 'очка', 'очков')}. Размер можно выбрать ниже.",
     ]
     for code, name in STAT_NAMES.items():
         total = base + race[code] + klass[code] + draft.allocated[code]
         lines.append(f"{name}: {total}. Влияет на {STAT_EFFECTS[code]}.")
-        rows.append((label(f"{name} плюс один"),))
+        if left:
+            rows.append((point_label(name, spend_amount),))
+    rows.extend(amounts.stat_amount_rows(left))
     lines.append(
         "Нажмите «Продолжить», чтобы перейти к подтверждению."
         if left == 0

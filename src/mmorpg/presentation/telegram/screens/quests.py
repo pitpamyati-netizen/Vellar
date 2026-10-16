@@ -216,7 +216,7 @@ def offer_screen(
     character: Character | None = None,
     notice: str = "",
 ) -> Screen:
-    """Сам разговор. Три ответа, и один из них - уйти."""
+    """Условия и плата сразу; взять, вернуть взятое или уйти."""
     progress = character.quests.progress(quest.id) if character is not None else 0
     is_taken = character is not None and character.quests.is_taken(quest.id)
 
@@ -230,7 +230,6 @@ def offer_screen(
     rows: list[tuple[Label, ...]] = []
     if not is_taken:
         rows.append((labels.QUEST_ACCEPT,))
-    rows.append((labels.QUEST_ASK,))
     if is_taken:
         rows.append((labels.QUEST_ABANDON,))
     rows.append((labels.QUEST_LEAVE,))

@@ -1592,3 +1592,63 @@ async def test_permanent_potions_can_be_found_and_bought_repeatedly(
     paid = await characters.get_active(ACCOUNT)
     assert paid is not None and paid.gold == rich.gold - spent
     assert await inventory.count(rich.id, item_id) == held_before + 2
+
+
+@pytest.mark.parametrize("quantity", [3, 5, 10, 50, 100])
+async def test_bulk_potion_purchase_through_real_handlers(
+    player: Player,
+    characters: InMemoryCharacterRepository,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    content: GameContent,
+    quantity: int,
+) -> None:
+    rich = replace(argus, gold=50000, tutorial=0b111111)
+    await characters.save(rich)
+    item = content.item("small_healing_potion")
+    held_before = await inventory.count(rich.id, item.id)
+    await player.press("Мир")
+    await player.press("Лавка")
+    await player.press("/поиск")
+    shop = await player.press(item.name)
+    choice = next(
+        button.text
+        for row in shop.rows
+        for button in row
+        if item.name in button.text and button.text.endswith("купить")
+    )
+    price = int(re.search(r"— (\d+) золота", choice).group(1))
+    await player.press(choice)
+    selected = await player.press(f"/количество {quantity}")
+    assert f"Количество к покупке: {quantity}" in selected.text()
+    assert (await characters.get_active(ACCOUNT)).gold == rich.gold
+    assert await inventory.count(rich.id, item.id) == held_before
+    result = await player.press("/купить")
+    assert f"Уплачено {price * quantity} золота" in result.text()
+    assert (await characters.get_active(ACCOUNT)).gold == rich.gold - price * quantity
+    assert await inventory.count(rich.id, item.id) == held_before + quantity
+
+
+async def test_stat_batch_through_real_handlers(
+    player: Player,
+    characters: InMemoryCharacterRepository,
+    argus: Character,
+) -> None:
+    from mmorpg.domain.entities import StatCode
+
+    character = replace(argus, unspent_stat_points=105, tutorial=0b111111)
+    await characters.save(character)
+    await player.press("Персонаж")
+    await player.press("Характеристики")
+    selected = await player.press("Вкладывать по 100")
+    assert (await characters.get_active(ACCOUNT)).unspent_stat_points == 105
+    assert "Вложение 100 очков" in selected.text()
+    result = await player.press("Вложить 100: Сила")
+    saved = await characters.get_active(ACCOUNT)
+    assert saved.unspent_stat_points == 5
+    assert saved.allocated[StatCode.STR] == character.allocated[StatCode.STR] + 100
+    shown = {button.text for row in result.rows for button in row}
+    assert "Вкладывать по 5" in shown and "Вкладывать по 10" not in shown
+    await player.press("Вкладывать по 5")
+    await player.press("Вложить 5: Сила")
+    assert (await characters.get_active(ACCOUNT)).unspent_stat_points == 0

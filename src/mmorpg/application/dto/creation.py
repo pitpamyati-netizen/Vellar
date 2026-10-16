@@ -60,10 +60,10 @@ class CharacterDraft:
             return self
         return replace(self, trait_ids=(*self.trait_ids, trait_id))
 
-    def spend_point(self, stat: StatCode, budget: int) -> CharacterDraft:
-        if self.spent_points >= budget:
+    def spend_point(self, stat: StatCode, budget: int, amount: int = 1) -> CharacterDraft:
+        if amount < 1 or self.spent_points + amount > budget:
             return self
-        return replace(self, allocated=self.allocated.with_change(stat, 1))
+        return replace(self, allocated=self.allocated.with_change(stat, amount))
 
     def reset_points(self) -> CharacterDraft:
         return replace(self, allocated=StatBlock())

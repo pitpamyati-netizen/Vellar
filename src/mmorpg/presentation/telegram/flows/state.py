@@ -306,6 +306,8 @@ class PlayState:
     #: Вещь, карточку которой открыли из сумки или с прилавка.
     item_id: str = ""
     shop_price: int | None = None
+    shop_quantity: int = 1
+    stat_amount: int = 1
     guild_confirmation: str = ""
     # Скоропортящееся: очищается в начале каждого шага, читается хендлером.
     pending: PendingWrite = field(default_factory=PendingWrite)
@@ -425,6 +427,8 @@ class PlayState:
                 "subclass": self.subclass_id,
                 "item": self.item_id,
                 "shop_price": self.shop_price,
+                "shop_quantity": self.shop_quantity,
+                "stat_amount": self.stat_amount,
                 "guild_confirmation": self.guild_confirmation,
                 "transfer": [self.transfer_scope, self.transfer_to, self.transfer_item],
                 "vault": [self.vault_action, self.vault_item],
@@ -575,6 +579,8 @@ class PlayState:
             subclass_id=str(data.get("subclass", "")),
             item_id=data.get("item", ""),
             shop_price=data.get("shop_price"),
+            shop_quantity=int(data.get("shop_quantity", 1)),
+            stat_amount=int(data.get("stat_amount", 1)),
             guild_confirmation=str(data.get("guild_confirmation", "")),
             searching=bool(data.get("searching", False)),
             craft_id=str(craft_id),

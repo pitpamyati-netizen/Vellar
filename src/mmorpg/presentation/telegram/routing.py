@@ -71,6 +71,7 @@ class Intent(StrEnum):
     FILTERS = "filters"
     RESET_FILTERS = "reset_filters"
     SELECT = "select"
+    SHOP_QUANTITY = "shop_quantity"
     UNKNOWN = "unknown"
     EQUIPMENT = "equipment"
     TALENTS = "talents"
@@ -236,6 +237,10 @@ def parse_command(text: str) -> Command | None:
     lowered = stripped.casefold()
     if lowered in SIMPLE_COMMANDS:
         return Command(intent=SIMPLE_COMMANDS[lowered])
+    if (match := re.fullmatch(r"/(?:количество|quantity)\s+([0-9]{1,9})", lowered)) is not None:
+        return Command(intent=Intent.SHOP_QUANTITY, number=int(match.group(1)))
+    if lowered in {"/купить", "/buy"}:
+        return Command(intent=Intent.SELECT, argument="Купить")
     if lowered in {"/выбратьталант", "/applytalent"}:
         return Command(intent=Intent.SELECT, argument="Принять талант")
     if lowered in {"/подтвердитьсбросталантов", "/confirmtalentreset"}:

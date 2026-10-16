@@ -751,7 +751,8 @@ def test_walking_away_from_a_contract_keeps_it_on_the_board(
     assert offer.screen is ScreenId.QUEST_OFFER
 
     asked = step(content, hero, offer, "Спросить, кто платит")
-    assert "Платит" in asked.notice
+    assert "Платит" not in asked.notice
+    assert asked.pending.empty
     assert asked.screen is ScreenId.QUEST_OFFER
 
     left = step(content, hero, offer, "Уйти")

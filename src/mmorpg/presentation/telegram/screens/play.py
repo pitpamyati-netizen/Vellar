@@ -34,6 +34,7 @@ from mmorpg.domain.rules.progression import LevelUp, experience_into_level
 from mmorpg.domain.rules.stats import DerivedStats
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
+from mmorpg.presentation.telegram.screens import amounts
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import (
     amount,
@@ -881,11 +882,15 @@ def damage_line(content: GameContent, character: Character) -> str:
     return f"от {low} до {high}, {held}"
 
 
-def spend_label(stat_name: str) -> Label:
-    return label(f"Вложить: {stat_name}")
+def spend_label(stat_name: str, spend_amount: int = 1) -> Label:
+    return label(
+        f"Вложить: {stat_name}" if spend_amount == 1 else f"Вложить {spend_amount}: {stat_name}"
+    )
 
 
-def stat_effect_lines(content: GameContent, character: Character) -> tuple[str, ...]:
+def stat_effect_lines(
+    content: GameContent, character: Character, spend_amount: int = 1
+) -> tuple[str, ...]:
     """Настоящая разница от следующего очка с учётом ветвей, вех и округления."""
     from mmorpg.domain.rules import economy, milestones, modifiers
     from mmorpg.domain.rules import stats as stat_rules
@@ -917,9 +922,12 @@ def stat_effect_lines(content: GameContent, character: Character) -> tuple[str, 
                 )
             parts.append(f"{name} {sign} {number(abs(delta))}{unit}")
 
-    lines = ["Следующее очко: расчёт для вашей нынешней экипировки и специализации."]
+    scope = "Следующее очко" if spend_amount == 1 else f"Вложение {spend_amount} очков"
+    lines = [f"{scope}: расчёт для вашей нынешней экипировки и специализации."]
     for code in STAT_NAMES:
-        candidate = replace(character, allocated=character.allocated.with_change(code, 1))
+        candidate = replace(
+            character, allocated=character.allocated.with_change(code, spend_amount)
+        )
         after = stat_rules.derived_stats(content, candidate)
         after_modifiers = modifiers.collect_modifiers(content, candidate)
         parts.clear()
@@ -964,7 +972,8 @@ def stat_effect_lines(content: GameContent, character: Character) -> tuple[str, 
             if milestone.trait_id not in previous_milestones:
                 parts.append(f"веха «{milestone.name}»: {milestone_gift(content, milestone)}")
         if parts:
-            lines.append(f"{STAT_NAMES[code]}: за очко {', '.join(parts)}.")
+            cost = "за очко" if spend_amount == 1 else f"за {spend_amount} очков"
+            lines.append(f"{STAT_NAMES[code]}: {cost} {', '.join(parts)}.")
         else:
             lines.append(f"{STAT_NAMES[code]}: сейчас показатели после округления не изменятся.")
     return tuple(lines)
@@ -1066,6 +1075,7 @@ def stats_screen(
     notice: str = "",
     *,
     verbose: bool = True,
+    spend_amount: int = 1,
 ) -> Screen:
     """Каждая основная характеристика: сколько она сейчас, что даёт и куда пойдёт очко.
 
@@ -1076,19 +1086,22 @@ def stats_screen(
     from mmorpg.presentation.telegram.screens.creation import STAT_NAMES
 
     primary = primary_stats(content, character)
+    spend_amount = amounts.stat_amount(spend_amount, character.unspent_stat_points)
     lines = [
         *head(
             f"Характеристики. Свободных очков: {character.unspent_stat_points}.",
             notice,
         ),
         "Вложенное очко назад не берут.",
+        f"За нажатие на характеристику вкладывается {spend_amount} "
+        f"{plural(spend_amount, 'очко', 'очка', 'очков')}. Размер можно выбрать ниже.",
         # Числа целиком - на карточке персонажа: здесь их место заняли бы
         # объяснения, ради которых этот экран и открывают.
         f"Здоровье {stats.max_health}, броня {stats.armor}, "
         f"точность {number(stats.accuracy)}, уклонение {percent(stats.dodge)}.",
         *(f"{name}: {primary[code]}." for code, name in STAT_NAMES.items()),
         *(
-            stat_effect_lines(content, character)
+            stat_effect_lines(content, character, spend_amount)
             if verbose
             else (
                 content.character_class(character.class_id).power,
@@ -1106,9 +1119,10 @@ def stats_screen(
     if character.unspent_stat_points:
         stat_names = list(STAT_NAMES.values())
         rows = [
-            tuple(spend_label(name) for name in stat_names[index : index + 2])
+            tuple(spend_label(name, spend_amount) for name in stat_names[index : index + 2])
             for index in range(0, len(stat_names), 2)
         ]
+        rows.extend(amounts.stat_amount_rows(character.unspent_stat_points))
     else:
         lines.append("Свободных очков нет: их даёт новый уровень.")
     # Ступень специализации живёт здесь же: подкласс переписывает сетку
