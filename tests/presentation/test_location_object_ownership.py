@@ -241,6 +241,26 @@ def test_enemy_reference_includes_every_part_of_its_place() -> None:
     assert seed(replace(session, epoch=-1)) == seed(session)
 
 
+@pytest.mark.parametrize("epoch", [0, 1, 7, 80])
+def test_all_catalogue_maps_keep_their_nodes_after_extensive_work(
+    content: GameContent, epoch: int
+) -> None:
+    from mmorpg.domain.rules.nodes import location_epoch
+
+    for city in content.cities:
+        for place in city.locations:
+            session = LocationSession(city_id=city.id, slot=place.slot, epoch=epoch)
+            location = build_location(content, SEED, session)
+            worked = LocationState(
+                nodes={node.index: NodeState(wave=10_000 + node.index) for node in location.nodes},
+                epoch_offset=epoch,
+            )
+            assert build_location(content, SEED, session, epoch=location_epoch(worked)) == location
+            saved = PlayState(session=session)
+            restored = PlayState.deserialise(saved.serialise())
+            assert build_location(content, SEED, restored.session) == location
+
+
 def test_roamer_replacement_requires_a_new_choice(content: GameContent, hero: Character) -> None:
     state = visit(content, NodeKind.GATHER)
     state = replace(state, session=replace(state.session, roamer_stamp=4))

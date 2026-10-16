@@ -971,10 +971,10 @@ async def test_what_one_player_took_is_gone_for_everybody(
     assert shared.node(node).taken == 1, "the second player got a fresh copy of the place"
 
 
-async def test_the_map_relays_when_the_district_is_worked_out(
-    player: Player, content: GameContent, deltas: Any
+async def test_the_map_stays_when_the_district_is_worked_out(
+    player: Player, content: GameContent, deltas: Any, argus: Character
 ) -> None:
-    """Карта не стоит на месте: выработанная округа заселяется заново и иначе (ADR 0035)."""
+    """Пополнение всех узлов не переставляет места и тропы (ADR 0108)."""
     await player.press("Мир")
     await player.press("Локации")
     await player.press("1. Луга у Заставы")
@@ -997,10 +997,10 @@ async def test_the_map_relays_when_the_district_is_worked_out(
     worked = await deltas.state("farhold", 1, now=later)
     assert all(worked.node(index).wave == 1 for index in inside)
     epoch = node_rules.location_epoch(worked)
-    assert epoch >= 1, "плотная вылазка сменила поколение"
+    assert epoch == flow.session.epoch, "пополнение не меняет поколение карты"
 
     relaid = build_location(content, SETTINGS.world_seed, flow.session, epoch=epoch)
-    assert [n.links for n in relaid.nodes] != [n.links for n in location.nodes], "тропы легли иначе"
+    assert relaid == location, "виды, названия, уровни и тропы остались на своих местах"
 
     # Босс по-прежнему держит конец, граф связен, выход достижим мимо логова.
     bosses = [n for n in relaid.nodes if n.kind is NodeKind.BOSS_BATTLE]
@@ -1008,6 +1008,25 @@ async def test_the_map_relays_when_the_district_is_worked_out(
     assert bosses[0].index == len(relaid.nodes) - 2
     assert relaid.is_connected
     assert relaid.exit_node.index in relaid.reachable_from(0)
+
+    # Даже вдали от входа чужая выработка не переносит игрока на другую карту.
+    from mmorpg.presentation.telegram.flows.play import Clock, advance
+
+    origin = next(node for node in location.nodes if node.index and node.links)
+    target = location.node(origin.links[0])
+    waiting = replace(flow, session=replace(flow.session, node=origin.index))
+    caption = play_screens.node_button(target, origin.index, location.name).text
+    moved = advance(
+        content,
+        argus,
+        waiting,
+        caption,
+        world_seed=SETTINGS.world_seed,
+        clock=Clock(now=later),
+        location_state=worked,
+    )
+    assert moved.session.node == target.index
+    assert "ко входу" not in moved.notice
 
 
 # --- Круг долгов ------------------------------------------------------

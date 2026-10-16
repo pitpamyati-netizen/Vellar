@@ -14,8 +14,10 @@ from scripts.test_stand import load_test_settings
 
 from mmorpg.application.battle_snapshots import encode
 from mmorpg.application.services.battle import BattleStore, begin
-from mmorpg.domain.entities.location import Enemy, EnemyKind
+from mmorpg.domain.entities.location import Enemy, EnemyKind, NodeState
+from mmorpg.domain.rules.nodes import RESPAWN_SECONDS, location_epoch
 from mmorpg.infrastructure.cache.memory import InMemoryStateCache
+from mmorpg.infrastructure.cache.redis_cache import _encode
 from mmorpg.infrastructure.content.loader import load_content
 from mmorpg.infrastructure.persistence.gameplay import PostgresGameplayState, PostgresStorage
 from mmorpg.infrastructure.persistence.postgres import PostgresCharacterRepository
@@ -87,6 +89,8 @@ async def run(database: str, seed: bool) -> None:
                 now=1,
                 ttl=1,
             )
+            await world._client.hset("loc:__stable_backup:1", "1", _encode(NodeState(wave=84)))
+            assert location_epoch(await world.state("__stable_backup", 1, now=1)) == 7
         else:
             battle = await store.load("m03-backup-control")
             assert battle is not None and battle.version == 1 and battle.content_version
@@ -98,9 +102,14 @@ async def run(database: str, seed: bool) -> None:
             assert (await world.engaged_at("farhold", 1, 1, wave=0, now=99999, ttl=1))[
                 0
             ].battle_id == battle.id
+            frozen = await world.state("__stable_backup", 1, now=1)
+            assert location_epoch(frozen) == 7 and frozen.node(1).wave == 84
+            await world.take("__stable_backup", 1, 1, wave=84, size=1, now=1, ttl=1)
+            refilled = await world.state("__stable_backup", 1, now=1 + RESPAWN_SECONDS)
+            assert location_epoch(refilled) == 7 and refilled.node(1).wave == 85
     finally:
         await pool.close()
-    print("M03 persistent battle, content, occupation and screen: verified")
+    print("M03 persistent battle, content, occupation, screen and stable map: verified")
 
 
 if __name__ == "__main__":

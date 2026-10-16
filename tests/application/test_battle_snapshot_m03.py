@@ -9,7 +9,7 @@ from mmorpg.application.battle_snapshots import content_snapshot, decode, encode
 from mmorpg.application.services.battle import begin, deserialise, serialise
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.entities.effects import EffectStack, status_effect
-from mmorpg.domain.entities.location import LocationState, NodeState
+from mmorpg.domain.entities.location import LocationState
 from mmorpg.domain.entities.statuses import StatusKind
 from mmorpg.presentation.telegram.flows.play import advance
 from mmorpg.presentation.telegram.flows.state import LocationSession, PlayState
@@ -53,12 +53,12 @@ def test_roster_and_combatant_powers_roundtrip(content, warrior):
     assert decode(json.loads(saved.roster_snapshot)) == roster
 
 
-def test_new_map_generation_rejects_old_action_and_explains_return(content, warrior):
+def test_explicit_map_reset_rejects_old_action_and_explains_return(content, warrior):
     flow = PlayState(
         screen=ScreenId.LOCATION,
         session=LocationSession(city_id="farhold", slot=1, node=1, epoch=0),
     )
-    world = LocationState(nodes={2: NodeState(wave=12)})
+    world = LocationState(epoch_offset=1)
     updated = advance(
         content, warrior, flow, "Вступить в бой 1", world_seed="test", location_state=world
     )

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from dataclasses import replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
@@ -20,7 +21,7 @@ from mmorpg.domain.entities.location import (
     Presence,
     Roamer,
 )
-from mmorpg.domain.rules.nodes import refreshed, taken_one
+from mmorpg.domain.rules.nodes import legacy_location_epoch, refreshed, taken_one
 from mmorpg.infrastructure.cache.operations import TransactionalRedis
 
 if TYPE_CHECKING:  # pragma: no cover - только для типов
@@ -127,8 +128,19 @@ class RedisLocationStateCache:
         return f"{epoch}:{node}:{wave}:{place}" if epoch else f"{node}:{wave}:{place}"
 
     async def state(self, city_id: str, slot: int, *, now: int) -> LocationState:
-        raw = await self._client.hgetall(self._state_key(city_id, slot))
-        return LocationState(nodes=MappingProxyType(_decode(raw, now)))
+        key = self._state_key(city_id, slot)
+        raw = await self._client.hgetall(key)
+        state = LocationState(nodes=MappingProxyType(_decode(raw, now)))
+        epoch = await self._client.get(key + ":layout-generation")
+        if epoch is None:
+            # Сохраняем именно нынешнюю раскладку старого мира, не нулевую.
+            offset = await self._client.get(key + ":generation")
+            previous = replace(state, epoch_offset=int(offset or 0))
+            await self._client.set(
+                key + ":layout-generation", str(legacy_location_epoch(previous)), nx=True
+            )
+            epoch = await self._client.get(key + ":layout-generation")
+        return replace(state, epoch_offset=int(epoch or 0))
 
     async def take(
         self,
@@ -143,14 +155,15 @@ class RedisLocationStateCache:
         place: int = -1,
     ) -> LocationState:
         key = self._state_key(city_id, slot)
-        nodes = _decode(await self._client.hgetall(key), now)
+        state = await self.state(city_id, slot, now=now)
+        nodes = dict(state.nodes)
         current = nodes.get(node, NodeState())
         # Нажатие, называющее прежнюю волну, принадлежит узлу, который уже перевернулся:
         # это не ошибка, оно просто ничего не меняет.
         nodes[node] = taken_one(current, size, now, place) if current.wave == wave else current
         await self._client.hset(key, str(node), _encode(nodes[node]))
         await self._client.expire(key, max(1, ttl))
-        return LocationState(nodes=MappingProxyType(nodes))
+        return replace(state, nodes=MappingProxyType(nodes))
 
     async def arrive(
         self, city_id: str, slot: int, presence: Presence, *, now: int, ttl: int

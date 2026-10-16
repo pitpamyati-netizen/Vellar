@@ -1,5 +1,8 @@
 # Указатель документации Vellar
 
+Стабильная карта 16.10.2026: [узлы без перестановок](stable-nodes-2026-10-16.md),
+[ADR 0108](adr/0108-stable-location-layouts.md).
+
 Исправления 16.10.2026: [свободные ранги и точный выбор объектов](ranks-nodes-2026-10-16.md),
 [ADR 0107](adr/0107-free-ranks-and-scoped-location-actions.md).
 

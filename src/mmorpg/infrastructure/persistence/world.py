@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import replace
 from typing import Any
 
 from mmorpg.application.operations import atomic_action
@@ -19,10 +18,10 @@ class PostgresLocationState(RedisLocationStateCache):
         self._client: Any = GameplayValues(pool)
         self.operations = self._client.operations
 
+    @atomic_action
     async def state(self, city_id: str, slot: int, *, now: int) -> LocationState:
-        state = await super().state(city_id, slot, now=now)
-        offset = await self._client.get(self._state_key(city_id, slot) + ":generation")
-        return replace(state, epoch_offset=int(offset or 0))
+        # Первое чтение закрепляет прежнюю карту в той же операции, что и команда.
+        return await super().state(city_id, slot, now=now)
 
     @atomic_action
     async def engage(self, *args: Any, **kwargs: Any) -> Engagement | None:
@@ -185,6 +184,6 @@ class PostgresLocationState(RedisLocationStateCache):
         # Узлы обновляются; действующие встречи сохраняют собственное владение.
         current = await self.state(city_id, slot, now=int(time.time()))
         await self._client.set(
-            self._state_key(city_id, slot) + ":generation", str(location_epoch(current) + 1)
+            self._state_key(city_id, slot) + ":layout-generation", str(location_epoch(current) + 1)
         )
         await self._client.delete(self._state_key(city_id, slot))

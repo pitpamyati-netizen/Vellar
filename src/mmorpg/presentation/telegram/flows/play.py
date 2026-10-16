@@ -167,14 +167,13 @@ def build_location(
     world_seed: str,
     session: LocationSession,
     *,
-    epoch: int = 0,
+    epoch: int | None = None,
 ) -> GeneratedLocation:
     """Собрать локацию, в которой стоит игрок, в её нынешнем поколении округи.
 
     ``epoch`` считается из общего состояния локации (``node_rules.location_epoch``):
-    от него зависит вся раскладка - дерево троп, места узлов, их имена. От места
-    не зависит только число узлов и набор категорий. О самой локации не хранится
-    ничего.
+    это закреплённый номер карты, не счётчик выработки. Без явного номера
+    используется поколение текущей сессии, а не другая карта нулевого поколения.
     """
     city = content.city(session.city_id)
     location = city.location(session.slot)
@@ -186,7 +185,7 @@ def build_location(
         biome=location.biome,
         level_min=location.level_min,
         level_max=location.level_max,
-        epoch=epoch,
+        epoch=max(0, session.epoch) if epoch is None else epoch,
     )
 
 

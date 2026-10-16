@@ -345,13 +345,14 @@ def test_a_search_quest_target_is_stocked_in_its_location(content: GameContent) 
             assert stocked >= quest.target_count, f"{quest.id}: {stocked} узлов {quest.target_kind}"
 
 
-def test_location_epoch_counts_by_wave_not_clock() -> None:
+def test_location_epoch_does_not_change_when_any_nodes_refill() -> None:
     assert node_rules.location_epoch(LocationState()) == 0
     nodes = {i: NodeState(wave=w) for i, w in enumerate([3, 3, 3, 3])}
-    # 12 волн суммарно = ровно одно сменившееся поколение.
-    assert node_rules.location_epoch(LocationState(nodes=nodes)) == 1
-    nodes[0] = NodeState(wave=2)
+    # Выработка меняет наполнение, но не карту и не личность чужой стаи.
     assert node_rules.location_epoch(LocationState(nodes=nodes)) == 0
+    assert node_rules.location_epoch(LocationState(nodes=nodes, epoch_offset=7)) == 7
+    nodes[0] = NodeState(wave=10_000)
+    assert node_rules.location_epoch(LocationState(nodes=nodes, epoch_offset=7)) == 7
 
 
 # --- строение --------------------------------------------------------

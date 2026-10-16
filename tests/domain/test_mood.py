@@ -38,8 +38,12 @@ def test_a_few_cleared_nodes_read_as_worked() -> None:
     assert mood_of(_state(waves={0: (0, WORKED_AT)})) is LocationMood.WORKED
 
 
-def test_a_relaid_district_reads_as_depleted() -> None:
+def test_a_worked_out_district_reads_as_depleted() -> None:
     assert mood_of(_state(waves={0: (REGROWTH_WAVES, 0)})) is LocationMood.DEPLETED
+
+
+def test_map_generation_alone_does_not_make_a_fresh_location_depleted() -> None:
+    assert mood_of(LocationState(epoch_offset=7)) is LocationMood.UNTOUCHED
 
 
 def test_a_roamer_makes_the_district_restless() -> None:
