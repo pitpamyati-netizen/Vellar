@@ -204,7 +204,9 @@ async def purchase(
     actor = await characters.get(actor_id)
     item = content.item(SWORD)
     state = replace(
-        PlayState().at(ScreenId.SHOP).at(ScreenId.SHOP_ITEM), item_id=SWORD, shop_price=quoted
+        PlayState(shop_id="weapons").at(ScreenId.SHOP).at(ScreenId.SHOP_ITEM),
+        item_id=SWORD,
+        shop_price=quoted,
     )
     step = play.advance(
         content,

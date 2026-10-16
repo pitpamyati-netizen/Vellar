@@ -86,6 +86,7 @@ from mmorpg.domain.rules.tools import TOOL_SLOT
 from mmorpg.infrastructure.content.city_events import parse_city_events
 from mmorpg.infrastructure.content.long_goals import parse_long_goals
 from mmorpg.infrastructure.content.market import parse_market
+from mmorpg.infrastructure.content.shops import parse_shops
 from mmorpg.infrastructure.content.talents import parse_talents
 
 CONTENT_FILES = (
@@ -108,6 +109,7 @@ CONTENT_FILES = (
     "city_events.toml",
     "long_goals.toml",
     "market.toml",
+    "shops.toml",
 )
 
 # Виды узлов, которые может попросить задание на поиск. Держатся строками, а не
@@ -212,6 +214,7 @@ def load_content(content_dir: Path) -> GameContent:
     city_events = parse_city_events(raw["city_events.toml"], cities, recipes, problems)
     long_goals = parse_long_goals(raw["long_goals.toml"], cities, quests, recipes, problems)
     market_rules = parse_market(raw["market.toml"], recipes, problems)
+    shops = parse_shops(raw["shops.toml"], written, problems)
     houses = _parse_houses(raw["houses.toml"], problems)
     guild_tiers = _parse_guild_tiers(raw["guilds.toml"], problems)
     subclasses = _parse_subclasses(raw["subclasses.toml"], modifier_keys, classes, problems)
@@ -262,6 +265,7 @@ def load_content(content_dir: Path) -> GameContent:
         "city_events": city_events,
         "long_goals": long_goals,
         "market_rules": market_rules,
+        "shops": shops,
         "talents": talents,
         "trait_categories": categories,
         "granted_trait_categories": granted_categories,

@@ -1493,11 +1493,12 @@ async def test_finishing_the_tutorial_hands_over_the_full_kit(
     """Последний шаг закрывает обучение и выдаёт набор: доспех, зелья, опыт, золото."""
     from mmorpg.domain.rules import tutorial as tutorial_rules
 
-    # Всё, кроме лавки, уже позади (маска без бита TRADE); TRADE закроет покупка.
+    # Всё, кроме торговли, уже позади; TRADE закроет покупка у алхимика.
     await characters.save(replace(argus, gold=1_000, tutorial=0b101111))
 
     await player.press("Мир")
-    shop = await player.press("Лавка")
+    await player.press("Торговая площадь")
+    shop = await player.press("Лавка алхимика")
     buy = next(
         item.text
         for row in shop.rows
@@ -1536,7 +1537,8 @@ async def test_the_card_of_a_good_charges_the_price_the_shelf_named(
     await characters.save(rich)
 
     await player.press("Мир")
-    shop = await player.press("Лавка")
+    await player.press("Торговая площадь")
+    shop = await player.press("Лавка алхимика")
     label = next(item.text for row in shop.rows for item in row if item.text.endswith("купить"))
     named = int(re.search(r"— (\d+) золота", label).group(1))
 
@@ -1567,12 +1569,14 @@ async def test_permanent_potions_can_be_found_and_bought_repeatedly(
     level: int,
     item_id: str,
 ) -> None:
-    rich = replace(argus, level=level, gold=50_000, tutorial=0b111111)
+    city = next(c for c in content.cities if c.level_min <= level <= c.level_max)
+    rich = replace(argus, city_id=city.id, level=level, gold=50_000, tutorial=0b111111)
     await characters.save(rich)
     item = content.item(item_id)
     held_before = await inventory.count(rich.id, item_id)
     await player.press("Мир")
-    await player.press("Лавка")
+    await player.press("Торговая площадь")
+    await player.press("Лавка алхимика")
     await player.press("/поиск")
     shop = await player.press(item.name)
     spent = 0
@@ -1608,7 +1612,8 @@ async def test_bulk_potion_purchase_through_real_handlers(
     item = content.item("small_healing_potion")
     held_before = await inventory.count(rich.id, item.id)
     await player.press("Мир")
-    await player.press("Лавка")
+    await player.press("Торговая площадь")
+    await player.press("Лавка алхимика")
     await player.press("/поиск")
     shop = await player.press(item.name)
     choice = next(
@@ -1652,3 +1657,65 @@ async def test_stat_batch_through_real_handlers(
     await player.press("Вкладывать по 5")
     await player.press("Вложить 5: Сила")
     assert (await characters.get_active(ACCOUNT)).unspent_stat_points == 0
+
+
+@pytest.mark.parametrize("city_number", range(15))
+async def test_every_city_square_merchants_purchase_and_return_through_handlers(
+    player: Player,
+    characters: InMemoryCharacterRepository,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    content: GameContent,
+    city_number: int,
+) -> None:
+    city = content.cities[city_number]
+    rich = replace(argus, city_id=city.id, level=150, gold=10000000, tutorial=0b111111)
+    await characters.save(rich)
+    await player.press("/город")
+    square = await player.press("Торговая площадь")
+    assert square.id is ScreenId.TRADE_SQUARE and city.name in square.text()
+    for number, merchant in enumerate(content.shops, 1):
+        shop = await player.press(f"/лавка {number}")
+        assert shop.id is ScreenId.SHOP and merchant.name in shop.text()
+        choice = next(b.text for row in shop.rows for b in row if b.text.endswith("купить"))
+        card = await player.press(choice)
+        state = await player.flow()
+        selected = content.item(state.item_id)
+        assert merchant.sells(selected)
+        if selected.is_equipment:
+            assert city.level_min <= selected.level <= city.level_max
+        quote = state.shop_price
+        before = await characters.get_active(ACCOUNT)
+        count = await inventory.count(rich.id, selected.id)
+        assert card.id is ScreenId.SHOP_ITEM and quote is not None
+        bought = await player.press("/купить")
+        after = await characters.get_active(ACCOUNT)
+        assert bought.id is ScreenId.SHOP and after.gold == before.gold - quote
+        assert await inventory.count(rich.id, selected.id) == count + 1
+        square = await player.press("/назад")
+        assert square.id is ScreenId.TRADE_SQUARE
+    assert (await player.press("/назад")).id is ScreenId.CITY
+
+
+async def test_a_saved_card_from_another_city_cannot_charge_the_wallet(
+    player: Player,
+    characters: InMemoryCharacterRepository,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+) -> None:
+    rich = replace(argus, gold=100000, tutorial=0b111111)
+    await characters.save(rich)
+    await player.press("/город")
+    await player.press("/площадь")
+    screen = await player.press("/лавка 4")
+    choice = next(b.text for row in screen.rows for b in row if b.text.endswith("купить"))
+    await player.press(choice)
+    card = await player.flow()
+    before = await inventory.count(rich.id, card.item_id)
+    current = await characters.get_active(ACCOUNT)
+    moved = replace(current, city_id="last_beacon", level=150)
+    await characters.save(moved)
+    result = await player.press("/купить")
+    assert "больше нет" in result.text()
+    assert (await characters.get_active(ACCOUNT)).gold == rich.gold
+    assert await inventory.count(rich.id, card.item_id) == before

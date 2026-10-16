@@ -143,3 +143,5 @@ M01 уточняет границы ценностей в 0084; отметки, 
 - [ADR 0103 — Восстановление здоровья и два ресурса](0103-health-recovery-and-class-resources.md)
 - [ADR 0105 — Деревья талантов и подтверждённый переход](0105-talent-trees-and-confirmed-transition.md)
 - [ADR 0106 — Согласованное развитие, фиксированные вещи и сложность областей](0106-coherent-progression-fixed-gear-and-challenge.md)
+
+- [ADR 0110 — Торговая площадь и ассортимент города](0110-city-trade-squares.md)

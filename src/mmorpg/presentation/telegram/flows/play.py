@@ -115,7 +115,7 @@ KEEPER_SCREENS = keeper_flow.SCREENS
 # объявляет.
 SERVICES: dict[str, tuple[str, ScreenId]] = {
     labels.LOCATIONS.text: ("locations", ScreenId.LOCATION_LIST),
-    labels.SHOP.text: ("shop", ScreenId.SHOP),
+    labels.SHOP.text: ("shop", ScreenId.TRADE_SQUARE),
     labels.DUNGEONS.text: ("dungeons", ScreenId.DUNGEON),
     labels.ARENA.text: ("arena", ScreenId.ARENA),
     labels.HOUSE.text: ("house", ScreenId.HOUSE),
@@ -132,6 +132,32 @@ LOST_VISIT = "Та вылазка уже закончилась. Выберит�
 
 def begin(character: Character) -> PlayState:
     return PlayState(city_id=character.city_id)
+
+
+def _shop_context(content: GameContent, state: PlayState) -> PlayState:
+    """Старый общий прилавок больше не подтверждает покупку: сначала выбор лавки."""
+    if state.screen in {ScreenId.SHOP, ScreenId.SHOP_ITEM} and not any(
+        one.id == state.shop_id for one in content.shops
+    ):
+        return replace(
+            state,
+            screen=ScreenId.TRADE_SQUARE,
+            stack=NavigationStack((ScreenId.CITY, ScreenId.TRADE_SQUARE)),
+            shop_id="",
+            item_id="",
+            shop_price=None,
+            shop_quantity=1,
+            list_page=PageState(),
+            searching=False,
+            pending=PendingWrite(),
+            notice="Теперь у каждого торговца своя лавка. Выберите её на площади.",
+        )
+    return state
+
+
+def _shop_goods(content: GameContent, state: PlayState, goods: Goods) -> tuple[Item, ...]:
+    shop = next((one for one in content.shops if one.id == state.shop_id), None)
+    return tuple(item for item in goods.stock if shop is not None and shop.sells(item))
 
 
 def known_city(content: GameContent, city_id: str, fallback_id: str) -> City:
@@ -548,6 +574,7 @@ def _render(
     digest_view: city_screens.DigestView | None = None,
 ) -> Screen:
     shelf = goods or Goods(gold=character.gold)
+    state = _shop_context(content, state)
     clock = clock or Clock()
     # Без общего состояния нельзя подменять сохранённую ненулевую карту
     # исходной раскладкой. Рабочие переходы приносят также реальные остатки узлов.
@@ -669,9 +696,13 @@ def _render(
             return shop_screens.inventory_screen(
                 content, shelf.owned, state.list_page, gold=shelf.gold, notice=state.notice
             )
+        case ScreenId.TRADE_SQUARE:
+            return shop_screens.trade_square_screen(
+                content, city, gold=shelf.gold, notice=state.notice
+            )
         case ScreenId.SHOP_ITEM if (
             content.has_item(state.item_id)
-            and any(one.id == state.item_id for one in shelf.stock)
+            and any(one.id == state.item_id for one in _shop_goods(content, state, shelf))
             and state.item_id in shelf.prices
         ):
             item = content.item(state.item_id)
@@ -687,12 +718,13 @@ def _render(
         case ScreenId.SHOP | ScreenId.SHOP_ITEM:
             return shop_screens.shop_screen(
                 content,
-                shelf.stock,
+                _shop_goods(content, state, shelf),
                 dict(shelf.prices),
                 state.list_page,
                 gold=shelf.gold,
                 city_name=city.name,
                 notice=state.notice,
+                shop_name=next(one.name for one in content.shops if one.id == state.shop_id),
             )
         case ScreenId.SELL:
             return shop_screens.sell_screen(
@@ -1048,6 +1080,7 @@ def advance(
     travel_discount: int = 0,
 ) -> PlayState:
     """Применить одно сообщение. Отвечает всегда; на неожиданный ввод не падает."""
+    state = _shop_context(content, state)
     # Вылазку, которую больше не собрать, выбрасывают до того, как её кто-нибудь
     # прочитает, поэтому обратно записывается работающее состояние: лечение в одном
     # лишь ``render`` оставило бы сохранённый экран сломанным навсегда.
@@ -1159,6 +1192,27 @@ def advance(
         return replace(
             state, city_id=character.city_id, pending=PendingWrite(), fight="", searching=False
         ).at(ScreenId.CITY)
+    if command.intent is Intent.TRADE_SQUARE or text.strip() == "Лавка":
+        if (
+            state.screen in {ScreenId.COMBAT, ScreenId.COMBAT_BAG}
+            or state.session.active
+            or state.descent.active
+        ):
+            return state.with_notice("Торговая площадь доступна после возвращения в город.")
+        city = content.city(character.city_id)
+        if "shop" not in city.services:
+            return state.with_notice("В этом городе нет торговой площади.")
+        return replace(
+            state,
+            city_id=city.id,
+            shop_id="",
+            item_id="",
+            shop_price=None,
+            shop_quantity=1,
+            list_page=PageState(),
+            pending=PendingWrite(),
+            searching=False,
+        ).at(ScreenId.TRADE_SQUARE)
     if command.intent is Intent.ROAD:
         return replace(
             state,
@@ -1266,6 +1320,8 @@ def advance(
             return _handle_inventory(content, character, state, command, shelf)
         case ScreenId.ITEM:
             return _handle_item(content, character, state, command, shelf)
+        case ScreenId.TRADE_SQUARE:
+            return _handle_trade_square(content, state, command)
         case ScreenId.SHOP:
             return _handle_shop(content, character, state, command, shelf)
         case ScreenId.SHOP_ITEM:
@@ -1617,7 +1673,7 @@ def _walk_to_tutorial_step(
     needed = {
         ScreenId.QUEST_BOARD: "tavern",
         ScreenId.TAVERN: "tavern",
-        ScreenId.SHOP: "shop",
+        ScreenId.TRADE_SQUARE: "shop",
         ScreenId.LOCATION_LIST: "locations",
     }.get(card.screen)
     if needed is not None and needed not in city.services:
@@ -1949,6 +2005,28 @@ def _handle_stats(
 # --- goods ------------------------------------------------------------
 
 
+def _handle_trade_square(content: GameContent, state: PlayState, command: Command) -> PlayState:
+    if command.intent is Intent.SELECT and labels.SELL.matches(command.argument):
+        return replace(state, list_page=PageState()).at(ScreenId.SELL)
+    shop = None
+    if command.intent is Intent.SHOP and command.number is not None:
+        if 1 <= command.number <= len(content.shops):
+            shop = content.shops[command.number - 1]
+    elif command.intent is Intent.SELECT:
+        shop = next((one for one in content.shops if one.name == command.argument), None)
+    if shop is None:
+        return state.with_notice("Выберите лавку на площади или введите /лавка и её номер.")
+    return replace(
+        state,
+        shop_id=shop.id,
+        item_id="",
+        shop_price=None,
+        shop_quantity=1,
+        list_page=PageState(),
+        searching=False,
+    ).at(ScreenId.SHOP)
+
+
 def _handle_shop(
     content: GameContent,
     character: Character,
@@ -1978,7 +2056,9 @@ def _handle_shop(
 def _visible_stock(content: GameContent, state: PlayState, goods: Goods) -> tuple[Item, ...]:
     """Товар, прошедший раздел и поиск, - тот же список, что нарисован."""
     return tuple(
-        item for item in goods.stock if shop_screens.matches_filters(item, state.list_page, content)
+        item
+        for item in _shop_goods(content, state, goods)
+        if shop_screens.matches_filters(item, state.list_page, content)
     )
 
 
@@ -1992,7 +2072,7 @@ def _handle_shop_item(
     """Количество выбирается до покупки; оплата и выдача — одним намерением."""
     if (
         not content.has_item(state.item_id)
-        or not any(one.id == state.item_id for one in goods.stock)
+        or not any(one.id == state.item_id for one in _shop_goods(content, state, goods))
         or state.item_id not in goods.prices
     ):
         return go_back(state).with_notice("Этого товара больше нет на прилавке.")

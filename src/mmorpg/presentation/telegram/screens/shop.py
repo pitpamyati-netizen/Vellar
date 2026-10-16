@@ -10,11 +10,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from mmorpg.domain.entities.content import GameContent, Item
+from mmorpg.domain.entities.content import City, GameContent, Item
 from mmorpg.presentation.telegram.keyboards.labels import SELL as SELL_ITEMS
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.screens.base import Screen, ScreenId
 from mmorpg.presentation.telegram.screens.format import gold as gold_words
+from mmorpg.presentation.telegram.screens.format import head
 from mmorpg.presentation.telegram.screens.paginated import (
     ListEntry,
     PageState,
@@ -163,6 +164,21 @@ def sell_text(item: Item, price: int) -> str:
     return f"{item.choice_name} — {price} золота, {SELL_SUFFIX}"
 
 
+def trade_square_screen(content: GameContent, city: City, *, gold: int, notice: str = "") -> Screen:
+    lines = [
+        *head(f"Торговая площадь города {city.name}.", notice),
+        f"Снаряжение для уровней {city.level_min}–{city.level_max}. У вас {gold_words(gold)}.",
+        "У каждого торговца свой товар. Выберите лавку или сдайте лишние вещи скупщику.",
+    ]
+    rows: list[tuple[Label, ...]] = []
+    for number, shop in enumerate(content.shops, 1):
+        lines.append(f"{shop.name}. {shop.description} Команда /лавка {number}.")
+        rows.append((label(shop.name),))
+    lines.append("Продать вещи: /продать. Вернуться в город: /назад.")
+    rows.append((SELL_ITEMS,))
+    return Screen(id=ScreenId.TRADE_SQUARE, lines=tuple(lines), rows=tuple(rows))
+
+
 def shop_screen(
     content: GameContent,
     stock: Sequence[Item],
@@ -172,6 +188,7 @@ def shop_screen(
     gold: int,
     city_name: str,
     notice: str = "",
+    shop_name: str = "Лавка",
 ) -> Screen:
     entries: list[ListEntry] = []
     for item in stock:
@@ -189,13 +206,14 @@ def shop_screen(
         )
     return paginated_screen(
         screen_id=ScreenId.SHOP,
-        title=f"Лавка города {city_name}",
+        title=f"{shop_name} города {city_name}",
         entries=entries,
         state=state,
         lead_lines=(
             notice or f"У вас {gold_words(gold)}.",
             "Нажмите товар, чтобы узнать, что он даёт и чем отличается от "
-            "надетого. Ассортимент лавки меняется раз в полчаса.",
+            "надетого. Основные товары есть всегда; "
+            "дополнительные предложения меняются раз в полчаса.",
         ),
         empty_text="Сегодня лавка пуста.",
         extra_rows=((SELL_ITEMS,),),

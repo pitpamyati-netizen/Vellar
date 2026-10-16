@@ -689,7 +689,7 @@ def roll_drop(
     if tier is None:
         return None
     # Инструмент с побеждённого не падает: его покупают, и покупают всегда
-    # (``rules/economy.tool_stock``, ADR 0056). Кирка вместо меча с хозяина
+    # (``rules/economy.roll_assortment``, ADR 0056). Кирка вместо меча с хозяина
     # логова была бы не находкой, а промахом таблицы добычи.
     droppable = [one for one in content.gear_archetypes if not one.tool_type]
     if not droppable:

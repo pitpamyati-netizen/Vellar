@@ -25,6 +25,7 @@ from mmorpg.domain.entities.location import EnemyArchetype
 from mmorpg.domain.entities.long_goal import LongGoalRules
 from mmorpg.domain.entities.market import MarketRules
 from mmorpg.domain.entities.quest import Quest
+from mmorpg.domain.entities.shop import Shop
 from mmorpg.domain.entities.stats import StatBlock, StatCode
 from mmorpg.domain.entities.statuses import StatusKind
 
@@ -515,7 +516,7 @@ class Item:
 
     stack: int = 1
     effect: ItemEffect | None = None
-    #: Постоянный товар лавки: доступен с уровня вещи независимо от переворота.
+    #: Прежняя отметка постоянного товара. Городские ступени задаёт shops.toml.
     shop_always: bool = False
     #: Урон оружия — числом в границах, а не долей чего-то. Пусто у всего, что не
     #: оружие.
@@ -1155,6 +1156,7 @@ class GameContent:
     city_events: tuple[CityEvent, ...] = ()
     market_rules: MarketRules = field(default_factory=MarketRules)
     talents: tuple[Talent, ...] = ()
+    shops: tuple[Shop, ...] = ()
 
     #: Чем собрать вещь, которой нет в реестре. Снаряжение собирается из вида,
     #: ступени, редкости и оттиска (``procgen/items.py``), и оттисков у одной вещи
@@ -1205,6 +1207,7 @@ class GameContent:
         city_events: Sequence[CityEvent] = (),
         market_rules: MarketRules = MarketRules(),
         talents: Sequence[Talent] = (),
+        shops: Sequence[Shop] = (),
         stat_words: Mapping[str, str] | None = None,
         assemble: Callable[[GameContent, str], Item | None] | None = None,
     ) -> GameContent:
@@ -1255,6 +1258,7 @@ class GameContent:
             city_events=tuple(city_events),
             market_rules=market_rules,
             talents=tuple(talents),
+            shops=tuple(shops),
             _races_by_id=MappingProxyType({race.id: race for race in races}),
             _classes_by_id=MappingProxyType({klass.id: klass for klass in classes}),
             _traits_by_id=MappingProxyType({trait.id: trait for trait in traits}),

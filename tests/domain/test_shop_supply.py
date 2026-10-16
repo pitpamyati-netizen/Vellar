@@ -1,67 +1,101 @@
-"""Постоянные зелья доступны на всей полосе уровней и в любом состоянии лавки."""
+"""Каждый город продаёт свою полосу, у каждой лавки свой товар."""
 
 from dataclasses import replace
 
 import pytest
 
-from mmorpg.domain.entities import GameContent
-from mmorpg.domain.rules.economy import permanent_stock, roll_assortment
-
-POTION_TIERS = (
-    (1, "small_healing_potion", "small_resource_draught"),
-    (24, "healing_potion", "resource_draught"),
-    (46, "strong_healing_potion", "strong_resource_draught"),
-    (76, "great_healing_potion", "great_resource_draught"),
-    (113, "full_healing_potion", "full_resource_draught"),
-)
+from mmorpg.domain.rules.economy import roll_assortment
 
 
-def test_every_level_keeps_all_unlocked_potions(content: GameContent) -> None:
-    for level in range(1, 151):
-        expected = {item_id for tier, *items in POTION_TIERS if tier <= level for item_id in items}
-        assert {item.id for item in permanent_stock(content, character_level=level)} == expected
+def stock(content, city_id="farhold", shop_id="", level=150, **kwargs):
+    return roll_assortment(
+        content,
+        world_seed="city-shops",
+        city_id=city_id,
+        rotation=kwargs.pop("rotation", 0),
+        character_level=level,
+        shop_id=shop_id,
+        **kwargs,
+    )
 
 
 @pytest.mark.parametrize("rotation", [0, 1, 7, 1000])
 @pytest.mark.parametrize("reputation,strain", [(0.0, 0.0), (0.0, 1.0), (400.0, 1.0)])
-def test_every_city_guarantees_potions_without_duplicates(
-    content: GameContent, rotation: int, reputation: float, strain: float
-) -> None:
+def test_every_city_has_only_its_equipment_range_and_no_duplicates(
+    content, rotation, reputation, strain
+):
     for city in content.cities:
-        for level in (1, 20, 23, 24, 45, 46, 75, 76, 112, 113, 150):
-            stock = roll_assortment(
-                content,
-                world_seed="guaranteed-potions",
-                city_id=city.id,
-                rotation=rotation,
-                character_level=level,
-                reputation=reputation,
-                strain=strain,
-            )
-            ids = [item.id for item in stock]
-            assert len(ids) == len(set(ids))
-            assert {item.id for item in stock if item.shop_always} == {
-                item.id for item in permanent_stock(content, character_level=level)
-            }
-            for tier, healing, resource in POTION_TIERS:
-                assert (healing in ids) == (tier <= level)
-                assert (resource in ids) == (tier <= level)
+        goods = stock(content, city.id, rotation=rotation, reputation=reputation, strain=strain)
+        assert goods
+        assert len({i.id for i in goods}) == len(goods)
+        assert all(city.level_min <= i.level <= city.level_max for i in goods if i.is_equipment)
+        assert all(i.level <= city.level_max for i in goods)
+        assert all(content.rarity(i.rarity).weight > 0 for i in goods)
+        assert not any(content.rarity(i.rarity).boss_only for i in goods)
 
 
-def test_only_permanent_goods_do_not_duplicate_in_fallback(content: GameContent) -> None:
+def test_every_shop_is_populated_and_has_only_its_own_goods(content):
+    for city in content.cities:
+        combined = set()
+        for shop in content.shops:
+            goods = stock(content, city.id, shop.id)
+            assert goods, (city.id, shop.id)
+            assert all(shop.sells(i) for i in goods)
+            assert not combined.intersection(i.id for i in goods)
+            combined.update(i.id for i in goods)
+        assert combined == {i.id for i in stock(content, city.id)}
+
+
+def test_level_and_reputation_cannot_move_a_city_to_another_equipment_tier(content):
+    for city in content.cities:
+        baseline = stock(content, city.id, level=1)
+        assert stock(content, city.id, level=150) == baseline
+        assert stock(content, city.id, level=75) == baseline
+        trusted = stock(content, city.id, reputation=10000)
+        assert all(city.level_min <= i.level <= city.level_max for i in trusted if i.is_equipment)
+    assert stock(content, "farhold") != stock(content, "last_beacon")
+
+
+def test_every_class_equipment_type_and_every_tool_have_a_permanent_common_option(content):
+    for city in content.cities:
+        goods = stock(content, city.id, strain=1.0)
+        for archetype in content.gear_archetypes:
+            assert any(i.id.startswith(f"{archetype.id}@") and i.rarity == "common" for i in goods)
+        for tool in content.tool_types:
+            assert {i.rarity for i in goods if i.tool_type == tool.id} >= {"common", "uncommon"}
+
+
+def test_consumable_and_material_families_keep_the_city_tiers_in_every_rotation(content):
+    for city in content.cities:
+        for shop in content.shops:
+            expected = set()
+            for family in shop.families:
+                items = [content.item(i) for i in family]
+                lower = max((i.level for i in items if i.level <= city.level_min), default=0)
+                expected.update(i.id for i in items if lower <= i.level <= city.level_max)
+            for rotation in (0, 1, 11):
+                goods = stock(content, city.id, shop.id, rotation=rotation, strain=1.0)
+                assert {i.id for i in goods if not i.is_equipment} == expected
+
+
+def test_sparse_catalogue_never_falls_back_to_equipment_from_another_city(content):
+    item = content.item("sword@140#common")
+    assert not stock(replace(content, items=(item,)), "farhold")
+
+
+def test_only_permanent_goods_do_not_duplicate(content):
     potion = content.item("small_healing_potion")
-    sparse = replace(content, items=(potion,), gear_archetypes=())
-    stock = roll_assortment(
-        sparse, world_seed="empty-shop", city_id="farhold", rotation=0, character_level=150
-    )
-    assert stock == (potion,)
+    assert stock(replace(content, items=(potion,))) == (potion,)
 
 
-def test_future_and_unsellable_permanent_goods_stay_off_the_shelf(content: GameContent) -> None:
-    potion = content.item("small_healing_potion")
-    unsellable = replace(potion, id="unsellable", rarity="relic")
+def test_unsellable_and_future_family_goods_stay_off_the_shelf(content):
+    potion = replace(content.item("small_healing_potion"), rarity="relic")
     future = content.item("full_healing_potion")
-    sparse = replace(content, items=(unsellable, future), gear_archetypes=())
-    assert not roll_assortment(
-        sparse, world_seed="locked-shop", city_id="farhold", rotation=0, character_level=1
-    )
+    assert not stock(replace(content, items=(potion, future)))
+
+
+def test_unknown_shop_or_city_without_trade_cannot_offer_goods(content):
+    assert not stock(content, shop_id="missing")
+    closed = replace(content.city("farhold"), services=())
+    changed = replace(content, cities=(closed,), _cities_by_id={closed.id: closed})
+    assert not stock(changed)

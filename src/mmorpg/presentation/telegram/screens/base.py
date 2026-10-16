@@ -46,6 +46,7 @@ class ScreenId(StrEnum):
     INVENTORY = "inventory"
     ITEM = "item"
     SHOP = "shop"
+    TRADE_SQUARE = "trade_square"
     SHOP_ITEM = "shop_item"
     SELL = "sell"
     LIST_FILTERS = "list_filters"

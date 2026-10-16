@@ -180,9 +180,9 @@ def test_shop_and_inventory_are_real_screens(
     )
 
     shop = advance(content, hero, in_city, "Лавка", clock=CLOCK, world_seed=WORLD_SEED, goods=goods)
-    assert shop.screen is ScreenId.SHOP
+    assert shop.screen is ScreenId.TRADE_SQUARE
     assert (
-        "Лавка города Дубно"
+        "Торговая площадь города Дубно"
         in render(content, hero, shop, world_seed=WORLD_SEED, goods=goods).text()
     )
 
@@ -220,6 +220,8 @@ def test_buying_defers_the_write_to_the_handler(
         content, wealthy, in_city, "Лавка", clock=CLOCK, world_seed=WORLD_SEED, goods=rich
     )
     first = stock[0]
+    merchant = next(one for one in content.shops if one.sells(first))
+    shop = advance(content, wealthy, shop, merchant.name, world_seed=WORLD_SEED, goods=rich)
     pressed = buy_label(first, prices[first.id]).text
 
     card = advance(content, wealthy, shop, pressed, clock=CLOCK, world_seed=WORLD_SEED, goods=rich)

@@ -82,15 +82,16 @@ CARDS: dict[TutorialTask, TaskCard] = {
     ),
     TutorialTask.TRADE: TaskCard(
         task=TutorialTask.TRADE,
-        title="Купить или продать в лавке",
+        title="Купить или продать на площади",
         text=(
-            "В лавке покупают снаряжение и сдают лишнее. Лавочник берёт дешевле, чем продаёт. "
+            "На торговой площади выберите лавку или сдайте лишнее скупщику. "
+            "Торговец берёт дешевле, чем продаёт. "
             "Надеть можно любую вещь, даже не для вашего класса: запрета нет, "
             "но за чужое оружие и чужой доспех вы платите точностью и инициативой, "
             "а умения, которые просят своё оружие, с чужим не сработают. "
             "Карточка вещи говорит об этом до того, как вы её наденете."
         ),
-        screen=ScreenId.SHOP,
+        screen=ScreenId.TRADE_SQUARE,
         done_line="В лавке побывали.",
         hint="Шаг обучения: купите или продайте вещь — лавочник берёт дешевле, чем продаёт.",
     ),
@@ -118,6 +119,7 @@ _HINT_SCREENS: dict[ScreenId, TutorialTask] = {
     # босс, провал). Шаг «выиграть бой» объясняет список локаций.
     ScreenId.LOCATION_LIST: TutorialTask.FIGHT,
     ScreenId.SHOP: TutorialTask.TRADE,
+    ScreenId.TRADE_SQUARE: TutorialTask.TRADE,
     ScreenId.SHOP_ITEM: TutorialTask.TRADE,
     ScreenId.SELL: TutorialTask.TRADE,
     ScreenId.TAVERN: TutorialTask.HAND_IN,

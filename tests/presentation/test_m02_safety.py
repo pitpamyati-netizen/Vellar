@@ -44,7 +44,7 @@ def buy(content, state, goods):
 @pytest.mark.parametrize("missing", ["stock", "price", "both"])
 def test_missing_current_goods_cannot_be_bought_from_a_saved_card(content, missing):
     item = content.item("dagger@1#legendary")
-    state = PlayState().at(ScreenId.SHOP).at(ScreenId.SHOP_ITEM)
+    state = PlayState(shop_id="weapons").at(ScreenId.SHOP).at(ScreenId.SHOP_ITEM)
     state = replace(state, item_id=item.id, shop_price=item.price)
     goods = Goods(
         gold=10000,
@@ -60,7 +60,9 @@ def test_missing_current_goods_cannot_be_bought_from_a_saved_card(content, missi
 def test_changed_price_requires_new_agreement_and_survives_state_serialisation(content, old_price):
     item = content.item("sword@1#common")
     state = replace(
-        PlayState().at(ScreenId.SHOP).at(ScreenId.SHOP_ITEM), item_id=item.id, shop_price=old_price
+        PlayState(shop_id="weapons").at(ScreenId.SHOP).at(ScreenId.SHOP_ITEM),
+        item_id=item.id,
+        shop_price=old_price,
     )
     goods = Goods(gold=10000, stock=(item,), prices={item.id: 100})
     first = buy(content, state, goods)

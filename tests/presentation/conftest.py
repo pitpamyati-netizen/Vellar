@@ -1471,6 +1471,7 @@ def all_screens(
             gold=10,
             city_name="Дубно",
         ),
+        shop.trade_square_screen(content, content.city("farhold"), gold=250),
         shop.shop_screen(
             content,
             sample_stock,

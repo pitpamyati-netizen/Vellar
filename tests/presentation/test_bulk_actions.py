@@ -40,7 +40,11 @@ def card(content, *, money=10000, item_id="small_healing_potion", price=7):
     item = content.item(item_id)
     goods = Goods(gold=money, stock=(item,), prices={item.id: price})
     state = replace(
-        PlayState().at(ScreenId.SHOP).at(ScreenId.SHOP_ITEM), item_id=item.id, shop_price=price
+        PlayState(shop_id=next(s.id for s in content.shops if s.sells(item)))
+        .at(ScreenId.SHOP)
+        .at(ScreenId.SHOP_ITEM),
+        item_id=item.id,
+        shop_price=price,
     )
     return character, state, goods
 

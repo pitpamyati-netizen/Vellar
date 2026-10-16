@@ -433,6 +433,7 @@ async def test_first_session_from_creation_through_all_six_real_tasks(content):
         import re
 
         # Добыча случайна: покупаем доступный товар с настоящего прилавка.
+        await press("Лавка алхимика")
         available_gold = (await character()).gold
         purchases = [
             b.text

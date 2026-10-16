@@ -12,7 +12,6 @@ from mmorpg.domain.entities import Character, GameContent, SkillLoadout
 from mmorpg.domain.entities.combat import ActionKind, BattleAction, Verdict
 from mmorpg.domain.entities.location import Enemy, EnemyKind
 from mmorpg.domain.entities.statuses import StatusKind
-from mmorpg.domain.procgen import items as gear_procgen
 from mmorpg.domain.rules.economy import buy_price, roll_assortment, sell_price
 from mmorpg.domain.rules.progression import MAX_LEVEL
 from mmorpg.presentation.telegram.flows import combat as flow
@@ -497,20 +496,12 @@ def test_assortment_differs_between_cities(content: GameContent) -> None:
     assert farhold != harbor
 
 
-def test_assortment_matches_the_player_level(content: GameContent) -> None:
+def test_assortment_matches_the_city_level(content: GameContent) -> None:
     stock = roll_assortment(
-        content, world_seed=WORLD_SEED, city_id="farhold", rotation=3, character_level=20
+        content, world_seed=WORLD_SEED, city_id="farhold", rotation=3, character_level=150
     )
     assert stock
-    # Полка инструментов стоит вне окна: её ступень берётся по уровню покупателя
-    # (ADR 0056), а окно считает уровни вещей. Низ окна опускается до ступени
-    # покупателя: снаряжение стоит только на ступенях, и окно по одним уровням
-    # промахивалось мимо всех.
-    tier = gear_procgen.tier_at(content, 20)
-    assert tier is not None and tier.level == 12
-    assert all(
-        tier.level <= item.level <= 22 or item.tool_type or item.shop_always for item in stock
-    )
+    assert all(1 <= item.level <= 15 for item in stock)
 
 
 def test_the_shelf_always_holds_gear(content: GameContent) -> None:

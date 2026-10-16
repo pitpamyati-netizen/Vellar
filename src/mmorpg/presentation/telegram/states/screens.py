@@ -49,6 +49,7 @@ class Play(StatesGroup):
     inventory = State()
     item = State()
     shop = State()
+    trade_square = State()
     shop_item = State()
     sell = State()
     list_filters = State()
@@ -174,6 +175,7 @@ STATE_FOR_SCREEN: dict[ScreenId, State] = {
     ScreenId.INVENTORY: Play.inventory,
     ScreenId.ITEM: Play.item,
     ScreenId.SHOP: Play.shop,
+    ScreenId.TRADE_SQUARE: Play.trade_square,
     ScreenId.SHOP_ITEM: Play.shop_item,
     ScreenId.SELL: Play.sell,
     ScreenId.LIST_FILTERS: Play.list_filters,
@@ -295,9 +297,10 @@ BACK_TARGET: dict[ScreenId, ScreenId | None] = {
     ScreenId.COMBAT_BAG: ScreenId.COMBAT,
     ScreenId.INVENTORY: ScreenId.MAIN_MENU,
     ScreenId.ITEM: ScreenId.INVENTORY,
-    ScreenId.SHOP: ScreenId.CITY,
+    ScreenId.TRADE_SQUARE: ScreenId.CITY,
+    ScreenId.SHOP: ScreenId.TRADE_SQUARE,
     ScreenId.SHOP_ITEM: ScreenId.SHOP,
-    ScreenId.SELL: ScreenId.SHOP,
+    ScreenId.SELL: ScreenId.TRADE_SQUARE,
     ScreenId.LIST_FILTERS: ScreenId.INVENTORY,
     ScreenId.CHARACTER: ScreenId.MAIN_MENU,
     ScreenId.EQUIPMENT: ScreenId.CHARACTER,

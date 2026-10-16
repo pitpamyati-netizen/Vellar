@@ -72,6 +72,8 @@ class Intent(StrEnum):
     RESET_FILTERS = "reset_filters"
     SELECT = "select"
     SHOP_QUANTITY = "shop_quantity"
+    TRADE_SQUARE = "trade_square"
+    SHOP = "shop"
     UNKNOWN = "unknown"
     EQUIPMENT = "equipment"
     TALENTS = "talents"
@@ -91,6 +93,10 @@ class Command:
 # латинские написания принимаются, чтобы игрок с одной лишь латинской раскладкой не
 # оказался заперт.
 SIMPLE_COMMANDS: dict[str, Intent] = {
+    "/площадь": Intent.TRADE_SQUARE,
+    "/лавка": Intent.TRADE_SQUARE,
+    "/shops": Intent.TRADE_SQUARE,
+    "/shop": Intent.TRADE_SQUARE,
     "/экипировка": Intent.EQUIPMENT,
     "/equipment": Intent.EQUIPMENT,
     "/таланты": Intent.TALENTS,
@@ -237,6 +243,10 @@ def parse_command(text: str) -> Command | None:
     lowered = stripped.casefold()
     if lowered in SIMPLE_COMMANDS:
         return Command(intent=SIMPLE_COMMANDS[lowered])
+    if (match := re.fullmatch(r"/(?:лавка|shop)\s+([0-9]+)", lowered)) is not None:
+        return Command(intent=Intent.SHOP, number=int(match.group(1)))
+    if lowered in {"/продать", "/sell"}:
+        return Command(intent=Intent.SELECT, argument=labels.SELL.text)
     if (match := re.fullmatch(r"/(?:количество|quantity)\s+([0-9]{1,9})", lowered)) is not None:
         return Command(intent=Intent.SHOP_QUANTITY, number=int(match.group(1)))
     if lowered in {"/купить", "/buy"}:

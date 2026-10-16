@@ -22,12 +22,9 @@ STOCK_MIN = 6
 STOCK_MAX = 12
 
 #: Доброе имя. ``reputation`` - это проценты ключа ``reputation_percent``, и
-#: каждые десять процентов кладут на полку одну вещь и поднимают её потолок на
-#: уровень: репутация держит лавку открытой чуть шире.
+#: каждые десять процентов добавляют одно предложение, сохраняя полосу города.
 REPUTATION_KEY = "reputation_percent"
 REPUTATION_PER_STEP = 10.0
-LEVEL_WINDOW_BELOW = 3
-LEVEL_WINDOW_ABOVE = 2
 CHARISMA_DISCOUNT_PER_POINT = 0.4
 MAX_CHARISMA_DISCOUNT = 15.0
 SELL_FRACTION = 0.2
@@ -60,8 +57,9 @@ def roll_assortment(
     character_level: int,
     reputation: float = 0.0,
     strain: float = 0.0,
+    shop_id: str = "",
 ) -> tuple[Item, ...]:
-    """Чем торгует этот город в этот переворот своего прилавка.
+    """Ассортимент лавки или всей площади в пределах городской полосы.
 
     Чем выше репутация, тем шире прилавок: ``reputation`` приходит процентами
     ``reputation_percent`` со всего, что надето и выбрано (``REPUTATION_PER_STEP``).
@@ -72,58 +70,58 @@ def roll_assortment(
     выкладывала бы легендарное так же часто, как обычное, а реликтовое - которое
     вообще не продаётся - заодно с ними.
     """
-    source = rng(shop_seed(world_seed, city_id, rotation))
-    widened = int(max(0.0, reputation) / REPUTATION_PER_STEP)
-    high = character_level + LEVEL_WINDOW_ABOVE + widened
-    # Окно считается по уровням, а снаряжение стоит только на ступенях
-    # (``items.toml``, ADR 0052), и между ступенями их шаг больше окна: на
-    # девятнадцатом уровне ближайшая ступень - двенадцатая, и прилавок с окном
-    # 16-21 не выкладывал НИ ОДНОЙ вещи, оставляя игроку полку инструментов и
-    # склянки. Поэтому нижняя граница опускается до ступени покупателя: лавка
-    # торгует тем, что на нём и надето.
-    tier = gear_procgen.tier_at(content, character_level)
-    floor = min(character_level - LEVEL_WINDOW_BELOW, tier.level if tier else character_level)
-    low = max(1, floor)
-
-    # Постоянные товары стоят до броска и не зависят от нужды города.
-    shelf = (
-        *tool_stock(content, character_level=character_level),
-        *permanent_stock(content, character_level=character_level),
-    )
-    on_shelf = {item.id for item in shelf}
-
-    candidates = [
-        item
-        for item in content.items
-        if low <= item.level <= high
-        and content.rarity(item.rarity).weight > 0
-        and item.id not in on_shelf
-        and not item.shop_always
-    ]
-    if not candidates:
-        candidates = sorted(
-            (
+    # character_level оставлен для совместимости вызовов. Полоса принадлежит
+    # городу и не сдвигается вслед за героем или его репутацией.
+    city = content.city(city_id)
+    if "shop" not in city.services:
+        return ()
+    shops = tuple(one for one in content.shops if not shop_id or one.id == shop_id)
+    all_stock: list[Item] = []
+    written = {item.id: item for item in content.items if not item.is_equipment}
+    for shop in shops:
+        source = rng(shop_seed(world_seed, f"{city_id}:{shop.id}", rotation))
+        eligible = [
+            item
+            for item in content.items
+            if item.is_equipment
+            and city.level_min <= item.level <= city.level_max
+            and shop.sells(item)
+            and content.rarity(item.rarity).weight > 0
+            and not content.rarity(item.rarity).boss_only
+        ]
+        # Обычная вещь каждого вида есть всегда: редкие предложения дополняют
+        # основу, а не оставляют один класс без оружия на полчаса.
+        base_level = min((item.level for item in eligible), default=city.level_min)
+        shelf = [
+            item
+            for item in eligible
+            if item.level == base_level
+            and item.rarity in (TOOL_RARITIES if item.is_tool else ("common",))
+        ]
+        for family in shop.families:
+            goods = [written[i] for i in family if i in written]
+            floor = max((i.level for i in goods if i.level <= city.level_min), default=0)
+            shelf.extend(
                 item
-                for item in content.items
-                if content.rarity(item.rarity).weight > 0
-                and item.id not in on_shelf
-                and not item.shop_always
-            ),
-            key=lambda item: abs(item.level - character_level),
-        )[:8]
-
-    size = min(len(candidates), source.randint(STOCK_MIN, STOCK_MAX) + widened)
-    pinch = max(0.0, min(1.0, strain))
-    if pinch:
-        size = max(min(STOCK_MIN, len(candidates)), size - round(size * STRAIN_STOCK_LOSS * pinch))
-    chosen: list[Item] = []
-    pool = list(candidates)
-    weights = [content.rarity(item.rarity).weight for item in pool]
-    for _ in range(size):
-        picked = source.choices(range(len(pool)), weights=weights, k=1)[0]
-        chosen.append(_stamped(content, source, pool.pop(picked)))
-        weights.pop(picked)
-    return tuple(sorted((*shelf, *chosen), key=lambda item: (item.level, item.name)))
+                for item in goods
+                if floor <= item.level <= city.level_max
+                and content.rarity(item.rarity).weight > 0
+                and not content.rarity(item.rarity).boss_only
+            )
+        on_shelf = {item.id for item in shelf}
+        pool = [item for item in eligible if item.id not in on_shelf]
+        widened = int(max(0.0, reputation) / REPUTATION_PER_STEP)
+        size = min(len(pool), source.randint(STOCK_MIN, STOCK_MAX) + widened)
+        pinch = max(0.0, min(1.0, strain))
+        size = max(min(STOCK_MIN, len(pool)), size - round(size * STRAIN_STOCK_LOSS * pinch))
+        weights = [content.rarity(item.rarity).weight for item in pool]
+        chosen: list[Item] = []
+        for _ in range(size):
+            picked = source.choices(range(len(pool)), weights=weights, k=1)[0]
+            chosen.append(_stamped(content, source, pool.pop(picked)))
+            weights.pop(picked)
+        all_stock.extend((*shelf, *chosen))
+    return tuple(sorted(all_stock, key=lambda item: (item.level, item.name)))
 
 
 def _stamped(content: GameContent, source: Random, item: Item) -> Item:
@@ -139,38 +137,6 @@ def _stamped(content: GameContent, source: Random, item: Item) -> Item:
     archetype_id, level, rarity_id, _ = parsed
     roll = gear_procgen.new_roll(content, source, content.gear_archetype(archetype_id))
     return content.item(gear_procgen.gear_id(archetype_id, level, rarity_id, roll))
-
-
-def tool_stock(content: GameContent, *, character_level: int) -> tuple[Item, ...]:
-    """Инструменты, которые лежат в лавке всегда: по два на каждое ремесло.
-
-    Ступень берётся по уровню покупателя, как и всё на прилавке, а редкость
-    решает одно - на сколько сборов инструмента хватит. Вида, которого нет в
-    содержимом, здесь просто не будет: полка называет только то, что собрано.
-    """
-    tier = gear_procgen.tier_at(content, character_level)
-    if tier is None:
-        return ()
-    stock: list[Item] = []
-    for archetype in content.gear_archetypes:
-        if not archetype.tool_type:
-            continue
-        for rarity_id in TOOL_RARITIES:
-            item_id = gear_procgen.gear_id(archetype.id, tier.level, rarity_id)
-            if content.has_item(item_id):
-                stock.append(content.item(item_id))
-    return tuple(stock)
-
-
-def permanent_stock(content: GameContent, *, character_level: int) -> tuple[Item, ...]:
-    """Постоянный товар из каталога: все открытые ступени, без броска наличия."""
-    return tuple(
-        item
-        for item in content.items
-        if item.shop_always
-        and item.level <= character_level
-        and content.rarity(item.rarity).weight > 0
-    )
 
 
 def buy_price(

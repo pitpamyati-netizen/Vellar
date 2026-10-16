@@ -1,0 +1,65 @@
+# Семейство перечисляет ступени одного товара. Город держит последнюю ступень
+# на своём нижнем уровне и следующие ступени до верхней границы.
+[[shop]]
+id = "weapons"
+name = "Лавка оружейника"
+description = "Мечи, топоры, луки, посохи и другое оружие."
+equipment = "weapon"
+
+[[shop]]
+id = "armor"
+name = "Лавка бронника"
+description = "Тканые, лёгкие, средние и тяжёлые доспехи."
+equipment = "armor"
+
+[[shop]]
+id = "jewelry"
+name = "Лавка ювелира"
+description = "Кольца, амулеты и другие украшения."
+equipment = "trinket"
+
+[[shop]]
+id = "alchemy"
+name = "Лавка алхимика"
+description = "Зелья лечения, настои восстановления запаса, противоядие и метательные смеси."
+families = [
+    ["small_healing_potion", "healing_potion", "strong_healing_potion", "great_healing_potion", "full_healing_potion"],
+    ["small_resource_draught", "resource_draught", "strong_resource_draught", "great_resource_draught", "full_resource_draught"],
+    ["antidote"],
+    ["flash_grenade"],
+]
+
+[[shop]]
+id = "tools"
+name = "Лавка инструментов"
+description = "Кирки, серпы, ножи для шкур, удочки, топоры лесоруба и точильные камни."
+equipment = "tool"
+families = [
+    ["whetstone", "hard_whetstone", "steel_whetstone", "deep_whetstone", "sky_whetstone"],
+]
+
+[[shop]]
+id = "provisions"
+name = "Лавка припасов"
+description = "Еда для восстановления здоровья и припасы перед боем."
+families = [
+    ["fish_stew", "thick_stew", "fish_pie", "smoked_catch", "feast_table"],
+    ["road_ration", "hearty_ration", "spiced_ration", "rich_ration", "feast_ration"],
+]
+
+[[shop]]
+id = "materials"
+name = "Лавка сырья"
+description = "Руда, слитки, шкуры, кожа, волокно, ткань, древесина, травы и рыба для ремесла."
+families = [
+    ["iron_scrap", "bog_iron", "mountain_ore", "cave_crystal", "sky_iron"],
+    ["crude_ingot", "iron_ingot", "steel_ingot", "deep_ingot", "sky_ingot"],
+    ["wolf_pelt", "thick_hide", "scaled_hide", "plated_hide", "frost_hide"],
+    ["rawhide_leather", "tanned_leather", "dense_leather", "plated_leather", "frost_leather"],
+    ["meadow_fiber", "river_tow", "mountain_flax", "resin_thread", "snow_down"],
+    ["coarse_cloth", "woolen_cloth", "dense_cloth", "fine_linen", "patterned_linen"],
+    ["dry_branch", "ash_log", "oak_log", "resin_log", "stone_log"],
+    ["hewn_board", "ash_beam", "oak_beam", "resin_beam", "stone_beam"],
+    ["meadow_herbs", "grove_resin", "frost_lichen", "bitter_root", "night_bloom"],
+    ["river_fish", "lake_fish", "sea_fish", "deep_fish", "ice_fish"],
+]

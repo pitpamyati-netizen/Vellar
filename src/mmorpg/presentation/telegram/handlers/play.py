@@ -767,7 +767,9 @@ async def _goods(
     if flow.screen not in {ScreenId.SHOP, ScreenId.SHOP_ITEM}:
         return Goods(gold=character.gold, owned=owned)
 
-    city_id = flow.city_id or character.city_id
+    city_id = character.city_id
+    if flow.city_id != city_id or not any(one.id == flow.shop_id for one in content.shops):
+        return Goods(gold=character.gold, owned=owned)
     # «Нужда» города по состоянию округи вокруг: выбитая и встревоженная земля
     # кормит город хуже, лавка дорожает и сужается (ADR 0055).
     moods = await digest_claim.city_moods(locations, content, city_id, now=now)
@@ -782,6 +784,7 @@ async def _goods(
         character_level=character.level,
         reputation=bundle.get(economy_rules.REPUTATION_KEY, 0.0),
         strain=strain,
+        shop_id=flow.shop_id,
     )
     charisma = primary_stats(content, character)[StatCode.CHA]
     prices = {

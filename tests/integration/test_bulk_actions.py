@@ -23,7 +23,7 @@ async def purchase(characters, inventory, users, content, character_id, operatio
     character = await characters.get(character_id)
     goods = Goods(gold=character.gold, stock=(content.item(POTION),), prices={POTION: 7})
     state = replace(
-        PlayState().at(ScreenId.SHOP).at(ScreenId.SHOP_ITEM),
+        PlayState(shop_id="alchemy").at(ScreenId.SHOP).at(ScreenId.SHOP_ITEM),
         item_id=POTION,
         shop_price=7,
         shop_quantity=50,
