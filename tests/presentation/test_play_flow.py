@@ -276,7 +276,7 @@ def test_location_list_shows_level_bands(
     listed = step(content, hero, in_city, "Локации")
     text = render(content, hero, listed, world_seed=WORLD_SEED).text()
     assert "Луга у Заставы" in text
-    assert "уровни с 1 по 2" in text
+    assert "уровни с 1 по 6" in text
 
 
 def test_entering_a_location_starts_at_the_entrance(

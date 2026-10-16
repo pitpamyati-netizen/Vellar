@@ -63,7 +63,16 @@ def test_every_local_target_is_reachable_and_does_not_count_in_other_places(cont
 
         assert record(quest.city_id, quest.location_slot).progress(quest.id) == 1, quest.id
         assert record("another_city", quest.location_slot).progress(quest.id) == 0, quest.id
-        assert record(quest.city_id, quest.location_slot + 1).progress(quest.id) == 0, quest.id
+        elsewhere = next(
+            one.slot
+            for one in city.active_locations
+            if one.slot != city.destination(quest.location_slot).slot
+        )
+        assert record(quest.city_id, elsewhere).progress(quest.id) == 0, quest.id
+        assert (
+            record(quest.city_id, city.destination(quest.location_slot).slot).progress(quest.id)
+            == 1
+        )
         assert record(quest.city_id, quest.location_slot).done == hero.quests.done
         checked += 1
     assert checked >= 51

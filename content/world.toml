@@ -1,16 +1,17 @@
-# Карта мира: 15 городов, по 5 локаций, уровни 1-150.
+# Карта мира: 15 городов, по 4 действующие локации, уровни 1-150.
+# Ещё 15 прежних карт сохранены для незавершённых вылазок (merged_into).
 #
 # Инварианты, которые проверяет tests/content/test_world.py:
-#   - ровно 15 городов, ровно 5 локаций на город
+#   - ровно 15 городов, 4 входа и 5 стабильных ключей карт на город
 #   - каждый уровень от 1 до 150 покрыт хотя бы одной локацией
-#   - внутри города границы растут монотонно, между локациями нет пробелов
+#   - границы действующих локаций растут; мирные места покрывают всю полосу
 #   - полосы городов перекрываются, поэтому всегда есть и где подкопить, и куда
 #     рваться
 #   - у каждого города список [[city.dungeon]]: не меньше четырёх обычных
 #     вразброс по его полосе и ровно одно "deep = true" на level_max (ADR 0041);
 #     id подземелья - замороженный ключ, кормит сид захода
 #
-# Четвёртая локация каждого города - спорная: это межа между уделами домов, и там
+# Локация под номером 4 у каждого города — спорная: это межа между уделами домов, и там
 # игроки могут нападать друг на друга ("pvp = true"), а правила этого лежат в
 # domain/rules/pvp.py. Всякая другая локация на дороге мирная, поэтому всегда есть
 # где работать, не оглядываясь.
@@ -78,15 +79,17 @@ deep = true
 [[city.location]]
 id = "quiet_meadows"
 experience_bonus_percent = 10
+habitats = ["лес"]
 slot = 1
 name = "Луга у Заставы"
 biome = "луга"
 level_min = 1
-level_max = 2
+level_max = 6
 
 [[city.location]]
 id = "dusk_grove"
 experience_bonus_percent = 10
+merged_into = 1
 slot = 2
 name = "Ольшаник"
 biome = "лес"
@@ -100,7 +103,7 @@ slot = 3
 name = "Волчьи Овраги"
 biome = "овраги"
 level_min = 5
-level_max = 8
+level_max = 11
 
 [[city.location]]
 id = "old_road"
@@ -170,14 +173,16 @@ deep = true
 
 [[city.location]]
 id = "fisher_piers"
+habitats = ["болото"]
 slot = 1
 name = "Мостки"
 biome = "берег"
 level_min = 12
-level_max = 14
+level_max = 17
 
 [[city.location]]
 id = "reed_marshes"
+merged_into = 1
 slot = 2
 name = "Камышовые Топи"
 biome = "болото"
@@ -190,7 +195,7 @@ slot = 3
 name = "Волнолом"
 biome = "берег"
 level_min = 16
-level_max = 20
+level_max = 23
 
 [[city.location]]
 id = "rotten_docks"
@@ -258,14 +263,16 @@ deep = true
 
 [[city.location]]
 id = "dale_screes"
+habitats = ["горы"]
 slot = 1
 name = "Осыпи Дола"
 biome = "холмы"
 level_min = 24
-level_max = 26
+level_max = 29
 
 [[city.location]]
 id = "granite_steps"
+merged_into = 1
 slot = 2
 name = "Гранитные Ступени"
 biome = "горы"
@@ -278,7 +285,7 @@ slot = 3
 name = "Каменоломня"
 biome = "карьер"
 level_min = 28
-level_max = 32
+level_max = 34
 
 [[city.location]]
 id = "wind_gorge"
@@ -346,14 +353,16 @@ deep = true
 
 [[city.location]]
 id = "trade_road"
+habitats = ["шахта"]
 slot = 1
 name = "Тракт у Мытни"
 biome = "дорога"
 level_min = 35
-level_max = 37
+level_max = 40
 
 [[city.location]]
 id = "copper_mines"
+merged_into = 1
 slot = 2
 name = "Медные Копи"
 biome = "шахта"
@@ -366,7 +375,7 @@ slot = 3
 name = "Хутор"
 biome = "руины"
 level_min = 39
-level_max = 43
+level_max = 45
 
 [[city.location]]
 id = "bandit_hollow"
@@ -434,14 +443,16 @@ deep = true
 
 [[city.location]]
 id = "willow_shoals"
+habitats = ["болото"]
 slot = 1
 name = "Отмели"
 biome = "река"
 level_min = 46
-level_max = 48
+level_max = 51
 
 [[city.location]]
 id = "flooded_forest"
+merged_into = 1
 slot = 2
 name = "Затопленный Лес"
 biome = "болото"
@@ -454,7 +465,7 @@ slot = 3
 name = "Курганы у Реки"
 biome = "курганы"
 level_min = 50
-level_max = 53
+level_max = 56
 
 [[city.location]]
 id = "mill_reaches"
@@ -526,10 +537,11 @@ slot = 1
 name = "Меловые Террасы"
 biome = "пустошь"
 level_min = 57
-level_max = 58
+level_max = 61
 
 [[city.location]]
 id = "scorched_waste"
+merged_into = 1
 slot = 2
 name = "Пустошь"
 biome = "пустошь"
@@ -542,7 +554,7 @@ slot = 3
 name = "Путь Водовозов"
 biome = "дорога"
 level_min = 60
-level_max = 63
+level_max = 66
 
 [[city.location]]
 id = "scorpion_ridge"
@@ -610,14 +622,16 @@ deep = true
 
 [[city.location]]
 id = "tar_docks"
+habitats = ["берег"]
 slot = 1
 name = "Смолокурни"
 biome = "порт"
 level_min = 67
-level_max = 68
+level_max = 71
 
 [[city.location]]
 id = "free_bay"
+merged_into = 1
 slot = 2
 name = "Вольная Бухта"
 biome = "берег"
@@ -630,7 +644,7 @@ slot = 3
 name = "Остовы Флота"
 biome = "корабли"
 level_min = 70
-level_max = 73
+level_max = 75
 
 [[city.location]]
 id = "beacon_cliff"
@@ -698,14 +712,16 @@ deep = true
 
 [[city.location]]
 id = "glass_fields"
+habitats = ["кратер"]
 slot = 1
 name = "Стеклянные Поля"
 biome = "пустошь"
 level_min = 76
-level_max = 77
+level_max = 80
 
 [[city.location]]
 id = "impact_crater"
+merged_into = 1
 slot = 2
 name = "Воронка"
 biome = "кратер"
@@ -718,7 +734,7 @@ slot = 3
 name = "Оплавленные Руины"
 biome = "руины"
 level_min = 79
-level_max = 82
+level_max = 85
 
 [[city.location]]
 id = "mirror_tunnels"
@@ -786,14 +802,16 @@ deep = true
 
 [[city.location]]
 id = "snow_dells"
+habitats = ["горы"]
 slot = 1
 name = "Пади"
 biome = "снега"
 level_min = 86
-level_max = 87
+level_max = 90
 
 [[city.location]]
 id = "ice_pass"
+merged_into = 1
 slot = 2
 name = "Ледяной Перевал"
 biome = "горы"
@@ -806,7 +824,7 @@ slot = 3
 name = "Караулка"
 biome = "руины"
 level_min = 89
-level_max = 92
+level_max = 94
 
 [[city.location]]
 id = "wolf_tundra"
@@ -874,14 +892,16 @@ deep = true
 
 [[city.location]]
 id = "ash_fields"
+habitats = ["вулкан"]
 slot = 1
 name = "Пепелища"
 biome = "пепел"
 level_min = 95
-level_max = 96
+level_max = 99
 
 [[city.location]]
 id = "lava_fissures"
+merged_into = 1
 slot = 2
 name = "Лавовые Трещины"
 biome = "вулкан"
@@ -894,7 +914,7 @@ slot = 3
 name = "Кузни Врат"
 biome = "кузни"
 level_min = 98
-level_max = 101
+level_max = 103
 
 [[city.location]]
 id = "smoke_citadel"
@@ -962,14 +982,16 @@ deep = true
 
 [[city.location]]
 id = "storm_ledges"
+habitats = ["скалы"]
 slot = 1
 name = "Уступы"
 biome = "горы"
 level_min = 104
-level_max = 105
+level_max = 108
 
 [[city.location]]
 id = "griffin_nests"
+merged_into = 1
 slot = 2
 name = "Гнёзда Грифонов"
 biome = "скалы"
@@ -982,7 +1004,7 @@ slot = 3
 name = "Расколотый Пик"
 biome = "горы"
 level_min = 107
-level_max = 110
+level_max = 112
 
 [[city.location]]
 id = "lightning_path"
@@ -1050,14 +1072,16 @@ deep = true
 
 [[city.location]]
 id = "azure_terraces"
+habitats = ["небо"]
 slot = 1
 name = "Сады Дома Мер"
 biome = "сады"
 level_min = 113
-level_max = 114
+level_max = 117
 
 [[city.location]]
 id = "hanging_tiers"
+merged_into = 1
 slot = 2
 name = "Ярусы"
 biome = "небо"
@@ -1070,7 +1094,7 @@ slot = 3
 name = "Галереи Списков"
 biome = "чертоги"
 level_min = 116
-level_max = 119
+level_max = 121
 
 [[city.location]]
 id = "wind_bridges"
@@ -1138,14 +1162,16 @@ deep = true
 
 [[city.location]]
 id = "bone_fields"
+habitats = ["курганы"]
 slot = 1
 name = "Отвалы"
 biome = "пустошь"
 level_min = 122
-level_max = 123
+level_max = 126
 
 [[city.location]]
 id = "march_barrows"
+merged_into = 1
 slot = 2
 name = "Большие Курганы"
 biome = "курганы"
@@ -1158,7 +1184,7 @@ slot = 3
 name = "Склепы Забытых"
 biome = "склепы"
 level_min = 125
-level_max = 128
+level_max = 130
 
 [[city.location]]
 id = "lower_city"
@@ -1226,14 +1252,16 @@ deep = true
 
 [[city.location]]
 id = "grand_stairs"
+habitats = ["чертоги"]
 slot = 1
 name = "Парадные Ступени"
 biome = "крепость"
 level_min = 131
-level_max = 132
+level_max = 135
 
 [[city.location]]
 id = "empty_halls"
+merged_into = 1
 slot = 2
 name = "Анфилады"
 biome = "чертоги"
@@ -1246,7 +1274,7 @@ slot = 3
 name = "Литейный Двор"
 biome = "кузни"
 level_min = 134
-level_max = 137
+level_max = 139
 
 [[city.location]]
 id = "old_chasm"
@@ -1314,14 +1342,16 @@ deep = true
 
 [[city.location]]
 id = "last_cape"
+habitats = ["разлом"]
 slot = 1
 name = "Мыс"
 biome = "край"
 level_min = 140
-level_max = 141
+level_max = 144
 
 [[city.location]]
 id = "old_rift"
+merged_into = 1
 slot = 2
 name = "Старый Разлом"
 biome = "разлом"
@@ -1334,7 +1364,7 @@ slot = 3
 name = "Башня Маяка"
 biome = "башня"
 level_min = 143
-level_max = 145
+level_max = 147
 
 [[city.location]]
 id = "keepers_garden"

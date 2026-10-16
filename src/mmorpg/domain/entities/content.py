@@ -856,6 +856,14 @@ class Location:
     pvp: bool = False
     #: Прибавка к фонду опыта за победу над стаей в этой локации.
     experience_bonus_percent: int = 0
+    #: Прежняя карта остаётся для сохранённых вылазок; новый вход ведёт сюда.
+    merged_into: int = 0
+    #: Дополнительная местность объединённой области, включая сырьё и фауну.
+    habitats: tuple[str, ...] = ()
+
+    @property
+    def biomes(self) -> frozenset[str]:
+        return frozenset((self.biome, *self.habitats))
 
     def covers(self, level: int) -> bool:
         return self.level_min <= level <= self.level_max
@@ -924,13 +932,22 @@ class City:
         return any(location.slot == slot for location in self.locations)
 
     @property
+    def active_locations(self) -> tuple[Location, ...]:
+        return tuple(one for one in self.locations if not one.merged_into)
+
+    def destination(self, slot: int) -> Location:
+        """Действующий вход; старый номер карты остаётся самостоятельным ключом."""
+        one = self.location(slot)
+        return self.location(one.merged_into) if one.merged_into else one
+
+    @property
     def biomes(self) -> frozenset[str]:
         """Какая земля лежит вокруг этого города.
 
-        У самого города биома нет: у него есть пять локаций, и биомы этих локаций
-        решают, какое собирающее ремесло здесь работает (``domain/rules/crafts``).
+        У самого города биома нет: местность его действующих локаций
+        определяет, какое собирающее ремесло здесь работает (``domain/rules/crafts``).
         """
-        return frozenset(location.biome for location in self.locations)
+        return frozenset(biome for location in self.active_locations for biome in location.biomes)
 
     def dungeon(self, dungeon_id: str) -> Dungeon:
         for one in self.dungeons:

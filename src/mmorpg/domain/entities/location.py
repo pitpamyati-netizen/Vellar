@@ -329,6 +329,11 @@ class GeneratedLocation:
     level_max: int
     nodes: tuple[LocationNode, ...]
     epoch: int = 0
+    habitats: tuple[str, ...] = ()
+
+    @property
+    def biomes(self) -> frozenset[str]:
+        return frozenset((self.biome, *self.habitats))
 
     @property
     def entrance(self) -> LocationNode:

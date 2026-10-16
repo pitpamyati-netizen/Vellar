@@ -44,7 +44,7 @@ def test_hunt_names_an_archetype_that_fits_its_place(content: GameContent) -> No
     for deed in _deeds(content, "dusk_harbor", 7, 40):
         if deed.kind is not DeedKind.HUNT:
             continue
-        biome = city.location(deed.slot).biome
+        biome = city.location(deed.slot).biomes
         fitting = {one.id for one in candidates(content.enemy_archetypes, biome, dungeon=False)}
         assert deed.archetype_id in fitting
 

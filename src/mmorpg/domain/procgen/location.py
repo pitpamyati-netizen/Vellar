@@ -164,6 +164,7 @@ def generate_location(
     level_min: int,
     level_max: int,
     epoch: int = 0,
+    habitats: tuple[str, ...] = (),
 ) -> GeneratedLocation:
     """Собрать локацию в одном месте города, в её нынешнем поколении.
 
@@ -216,6 +217,7 @@ def generate_location(
         level_max=level_max,
         epoch=epoch,
         nodes=nodes,
+        habitats=habitats,
     )
 
 

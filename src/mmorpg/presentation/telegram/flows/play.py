@@ -185,6 +185,7 @@ def build_location(
         biome=location.biome,
         level_min=location.level_min,
         level_max=location.level_max,
+        habitats=location.habitats,
         epoch=max(0, session.epoch) if epoch is None else epoch,
     )
 
@@ -259,7 +260,7 @@ def node_pack(
         seed=node_pack_seed(
             world_seed, replace(session, epoch=location.epoch), index=index, wave=wave, place=place
         ),
-        biome=location.biome,
+        biome=location.biomes,
         level=max(1, node.level),
         rank=node.kind.rank,
         affix_chance=odds.chance,
@@ -415,9 +416,7 @@ def _vein_line(
     sources = (wanted,) if wanted else (tool_rules.sources_of(content, tool) if tool else ())
     here = craft_rules.best_per_source(
         content,
-        craft_rules.yields_here(
-            content, level=node.level, biomes=frozenset({location.biome}), sources=sources
-        ),
+        craft_rules.yields_here(content, level=node.level, biomes=location.biomes, sources=sources),
     )
     if not here:
         here = craft_rules.best_per_source(
@@ -2801,10 +2800,17 @@ def _handle_location_list(
     command: Command,
 ) -> PlayState:
     city = known_city(content, state.city_id, character.city_id)
+    for old in city.locations:
+        if old.merged_into and command.argument.startswith(f"{old.slot}. {old.name}"):
+            destination = city.destination(old.slot)
+            return state.with_notice(
+                f"{old.name} теперь входит в область «{destination.name}». "
+                f"Выберите «{destination.slot}. {destination.name}»."
+            )
     if command.intent is not Intent.SELECT:
         return state.with_notice("Нажмите локацию из списка.")
 
-    for location in city.locations:
+    for location in city.active_locations:
         if command.argument.startswith(f"{location.slot}. {location.name}"):
             if character.level < location.level_min and not character.is_admin:
                 return state.with_notice(
@@ -3122,7 +3128,7 @@ def _location_biomes(content: GameContent, session: LocationSession) -> frozense
     city = content.city(session.city_id)
     if not city.has_location(session.slot):
         return frozenset()
-    return frozenset({city.location(session.slot).biome})
+    return city.location(session.slot).biomes
 
 
 def search_line(content: GameContent, node_name: str, result: adventure.SearchResult) -> str:

@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import random
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 
 from mmorpg.domain.entities.content import EnemyAffix
@@ -135,7 +135,7 @@ def _roll_affixes(
 
 
 def candidates(
-    archetypes: Sequence[EnemyArchetype], biome: str, *, dungeon: bool = False
+    archetypes: Sequence[EnemyArchetype], biome: str | Collection[str], *, dungeon: bool = False
 ) -> tuple[EnemyArchetype, ...]:
     """Породы, подходящие биому, с откатом к тем, что годятся везде.
 
@@ -143,7 +143,8 @@ def candidates(
     ``dungeon``-породы, дорога - только остальные, и у каждого свой ``*``-запас.
     """
     pool = tuple(archetype for archetype in archetypes if archetype.dungeon is dungeon)
-    fitting = tuple(archetype for archetype in pool if archetype.fits(biome))
+    biomes = {biome} if isinstance(biome, str) else set(biome)
+    fitting = tuple(archetype for archetype in pool if biomes.intersection(archetype.biomes))
     if fitting:
         return fitting
     return tuple(archetype for archetype in pool if "*" in archetype.biomes)
@@ -153,7 +154,7 @@ def generate_enemy(
     seed: bytes,
     *,
     archetypes: Sequence[EnemyArchetype],
-    biome: str,
+    biome: str | Collection[str],
     level: int,
     rank: EnemyRank = EnemyRank.NORMAL,
     elite_titles: Sequence[str] = (),
@@ -283,7 +284,7 @@ def generate_group(
     seed: bytes,
     *,
     archetypes: Sequence[EnemyArchetype],
-    biome: str,
+    biome: str | Collection[str],
     level: int,
     rank: EnemyRank = EnemyRank.NORMAL,
     elite_titles: Sequence[str] = (),
@@ -327,10 +328,13 @@ def generate_group(
     weights = [6, 3, 1, 1, 1, 1, 1][:ceiling] or [1]
     size_source = rng(derive(seed, "group"))
     size = size_source.choices(range(1, ceiling + 1), weights=weights)[0]
-    return tuple(
-        generate_enemy(
+    pool = list(candidates(archetypes, biome, dungeon=dungeon))
+    remaining = list(pool)
+    group: list[Enemy] = []
+    for index in range(size):
+        enemy = generate_enemy(
             derive(seed, "member", index),
-            archetypes=archetypes,
+            archetypes=remaining or pool,
             biome=biome,
             level=level,
             elite_titles=elite_titles,
@@ -340,5 +344,6 @@ def generate_group(
             dungeon=dungeon,
             affixes_applied=rolled,
         )
-        for index in range(size)
-    )
+        group.append(enemy)
+        remaining = [one for one in remaining if one.id != enemy.archetype_id]
+    return tuple(group)

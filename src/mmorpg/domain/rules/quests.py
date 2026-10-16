@@ -99,12 +99,21 @@ def _counts_search(quest: Quest, node: NodeKind) -> bool:
     return not quest.target_kind or node.value == quest.target_kind
 
 
-def _at_place(quest: Quest, city_id: str, location_slot: int) -> bool:
+def _at_place(content: GameContent, quest: Quest, city_id: str, location_slot: int) -> bool:
     """Испытания свободны; городская работа сверяет место самого события."""
     if quest.is_trial:
         return True
-    return quest.city_id == city_id and (
-        not quest.location_slot or quest.location_slot == location_slot
+    if quest.city_id != city_id:
+        return False
+    if not quest.location_slot or quest.location_slot == location_slot:
+        return True
+    if not content.has_city(city_id):
+        return False
+    city = content.city(city_id)
+    return (
+        city.has_location(quest.location_slot)
+        and city.has_location(location_slot)
+        and city.destination(quest.location_slot).slot == city.destination(location_slot).slot
     )
 
 
@@ -123,7 +132,7 @@ def record_kills(
         if not content.has_quest(quest_id):
             continue
         quest = content.quest(quest_id)
-        if not _at_place(quest, city_id, location_slot):
+        if not _at_place(content, quest, city_id, location_slot):
             continue
         counted = sum(1 for enemy in enemies if _counts_kill(quest, enemy))
         if not counted:
@@ -152,7 +161,7 @@ def record_descent(
     steps = []
     for step in taken(content, character):
         quest = step.quest
-        if quest.objective is not ObjectiveKind.DELVE or not _at_place(quest, city_id, 0):
+        if quest.objective is not ObjectiveKind.DELVE or not _at_place(content, quest, city_id, 0):
             continue
         if quest.target_kind and quest.target_kind != dungeon_id:
             continue
@@ -194,7 +203,7 @@ def record_craft(
         if not content.has_quest(quest_id):
             continue
         quest = content.quest(quest_id)
-        if not _at_place(quest, city_id, 0) or not _counts_craft(quest, item_id):
+        if not _at_place(content, quest, city_id, 0) or not _counts_craft(quest, item_id):
             continue
         room = max(0, quest.target_count - log.progress(quest_id))
         gained = min(max(0, count), room)
@@ -222,7 +231,7 @@ def record_search(
         if not content.has_quest(quest_id):
             continue
         quest = content.quest(quest_id)
-        if not _at_place(quest, city_id, location_slot) or not _counts_search(quest, node):
+        if not _at_place(content, quest, city_id, location_slot) or not _counts_search(quest, node):
             continue
         if log.progress(quest_id) >= quest.target_count:
             continue

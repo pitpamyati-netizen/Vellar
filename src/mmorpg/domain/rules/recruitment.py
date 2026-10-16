@@ -37,7 +37,7 @@ def goals(content: GameContent, character: Character) -> tuple[Goal, ...]:
             "location",
             str(one.slot),
         )
-        for one in city.locations
+        for one in city.active_locations
         if character.level >= one.level_min
     ]
     result.extend(

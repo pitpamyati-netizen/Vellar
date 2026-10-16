@@ -37,7 +37,7 @@ def test_every_goal_comes_from_current_content_and_respects_access(content):
             city_id=city.id,
         )
         listed = goals(content, hero)
-        assert len(listed) == len(city.locations) + len(city.dungeons)
+        assert len(listed) == len(city.active_locations) + len(city.dungeons)
         assert len({one.key for one in listed}) == len(listed)
         assert all(one.city_id == city.id for one in listed)
         for low in (1, city.unlock_level):

@@ -96,7 +96,7 @@ def where_line(content: GameContent, quest: Quest) -> str:
         return f"Где: город {city.name}, «Подземелья», {name}."
     if not quest.location_slot or not city.has_location(quest.location_slot):
         return f"Где: в локациях города {city.name}, любых по вашему уровню."
-    location = city.location(quest.location_slot)
+    location = city.destination(quest.location_slot)
     return (
         f"Где: город {city.name}, «Локации», «{location.slot}. {location.name}». "
         f"Уровни там с {location.level_min} по {location.level_max}."

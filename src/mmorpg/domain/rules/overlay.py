@@ -1026,6 +1026,15 @@ def _location_problems(content: GameContent, record: OverlayRecord) -> list[str]
     if record.number("level_min") < 1:
         return ["Уровень «от» меньше первого."]
     city_id = record.value("city")
+    for origin in content.cities:
+        original = next((one for one in origin.locations if one.id == record.entity_id), None)
+        if original is None:
+            continue
+        related = original.merged_into or any(
+            one.merged_into == original.slot for one in origin.locations
+        )
+        if related and (city_id != origin.id or slot != original.slot):
+            return ["Это объединённая область: её город и номер входа должны сохраняться."]
     if not content.has_city(city_id):
         return []
     taken = content.city(city_id).locations
@@ -1045,6 +1054,11 @@ def _removal_problems(content: GameContent, record: OverlayRecord) -> tuple[str,
         return ()
     for city in content.cities:
         if any(location.id == record.entity_id for location in city.locations):
+            original = next(one for one in city.locations if one.id == record.entity_id)
+            if any(one.merged_into == original.slot for one in city.locations):
+                return (
+                    "В эту область входят прежние места: сначала измените их связи в каталоге.",
+                )
             if len(city.locations) <= 1:
                 return (f"Это последняя локация города {city.name}: без неё в город незачем идти.",)
             return ()
@@ -1198,7 +1212,18 @@ def _apply_locations(cities: Sequence[City], records: Sequence[OverlayRecord]) -
             slot = record.number("slot")
             if any(loc.slot == slot and key != record.entity_id for key, loc in by_id.items()):
                 continue
-            by_id[record.entity_id] = _location_from(record, city.id)
+            original = by_id.get(record.entity_id)
+            edited = _location_from(record, city.id)
+            by_id[record.entity_id] = (
+                replace(
+                    edited,
+                    merged_into=original.merged_into,
+                    habitats=original.habitats,
+                    experience_bonus_percent=original.experience_bonus_percent,
+                )
+                if original
+                else edited
+            )
         # Локация из другого города, переселённая сюда, уходит оттуда сама: её
         # больше нет ни в одном списке, кроме нового.
         moved = {record.entity_id for record in edits if record.value("city") != city.id}

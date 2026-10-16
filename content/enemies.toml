@@ -4,7 +4,8 @@
 # Множители считаются от основания по уровням в
 # mmorpg/domain/procgen/enemies.py. 1.0 - это средний противник.
 #
-# biomes: в каких биомах локаций эта порода может появиться. "*" значит везде.
+# biomes: местность этой породы. "*" — запас для неизвестной местности,
+# который не подмешивается к подходящим местным видам.
 # У каждого биома, который встречается в world.toml, обязано быть хотя бы три
 # кандидата - проверяет tests/content/test_enemies.py.
 #
@@ -142,9 +143,8 @@ loot = ["iron_scrap"]
 id = "wandering_beast"
 name = "Дикий зверь"
 kind = "beast"
-# Породы «на любой биом» держат каждый биом выше порога в три кандидата, поэтому ни одна
-# локация не выставит одного и того же противника дважды подряд. См.
-# tests/content/test_enemies.py.
+# Запас для неизвестного биома. Разные волны могут повторять вид;
+# внутри стаи разные виды выбираются без повторов, пока хватает местного пула.
 biomes = ["*"]
 health = 1.0
 damage = 1.1
@@ -638,3 +638,503 @@ damage = 1.1
 initiative = 1.15
 gold = 1.4
 recloak = 2
+
+[[enemy]]
+id = "burrow_badger"
+name = "Норный барсук"
+kind = "beast"
+role = "warrior"
+element = "bludgeoning"
+biomes = ["луга", "лес", "холмы", "овраги"]
+health = 1.15
+damage = 0.9
+armor = 1.25
+initiative = 0.85
+loot = ["wolf_pelt"]
+
+[[enemy]]
+id = "meadow_adder"
+name = "Луговой гад"
+kind = "beast"
+role = "rogue"
+element = "poison"
+biomes = ["луга", "сады", "тундра"]
+health = 0.8
+damage = 1.1
+armor = 0.6
+initiative = 1.35
+loot = []
+
+[[enemy]]
+id = "poacher"
+name = "Браконьер"
+kind = "humanoid"
+role = "rogue"
+element = "piercing"
+biomes = ["лес", "луга", "холмы", "овраги", "тундра"]
+health = 0.9
+damage = 1.0
+armor = 0.8
+initiative = 1.25
+loot = ["iron_scrap"]
+
+[[enemy]]
+id = "road_bonesetter"
+name = "Дорожный костоправ"
+kind = "humanoid"
+role = "healer"
+element = "bludgeoning"
+biomes = ["дорога", "лес", "холмы", "руины"]
+health = 0.85
+damage = 0.85
+armor = 0.75
+initiative = 1.0
+loot = []
+
+[[enemy]]
+id = "ravine_jackal"
+name = "Овражный шакал"
+kind = "beast"
+role = "brute"
+element = "rending"
+biomes = ["овраги", "ущелье", "пустошь", "пепел"]
+health = 1.0
+damage = 1.15
+armor = 0.6
+initiative = 1.1
+loot = ["wolf_pelt"]
+
+[[enemy]]
+id = "reed_serpent"
+name = "Камышовый полоз"
+kind = "beast"
+role = "rogue"
+element = "poison"
+biomes = ["болото", "река", "берег"]
+health = 0.8
+damage = 1.1
+armor = 0.65
+initiative = 1.35
+loot = []
+
+[[enemy]]
+id = "marsh_herbalist"
+name = "Болотный травник"
+kind = "humanoid"
+role = "healer"
+element = "poison"
+biomes = ["болото", "река", "сады"]
+health = 0.9
+damage = 0.85
+armor = 0.75
+initiative = 1.0
+loot = []
+
+[[enemy]]
+id = "bank_toad"
+name = "Береговой жабник"
+kind = "beast"
+role = "brute"
+element = "bludgeoning"
+biomes = ["болото", "река", "берег", "пещеры"]
+health = 1.2
+damage = 0.95
+armor = 0.9
+initiative = 0.8
+loot = []
+
+[[enemy]]
+id = "shore_crab"
+name = "Панцирный краб"
+kind = "beast"
+role = "warrior"
+element = "piercing"
+biomes = ["берег", "море", "скалы", "утёсы", "корабли"]
+health = 1.05
+damage = 0.9
+armor = 1.5
+initiative = 0.75
+loot = []
+
+[[enemy]]
+id = "wreck_raider"
+name = "Корабельный налётчик"
+kind = "humanoid"
+role = "warrior"
+element = "slashing"
+biomes = ["берег", "море", "корабли", "порт"]
+health = 1.1
+damage = 1.0
+armor = 1.15
+initiative = 0.95
+loot = ["iron_scrap"]
+
+[[enemy]]
+id = "tide_caller"
+name = "Заклинатель прилива"
+kind = "humanoid"
+role = "caster"
+element = "cold"
+biomes = ["берег", "море", "корабли", "порт"]
+health = 0.85
+damage = 1.05
+armor = 0.7
+initiative = 1.05
+loot = []
+
+[[enemy]]
+id = "quarry_sapper"
+name = "Карьерный подрывник"
+kind = "humanoid"
+role = "rogue"
+element = "fire"
+biomes = ["карьер", "скалы", "шахта", "тоннели", "разлом"]
+health = 0.85
+damage = 1.1
+armor = 0.8
+initiative = 1.1
+loot = ["iron_scrap"]
+
+[[enemy]]
+id = "ore_mite"
+name = "Рудный клещ"
+kind = "beast"
+role = "brute"
+element = "piercing"
+biomes = ["карьер", "скалы", "шахта", "ущелье", "тоннели"]
+health = 1.2
+damage = 1.0
+armor = 1.1
+initiative = 0.8
+loot = []
+
+[[enemy]]
+id = "stone_mender"
+name = "Каменный связник"
+kind = "elemental"
+role = "healer"
+element = "nature"
+biomes = ["карьер", "скалы", "шахта", "кузни", "ущелье"]
+health = 1.0
+damage = 0.8
+armor = 1.15
+initiative = 0.8
+loot = []
+
+[[enemy]]
+id = "cinder_smith"
+name = "Зольный кузнец"
+kind = "humanoid"
+role = "warrior"
+element = "bludgeoning"
+biomes = ["кузни", "пепел", "вулкан", "кратер"]
+health = 1.1
+damage = 1.0
+armor = 1.25
+initiative = 0.8
+loot = ["iron_scrap"]
+
+[[enemy]]
+id = "ash_adder"
+name = "Пепельный полоз"
+kind = "beast"
+role = "rogue"
+element = "fire"
+biomes = ["пепел", "вулкан", "кратер", "пустошь"]
+health = 0.8
+damage = 1.1
+armor = 0.7
+initiative = 1.25
+loot = []
+
+[[enemy]]
+id = "slag_walker"
+name = "Шлаковый ходок"
+kind = "elemental"
+role = "brute"
+element = "fire"
+biomes = ["пепел", "вулкан", "кратер", "кузни"]
+health = 1.25
+damage = 1.0
+armor = 1.2
+initiative = 0.75
+loot = []
+
+[[enemy]]
+id = "ridge_harrier"
+name = "Хребтовый хищник"
+kind = "beast"
+role = "rogue"
+element = "rending"
+biomes = ["горы", "плато", "вершина", "небо", "утёсы"]
+health = 0.85
+damage = 1.1
+armor = 0.7
+initiative = 1.4
+loot = ["wolf_pelt"]
+
+[[enemy]]
+id = "cliff_ram"
+name = "Скальный баран"
+kind = "beast"
+role = "brute"
+element = "bludgeoning"
+biomes = ["горы", "плато", "вершина", "утёсы", "ущелье"]
+health = 1.25
+damage = 1.0
+armor = 1.1
+initiative = 0.85
+loot = ["wolf_pelt"]
+
+[[enemy]]
+id = "wind_hermit"
+name = "Ветровой отшельник"
+kind = "humanoid"
+role = "healer"
+element = "air"
+biomes = ["горы", "плато", "вершина", "небо"]
+health = 0.9
+damage = 0.85
+armor = 0.7
+initiative = 1.1
+loot = []
+
+[[enemy]]
+id = "snow_tracker"
+name = "Снежный ловчий"
+kind = "humanoid"
+role = "rogue"
+element = "piercing"
+biomes = ["снега", "тундра", "лес"]
+health = 0.9
+damage = 1.0
+armor = 0.85
+initiative = 1.2
+loot = ["iron_scrap"]
+
+[[enemy]]
+id = "rime_guard"
+name = "Инеевый страж"
+kind = "elemental"
+role = "warrior"
+element = "cold"
+biomes = ["снега", "тундра"]
+health = 1.15
+damage = 0.95
+armor = 1.3
+initiative = 0.8
+loot = []
+
+[[enemy]]
+id = "garden_caretaker"
+name = "Одичавший садовник"
+kind = "humanoid"
+role = "warrior"
+element = "slashing"
+biomes = ["сады", "руины"]
+health = 1.1
+damage = 0.95
+armor = 1.1
+initiative = 0.95
+loot = ["iron_scrap"]
+
+[[enemy]]
+id = "oathless_guard"
+name = "Безжалованный гвардеец"
+kind = "humanoid"
+role = "warrior"
+element = "piercing"
+biomes = ["крепость", "дорога", "башня", "чертоги", "тронный зал"]
+health = 1.15
+damage = 1.0
+armor = 1.2
+initiative = 0.9
+loot = ["iron_scrap"]
+
+[[enemy]]
+id = "seal_reader"
+name = "Чтец печатей"
+kind = "humanoid"
+role = "caster"
+element = "arcane"
+biomes = ["башня", "чертоги", "тронный зал", "крепость"]
+health = 0.85
+damage = 1.1
+armor = 0.7
+initiative = 1.05
+loot = []
+
+[[enemy]]
+id = "court_physician"
+name = "Опальный лекарь"
+kind = "humanoid"
+role = "healer"
+element = "mental"
+biomes = ["башня", "чертоги", "тронный зал", "крепость"]
+health = 0.85
+damage = 0.85
+armor = 0.75
+initiative = 1.0
+loot = []
+
+[[enemy]]
+id = "barrow_sentinel"
+name = "Курганный караульщик"
+kind = "undead"
+role = "warrior"
+element = "bludgeoning"
+biomes = ["курганы", "склепы", "город мёртвых", "подземелье"]
+health = 1.15
+damage = 0.95
+armor = 1.3
+initiative = 0.8
+loot = ["iron_scrap"]
+
+[[enemy]]
+id = "grave_whisperer"
+name = "Могильный шептун"
+kind = "undead"
+role = "caster"
+element = "negative"
+biomes = ["курганы", "склепы", "город мёртвых", "подземелье"]
+health = 0.8
+damage = 1.1
+armor = 0.65
+initiative = 1.1
+loot = []
+
+[[enemy]]
+id = "rift_hunter"
+name = "Разломный ловец"
+kind = "aberration"
+role = "rogue"
+element = "mental"
+biomes = ["разлом", "край", "кратер", "тоннели"]
+health = 0.85
+damage = 1.1
+armor = 0.7
+initiative = 1.3
+loot = []
+
+[[enemy]]
+id = "edge_keeper"
+name = "Краевой сторож"
+kind = "aberration"
+role = "warrior"
+element = "nature"
+biomes = ["разлом", "край", "кратер"]
+health = 1.2
+damage = 0.95
+armor = 1.25
+initiative = 0.85
+loot = []
+
+[[enemy]]
+id = "hollow_mender"
+name = "Полый сшиватель"
+kind = "aberration"
+role = "healer"
+element = "mental"
+biomes = ["разлом", "край", "тоннели"]
+health = 0.9
+damage = 0.85
+armor = 0.8
+initiative = 1.0
+loot = []
+
+[[enemy]]
+id = "cave_salamander"
+name = "Пещерный полоз"
+kind = "beast"
+role = "brute"
+element = "poison"
+biomes = ["пещеры", "подземелье", "тоннели"]
+health = 1.1
+damage = 1.05
+armor = 0.85
+initiative = 0.95
+loot = []
+
+[[enemy]]
+id = "sump_crab"
+name = "Отстойный панцирник"
+kind = "beast"
+role = "warrior"
+element = "piercing"
+biomes = ["затопленные ходы", "глубокие пещеры"]
+dungeon = true
+health = 1.15
+damage = 0.95
+armor = 1.3
+initiative = 0.8
+loot = []
+
+[[enemy]]
+id = "mine_surgeon"
+name = "Шахтный костоправ"
+kind = "humanoid"
+role = "healer"
+element = "bludgeoning"
+biomes = ["штольни", "рудник"]
+dungeon = true
+health = 0.85
+damage = 0.85
+armor = 0.8
+initiative = 1.0
+loot = []
+
+[[enemy]]
+id = "ore_whisperer"
+name = "Жильный шептун"
+kind = "elemental"
+role = "caster"
+element = "nature"
+biomes = ["штольни", "рудник", "глубокие пещеры"]
+dungeon = true
+health = 0.85
+damage = 1.05
+armor = 0.8
+initiative = 0.95
+loot = []
+
+[[enemy]]
+id = "crypt_cutthroat"
+name = "Склепный душитель"
+kind = "undead"
+role = "rogue"
+element = "negative"
+biomes = ["катакомбы", "подземный город"]
+dungeon = true
+health = 0.85
+damage = 1.1
+armor = 0.75
+initiative = 1.25
+loot = []
+
+[[enemy]]
+id = "buried_physician"
+name = "Погребённый лекарь"
+kind = "undead"
+role = "healer"
+element = "negative"
+biomes = ["катакомбы", "подземный город", "затопленные ходы"]
+dungeon = true
+health = 0.9
+damage = 0.85
+armor = 0.8
+initiative = 0.95
+loot = []
+
+[[enemy]]
+id = "sunken_warden"
+name = "Затонувший привратник"
+kind = "undead"
+role = "warrior"
+element = "bludgeoning"
+biomes = ["затопленные ходы", "глубокие пещеры"]
+dungeon = true
+health = 1.2
+damage = 0.95
+armor = 1.25
+initiative = 0.8
+loot = ["iron_scrap"]

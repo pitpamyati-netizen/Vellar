@@ -111,7 +111,8 @@ def test_buy_sell_cycle_never_creates_gold_with_small_prices_or_stacked_bonuses(
 
 
 @pytest.mark.parametrize(
-    "city,slot,expected", [("last_beacon", 1, 0), ("farhold", 2, 0), ("", 0, 0), ("farhold", 1, 1)]
+    "city,slot,expected",
+    [("last_beacon", 1, 0), ("farhold", 3, 0), ("farhold", 2, 1), ("", 0, 0), ("farhold", 1, 1)],
 )
 def test_search_counts_the_event_place_not_the_character_city(content, city, slot, expected):
     character = hero(

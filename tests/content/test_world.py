@@ -1,4 +1,4 @@
-"""Основа мира: 15 городов, по 5 локаций, уровни 1-150 без пробелов."""
+"""Основа мира: 60 действующих локаций и 15 прежних карт, уровни 1–150."""
 
 from __future__ import annotations
 
@@ -14,10 +14,12 @@ def test_fifteen_cities(content: GameContent) -> None:
     assert sorted(city.order for city in content.cities) == list(range(1, 16))
 
 
-def test_each_city_has_five_locations(content: GameContent) -> None:
+def test_each_city_has_four_destinations_and_five_stable_map_keys(content: GameContent) -> None:
     for city in content.cities:
         assert len(city.locations) == 5, city.id
         assert [location.slot for location in city.locations] == [1, 2, 3, 4, 5]
+        assert [location.slot for location in city.active_locations] == [1, 3, 4, 5]
+        assert city.location(2).merged_into == 1
 
 
 def test_each_city_has_one_deep_dungeon_at_its_ceiling(content: GameContent) -> None:
@@ -68,7 +70,8 @@ def test_every_level_is_covered(content: GameContent) -> None:
 
 def test_locations_have_no_gaps_and_increase(content: GameContent) -> None:
     for city in content.cities:
-        for earlier, later in zip(city.locations, city.locations[1:], strict=False):
+        safe = [one for one in city.active_locations if not one.pvp]
+        for earlier, later in itertools.pairwise(safe):
             assert later.level_min <= earlier.level_max, f"gap in {city.id}"
             assert later.level_min > earlier.level_min, f"{city.id} not monotonic"
             assert later.level_max > earlier.level_max, f"{city.id} not monotonic"

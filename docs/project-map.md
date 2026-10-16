@@ -124,7 +124,7 @@
   `routing.py`, `messaging.py`, `digest_claim.py` (ADR 0053), `broadcast.py`,
   `throttle.py`, `cleanup.py`.
 
-**`content/`** — `world.toml` (15 городов × 5 локаций, 1–150; у каждого города
+**`content/`** — `world.toml` (15 городов × 4 действующие локации и 15 прежних карт, 1–150; у каждого города
 список `[[city.dungeon]]` — четыре обычных вразброс по полосе и одно
 `deep = true` на `level_max`, ADR 0041; службы `"summary"` — сводка заставы, ADR 0053, 0054, и
 `"forge"` — кузница, ADR 0057), `races.toml`

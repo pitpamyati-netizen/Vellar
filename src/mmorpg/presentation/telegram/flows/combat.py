@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import replace
 
 from mmorpg.application.services.battle import BattleSession
@@ -40,7 +40,7 @@ def spawn_for_node(
     content: GameContent,
     *,
     seed: bytes,
-    biome: str,
+    biome: str | Collection[str],
     level: int,
     rank: EnemyRank = EnemyRank.NORMAL,
     stakes: float = 1.0,

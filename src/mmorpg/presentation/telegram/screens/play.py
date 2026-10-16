@@ -318,9 +318,14 @@ def location_list_screen(
         ListEntry(
             key=str(location.slot),
             text=f"{location.slot}. {location.name}",
-            detail=_location_fit(location, character.level),
+            detail=_location_fit(location, character.level)
+            + "".join(
+                f". В эту область входит {old.name}"
+                for old in city.locations
+                if old.merged_into == location.slot
+            ),
         )
-        for location in city.locations
+        for location in city.active_locations
     ]
     return paginated_screen(
         screen_id=ScreenId.LOCATION_LIST,
@@ -360,7 +365,7 @@ def risk_note(node: LocationNode, character_level: int) -> str:
         return ""
     gap = node.level - character_level
     if gap <= -3:
-        risk = "противник слабее вас, бой короткий"
+        risk = "уровень противника ниже вашего, награда за опыт уменьшена"
     elif gap <= 1:
         risk = "противник вам вровень"
     elif gap <= 4:

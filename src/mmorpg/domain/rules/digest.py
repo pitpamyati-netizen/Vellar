@@ -109,6 +109,8 @@ def digest(
     source = rng(derive(shop_seed(world_seed, city_id, rotation), "digest"))
 
     spots = _combat_locations(city, level)
+    if not spots:
+        return ()
 
     hunt_here = _pick_spot(source, spots, moods)
     prey = _prey_for(content, hunt_here, source)
@@ -200,17 +202,13 @@ def _band_gap(location: Location, level: int) -> int:
 
 
 def _combat_locations(city: City, level: int) -> list[Location]:
-    """Мирные локации города по уровню игрока — всегда хотя бы две, если они есть.
-
-    Одна локация в наборе заморозила бы дело на все перевороты: сид меняется, а
-    выбор из одного — нет.
-    """
-    pool = [loc for loc in city.locations if not loc.pvp] or list(city.locations)
+    """Доступные мирные места: сводка не посылает новичка к закрытому входу."""
+    pool = [loc for loc in city.active_locations if not loc.pvp and loc.level_min <= level]
     covering = [loc for loc in pool if loc.covers(level)]
-    if len(covering) >= 2:
+    if covering:
         return covering
     by_gap = sorted(pool, key=lambda loc: (_band_gap(loc, level), loc.slot))
-    return by_gap[: max(2, len(covering))] if len(by_gap) >= 2 else by_gap
+    return by_gap[:2]
 
 
 def _pick_spot(
@@ -239,7 +237,7 @@ def _prey_for(
     Пул — тот же, из которого локация набирает стаи (``procgen/enemies.candidates``),
     поэтому дело всегда выполнимо: названная порода здесь и правда водится.
     """
-    pool = candidates(content.enemy_archetypes, location.biome, dungeon=False)
+    pool = candidates(content.enemy_archetypes, location.biomes, dungeon=False)
     return source.choice(list(pool)) if pool else None
 
 

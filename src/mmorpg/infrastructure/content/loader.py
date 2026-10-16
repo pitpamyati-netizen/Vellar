@@ -2236,7 +2236,7 @@ def _validate_enemies(
     overworld = [enemy for enemy in enemies if not enemy.dungeon]
     underground = [enemy for enemy in enemies if enemy.dungeon]
 
-    biomes = {location.biome for city in cities for location in city.locations}
+    biomes = {biome for city in cities for location in city.locations for biome in location.biomes}
     for biome in sorted(biomes):
         if not any(enemy.fits(biome) for enemy in overworld):
             problems.append(f"enemies.toml: biome {biome!r} has no overworld enemy archetype")
@@ -2269,6 +2269,8 @@ def _parse_world(raw: Mapping[str, Any], problems: list[str]) -> tuple[City, ...
                 city_id=city_id,
                 pvp=bool(loc.get("pvp", False)),
                 experience_bonus_percent=int(loc.get("experience_bonus_percent", 0)),
+                merged_into=int(loc.get("merged_into", 0)),
+                habitats=tuple(str(one) for one in loc.get("habitats", ())),
             )
             for loc in entry.get("location", ())
         )
@@ -2455,13 +2457,24 @@ def _validate_world(cities: Sequence[City], rules: ProgressionRules, problems: l
 
         previous: Location | None = None
         for location in city.locations:
+            if location.merged_into:
+                if (
+                    not city.has_location(location.merged_into)
+                    or location.merged_into == location.slot
+                    or city.location(location.merged_into).merged_into
+                ):
+                    problems.append(f"world.toml: {city.id}/{location.id} invalid merged_into")
+                else:
+                    destination = city.destination(location.slot)
+                    if location.pvp != destination.pvp or not location.biomes <= destination.biomes:
+                        problems.append(f"world.toml: {city.id}/{location.id} unsafe merge")
             if not 0 <= location.experience_bonus_percent <= 100:
                 problems.append(
                     f"world.toml: {city.id}/{location.id} experience_bonus_percent must be 0..100"
                 )
             if location.level_min > location.level_max:
                 problems.append(f"world.toml: {city.id}/{location.id} has an inverted level range")
-            if previous is not None:
+            if previous is not None and not location.merged_into and not location.pvp:
                 if location.level_min > previous.level_max:
                     problems.append(
                         f"world.toml: gap between {previous.id} and {location.id} in {city.id}"
@@ -2473,8 +2486,15 @@ def _validate_world(cities: Sequence[City], rules: ProgressionRules, problems: l
                     problems.append(
                         f"world.toml: {city.id}/{location.id} does not increase monotonically"
                     )
-            covered.update(range(location.level_min, location.level_max + 1))
-            previous = location
+            if not location.merged_into:
+                covered.update(range(location.level_min, location.level_max + 1))
+                if not location.pvp:
+                    previous = location
+
+        safe = [one for one in city.active_locations if not one.pvp]
+        safe_levels = {level for one in safe for level in range(one.level_min, one.level_max + 1)}
+        if not set(range(city.level_min, city.level_max + 1)) <= safe_levels:
+            problems.append(f"world.toml: {city.id} requires PvP to cover its level band")
 
         if city.locations:
             if city.locations[0].level_min != city.level_min:

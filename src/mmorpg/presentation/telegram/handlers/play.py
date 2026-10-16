@@ -816,7 +816,7 @@ async def _digest_view(
     )
     place = ""
     moods: dict[int, mood_rules.LocationMood] = {}
-    for location in city.locations:
+    for location in city.active_locations:
         state = await locations.state(city.id, location.slot, now=now)
         roamer = await locations.roamer(city.id, location.slot, now=now)
         moods[location.slot] = mood_rules.mood_of(state.with_roamer(roamer))
