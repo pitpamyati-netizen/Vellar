@@ -1,6 +1,7 @@
 """SQL проверяет резерв, журнал, конкуренцию, отмену и восстановление."""
 
 import asyncio
+from dataclasses import replace
 from uuid import uuid4
 
 import asyncpg
@@ -228,8 +229,21 @@ async def test_sql_reserve_refund_and_expiry_journal_conserve_everything(market_
     assert total == 0
 
 
-async def test_sql_craft_order_rollback_two_makers_and_saved_result(market_sql):
+@pytest.mark.parametrize("quality", ["plain", "fine"])
+async def test_sql_craft_order_rollback_two_makers_and_saved_result(market_sql, quality):
     e = market_sql
+    # Случайное качество зависело от номера героя в SQL: отменная работа
+    # законно сберегает половину сырья. Проверяем оба исхода явно, сохраняя
+    # настоящие правила изготовления, отката и конкуренции двух мастеров.
+    e.market.content = e.market.content.rebuilt(
+        craft_rules=replace(
+            e.market.content.craft_rules,
+            fine_chance_base=100 if quality == "fine" else 0,
+            fine_chance_per_rank=0,
+            good_chance_base=0,
+            good_chance_per_rank=0,
+        )
+    )
     buyer, maker, other = e.heroes
     for person in (maker, other):
         await e.inventory.add(person.id, "iron_scrap", 2)
@@ -253,12 +267,12 @@ async def test_sql_craft_order_rollback_two_makers_and_saved_result(market_sql):
     filled = state.orders[0]
     assert filled.status == "filled" and filled.quantity >= 1
     assert await e.inventory.count(buyer.id, filled.item_id) == filled.quantity
-    assert sum([await e.inventory.count(person.id, "iron_scrap") for person in (maker, other)]) == 2
+    for person, result in zip((maker, other), results, strict=True):
+        expected = (1 if quality == "fine" else 0) if result.ok else 2
+        assert await e.inventory.count(person.id, "iron_scrap") == expected
 
 
 async def test_physical_gear_keeps_number_wear_in_escrow_and_return(market_sql):
-    from dataclasses import replace
-
     from mmorpg.domain.entities.character import ItemWear
     from mmorpg.infrastructure.persistence.postgres import PostgresInventoryRepository
 

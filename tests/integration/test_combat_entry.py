@@ -18,6 +18,8 @@ from mmorpg.application.services.battle import BattleStore
 from mmorpg.config import AppEnv
 from mmorpg.domain.entities import SkillKind, SkillLoadout
 from mmorpg.domain.entities.character import Character
+from mmorpg.domain.entities.location import NodeKind
+from mmorpg.domain.entities.stats import StatBlock
 from mmorpg.domain.ports.repositories import User
 from mmorpg.domain.procgen import location_seed
 from mmorpg.domain.rules import nodes as node_rules
@@ -26,7 +28,7 @@ from mmorpg.main import build_application
 from mmorpg.presentation.telegram.flows.play import build_location, render
 from mmorpg.presentation.telegram.flows.state import LocationSession, PlayState
 from mmorpg.presentation.telegram.screens.base import ScreenId
-from mmorpg.presentation.telegram.screens.play import NODE_ACTIONS
+from mmorpg.presentation.telegram.screens.play import NODE_ACTIONS, node_button
 from mmorpg.presentation.telegram.states.screens import STATE_FOR_SCREEN, Play
 from tests.presentation.test_command_journal import RecordingSession, update
 from tests.test_main import _dependencies
@@ -251,3 +253,136 @@ async def test_saved_location_wave_rejects_replacement_objects(combat_app):
     assert await dependencies.characters.get(hero.id) == before
     refreshed = PlayState.deserialise((await state.get_data())["play"])
     assert refreshed.session.wave == shown.session.wave + 1
+
+
+@pytest.mark.parametrize("empty_after", [False, True])
+async def test_win_return_and_next_choice_keep_the_actual_map(combat_app, monkeypatch, empty_after):
+    app, dependencies, hero, state, recording = combat_app
+    hero = await dependencies.characters.save(
+        replace(hero, allocated=StatBlock(STR=10_000, AGI=10_000, END=10_000))
+    )
+    now = int(time.time())
+    await dependencies.locations.reset("farhold", 1)
+    world = await dependencies.locations.state("farhold", 1, now=now)
+    session = LocationSession("farhold", 1, epoch=location_epoch(world))
+    assert session.epoch > 0
+    location = build_location(app.content, app.settings.world_seed, session)
+    node = next(one for one in location.nodes if one.kind is NodeKind.BATTLE)
+    size = node_rules.wave_size(
+        location_seed(app.settings.world_seed, "farhold", 1), node.index, node.kind, 0
+    )
+    if empty_after:
+        for place in range(1, size):
+            await dependencies.locations.take(
+                "farhold", 1, node.index, wave=0, size=size, now=now, ttl=3600, place=place
+            )
+    flow = PlayState(session=replace(session, node=node.index)).at(ScreenId.LOCATION)
+    await state.set_state(Play.location)
+    await state.set_data({"play": flow.serialise()})
+    _, reply = await feed(app, recording, hero, "/осмотреться", 1)
+    choice = next(
+        button.text
+        for row in reply.reply_markup.keyboard
+        for button in row
+        if button.text.startswith("Вступить в бой")
+    )
+    _, reply = await feed(app, recording, hero, choice, 2)
+    store = BattleStore(dependencies.state_cache)
+    battle_id = (await state.get_data())["battle"]
+    opened = await store.load(battle_id)
+    assert opened and opened.epoch == session.epoch
+    # Содержимое обновилось во время боя. Бой хранит прежние правила, но узел
+    # после возвращения должен сразу показывать нынешнее название и свойства.
+    current = app.content.rebuilt(
+        cities=tuple(
+            replace(
+                city,
+                locations=tuple(
+                    replace(place, name="Контрольные луга") if place.slot == 1 else place
+                    for place in city.locations
+                ),
+            )
+            if city.id == "farhold"
+            else city
+            for city in app.content.cities
+        ),
+        enemy_archetypes=tuple(
+            replace(one, health=one.health * 2) for one in app.content.enemy_archetypes
+        ),
+    )
+    monkeypatch.setattr(dependencies.registry, "_current", current)
+    for number in range(3, 33):
+        _, reply = await feed(app, recording, hero, "Атака", number)
+        settled = await store.load(battle_id)
+        if settled.settled:
+            break
+    assert (
+        settled.settled
+        and settled.state.verdict_for(settled.combatant_of(hero.id).id).value == "victory"
+    )
+    before_return = await dependencies.characters.get(hero.id)
+    event, reply = await feed(app, recording, hero, "Назад", 40)
+    saved = PlayState.deserialise((await state.get_data())["play"])
+    assert await state.get_state() == Play.location.state
+    assert saved.session.node == node.index and saved.session.epoch == session.epoch
+    assert f"Локация Контрольные луга, узел {node.index}: {node.name}." in reply.text
+    assert not dict(saved.session.foes).get(0)
+    buttons = [button.text for row in reply.reply_markup.keyboard for button in row]
+    if empty_after:
+        assert "Здесь пусто" in reply.text and not saved.session.foes
+        choice = node_button(location.node(node.links[0]), node.index, "Контрольные луга").text
+        assert choice in buttons
+    else:
+        assert f"Противников: {size - 1} из {size}." in reply.text
+        choice = next(text for text in buttons if text.startswith("Вступить в бой"))
+    after_return = await dependencies.characters.get(hero.id)
+    assert (after_return.gold, after_return.experience) == (
+        before_return.gold,
+        before_return.experience,
+    )
+    await app.dispatcher.feed_update(app.bot, event)
+    assert PlayState.deserialise((await state.get_data())["play"]) == saved
+    assert await dependencies.characters.get(hero.id) == after_return
+    _, reply = await feed(app, recording, hero, choice, 41)
+    assert (
+        "Эта кнопка больше" not in reply.text and "свойства этой стаи изменились" not in reply.text
+    )
+    if empty_after:
+        moved = PlayState.deserialise((await state.get_data())["play"])
+        assert moved.session.node in node.links and moved.session.epoch == session.epoch
+    else:
+        assert "Бой. Круг" in reply.text
+        next_battle = await store.load((await state.get_data())["battle"])
+        assert next_battle.place == 1 and next_battle.epoch == session.epoch
+
+
+async def test_failed_return_rolls_back_the_screen_and_retries(combat_app, monkeypatch):
+    from mmorpg.presentation.telegram.handlers import play
+    from mmorpg.presentation.telegram.middlewares.errors import APOLOGY
+
+    app, dependencies, hero, state, recording = combat_app
+    now = int(time.time())
+    world = await dependencies.locations.state("farhold", 1, now=now)
+    session = LocationSession("farhold", 1, node=2, epoch=location_epoch(world))
+    flow = PlayState(session=session).at(ScreenId.LOCATION).at(ScreenId.COMBAT)
+    data = {"play": flow.serialise(), "battle": "missing-battle"}
+    await state.set_state(Play.combat)
+    await state.set_data(data)
+    original = play.render_play
+
+    async def fail_after_render(*args, **kwargs):
+        await original(*args, **kwargs)
+        raise RuntimeError("controlled return failure")
+
+    monkeypatch.setattr(play, "render_play", fail_after_render)
+    _, reply = await feed(app, recording, hero, "Назад", 1)
+    assert reply.text == APOLOGY
+    assert await state.get_state() == Play.combat.state
+    assert await state.get_data() == data
+    assert await dependencies.locations.state("farhold", 1, now=now) == world
+    monkeypatch.setattr(play, "render_play", original)
+    _, reply = await feed(app, recording, hero, "Назад", 1)
+    saved = PlayState.deserialise((await state.get_data())["play"])
+    assert saved.screen is ScreenId.LOCATION and saved.session.node == 2
+    assert saved.session.epoch == session.epoch and saved.session.wave >= 0
+    assert "Локация" in reply.text and await state.get_state() == Play.location.state

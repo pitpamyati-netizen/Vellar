@@ -86,7 +86,13 @@ from mmorpg.presentation.telegram.flows.play import (
     node_pack_seed,
     visit_seed,
 )
-from mmorpg.presentation.telegram.flows.state import Descent, LocationSession, PlayState
+from mmorpg.presentation.telegram.flows.state import (
+    Clock,
+    Descent,
+    LocationSession,
+    PendingWrite,
+    PlayState,
+)
 from mmorpg.presentation.telegram.keyboards import labels
 from mmorpg.presentation.telegram.keyboards.labels import Label, label
 from mmorpg.presentation.telegram.messaging import push_screen, send_screen, send_text
@@ -809,6 +815,8 @@ async def fight(
                 session, encounter=descent.encounter(session.owner), roamer_stamp=descent.stamp
             )
         session = await store.save(session)
+    # Бой завершается по сохранённым правилам, а возврат показывает нынешний мир.
+    world_content = content
     content = await store.content(session, content)
     expected = data.get("battle_version")
     if match := re.search(r" — ход (\d+)$", message.text):
@@ -880,6 +888,7 @@ async def fight(
             state_cache,
             parties,
             locations,
+            world_content=world_content,
         )
         return
 
@@ -2136,6 +2145,8 @@ async def _after_the_fight(
     state_cache: StateCache,
     parties: PartyStore,
     locations: LocationStateCache,
+    *,
+    world_content: GameContent,
 ) -> None:
     """Экран итога - настоящий экран: он отвечает на каждую кнопку."""
     text = message.text or ""
@@ -2158,7 +2169,7 @@ async def _after_the_fight(
         await state.set_state(Play.main_menu)
         from mmorpg.presentation.telegram.handlers.play import render_play
 
-        await render_play(message, content, settings, home, character)
+        await render_play(message, world_content, settings, home, character)
         return
 
     if flow.descent.active:
@@ -2168,7 +2179,9 @@ async def _after_the_fight(
                 # Ход наверх - это не бой: заход кончается с тем, что уже взято.
                 # Замок подземелья снимает ``_leave_to_play`` (ADR 0037).
                 await state.update_data({STATE_KEY: ""})
-                await _leave_to_play(message, state, content, settings, flow, character, locations)
+                await _leave_to_play(
+                    message, state, world_content, settings, flow, character, locations
+                )
                 return
             await state.update_data({STATE_KEY: ""})
             await open_fight(
@@ -2185,7 +2198,7 @@ async def _after_the_fight(
                 locations=locations,
             )
             return
-    await _leave_to_play(message, state, content, settings, flow, character, locations)
+    await _leave_to_play(message, state, world_content, settings, flow, character, locations)
 
 
 def _dungeon_fork(
@@ -2233,14 +2246,19 @@ async def _leave_to_play(
     settings: Settings,
     flow: PlayState,
     character: Character,
-    locations: LocationStateCache | None = None,
+    locations: LocationStateCache,
 ) -> None:
     """Бросить бой и вернуть игрока на тот экран, с которого он пришёл."""
-    from mmorpg.presentation.telegram.handlers.play import render_play
+    from mmorpg.presentation.telegram.handlers.play import (
+        _company,
+        _fights,
+        render_play,
+        sync_location,
+    )
 
     # Брошенный заход отпускает замок: само блуждающее подземелье остаётся для
     # других (ADR 0037).
-    if flow.descent.roamer and locations is not None:
+    if flow.descent.roamer:
         await locations.release_roamer(
             flow.descent.city_id, flow.descent.slot, encounter=flow.descent.encounter(character.id)
         )
@@ -2255,10 +2273,33 @@ async def _leave_to_play(
     target = previous or (ScreenId.LOCATION if flow.session.active else ScreenId.CITY)
     if target is ScreenId.LOCATION and not flow.session.active:
         target = ScreenId.CITY
-    landing = replace(flow, screen=target, stack=stack, fight="", notice="")
+    landing = replace(flow, screen=target, stack=stack, fight="", notice="", pending=PendingWrite())
+    now = int(time.time())
+    here = None
+    if target is ScreenId.LOCATION:
+        # Возврат — такой же показ узла, как обычное перемещение: после боя
+        # стая уже убрана, волна могла смениться, а рядом могли начать другой бой.
+        # Сохраняем именно тот выбор, который сейчас отправим игроку.
+        landing, here = await sync_location(
+            content, landing, flow, character, locations, now, settings
+        )
+    company = await _company(landing, character, locations, now) if here is not None else ()
+    held = (
+        await _fights(landing, locations, content, settings, here, now) if here is not None else ()
+    )
     await state.update_data({STATE_KEY: "", PLAY_KEY: landing.serialise()})
     await state.set_state(STATE_FOR_SCREEN[landing.screen])
-    await render_play(message, content, settings, landing, character)
+    await render_play(
+        message,
+        content,
+        settings,
+        landing,
+        character,
+        clock=Clock(now=now, shop_rotation=rotation_index(now, settings.shop_rotation_seconds)),
+        neighbours=company,
+        fights=held,
+        location_state=here,
+    )
 
 
 # --- сумка ------------------------------------------------------------

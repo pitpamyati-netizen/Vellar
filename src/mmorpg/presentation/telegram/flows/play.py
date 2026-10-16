@@ -548,7 +548,13 @@ def _render(
 ) -> Screen:
     shelf = goods or Goods(gold=character.gold)
     clock = clock or Clock()
-    here_now = location_state or LocationState()
+    # Без общего состояния нельзя подменять сохранённую ненулевую карту
+    # исходной раскладкой. Рабочие переходы приносят также реальные остатки узлов.
+    here_now = (
+        location_state
+        if location_state is not None
+        else LocationState(epoch_offset=max(0, state.session.epoch))
+    )
     city = known_city(content, state.city_id, character.city_id)
     # Панель смотрителя и разговор с жителем рисуются своим модулем: это не
     # исключение из правил экрана, а просто другая половина того же автомата.
