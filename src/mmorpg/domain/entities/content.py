@@ -1033,7 +1033,8 @@ class ProgressionRules:
     rank_cost: int
     #: Уровень героя для каждого нового ранга. Отсутствующее поле старого
     #: снимка получает базовый набор порогов без изменения персонажа.
-    rank_unlock_levels: tuple[int, ...] = (1, 10, 30, 60, 100)
+    # Только для чтения прежних снимков боя. Пороги рангов больше не применяются.
+    rank_unlock_levels: tuple[int, ...] = ()
     health_recovery_base_percent: float = 5.0
     health_recovery_endurance_percent: float = 20.0
     health_recovery_endurance_softener: float = 100.0

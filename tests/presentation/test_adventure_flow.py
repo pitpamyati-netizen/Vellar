@@ -343,7 +343,9 @@ async def walk_to(player: Player, content: GameContent, kind: NodeKind) -> int:
     walk, target = found
     for index in walk:
         node = location.node(index)
-        await player.press(f"Узел {node.index}: {node.name}")
+        await player.press(
+            play_screens.node_button(node, (await player.flow()).session.node, location.name).text
+        )
     assert (await player.flow()).session.node == target
     return target
 
@@ -365,8 +367,9 @@ async def test_a_battle_node_names_who_waits_there(player: Player, content: Game
         for text in row
         if text.startswith(play_screens.NODE_ACTIONS[NodeKind.BATTLE])
     )
-    named = action.split(": ", 1)[1]
-    assert named, "the button says who waits"
+    assert f"узел {(await player.flow()).session.node}" in action
+    named = screen.text().split("Здесь ждут:\n", 1)[1].split("\n", 1)[0].split(". ", 1)[1]
+    named = named.split(" (")[0].split(",")[0]
     assert "Здесь ждут" in screen.text() or "Здесь ждёт" in screen.text()
     assert named in screen.text()
 
@@ -385,7 +388,7 @@ async def test_a_vein_names_what_lies_in_it(player: Player, content: GameContent
         for text in row
         if text.startswith(play_screens.NODE_ACTIONS[NodeKind.GATHER])
     )
-    assert ": " in action, action
+    assert f"узел {(await player.flow()).session.node}" in action
     assert "Здесь берут:" in screen.text()
 
 
@@ -434,9 +437,8 @@ async def test_every_pack_in_the_node_has_its_own_button(
     assert len(buttons) >= 2, "в засаде стоит не одна стая"
 
     for number, button in enumerate(buttons, start=1):
-        head, named = button.split(": ", 1)
-        assert head.endswith(str(number)), "номер держит место стаи в волне"
-        assert f"{number}. {named}" in screen.text(), "кнопка и строка называют одно и то же"
+        assert f"бой {number}, узел " in button
+        assert f"{number}. " in screen.text(), "номер связывает кнопку со строкой стаи"
         assert "уровень" in screen.text()
 
 
@@ -446,7 +448,7 @@ async def test_the_pack_you_pressed_is_the_pack_you_fight(
     """Выбрали вторую стаю - дерётесь со второй, а не с той, что стояла первой."""
     await walk_to(player, content, NodeKind.BATTLE)
     second = attack_buttons(player.sent.last)[1]
-    named = second.split(": ", 1)[1].split(",")[0]
+    named = player.sent.last.text().split("\n2. ", 1)[1].split(" (")[0].split(",")[0]
 
     fight = await player.press(second)
     assert fight.id is ScreenId.COMBAT
@@ -470,7 +472,6 @@ async def test_a_pack_someone_fights_invites_you_in_instead(
     """Пришедший на занятую стаю не бьёт её второй раз, а вмешивается (ADR 0065)."""
     node = await walk_to(player, content, NodeKind.BATTLE)
     first = attack_buttons(player.sent.last)[0]
-    named = first.split(": ", 1)[1]
     await player.press(first)
     battle_id = (await player.state.get_data())["battle"]
     assert battle_id
@@ -506,8 +507,8 @@ async def test_a_pack_someone_fights_invites_you_in_instead(
         if text.startswith(play_screens.JOIN_FIGHT)
     ]
     assert joining, "кнопка «Вмешаться» стоит там же, где стояло бы «Вступить в бой»"
-    assert named in joining[0]
-    assert named not in " ".join(attack_buttons(screen)), "по занятой стае второй раз не бьют"
+    assert f"узел {node}" in joining[0]
+    assert not any(text.startswith("Вступить в бой 1,") for text in attack_buttons(screen))
 
     joined = await other.press(joining[0])
     assert joined.id is ScreenId.COMBAT
@@ -1268,9 +1269,13 @@ async def test_a_roamer_shows_up_in_the_location_and_a_solo_run_can_be_entered(
 
     shown = await player.press("Осмотреться")
     assert "подземелье" in shown.text().casefold()
-    assert "Спуститься в подземелье" in [item.text for row in shown.rows for item in row]
+    assert play_screens.at_node("Спуститься в подземелье", node, "Луга у Заставы").text in [
+        item.text for row in shown.rows for item in row
+    ]
 
-    screen = await player.press("Спуститься в подземелье")
+    screen = await player.press(
+        play_screens.at_node("Спуститься в подземелье", node, "Луга у Заставы").text
+    )
     assert screen.id is ScreenId.COMBAT
     flow = await player.flow()
     assert flow.descent.roamer is True
@@ -1290,7 +1295,9 @@ async def test_a_taken_roamer_shows_no_button_and_refuses_entry(
 
     shown = await player.press("Осмотреться")
     assert "уже спустились" in shown.text().casefold()
-    assert "Спуститься в подземелье" not in [item.text for row in shown.rows for item in row]
+    assert play_screens.at_node("Спуститься в подземелье", node, "Луга у Заставы").text not in [
+        item.text for row in shown.rows for item in row
+    ]
 
 
 async def test_a_group_roamer_turns_a_lone_adventurer_away(
@@ -1300,7 +1307,9 @@ async def test_a_group_roamer_turns_a_lone_adventurer_away(
     await _seed_roamer(deltas, node, group=True)
     await player.press("Осмотреться")
 
-    screen = await player.press("Спуститься в подземелье")
+    screen = await player.press(
+        play_screens.at_node("Спуститься в подземелье", node, "Луга у Заставы").text
+    )
     assert screen.id is ScreenId.LOCATION
     assert "отряд" in screen.text().casefold()
     # Замок не взят: одиночку не пустили.
@@ -1329,7 +1338,9 @@ async def test_a_roamer_run_carried_to_the_lair_makes_the_rift_vanish(
     node = await walk_to(player, content, NodeKind.GATHER)
     await _seed_roamer(deltas, node)
     await player.press("Осмотреться")
-    screen = await player.press("Спуститься в подземелье")
+    screen = await player.press(
+        play_screens.at_node("Спуститься в подземелье", node, "Луга у Заставы").text
+    )
 
     doors = ("Логово хозяина", "Дальше — схватка", "Дальше — затишье", "Дальше — крупный зверь")
     for _ in range(200):

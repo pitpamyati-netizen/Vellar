@@ -64,7 +64,6 @@ from mmorpg.domain.rules import digest as digest_rules
 from mmorpg.domain.rules import dungeon as dungeon_rules
 from mmorpg.domain.rules import guild as guild_rules
 from mmorpg.domain.rules import guild_contract as contract_rules
-from mmorpg.domain.rules import mood as mood_rules
 from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules import party as party_rules
 from mmorpg.domain.rules import pvp as pvp_rules
@@ -83,6 +82,7 @@ from mmorpg.presentation.telegram.flows.play import (
     descent_fight_seed,
     dungeon_run_seed,
     location_known,
+    node_pack,
     node_pack_seed,
     visit_seed,
 )
@@ -565,7 +565,7 @@ async def _spawn(
     # (``domain/rules/nodes.py``).
     seed = node_pack_seed(
         settings.world_seed,
-        flow.session,
+        replace(flow.session, epoch=location.epoch),
         index=node.index,
         wave=left.wave,
         place=place,
@@ -619,15 +619,15 @@ async def _spawn(
     # Прозвище-модификатор бывает только у сильного одиночки и хозяина логова, и
     # никогда у обычной стаи (ADR 0042); эпиков в локации мало (ADR 0034). В
     # выбитой и встревоженной округе эпик и хозяин логова злее (ADR 0055).
-    odds = dungeon_rules.affix_odds(node.kind.rank, mood_rules.mood_of(location_state))
-    enemies = fight_flow.spawn_for_node(
+    enemies = node_pack(
         content,
-        seed=seed,
-        biome=location.biome,
-        level=max(1, node.level),
-        rank=node.kind.rank,
-        affix_chance=odds.chance,
-        affix_count=odds.count,
+        world_seed=settings.world_seed,
+        session=flow.session,
+        location=location,
+        index=node.index,
+        wave=left.wave,
+        place=place,
+        state=location_state,
     )
     return begin(
         content,

@@ -2,6 +2,9 @@
 
 Дата: 15 октября 2026 года. Статус: принято по прямому поручению пользователя.
 
+Пункт 2 о порогах рангов заменён 16.10.2026
+[ADR 0107](0107-free-ranks-and-scoped-location-actions.md). Остальные решения сохраняются.
+
 Уточняет [ADR 0058](0058-a-hundred-and-fifty-levels.md),
 [ADR 0059](0059-gear-carries-affixes-and-a-stamp.md),
 [ADR 0071](0071-loot-leans-to-your-class-and-gear-asks-for-a-stat.md),

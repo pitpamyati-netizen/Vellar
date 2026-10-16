@@ -88,6 +88,7 @@ from mmorpg.presentation.telegram.flows.play import (
     build_location,
     known_city,
     location_known,
+    node_foes,
     render,
     visit_seed,
 )
@@ -1568,6 +1569,58 @@ async def sync_location(
 
     roamer = await _roaming_here(content, session, locations, state, now, settings)
     state = state.with_roamer(roamer)
+
+    epoch = node_rules.location_epoch(state)
+    if session.epoch != epoch:
+        session = replace(session, node=0, epoch=epoch)
+        if updated.fight:
+            updated = go_back(updated).at(ScreenId.LOCATION)
+        updated = updated.with_notice(
+            f"{updated.notice} Округа изменилась. Вы вернулись ко входу.".strip()
+        )
+    location = build_location(content, settings.world_seed, session, epoch=epoch)
+    shown = node_rules.standing_at(
+        visit_seed(settings.world_seed, session), location, state, session.node, now
+    )
+    if updated.fight.startswith(("node:", "join:")) and (
+        session.wave >= 0 and session.wave != shown.wave
+    ):
+        updated = (
+            go_back(updated)
+            .at(ScreenId.LOCATION)
+            .with_notice("Прежних противников уже нет. Выберите стаю заново.")
+        )
+    foes = tuple(
+        (one.place, one.signature)
+        for one in node_foes(
+            content,
+            world_seed=settings.world_seed,
+            session=session,
+            location=location,
+            index=session.node,
+            standing={session.node: shown},
+            state=state,
+        )
+    )
+    if updated.fight.startswith("node:"):
+        place = int(updated.fight.split(":", 1)[1])
+        previous = dict(session.foes).get(place)
+        actual = dict(foes).get(place)
+        if actual is None or (previous is not None and previous != actual):
+            updated = (
+                go_back(updated)
+                .at(ScreenId.LOCATION)
+                .with_notice(
+                    "Стая исчезла или её свойства изменились. Бой не начат; выберите заново."
+                )
+            )
+    session = replace(
+        session,
+        wave=shown.wave,
+        roamer_stamp=roamer.stamp if roamer is not None and roamer.node == session.node else -1,
+        foes=foes,
+    )
+    updated = replace(updated, session=session)
 
     await locations.arrive(
         session.city_id,

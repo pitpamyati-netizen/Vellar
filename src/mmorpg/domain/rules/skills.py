@@ -94,13 +94,11 @@ def usable(content: GameContent, character: Character, skill: Skill) -> bool:
 
 
 def next_rank_level(content: GameContent, character: Character, skill: Skill) -> int | None:
-    """Уровень для следующего вложения; ``None`` — ранг уже предельный."""
+    """Уровень первого изучения; улучшение изученного не зависит от уровня."""
     rank = character.loadout.rank_of(skill.code) if is_known(character, skill.code) else 0
     if rank >= content.rules.max_rank:
         return None
-    levels = content.rules.rank_unlock_levels
-    required = levels[min(max(0, rank), len(levels) - 1)]
-    return required if rank else max(required, skill.level)
+    return 1 if rank else skill.level
 
 
 def _class_pool(content: GameContent, character: Character, kind: SkillKind) -> tuple[Skill, ...]:

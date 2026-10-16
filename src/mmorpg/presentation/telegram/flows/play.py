@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
+from hashlib import sha256
 
 from mmorpg import economy_log
 from mmorpg.domain.entities.character import Character
@@ -230,7 +231,10 @@ def node_pack_seed(
     Место, а не счёт взятого: стая с третьего места собирается одной и той же,
     сколько бы соседних до неё ни пало.
     """
-    return derive(node_fight_seed(world_seed, session, wave, index), place)
+    seed = derive(node_fight_seed(world_seed, session, wave, index), place)
+    # Нулевое поколение сохраняет прежние стаи. Новое поколение — другое место,
+    # даже если номер узла и номер его волны случайно совпали.
+    return derive(seed, "epoch", session.epoch) if session.epoch > 0 else seed
 
 
 def node_pack(
@@ -253,7 +257,9 @@ def node_pack(
     odds = dungeon_rules.affix_odds(node.kind.rank, mood_rules.mood_of(state))
     return fight_flow.spawn_for_node(
         content,
-        seed=node_pack_seed(world_seed, session, index=index, wave=wave, place=place),
+        seed=node_pack_seed(
+            world_seed, replace(session, epoch=location.epoch), index=index, wave=wave, place=place
+        ),
         biome=location.biome,
         level=max(1, node.level),
         rank=node.kind.rank,
@@ -358,7 +364,11 @@ def node_foes(
     left = standing.get(index)
     if left is None or left.empty or not node.kind.is_combat:
         return ()
-    busy = {one.slot: one.name for one in fights if one.node == index and one.wave == left.wave}
+    busy = {
+        one.slot: one.name
+        for one in fights
+        if one.node == index and one.wave == left.wave and one.epoch == location.epoch
+    }
     packs = {
         place: node_pack(
             content,
@@ -381,6 +391,7 @@ def node_foes(
             # Как эта стая дерётся, говорится до боя: панель собирают до него
             # (ADR 0081).
             habits=screens.pack_habits(packs[place]),
+            signature=sha256(repr(packs[place]).encode("utf-8")).hexdigest(),
         )
         for place in left.free
     )
@@ -2832,7 +2843,10 @@ def _handle_location(
     )
     epoch = node_rules.location_epoch(location_state)
     if state.session.epoch >= 0 and state.session.epoch != epoch:
-        return replace(state, session=replace(state.session, node=0, epoch=epoch)).with_notice(
+        return replace(
+            state,
+            session=replace(state.session, node=0, epoch=epoch, wave=-1, roamer_stamp=-1, foes=()),
+        ).with_notice(
             "Округа изменилась за время отсутствия. Вы вернулись ко входу; "
             "прежнее действие не выполнено."
         )
@@ -2840,11 +2854,16 @@ def _handle_location(
     node = location.node(state.session.node)
 
     if command.intent is not Intent.SELECT:
-        return state.with_notice("Нажмите переход или действие узла.")
+        return state.with_notice(
+            "Эта кнопка больше не относится к текущему узлу или объекту. "
+            "Выберите действие на новой клавиатуре ниже."
+        )
 
     if screens.LEAVE_LOCATION.matches(command.argument) or (
         node.kind is NodeKind.EXIT
-        and command.argument.startswith(screens.NODE_ACTIONS[NodeKind.EXIT])
+        and screens.node_action(NodeKind.EXIT, index=node.index, location=location.name).matches(
+            command.argument
+        )
     ):
         return (
             replace(state, session=LocationSession())
@@ -2852,7 +2871,16 @@ def _handle_location(
             .with_notice(f"Вы покинули локацию {location.name}.")
         )
 
-    if labels.ENTER_ROAMER.matches(command.argument):
+    if screens.at_node(labels.ENTER_ROAMER.text, node.index, location.name).matches(
+        command.argument
+    ):
+        roamer = location_state.roamer
+        if state.session.roamer_stamp >= 0 and (
+            roamer is None or roamer.stamp != state.session.roamer_stamp
+        ):
+            return state.with_notice(
+                "Прежний вход в подземелье закрылся. Проверьте обстановку и выберите заново."
+            )
         return _enter_roamer(state, location_state, node.index, now)
 
     for person in neighbours:
@@ -2877,8 +2905,30 @@ def _handle_location(
         return replace(state, fight=f"pvp:{person.character_id}").at(ScreenId.COMBAT)
 
     for neighbour in (location.node(index) for index in node.links):
-        if screens.node_button(neighbour).matches(command.argument):
-            return replace(state, session=replace(state.session, node=neighbour.index))
+        if screens.node_button(neighbour, node.index, location.name).matches(command.argument):
+            return replace(
+                state,
+                session=replace(
+                    state.session, node=neighbour.index, wave=-1, roamer_stamp=-1, foes=()
+                ),
+            )
+
+    left = node_rules.standing_at(
+        visit_seed(world_seed, state.session), location, location_state, node.index, now
+    )
+    if state.session.wave >= 0 and state.session.wave != left.wave:
+        return replace(state, session=replace(state.session, wave=left.wave)).with_notice(
+            "Прежних объектов в узле уже нет: здесь появились новые. "
+            "Действие не выполнено; выберите заново."
+        )
+    if (
+        node.kind.is_combat
+        and left.empty
+        and screens.node_action(node.kind, index=node.index, location=location.name).matches(
+            command.argument
+        )
+    ):
+        return state.with_notice(_empty_node_line(node.name))
 
     # У каждой стаи узла своя кнопка, и узнаётся она по слову действия и номеру
     # места в волне (ADR 0065): «Вступить в бой 2: Серый волк, 3 штуки».
@@ -2896,9 +2946,11 @@ def _handle_location(
     if picked is not None:
         return picked
 
-    # Кнопка узла называет то, к чему ведёт («Обыскать тайник»), и потому
-    # узнаётся по слову действия, а не по строке целиком (ADR 0063).
-    if command.argument.startswith(screens.NODE_ACTIONS[node.kind]):
+    # Боевой узел принимает только выбор конкретной стаи. Общая кнопка
+    # не вправе незаметно подменить исчезнувшую стаю первой свободной.
+    if not node.kind.is_combat and screens.node_action(
+        node.kind, index=node.index, location=location.name
+    ).matches(command.argument):
         return _resolve_node_action(
             content, character, state, location, world_seed, location_state, now
         )
@@ -2942,13 +2994,23 @@ def _picked_foe(
     )
     alone = left.size <= 1
     for foe in foes:
-        if screens.foe_label(node.kind, foe, alone).matches(command.argument):
+        if screens.foe_label(
+            node.kind, foe, alone, index=node.index, location=location.name
+        ).matches(command.argument):
+            previous = dict(state.session.foes).get(foe.place)
+            if previous is not None and previous != foe.signature:
+                return state.with_notice(
+                    "Состав или свойства этой стаи изменились. "
+                    "Бой не начат; проверьте противников и выберите заново."
+                )
             if foe.busy:
                 return state.with_notice(
                     f"За эту стаю уже дерётся {foe.fighter}. В этот бой можно вмешаться."
                 )
             return replace(state, fight=f"node:{foe.place}").at(ScreenId.COMBAT)
-        if screens.join_label(foe, alone).matches(command.argument):
+        if screens.join_label(foe, alone, index=node.index, location=location.name).matches(
+            command.argument
+        ):
             if not foe.busy:
                 return state.with_notice("Тот бой уже кончился. Эта стая стоит свободно.")
             return replace(state, fight=f"join:{foe.place}").at(ScreenId.COMBAT)
@@ -3019,10 +3081,7 @@ def _resolve_node_action(
         return state.with_notice(_empty_node_line(node.name))
 
     if node.kind.is_combat:
-        # Бой собирает сам хендлер: ему принадлежат и сборка противника, и кэш, в
-        # котором бой живёт. Место в волне называется здесь же: без него хендлер
-        # не знает, за какую из стай узла дерутся (ADR 0065).
-        return replace(state, fight=f"node:{left.free[0]}").at(ScreenId.COMBAT)
+        return state.with_notice("Выберите конкретную стаю на новой клавиатуре ниже.")
 
     biomes = _location_biomes(content, state.session)
     if node.kind is NodeKind.GATHER:

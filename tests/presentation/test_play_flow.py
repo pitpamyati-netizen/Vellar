@@ -16,6 +16,7 @@ from mmorpg.presentation.telegram.flows.play import (
     build_location,
     render,
 )
+from mmorpg.presentation.telegram.screens import play as play_screens
 from mmorpg.presentation.telegram.screens.base import ScreenId
 
 WORLD_SEED = "vellar-test"
@@ -302,7 +303,9 @@ def test_moving_between_nodes(
 ) -> None:
     location = build_location(content, WORLD_SEED, in_location.session)
     neighbour = location.node(location.entrance.links[0])
-    moved = step(content, hero, in_location, f"Узел {neighbour.index}: {neighbour.name}")
+    moved = step(
+        content, hero, in_location, play_screens.node_button(neighbour, 0, location.name).text
+    )
     assert moved.session.node == neighbour.index
 
 
@@ -368,7 +371,7 @@ def test_an_emptied_node_says_when_it_fills_up_again(
         content,
         hero,
         at_node,
-        "Собрать сырьё",
+        play_screens.node_action(gather.kind, index=gather.index, location=location.name).text,
         world_seed=WORLD_SEED,
         clock=Clock(now=160),
         location_state=emptied,

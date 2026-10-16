@@ -302,13 +302,6 @@ def _build_rules(raw: Mapping[str, Mapping[str, Any]], problems: list[str]) -> P
     trait_meta = raw["traits.toml"].get("meta", {})
     skill_meta = raw["skills.toml"].get("meta", {})
 
-    rank_levels = skill_meta.get("rank_unlock_levels", (1, 10, 30, 60, 100))
-    if not isinstance(rank_levels, (list, tuple)) or any(
-        type(one) is not int for one in rank_levels
-    ):
-        problems.append("skills.toml: [meta].rank_unlock_levels must list integer levels")
-        rank_levels = (1, 10, 30, 60, 100)
-
     rules = ProgressionRules(
         max_character_level=int(world_meta.get("max_character_level", 150)),
         base_stat_value=int(class_meta.get("base_stat_value", 5)),
@@ -324,7 +317,6 @@ def _build_rules(raw: Mapping[str, Mapping[str, Any]], problems: list[str]) -> P
         max_rank=int(skill_meta.get("max_rank", 5)),
         levels_per_skill_point=int(skill_meta.get("levels_per_skill_point", 2)),
         rank_cost=int(skill_meta.get("rank_cost", 1)),
-        rank_unlock_levels=tuple(rank_levels),
         health_recovery_base_percent=float(class_meta.get("health_recovery_base_percent", 5)),
         health_recovery_endurance_percent=float(
             class_meta.get("health_recovery_endurance_percent", 20)
@@ -337,22 +329,8 @@ def _build_rules(raw: Mapping[str, Mapping[str, Any]], problems: list[str]) -> P
         problems.append("skills.toml: [meta].levels_per_skill_point must be at least 1")
     if rules.rank_cost < 1:
         problems.append("skills.toml: [meta].rank_cost must be at least 1")
-    if (
-        len(rules.rank_unlock_levels) != rules.max_rank
-        or not rules.rank_unlock_levels
-        or rules.rank_unlock_levels[0] != 1
-        or any(not 1 <= level <= rules.max_character_level for level in rules.rank_unlock_levels)
-        or any(
-            previous >= following
-            for previous, following in zip(
-                rules.rank_unlock_levels, rules.rank_unlock_levels[1:], strict=False
-            )
-        )
-    ):
-        problems.append(
-            "skills.toml: [meta].rank_unlock_levels must list one increasing level per rank, "
-            "starting at 1 and within the character level limit"
-        )
+    if rules.max_rank < 1:
+        problems.append("skills.toml: [meta].max_rank must be at least 1")
     from math import isfinite
 
     for name in (

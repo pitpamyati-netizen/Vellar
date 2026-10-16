@@ -319,8 +319,10 @@ async def test_first_session_from_creation_through_all_six_real_tasks(content):
         while queue:
             node, path = queue.popleft()
             if node == target:
+                origin = current.session.node
                 for index in path:
-                    await press(node_button(generated.nodes[index]).text)
+                    await press(node_button(generated.nodes[index], origin, generated.name).text)
+                    origin = index
                 return
             if node in seen:
                 continue
@@ -400,7 +402,14 @@ async def test_first_session_from_creation_through_all_six_real_tasks(content):
         for node in generated.nodes:
             if node.kind in {NodeKind.GATHER, NodeKind.CACHE, NodeKind.EVENT, NodeKind.SHRINE}:
                 await move_to(node.index)
-                await press(NODE_ACTIONS[node.kind])
+                await press(
+                    next(
+                        b.text
+                        for row in session.sent[-1].reply_markup.keyboard
+                        for b in row
+                        if b.text.startswith(NODE_ACTIONS[node.kind])
+                    )
+                )
                 if (await character()).quests.progress(quest.id) >= quest.target_count:
                     break
         assert (await character()).quests.progress(quest.id) >= quest.target_count

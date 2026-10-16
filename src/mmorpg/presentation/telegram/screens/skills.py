@@ -186,7 +186,11 @@ def rank_offer(content: GameContent, character: Character, skill: Skill) -> str:
     """
     rules = content.rules
     required = skill_rules.next_rank_level(content, character, skill)
-    opening = f"Следующее вложение доступно с уровня {required}." if required is not None else ""
+    opening = (
+        f"Изучение доступно с уровня {required}."
+        if required is not None and not skill_rules.is_known(character, skill.code)
+        else ""
+    )
     if not skill_rules.is_known(character, skill.code):
         if skill_rules.fork_taken(content, character, skill) is not None:
             return ""
@@ -221,7 +225,8 @@ def rank_offer(content: GameContent, character: Character, skill: Skill) -> str:
         # шесть» вместо «плюс пяти», обязано быть названо до нажатия, а не после.
         grown = passive_power_words(content, skill, rank + 1)
         said.append(f"Следующий за {cost} даст {grown}.")
-        said.append(opening)
+        if opening:
+            said.append(opening)
     return " ".join(said)
 
 
@@ -246,7 +251,7 @@ def refusal(content: GameContent, character: Character, skill: Skill) -> str:
     required = skill_rules.next_rank_level(content, character, skill)
     if required is not None and character.level < required:
         return (
-            f"Следующий ранг умения «{skill.name}» доступен с уровня {required}. "
+            f"Изучение умения «{skill.name}» доступно с уровня {required}. "
             f"Ваш уровень: {character.level}. Очки сохранены."
         )
     if skill_rules.is_known(character, skill.code):
@@ -376,9 +381,8 @@ def skills_screen(
     lead = [
         notice or f"Умения. Очков умений: {character.unspent_skill_points}.",
         f"Ваш уровень: {character.level}. Пассивные умения слотов не занимают.",
-        f"Ранги с 1 по {content.rules.max_rank} открываются на уровнях "
-        f"{', '.join(str(level) for level in content.rules.rank_unlock_levels)}. "
-        "Первый ранг также требует уровня самого умения.",
+        f"Изученное умение можно улучшать до ранга {content.rules.max_rank} "
+        "независимо от уровня героя. Первое изучение требует уровня самого умения.",
         spent_line(content, character),
     ]
     if not character.unspent_skill_points:

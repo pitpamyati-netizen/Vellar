@@ -113,9 +113,17 @@ def unequip_label(slot_name: str) -> Label:
     return label(f"Снять: {slot_name}")
 
 
-def node_button(node: LocationNode) -> Label:
+def node_button(node: LocationNode, origin: int | None = None, location: str = "") -> Label:
     """Кнопки узлов несут свой номер, поэтому две «Стычки» остаются различимыми."""
-    return label(f"Узел {node.index}: {node.name}")
+    prefix = "" if origin is None else f"Из узла {origin} в "
+    where = f" ({location})" if location else ""
+    return label(f"{prefix}Узел {node.index}: {node.name}{where}")
+
+
+def at_node(action: str, index: int, location: str = "") -> Label:
+    """Короткая кнопка относится к названному узлу; подробности — в сообщении."""
+    where = f": {location}" if location else ""
+    return label(f"{action}, узел {index}{where}")
 
 
 def standing_in(content: GameContent, character: Character) -> City:
@@ -403,6 +411,7 @@ class NodeFoe:
     #: Как эта стая дерётся: повадки и рода урона, словами (``pack_habits``).
     #: Называется до боя, потому что панель собирают до него.
     habits: str = ""
+    signature: str = ""
 
     @property
     def busy(self) -> bool:
@@ -414,14 +423,25 @@ def foe_number(foe: NodeFoe, single: bool) -> str:
     return "" if single else f" {foe.place + 1}"
 
 
-def foe_label(kind: NodeKind, foe: NodeFoe, single: bool = False) -> Label:
+def foe_label(
+    kind: NodeKind,
+    foe: NodeFoe,
+    single: bool = False,
+    *,
+    index: int | None = None,
+    location: str = "",
+) -> Label:
     """Кнопка боя с одной названной стаей: слово действия, номер, кто это."""
-    return label(f"{NODE_ACTIONS[kind]}{foe_number(foe, single)}: {foe.line}")
+    action = f"{NODE_ACTIONS[kind]}{foe_number(foe, single)}"
+    return at_node(action, index, location) if index is not None else label(f"{action}: {foe.line}")
 
 
-def join_label(foe: NodeFoe, single: bool = False) -> Label:
+def join_label(
+    foe: NodeFoe, single: bool = False, *, index: int | None = None, location: str = ""
+) -> Label:
     """Кнопка «вмешаться» - в тот бой, что уже идёт за эту стаю (ADR 0065)."""
-    return label(f"{JOIN_FIGHT}{foe_number(foe, single)}: {foe.line}")
+    action = f"{JOIN_FIGHT}{foe_number(foe, single)}"
+    return at_node(action, index, location) if index is not None else label(f"{action}: {foe.line}")
 
 
 def foe_line(foe: NodeFoe, single: bool = False) -> str:
@@ -481,13 +501,17 @@ def pack_line(pack: Sequence[Enemy]) -> str:
     )
 
 
-def node_action(kind: NodeKind, watch: str = "") -> Label:
+def node_action(
+    kind: NodeKind, watch: str = "", *, index: int | None = None, location: str = ""
+) -> Label:
     """Кнопка действия узла, назвавшая то, к чему она ведёт.
 
     Слово действия стоит первым и не меняется: по нему ветка узнаёт нажатие, и
     по нему же игрок узнаёт кнопку, которую нажимал вчера (ADR 0063).
     """
     action = NODE_ACTIONS[kind]
+    if index is not None:
+        return at_node(action, index, location)
     return label(f"{action}: {watch}" if watch else action)
 
 
@@ -668,14 +692,16 @@ def location_screen(
         # неё уже идёт, свободная - начать свой (ADR 0065).
         alone = here.size <= 1
         rows: list[tuple[Label, ...]] = [
-            (join_label(foe, alone),) if foe.busy else (foe_label(node.kind, foe, alone),)
+            (join_label(foe, alone, index=node.index, location=location.name),)
+            if foe.busy
+            else (foe_label(node.kind, foe, alone, index=node.index, location=location.name),)
             for foe in foes
         ]
     else:
-        action = node_action(node.kind, "" if here.empty else watch.get(node.index, ""))
+        action = node_action(node.kind, index=node.index, location=location.name)
         rows = [(action,)]
     if roamer_open is not None:
-        rows.insert(0, (labels.ENTER_ROAMER,))
+        rows.insert(0, (at_node(labels.ENTER_ROAMER.text, node.index, location.name),))
     for person in others:
         # Позвать можно везде, напасть - только на вольной земле.
         row = (
@@ -684,7 +710,7 @@ def location_screen(
             else (invite_label(person.name),)
         )
         rows.append(row)
-    rows.extend((node_button(neighbour),) for neighbour in neighbours)
+    rows.extend((node_button(neighbour, node.index, location.name),) for neighbour in neighbours)
     rows.append((LEAVE_LOCATION,))
 
     return Screen(

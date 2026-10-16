@@ -1,4 +1,4 @@
-"""Класс, выбранная дорога и опыт героя ограничивают новые вложения в умения."""
+"""Принадлежность и первое изучение проверяются; ранги не ограничены уровнем."""
 
 from __future__ import annotations
 
@@ -82,26 +82,20 @@ def test_foreign_passive_stays_saved_without_granting_its_effect(
     assert skills.mastery_choices(content, preserved, foreign) == ()
 
 
-@pytest.mark.parametrize("rank,required", [(1, 1), (2, 10), (3, 30), (4, 60), (5, 100)])
+@pytest.mark.parametrize("rank", [2, 3, 4, 5])
+@pytest.mark.parametrize("class_id", CLASSES)
 @pytest.mark.parametrize("kind", [SkillKind.ACTIVE, SkillKind.PASSIVE])
-def test_new_rank_requires_its_level_even_with_saved_points(
-    content: GameContent, rank: int, required: int, kind: SkillKind
+def test_known_skill_can_reach_every_rank_at_level_one(
+    content: GameContent, rank: int, class_id: str, kind: SkillKind
 ) -> None:
-    skill = content.skills_of("class:warrior", kind)[0]
-    current = rank - 1
-    ranks = {skill.code: current} if current else {}
-    actual_required = max(required, skill.level) if rank == 1 else required
-    character = hero("warrior", level=actual_required, loadout=SkillLoadout(ranks=ranks))
-    if actual_required > 1:
-        under = replace(character, level=actual_required - 1)
-        assert skills.learn(content, under, skill) is None
-        assert str(actual_required) in skill_screens.refusal(content, under, skill)
-        assert under.unspent_skill_points == 75
+    skill = content.skills_of(f"class:{class_id}", kind)[0]
+    character = hero(class_id, level=1, loadout=SkillLoadout(ranks={skill.code: rank - 1}))
     grown = skills.learn(content, character, skill)
     assert grown is not None
     assert grown.loadout.rank_of(skill.code) == rank
     assert grown.unspent_skill_points == character.unspent_skill_points - 1
-    assert str(actual_required) in skill_screens.rank_offer(content, character, skill)
+    assert "доступно с уровня" not in skill_screens.rank_offer(content, character, skill)
+    assert skills.learn(content, replace(character, unspent_skill_points=0), skill) is None
 
 
 def test_first_learning_also_requires_the_skills_own_level(content: GameContent) -> None:
@@ -112,13 +106,12 @@ def test_first_learning_also_requires_the_skills_own_level(content: GameContent)
     assert skills.learn(content, replace(character, level=skill.level), skill) is not None
 
 
-def test_the_rank_requirement_comes_from_current_content_rules(content: GameContent) -> None:
+def test_old_rank_thresholds_do_not_restore_level_restrictions(content: GameContent) -> None:
     custom = content.rebuilt(rules=replace(content.rules, rank_unlock_levels=(1, 12, 35, 70, 120)))
     skill = custom.skills_of("class:warrior", SkillKind.ACTIVE)[0]
     character = hero("warrior", level=11, loadout=SkillLoadout(ranks={skill.code: 1}))
-    assert skills.next_rank_level(custom, character, skill) == 12
-    assert skills.learn(custom, character, skill) is None
-    assert skills.learn(custom, replace(character, level=12), skill) is not None
+    assert skills.next_rank_level(custom, character, skill) == 1
+    assert skills.learn(custom, replace(character, level=1), skill) is not None
 
 
 def test_paid_own_skill_and_rank_survive_a_later_opening_level(content: GameContent) -> None:

@@ -355,9 +355,12 @@ async def test_a_duel_ends_and_the_stake_changes_hands(
     assert moved > 0, "ставка перешла из рук в руки"
     assert first.gold + second.gold == attacker.gold + defender.gold, "золото не печатают"
     assert moved == pvp_rules.spoils_from(max(attacker.gold, defender.gold))
-    # Раны записаны обоим: бой был настоящий.
-    assert first.health > 0 and second.health > 0
-    assert min(first.health, second.health) < max(first.health, second.health)
+    # Победитель тоже может остаться с единицей здоровья. Сверяем сохранение
+    # с действительным исходом боя, а не со случайной разницей между игроками.
+    assert session is not None and session.state.is_over
+    for saved in (first, second):
+        fighter = next(one for one in session.participants() if one.character_id == saved.id)
+        assert saved.health == max(1, fighter.health)
 
 
 async def test_yielding_ends_a_duel_nobody_answers(

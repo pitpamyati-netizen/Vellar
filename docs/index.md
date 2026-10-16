@@ -1,5 +1,8 @@
 # Указатель документации Vellar
 
+Исправления 16.10.2026: [свободные ранги и точный выбор объектов](ranks-nodes-2026-10-16.md),
+[ADR 0107](adr/0107-free-ranks-and-scoped-location-actions.md).
+
 Переработка 15.10.2026: [развитие, сложность, добыча и тексты](character-rework-2026-10-15.md),
 [новые правила](adr/0106-coherent-progression-fixed-gear-and-challenge.md),
 [проверка добычи](loot-rework-2026-10-15.md),

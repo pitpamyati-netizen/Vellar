@@ -194,6 +194,10 @@ class LocationSession:
     slot: int = 0
     node: int = 0
     epoch: int = -1
+    # Какое наполнение и какой вход в подземелье игроку действительно показали.
+    wave: int = -1
+    roamer_stamp: int = -1
+    foes: tuple[tuple[int, str], ...] = ()
 
     @property
     def active(self) -> bool:
@@ -389,6 +393,9 @@ class PlayState:
                     self.session.slot,
                     self.session.node,
                     self.session.epoch,
+                    self.session.wave,
+                    self.session.roamer_stamp,
+                    self.session.foes,
                 ],
                 "descent": [
                     self.descent.city_id,
@@ -458,6 +465,9 @@ class PlayState:
         session_parts = [*data.get("session", []), "", 0, 0][:3]
         city_id, slot, node = session_parts
         session_epoch = data.get("session", [])[3] if len(data.get("session", [])) > 3 else -1
+        session_wave = data.get("session", [])[4] if len(data.get("session", [])) > 4 else -1
+        roamer_stamp = data.get("session", [])[5] if len(data.get("session", [])) > 5 else -1
+        session_foes = data.get("session", [])[6] if len(data.get("session", [])) > 6 else ()
         # Хвост читается с запасом: запись старого образца не называла ни
         # подземелье, ни сложность, ни вид комнаты. На месте ``dungeon_id`` там
         # лежал числовой ``tier`` (1/2): ``str(1)`` не совпадёт ни с одним id,
@@ -519,7 +529,13 @@ class PlayState:
             location_page=PageState(page=int(data.get("location_page", 1))),
             city_id=data.get("city", ""),
             session=LocationSession(
-                city_id=str(city_id), slot=int(slot), node=int(node), epoch=int(session_epoch)
+                city_id=str(city_id),
+                slot=int(slot),
+                node=int(node),
+                epoch=int(session_epoch),
+                wave=int(session_wave),
+                roamer_stamp=int(roamer_stamp),
+                foes=tuple((int(place), str(signature)) for place, signature in session_foes),
             ),
             descent=Descent(
                 city_id=descent_city,

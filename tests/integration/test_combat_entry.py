@@ -16,8 +16,11 @@ from scripts.test_stand import load_test_settings
 from mmorpg import economy_log
 from mmorpg.application.services.battle import BattleStore
 from mmorpg.config import AppEnv
+from mmorpg.domain.entities import SkillKind, SkillLoadout
 from mmorpg.domain.entities.character import Character
 from mmorpg.domain.ports.repositories import User
+from mmorpg.domain.procgen import location_seed
+from mmorpg.domain.rules import nodes as node_rules
 from mmorpg.domain.rules.nodes import location_epoch
 from mmorpg.main import build_application
 from mmorpg.presentation.telegram.flows.play import build_location, render
@@ -178,3 +181,73 @@ async def test_failure_after_opening_rolls_back_battle_and_screen_then_retry_suc
     _, reply = await feed(app, recording, hero, "Разведка", 1)
     assert "Бой. Круг" in reply.text
     assert await state.get_state() == Play.combat.state
+
+
+async def test_level_one_rank_five_is_saved_and_replay_does_not_spend_twice(combat_app):
+    app, dependencies, hero, state, recording = combat_app
+    skill = app.content.skills_of("class:warrior", SkillKind.PASSIVE)[0]
+    hero = await dependencies.characters.save(
+        replace(hero, level=1, unspent_skill_points=1, loadout=SkillLoadout(ranks={skill.code: 4}))
+    )
+    flow = PlayState(screen=ScreenId.SKILLS)
+    await state.set_state(STATE_FOR_SCREEN[flow.screen])
+    await state.set_data({"play": flow.serialise()})
+    screen = render(app.content, hero, flow, world_seed=app.settings.world_seed)
+    text = next(button.text for row in screen.rows for button in row if skill.name in button.text)
+    event, reply = await feed(app, recording, hero, text, 1)
+    assert "ранг 5" in reply.text
+    saved = await dependencies.characters.get(hero.id)
+    assert saved.level == 1
+    assert saved.loadout.rank_of(skill.code) == 5
+    assert saved.unspent_skill_points == 0
+    await app.dispatcher.feed_update(app.bot, event)
+    assert await dependencies.characters.get(hero.id) == saved
+
+
+async def test_saved_location_wave_rejects_replacement_objects(combat_app):
+    app, dependencies, hero, state, recording = combat_app
+    now = int(time.time())
+    await dependencies.locations.reset("farhold", 1)
+    world = await dependencies.locations.state("farhold", 1, now=now)
+    epoch = location_epoch(world)
+    session = LocationSession("farhold", 1, epoch=epoch)
+    location = build_location(app.content, app.settings.world_seed, session, epoch=epoch)
+    node = next(one for one in location.nodes if one.kind.is_combat)
+    flow = PlayState(screen=ScreenId.LOCATION, session=replace(session, node=node.index))
+    await state.set_state(STATE_FOR_SCREEN[flow.screen])
+    await state.set_data({"play": flow.serialise()})
+    _, reply = await feed(app, recording, hero, "/осмотреться", 1)
+    shown = PlayState.deserialise((await state.get_data())["play"])
+    assert shown.session.wave >= 0
+    assert shown.session.foes
+    text = next(
+        button.text
+        for row in reply.reply_markup.keyboard
+        for button in row
+        if button.text.startswith(NODE_ACTIONS[node.kind])
+    )
+    size = node_rules.wave_size(
+        location_seed(app.settings.world_seed, "farhold", 1),
+        node.index,
+        node.kind,
+        shown.session.wave,
+    )
+    for place in range(size):
+        await dependencies.locations.take(
+            "farhold",
+            1,
+            node.index,
+            wave=shown.session.wave,
+            size=size,
+            now=now - node_rules.RESPAWN_SECONDS - 1,
+            ttl=3600,
+            place=place,
+        )
+    before = await dependencies.characters.get(hero.id)
+    _, reply = await feed(app, recording, hero, text, 2)
+    assert "появились новые" in reply.text
+    assert await state.get_state() == Play.location.state
+    assert await BattleStore(dependencies.state_cache).busy(hero.id) is None
+    assert await dependencies.characters.get(hero.id) == before
+    refreshed = PlayState.deserialise((await state.get_data())["play"])
+    assert refreshed.session.wave == shown.session.wave + 1
