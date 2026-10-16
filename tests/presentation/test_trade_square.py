@@ -108,3 +108,16 @@ def test_square_cannot_be_opened_during_battle_or_outside_city(content, hero, sc
     state = PlayState(screen=screen, session=LocationSession(city_id="farhold", slot=1))
     refused = step(content, hero, state, "/площадь")
     assert refused.screen is screen and refused.pending.empty
+
+
+def test_square_command_works_after_returning_to_city_from_an_expedition(content, hero):
+    outside = PlayState(
+        screen=ScreenId.LOCATION, session=LocationSession(city_id="farhold", slot=1)
+    )
+    city = step(content, hero, outside, "/город")
+    assert city.screen is ScreenId.CITY
+    command = step(content, hero, city, "/площадь")
+    button = step(content, hero, city, "Торговая площадь")
+    assert command.screen is button.screen is ScreenId.TRADE_SQUARE
+    shop = step(content, hero, command, "/лавка 4")
+    assert step(content, hero, shop, "/площадь").screen is ScreenId.TRADE_SQUARE

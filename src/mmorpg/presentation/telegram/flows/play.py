@@ -1193,10 +1193,17 @@ def advance(
             state, city_id=character.city_id, pending=PendingWrite(), fight="", searching=False
         ).at(ScreenId.CITY)
     if command.intent is Intent.TRADE_SQUARE or text.strip() == "Лавка":
-        if (
-            state.screen in {ScreenId.COMBAT, ScreenId.COMBAT_BAG}
-            or state.session.active
-            or state.descent.active
+        # /город оставляет сведения о прежней вылазке. На городском экране
+        # команда площади должна работать так же, как её кнопка.
+        in_town = state.screen in {
+            ScreenId.CITY,
+            ScreenId.TRADE_SQUARE,
+            ScreenId.SHOP,
+            ScreenId.SHOP_ITEM,
+            ScreenId.SELL,
+        }
+        if state.screen in {ScreenId.COMBAT, ScreenId.COMBAT_BAG} or (
+            (state.session.active or state.descent.active) and not in_town
         ):
             return state.with_notice("Торговая площадь доступна после возвращения в город.")
         city = content.city(character.city_id)
