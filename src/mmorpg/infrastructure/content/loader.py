@@ -1973,6 +1973,7 @@ def _parse_items(
                 stack=int(entry.get("stack", 1)),
                 source=str(entry.get("source", "")),
                 effect=effect,
+                shop_always=bool(entry.get("shop_always", False)),
             )
         )
     _check_unique((item.id for item in parsed), "items.toml", problems)
@@ -2267,6 +2268,7 @@ def _parse_world(raw: Mapping[str, Any], problems: list[str]) -> tuple[City, ...
                 level_max=int(loc["level_max"]),
                 city_id=city_id,
                 pvp=bool(loc.get("pvp", False)),
+                experience_bonus_percent=int(loc.get("experience_bonus_percent", 0)),
             )
             for loc in entry.get("location", ())
         )
@@ -2453,6 +2455,10 @@ def _validate_world(cities: Sequence[City], rules: ProgressionRules, problems: l
 
         previous: Location | None = None
         for location in city.locations:
+            if not 0 <= location.experience_bonus_percent <= 100:
+                problems.append(
+                    f"world.toml: {city.id}/{location.id} experience_bonus_percent must be 0..100"
+                )
             if location.level_min > location.level_max:
                 problems.append(f"world.toml: {city.id}/{location.id} has an inverted level range")
             if previous is not None:

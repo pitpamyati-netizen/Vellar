@@ -671,6 +671,7 @@ tool_type = "logging_axe"
 
 [[item]]
 id = "small_healing_potion"
+shop_always = true
 name = "Малое зелье лечения"
 kind = "consumable"
 slot = "none"
@@ -682,6 +683,7 @@ effect = { kind = "heal_percent", power = 15 }
 
 [[item]]
 id = "healing_potion"
+shop_always = true
 name = "Зелье лечения"
 kind = "consumable"
 slot = "none"
@@ -693,6 +695,7 @@ effect = { kind = "heal_percent", power = 25 }
 
 [[item]]
 id = "strong_healing_potion"
+shop_always = true
 name = "Крепкое зелье лечения"
 kind = "consumable"
 slot = "none"
@@ -704,6 +707,7 @@ effect = { kind = "heal_percent", power = 35 }
 
 [[item]]
 id = "great_healing_potion"
+shop_always = true
 name = "Большое зелье лечения"
 kind = "consumable"
 slot = "none"
@@ -715,6 +719,7 @@ effect = { kind = "heal_percent", power = 45 }
 
 [[item]]
 id = "full_healing_potion"
+shop_always = true
 name = "Полное зелье лечения"
 kind = "consumable"
 slot = "none"
@@ -728,6 +733,7 @@ effect = { kind = "heal_percent", power = 60 }
 
 [[item]]
 id = "small_resource_draught"
+shop_always = true
 name = "Малый настой сосредоточения"
 kind = "consumable"
 slot = "none"
@@ -739,6 +745,7 @@ effect = { kind = "restore_resource_percent", power = 20 }
 
 [[item]]
 id = "resource_draught"
+shop_always = true
 name = "Настой сосредоточения"
 kind = "consumable"
 slot = "none"
@@ -750,6 +757,7 @@ effect = { kind = "restore_resource_percent", power = 35 }
 
 [[item]]
 id = "strong_resource_draught"
+shop_always = true
 name = "Крепкий настой сосредоточения"
 kind = "consumable"
 slot = "none"
@@ -761,6 +769,7 @@ effect = { kind = "restore_resource_percent", power = 50 }
 
 [[item]]
 id = "great_resource_draught"
+shop_always = true
 name = "Большой настой сосредоточения"
 kind = "consumable"
 slot = "none"
@@ -772,6 +781,7 @@ effect = { kind = "restore_resource_percent", power = 65 }
 
 [[item]]
 id = "full_resource_draught"
+shop_always = true
 name = "Полный настой сосредоточения"
 kind = "consumable"
 slot = "none"

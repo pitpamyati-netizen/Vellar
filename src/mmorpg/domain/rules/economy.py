@@ -85,9 +85,11 @@ def roll_assortment(
     floor = min(character_level - LEVEL_WINDOW_BELOW, tier.level if tier else character_level)
     low = max(1, floor)
 
-    # Полка инструментов стоит до всякого броска и не зависит ни от сида, ни от
-    # нужды города: сточенную кирку меняют там, где стоят.
-    shelf = tool_stock(content, character_level=character_level)
+    # Постоянные товары стоят до броска и не зависят от нужды города.
+    shelf = (
+        *tool_stock(content, character_level=character_level),
+        *permanent_stock(content, character_level=character_level),
+    )
     on_shelf = {item.id for item in shelf}
 
     candidates = [
@@ -96,10 +98,17 @@ def roll_assortment(
         if low <= item.level <= high
         and content.rarity(item.rarity).weight > 0
         and item.id not in on_shelf
+        and not item.shop_always
     ]
     if not candidates:
         candidates = sorted(
-            (item for item in content.items if content.rarity(item.rarity).weight > 0),
+            (
+                item
+                for item in content.items
+                if content.rarity(item.rarity).weight > 0
+                and item.id not in on_shelf
+                and not item.shop_always
+            ),
             key=lambda item: abs(item.level - character_level),
         )[:8]
 
@@ -151,6 +160,17 @@ def tool_stock(content: GameContent, *, character_level: int) -> tuple[Item, ...
             if content.has_item(item_id):
                 stock.append(content.item(item_id))
     return tuple(stock)
+
+
+def permanent_stock(content: GameContent, *, character_level: int) -> tuple[Item, ...]:
+    """Постоянный товар из каталога: все открытые ступени, без броска наличия."""
+    return tuple(
+        item
+        for item in content.items
+        if item.shop_always
+        and item.level <= character_level
+        and content.rarity(item.rarity).weight > 0
+    )
 
 
 def buy_price(

@@ -1529,7 +1529,13 @@ async def _settle_world(
     state = session.state
     if winners:
         splitter = participation.reward_shares if session.participation_rule else party_rules.split
-        experience = splitter(state.experience, len(winners))
+        experience_pool = adventure.location_experience(
+            content,
+            state.experience,
+            city_id=session.city_id,
+            location_slot=session.slot if session.kind is BattleKind.NODE else 0,
+        )
+        experience = splitter(experience_pool, len(winners))
         gold = splitter(state.gold, len(winners))
         shares = party_rules.distribute(
             state.loot,

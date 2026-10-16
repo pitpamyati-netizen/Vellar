@@ -157,6 +157,23 @@ def carry_wounds(
     return character.with_health(max(1, health), stats.max_health)
 
 
+def location_experience(
+    content: GameContent,
+    amount: int,
+    *,
+    city_id: str = "",
+    location_slot: int = 0,
+) -> int:
+    """Прибавка места к общему фонду боя, до деления и личных прибавок."""
+    if amount <= 0 or not city_id or not location_slot:
+        return amount
+    city = content.city(city_id)
+    if not city.has_location(location_slot):
+        return amount
+    bonus = city.location(location_slot).experience_bonus_percent
+    return round(amount * (100 + bonus) / 100)
+
+
 def resolve_victory(
     content: GameContent,
     character: Character,
@@ -173,7 +190,8 @@ def resolve_victory(
 
     Доли приходят снаружи: сколько именно досталось этому герою, решает отряд, а
     не бой (``domain/rules/party.split``). Не переданы - значит герой дрался
-    один и забирает всё.
+    один и забирает всё. Переданный опыт уже содержит прибавку места;
+    без переданной доли она считается от общего опыта боя здесь.
     """
     fallen = tuple(one.enemy for one in state.combatants if one.enemy is not None and not one.alive)
     log, steps = quest_rules.record_kills(
@@ -181,7 +199,11 @@ def resolve_victory(
     )
 
     share_gold = state.gold if gold is None else gold
-    share_experience = state.experience if experience is None else experience
+    share_experience = (
+        location_experience(content, state.experience, city_id=city_id, location_slot=location_slot)
+        if experience is None
+        else experience
+    )
     share_loot = state.loot if loot is None else loot
 
     paid = replace(

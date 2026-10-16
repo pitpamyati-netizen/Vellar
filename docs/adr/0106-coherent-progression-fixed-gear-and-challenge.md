@@ -5,6 +5,10 @@
 Пункт 2 о порогах рангов заменён 16.10.2026
 [ADR 0107](0107-free-ranks-and-scoped-location-actions.md). Остальные решения сохраняются.
 
+Пункт 6 о сохранении наград уточнён поручением от 16.10.2026:
+пять начальных локаций получили 10 процентов к опыту за стаи.
+[Правило, расчёт и проверки](../shop-and-early-experience.md).
+
 Уточняет [ADR 0058](0058-a-hundred-and-fifty-levels.md),
 [ADR 0059](0059-gear-carries-affixes-and-a-stamp.md),
 [ADR 0071](0071-loot-leans-to-your-class-and-gear-asks-for-a-stat.md),

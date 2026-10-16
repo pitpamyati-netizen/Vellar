@@ -515,6 +515,8 @@ class Item:
 
     stack: int = 1
     effect: ItemEffect | None = None
+    #: Постоянный товар лавки: доступен с уровня вещи независимо от переворота.
+    shop_always: bool = False
     #: Урон оружия — числом в границах, а не долей чего-то. Пусто у всего, что не
     #: оружие.
     damage: Dice | None = None
@@ -852,6 +854,8 @@ class Location:
     # тебя могут забрать золото, обязано сказать об этом до того, как ты туда вошёл
     # (``domain/rules/pvp.py``).
     pvp: bool = False
+    #: Прибавка к фонду опыта за победу над стаей в этой локации.
+    experience_bonus_percent: int = 0
 
     def covers(self, level: int) -> bool:
         return self.level_min <= level <= self.level_max

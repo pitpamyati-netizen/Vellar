@@ -115,7 +115,7 @@ def test_a_won_fight_pays_and_can_raise_a_level(content: GameContent, hero: Char
     assert result.character.gold == hero.gold + 25
     # Названо то, что записано: у человека расовая прибавка к опыту, и отчёт о
     # бое обязан называть уже её (``progression.earned``).
-    assert result.experience == progression.earned(content, hero, 400)
+    assert result.experience == progression.earned(content, hero, 440)
     assert result.experience > 400
     assert result.character.experience == hero.experience + result.experience
     assert result.loot == ("wolf_pelt",)
@@ -134,8 +134,8 @@ def test_a_won_fight_reports_the_experience_it_actually_gave(
     result = adventure.resolve_victory(
         content, plain, a_won_fight(content, plain), 1, city_id="farhold", location_slot=1
     )
-    assert result.experience == 400
-    assert result.character.experience == plain.experience + 400
+    assert result.experience == 440
+    assert result.character.experience == plain.experience + 440
 
 
 def test_wounds_are_carried_out_of_the_fight(content: GameContent, hero: Character) -> None:

@@ -1547,3 +1547,48 @@ async def test_the_card_of_a_good_charges_the_price_the_shelf_named(
     paid = await characters.get_active(ACCOUNT)
     assert paid is not None
     assert paid.gold == rich.gold - named
+
+
+@pytest.mark.parametrize(
+    "level,item_id",
+    [
+        (20, "small_healing_potion"),
+        (20, "small_resource_draught"),
+        (50, "strong_healing_potion"),
+        (150, "full_resource_draught"),
+    ],
+)
+async def test_permanent_potions_can_be_found_and_bought_repeatedly(
+    player: Player,
+    characters: InMemoryCharacterRepository,
+    inventory: InMemoryInventoryRepository,
+    argus: Character,
+    content: GameContent,
+    level: int,
+    item_id: str,
+) -> None:
+    rich = replace(argus, level=level, gold=50_000, tutorial=0b111111)
+    await characters.save(rich)
+    item = content.item(item_id)
+    held_before = await inventory.count(rich.id, item_id)
+    await player.press("Мир")
+    await player.press("Лавка")
+    await player.press("/поиск")
+    shop = await player.press(item.name)
+    spent = 0
+    for _ in range(2):
+        label = next(
+            button.text
+            for row in shop.rows
+            for button in row
+            if item.name in button.text and button.text.endswith("купить")
+        )
+        named = int(re.search(r"— (\d+) золота", label).group(1))
+        spent += named
+        card = await player.press(label)
+        assert card.id is ScreenId.SHOP_ITEM
+        shop = await player.press("Купить")
+        assert f"Куплено: {item.name}." in shop.text()
+    paid = await characters.get_active(ACCOUNT)
+    assert paid is not None and paid.gold == rich.gold - spent
+    assert await inventory.count(rich.id, item_id) == held_before + 2

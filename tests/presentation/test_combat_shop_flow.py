@@ -508,7 +508,9 @@ def test_assortment_matches_the_player_level(content: GameContent) -> None:
     # промахивалось мимо всех.
     tier = gear_procgen.tier_at(content, 20)
     assert tier is not None and tier.level == 12
-    assert all(tier.level <= item.level <= 22 or item.tool_type for item in stock)
+    assert all(
+        tier.level <= item.level <= 22 or item.tool_type or item.shop_always for item in stock
+    )
 
 
 def test_the_shelf_always_holds_gear(content: GameContent) -> None:

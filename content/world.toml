@@ -77,6 +77,7 @@ deep = true
 
 [[city.location]]
 id = "quiet_meadows"
+experience_bonus_percent = 10
 slot = 1
 name = "Луга у Заставы"
 biome = "луга"
@@ -85,6 +86,7 @@ level_max = 2
 
 [[city.location]]
 id = "dusk_grove"
+experience_bonus_percent = 10
 slot = 2
 name = "Ольшаник"
 biome = "лес"
@@ -93,6 +95,7 @@ level_max = 5
 
 [[city.location]]
 id = "wolf_ravines"
+experience_bonus_percent = 10
 slot = 3
 name = "Волчьи Овраги"
 biome = "овраги"
@@ -101,6 +104,7 @@ level_max = 8
 
 [[city.location]]
 id = "old_road"
+experience_bonus_percent = 10
 slot = 4
 name = "Тракт на Затон"
 biome = "дорога"
@@ -110,6 +114,7 @@ pvp = true
 
 [[city.location]]
 id = "abandoned_mine"
+experience_bonus_percent = 10
 slot = 5
 name = "Выработки"
 biome = "подземелье"
